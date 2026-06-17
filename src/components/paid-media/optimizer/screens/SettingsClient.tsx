@@ -6,9 +6,14 @@ import { Search } from "lucide-react";
 
 import { useOptimizer } from "../OptimizerProvider";
 import { AudienceChip, NumberField } from "../OptimizerBits";
-import { fmt, shortName } from "@/lib/paid-media/optimizer/engine-helpers";
-import { MONTH, type OptimizationMode } from "@/lib/paid-media/optimizer/types";
-import type { AdSetSnapshot } from "@continuum/optimization-engine";
+import { costLabel, fmt, shortName } from "@/lib/paid-media/optimizer/engine-helpers";
+import {
+  MONTH,
+  OBJECTIVE_LABELS,
+  type OptimizationMode,
+  type OptimizationObjective,
+} from "@/lib/paid-media/optimizer/types";
+import { getObjectiveProfile, type AdSetSnapshot } from "@continuum/optimization-engine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,14 +29,21 @@ const MODES: { value: OptimizationMode; label: string; hint: string }[] = [
   { value: "scale", label: "Scale", hint: "grow if target met" },
 ];
 
-const cpiOfSnap = (s: AdSetSnapshot): number =>
-  s.windows.d14.purchases > 0 ? s.windows.d14.spend / s.windows.d14.purchases : 0;
+const OBJECTIVES = Object.keys(OBJECTIVE_LABELS) as OptimizationObjective[];
 
 export function SettingsClient({ portfolioId }: { portfolioId: string }) {
-  const { getPortfolio, catalog, updateConfig, renamePortfolio, toggleAdSet } = useOptimizer();
+  const { getPortfolio, catalog, updateConfig, renamePortfolio, setObjective, toggleAdSet } =
+    useOptimizer();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const pf = getPortfolio(portfolioId);
+
+  // Per-ad-set cost uses the portfolio objective's KPI (spend / events).
+  const kpiField = pf ? getObjectiveProfile(pf.objective).kpiField : "purchases";
+  const cpiOfSnap = (s: AdSetSnapshot): number => {
+    const events = (s.windows.d14[kpiField] ?? 0) as number;
+    return events > 0 ? s.windows.d14.spend / events : 0;
+  };
 
   const rows = useMemo(() => {
     if (!pf) return [];
@@ -119,6 +131,38 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
         </div>
 
         <div className="flex flex-col gap-2">
+          <div className="text-sm font-semibold" id="objective-label">
+            Objective{" "}
+            <span className="font-normal text-muted-foreground">
+              — selects the calibrated profile (KPI, weights, caps)
+            </span>
+          </div>
+          <div
+            role="radiogroup"
+            aria-labelledby="objective-label"
+            className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/40 p-1"
+          >
+            {OBJECTIVES.map((o) => (
+              <button
+                key={o}
+                type="button"
+                role="radio"
+                aria-checked={pf.objective === o}
+                onClick={() => setObjective(pf.id, o)}
+                className={cn(
+                  "rounded-md px-2 py-1.5 text-xs transition-colors",
+                  pf.objective === o
+                    ? "bg-background font-semibold shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {OBJECTIVE_LABELS[o]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
           <div className="text-sm font-semibold">Budget &amp; schedule</div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={`Period total budget (${pf.currency})`} htmlFor="pf-period-budget">
@@ -162,7 +206,7 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
           />
         </Field>
 
-        <Field label={`Target CPA / CPI (${pf.currency})`} htmlFor="pf-target">
+        <Field label={`Target ${costLabel(pf.objective)} (${pf.currency})`} htmlFor="pf-target">
           <NumberField
             id="pf-target"
             value={pf.config.cpaTarget}

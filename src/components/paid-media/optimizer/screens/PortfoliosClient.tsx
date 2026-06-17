@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useOptimizer } from "../OptimizerProvider";
 import { ModeChip } from "../OptimizerBits";
 import {
+  costLabel,
   fmt,
   pauseKey,
   portfolioCpi,
@@ -60,7 +61,7 @@ export function PortfoliosClient() {
                 <div className="text-right">
                   <div className="font-semibold tabular-nums">${fmt(pf.config.dailyBudget)}</div>
                   <div className="text-xs text-muted-foreground">
-                    CPI{" "}
+                    {costLabel(pf.objective)}{" "}
                     {hasAdSets ? (
                       <>
                         <span

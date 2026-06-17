@@ -16,8 +16,12 @@ import {
   StatusChip,
   TrajectoryChip,
 } from "../OptimizerBits";
+import { getObjectiveProfile } from "@continuum/optimization-engine";
 import {
   capitalize,
+  compositesFrom,
+  costFromScore,
+  costLabel,
   fmt,
   pauseKey,
   projectSpend,
@@ -41,20 +45,32 @@ import {
 const BASE = "/paid-media/optimizer";
 
 export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
-  const { getPortfolio, updateConfig, isActionApproved, approveAction } = useOptimizer();
+  const { getPortfolio, updateConfig, isActionApproved, approveAction, getPriorComposites, commitComposites } =
+    useOptimizer();
   const router = useRouter();
   const pf = getPortfolio(portfolioId);
 
+  // Default asymmetric caps: portfolio override -> objective profile calibration.
+  const profileCaps = pf ? getObjectiveProfile(pf.objective) : undefined;
+  const defaultUp = pf?.config.velocityUpPct ?? Math.round((profileCaps?.velocityUpPct ?? 0.4) * 100);
+  const defaultDown = pf?.config.velocityDownPct ?? Math.round((profileCaps?.velocityDownPct ?? 0.45) * 100);
+
   // Overrides apply to THIS reallocation's preview until "Apply to portfolio" persists them.
   const [daily, setDaily] = useState<number>(pf?.config.dailyBudget ?? 0);
-  const [cap, setCap] = useState<number>(pf?.config.velocityCap ?? 30);
+  const [up, setUp] = useState<number>(defaultUp);
+  const [down, setDown] = useState<number>(defaultDown);
 
   if (!pf) return null;
   if (pf.snapshots.length === 0) {
     return <EmptyPortfolioState settingsHref={`${BASE}/${pf.id}/settings`} />;
   }
 
-  const result = runPortfolioCycle(pf, { dailyBudget: daily, velocityCap: cap });
+  const result = runPortfolioCycle(pf, {
+    dailyBudget: daily,
+    velocityUpPct: up,
+    velocityDownPct: down,
+    priorComposites: getPriorComposites(pf.id),
+  });
   const reallocation = result.reallocation;
   const proj = projectSpend(pf, daily);
 
@@ -66,11 +82,17 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
 
   const discard = () => {
     setDaily(pf.config.dailyBudget);
-    setCap(pf.config.velocityCap);
+    setUp(defaultUp);
+    setDown(defaultDown);
     router.push(`${BASE}/${pf.id}`);
   };
   const applyToPortfolio = () =>
-    updateConfig(pf.id, { dailyBudget: daily, velocityCap: cap });
+    updateConfig(pf.id, { dailyBudget: daily, velocityUpPct: up, velocityDownPct: down });
+  const approveReallocation = () => {
+    // Commit this cycle's composites as the next cycle's EWMA prior.
+    commitComposites(pf.id, compositesFrom(reallocation.items));
+    approveAction(reallocationKey(pf.id));
+  };
 
   return (
     <Card>
@@ -144,13 +166,13 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
                   <TableHead className="w-[30%]">Current → Proposed</TableHead>
                   <TableHead className="text-right">Δ</TableHead>
                   <TableHead>Trajectory</TableHead>
-                  <TableHead className="text-right">CPI</TableHead>
+                  <TableHead className="text-right">{costLabel(pf.objective)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item) => {
                   const snap = byId.get(item.id);
-                  const cpiItem = item.score14d > 0 ? 1 / item.score14d : 0;
+                  const cpiItem = costFromScore(item.score14d, pf.objective);
                   return (
                     <TableRow key={item.id}>
                       <TableCell>
@@ -233,7 +255,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
               — previews this proposal; &ldquo;Apply to portfolio&rdquo; saves it to Settings
             </span>
           </h3>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="realloc-daily" className="text-xs text-muted-foreground">
                 Daily budget ({pf.currency})
@@ -242,20 +264,34 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">
-                Velocity cap: <span className="font-medium text-foreground">{cap}%</span>
+                Raise cap: <span className="font-medium text-foreground">+{up}%</span>
               </label>
               <Slider
-                value={[cap]}
+                value={[up]}
                 min={10}
-                max={60}
+                max={80}
                 step={1}
-                onValueChange={(v) => setCap(v[0] ?? cap)}
-                aria-label="Velocity cap"
+                onValueChange={(v) => setUp(v[0] ?? up)}
+                aria-label="Raise cap"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">
+                Cut cap: <span className="font-medium text-foreground">−{down}%</span>
+              </label>
+              <Slider
+                value={[down]}
+                min={10}
+                max={80}
+                step={1}
+                onValueChange={(v) => setDown(v[0] ?? down)}
+                aria-label="Cut cap"
               />
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Mode ({capitalize(pf.config.mode)}) and target come from the portfolio settings.
+            Caps default to the {costLabel(pf.objective)} objective&rsquo;s calibration. Mode (
+            {capitalize(pf.config.mode)}) and target come from the portfolio settings.
           </p>
         </div>
 
@@ -268,7 +304,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
           </Button>
           <Button
             variant="success"
-            onClick={() => approveAction(reallocationKey(pf.id))}
+            onClick={approveReallocation}
             disabled={reallocApproved}
           >
             ✓ Approve reallocation

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { AdSetSnapshot } from "@continuum/optimization-engine";
+import type { AdSetSnapshot, OptimizationObjective } from "@continuum/optimization-engine";
 
 import { AD_SET_CATALOG, SAMPLE_PORTFOLIOS } from "@/lib/paid-media/optimizer/sample-data";
 import type {
@@ -25,11 +25,16 @@ type OptimizerContextValue = {
   getPortfolio: (id: string) => OptimizerPortfolio | undefined;
   updateConfig: (id: string, patch: Partial<PortfolioConfig>) => void;
   renamePortfolio: (id: string, name: string) => void;
+  setObjective: (id: string, objective: OptimizationObjective) => void;
   toggleAdSet: (id: string, adSetId: string) => void;
   addPortfolio: () => string;
   /** Whether a proposed action (by stable key) has been approved this session. */
   isActionApproved: (key: string) => boolean;
   approveAction: (key: string) => void;
+  /** EWMA prior composite per ad set, from the last committed cycle (by portfolio). */
+  getPriorComposites: (portfolioId: string) => Record<string, number> | undefined;
+  /** Persist this cycle's composites as the next cycle's EWMA prior. */
+  commitComposites: (portfolioId: string, composites: Record<string, number>) => void;
 };
 
 const OptimizerContext = createContext<OptimizerContextValue | null>(null);
@@ -63,6 +68,10 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
 
   const renamePortfolio = useCallback((id: string, name: string) => {
     setPortfolios((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+  }, []);
+
+  const setObjective = useCallback((id: string, objective: OptimizationObjective) => {
+    setPortfolios((prev) => prev.map((p) => (p.id === id ? { ...p, objective } : p)));
   }, []);
 
   const toggleAdSet = useCallback((id: string, adSetId: string) => {
@@ -123,6 +132,23 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // EWMA state: composites from the last committed cycle, per portfolio. Lead
+  // (the only EWMA objective) smooths against these. Session-only — durable
+  // persistence (ad_set_engine_state) is a review-gated Supabase follow-up.
+  const [priorComposites, setPriorComposites] = useState<
+    Record<string, Record<string, number>>
+  >({});
+  const getPriorComposites = useCallback(
+    (portfolioId: string) => priorComposites[portfolioId],
+    [priorComposites],
+  );
+  const commitComposites = useCallback(
+    (portfolioId: string, composites: Record<string, number>) => {
+      setPriorComposites((prev) => ({ ...prev, [portfolioId]: composites }));
+    },
+    [],
+  );
+
   const value = useMemo<OptimizerContextValue>(
     () => ({
       portfolios,
@@ -130,20 +156,26 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
       getPortfolio,
       updateConfig,
       renamePortfolio,
+      setObjective,
       toggleAdSet,
       addPortfolio,
       isActionApproved,
       approveAction,
+      getPriorComposites,
+      commitComposites,
     }),
     [
       portfolios,
       getPortfolio,
       updateConfig,
       renamePortfolio,
+      setObjective,
       toggleAdSet,
       addPortfolio,
       isActionApproved,
       approveAction,
+      getPriorComposites,
+      commitComposites,
     ],
   );
 

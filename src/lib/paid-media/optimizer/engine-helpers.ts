@@ -1,13 +1,23 @@
 import { getObjectiveProfile, runCycle } from "@continuum/optimization-engine";
-import type { CycleResult, ReallocationResult } from "@continuum/optimization-engine";
+import type {
+  CycleResult,
+  ItemDiagnostics,
+  OptimizationObjective,
+  ReallocationResult,
+} from "@continuum/optimization-engine";
 
 import { MONTH, type OptimizerPortfolio } from "./types";
 
 export type ComputeOverrides = {
   /** Override the portfolio daily budget for THIS reallocation only. */
   dailyBudget?: number;
-  /** Override the velocity cap (percent) for THIS reallocation only. */
+  /** Override the legacy symmetric velocity cap (percent) for THIS reallocation only. */
   velocityCap?: number;
+  /** Override the asymmetric raise / cut caps (percent) for THIS reallocation only. */
+  velocityUpPct?: number;
+  velocityDownPct?: number;
+  /** Prior smoothed composite per ad set id (EWMA state from the last cycle). */
+  priorComposites?: Record<string, number>;
 };
 
 /** Run a full optimization cycle for one portfolio, with optional review overrides. */
@@ -19,18 +29,48 @@ export function runPortfolioCycle(
   // `|| c.x` (not `??`): a cleared / 0 override falls back to the configured value,
   // so an empty budget field never collapses the whole proposal to zero.
   const total = Math.round(overrides?.dailyBudget || c.dailyBudget);
+  // Asymmetric caps precedence: review override -> portfolio setting -> profile default.
+  const upPct = overrides?.velocityUpPct ?? c.velocityUpPct;
+  const downPct = overrides?.velocityDownPct ?? c.velocityDownPct;
   return runCycle(pf.snapshots, {
     mode: c.mode,
     total,
     maxBudget: Math.round(total * 1.3),
     weeklyGrowthPct: 0.05,
     objective: pf.objective,
+    priorComposites: overrides?.priorComposites,
     config: {
       cpaTarget: c.cpaTarget,
       velocityCapPct: (overrides?.velocityCap || c.velocityCap) / 100,
+      ...(upPct !== undefined ? { velocityUpPct: upPct / 100 } : {}),
+      ...(downPct !== undefined ? { velocityDownPct: downPct / 100 } : {}),
     },
   });
 }
+
+/** Snapshot the composite scores from a cycle as the next cycle's EWMA prior. */
+export function compositesFrom(items: ItemDiagnostics[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const i of items) map[i.id] = i.compositeScore;
+  return map;
+}
+
+/** Cost-per-event metric per objective: display label + scale (awareness => CPM x1000). */
+const COST_METRIC: Record<OptimizationObjective, { label: string; scale: number }> = {
+  purchase: { label: "CPA", scale: 1 },
+  app_install: { label: "CPI", scale: 1 },
+  signup: { label: "CPA", scale: 1 },
+  lead: { label: "CPL", scale: 1 },
+  traffic: { label: "CPV", scale: 1 },
+  awareness: { label: "CPM", scale: 1000 },
+};
+
+export const costLabel = (objective: OptimizationObjective): string =>
+  COST_METRIC[objective].label;
+
+/** Per-ad-set cost from its 14d score (score = events/spend => cost = scale/score). */
+export const costFromScore = (score: number, objective: OptimizationObjective): number =>
+  score > 0 ? COST_METRIC[objective].scale / score : 0;
 
 export type Projection = {
   daily: number;
@@ -62,7 +102,7 @@ export function portfolioCpi(pf: OptimizerPortfolio): number {
     spend += s.windows.d14.spend;
     conv += (s.windows.d14[kpiField] ?? 0) as number;
   }
-  return conv > 0 ? spend / conv : 0;
+  return conv > 0 ? (spend / conv) * COST_METRIC[pf.objective].scale : 0;
 }
 
 export function spend14d(pf: OptimizerPortfolio): number {

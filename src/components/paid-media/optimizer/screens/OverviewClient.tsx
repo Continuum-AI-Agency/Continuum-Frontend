@@ -154,7 +154,7 @@ export function OverviewClient() {
                 <TableHead>Portfolio</TableHead>
                 <TableHead>Objective</TableHead>
                 <TableHead className="text-right">Daily</TableHead>
-                <TableHead className="text-right">CPI / target</TableHead>
+                <TableHead className="text-right">Cost / target</TableHead>
                 <TableHead className="text-right">Pacing</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead />
