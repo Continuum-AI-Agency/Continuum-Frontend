@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Continuum Optimizer — Frontend (current state)</title>
+<style>
+  :root{
+    --primary:#5A48F9; --primary-2:#7B6BFF;
+    --bg:#f6f5ff; --card:#ffffff; --card-tint:#f5f4ff; --muted-bg:#eeecfc;
+    --ink:#1c1936; --muted:#6f6a93; --faint:#9c98bd; --border:#e4e2f7;
+    --green:#1f9d6b; --green-bg:#e7f7ef; --amber:#b45309; --amber-bg:#fdf3e3;
+    --red:#dc2626; --red-bg:#fdecec; --radius:12px;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+  .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh}
+  /* sidebar */
+  .side{background:#faf9ff;border-right:1px solid var(--border);padding:16px 12px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:9px;padding:6px 8px 16px}
+  .brand .logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--primary),#ec4899);box-shadow:0 0 16px rgba(90,72,249,.4)}
+  .brand b{font-size:15px}
+  .nav a{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;color:var(--muted);text-decoration:none;font-size:13.5px;margin:2px 0}
+  .nav a .ic{width:16px;height:16px;border-radius:5px;background:var(--muted-bg);flex:none}
+  .nav a.active{background:var(--muted-bg);color:var(--primary);font-weight:600}
+  .nav a.active .ic{background:var(--primary)}
+  .side .foot{position:absolute;bottom:14px;left:12px;right:12px;font-size:11px;color:var(--faint)}
+  /* main */
+  .main{padding:22px 30px 70px;max-width:1080px}
+  .page-h{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .page-h h1{font-size:21px;margin:0}
+  .page-h .crumb{font-size:12.5px;color:var(--faint)}
+  .lede{color:var(--muted);font-size:13px;margin:0 0 16px}
+  /* optimizer nav tabs */
+  .otabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap}
+  .otabs button{appearance:none;border:0;background:none;font:inherit;cursor:pointer;color:var(--muted);
+    padding:9px 13px;border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:7px;border-radius:6px 6px 0 0}
+  .otabs button:hover{color:var(--ink);background:var(--card-tint)}
+  .otabs button.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+  .otabs .sep{flex:1}
+  .otabs .grp{font-size:10px;color:var(--faint);align-self:center;text-transform:uppercase;letter-spacing:.08em;padding:0 6px}
+  .pendingdot{background:var(--primary);color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;font-weight:700}
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px}
+  .kpi .l{font-size:11.5px;color:var(--muted)}
+  .kpi .v{font-size:22px;font-weight:700;margin-top:3px;letter-spacing:-.5px}
+  .kpi .s{font-size:11.5px;color:var(--faint);margin-top:2px}
+  .kpi.ok .v{color:var(--ink)} .kpi.bad .v{color:var(--red)} .kpi.warn .v{color:var(--amber)} .kpi.good .v{color:var(--green)}
+  .sectitle{font-size:14px;font-weight:650;margin:18px 0 9px}
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 12px;font-size:13px;border-bottom:1px solid var(--border)}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:600;background:var(--card-tint)}
+  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+  .tablewrap{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  tr:last-child td{border-bottom:0}
+  .name{font-weight:600}
+  .mono{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--border);background:var(--card-tint);color:var(--muted);white-space:nowrap}
+  .chip.mode{background:var(--muted-bg);color:var(--primary);border-color:transparent}
+  .chip.aud{font-size:9.5px}
+  .chip.green{background:var(--green-bg);color:var(--green);border-color:transparent}
+  .chip.amber{background:var(--amber-bg);color:var(--amber);border-color:transparent}
+  .chip.red{background:var(--red-bg);color:var(--red);border-color:transparent}
+  .chip.gray{background:#eef;color:var(--faint)}
+  .traj-up{color:var(--green);font-weight:600} .traj-dn{color:var(--red);font-weight:600} .traj-fl{color:var(--faint)}
+  .delta-up{color:var(--green);font-weight:600} .delta-dn{color:var(--red);font-weight:600}
+  /* share bar */
+  .sbar{position:relative;height:9px;background:var(--muted-bg);border-radius:999px;overflow:visible;min-width:120px}
+  .sbar .prop{position:absolute;left:0;top:0;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--primary-2))}
+  .sbar .cur{position:absolute;top:-3px;height:15px;width:2px;background:#1c1936;opacity:.5}
+  /* buttons */
+  .btn{appearance:none;border:1px solid var(--border);background:var(--card);color:var(--ink);font:inherit;font-size:12.5px;
+    padding:6px 12px;border-radius:9px;cursor:pointer;font-weight:550}
+  .btn:hover{background:var(--card-tint)}
+  .btn.primary{background:var(--primary);color:#fff;border-color:transparent}
+  .btn.success{background:var(--green);color:#fff;border-color:transparent}
+  .btn.ghost{background:none;border-color:transparent;color:var(--muted)}
+  .btn.sm{padding:4px 10px;font-size:12px}
+  .badge{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600}
+  .badge.success{background:var(--green-bg);color:var(--green)}
+  .badge.outline-amber{background:transparent;color:var(--amber);border:1px solid var(--amber)}
+  /* misc */
+  .row{display:flex;align-items:center;gap:10px}
+  .between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .muted{color:var(--muted)} .faint{color:var(--faint)} .small{font-size:12px}
+  .pacing{height:10px;border-radius:999px;background:var(--muted-bg);position:relative;overflow:hidden}
+  .pacing .fill{position:absolute;left:50%;top:0;height:100%;background:var(--primary);opacity:.7}
+  .banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--card-tint);border:1px solid var(--border);border-radius:var(--radius);padding:11px 15px;font-size:13px}
+  .rec{border:1px solid #f0d9a8;background:#fdf6e8;border-radius:var(--radius);padding:11px 13px;margin-top:8px}
+  .rec .t{font-weight:600;color:var(--amber)}
+  .rec .why{font-size:12px;color:var(--muted);margin-top:4px}
+  .pf-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);margin-bottom:10px}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+  .field label{font-size:11.5px;color:var(--muted)}
+  .inp{border:1px solid var(--border);border-radius:9px;padding:8px 11px;font:inherit;font-size:13px;background:var(--card);max-width:340px}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;background:var(--card-tint);padding:3px}
+  .seg button{appearance:none;border:0;background:none;font:inherit;font-size:12px;padding:6px 11px;border-radius:7px;cursor:pointer;color:var(--muted)}
+  .seg button.on{background:var(--card);font-weight:650;box-shadow:0 1px 2px rgba(0,0,0,.06);color:var(--ink)}
+  .objgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:420px}
+  .objgrid button{appearance:none;border:1px solid transparent;background:var(--card-tint);font:inherit;font-size:12px;padding:8px;border-radius:8px;cursor:pointer;color:var(--muted)}
+  .objgrid button.on{background:var(--card);border-color:var(--border);font-weight:650;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .slider{height:6px;border-radius:999px;background:var(--muted-bg);position:relative;max-width:280px;margin:8px 0}
+  .slider .knob{position:absolute;top:-5px;width:16px;height:16px;border-radius:50%;background:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .slider .filled{position:absolute;left:0;top:0;height:100%;background:var(--primary);border-radius:999px}
+  .adlist{border:1px solid var(--border);border-radius:var(--radius);max-height:230px;overflow:auto}
+  .adrow{display:flex;align-items:center;gap:11px;padding:8px 12px;border-bottom:1px solid var(--border)}
+  .adrow:last-child{border-bottom:0}
+  .cbx{width:15px;height:15px;border:1.5px solid var(--border);border-radius:4px;flex:none}
+  .cbx.on{background:var(--primary);border-color:var(--primary);position:relative}
+  .cbx.on::after{content:"✓";color:#fff;font-size:11px;position:absolute;left:1.5px;top:-2px}
+  .view{display:none} .view.on{display:block}
+  .note{font-size:11.5px;color:var(--faint);margin-top:8px}
+  .legend-strip{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== sidebar ===== -->
+  <aside class="side">
+    <div class="brand"><div class="logo"></div><b>Continuum</b></div>
+    <nav class="nav">
+      <a><span class="ic"></span> Dashboard</a>
+      <a><span class="ic"></span> Organic</a>
+      <a class="active"><span class="ic"></span> Paid Media</a>
+      <a><span class="ic"></span> Library</a>
+      <a><span class="ic"></span> Integrations</a>
+      <a><span class="ic"></span> Settings</a>
+    </nav>
+    <div class="foot">Privalia MX · workspace<br/>app.trycontinuum.ai</div>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="main">
+    <div class="page-h">
+      <h1>Optimizer</h1>
+      <span class="crumb" id="crumb">Paid Media › Optimizer</span>
+    </div>
+    <p class="lede" id="lede">Multi-portfolio budget reallocation for Meta · propose-only · 3 portfolios</p>
+
+    <div class="otabs" id="otabs">
+      <button data-v="overview" class="on">Overview</button>
+      <button data-v="portfolios">Portfolios</button>
+      <button data-v="actions">Actions <span class="pendingdot">7</span></button>
+      <span class="grp">drill-in · Privalia · Retargeting · Purchases</span>
+      <button data-v="dashboard">Dashboard</button>
+      <button data-v="reallocation">Reallocation</button>
+      <button data-v="settings">Settings</button>
+    </div>
+
+    <!-- ============ OVERVIEW ============ -->
+    <section class="view on" id="v-overview">
+      <div class="kpis">
+        <div class="kpi"><div class="l">Total daily budget</div><div class="v">$29,388</div><div class="s">MXN / day · 3 portfolios</div></div>
+        <div class="kpi warn"><div class="l">Projected month vs plan</div><div class="v">+1.3%</div><div class="s">$881,640 vs $870,000 plan</div></div>
+        <div class="kpi"><div class="l">Pending actions</div><div class="v">7</div><div class="s">3 reallocations · 4 pauses</div></div>
+        <div class="kpi good"><div class="l">Reallocated this cycle</div><div class="v">$3,399</div><div class="s">moved to better performers</div></div>
+      </div>
+
+      <div class="sectitle">Portfolios at a glance</div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Portfolio</th><th>Objective</th><th class="r">Daily</th><th class="r">Cost / target</th><th class="r">Pacing</th><th class="r">Pending</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="name">Privalia · ACQ · Mobile Installs</td>
+              <td><span class="muted">App installs</span> <span class="chip mode">Balanced</span></td>
+              <td class="r">$15,388</td>
+              <td class="r"><span style="color:var(--red)">$20</span> <span class="faint">/$20</span></td>
+              <td class="r warn"><span class="chip amber">+2.6%</span></td>
+              <td class="r">1</td>
+              <td class="r"><button class="btn sm">Open</button></td>
+            </tr>
+            <tr>
+              <td class="name">Privalia · Retargeting · Purchases</td>
+              <td><span class="muted">Purchases</span> <span class="chip mode">Efficiency</span></td>
+              <td class="r">$8,000</td>
+              <td class="r"><span style="color:var(--green)">$161</span> <span class="faint">/$180</span></td>
+              <td class="r"><span class="chip green">on track</span></td>
+              <td class="r">3</td>
+              <td class="r"><button class="btn sm">Open</button></td>
+            </tr>
+            <tr>
+              <td class="name">LATAM · Prospecting · Leads</td>
+              <td><span class="muted">Leads</span> <span class="chip mode">Scale</span></td>
+              <td class="r">$6,000</td>
+              <td class="r"><span style="color:var(--green)">$78</span> <span class="faint">/$90</span></td>
+              <td class="r"><span class="chip green">on track</span></td>
+              <td class="r">3</td>
+              <td class="r"><button class="btn sm">Open</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sectitle">Highlights</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <div class="card"><div class="faint small">Top mover</div><div style="font-weight:650;margin-top:4px">UGC · +40%</div><div class="small muted">Mobile Installs · CPI $15</div></div>
+        <div class="card"><div class="faint small">Most efficient portfolio</div><div style="font-weight:650;margin-top:4px">LATAM · Leads</div><div class="small muted">CPL $78 vs $90 target</div></div>
+        <div class="card"><div class="faint small">Conservation</div><div style="font-weight:650;margin-top:4px;color:var(--green)">✓ guaranteed</div><div class="small muted">Σ proposed = total · all portfolios</div></div>
+      </div>
+    </section>
+
+    <!-- ============ PORTFOLIOS ============ -->
+    <section class="view" id="v-portfolios">
+      <div class="between" style="margin-bottom:12px">
+        <div class="muted small">3 portfolios</div>
+        <button class="btn primary">+ New portfolio</button>
+      </div>
+      <div class="pf-card">
+        <div><div class="name">Privalia · ACQ · Mobile Installs</div>
+          <div class="small muted" style="margin-top:3px">App installs · 9 ad sets <span class="chip mode">Balanced</span> · plan $450,000/mo</div></div>
+        <div class="row"><div style="text-align:right"><div style="font-weight:700">$15,388</div><div class="small faint">CPI <span style="color:var(--red)">$20</span>/$20</div></div>
+          <button class="btn sm">Edit</button><button class="btn sm primary">Open</button></div>
+      </div>
+      <div class="pf-card">
+        <div><div class="name">Privalia · Retargeting · Purchases</div>
+          <div class="small muted" style="margin-top:3px">Purchases · 6 ad sets <span class="chip mode">Efficiency</span> · plan $240,000/mo</div></div>
+        <div class="row"><div style="text-align:right"><div style="font-weight:700">$8,000</div><div class="small faint">CPA <span style="color:var(--green)">$161</span>/$180</div></div>
+          <button class="btn sm">Edit</button><button class="btn sm primary">Open</button></div>
+      </div>
+      <div class="pf-card">
+        <div><div class="name">LATAM · Prospecting · Leads</div>
+          <div class="small muted" style="margin-top:3px">Leads · 7 ad sets <span class="chip mode">Scale</span> · plan $180,000/mo</div></div>
+        <div class="row"><div style="text-align:right"><div style="font-weight:700">$6,000</div><div class="small faint">CPL <span style="color:var(--green)">$78</span>/$90</div></div>
+          <button class="btn sm">Edit</button><button class="btn sm primary">Open</button></div>
+      </div>
+    </section>
+
+    <!-- ============ ACTIONS ============ -->
+    <section class="view" id="v-actions">
+      <div class="legend-strip">
+        <span>● <b>7</b> pending</span><span class="faint">pending first, then history · each needs review</span>
+      </div>
+      <div class="sectitle">Pending — pauses (always need approval)</div>
+      <div class="rec"><div class="between"><span class="t">broad-CDP-old <span class="faint small">· Privalia Purchases</span></span>
+        <div class="row"><span class="chip red">P2 sustained poor</span><button class="btn sm">Review</button><button class="btn sm success">Approve pause</button></div></div>
+        <div class="why">CPA 14d $539 &gt; 2.5× the robust reference, with no recent improvement.</div></div>
+      <div class="rec"><div class="between"><span class="t">wishlist-stale <span class="faint small">· Privalia Purchases</span></span>
+        <div class="row"><span class="chip amber">P3 dead weight</span><button class="btn sm">Review</button><button class="btn sm success">Approve pause</button></div></div>
+        <div class="why">Spent $1,260 over 14d (&gt; 1 target CPA) with 0 conversions: dead weight.</div></div>
+      <div class="rec"><div class="between"><span class="t">interest-finance <span class="faint small">· LATAM Leads</span></span>
+        <div class="row"><span class="chip red">P2 sustained poor</span><button class="btn sm">Review</button><button class="btn sm success">Approve pause</button></div></div>
+        <div class="why">CPL 14d $136 &gt; 2.5× the robust reference, with no recent improvement.</div></div>
+      <div class="rec"><div class="between"><span class="t">cold-nosignal <span class="faint small">· LATAM Leads</span></span>
+        <div class="row"><span class="chip red">P1 zero upper funnel</span><button class="btn sm">Review</button><button class="btn sm success">Approve pause</button></div></div>
+        <div class="why">Spent $312 over 3d with 0 conversions and null upper-funnel signal vs portfolio average.</div></div>
+
+      <div class="sectitle">Pending — reallocations</div>
+      <div class="banner"><span>Budget reallocation ready · <b>Privalia · Mobile Installs</b> · $2,674 moved · total preserved</span><div class="row"><button class="btn sm">Review</button><button class="btn sm success">Approve</button></div></div>
+      <div class="banner" style="margin-top:8px"><span>Budget reallocation ready · <b>Privalia · Purchases</b> · $259 moved · total preserved</span><div class="row"><button class="btn sm">Review</button><button class="btn sm success">Approve</button></div></div>
+      <div class="banner" style="margin-top:8px"><span>Budget reallocation ready · <b>LATAM · Leads</b> · $466 moved · scale +5% · total preserved</span><div class="row"><button class="btn sm">Review</button><button class="btn sm success">Approve</button></div></div>
+    </section>
+
+    <!-- ============ DASHBOARD (Purchases) ============ -->
+    <section class="view" id="v-dashboard">
+      <div class="kpis">
+        <div class="kpi"><div class="l">Daily budget</div><div class="v">$8,000</div><div class="s">MXN / day</div></div>
+        <div class="kpi"><div class="l">Spent (14d)</div><div class="v">$111,315</div><div class="s">of $240,000 plan</div></div>
+        <div class="kpi good"><div class="l">Portfolio CPA</div><div class="v">$161.3</div><div class="s">target $180</div></div>
+        <div class="kpi"><div class="l">30d vs plan</div><div class="v">+0%</div><div class="s">on plan</div></div>
+      </div>
+      <div class="banner"><span>⇄ <b>Budget reallocation ready</b> · Jun 14 · total preserved</span><div class="row"><button class="btn sm">Review</button><button class="btn sm success">Approve</button></div></div>
+
+      <div class="sectitle">Ad sets</div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Ad set</th><th class="r">Daily</th><th style="width:34%">Share</th><th>Trajectory</th><th class="r">CPA</th></tr></thead>
+          <tbody>
+            <tr><td><span class="name">cart-abandoners-7d</span> <span class="chip aud">remarketing</span></td><td class="r">2,345</td><td><div class="sbar"><div class="prop" style="width:100%"></div></div></td><td><span class="traj-fl">→ neutral</span></td><td class="r">$108</td></tr>
+            <tr><td><span class="name">viewers-30d</span> <span class="chip aud">remarketing</span></td><td class="r">1,565</td><td><div class="sbar"><div class="prop" style="width:67%"></div></div></td><td><span class="traj-fl">→ neutral</span></td><td class="r">$108</td></tr>
+            <tr><td><span class="name">past-buyers-LAL</span> <span class="chip aud">remarketing</span></td><td class="r">1,514</td><td><div class="sbar"><div class="prop" style="width:65%"></div></div></td><td><span class="traj-fl">→ neutral</span></td><td class="r">$180</td></tr>
+            <tr><td><span class="name">category-browsers</span> <span class="chip gray">learning</span></td><td class="r">1,104</td><td><div class="sbar"><div class="prop" style="width:47%"></div></div></td><td><span class="traj-fl">→ neutral</span></td><td class="r">$268</td></tr>
+            <tr><td><span class="name">broad-CDP-old</span> <span class="chip red">starved</span></td><td class="r">828</td><td><div class="sbar"><div class="prop" style="width:35%"></div></div></td><td><span class="traj-fl">→ neutral</span></td><td class="r">$539</td></tr>
+            <tr><td><span class="name">wishlist-stale</span> <span class="chip red">starved</span></td><td class="r">644</td><td><div class="sbar"><div class="prop" style="width:27%"></div></div></td><td><span class="traj-fl">→ neutral</span></td><td class="r">$0</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ REALLOCATION (Purchases) ============ -->
+    <section class="view" id="v-reallocation">
+      <div class="between" style="margin-bottom:14px">
+        <div><div class="row" style="font-weight:650;font-size:15px">⇄ Budget reallocation</div>
+          <div class="small muted" style="margin-top:2px">Jun 14, 2026 · 6 ad sets · Efficiency mode</div></div>
+        <span class="badge outline-amber">Pending review</span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Daily total</div><div class="v">$8,000</div><div class="s">MXN / day</div></div>
+        <div class="kpi"><div class="l">30-day projection</div><div class="v">$240,000</div><div class="s">+0% vs plan</div></div>
+        <div class="kpi"><div class="l">To month end (17d)</div><div class="v">$136,000</div><div class="s">plan $240,000/mo</div></div>
+        <div class="kpi"><div class="l">Conservation</div><div class="v" style="font-size:15px;margin-top:8px"><span class="badge success">✓ exact</span></div><div class="s">total preserved</div></div>
+      </div>
+
+      <div class="small muted" style="margin-bottom:5px">Pacing vs plan</div>
+      <div class="pacing" style="margin-bottom:18px"><div class="fill" style="width:0%"></div></div>
+
+      <div class="sectitle">Proposed changes</div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Ad set</th><th class="r">Current</th><th style="width:30%">Current → Proposed</th><th class="r">Δ</th><th>Trajectory</th><th class="r">CPA</th></tr></thead>
+          <tbody>
+            <tr><td><span class="name">cart-abandoners-7d</span> <span class="chip aud">remarketing</span></td><td class="r faint">2,200</td><td><div class="sbar"><div class="prop" style="width:100%"></div><div class="cur" style="left:94%"></div></div></td><td class="r delta-up">+7%</td><td><span class="traj-fl">→ neutral</span></td><td class="r">$108</td></tr>
+            <tr><td><span class="name">viewers-30d</span> <span class="chip aud">remarketing</span></td><td class="r faint">1,600</td><td><div class="sbar"><div class="prop" style="width:67%"></div><div class="cur" style="left:68%"></div></div></td><td class="r delta-dn">−2%</td><td><span class="traj-fl">→ neutral</span></td><td class="r">$108</td></tr>
+            <tr><td><span class="name">past-buyers-LAL</span> <span class="chip aud">remarketing</span></td><td class="r faint">1,400</td><td><div class="sbar"><div class="prop" style="width:65%"></div><div class="cur" style="left:60%"></div></div></td><td class="r delta-up">+8%</td><td><span class="traj-fl">→ neutral</span></td><td class="r">$180</td></tr>
+            <tr><td><span class="name">category-browsers</span> <span class="chip gray">learning</span></td><td class="r faint">1,200</td><td><div class="sbar"><div class="prop" style="width:47%"></div><div class="cur" style="left:51%"></div></div></td><td class="r delta-dn">−8%</td><td><span class="traj-fl">→ neutral</span></td><td class="r">$268</td></tr>
+            <tr><td><span class="name">broad-CDP-old</span> <span class="chip red">starved</span></td><td class="r faint">900</td><td><div class="sbar"><div class="prop" style="width:35%"></div><div class="cur" style="left:38%"></div></div></td><td class="r delta-dn">−8%</td><td><span class="traj-fl">→ neutral</span></td><td class="r">$539</td></tr>
+            <tr><td><span class="name">wishlist-stale</span> <span class="chip red">starved</span></td><td class="r faint">700</td><td><div class="sbar"><div class="prop" style="width:27%"></div><div class="cur" style="left:30%"></div></div></td><td class="r delta-dn">−8%</td><td><span class="traj-fl">→ neutral</span></td><td class="r">$0</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sectitle">Pause recommendations</div>
+      <div class="rec"><div class="between"><span class="t">broad-CDP-old</span><button class="btn sm">Approve pause</button></div>
+        <div class="why">CPA 14d $539 &gt; 2.5× the robust reference, with no recent improvement.</div></div>
+      <div class="rec"><div class="between"><span class="t">wishlist-stale</span><button class="btn sm">Approve pause</button></div>
+        <div class="why">Spent $1,260 over 14d (&gt; 1 target CPA) with 0 conversions: dead weight.</div></div>
+
+      <div class="sectitle">Review &amp; edit <span class="faint small" style="font-weight:400">— previews this proposal; “Apply to portfolio” saves it to Settings</span></div>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+          <div><label class="small muted">Daily budget (MXN)</label><div class="inp" style="margin-top:5px">8,000</div></div>
+          <div><label class="small muted">Raise cap: <b>+30%</b></label><div class="slider"><div class="filled" style="width:40%"></div><div class="knob" style="left:37%"></div></div></div>
+          <div><label class="small muted">Cut cap: <b>−40%</b></label><div class="slider"><div class="filled" style="width:50%"></div><div class="knob" style="left:47%"></div></div></div>
+        </div>
+        <div class="note">Caps default to the <b>CPA</b> objective’s calibration (+30% / −40%). Mode (Efficiency) and target come from portfolio settings.</div>
+      </div>
+
+      <div class="between" style="justify-content:flex-end;margin-top:14px">
+        <button class="btn ghost">Discard</button><button class="btn">Apply to portfolio</button><button class="btn success">✓ Approve reallocation</button>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS (Purchases) ============ -->
+    <section class="view" id="v-settings">
+      <div class="card" style="max-width:640px">
+        <div class="field"><label>Portfolio name</label><input class="inp" value="Privalia · Retargeting · Purchases"/></div>
+
+        <div class="sectitle" style="margin-top:0">Ad sets <span class="faint small" style="font-weight:400">— search by name or ad set ID to add</span></div>
+        <input class="inp" style="max-width:none;width:100%;margin-bottom:8px" placeholder="Search by name or ad set ID…"/>
+        <div class="small faint" style="margin-bottom:8px">6 selected · 38 available in account</div>
+        <div class="adlist">
+          <div class="adrow"><div class="cbx on"></div><div style="flex:1"><div class="name small">cart-abandoners-7d <span class="chip aud">remarketing</span></div><div class="mono">ID 6979511002071</div></div><div class="small faint">$2,200</div><div class="small" style="width:42px;text-align:right">$108</div></div>
+          <div class="adrow"><div class="cbx on"></div><div style="flex:1"><div class="name small">viewers-30d <span class="chip aud">remarketing</span></div><div class="mono">ID 6979511002072</div></div><div class="small faint">$1,600</div><div class="small" style="width:42px;text-align:right">$108</div></div>
+          <div class="adrow"><div class="cbx on"></div><div style="flex:1"><div class="name small">past-buyers-LAL <span class="chip aud">remarketing</span></div><div class="mono">ID 6979511002073</div></div><div class="small faint">$1,400</div><div class="small" style="width:42px;text-align:right">$180</div></div>
+          <div class="adrow"><div class="cbx"></div><div style="flex:1"><div class="name small">prospecting-broad</div><div class="mono">ID 6979511002099</div></div><div class="small faint">$0</div><div class="small" style="width:42px;text-align:right">–</div></div>
+        </div>
+
+        <div class="sectitle">Objective <span class="faint small" style="font-weight:400">— selects the calibrated profile (KPI, weights, caps)</span></div>
+        <div class="objgrid">
+          <button>Purchases</button><button class="on">Purchases ✓</button><button>Sign-ups</button>
+          <button>Leads</button><button>Traffic</button><button>Awareness</button>
+        </div>
+        <div class="note">App installs / Sign-ups / Leads / Traffic / Awareness available — drives KPI, window weights, asymmetric caps, gate &amp; EWMA.</div>
+
+        <div class="sectitle">Budget &amp; schedule</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:480px">
+          <div class="field"><label>Period total budget (MXN)</label><input class="inp" value="240,000"/></div>
+          <div class="field"><label>Period</label><input class="inp" value="Jun 1 – Jun 30, 2026" disabled/></div>
+          <div class="field"><label>Daily budget (MXN)</label><input class="inp" value="8,000"/></div>
+          <div class="field"><label>Implied from plan</label><input class="inp" value="$8,000 / day" disabled/></div>
+        </div>
+
+        <div class="field"><label>Velocity cap (± per cycle): <b>30%</b></label><div class="slider"><div class="filled" style="width:40%"></div><div class="knob" style="left:37%"></div></div></div>
+        <div class="field"><label>Target CPA (MXN)</label><input class="inp" style="max-width:160px" value="180"/></div>
+
+        <div class="sectitle">Optimization mode</div>
+        <div class="seg">
+          <button class="on">Efficiency<br/><span class="faint" style="font-size:10px">ceiling, may underspend</span></button>
+          <button>Balanced<br/><span class="faint" style="font-size:10px">spend the exact plan</span></button>
+          <button>Scale<br/><span class="faint" style="font-size:10px">grow if target met</span></button>
+        </div>
+
+        <div class="between" style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+          <div><div class="small" style="font-weight:600">Reallocation runs automatically</div><div class="small faint">Daily cycle · pauses always need approval</div></div>
+          <button class="btn primary">Save portfolio</button>
+        </div>
+      </div>
+    </section>
+
+    <p class="note" style="margin-top:26px">Faithful mockup of the current optimizer UI — values are the live engine output over the bundled sample portfolios
+    (<span class="mono">runPortfolioCycle</span> over <span class="mono">SAMPLE_PORTFOLIOS</span>). Drill-in screens show the “Privalia · Retargeting · Purchases” portfolio.</p>
+  </main>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('#otabs button');
+  const views = document.querySelectorAll('.view');
+  const crumb = document.getElementById('crumb');
+  const lede = document.getElementById('lede');
+  const meta = {
+    overview:   ['Paid Media › Optimizer', 'Multi-portfolio budget reallocation for Meta · propose-only · 3 portfolios'],
+    portfolios: ['Paid Media › Optimizer › Portfolios', 'Create, edit and open portfolios'],
+    actions:    ['Paid Media › Optimizer › Actions', 'Global recommendations feed across all portfolios'],
+    dashboard:  ['Paid Media › Optimizer › Privalia · Retargeting · Purchases', 'Purchases · 6 ad sets · Efficiency · plan $240,000/mo'],
+    reallocation:['Paid Media › Optimizer › Purchases › Reallocation', 'Review the proposed budget changes before approving'],
+    settings:   ['Paid Media › Optimizer › Purchases › Settings', 'Objective, budget, caps and mode — the source of truth'],
+  };
+  tabs.forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.v;
+    tabs.forEach(x => x.classList.toggle('on', x === b));
+    views.forEach(x => x.classList.toggle('on', x.id === 'v-'+v));
+    crumb.textContent = meta[v][0]; lede.textContent = meta[v][1];
+    window.scrollTo({top:0,behavior:'smooth'});
+  }));
+</script>
+</body>
+</html>
