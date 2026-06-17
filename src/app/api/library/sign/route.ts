@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { callerHasBrandAccess } from "@/lib/media/brand-access.server";
 import { mediaSchema } from "@/lib/media/supabase-media";
 import { mintSignedUrl } from "@/lib/media/signed-urls";
@@ -43,8 +42,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await mediaSchema(admin)
+  // User-scoped read: media.assets RLS (has_brand_access) already restricts to
+  // the caller's brand, so no service-role bypass is needed.
+  const { data, error } = await mediaSchema(supabase)
     .from("assets")
     .select("storage_path, bucket")
     .eq("id", assetId)

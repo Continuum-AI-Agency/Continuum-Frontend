@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { mediaSearchRequestSchema } from "@continuum/contracts";
 import { mediaSchema } from "@/lib/media/supabase-media";
 import { rowToMediaAsset } from "@/lib/media/mapper";
@@ -40,9 +39,8 @@ export async function POST(request: Request) {
   const filterSource = req.filters?.source;
   const filterKind = req.filters?.kind;
 
-  // Verify the caller belongs to the brand before using the admin client
-  // (which bypasses RLS). has_brand_access is SECURITY DEFINER and reads
-  // auth.uid(), so it must run on the user-scoped client.
+  // Verify the caller belongs to the brand. has_brand_access is SECURITY
+  // DEFINER and reads auth.uid(), so it must run on the user-scoped client.
   const { data: hasAccess, error: accessError } = await supabase
     .schema("brand_profiles")
     .rpc("has_brand_access", { brand_id: req.brandId });
@@ -50,12 +48,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-
+  // Read/rank with the user-scoped client: media.assets RLS (has_brand_access)
+  // scopes rows to the caller's brands, and authenticated holds EXECUTE on the
+  // ranking RPCs — so no service-role bypass is needed.
   try {
     if (req.mode === "text") {
       // Field-priority lexical ranking: title > tags > description.
-      const { data: matchRows, error: matchError } = await mediaSchema(admin)
+      const { data: matchRows, error: matchError } = await mediaSchema(supabase)
         .rpc("search_assets_ranked", {
           filter_brand_id: req.brandId,
           q: req.query!,
@@ -74,7 +73,7 @@ export async function POST(request: Request) {
         return NextResponse.json(result);
       }
 
-      let assetQuery = mediaSchema(admin)
+      let assetQuery = mediaSchema(supabase)
         .from("assets")
         .select(MEDIA_ASSET_SELECT)
         .in("id", ids);
@@ -114,7 +113,7 @@ export async function POST(request: Request) {
     }
 
     // similar mode
-    const { data: refRow, error: refError } = await mediaSchema(admin)
+    const { data: refRow, error: refError } = await mediaSchema(supabase)
       .from("assets")
       .select("embedding_image, brand_id")
       .eq("id", req.similarToAssetId!)
@@ -132,7 +131,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Reference asset not found" }, { status: 404 });
     }
 
-    const { data: matchRows, error: matchError } = await mediaSchema(admin)
+    const { data: matchRows, error: matchError } = await mediaSchema(supabase)
       .rpc("match_similar_assets", {
         query_embedding: refRow.embedding_image,
         match_threshold: req.threshold,
@@ -153,7 +152,7 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
 
-    let similarQuery = mediaSchema(admin)
+    let similarQuery = mediaSchema(supabase)
       .from("assets")
       .select(MEDIA_ASSET_SELECT)
       .in("id", ids);

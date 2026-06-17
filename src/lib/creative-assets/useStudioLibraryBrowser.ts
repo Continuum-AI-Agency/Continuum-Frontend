@@ -31,6 +31,9 @@ export type UseStudioLibraryBrowserResult = {
   setQuery: (value: string) => void;
   filters: StudioLibraryFilters;
   setFilters: (next: Partial<StudioLibraryFilters>) => void;
+  // Non-null when the last request failed. The panel renders this distinctly
+  // from an empty result so a server error never masquerades as "no assets".
+  error: string | null;
 };
 
 // Browses the unified media library from inside the ai-studio sheet. Lists via
@@ -41,6 +44,7 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQueryState] = useState("");
   const [filters, setFiltersState] = useState<StudioLibraryFilters>({
     source: "all",
@@ -65,11 +69,15 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
           limit: PAGE_SIZE,
         });
         const resp = await fetch(`/api/library/assets?${sp.toString()}`);
+        if (!resp.ok) {
+          throw new Error(`Library request failed (${resp.status})`);
+        }
         const data = (await resp.json()) as {
           items?: MediaAsset[];
           nextOffset?: number | null;
         };
         if (requestId !== requestIdRef.current) return;
+        setError(null);
         const incoming = data.items ?? [];
         setAssets((prev) => {
           if (offset === 0) return incoming;
@@ -81,6 +89,7 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
       } catch (err) {
         if (requestId === requestIdRef.current) {
           console.error("[useStudioLibraryBrowser] list failed", err);
+          setError("Couldn't load the library. Please try again.");
           setHasMore(false);
         }
       } finally {
@@ -111,13 +120,18 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
             ...(Object.keys(searchFilters).length > 0 ? { filters: searchFilters } : {}),
           }),
         });
+        if (!resp.ok) {
+          throw new Error(`Library search failed (${resp.status})`);
+        }
         const data = (await resp.json()) as { items?: MediaSearchResultItem[] };
         if (requestId !== requestIdRef.current) return;
+        setError(null);
         setAssets((data.items ?? []).map((item) => item.asset));
         setHasMore(false);
       } catch (err) {
         if (requestId === requestIdRef.current) {
           console.error("[useStudioLibraryBrowser] search failed", err);
+          setError("Couldn't search the library. Please try again.");
         }
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -154,5 +168,5 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
     [],
   );
 
-  return { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters };
+  return { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters, error };
 }

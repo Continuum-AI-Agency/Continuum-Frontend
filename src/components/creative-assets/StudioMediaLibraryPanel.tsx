@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { Loader2, Play, Search, ImageOff } from "lucide-react";
+import { Loader2, Play, Search, ImageOff, AlertTriangle } from "lucide-react";
 import type { MediaAsset } from "@continuum/contracts";
 import { LibraryFilterBar } from "@/components/library/LibraryFilterBar";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -19,7 +19,7 @@ type Props = {
 // library page's filter + search semantics and makes every asset grabbable onto
 // the canvas via the shared asset_drop contract.
 export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
-  const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
+  const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters, error } =
     useStudioLibraryBrowser(brandProfileId);
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
@@ -62,6 +62,11 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
         {assets.length === 0 && loading ? (
           <div className="flex h-32 items-center justify-center text-sm text-gray-400">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+          </div>
+        ) : assets.length === 0 && error ? (
+          <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-gray-400">
+            <AlertTriangle className="h-6 w-6 text-amber-400" />
+            <span>{error}</span>
           </div>
         ) : assets.length === 0 ? (
           <div className="p-6 text-center text-sm text-gray-400">

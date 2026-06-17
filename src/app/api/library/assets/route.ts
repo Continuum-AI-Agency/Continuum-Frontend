@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mediaKindSchema, mediaSourceSchema } from "@continuum/contracts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { callerHasBrandAccess } from "@/lib/media/brand-access.server";
 import { mediaSchema } from "@/lib/media/supabase-media";
 import { rowToMediaAsset } from "@/lib/media/mapper";
@@ -53,8 +52,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-
+  // Read with the user-scoped client: the media.assets RLS policy
+  // (has_brand_access(brand_id)) already scopes rows to the caller's brands, so
+  // no service-role bypass is needed. Mirrors fetchMediaAssets (the RSC seed).
+  //
   // Effective source/kind start from the explicit chip filters; a smart
   // collection can override/augment them via its smart_query (the scaffolding
   // for derived folders). Manual collections instead constrain by membership.
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
   let assetIds: string[] | null = null;
 
   if (collectionId) {
-    const { data: collection, error: collectionError } = await mediaSchema(admin)
+    const { data: collection, error: collectionError } = await mediaSchema(supabase)
       .from("collections")
       .select("kind, smart_query")
       .eq("id", collectionId)
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
       effectiveSource = smart.source ?? source;
       effectiveKind = smart.kind ?? kind;
     } else {
-      const { data: items, error: itemsError } = await mediaSchema(admin)
+      const { data: items, error: itemsError } = await mediaSchema(supabase)
         .from("collection_items")
         .select("asset_id")
         .eq("collection_id", collectionId)
@@ -97,7 +98,7 @@ export async function GET(request: Request) {
     }
   }
 
-  let query = mediaSchema(admin)
+  let query = mediaSchema(supabase)
     .from("assets")
     .select(MEDIA_ASSET_SELECT)
     .eq("brand_id", brandId)
