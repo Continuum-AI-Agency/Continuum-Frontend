@@ -2,7 +2,11 @@ import type { StudioNode } from "../types";
 import { request } from "@/lib/api/http";
 
 type SignItem = { bucket: string; path: string };
-type SignResult = { path: string; signedUrl: string };
+type SignResult = { bucket?: string; path: string; signedUrl: string };
+
+function signKey(bucket: string, path: string): string {
+  return `${bucket}\n${path}`;
+}
 
 function collectSignItems(nodes: StudioNode[]): SignItem[] {
   const items: SignItem[] = [];
@@ -39,9 +43,21 @@ function applySignedUrls(nodes: StudioNode[], urlMap: Map<string, string>): Stud
     const imgPath = data.generatedImageStoragePath;
     const vidPath = data.generatedVideoStoragePath;
     const refPath = data.sourcePath;
-    const imgUrl = typeof imgPath === "string" ? urlMap.get(imgPath) : undefined;
-    const vidUrl = typeof vidPath === "string" ? urlMap.get(vidPath) : undefined;
-    const refUrl = typeof refPath === "string" ? urlMap.get(refPath) : undefined;
+    const imgBucket = data.generatedImageBucket;
+    const vidBucket = data.generatedVideoBucket;
+    const refBucket = data.bucket;
+    const imgUrl =
+      typeof imgPath === "string" && typeof imgBucket === "string"
+        ? urlMap.get(signKey(imgBucket, imgPath))
+        : undefined;
+    const vidUrl =
+      typeof vidPath === "string" && typeof vidBucket === "string"
+        ? urlMap.get(signKey(vidBucket, vidPath))
+        : undefined;
+    const refUrl =
+      typeof refPath === "string" && typeof refBucket === "string"
+        ? urlMap.get(signKey(refBucket, refPath))
+        : undefined;
     if (!imgUrl && !vidUrl && !refUrl) return node;
 
     const refField = node.type === "video" ? "video" : "image";
@@ -68,7 +84,9 @@ export async function resignCanvasNodes(nodes: StudioNode[]): Promise<StudioNode
       body: { items },
     });
 
-    const urlMap = new Map<string, string>(results.map((r) => [r.path, r.signedUrl]));
+    const urlMap = new Map<string, string>(
+      results.map((r) => [r.bucket ? signKey(r.bucket, r.path) : r.path, r.signedUrl])
+    );
     return applySignedUrls(nodes, urlMap);
   } catch (err) {
     console.warn("[studio] resignCanvasNodes: failed to re-sign, using stale URLs", err);

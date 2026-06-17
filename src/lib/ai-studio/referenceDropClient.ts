@@ -6,7 +6,7 @@ import { formatMiB, type ParsedReferenceDropPayload } from "@/lib/ai-studio/refe
 export async function resolveDroppedBase64(
   parsed: ParsedReferenceDropPayload,
   maxBytes: number
-): Promise<{ base64: string; sourceName?: string; byteLength?: number }> {
+): Promise<{ base64: string; sourceName?: string; byteLength?: number; sourceUrl?: string }> {
   if (parsed.kind === "data-url") {
     return { base64: parsed.base64, sourceName: "data-url" };
   }
@@ -14,12 +14,49 @@ export async function resolveDroppedBase64(
   const source = parsed.publicUrl ?? parsed.path;
   if (!source) throw new Error("Missing asset data");
 
-  const url = parsed.publicUrl ? parsed.publicUrl : await createSignedAssetUrl(parsed.path!, 300);
+  const freshUrl = async () => createFreshSignedUrl(parsed);
+  const url = parsed.publicUrl ?? (await freshUrl());
 
-  const { base64, byteLength } = await fetchBase64(url, maxBytes);
+  let resolvedUrl = url;
+  let fetched: { base64: string; byteLength?: number };
+  try {
+    fetched = await fetchBase64(url, maxBytes);
+  } catch (error) {
+    if (!parsed.publicUrl || !canRefreshRemoteUrl(parsed)) {
+      throw error;
+    }
+    resolvedUrl = await freshUrl();
+    fetched = await fetchBase64(resolvedUrl, maxBytes);
+  }
   const rawName = source.split("/").pop() ?? "ref";
   const sourceName = rawName.split("?")[0]?.split("#")[0] ?? rawName;
-  return { base64, sourceName, byteLength };
+  return { ...fetched, sourceName, sourceUrl: resolvedUrl };
+}
+
+function canRefreshRemoteUrl(parsed: Extract<ParsedReferenceDropPayload, { kind: "remote" }>): boolean {
+  return Boolean((parsed.brandId && parsed.assetId) || (parsed.bucket && parsed.path) || parsed.path);
+}
+
+async function createFreshSignedUrl(parsed: Extract<ParsedReferenceDropPayload, { kind: "remote" }>): Promise<string> {
+  if (parsed.brandId && parsed.assetId) {
+    const resp = await fetch("/api/library/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brandId: parsed.brandId, assetId: parsed.assetId }),
+    });
+    if (!resp.ok) {
+      throw new Error(`Failed to sign library asset: ${resp.status}`);
+    }
+    const data = (await resp.json()) as { signedUrl?: string };
+    if (data.signedUrl) return data.signedUrl;
+    throw new Error("Failed to sign library asset");
+  }
+
+  if (parsed.path) {
+    return createSignedAssetUrl(parsed.path, 300, parsed.bucket);
+  }
+
+  throw new Error("Missing asset data");
 }
 
 async function fetchBase64(

@@ -141,7 +141,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   }), []);
 
   const applyPreviewImage = useCallback(
-    (opts: { src: string; fileName?: string; sourcePath?: string; sourceUrl?: string }) => {
+    (opts: { src: string; fileName?: string; sourcePath?: string; bucket?: string; sourceUrl?: string }) => {
       setPreview(opts.src);
       updateNodeData(id, {
         image: opts.src,
@@ -150,6 +150,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         hasMarkup: false,
         fileName: opts.fileName,
         sourcePath: opts.sourcePath,
+        bucket: opts.bucket,
         sourceUrl: opts.sourceUrl,
       });
       triggerSave();
@@ -190,6 +191,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       hasMarkup: false,
       fileName: undefined,
       sourcePath: undefined,
+      bucket: undefined,
       sourceUrl: undefined,
       aspectRatio: '1:1',
     });
@@ -313,6 +315,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       src: resolved.dataUrl,
       fileName: resolved.fileName,
       sourcePath: resolved.sourcePath,
+      bucket: resolved.bucket,
       sourceUrl: resolved.sourceUrl,
     });
   }, [applyPreviewImage, fileToDataUrl, show, uploadLocalReference]);

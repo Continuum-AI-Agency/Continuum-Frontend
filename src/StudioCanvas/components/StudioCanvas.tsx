@@ -1006,6 +1006,7 @@ function Flow({
           image: resolved.dataUrl,
           fileName: resolved.fileName,
           sourcePath: resolved.sourcePath,
+          bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
         };
       } else if (assetNodeType === 'video') {
@@ -1013,6 +1014,7 @@ function Flow({
           video: resolved.dataUrl,
           fileName: resolved.fileName,
           sourcePath: resolved.sourcePath,
+          bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
         };
       } else if (assetNodeType === 'audio') {

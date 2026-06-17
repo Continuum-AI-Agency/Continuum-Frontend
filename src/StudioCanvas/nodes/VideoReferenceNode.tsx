@@ -80,6 +80,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
           video: result,
           fileName: file.name,
           sourcePath: undefined,
+          bucket: undefined,
           sourceUrl: undefined,
         });
         triggerSave();
@@ -169,6 +170,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
       video: resolved.dataUrl,
       fileName: resolved.fileName,
       sourcePath: resolved.sourcePath,
+      bucket: resolved.bucket,
       sourceUrl: resolved.sourceUrl,
     });
     triggerSave();

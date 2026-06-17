@@ -195,10 +195,11 @@ export async function createCreativeFolder(
 
 export async function createSignedAssetUrl(
   fullPath: string,
-  expiresInSeconds: number
+  expiresInSeconds: number,
+  bucketOverride?: string
 ): Promise<string> {
   const supabase = createSupabaseBrowserClient();
-  const bucket = getCreativeAssetsBucket();
+  const bucket = bucketOverride?.trim() || getCreativeAssetsBucket();
 
   // Supabase image transforms break on videos; only apply resizing for image assets.
   const shouldTransformImage = /\.((png)|(jpe?g)|(gif)|(webp)|(avif))$/i.test(fullPath);

@@ -19,6 +19,7 @@ export type StudioAssetDropPayload = {
     mimeType: string;
     meta: {
       assetId: string;
+      brandId: string;
       title?: string;
       kind: MediaAsset["kind"];
     };
@@ -36,6 +37,7 @@ export function buildStudioAssetDropPayload(asset: MediaAsset): StudioAssetDropP
       mimeType: asset.mimeType,
       meta: {
         assetId: asset.id,
+        brandId: asset.brandId,
         title: asset.title ?? undefined,
         kind: asset.kind,
       },

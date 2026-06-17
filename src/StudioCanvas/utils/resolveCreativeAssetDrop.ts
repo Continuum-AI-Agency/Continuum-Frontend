@@ -18,6 +18,7 @@ export type CreativeAssetDropSuccess = {
   mimeType: string;
   fileName?: string;
   sourcePath?: string;
+  bucket?: string;
   sourceUrl?: string;
 };
 
@@ -33,7 +34,7 @@ export type CreativeAssetDropResult = CreativeAssetDropSuccess | CreativeAssetDr
 export type Base64Resolver = (
   parsed: ParsedReferenceDropPayload,
   maxBytes: number
-) => Promise<{ base64: string; sourceName?: string; byteLength?: number }>;
+) => Promise<{ base64: string; sourceName?: string; byteLength?: number; sourceUrl?: string }>;
 
 export async function resolveCreativeAssetDrop(
   rawPayload: string,
@@ -115,7 +116,7 @@ export async function resolveCreativeAssetDrop(
   }
 
   try {
-    const { base64, sourceName, byteLength } = await resolveBase64(parsed, maxBytes);
+    const { base64, sourceName, byteLength, sourceUrl } = await resolveBase64(parsed, maxBytes);
     if (typeof byteLength === "number" && byteLength > maxBytes) {
       return {
         status: "error",
@@ -132,7 +133,8 @@ export async function resolveCreativeAssetDrop(
       mimeType,
       fileName: sourceName && sourceName !== "data-url" ? sourceName : undefined,
       sourcePath: parsed.kind === "remote" ? parsed.path : undefined,
-      sourceUrl: parsed.kind === "remote" ? parsed.publicUrl : undefined,
+      bucket: parsed.kind === "remote" ? parsed.bucket : undefined,
+      sourceUrl: parsed.kind === "remote" ? sourceUrl ?? parsed.publicUrl : undefined,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to resolve asset";

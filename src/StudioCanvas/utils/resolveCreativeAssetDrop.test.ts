@@ -39,6 +39,34 @@ describe('resolveCreativeAssetDrop', () => {
     }
   });
 
+  it('preserves library bucket metadata and fresh signed url from asset_drop payloads', async () => {
+    const payload = JSON.stringify({
+      type: 'asset_drop',
+      payload: {
+        bucket: 'media-library',
+        path: 'brand/asset.png',
+        publicUrl: 'https://expired.example/asset.png',
+        mimeType: 'image/png',
+        meta: { assetId: 'asset-1', brandId: 'brand-1' },
+      },
+    });
+    const resolverWithFreshUrl = mock(async () => ({
+      base64: 'resolved_base64',
+      sourceName: 'asset.png',
+      byteLength: 16,
+      sourceUrl: 'https://fresh.example/asset.png',
+    }));
+
+    const result = await resolveCreativeAssetDrop(payload, resolverWithFreshUrl);
+
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.sourcePath).toBe('brand/asset.png');
+      expect(result.bucket).toBe('media-library');
+      expect(result.sourceUrl).toBe('https://fresh.example/asset.png');
+    }
+  });
+
   it('returns document type for PDF', async () => {
     const payload = 'data:application/pdf;base64,abcd';
     const result = await resolveCreativeAssetDrop(payload, resolver);

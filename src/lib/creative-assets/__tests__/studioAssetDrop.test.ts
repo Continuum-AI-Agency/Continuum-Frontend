@@ -60,7 +60,7 @@ describe("buildStudioAssetDropPayload", () => {
 
   it("includes asset meta (id, title, kind)", () => {
     const p = buildStudioAssetDropPayload(baseAsset).payload;
-    expect(p.meta).toEqual({ assetId: "asset-1", title: "A sunset", kind: "image" });
+    expect(p.meta).toEqual({ assetId: "asset-1", brandId: "brand-1", title: "A sunset", kind: "image" });
   });
 
   it("uses the reactflow node-data MIME contract", () => {

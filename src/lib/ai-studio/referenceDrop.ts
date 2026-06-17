@@ -8,16 +8,26 @@ export const DOCUMENT_REFERENCE_MAX_BYTES = 10 * MEBIBYTE_BYTES;
 
 export type ParsedReferenceDropPayload =
   | { kind: "data-url"; mimeType: string; base64: string }
-  | { kind: "remote"; path?: string; publicUrl?: string; mimeType?: string; sizeBytes?: number };
+  | {
+      kind: "remote";
+      path?: string;
+      bucket?: string;
+      publicUrl?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+      assetId?: string;
+      brandId?: string;
+    };
 
 type LegacyCreativeAssetPayload = { name: string; path: string; contentType?: string | null };
 type ReactFlowAssetDropPayload = {
   type?: string;
   payload?: {
+    bucket?: string;
     path?: string;
     publicUrl?: string;
     mimeType?: string;
-    meta?: { size?: number };
+    meta?: { size?: number; assetId?: string; brandId?: string };
   };
 };
 
@@ -39,9 +49,12 @@ export function parseReferenceDropPayload(raw: string): ParsedReferenceDropPaylo
       return {
         kind: "remote",
         path: parsed.payload?.path,
+        bucket: parsed.payload?.bucket,
         publicUrl: parsed.payload?.publicUrl,
         mimeType: parsed.payload?.mimeType,
         sizeBytes: parsed.payload?.meta?.size,
+        assetId: parsed.payload?.meta?.assetId,
+        brandId: parsed.payload?.meta?.brandId,
       };
     }
   }
