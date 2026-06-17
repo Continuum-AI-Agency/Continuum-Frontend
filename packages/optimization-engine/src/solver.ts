@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from './config';
+import { sum } from './internal/math';
 
 export type SolverItem = {
   id: string;
@@ -339,5 +340,3 @@ function finalize(
     notes,
   };
 }
-
-const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);

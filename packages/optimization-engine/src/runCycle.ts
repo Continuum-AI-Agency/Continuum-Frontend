@@ -13,6 +13,7 @@ import { classifyPortfolio } from './classify';
 import { evaluateTriggers } from './triggers';
 import { computePacing } from './pacing';
 import { reallocate } from './engine';
+import { sum } from './internal/math';
 import { kpiEvents } from './scoring';
 import type {
   AdSetSnapshot,
@@ -34,8 +35,6 @@ export type CycleOptions = {
   priorComposites?: Record<string, number>;
   config?: DeepPartial<EngineConfig>;
 };
-
-const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
 export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
   const mode: OptimizationMode = opts.mode ?? 'balanced';
