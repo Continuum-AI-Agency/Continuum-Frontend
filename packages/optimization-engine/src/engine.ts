@@ -8,6 +8,7 @@
 
 import { resolveConfig } from './config';
 import type { DeepPartial, EngineConfig } from './config';
+import { clamp, sum } from './internal/math';
 import { scoreAdSet } from './scoring';
 import { solve } from './solver';
 import type { SolverItem } from './solver';
@@ -16,10 +17,6 @@ import type {
   ItemDiagnostics,
   ReallocationResult,
 } from './types';
-
-const clamp = (x: number, lo: number, hi: number): number =>
-  Math.max(lo, Math.min(hi, x));
-const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
 function isLearning(s: AdSetSnapshot): boolean {
   return s.learningPhase ?? s.status === 'learning';
