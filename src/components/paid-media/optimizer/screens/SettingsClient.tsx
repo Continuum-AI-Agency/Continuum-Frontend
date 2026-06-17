@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
-const BASE = "/paid-media/optimizer";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 
 const MODES: { value: OptimizationMode; label: string; hint: string }[] = [
   { value: "efficiency", label: "Efficiency", hint: "ceiling, may underspend" },

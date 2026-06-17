@@ -18,7 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { OBJECTIVE_LABELS } from "@/lib/paid-media/optimizer/types";
 import { cn } from "@/lib/utils";
 
-const BASE = "/paid-media/optimizer";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 
 export function PortfoliosClient() {
   const { portfolios, addPortfolio, isActionApproved } = useOptimizer();

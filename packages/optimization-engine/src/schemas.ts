@@ -35,6 +35,14 @@ export const AdSetStatusSchema = z.enum([
   'grace',
   'frozen',
   'flagged',
+  'starved', // trigger-set: eligible but driven to its floor
+]);
+
+export const AudienceTypeSchema = z.enum([
+  'prospecting',
+  'retargeting',
+  'remarketing',
+  'unknown',
 ]);
 
 export const AdSetSnapshotSchema = z.object({
@@ -45,6 +53,8 @@ export const AdSetSnapshotSchema = z.object({
   learningPhase: z.boolean().optional(),
   freeze: z.boolean().optional(),
   ageDays: z.number().nonnegative(),
+  audienceType: AudienceTypeSchema.optional(),
+  frequency7d: z.number().nonnegative().optional(),
   windows: z.object({
     d3: WindowMetricsSchema,
     d7: WindowMetricsSchema,
@@ -77,11 +87,8 @@ export const EngineConfigSchema = z
     sustainedPoorWindow: z.number().positive(),
     sustainedPoorMultiplier: z.number().positive(),
     newItemProtectDays: z.number().nonnegative(),
-    postReactivationGraceDays: z.number().nonnegative(),
     learningConvThreshold: z.number().nonnegative(),
     learningMinDays: z.number().nonnegative(),
-    fatigueFreqThreshold: z.number().nonnegative(),
-    fatigueCppWowDecay: z.number().nonnegative(),
     minPurchasesSignif: z.number().nonnegative(),
     toggles: z.object({
       significanceGate: z.boolean(),
@@ -92,7 +99,7 @@ export const EngineConfigSchema = z
     overflowMode: z.enum(['breach_best', 'underspend', 'relax_uniform']),
     // Optional objective-profile fields (set when a portfolio declares an objective).
     objective: OptimizationObjectiveSchema.optional(),
-    kpiField: z.string().optional(),
+    kpiField: WindowMetricsSchema.keyof().optional(),
     velocityUpPct: z.number().min(0).max(5).optional(),
     velocityDownPct: z.number().min(0).max(1).optional(),
     ewmaAlpha: z.number().min(0).max(1).optional(),

@@ -6,10 +6,9 @@ import { usePathname } from "next/navigation";
 
 import { useOptimizer } from "./OptimizerProvider";
 import { pendingRemaining, runPortfolioCycle } from "@/lib/paid-media/optimizer/engine-helpers";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-const BASE = "/paid-media/optimizer";
 
 export function OptimizerNav() {
   const pathname = usePathname();

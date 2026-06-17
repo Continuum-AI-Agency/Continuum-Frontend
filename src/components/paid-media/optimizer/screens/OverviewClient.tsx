@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-const BASE = "/paid-media/optimizer";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 
 export function OverviewClient() {
   const { portfolios, isActionApproved } = useOptimizer();

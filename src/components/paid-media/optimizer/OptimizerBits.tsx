@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { ItemDiagnostics } from "@continuum/optimization-engine";
+import type { AdSetSnapshot, ItemDiagnostics } from "@continuum/optimization-engine";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { TableCell } from "@/components/ui/table";
+import { shortName } from "@/lib/paid-media/optimizer/engine-helpers";
 import { cn } from "@/lib/utils";
 
 type Tone = "default" | "ok" | "warn" | "bad";
@@ -70,6 +72,25 @@ export function StatusChip({ status }: { status: string }) {
     return <Badge variant="secondary">grace</Badge>;
   }
   return null;
+}
+
+/** Ad-set name table cell: truncated name + audience + status chips. */
+export function AdSetNameCell({
+  item,
+  snap,
+}: {
+  item: ItemDiagnostics;
+  snap?: AdSetSnapshot;
+}) {
+  return (
+    <TableCell>
+      <div className="flex items-center gap-1.5">
+        <span className="truncate font-medium">{shortName(snap?.name ?? item.id)}</span>
+        <AudienceChip type={snap?.audienceType} />
+        <StatusChip status={item.status} />
+      </div>
+    </TableCell>
+  );
 }
 
 export function TrajectoryChip({ state }: { state: ItemDiagnostics["trajectoryState"] }) {

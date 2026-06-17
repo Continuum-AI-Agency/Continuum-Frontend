@@ -10,15 +10,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const audienceTypeSchema = z.enum(["prospecting", "retargeting", "remarketing", "unknown"]);
-
-// The engine's snapshot schema strips `audienceType` / `frequency7d`; re-add them
-// so the full snapshot survives validation and reaches the engine.
-const snapshotSchema = AdSetSnapshotSchema.extend({
-  audienceType: audienceTypeSchema.optional(),
-  frequency7d: z.number().nonnegative().optional(),
-});
-
 const pacingSchema = z.object({
   periodBudget: z.number().nonnegative(),
   periodDays: z.number().positive(),
@@ -38,7 +29,7 @@ const configSchema = z
 const bodySchema = z
   .object({
     snapshots: z
-      .array(snapshotSchema)
+      .array(AdSetSnapshotSchema)
       .min(1, "At least one ad set snapshot is required.")
       .max(1000, "Too many ad sets in a single request."),
     mode: z.enum(["balanced", "efficiency", "scale"]).default("balanced"),
