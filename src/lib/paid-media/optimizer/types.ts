@@ -16,8 +16,14 @@ export type PortfolioConfig = {
   periodBudget: number;
   /** Daily budget to allocate this cycle. */
   dailyBudget: number;
-  /** Max change per ad set per cycle, in percent. */
+  /** Max change per ad set per cycle, in percent (legacy symmetric fallback). */
   velocityCap: number;
+  /**
+   * Asymmetric per-cycle caps in percent. When unset, the objective profile's
+   * calibrated caps apply. Set via the reallocation review's "Apply to portfolio".
+   */
+  velocityUpPct?: number;
+  velocityDownPct?: number;
   /** Target cost per acquisition / install. */
   cpaTarget: number;
 };

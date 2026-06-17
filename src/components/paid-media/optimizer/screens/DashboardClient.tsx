@@ -13,6 +13,8 @@ import {
   TrajectoryChip,
 } from "../OptimizerBits";
 import {
+  costFromScore,
+  costLabel,
   fmt,
   portfolioCpi,
   projectSpend,
@@ -34,14 +36,16 @@ import {
 const BASE = "/paid-media/optimizer";
 
 export function DashboardClient({ portfolioId }: { portfolioId: string }) {
-  const { getPortfolio } = useOptimizer();
+  const { getPortfolio, getPriorComposites } = useOptimizer();
   const pf = getPortfolio(portfolioId);
   if (!pf) return null;
   if (pf.snapshots.length === 0) {
     return <EmptyPortfolioState settingsHref={`${BASE}/${pf.id}/settings`} />;
   }
 
-  const reallocation = runPortfolioCycle(pf).reallocation;
+  const reallocation = runPortfolioCycle(pf, {
+    priorComposites: getPriorComposites(pf.id),
+  }).reallocation;
   const proj = projectSpend(pf);
   const cpi = portfolioCpi(pf);
   const spent = spend14d(pf);
@@ -64,7 +68,7 @@ export function DashboardClient({ portfolioId }: { portfolioId: string }) {
           sub={`of $${fmt(pf.config.periodBudget)} plan`}
         />
         <KpiCard
-          label="Portfolio CPI"
+          label={`Portfolio ${costLabel(pf.objective)}`}
           value={`$${cpi.toFixed(1)}`}
           sub={`target $${pf.config.cpaTarget}`}
           tone={cpi > pf.config.cpaTarget * 1.05 ? "bad" : "ok"}
@@ -105,13 +109,13 @@ export function DashboardClient({ portfolioId }: { portfolioId: string }) {
                 <TableHead className="text-right">Daily</TableHead>
                 <TableHead className="w-[34%]">Share</TableHead>
                 <TableHead>Trajectory</TableHead>
-                <TableHead className="text-right">CPI</TableHead>
+                <TableHead className="text-right">{costLabel(pf.objective)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((item) => {
                 const snap = byId.get(item.id);
-                const cpiItem = item.score14d > 0 ? 1 / item.score14d : 0;
+                const cpiItem = costFromScore(item.score14d, pf.objective);
                 return (
                   <TableRow key={item.id}>
                     <TableCell>
