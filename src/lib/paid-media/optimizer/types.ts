@@ -1,6 +1,10 @@
-import type { AdSetSnapshot, OptimizationMode } from "@continuum/optimization-engine";
+import type {
+  AdSetSnapshot,
+  OptimizationMode,
+  OptimizationObjective,
+} from "@continuum/optimization-engine";
 
-export type { OptimizationMode };
+export type { OptimizationMode, OptimizationObjective };
 
 /**
  * Portfolio-level configuration. These are the source of truth: once saved,
@@ -21,10 +25,20 @@ export type PortfolioConfig = {
 export type OptimizerPortfolio = {
   id: string;
   name: string;
-  objective: string;
+  objective: OptimizationObjective;
   currency: string;
   config: PortfolioConfig;
   snapshots: AdSetSnapshot[];
+};
+
+/** Human-readable labels for each objective (UI display). */
+export const OBJECTIVE_LABELS: Record<OptimizationObjective, string> = {
+  purchase: "Purchases",
+  app_install: "App installs",
+  signup: "Sign-ups",
+  lead: "Leads",
+  traffic: "Traffic",
+  awareness: "Awareness",
 };
 
 /** An ad set in the account catalog (real Meta ID), addable in Settings. */

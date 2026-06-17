@@ -9,10 +9,15 @@ export { scoreAdSet, cpp, windowScore } from './scoring';
 export { solve } from './solver';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export type { EngineConfig, DeepPartial, WindowWeights } from './config';
+export { OBJECTIVE_PROFILES, getObjectiveProfile } from './objectives';
+export type { ObjectiveProfile } from './objectives';
+export { META_FIELD_MAP, mapMetaRowToWindowMetrics } from './ingest';
+export type { MetaMetricRow } from './ingest';
 export type {
   AdSetSnapshot,
   AdSetStatus,
   WindowMetrics,
+  OptimizationObjective,
   ItemDiagnostics,
   ReallocationResult,
   TrajectoryState,

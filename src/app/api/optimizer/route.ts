@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { runCycle, type CycleResult } from "@continuum/optimization-engine";
-import { AdSetSnapshotSchema } from "@continuum/optimization-engine/schemas";
+import {
+  AdSetSnapshotSchema,
+  OptimizationObjectiveSchema,
+} from "@continuum/optimization-engine/schemas";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -39,6 +42,7 @@ const bodySchema = z
       .min(1, "At least one ad set snapshot is required.")
       .max(1000, "Too many ad sets in a single request."),
     mode: z.enum(["balanced", "efficiency", "scale"]).default("balanced"),
+    objective: OptimizationObjectiveSchema.optional(),
     total: z.number().positive().optional(),
     maxBudget: z.number().positive().optional(),
     weeklyGrowthPct: z.number().min(0).max(1).optional(),
@@ -73,12 +77,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { snapshots, mode, total, maxBudget, weeklyGrowthPct, pacing, config } = parsed.data;
+  const { snapshots, mode, objective, total, maxBudget, weeklyGrowthPct, pacing, config } =
+    parsed.data;
 
   try {
     // Pure compute — no external calls. Engine guarantees Σ proposed budgets == total.
     const result: CycleResult = runCycle(snapshots, {
       mode,
+      objective,
       total,
       maxBudget,
       weeklyGrowthPct,

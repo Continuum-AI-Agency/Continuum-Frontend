@@ -12,7 +12,22 @@ export const WindowMetricsSchema = z.object({
   addToCarts: z.number().int().nonnegative(),
   clicks: z.number().int().nonnegative(),
   impressions: z.number().int().nonnegative(),
+  // Optional per-objective KPI events — a snapshot only carries the ones it needs.
+  leads: z.number().int().nonnegative().optional(),
+  appInstalls: z.number().int().nonnegative().optional(),
+  signups: z.number().int().nonnegative().optional(),
+  landingPageViews: z.number().int().nonnegative().optional(),
+  reach: z.number().int().nonnegative().optional(),
 });
+
+export const OptimizationObjectiveSchema = z.enum([
+  'purchase',
+  'app_install',
+  'signup',
+  'lead',
+  'traffic',
+  'awareness',
+]);
 
 export const AdSetStatusSchema = z.enum([
   'active',
@@ -75,6 +90,12 @@ export const EngineConfigSchema = z
       saturationGamma: z.number().positive(),
     }),
     overflowMode: z.enum(['breach_best', 'underspend', 'relax_uniform']),
+    // Optional objective-profile fields (set when a portfolio declares an objective).
+    objective: OptimizationObjectiveSchema.optional(),
+    kpiField: z.string().optional(),
+    velocityUpPct: z.number().min(0).max(5).optional(),
+    velocityDownPct: z.number().min(0).max(1).optional(),
+    ewmaAlpha: z.number().min(0).max(1).optional(),
   })
   // Sanity: weights for each trajectory state must sum to ~1.
   .refine(

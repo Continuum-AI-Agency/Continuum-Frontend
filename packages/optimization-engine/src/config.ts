@@ -1,7 +1,12 @@
 // ---------------------------------------------------------------------------
 // Default engine configuration — values mirror the "Config" sheet of
 // rules_system_v2_ecuations.xlsx 1:1. Every value is overridable per portfolio.
+// Per-portfolio objectives (objectives.ts) overlay onto this base; the default
+// (no objective) reproduces the Excel behaviour exactly.
 // ---------------------------------------------------------------------------
+
+import { OBJECTIVE_PROFILES, type ObjectiveProfile } from './objectives';
+import type { OptimizationObjective, WindowMetrics } from './types';
 
 export type WindowWeights = { d3: number; d7: number; d14: number };
 
@@ -63,6 +68,15 @@ export type EngineConfig = {
     saturationGamma: number;
   };
 
+  // ---- Objective profile (set when a portfolio declares an objective) -----
+  // When absent the engine uses the legacy purchase path (Excel behaviour).
+  // When set, scoring uses kpiField (events/$) and velocity caps are asymmetric.
+  objective?: OptimizationObjective;
+  kpiField?: keyof WindowMetrics; // which WindowMetrics field scores (events/$)
+  velocityUpPct?: number; // asymmetric raise cap (defaults to velocityCapPct)
+  velocityDownPct?: number; // asymmetric cut cap (defaults to velocityCapPct)
+  ewmaAlpha?: number; // composite smoothing across cycles (0 = off)
+
   // ---- Solver behaviour --------------------------------------------------
   // What to do when freed budget cannot be absorbed within the +cap of the
   // eligible items (Pool > sum of upper bounds).
@@ -117,16 +131,44 @@ export const DEFAULT_CONFIG: EngineConfig = {
   overflowMode: 'breach_best',
 };
 
-/** Deep-merge a partial override onto the defaults. */
-export function resolveConfig(override?: DeepPartial<EngineConfig>): EngineConfig {
-  if (!override) return DEFAULT_CONFIG;
+/** Overlay a calibrated objective profile onto the Excel defaults. */
+export function applyObjectiveProfile(profile: ObjectiveProfile): EngineConfig {
   return {
     ...DEFAULT_CONFIG,
+    weightsNeutral: profile.weights.neutral,
+    weightsPositive: profile.weights.positive,
+    weightsNegative: profile.weights.negative,
+    objective: profile.objective,
+    kpiField: profile.kpiField,
+    velocityUpPct: profile.velocityUpPct,
+    velocityDownPct: profile.velocityDownPct,
+    ewmaAlpha: profile.ewmaAlpha,
+    toggles: {
+      ...DEFAULT_CONFIG.toggles,
+      significanceGate: profile.significanceGate,
+      minEventsPerWindow: profile.minEventsPerWindow,
+      saturationGamma: profile.saturationGamma,
+    },
+  };
+}
+
+/**
+ * Deep-merge a partial override onto the defaults. Precedence:
+ * profile defaults (when `override.objective` is set) -> explicit override
+ * (portfolio settings + per-reallocation review overrides, merged by the caller).
+ */
+export function resolveConfig(override?: DeepPartial<EngineConfig>): EngineConfig {
+  const base = override?.objective
+    ? applyObjectiveProfile(OBJECTIVE_PROFILES[override.objective])
+    : DEFAULT_CONFIG;
+  if (!override) return base;
+  return {
+    ...base,
     ...override,
-    weightsNeutral: { ...DEFAULT_CONFIG.weightsNeutral, ...override.weightsNeutral },
-    weightsPositive: { ...DEFAULT_CONFIG.weightsPositive, ...override.weightsPositive },
-    weightsNegative: { ...DEFAULT_CONFIG.weightsNegative, ...override.weightsNegative },
-    toggles: { ...DEFAULT_CONFIG.toggles, ...override.toggles },
+    weightsNeutral: { ...base.weightsNeutral, ...override.weightsNeutral },
+    weightsPositive: { ...base.weightsPositive, ...override.weightsPositive },
+    weightsNegative: { ...base.weightsNegative, ...override.weightsNegative },
+    toggles: { ...base.toggles, ...override.toggles },
   } as EngineConfig;
 }
 
