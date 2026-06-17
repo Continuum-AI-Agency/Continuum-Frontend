@@ -1,19 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightLeft } from "lucide-react";
 
 import { useOptimizer } from "../OptimizerProvider";
 import {
-  AudienceChip,
+  AdSetNameCell,
   DeltaPct,
   EmptyPortfolioState,
   KpiCard,
   NumberField,
   PacingBar,
   ShareBar,
-  StatusChip,
   TrajectoryChip,
 } from "../OptimizerBits";
 import { getObjectiveProfile } from "@continuum/optimization-engine";
@@ -23,12 +22,16 @@ import {
   costFromScore,
   costLabel,
   fmt,
+  maxBudgetBar,
   pauseKey,
   projectSpend,
+  rankedItems,
   reallocationKey,
   runPortfolioCycle,
   shortName,
+  snapshotsById,
 } from "@/lib/paid-media/optimizer/engine-helpers";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,8 +44,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const BASE = "/paid-media/optimizer";
 
 export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
   const { getPortfolio, updateConfig, isActionApproved, approveAction, getPriorComposites, commitComposites } =
@@ -60,23 +61,31 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
   const [up, setUp] = useState<number>(defaultUp);
   const [down, setDown] = useState<number>(defaultDown);
 
+  const result = useMemo(
+    () =>
+      pf && pf.snapshots.length > 0
+        ? runPortfolioCycle(pf, {
+            dailyBudget: daily,
+            velocityUpPct: up,
+            velocityDownPct: down,
+            priorComposites: getPriorComposites(pf.id),
+          })
+        : null,
+    [pf, daily, up, down, getPriorComposites],
+  );
+
   if (!pf) return null;
   if (pf.snapshots.length === 0) {
     return <EmptyPortfolioState settingsHref={`${BASE}/${pf.id}/settings`} />;
   }
 
-  const result = runPortfolioCycle(pf, {
-    dailyBudget: daily,
-    velocityUpPct: up,
-    velocityDownPct: down,
-    priorComposites: getPriorComposites(pf.id),
-  });
-  const reallocation = result.reallocation;
+  const reallocation = result!.reallocation;
+  const recommendations = result!.recommendations;
   const proj = projectSpend(pf, daily);
 
-  const items = [...reallocation.items].sort((a, b) => b.finalBudget - a.finalBudget);
-  const maxBar = Math.max(1, ...items.map((i) => Math.max(i.finalBudget, i.currentBudget)));
-  const byId = new Map(pf.snapshots.map((s) => [s.id, s]));
+  const items = rankedItems(reallocation);
+  const maxBar = maxBudgetBar(items);
+  const byId = snapshotsById(pf);
 
   const reallocApproved = isActionApproved(reallocationKey(pf.id));
 
@@ -175,15 +184,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
                   const cpiItem = costFromScore(item.score14d, pf.objective);
                   return (
                     <TableRow key={item.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate font-medium">
-                            {shortName(snap?.name ?? item.id)}
-                          </span>
-                          <AudienceChip type={snap?.audienceType} />
-                          <StatusChip status={item.status} />
-                        </div>
-                      </TableCell>
+                      <AdSetNameCell item={item} snap={snap} />
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {fmt(item.currentBudget)}
                       </TableCell>
@@ -210,10 +211,10 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
           </div>
         </div>
 
-        {result.recommendations.length > 0 ? (
+        {recommendations.length > 0 ? (
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">Pause recommendations</h3>
-            {result.recommendations.map((rec) => {
+            {recommendations.map((rec) => {
               const snap = byId.get(rec.adSetId);
               const isApproved = isActionApproved(pauseKey(pf.id, rec.adSetId));
               return (

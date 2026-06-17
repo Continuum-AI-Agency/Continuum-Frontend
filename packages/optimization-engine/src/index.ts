@@ -5,7 +5,7 @@ export { classifyStatus, classifyPortfolio, NEW_ITEM_LOCK_DAYS } from './classif
 export { evaluateTriggers } from './triggers';
 export type { TriggerOutput } from './triggers';
 export { computePacing } from './pacing';
-export { scoreAdSet, cpp, windowScore } from './scoring';
+export { scoreAdSet, windowScore } from './scoring';
 export { solve } from './solver';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export type { EngineConfig, DeepPartial, WindowWeights } from './config';

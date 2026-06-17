@@ -1,5 +1,6 @@
 import { getObjectiveProfile, runCycle } from "@continuum/optimization-engine";
 import type {
+  AdSetSnapshot,
   CycleResult,
   ItemDiagnostics,
   OptimizationObjective,
@@ -46,6 +47,21 @@ export function runPortfolioCycle(
       ...(downPct !== undefined ? { velocityDownPct: downPct / 100 } : {}),
     },
   });
+}
+
+/** Reallocation items sorted by proposed budget, descending. */
+export function rankedItems(reallocation: ReallocationResult): ItemDiagnostics[] {
+  return [...reallocation.items].sort((a, b) => b.finalBudget - a.finalBudget);
+}
+
+/** Largest current-or-proposed budget, for scaling the share bars (min 1). */
+export function maxBudgetBar(items: ItemDiagnostics[]): number {
+  return Math.max(1, ...items.map((i) => Math.max(i.finalBudget, i.currentBudget)));
+}
+
+/** Lookup map from ad set id to its snapshot. */
+export function snapshotsById(pf: OptimizerPortfolio): Map<string, AdSetSnapshot> {
+  return new Map(pf.snapshots.map((s) => [s.id, s]));
 }
 
 /** Snapshot the composite scores from a cycle as the next cycle's EWMA prior. */

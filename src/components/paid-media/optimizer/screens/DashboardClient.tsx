@@ -1,27 +1,30 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
 
 import { useOptimizer } from "../OptimizerProvider";
 import {
-  AudienceChip,
+  AdSetNameCell,
   EmptyPortfolioState,
   KpiCard,
   ShareBar,
-  StatusChip,
   TrajectoryChip,
 } from "../OptimizerBits";
 import {
   costFromScore,
   costLabel,
   fmt,
+  maxBudgetBar,
   portfolioCpi,
   projectSpend,
+  rankedItems,
   runPortfolioCycle,
-  shortName,
+  snapshotsById,
   spend14d,
 } from "@/lib/paid-media/optimizer/engine-helpers";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -33,26 +36,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const BASE = "/paid-media/optimizer";
-
 export function DashboardClient({ portfolioId }: { portfolioId: string }) {
   const { getPortfolio, getPriorComposites } = useOptimizer();
   const pf = getPortfolio(portfolioId);
+  const reallocation = useMemo(
+    () =>
+      pf && pf.snapshots.length > 0
+        ? runPortfolioCycle(pf, { priorComposites: getPriorComposites(pf.id) }).reallocation
+        : null,
+    [pf, getPriorComposites],
+  );
   if (!pf) return null;
   if (pf.snapshots.length === 0) {
     return <EmptyPortfolioState settingsHref={`${BASE}/${pf.id}/settings`} />;
   }
 
-  const reallocation = runPortfolioCycle(pf, {
-    priorComposites: getPriorComposites(pf.id),
-  }).reallocation;
   const proj = projectSpend(pf);
   const cpi = portfolioCpi(pf);
   const spent = spend14d(pf);
 
-  const items = [...reallocation.items].sort((a, b) => b.finalBudget - a.finalBudget);
-  const maxBar = Math.max(1, ...items.map((i) => Math.max(i.finalBudget, i.currentBudget)));
-  const byId = new Map(pf.snapshots.map((s) => [s.id, s]));
+  const items = rankedItems(reallocation!);
+  const maxBar = maxBudgetBar(items);
+  const byId = snapshotsById(pf);
 
   return (
     <div className="flex flex-col gap-4">
@@ -118,15 +123,7 @@ export function DashboardClient({ portfolioId }: { portfolioId: string }) {
                 const cpiItem = costFromScore(item.score14d, pf.objective);
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate font-medium">
-                          {shortName(snap?.name ?? item.id)}
-                        </span>
-                        <AudienceChip type={snap?.audienceType} />
-                        <StatusChip status={item.status} />
-                      </div>
-                    </TableCell>
+                    <AdSetNameCell item={item} snap={snap} />
                     <TableCell className="text-right tabular-nums">
                       {fmt(item.finalBudget)}
                     </TableCell>

@@ -18,9 +18,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { OPTIMIZER_BASE_PATH as BASE } from "@/lib/paid-media/optimizer/constants";
 import { cn } from "@/lib/utils";
-
-const BASE = "/paid-media/optimizer";
 
 type FeedAction = {
   key: string;

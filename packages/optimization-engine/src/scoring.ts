@@ -8,7 +8,7 @@
 import type { EngineConfig, WindowWeights } from './config';
 import type { AdSetSnapshot, TrajectoryState, WindowMetrics } from './types';
 
-export const cpp = (m: WindowMetrics): number =>
+const cpp = (m: WindowMetrics): number =>
   m.purchases > 0 ? m.spend / m.purchases : 0;
 
 /** Count of the active KPI events in a window (objective-aware; default purchases). */

@@ -10,6 +10,10 @@ import type { OptimizationObjective, WindowMetrics } from './types';
 
 export type WindowWeights = { d3: number; d7: number; d14: number };
 
+export type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};
+
 export type EngineConfig = {
   // -- Optimization engine --
   reallocCycleDays: number;
@@ -39,15 +43,10 @@ export type EngineConfig = {
 
   // -- Grace periods --
   newItemProtectDays: number;
-  postReactivationGraceDays: number;
 
   // -- Learning phase --
   learningConvThreshold: number;
   learningMinDays: number;
-
-  // -- Creative fatigue (flag only) --
-  fatigueFreqThreshold: number;
-  fatigueCppWowDecay: number;
 
   // -- Tier / significance --
   // minPurchasesSignif: below this many purchases in a window, fall back to the
@@ -111,13 +110,9 @@ export const DEFAULT_CONFIG: EngineConfig = {
   sustainedPoorMultiplier: 2.5,
 
   newItemProtectDays: 7,
-  postReactivationGraceDays: 5,
 
   learningConvThreshold: 50,
   learningMinDays: 7,
-
-  fatigueFreqThreshold: 4,
-  fatigueCppWowDecay: 0.4,
 
   minPurchasesSignif: 0,
 
@@ -171,7 +166,3 @@ export function resolveConfig(override?: DeepPartial<EngineConfig>): EngineConfi
     toggles: { ...base.toggles, ...override.toggles },
   } as EngineConfig;
 }
-
-export type DeepPartial<T> = {
-  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
-};
