@@ -8,8 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from './config';
-import { cpp } from './scoring';
-import { scoreAdSet } from './scoring';
+import { costPerEvent, kpiEvents, scoreAdSet } from './scoring';
 import type { AdSetSnapshot, Recommendation } from './types';
 
 const isEvaluable = (s: AdSetSnapshot): boolean =>
@@ -35,10 +34,11 @@ export function evaluateTriggers(
   const recs: Recommendation[] = [];
   const starve = new Set<string>();
 
-  // Robust reference CPP: P25 of CPP_14d over evaluable items with purchase data.
+  // Robust reference cost-per-event: P25 of cost/KPI over the 14d window for
+  // evaluable items with data. KPI defaults to purchases (objective-aware).
   const cpp14s = snapshots
-    .filter((s) => isEvaluable(s) && s.windows.d14.purchases > 0)
-    .map((s) => cpp(s.windows.d14));
+    .filter((s) => isEvaluable(s) && kpiEvents(s.windows.d14, cfg) > 0)
+    .map((s) => costPerEvent(s.windows.d14, cfg));
   const robustBestCpp = percentile(cpp14s, 25);
 
   // Portfolio average ATC cost (for P1 relative comparison).
@@ -63,7 +63,7 @@ export function evaluateTriggers(
     const atcCost3d = d3.addToCarts > 0 ? d3.spend / d3.addToCarts : Infinity;
     const p1 =
       d3.spend > floor &&
-      d3.purchases === 0 &&
+      kpiEvents(d3, cfg) === 0 &&
       (d3.addToCarts === 0 ||
         (avgAtcCost > 0 && atcCost3d > cfg.upperFunnelOverrideMult * avgAtcCost));
     if (p1) {
@@ -77,8 +77,8 @@ export function evaluateTriggers(
     }
 
     // P2 — sustained poor vs robust reference (skip if recovering)
-    if (d14.purchases > 0 && robustBestCpp > 0 && traj !== 'positive') {
-      const cpp14 = cpp(d14);
+    if (kpiEvents(d14, cfg) > 0 && robustBestCpp > 0 && traj !== 'positive') {
+      const cpp14 = costPerEvent(d14, cfg);
       if (cpp14 > cfg.sustainedPoorMultiplier * robustBestCpp) {
         recs.push({
           adSetId: s.id, kind: 'pause', trigger: 'P2_sustained_poor', severity: 'medium',
@@ -91,7 +91,7 @@ export function evaluateTriggers(
     }
 
     // P3 — low significance / dead weight (spent enough, ~zero results)
-    if (d14.purchases === 0 && s.windows.d7.purchases === 0 && d14.spend > cfg.cpaTarget) {
+    if (kpiEvents(d14, cfg) === 0 && kpiEvents(s.windows.d7, cfg) === 0 && d14.spend > cfg.cpaTarget) {
       recs.push({
         adSetId: s.id, kind: 'pause', trigger: 'P3_low_significance', severity: 'low',
         reason: `Spent $${d14.spend.toFixed(0)} over 14d (> 1 target CPA) with 0 conversions: dead weight.`,

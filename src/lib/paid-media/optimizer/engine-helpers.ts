@@ -1,4 +1,4 @@
-import { runCycle } from "@continuum/optimization-engine";
+import { getObjectiveProfile, runCycle } from "@continuum/optimization-engine";
 import type { CycleResult, ReallocationResult } from "@continuum/optimization-engine";
 
 import { MONTH, type OptimizerPortfolio } from "./types";
@@ -24,6 +24,7 @@ export function runPortfolioCycle(
     total,
     maxBudget: Math.round(total * 1.3),
     weeklyGrowthPct: 0.05,
+    objective: pf.objective,
     config: {
       cpaTarget: c.cpaTarget,
       velocityCapPct: (overrides?.velocityCap || c.velocityCap) / 100,
@@ -52,13 +53,14 @@ export function projectSpend(pf: OptimizerPortfolio, dailyOverride?: number): Pr
   return { daily, month30, toMonthEnd, remainingDays, pctVsPlan };
 }
 
-/** Portfolio CPI/CPP over the 14-day window (Σ spend / Σ conversions). */
+/** Portfolio cost per KPI event over the 14-day window (Σ spend / Σ events). */
 export function portfolioCpi(pf: OptimizerPortfolio): number {
+  const kpiField = getObjectiveProfile(pf.objective).kpiField;
   let spend = 0;
   let conv = 0;
   for (const s of pf.snapshots) {
     spend += s.windows.d14.spend;
-    conv += s.windows.d14.purchases;
+    conv += (s.windows.d14[kpiField] ?? 0) as number;
   }
   return conv > 0 ? spend / conv : 0;
 }

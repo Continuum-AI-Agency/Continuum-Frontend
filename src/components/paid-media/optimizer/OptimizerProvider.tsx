@@ -92,7 +92,7 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
     const fresh: OptimizerPortfolio = {
       id,
       name: "New portfolio",
-      objective: "Purchases",
+      objective: "purchase",
       currency: "MXN",
       config: {
         mode: "balanced",

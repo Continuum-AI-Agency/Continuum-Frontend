@@ -14,14 +14,31 @@ export type AdSetStatus =
 /** Audience family — modulates guardrails (e.g. frequency tolerance). */
 export type AudienceType = 'prospecting' | 'retargeting' | 'remarketing' | 'unknown';
 
-/** Raw counts for one analysis window. CPP is DERIVED, never stored. */
+/** Raw counts for one analysis window. Cost-per-event is DERIVED, never stored.
+ * The KPI event used for scoring is chosen by the portfolio's objective profile
+ * (see objectives.ts). All event fields beyond spend are optional so a snapshot
+ * only needs to carry the ones relevant to its objective. */
 export type WindowMetrics = {
   spend: number;
-  purchases: number;
+  purchases: number; // optimization KPI for 'purchase' (incl. approved-credit)
   addToCarts: number;
   clicks: number;
-  impressions: number;
+  impressions: number; // KPI for 'awareness' (cost = CPM-like)
+  leads?: number; // KPI for 'lead'
+  appInstalls?: number; // KPI for 'app_install'
+  signups?: number; // KPI for 'signup' (account openings / checkouts initiated)
+  landingPageViews?: number; // KPI for 'traffic'
+  reach?: number;
 };
+
+/** Campaign optimization objective — selects the per-objective profile + KPI. */
+export type OptimizationObjective =
+  | 'purchase'
+  | 'app_install'
+  | 'signup'
+  | 'lead'
+  | 'traffic'
+  | 'awareness';
 
 /** Snapshot of one ad set at the moment a cycle runs. */
 export type AdSetSnapshot = {

@@ -1,3 +1,5 @@
+import { getObjectiveProfile, type WindowMetrics } from "@continuum/optimization-engine";
+
 import type { CatalogAdSet, OptimizerPortfolio } from "./types";
 
 // Materialized multi-portfolio sample data (from the engine handoff demo:
@@ -6,11 +8,11 @@ import type { CatalogAdSet, OptimizerPortfolio } from "./types";
 // catalog carries real Meta ad set IDs for the Settings picker.
 // No live Meta / Supabase in this PR.
 
-export const SAMPLE_PORTFOLIOS: OptimizerPortfolio[] = [
+const RAW_SAMPLE_PORTFOLIOS: OptimizerPortfolio[] = [
  {
   "id": "pf-privalia-installs",
   "name": "Privalia · ACQ · Mobile Installs",
-  "objective": "App installs",
+  "objective": "app_install",
   "currency": "MXN",
   "config": {
    "mode": "balanced",
@@ -313,7 +315,7 @@ export const SAMPLE_PORTFOLIOS: OptimizerPortfolio[] = [
  {
   "id": "pf-privalia-rmkt",
   "name": "Privalia · Retargeting · Purchases",
-  "objective": "Purchases",
+  "objective": "purchase",
   "currency": "MXN",
   "config": {
    "mode": "efficiency",
@@ -520,7 +522,7 @@ export const SAMPLE_PORTFOLIOS: OptimizerPortfolio[] = [
  {
   "id": "pf-prospecting-leads",
   "name": "LATAM · Prospecting · Leads",
-  "objective": "Leads",
+  "objective": "lead",
   "currency": "MXN",
   "config": {
    "mode": "scale",
@@ -757,6 +759,27 @@ export const SAMPLE_PORTFOLIOS: OptimizerPortfolio[] = [
   ]
  }
 ];
+
+// The demo dataset records each conversion in `purchases`. For non-purchase
+// objectives, mirror that count into the objective's KPI field so the engine
+// scores on the right signal. No-op for the purchase portfolio.
+function withObjectiveKpi(pf: OptimizerPortfolio): OptimizerPortfolio {
+  const kpiField = getObjectiveProfile(pf.objective).kpiField;
+  if (kpiField === "purchases") return pf;
+  const mirror = (w: WindowMetrics): WindowMetrics => ({
+    ...w,
+    [kpiField]: (w[kpiField] ?? w.purchases) as number,
+  });
+  return {
+    ...pf,
+    snapshots: pf.snapshots.map((s) => ({
+      ...s,
+      windows: { d3: mirror(s.windows.d3), d7: mirror(s.windows.d7), d14: mirror(s.windows.d14) },
+    })),
+  };
+}
+
+export const SAMPLE_PORTFOLIOS: OptimizerPortfolio[] = RAW_SAMPLE_PORTFOLIOS.map(withObjectiveKpi);
 
 export const AD_SET_CATALOG: CatalogAdSet[] = [
  {

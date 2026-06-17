@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from './config';
+import { kpiEvents } from './scoring';
 import type { AdSetSnapshot, AdSetStatus } from './types';
 
 /** Days a brand-new ad set has its budget fully locked (no movement at all). */
@@ -24,7 +25,8 @@ export function classifyStatus(s: AdSetSnapshot, cfg: EngineConfig): AdSetStatus
   if (s.ageDays < cfg.newItemProtectDays) return 'grace';
 
   // Platform learning phase: few conversions in 7d OR still young.
-  const conv7d = s.windows.d7.purchases;
+  // Conversions are counted on the objective's KPI (purchases by default).
+  const conv7d = kpiEvents(s.windows.d7, cfg);
   if (conv7d < cfg.learningConvThreshold || s.ageDays < cfg.learningMinDays) {
     return 'learning';
   }

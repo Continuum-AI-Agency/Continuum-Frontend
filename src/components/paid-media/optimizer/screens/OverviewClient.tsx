@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { useOptimizer } from "../OptimizerProvider";
 import { KpiCard, ModeChip } from "../OptimizerBits";
+import { OBJECTIVE_LABELS } from "@/lib/paid-media/optimizer/types";
 import {
   fmt,
   moneyMoved,
@@ -174,7 +175,7 @@ export function OverviewClient() {
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        {r.pf.objective}
+                        {OBJECTIVE_LABELS[r.pf.objective]}
                         <ModeChip mode={r.pf.config.mode} />
                       </span>
                     </TableCell>

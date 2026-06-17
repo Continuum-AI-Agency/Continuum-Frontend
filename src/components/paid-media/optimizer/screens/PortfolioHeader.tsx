@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import { useOptimizer } from "../OptimizerProvider";
 import { ModeChip } from "../OptimizerBits";
 import { fmt } from "@/lib/paid-media/optimizer/engine-helpers";
+import { OBJECTIVE_LABELS } from "@/lib/paid-media/optimizer/types";
 import { cn } from "@/lib/utils";
 
 const BASE = "/paid-media/optimizer";
@@ -54,7 +55,7 @@ export function PortfolioHeader({ portfolioId }: { portfolioId: string }) {
         <div>
           <h2 className="text-lg font-semibold">{pf.name}</h2>
           <p className="text-sm text-muted-foreground">
-            {pf.objective} · {pf.snapshots.length} ad sets · plan ${fmt(pf.config.periodBudget)}/mo
+            {OBJECTIVE_LABELS[pf.objective]} · {pf.snapshots.length} ad sets · plan ${fmt(pf.config.periodBudget)}/mo
           </p>
         </div>
         <ModeChip mode={pf.config.mode} automatic />

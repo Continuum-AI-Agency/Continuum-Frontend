@@ -9,9 +9,18 @@ import {
   classifyStatus,
   evaluateTriggers,
   computePacing,
+  scoreAdSet,
+  windowScore,
+  resolveConfig,
+  getObjectiveProfile,
+  mapMetaRowToWindowMetrics,
   DEFAULT_CONFIG,
 } from "../src/index";
-import type { AdSetSnapshot, WindowMetrics } from "../src/index";
+import type {
+  AdSetSnapshot,
+  OptimizationObjective,
+  WindowMetrics,
+} from "../src/index";
 
 const approx = (a: number, b: number, tol = 1e-3) =>
   expect(Math.abs(a - b) <= tol).toBe(true);
@@ -217,4 +226,131 @@ test("runCycle efficiency underspends ceiling; scale grows to maxBudget", () => 
   expect(scale.reallocation.totalBudget > 200).toBe(true);
   expect(scale.reallocation.totalBudget <= 260).toBe(true);
   approx(scale.reallocation.allocatedTotal, scale.reallocation.totalBudget, 1e-2);
+});
+
+// --- Objective profiles ----------------------------------------------------
+test("each objective scores on its own KPI field (events / spend)", () => {
+  const m: WindowMetrics = {
+    spend: 100, purchases: 5, addToCarts: 0, clicks: 0, impressions: 2000,
+    appInstalls: 20, leads: 4, signups: 8, landingPageViews: 50,
+  };
+  approx(windowScore(m, resolveConfig({ objective: "purchase" })), 5 / 100, 1e-9);
+  approx(windowScore(m, resolveConfig({ objective: "app_install" })), 20 / 100, 1e-9);
+  approx(windowScore(m, resolveConfig({ objective: "signup" })), 8 / 100, 1e-9);
+  approx(windowScore(m, resolveConfig({ objective: "lead" })), 4 / 100, 1e-9);
+  approx(windowScore(m, resolveConfig({ objective: "traffic" })), 50 / 100, 1e-9);
+  approx(windowScore(m, resolveConfig({ objective: "awareness" })), 2000 / 100, 1e-9);
+});
+
+test("default (no objective) keeps the legacy purchase/Tier-2 path", () => {
+  // Zero purchases but clicks/ATC present => Tier-2 proxy (only on the legacy path).
+  const m: WindowMetrics = { spend: 100, purchases: 0, addToCarts: 4, clicks: 20, impressions: 0 };
+  approx(windowScore(m, DEFAULT_CONFIG), 4 / 20, 1e-9);
+});
+
+test("asymmetric velocity caps bound the [lo,hi] box per objective", () => {
+  const A = (installs: number, spend = 100): WindowMetrics => ({
+    spend, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0, appInstalls: installs,
+  });
+  const snaps: AdSetSnapshot[] = [
+    { id: "a", status: "active", currentBudget: 100, ageDays: 40, windows: { d3: A(10), d7: A(18), d14: A(30) } },
+    { id: "b", status: "active", currentBudget: 100, ageDays: 40, windows: { d3: A(6), d7: A(12), d14: A(22) } },
+    { id: "c", status: "active", currentBudget: 100, ageDays: 40, windows: { d3: A(8), d7: A(15), d14: A(28) } },
+  ];
+  // app_install: up +40%, down −45%. floor (15) < current*0.55, total feasible.
+  const res = reallocate(snaps, 300, { objective: "app_install" });
+  approx(res.allocatedTotal, 300, 1e-6);
+  expect(res.feasibility.overflow).toBe(false);
+  expect(res.feasibility.underflow).toBe(false);
+  for (const i of res.items) {
+    approx(i.lowerBound, 55, 1e-6); // 100 * (1 - 0.45)
+    approx(i.upperBound, 140, 1e-6); // 100 * (1 + 0.40)
+  }
+});
+
+test("learning phase keeps the -8% down-cap as an additional floor", () => {
+  const A = (installs: number): WindowMetrics => ({
+    spend: 100, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0, appInstalls: installs,
+  });
+  const snaps: AdSetSnapshot[] = [
+    { id: "a", status: "active", currentBudget: 100, ageDays: 40, windows: { d3: A(10), d7: A(18), d14: A(30) } },
+    { id: "b", status: "active", currentBudget: 100, ageDays: 40, windows: { d3: A(9), d7: A(16), d14: A(28) } },
+    { id: "L", status: "learning", learningPhase: true, currentBudget: 100, ageDays: 10, windows: { d3: A(1), d7: A(2), d14: A(3) } },
+  ];
+  const res = reallocate(snaps, 400, { objective: "app_install" });
+  approx(res.allocatedTotal, 400, 1e-6);
+  // Learning item: down = min(45%, 8%) = 8% => lower bound 92 (not 55).
+  approx(res.items.find((i) => i.id === "L")!.lowerBound, 92, 1e-6);
+  approx(res.items.find((i) => i.id === "a")!.lowerBound, 55, 1e-6);
+});
+
+test("significance gate (lead) drops sub-threshold windows from the composite", () => {
+  const L = (leads: number, spend = 100): WindowMetrics => ({
+    spend, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0, leads,
+  });
+  // d3 has 2 leads (< gate of 5) at the same rate as d7 (neutral trajectory).
+  const s: AdSetSnapshot = {
+    id: "x", status: "active", currentBudget: 100, ageDays: 40,
+    windows: { d3: L(2, 20), d7: L(10), d14: L(20) },
+  };
+  const cfg = resolveConfig({ objective: "lead" });
+  const sc = scoreAdSet(s, cfg);
+  const w = cfg.weightsNeutral; // lead neutral .1/.4/.5
+  const expected = (w.d7 * 0.1 + w.d14 * 0.2) / (w.d7 + w.d14); // d3 excluded by the gate
+  approx(sc.composite, expected, 1e-9);
+});
+
+test("EWMA blends prior and raw composite by alpha (lead)", () => {
+  const L = (leads: number): WindowMetrics => ({
+    spend: 100, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0, leads,
+  });
+  const s: AdSetSnapshot = {
+    id: "x", status: "active", currentBudget: 100, ageDays: 40,
+    windows: { d3: L(10), d7: L(10), d14: L(10) },
+  };
+  const cfg = resolveConfig({ objective: "lead" }); // alpha 0.5
+  const raw = scoreAdSet(s, cfg).composite; // no prior => raw
+  const prior = 0.5;
+  approx(scoreAdSet(s, cfg, prior).composite, 0.5 * raw + 0.5 * prior, 1e-9);
+});
+
+test("conservation holds across all objectives", () => {
+  const objectives: OptimizationObjective[] = [
+    "purchase", "app_install", "signup", "lead", "traffic", "awareness",
+  ];
+  for (const objective of objectives) {
+    const kpi = getObjectiveProfile(objective).kpiField;
+    const win = (events: number, spend: number): WindowMetrics => {
+      const w: WindowMetrics = { spend, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
+      (w as Record<string, number>)[kpi] = events;
+      return w;
+    };
+    const snaps: AdSetSnapshot[] = [
+      { id: "a", status: "active", currentBudget: 100, ageDays: 40, windows: { d3: win(10, 100), d7: win(18, 200), d14: win(30, 400) } },
+      { id: "b", status: "active", currentBudget: 120, ageDays: 40, windows: { d3: win(5, 100), d7: win(9, 200), d14: win(16, 400) } },
+      { id: "c", status: "active", currentBudget: 80, ageDays: 40, windows: { d3: win(8, 100), d7: win(15, 200), d14: win(26, 400) } },
+    ];
+    const res = runCycle(snaps, { mode: "balanced", objective, total: 300 });
+    approx(res.reallocation.allocatedTotal, 300, 1e-2);
+    expect(res.reallocation.conserved).toBe(true);
+  }
+});
+
+test("Meta ingest maps export columns to WindowMetrics", () => {
+  const row = {
+    "Amount spent": "1,234.50", "App installs": 20, "Link clicks": 300,
+    Impressions: "45,000", "Adds to cart": 5, Leads: 4, "Checkouts initiated": 8,
+    "Landing page views": 50, Reach: 1000, Purchases: 12, "Ignored col": 99,
+  };
+  const m = mapMetaRowToWindowMetrics(row);
+  approx(m.spend, 1234.5, 1e-9);
+  expect(m.appInstalls).toBe(20);
+  expect(m.clicks).toBe(300);
+  expect(m.impressions).toBe(45000);
+  expect(m.addToCarts).toBe(5);
+  expect(m.leads).toBe(4);
+  expect(m.signups).toBe(8);
+  expect(m.landingPageViews).toBe(50);
+  expect(m.reach).toBe(1000);
+  expect(m.purchases).toBe(12);
 });

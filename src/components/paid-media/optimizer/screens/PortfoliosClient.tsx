@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { OBJECTIVE_LABELS } from "@/lib/paid-media/optimizer/types";
 import { cn } from "@/lib/utils";
 
 const BASE = "/paid-media/optimizer";
@@ -51,7 +52,7 @@ export function PortfoliosClient() {
               <div>
                 <div className="font-medium">{pf.name}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  {pf.objective} · {pf.snapshots.length} ad sets
+                  {OBJECTIVE_LABELS[pf.objective]} · {pf.snapshots.length} ad sets
                   <ModeChip mode={pf.config.mode} />· plan ${fmt(pf.config.periodBudget)}/mo
                 </div>
               </div>

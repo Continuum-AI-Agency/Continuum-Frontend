@@ -13,11 +13,12 @@ import { classifyPortfolio } from './classify';
 import { evaluateTriggers } from './triggers';
 import { computePacing } from './pacing';
 import { reallocate } from './engine';
-import { cpp } from './scoring';
+import { kpiEvents } from './scoring';
 import type {
   AdSetSnapshot,
   CycleResult,
   OptimizationMode,
+  OptimizationObjective,
   PacingResult,
   PacingState,
 } from './types';
@@ -28,6 +29,9 @@ export type CycleOptions = {
   total?: number; // explicit total when no pacing state is provided
   maxBudget?: number; // ceiling for 'scale' mode
   weeklyGrowthPct?: number; // step for 'scale' mode (default 0.05)
+  objective?: OptimizationObjective; // selects the calibrated profile + KPI
+  /** Prior smoothed composite per ad set id (EWMA state from the last cycle). */
+  priorComposites?: Record<string, number>;
   config?: DeepPartial<EngineConfig>;
 };
 
@@ -35,7 +39,8 @@ const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
 export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
   const mode: OptimizationMode = opts.mode ?? 'balanced';
-  const baseCfg = resolveConfig(opts.config);
+  const configOverride: DeepPartial<EngineConfig> = { objective: opts.objective, ...opts.config };
+  const baseCfg = resolveConfig(configOverride);
 
   // --- Pacing: the planned daily total ----------------------------------
   let pacing: PacingResult;
@@ -68,8 +73,8 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
   } else if (mode === 'scale') {
     overflowMode = 'breach_best';
     const totSpend = sum(prepared.map((s) => s.windows.d14.spend));
-    const totPurch = sum(prepared.map((s) => s.windows.d14.purchases));
-    const portfolioCpp = totPurch > 0 ? totSpend / totPurch : Infinity;
+    const totEvents = sum(prepared.map((s) => kpiEvents(s.windows.d14, baseCfg)));
+    const portfolioCpp = totEvents > 0 ? totSpend / totEvents : Infinity;
     const meetsTarget = portfolioCpp <= baseCfg.cpaTarget;
     if (meetsTarget && opts.maxBudget) {
       const step = 1 + (opts.weeklyGrowthPct ?? 0.05);
@@ -77,7 +82,12 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     }
   }
 
-  const reallocation = reallocate(prepared, total, { ...opts.config, overflowMode });
+  const reallocation = reallocate(
+    prepared,
+    total,
+    { ...configOverride, overflowMode },
+    opts.priorComposites,
+  );
 
   return { mode, pacing, reallocation, recommendations };
 }

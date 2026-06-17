@@ -34,12 +34,21 @@ export function reallocate(
   snapshots: AdSetSnapshot[],
   totalBudget: number,
   override?: DeepPartial<EngineConfig>,
+  priorComposites?: Record<string, number>,
 ): ReallocationResult {
   const cfg = resolveConfig(override);
   const notes: string[] = [];
 
+  // Velocity caps. Default (no objective): symmetric ±velocityCapPct with the
+  // learning down-cap. With a profile: asymmetric up/down, and learning keeps
+  // the −8% cap as an additional floor (effective down = the smaller reduction).
+  const upPct = cfg.velocityUpPct ?? cfg.velocityCapPct;
+  const downBasePct = cfg.velocityDownPct ?? cfg.velocityCapPct;
+  const downPctFor = (s: AdSetSnapshot): number =>
+    isLearning(s) ? Math.min(downBasePct, cfg.learningReductionCapPct) : downBasePct;
+
   // --- 1. Score every ad set -------------------------------------------
-  const scored = snapshots.map((s) => ({ s, sc: scoreAdSet(s, cfg) }));
+  const scored = snapshots.map((s) => ({ s, sc: scoreAdSet(s, cfg, priorComposites?.[s.id]) }));
 
   // --- 2. Effective score ----------------------------------------------
   // Grace items get the average composite of ACTIVE items (Tier 3). If there
@@ -85,17 +94,14 @@ export function reallocate(
   const denom = sum(eligible.map(effectiveScore));
 
   // --- 5. Build solver items for eligible ad sets ----------------------
-  const solverItems: SolverItem[] = eligible.map((x) => {
-    const down = isLearning(x.s) ? cfg.learningReductionCapPct : cfg.velocityCapPct;
-    return {
-      id: x.s.id,
-      score: effectiveScore(x),
-      current: x.s.currentBudget,
-      floor,
-      velocityDown: x.s.currentBudget * (1 - down),
-      velocityUp: x.s.currentBudget * (1 + cfg.velocityCapPct),
-    };
-  });
+  const solverItems: SolverItem[] = eligible.map((x) => ({
+    id: x.s.id,
+    score: effectiveScore(x),
+    current: x.s.currentBudget,
+    floor,
+    velocityDown: x.s.currentBudget * (1 - downPctFor(x.s)),
+    velocityUp: x.s.currentBudget * (1 + upPct),
+  }));
 
   const solved = solve(solverItems, pool, cfg);
   const allocById = new Map(solved.allocations.map((a) => [a.id, a]));
@@ -107,9 +113,8 @@ export function reallocate(
     const eff = effectiveScore(x);
     const share = isEligible(s) && denom > 0 ? eff / denom : 0;
     const raw = isEligible(s) ? share * pool : 0;
-    const down = isLearning(s) ? cfg.learningReductionCapPct : cfg.velocityCapPct;
     const velocityCapped = isEligible(s)
-      ? clamp(raw, s.currentBudget * (1 - down), s.currentBudget * (1 + cfg.velocityCapPct))
+      ? clamp(raw, s.currentBudget * (1 - downPctFor(s)), s.currentBudget * (1 + upPct))
       : s.currentBudget;
 
     let finalBudget: number;
