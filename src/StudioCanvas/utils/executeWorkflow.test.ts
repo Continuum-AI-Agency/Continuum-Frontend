@@ -20,6 +20,12 @@ describe('executeWorkflow', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
+    // Default: reference hydration is a no-op (returns inputs unchanged) so existing
+    // scenarios behave identically; tests that exercise hydration override this.
+    mock.module('./rehydrateWorkflowMedia', () => ({
+      rehydrateWorkflowMediaNodes: mock(async (input: StudioNode[]) => input),
+    }));
+
     // Reset store state
     useStudioStore.setState({
       nodes: [],
@@ -728,5 +734,87 @@ describe('executeWorkflow', () => {
     const payload = executeGeneration.mock.calls[0][1];
     expect(payload.reference_images?.[0]?.image_url).toBe(remoteUrl);
     expect(payload.reference_images?.[0]?.data).toBeUndefined();
+  });
+
+  it('falls back to sourceUrl for a saved Continuum reference whose inline base64 was stripped', async () => {
+    // A saved canvas strips the inline base64 from `image`; only the durable signed
+    // URL in `sourceUrl` survives. With no storage coords to re-sign, hydration is a
+    // no-op, but the reference must still be passed to the Backend (not dropped).
+    const signedUrl = 'https://x.supabase.co/storage/v1/object/sign/media-library/c.jpg?token=fresh';
+    const nodes: StudioNode[] = [
+      { id: 'img', position: { x: 0, y: 0 }, data: { sourceUrl: signedUrl }, type: 'image' },
+      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'use this' }, type: 'nanoGen' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => ({
+      success: true,
+      output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      payload,
+    }));
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'nano', clearDownstream: false });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_images?.length).toBe(1);
+    expect(payload.reference_images?.[0]?.image_url).toBe(signedUrl);
+  });
+
+  it('hydrates a saved sidebar/Library reference (base64 stripped, coords kept) before a single-node generate', async () => {
+    // A Library creative dropped onto a reference node carries inline base64 +
+    // sourcePath/bucket/sourceUrl. After the canvas saves, the inline base64 is
+    // stripped and the signed URL expires (1h). A single-node generate must re-sign/
+    // inline fresh bytes at the chokepoint so the Backend gets base64 — not a dropped
+    // or expired reference. This is the post-save shape of the sidebar-drop path.
+    const freshBase64 = 'data:image/png;base64,FRESH_LIBRARY_BYTES';
+    mock.module('./rehydrateWorkflowMedia', () => ({
+      rehydrateWorkflowMediaNodes: mock(async (input: StudioNode[]) =>
+        input.map((node) =>
+          node.type === 'image'
+            ? { ...node, data: { ...node.data, image: freshBase64, sourceUrl: 'https://x/fresh.jpg' } }
+            : node
+        )
+      ),
+    }));
+
+    const nodes: StudioNode[] = [
+      {
+        id: 'img',
+        position: { x: 0, y: 0 },
+        // Inline base64 stripped on save; durable coords retained but URL expired.
+        data: { sourcePath: 'brand/d.jpg', bucket: 'media-library', sourceUrl: 'https://stale/d.jpg?token=expired' },
+        type: 'image',
+      },
+      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'use this' }, type: 'nanoGen' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => ({
+      success: true,
+      output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      payload,
+    }));
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'nano', clearDownstream: false });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_images?.[0]?.data).toBe('FRESH_LIBRARY_BYTES');
+
+    const imgNode = useStudioStore.getState().nodes.find((node) => node.id === 'img');
+    expect((imgNode?.data as any).image).toBe(freshBase64);
   });
 });

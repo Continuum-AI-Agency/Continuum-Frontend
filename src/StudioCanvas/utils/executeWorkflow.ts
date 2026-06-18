@@ -15,6 +15,7 @@ import { checkSpliceSupport } from "./splice/webcodecsSupport";
 import { runSpliceInWorker } from "../workers/spliceWorkerClient";
 import type { ClipSlot, VideoEditorNodeData } from "../types";
 import { registerCanvasOutput } from "@/lib/creative-assets/registerCanvasAsset";
+import { rehydrateWorkflowMediaNodes } from "./rehydrateWorkflowMedia";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
@@ -372,6 +373,90 @@ const getNodeReadiness = (
   return { ready: true };
 };
 
+const resolveExecutableNodes = (nodes: StudioNode[], targetNodeId?: string): StudioNode[] => {
+  if (!targetNodeId) return nodes.filter((node) => isMediaNodeType(node.type));
+  const target = nodes.find((node) => node.id === targetNodeId);
+  if (!target) return [];
+  return target.type === 'string' || target.type === 'videoDecode' || isMediaNodeType(target.type)
+    ? [target]
+    : [];
+};
+
+const REFERENCE_INPUT_HANDLES = new Set([
+  'ref-image',
+  'ref-images',
+  'ref-video',
+  'first-frame',
+  'last-frame',
+  'image',
+  'video',
+]);
+
+const isReferenceInputHandle = (handle?: string | null): boolean =>
+  typeof handle === 'string' && (REFERENCE_INPUT_HANDLES.has(handle) || handle.startsWith('frame-'));
+
+const asTrimmedString = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+// A reference whose media is not already inline base64 needs hydration: fetch a
+// fresh signed URL and inline its bytes (or re-sign a generator output). Library/
+// Continuum references arrive as a signed URL that expires after ~1h, or had their
+// inline base64 stripped on save; left as-is, the Backend fetch of a stale URL
+// fails the whole generation, while an upload (synchronous base64) always works.
+const referenceNeedsHydration = (node: StudioNode): boolean => {
+  const data = node.data as Record<string, unknown>;
+  if (node.type === 'image' || node.type === 'video') {
+    const value = asTrimmedString(node.type === 'video' ? data.video : data.image);
+    if (value.startsWith('data:')) return false;
+    return typeof data.sourcePath === 'string'
+      || typeof data.sourceUrl === 'string'
+      || value.startsWith('http');
+  }
+  const imageValue = asTrimmedString(data.generatedImage);
+  if (!imageValue.startsWith('data:') && typeof data.generatedImageStoragePath === 'string' && typeof data.generatedImageBucket === 'string') {
+    return true;
+  }
+  const videoValue = asTrimmedString(data.generatedVideo);
+  if (!videoValue.startsWith('data:') && typeof data.generatedVideoStoragePath === 'string' && typeof data.generatedVideoBucket === 'string') {
+    return true;
+  }
+  return false;
+};
+
+// Before building generation payloads, inline/re-sign the reference media feeding
+// the run so a single-node generate sends fresh bytes (or a fresh URL). The load
+// path already does this (rehydrateWorkflowMediaNodes); the hot path did not, which
+// silently dropped or expired Library/Continuum references. No-op when every
+// reference is already inline base64 or has no durable source to hydrate from.
+async function ensureReferenceMediaHydrated(
+  nodes: StudioNode[],
+  edges: Edge[],
+  executableNodeIds: Set<string>
+): Promise<void> {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const candidateIds = new Set<string>();
+  for (const edge of edges) {
+    if (!executableNodeIds.has(edge.target)) continue;
+    if (!isReferenceInputHandle(edge.targetHandle)) continue;
+    const source = nodeById.get(edge.source);
+    if (!source) continue;
+    if (source.type === 'image' || source.type === 'video' || isMediaNodeType(source.type)) {
+      candidateIds.add(source.id);
+    }
+  }
+
+  const candidates = nodes.filter((node) => candidateIds.has(node.id) && referenceNeedsHydration(node));
+  if (candidates.length === 0) return;
+
+  const hydrated = await rehydrateWorkflowMediaNodes(candidates);
+  for (const node of hydrated) {
+    const original = nodeById.get(node.id);
+    if (original && original.data !== node.data) {
+      useStudioStore.getState().updateNodeData(node.id, node.data as Partial<StudioNode['data']>);
+    }
+  }
+}
+
 type ExecuteWorkflowOptions = {
   targetNodeId?: string;
   clearDownstream?: boolean;
@@ -383,6 +468,21 @@ export async function executeWorkflow(
   controls: ExecutorControls,
   options: ExecuteWorkflowOptions = {}
 ) {
+  // Inline/re-sign reference media feeding the run BEFORE building payloads. A
+  // Library/Continuum reference arrives as a signed URL (which expires ~1h) or had
+  // its inline base64 stripped on save; left as-is, a single-node generate sends an
+  // expired URL the Backend cannot fetch (the generation fails) or no reference at
+  // all. This mirrors the load path so the hot path is equally robust.
+  {
+    const snapshot = useStudioStore.getState();
+    const scopeNodeIds = resolveExecutableNodes(snapshot.nodes, options.targetNodeId).map((node) => node.id);
+    if (scopeNodeIds.length === 0) {
+      console.log("No executable nodes found");
+      return;
+    }
+    await ensureReferenceMediaHydrated(snapshot.nodes, snapshot.edges, new Set(scopeNodeIds));
+  }
+
   const { nodes, edges } = useStudioStore.getState();
   const { executeGeneration, executeEnrichment } = controls;
   console.info("[studio] executeWorkflow start", {
@@ -392,13 +492,7 @@ export async function executeWorkflow(
   });
 
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const targetNode = options.targetNodeId ? nodeById.get(options.targetNodeId) : undefined;
-
-  const executableNodes = targetNode
-    ? (targetNode.type === 'string' || targetNode.type === 'videoDecode' || isMediaNodeType(targetNode.type)
-        ? [targetNode]
-        : [])
-    : nodes.filter((node) => isMediaNodeType(node.type));
+  const executableNodes = resolveExecutableNodes(nodes, options.targetNodeId);
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
@@ -488,6 +582,19 @@ export async function executeWorkflow(
             base64: '',
             mimeType: 'image/png',
             url: imageData.image,
+            storagePath: imageData.sourcePath,
+            storageBucket: (imageData as any).bucket,
+          });
+        } else if (isHttpUrl(imageData.sourceUrl)) {
+          // Saved canvases strip the inline base64 from `image`; only the durable
+          // signed URL in `sourceUrl` survives. Use it (last resort, when hydration
+          // could not re-sign a node lacking storage coords) so a pulled Continuum
+          // reference is still passed to the Backend instead of silently dropped.
+          resolvedOutputs.set(node.id, {
+            type: 'image',
+            base64: '',
+            mimeType: 'image/png',
+            url: imageData.sourceUrl,
             storagePath: imageData.sourcePath,
             storageBucket: (imageData as any).bucket,
           });

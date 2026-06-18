@@ -355,6 +355,20 @@ function resolveSeedMediaDataUrl(seed: PlannerAiStudioHandoff): string | null {
     : `data:image/png;base64,${assetBase64}`;
 }
 
+// Builds the data for a planner/Library seed image reference node. When the seed
+// is a remote URL (a short-TTL signed URL), it is carried as `sourceUrl` so the
+// node can be inlined to base64 (inlineReferenceImageNodes) and re-hydrated after a
+// save strips the inline data. Without this a Library-sourced seed is dropped at
+// generation, while an upload (inline base64) is not.
+function buildSeedImageNodeData(seedImage: string): Record<string, unknown> {
+  const isRemoteUrl = /^https?:\/\//i.test(seedImage.trim());
+  return {
+    image: seedImage,
+    fileName: "planner-seed-image.png",
+    ...(isRemoteUrl ? { sourceUrl: seedImage.trim() } : {}),
+  };
+}
+
 function buildSeedPrompt(seed: PlannerAiStudioHandoff): string {
   const workflowSpec = resolveWorkflowConceptSpec({
     platform: seed.platform,
@@ -495,7 +509,7 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
         id: imageRefId,
         type: "image",
         position: { x: 620, y: 500 },
-        data: { image: seedImage, fileName: "planner-seed-image.png" },
+        data: buildSeedImageNodeData(seedImage),
         style: { width: 196, height: 196 },
       } as StudioNode);
       edges.push({
@@ -524,7 +538,7 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
         id: seedNodeId,
         type: "image",
         position: { x: 120, y: 470 },
-        data: { image: seedImage, fileName: "planner-seed-image.png" },
+        data: buildSeedImageNodeData(seedImage),
         style: { width: 180, height: 180 },
       } as StudioNode);
     }
@@ -787,6 +801,15 @@ function Flow({
     setEdges(starter.edges);
     triggerSave();
     hydratedPlannerSeedRef.current = hydrationKey;
+
+    // Load the Library/planner seed image into the node as inline base64 (like an
+    // upload), so it reaches the generation model and survives a save+reload via
+    // re-hydration. Mirrors the unfurl drop path; runs in the background with a
+    // per-node processing/ready status.
+    void inlineReferenceImageNodes(starter.nodes, {
+      inline: inlineRemoteImage,
+      updateNodeData,
+    });
   }, [
     activeRoomId,
     edges.length,
@@ -797,6 +820,7 @@ function Flow({
     setNodes,
     takeSnapshot,
     triggerSave,
+    updateNodeData,
   ]);
 
   useEffect(() => {
