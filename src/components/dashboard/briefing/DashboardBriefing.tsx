@@ -1,8 +1,8 @@
+import type { ReactNode } from "react";
 import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { InsightLeaderboard, type LeaderboardRow } from "./InsightLeaderboard";
 import { NorthStarActions } from "./NorthStarActions";
-import { CompetitorBriefingStub } from "./CompetitorBriefingStub";
 import { DashboardBriefingEmptyState } from "./DashboardBriefingEmptyState";
 
 function trendsToRows(trends: BrandInsightsTrend[]): LeaderboardRow[] {
@@ -24,13 +24,15 @@ type DashboardBriefingProps = {
   brandId: string;
   trends: BrandInsightsTrend[];
   lastGeneratedAt?: string;
+  // The right column beside Brand Trends — the organic creatives leaderboard.
+  creativesSlot?: ReactNode;
 };
 
 // The lead value moment for the home board: an "Overview" header, the ranked
 // insight leaderboard (or a teaching empty state), the competitor stub, and the
 // three North Star actions. Insights refresh automatically (onboarding + daily
 // cron); the manual refresh is a low-key secondary control, not a CTA.
-export function DashboardBriefing({ brandId, trends, lastGeneratedAt }: DashboardBriefingProps) {
+export function DashboardBriefing({ brandId, trends, lastGeneratedAt, creativesSlot }: DashboardBriefingProps) {
   const rows = trendsToRows(trends);
   const hasInsights = rows.length > 0;
 
@@ -52,7 +54,7 @@ export function DashboardBriefing({ brandId, trends, lastGeneratedAt }: Dashboar
         ) : (
           <DashboardBriefingEmptyState />
         )}
-        <CompetitorBriefingStub />
+        {creativesSlot}
       </div>
     </section>
   );

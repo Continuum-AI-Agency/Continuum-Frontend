@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { DashboardBriefing } from "@/components/dashboard/briefing/DashboardBriefing";
+import { OrganicCreativesLeaderboard } from "@/components/dashboard/briefing/OrganicCreativesLeaderboard";
+import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import type { BrandInsightsTrendsAndEvents, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 
@@ -35,10 +37,23 @@ export function OrganicDashboardView({
   insightsStatus,
 }: OrganicDashboardViewProps) {
   const generatedAt = trendsAndEvents.generatedAt ?? insightsGeneratedAt;
+  const isCold = trendsAndEvents.trends.length === 0 || !generatedAt;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-[var(--app-shell-gap)]">
-      <DashboardBriefing brandId={brandId} trends={trendsAndEvents.trends} lastGeneratedAt={generatedAt} />
+      <DashboardWarmOnMount brandId={brandId} isCold={isCold} />
+      <DashboardBriefing
+        brandId={brandId}
+        trends={trendsAndEvents.trends}
+        lastGeneratedAt={generatedAt}
+        creativesSlot={
+          <OrganicCreativesLeaderboard
+            brandId={brandId}
+            accounts={instagramAccounts}
+            youtubeAccounts={youtubeAccounts}
+          />
+        }
+      />
 
       <section className="min-h-[clamp(220px,28dvh,500px)]">
         <BrandTrendsPanel

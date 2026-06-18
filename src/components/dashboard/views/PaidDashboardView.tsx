@@ -11,8 +11,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { NorthStarActions } from "@/components/dashboard/briefing/NorthStarActions";
-import { CompetitorBriefingStub } from "@/components/dashboard/briefing/CompetitorBriefingStub";
-import { PaidLeaderboard } from "@/components/dashboard/briefing/PaidLeaderboard";
+import { PaidEntityLeaderboard } from "@/components/dashboard/briefing/PaidEntityLeaderboard";
 import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
 import {
   Tooltip,
@@ -260,8 +259,20 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
         </div>
         <NorthStarActions />
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <PaidLeaderboard brandId={brandId} adAccountId={selectedAccountId} />
-          <CompetitorBriefingStub />
+          <PaidEntityLeaderboard
+            brandId={brandId}
+            adAccountId={selectedAccountId}
+            scope="top_campaigns"
+            title="Top campaigns by ROAS"
+            emptyMessage="No campaign performance yet for this account."
+          />
+          <PaidEntityLeaderboard
+            brandId={brandId}
+            adAccountId={selectedAccountId}
+            scope="top_adsets"
+            title="Top ad sets by ROAS"
+            emptyMessage="No ad set performance yet for this account."
+          />
         </div>
       </section>
 

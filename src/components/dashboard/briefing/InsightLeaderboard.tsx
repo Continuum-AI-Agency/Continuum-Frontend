@@ -1,12 +1,20 @@
+import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LeaderboardThumbnail } from "./LeaderboardThumbnail";
 
 export type LeaderboardRow = {
   id: string;
   name: string;
   subLabel?: string;
+  // The "example insight" line surfaced under the row metadata — the value moment.
+  insightLine?: string;
   metricValue: string;
   deltaPct?: number;
+  // Creative thumbnail (organic creatives); omitted for trends/campaigns.
+  thumbnailUrl?: string;
+  // Per-row contextual actions (hover/focus-revealed bar). Inert when absent.
+  actions?: ReactNode;
 };
 
 function DeltaBadge({ value }: { value: number }) {
@@ -33,8 +41,10 @@ type InsightLeaderboardProps = {
   className?: string;
 };
 
-// A dense, ranked data-table of insights (trend signals, top campaigns, etc.) —
-// the "pulled-out" value moment that leads the dashboard.
+// A dense, ranked data-table of insights (trend signals, top creatives, top
+// campaigns) — the "pulled-out" value moment that leads the dashboard. Rows can
+// carry a creative thumbnail, an example-insight line, and contextual actions
+// that reveal on hover/focus (always visible on touch via max-sm).
 export function InsightLeaderboard({ title, metricLabel, rows, className }: InsightLeaderboardProps) {
   return (
     <div className={cn("overflow-hidden rounded-lg border border-border/70 bg-card", className)}>
@@ -48,19 +58,34 @@ export function InsightLeaderboard({ title, metricLabel, rows, className }: Insi
         {rows.map((row, index) => (
           <li
             key={row.id}
-            className="flex items-center gap-3 border-b border-border/50 px-3 py-2.5 last:border-b-0"
+            className="group flex flex-col border-b border-border/50 px-3 py-2.5 last:border-b-0"
           >
-            <span className="w-4 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{index + 1}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm text-foreground">{row.name}</span>
-              {row.subLabel ? (
-                <span className="block truncate text-[11px] text-muted-foreground">{row.subLabel}</span>
+            <div className="flex items-center gap-3">
+              <span className="w-4 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+              {row.thumbnailUrl ? (
+                <LeaderboardThumbnail src={row.thumbnailUrl} alt={row.name} fallbackSeed={row.name} />
               ) : null}
-            </span>
-            <span className="shrink-0 text-right font-mono text-sm tabular-nums text-foreground">
-              {row.metricValue}
-            </span>
-            {typeof row.deltaPct === "number" ? <DeltaBadge value={row.deltaPct} /> : null}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground">{row.name}</span>
+                {row.subLabel ? (
+                  <span className="block truncate text-[11px] text-muted-foreground">{row.subLabel}</span>
+                ) : null}
+                {row.insightLine ? (
+                  <span className="block truncate text-[11px] leading-snug text-foreground/70">{row.insightLine}</span>
+                ) : null}
+              </span>
+              <span className="shrink-0 text-right font-mono text-sm tabular-nums text-foreground">
+                {row.metricValue}
+              </span>
+              {typeof row.deltaPct === "number" ? <DeltaBadge value={row.deltaPct} /> : null}
+            </div>
+            {row.actions ? (
+              <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-200 ease-out group-hover:grid-rows-[1fr] group-focus-within:grid-rows-[1fr] max-sm:grid-rows-[1fr]">
+                <div className="overflow-hidden">
+                  <div className="pl-7 pt-2">{row.actions}</div>
+                </div>
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>
