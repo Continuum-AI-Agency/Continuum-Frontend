@@ -4,6 +4,7 @@ export * from "./media/index";
 export * from "./documents/index";
 export * from "./competitor-spy/index";
 export * from "./organic/index";
+export * from "./paid/index";
 export * from "./brands/index";
 export * from "./mcp/index";
 export * from "./skills/index";
