@@ -10,6 +10,9 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
+import { NorthStarActions } from "@/components/dashboard/briefing/NorthStarActions";
+import { CompetitorBriefingStub } from "@/components/dashboard/briefing/CompetitorBriefingStub";
+import { PaidLeaderboard } from "@/components/dashboard/briefing/PaidLeaderboard";
 import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
 import {
   Tooltip,
@@ -249,8 +252,21 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   }, []);
 
   return (
-    <div className="grid min-h-[clamp(500px,80dvh,1400px)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
-      <div className="min-w-0">{reportingArea}</div>
+    <div className="flex flex-col gap-[var(--app-shell-gap)]">
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
+          <p className="text-xs text-muted-foreground">Your paid performance at a glance. Pick your next move.</p>
+        </div>
+        <NorthStarActions />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <PaidLeaderboard brandId={brandId} adAccountId={selectedAccountId} />
+          <CompetitorBriefingStub />
+        </div>
+      </section>
+
+      <div className="grid min-h-[clamp(500px,80dvh,1400px)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
+        <div className="min-w-0">{reportingArea}</div>
 
       <AnimatePresence
         initial={false}
@@ -331,6 +347,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

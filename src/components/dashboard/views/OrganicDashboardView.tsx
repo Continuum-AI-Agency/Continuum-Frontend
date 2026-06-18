@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
-import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
+import { DashboardBriefing } from "@/components/dashboard/briefing/DashboardBriefing";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import type { BrandInsightsTrendsAndEvents, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 
@@ -34,16 +34,11 @@ export function OrganicDashboardView({
   insightsGeneratedAt,
   insightsStatus,
 }: OrganicDashboardViewProps) {
+  const generatedAt = trendsAndEvents.generatedAt ?? insightsGeneratedAt;
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-[var(--app-shell-gap)]">
-      <section>
-        <InstagramOrganicReportingWidget
-          brandId={brandId}
-          accounts={instagramAccounts}
-          youtubeAccounts={youtubeAccounts}
-          className="min-h-[var(--dashboard-min-panel-height)]"
-        />
-      </section>
+      <DashboardBriefing brandId={brandId} trends={trendsAndEvents.trends} lastGeneratedAt={generatedAt} />
 
       <section className="min-h-[clamp(220px,28dvh,500px)]">
         <BrandTrendsPanel
@@ -52,14 +47,17 @@ export function OrganicDashboardView({
           questionsByNiche={questionsByNiche}
           brandId={brandId}
           country={trendsAndEvents.country}
-          generatedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
+          generatedAt={generatedAt}
           status={trendsAndEvents.status ?? insightsStatus}
-          statusSlot={
-            <BrandInsightsGenerateButton
-              brandId={brandId}
-              lastGeneratedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
-            />
-          }
+        />
+      </section>
+
+      <section>
+        <InstagramOrganicReportingWidget
+          brandId={brandId}
+          accounts={instagramAccounts}
+          youtubeAccounts={youtubeAccounts}
+          className="min-h-[var(--dashboard-min-panel-height)]"
         />
       </section>
     </div>

@@ -23,7 +23,7 @@ import {
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRight, LogOut, Moon, Search, Sun } from "lucide-react";
+import { ChevronRight, Lock, LogOut, Moon, Search, Sun } from "lucide-react";
 import {
   APP_NAVIGATION_GROUPS,
   APP_NAVIGATION_FOOTER,
@@ -179,6 +179,9 @@ function AppSidebarInner() {
             <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
               {item.label}
             </span>
+            {item.locked ? (
+              <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden" />
+            ) : null}
           </SidebarMenuButton>
           {item.badge ? (
             <SidebarMenuBadge className="pointer-events-none opacity-60">

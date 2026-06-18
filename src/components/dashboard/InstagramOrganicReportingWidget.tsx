@@ -82,8 +82,8 @@ const METRIC_LABELS: Record<string, string> = {
   impressions: "Impressions",
 };
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat().format(value);
+function formatCompact(value: number) {
+  return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function rangeLabel(preset: OrganicDateRangePreset) {
@@ -346,6 +346,28 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
   );
 }
 
+// Compact, data-backed bars showing the metric's recent daily series. Reserves
+// its height even when the series is unavailable so cards stay aligned.
+function MiniBars({ values, active }: { values: number[]; active?: boolean }) {
+  if (values.length === 0) return <div className="h-5" aria-hidden="true" />;
+  const max = Math.max(...values, 1);
+
+  return (
+    <div className="flex h-5 items-end gap-px" aria-hidden="true">
+      {values.map((value, index) => (
+        <span
+          key={index}
+          className={cn(
+            "min-w-[2px] flex-1 rounded-[1px]",
+            active ? "bg-[var(--primary)]" : "bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
+          )}
+          style={{ height: `${Math.max(8, (value / max) * 100)}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function MetricsPanel({
   data,
   expandedMetric,
@@ -392,39 +414,39 @@ function MetricsPanel({
               const delta = comparison?.[item.key]?.percentageChange;
               const formattedDelta = formatPercent(delta ?? undefined);
               const isActive = expandedKey === item.key;
-              const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
+              const deltaClass =
+                delta === undefined || delta === 0
+                  ? "text-muted-foreground"
+                  : delta > 0
+                    ? "text-emerald-500"
+                    : "text-red-500";
+              const seriesValues = (buildDailySeries(data.trends, item.key) ?? []).map((point) => point.value);
 
               return (
                 <button
                   key={item.key}
                   type="button"
                   onClick={() => onMetricSelect(item.key)}
-                  className="text-left w-full h-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                   aria-pressed={isActive}
+                  className={cn(
+                    "group/kpi flex h-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+                    isActive
+                      ? "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]"
+                      : "border-border/70 bg-card",
+                  )}
                 >
-                  <Card
-                    variant="surface"
-                    className={cn(
-                      "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[48px] overflow-hidden",
-                      isActive && "ring-1 ring-primary bg-accent/10"
-                    )}
-                  >
-                    <Box px="2" py="1" className="w-full">
-                      <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                        <Text color="gray" weight="medium" className="truncate w-full leading-tight text-[10px]">
-                          {item.label}
-                        </Text>
-                        <Heading weight="bold" className="truncate w-full leading-tight text-sm tabular-nums">{formatNumber(item.value)}</Heading>
-                        {formattedDelta ? (
-                          <Text color={deltaTone} weight="bold" className="leading-none text-[10px] tabular-nums">
-                            {formattedDelta}
-                          </Text>
-                        ) : (
-                          <Box className="h-1.5" />
-                        )}
-                      </Flex>
-                    </Box>
-                  </Card>
+                  <span className="truncate font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {item.label}
+                  </span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xl font-semibold leading-none tabular-nums text-foreground">
+                      {formatCompact(item.value)}
+                    </span>
+                    {formattedDelta ? (
+                      <span className={cn("font-mono text-[10px] tabular-nums", deltaClass)}>{formattedDelta}</span>
+                    ) : null}
+                  </div>
+                  <MiniBars values={seriesValues} active={isActive} />
                 </button>
               );
             })}

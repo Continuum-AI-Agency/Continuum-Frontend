@@ -139,6 +139,7 @@ export async function generateBrandInsights(input: unknown) {
       window_end: window.windowEnd,
       platforms: parsed.selectedSocialPlatforms ?? undefined,
       items_per_platform: parsed.maxItemsPerPlatform ?? undefined,
+      force_regenerate: parsed.forceRegenerate ?? undefined,
     },
     cache: "no-store",
   });

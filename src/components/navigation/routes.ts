@@ -9,12 +9,8 @@ import {
   Bot,
   CalendarDays,
   ChartColumn,
-  Blocks,
-  Users,
-  FileText,
-  User,
-  Package,
-  CircleCheck,
+  Code,
+  Gauge,
   Images,
   type LucideIcon,
 } from "lucide-react";
@@ -38,6 +34,8 @@ export type AppNavigationItem = {
   adminOnly?: boolean;
   // Greyed-out, non-interactive nav entry (e.g. not yet available).
   disabled?: boolean;
+  // Renders a lock affordance on a disabled entry (coming-soon, gated surface).
+  locked?: boolean;
 };
 
 export type AppNavigationGroup = {
@@ -45,120 +43,78 @@ export type AppNavigationGroup = {
   items: AppNavigationItem[];
 };
 
-// The four product areas. Order and labels are the canonical IA.
-export const APP_NAVIGATION_PRIMARY: AppNavigationItem[] = [
-  {
-    label: "Home",
-    href: "/dashboard",
-    icon: Home,
-  },
-  {
-    label: "Canvas",
-    href: "/ai-studio",
-    icon: Frame,
-    accentColor: "text-violet-500",
-  },
-  {
-    label: "Organic",
-    href: "/organic",
-    icon: Sprout,
-    accentColor: "text-emerald-500",
-    quickTabs: true,
-    items: [
-      {
-        label: "Metrics Dashboard",
-        href: "/organic?tab=metrics",
-        icon: ChartColumn,
-      },
-      {
-        label: "Planner",
-        href: "/organic?tab=planner",
-        icon: CalendarDays,
-      },
-    ],
-  },
-  {
-    label: "Scale",
-    href: "/scale",
-    icon: TrendingUp,
-    accentColor: "text-amber-500",
-    quickTabs: true,
-    items: [
-      {
-        label: "Observability",
-        href: "/scale?tab=dashboard",
-        icon: Activity,
-      },
-      {
-        label: "Approvals",
-        href: "/scale/approvals",
-        icon: CircleCheck,
-      },
-      {
-        label: "Jaina",
-        href: "/scale?tab=jaina",
-        icon: Bot,
-      },
-    ],
-  },
+// Sub-routes for the Organic section. Shown as flat nested items under the
+// "Organic" section header (Hessian-style), and reused as the parent's items
+// for breadcrumb resolution.
+const ORGANIC_ITEMS: AppNavigationItem[] = [
+  { label: "Agent", href: "/organic?tab=agent", icon: Bot, accentColor: "text-emerald-500" },
+  { label: "Analytics", href: "/organic?tab=metrics", icon: ChartColumn, accentColor: "text-emerald-500" },
+  { label: "Calendar", href: "/organic?tab=planner", icon: CalendarDays, accentColor: "text-emerald-500" },
 ];
 
-// Cross-cutting tools that support the four areas, demoted below them.
-export const APP_NAVIGATION_SECONDARY: AppNavigationItem[] = [
-  {
-    label: "Library",
-    href: "/library",
-    icon: Images,
-    accentColor: "text-rose-500",
-    description: "Media library + competitor inspiration for your brand.",
-  },
-  {
-    label: "Primitives",
-    href: "/primitives",
-    icon: Blocks,
-    accentColor: "text-sky-500",
-    disabled: true,
-    badge: {
-      label: "Soon",
-      tone: "blue",
-    },
-    description: "Shared building blocks for paid media (audiences, guidelines, personas).",
-    items: [
-      {
-        label: "Audiences",
-        href: "/primitives?tab=audiences",
-        icon: Users,
-      },
-      {
-        label: "Brand Guidelines",
-        href: "/primitives?tab=guidelines",
-        icon: FileText,
-      },
-      {
-        label: "Personas",
-        href: "/primitives?tab=personas",
-        icon: User,
-      },
-      {
-        label: "Products",
-        href: "/primitives?tab=products",
-        icon: Package,
-      },
-    ],
-  },
+// Sub-routes for the Scale section. "Optimization" is the campaign performance
+// surface (the Scale page tab formerly labeled "Performance").
+const SCALE_ITEMS: AppNavigationItem[] = [
+  { label: "Agent", href: "/scale?tab=jaina", icon: Bot, accentColor: "text-amber-500" },
+  { label: "Analytics", href: "/scale?tab=dashboard", icon: Activity, accentColor: "text-amber-500" },
+  { label: "Optimization", href: "/scale?tab=performance", icon: Gauge, accentColor: "text-amber-500" },
 ];
 
-// Visual grouping consumed by AppSidebar. A null label renders no header.
+const HOME: AppNavigationItem = { label: "Home", href: "/dashboard", icon: Home };
+const CANVAS: AppNavigationItem = {
+  label: "Canvas",
+  href: "/ai-studio",
+  icon: Frame,
+  accentColor: "text-violet-500",
+};
+const LIBRARY: AppNavigationItem = {
+  label: "Library",
+  href: "/library",
+  icon: Images,
+  accentColor: "text-rose-500",
+  description: "Media library + competitor inspiration for your brand.",
+};
+
+// Parent area entries — used by the flat list (breadcrumb + command palette).
+// In the sidebar these render as section headers; the flat entries keep their
+// canonical /organic and /scale hrefs so the breadcrumb resolves by pathname.
+const ORGANIC: AppNavigationItem = {
+  label: "Organic",
+  href: "/organic",
+  icon: Sprout,
+  accentColor: "text-emerald-500",
+  items: ORGANIC_ITEMS,
+};
+const SCALE: AppNavigationItem = {
+  label: "Scale",
+  href: "/scale",
+  icon: TrendingUp,
+  accentColor: "text-amber-500",
+  items: SCALE_ITEMS,
+};
+
+// Locked developer surface. Greyed-out and non-interactive until released.
+const DEVELOPERS: AppNavigationItem = {
+  label: "Developers",
+  href: "/developers",
+  icon: Code,
+  disabled: true,
+  locked: true,
+};
+
+// The canonical sidebar IA: an unlabeled lead group, then one labeled section
+// per product area, Storage, and the locked Developers section.
 export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
-  { label: null, items: APP_NAVIGATION_PRIMARY },
-  { label: "Resources", items: APP_NAVIGATION_SECONDARY },
+  { label: null, items: [HOME, CANVAS] },
+  { label: "Organic", items: ORGANIC_ITEMS },
+  { label: "Scale", items: SCALE_ITEMS },
+  { label: "Storage", items: [LIBRARY] },
+  { label: null, items: [DEVELOPERS] },
 ];
 
-// Flat list for non-grouped consumers (breadcrumb, command palette).
-export const APP_NAVIGATION: AppNavigationItem[] = [
-  ...APP_NAVIGATION_PRIMARY,
-  ...APP_NAVIGATION_SECONDARY,
-];
+// Flat list of navigable areas for non-grouped consumers (breadcrumb, command
+// palette). Parent areas only — sub-routes are reached from the sidebar.
+export const APP_NAVIGATION: AppNavigationItem[] = [HOME, CANVAS, ORGANIC, SCALE, LIBRARY];
 
 export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [
   {

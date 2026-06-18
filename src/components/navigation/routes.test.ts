@@ -4,8 +4,6 @@ import {
   APP_NAVIGATION,
   APP_NAVIGATION_FOOTER,
   APP_NAVIGATION_GROUPS,
-  APP_NAVIGATION_PRIMARY,
-  APP_NAVIGATION_SECONDARY,
   isRouteActive,
 } from "./routes";
 
@@ -14,75 +12,87 @@ function params(query = ""): URLSearchParams {
 }
 
 describe("navigation structure", () => {
-  it("exposes the four product areas in order", () => {
-    expect(APP_NAVIGATION_PRIMARY.map((i) => i.label)).toEqual([
+  it("keeps a flat list of navigable areas for breadcrumb + command palette", () => {
+    expect(APP_NAVIGATION.map((i) => i.label)).toEqual([
       "Home",
       "Canvas",
       "Organic",
       "Scale",
+      "Library",
     ]);
-    expect(APP_NAVIGATION_PRIMARY.map((i) => i.href)).toEqual([
+    expect(APP_NAVIGATION.map((i) => i.href)).toEqual([
       "/dashboard",
       "/ai-studio",
       "/organic",
       "/scale",
+      "/library",
     ]);
   });
 
-  it("demotes Library and Primitives to the secondary group", () => {
-    expect(APP_NAVIGATION_SECONDARY.map((i) => i.label)).toEqual([
-      "Library",
-      "Primitives",
+  it("groups the sidebar into Hessian-style sections", () => {
+    expect(APP_NAVIGATION_GROUPS.map((g) => g.label)).toEqual([
+      null,
+      "Organic",
+      "Scale",
+      "Storage",
+      null,
     ]);
   });
 
-  it("renders primary group unlabeled and secondary group as Resources", () => {
-    expect(APP_NAVIGATION_GROUPS).toHaveLength(2);
-    expect(APP_NAVIGATION_GROUPS[0].label).toBeNull();
-    expect(APP_NAVIGATION_GROUPS[0].items).toBe(APP_NAVIGATION_PRIMARY);
-    expect(APP_NAVIGATION_GROUPS[1].label).toBe("Resources");
-    expect(APP_NAVIGATION_GROUPS[1].items).toBe(APP_NAVIGATION_SECONDARY);
+  it("puts Home + Canvas in the unlabeled lead group", () => {
+    const lead = APP_NAVIGATION_GROUPS[0];
+    expect(lead.label).toBeNull();
+    expect(lead.items.map((i) => i.href)).toEqual(["/dashboard", "/ai-studio"]);
   });
 
-  it("keeps a flat list of all six main items for non-grouped consumers", () => {
-    expect(APP_NAVIGATION).toHaveLength(6);
-    expect(APP_NAVIGATION).toEqual([
-      ...APP_NAVIGATION_PRIMARY,
-      ...APP_NAVIGATION_SECONDARY,
+  it("nests Organic sub-routes as Agent / Analytics / Calendar", () => {
+    const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === "Organic");
+    expect(organic?.items.map((i) => i.label)).toEqual([
+      "Agent",
+      "Analytics",
+      "Calendar",
+    ]);
+    expect(organic?.items.map((i) => i.href)).toEqual([
+      "/organic?tab=agent",
+      "/organic?tab=metrics",
+      "/organic?tab=planner",
     ]);
   });
 
-  it("footer is Settings + admin-gated Admin, with no Integrations entry", () => {
-    expect(APP_NAVIGATION_FOOTER.map((i) => i.label)).toEqual([
-      "Settings",
-      "Admin",
+  it("nests Scale sub-routes as Agent / Analytics / Optimization", () => {
+    const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === "Scale");
+    expect(scale?.items.map((i) => i.label)).toEqual([
+      "Agent",
+      "Analytics",
+      "Optimization",
     ]);
-    expect(APP_NAVIGATION_FOOTER.find((i) => i.label === "Admin")?.adminOnly).toBe(
-      true,
-    );
-    expect(APP_NAVIGATION_FOOTER.some((i) => i.label === "Integrations")).toBe(
-      false,
-    );
-    expect(APP_NAVIGATION_FOOTER.some((i) => i.href.startsWith("/integrations"))).toBe(
-      false,
-    );
-  });
-
-  it("scale quick tabs point at the renamed /scale routes", () => {
-    const scale = APP_NAVIGATION_PRIMARY.find((i) => i.label === "Scale");
-    expect(scale?.items?.map((s) => s.href)).toEqual([
-      "/scale?tab=dashboard",
-      "/scale/approvals",
+    expect(scale?.items.map((i) => i.href)).toEqual([
       "/scale?tab=jaina",
+      "/scale?tab=dashboard",
+      "/scale?tab=performance",
     ]);
   });
 
-  it("greys out Primitives and carries no Beta badge anywhere", () => {
-    const primitives = APP_NAVIGATION_SECONDARY.find((i) => i.label === "Primitives");
-    expect(primitives?.disabled).toBe(true);
+  it("puts Library under a Storage section", () => {
+    const storage = APP_NAVIGATION_GROUPS.find((g) => g.label === "Storage");
+    expect(storage?.items.map((i) => i.href)).toEqual(["/library"]);
+  });
 
-    const scale = APP_NAVIGATION_PRIMARY.find((i) => i.label === "Scale");
-    expect(scale?.badge).toBeUndefined();
+  it("exposes a single locked, greyed-out Developers entry", () => {
+    const developers = APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find(
+      (i) => i.label === "Developers",
+    );
+    expect(developers).toBeDefined();
+    expect(developers!.disabled).toBe(true);
+    expect(developers!.locked).toBe(true);
+  });
+
+  it("footer is Settings + admin-gated Admin", () => {
+    expect(APP_NAVIGATION_FOOTER.map((i) => i.label)).toEqual(["Settings", "Admin"]);
+    expect(APP_NAVIGATION_FOOTER.find((i) => i.label === "Admin")?.adminOnly).toBe(true);
+  });
+
+  it("carries no Beta badge anywhere", () => {
     expect(APP_NAVIGATION.every((i) => i.badge?.label !== "Beta")).toBe(true);
   });
 });
@@ -93,25 +103,22 @@ describe("isRouteActive", () => {
     expect(isRouteActive("/dashboard/x", params(), { href: "/dashboard" })).toBe(false);
   });
 
-  it("matches /scale exactly and as a parent prefix", () => {
+  it("matches /scale as a parent prefix", () => {
     expect(isRouteActive("/scale", params(), { href: "/scale" })).toBe(true);
     expect(isRouteActive("/scale/approvals", params(), { href: "/scale" })).toBe(true);
     expect(isRouteActive("/scaled", params(), { href: "/scale" })).toBe(false);
   });
 
-  it("matches the Approvals sub-route", () => {
+  it("matches query-bearing sub-routes only when every param matches", () => {
     expect(
-      isRouteActive("/scale/approvals", params(), { href: "/scale/approvals" }),
-    ).toBe(true);
-  });
-
-  it("matches query-bearing quick tabs only when every param matches", () => {
-    expect(
-      isRouteActive("/scale", params("tab=jaina"), { href: "/scale?tab=jaina" }),
+      isRouteActive("/scale", params("tab=performance"), { href: "/scale?tab=performance" }),
     ).toBe(true);
     expect(
-      isRouteActive("/scale", params("tab=dashboard"), { href: "/scale?tab=jaina" }),
+      isRouteActive("/scale", params("tab=dashboard"), { href: "/scale?tab=performance" }),
     ).toBe(false);
+    expect(
+      isRouteActive("/organic", params("tab=metrics"), { href: "/organic?tab=metrics" }),
+    ).toBe(true);
     expect(isRouteActive("/scale", params(), { href: "/scale?tab=jaina" })).toBe(false);
   });
 });

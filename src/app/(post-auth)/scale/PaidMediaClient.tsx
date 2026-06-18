@@ -362,7 +362,7 @@ export default function PaidMediaClientPage({
                 onMouseEnter={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
                 onFocus={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
               >
-                Performance
+                Optimization
               </TabsTrigger>
               <TabsTrigger
                 value="jaina"

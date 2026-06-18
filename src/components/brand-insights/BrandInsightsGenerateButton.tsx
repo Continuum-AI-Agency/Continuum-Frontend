@@ -25,6 +25,11 @@ const STALE_AFTER_DAYS = 5;
 type Props = {
   brandId: string;
   lastGeneratedAt?: string;
+  // Render as a low-key, uncolored control (not a call-to-action). Used on the
+  // dashboard where generation is automatic and the manual refresh is secondary.
+  subtle?: boolean;
+  // Always start a fresh generation, bypassing the backend's 5-day reuse window.
+  force?: boolean;
 };
 
 function ageInDays(iso?: string): number | null {
@@ -34,7 +39,7 @@ function ageInDays(iso?: string): number | null {
   return Math.floor((Date.now() - timestamp) / 86_400_000);
 }
 
-export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props) {
+export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle = false, force = false }: Props) {
   const router = useRouter();
   const { show } = useToast();
   const [generationId, setGenerationId] = useState<string | null>(null);
@@ -60,8 +65,9 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props)
   const buttonLabel = useMemo(() => {
     if (generationId) return "Generating…";
     if (isPending) return "Starting…";
+    if (force) return "Refresh";
     return isStale ? "Regenerate" : "Refresh";
-  }, [generationId, isPending, isStale]);
+  }, [generationId, isPending, isStale, force]);
 
   // Relative age caption, hidden while a run is in flight (the progress row
   // takes over). Null when we have no prior generation to describe.
@@ -126,7 +132,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props)
     setStageMessage(null);
     startTransition(async () => {
       try {
-        const result = await generateBrandInsights({ brandId });
+        const result = await generateBrandInsights({ brandId, forceRegenerate: force });
         if (result.status === "processing" && result.generationId) {
           const activeGenerationId = result.generationId;
           setGenerationId(activeGenerationId);
@@ -209,17 +215,28 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props)
     });
   };
 
-  const Icon = isStale ? Sparkles : RefreshCw;
+  const Icon = force ? RefreshCw : isStale ? Sparkles : RefreshCw;
 
   return (
     <div className={cn("flex flex-col items-end gap-1.5", showProgress ? "w-full" : "w-auto")}>
       <div className="flex items-center gap-2">
-        {ageLabel ? (
+        {ageLabel && !subtle ? (
           <span className="text-[11px] tabular-nums text-muted-foreground">{ageLabel}</span>
         ) : null}
-        <Button onClick={handleRun} disabled={isWorking} size="sm" className="h-7 px-2 text-xs">
+        <Button
+          onClick={handleRun}
+          disabled={isWorking}
+          variant={subtle ? "ghost" : "default"}
+          size="sm"
+          aria-label={subtle ? buttonLabel : undefined}
+          title={subtle ? buttonLabel : undefined}
+          className={cn(
+            "h-7 text-xs",
+            subtle ? "w-7 px-0 text-muted-foreground hover:text-foreground" : "px-2",
+          )}
+        >
           {isWorking ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />}
-          {buttonLabel}
+          {!subtle && buttonLabel}
         </Button>
       </div>
       {showProgress && (
