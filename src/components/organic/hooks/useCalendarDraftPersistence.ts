@@ -11,6 +11,7 @@ import {
   buildPersistedDraftPayload,
   isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
+  mergeUnsavedLocalDrafts,
   type PersistedOrganicDraftRow,
 } from "@/lib/organic/calendar-draft-persistence"
 
@@ -83,6 +84,10 @@ export function useCalendarDraftPersistence({
   const lastSyncedSignatureRef = React.useRef<string>("")
   const syncInFlightRef = React.useRef(false)
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), [])
+  // Live view of the current grid so a refetch can preserve in-flight local drafts
+  // (manual constructions not yet autosaved) instead of clobbering them.
+  const calendarDaysRef = React.useRef(calendarDays)
+  calendarDaysRef.current = calendarDays
 
   const refetch = React.useCallback(async () => {
     if (!brandProfileId || !weekStartId) return
@@ -127,7 +132,9 @@ export function useCalendarDraftPersistence({
       day.slots.push(entry.draft)
     }
 
-    setCalendarDays(days)
+    // Non-destructive reconcile: keep never-persisted local drafts that the server
+    // hasn't echoed yet, so a refetch racing a fresh manual construction can't wipe it.
+    setCalendarDays(mergeUnsavedLocalDrafts(days, calendarDaysRef.current))
     knownBackendIdsRef.current = knownIds
   }, [brandProfileId, setCalendarDays, weekStartId])
 

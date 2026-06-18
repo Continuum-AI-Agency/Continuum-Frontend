@@ -234,4 +234,33 @@ describe("mapPersistedRowToCalendarEntry — generated drafts (content_json shap
     expect(entry?.draft.mediaSuggestion?.hyperframe?.mp4Status).toBe("pending")
     expect(entry?.draft.mediaSuggestion?.hyperframe?.generated).toBe(true)
   })
+
+  it("restores the persisted storyboard preview frames from content_json", () => {
+    const row = generatedRow()
+    ;(row.content_json as Record<string, unknown>).creative = {
+      mediaSuggestion: {
+        mediaStatus: "pending",
+        storyboard: [
+          {
+            role: "primary",
+            bucket: "brand-profile-assets",
+            storagePath: "organic/d/preview/1.png",
+            storageUrl: "https://signed/preview-1.png",
+            format: "carousel",
+          },
+        ],
+      },
+    }
+    const entry = mapPersistedRowToCalendarEntry(row, days)
+    expect(entry?.draft.mediaSuggestion?.storyboard).toHaveLength(1)
+    expect(entry?.draft.mediaSuggestion?.storyboard?.[0].storageUrl).toBe(
+      "https://signed/preview-1.png"
+    )
+    expect(entry?.draft.mediaSuggestion?.storyboard?.[0].storagePath).toBe(
+      "organic/d/preview/1.png"
+    )
+    expect(entry?.draft.mediaSuggestion?.storyboard?.[0].bucket).toBe(
+      "brand-profile-assets"
+    )
+  })
 })

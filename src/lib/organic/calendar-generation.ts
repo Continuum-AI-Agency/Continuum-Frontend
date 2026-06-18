@@ -427,6 +427,22 @@ const placementCreativeSchema = z
         alt: z.string().nullish(),
         assetBase64: z.string().nullish(),
         assets: z.array(mediaSuggestionAssetSchema).nullish(),
+        // Persisted 512px Stage-2 storyboard preview frames (durable
+        // bucket+storagePath; storageUrl re-minted on load). Mirrors the
+        // @continuum/contracts organicStoryboardPreviewSchema shape.
+        storyboard: z
+          .array(
+            z
+              .object({
+                role: z.string().nullish(),
+                bucket: z.string().nullish(),
+                storagePath: z.string().nullish(),
+                storageUrl: z.string().nullish(),
+                format: z.string().nullish(),
+              })
+              .passthrough(),
+          )
+          .nullish(),
         generationContext: mediaSuggestionGenerationContextSchema.nullish(),
       })
       .nullish(),

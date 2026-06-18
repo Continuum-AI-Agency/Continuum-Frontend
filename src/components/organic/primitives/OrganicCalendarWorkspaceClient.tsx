@@ -33,6 +33,7 @@ import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
 import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistence"
 import { useCalendarRealtimeSync } from "../hooks/useCalendarRealtimeSync"
+import { DraftsElsewhereBadge } from "./DraftsElsewhereBadge"
 import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
@@ -542,7 +543,10 @@ export function OrganicCalendarWorkspaceClient({
         creativeIdea: "",
         captionPreview: "",
         tags: [],
-        mediaCount: isManual ? 0 : 1,
+        // No media exists yet for a freshly-created quick draft. Media presence
+        // is derived downstream from real publishingAssets / mediaStatus, so this
+        // must start at 0 rather than seeding a fake "has media" count.
+        mediaCount: 0,
         seedTrendId: status === "placeholder" ? trendTag : undefined,
         targetAccountId,
       }
@@ -759,6 +763,7 @@ export function OrganicCalendarWorkspaceClient({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
+      <DraftsElsewhereBadge />
       <CalendarDndContext
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}

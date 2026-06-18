@@ -95,32 +95,8 @@ describe("TimeGridCanvas", () => {
     cleanup()
   })
 
-  it("calls onCreatePost from header plus button", () => {
-    const onCreatePost = mock()
-
-    render(
-      <TimeGridCanvas
-        days={buildWeekDays()}
-        platforms={buildPlannerTestPlatforms(buildWeekDays())}
-        selectedDraftId={null}
-        selectedDraftIds={[]}
-        rangeTitle="February 23 – March 1, 2026"
-        rangeSubtitle="Week 9"
-        viewMode="week"
-        onViewModeChange={mock()}
-        onPreviousWeek={mock()}
-        onNextWeek={mock()}
-        onCreatePost={onCreatePost}
-        onSelectDraft={mock()}
-        onToggleSelection={mock()}
-        onRegenerate={mock()}
-      />
-    )
-
-    fireEvent.click(screen.getByRole("button", { name: "Add placeholder" }))
-
-    expect(onCreatePost).toHaveBeenCalledWith({ status: "placeholder" })
-  })
+  // The header "+" was intentionally removed — add-post is the per-day hover "+"
+  // (AddPostMenu) in the planner cells, not a header control.
 
   it("calls onCreatePost with day and platform when clicking an empty cell", () => {
     const onCreatePost = mock()

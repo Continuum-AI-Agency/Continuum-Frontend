@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { AlertCircle, Check, Clock, ImageOff, Loader2, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useCalendarStore } from "@/lib/organic/store";
+import { useDraftStoryboard } from "../hooks/useDraftStoryboard";
 import {
   Carousel,
   CarouselContent,
@@ -49,8 +50,7 @@ function resolvePreviewImages(preview: PipelinePreview | undefined): string[] {
   return [];
 }
 
-function PreviewImages({ preview }: { preview: PipelinePreview | undefined }) {
-  const images = resolvePreviewImages(preview);
+function PreviewImages({ images }: { images: string[] }) {
   if (images.length === 0) return null;
 
   if (images.length > 1) {
@@ -210,6 +210,12 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
   // A finished single-post pipeline persists a calendar draft; signal the calendar
   // to reconcile so it appears without a manual reload (debounced workspace-side).
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
+  // Fall back to the persisted draft's storyboard (re-signed on calendar load) when
+  // the live blueprint frame didn't populate card.preview — the expand job usually
+  // finishes after the chat stream closes, so this is the reliable inline source.
+  const draftStoryboard = useDraftStoryboard(card.draftId);
+  const cardImages = resolvePreviewImages(card.preview);
+  const previewImages = cardImages.length > 0 ? cardImages : draftStoryboard;
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
@@ -251,7 +257,7 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
         </div>
       )}
 
-      <PreviewImages preview={card.preview} />
+      <PreviewImages images={previewImages} />
 
       {card.preview?.caption && (
         <p className="line-clamp-2 text-[13px] leading-relaxed text-foreground text-pretty">

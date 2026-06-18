@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   CopyIcon,
   CheckIcon,
@@ -78,6 +79,10 @@ function resolveAccentColor(
   return PLATFORM_ACCENT[platform] ?? "#5A48F9";
 }
 
+function hasTextValue(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export function CalendarDraftCard({
   draft,
   isSelected,
@@ -130,7 +135,23 @@ export function CalendarDraftCard({
     draft.status !== "streaming";
 
   const accentColor = resolveAccentColor(draft, platform);
-  const hasMedia = draft.mediaCount > 0;
+  // Media presence is derived from ACTUAL realized media — durable
+  // publishingAssets or a `ready` mediaStatus — never the seeded mediaCount,
+  // which was historically defaulted to 1 even for text-only drafts.
+  const realizedMediaCount = draft.publishingAssets?.length ?? 0;
+  const mediaStatus = draft.mediaSuggestion?.mediaStatus;
+  const hasRealizedMedia = realizedMediaCount > 0 || mediaStatus === "ready";
+  const isMediaGenerating = mediaStatus === "generating";
+  const storyboardFrames =
+    draft.mediaSuggestion?.storyboard?.filter((frame) => hasTextValue(frame?.storageUrl)) ?? [];
+  // A text-only (blueprint) draft: no realized media yet, not actively
+  // generating, and not a status that already telegraphs its own state.
+  const isTextOnlyDraft =
+    !hasRealizedMedia &&
+    !isMediaGenerating &&
+    draft.status !== "streaming" &&
+    draft.status !== "placeholder" &&
+    draft.status !== "published";
   const showHoverPreview = draft.status !== "streaming" && draft.status !== "placeholder";
 
   const focusEditor = React.useCallback(
@@ -390,16 +411,59 @@ export function CalendarDraftCard({
                   </div>
                 ) : null}
 
+                {/* Media state — honest about text-only / blueprint drafts.
+                    Only realized media earns the image chip; a pending draft
+                    shows its storyboard (when ready) or an explicit text-only
+                    state, never a fake "has media" affordance. */}
+                {isMediaGenerating ? (
+                  <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary/80">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
+                    {draft.generationStage ?? "Generating media…"}
+                  </p>
+                ) : isTextOnlyDraft && storyboardFrames.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                      Blueprint ready
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {storyboardFrames.slice(0, 3).map((frame, index) => (
+                        <div
+                          key={`${frame.storagePath ?? frame.storageUrl}-${index}`}
+                          className="relative h-9 w-9 overflow-hidden rounded border border-border/60 bg-muted/40"
+                        >
+                          <Image
+                            src={frame.storageUrl as string}
+                            alt={`Storyboard frame ${index + 1}`}
+                            fill
+                            unoptimized
+                            sizes="36px"
+                            className="object-cover"
+                          />
+                        </div>
+                      ))}
+                      {storyboardFrames.length > 3 && (
+                        <span className="text-[10px] font-medium text-muted-foreground/60">
+                          +{storyboardFrames.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : isTextOnlyDraft ? (
+                  <p className="mt-1.5 text-[10px] italic text-muted-foreground/60">
+                    Text only — no media yet
+                  </p>
+                ) : null}
+
                 {/* Footer: platforms | media chip | format */}
                 <div className="mt-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     {draft.platforms.map((p) => (
                       <PlatformBadge key={p} platform={p} />
                     ))}
-                    {hasMedia && (
+                    {hasRealizedMedia && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 ml-0.5">
                         <ImageIcon className="h-2.5 w-2.5" />
-                        {draft.mediaCount > 1 ? draft.mediaCount : null}
+                        {realizedMediaCount > 1 ? realizedMediaCount : null}
                       </span>
                     )}
                   </div>

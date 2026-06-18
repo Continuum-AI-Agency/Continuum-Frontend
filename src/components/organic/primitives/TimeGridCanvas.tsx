@@ -70,11 +70,6 @@ export function TimeGridCanvas({
         onViewModeChange={onViewModeChange}
         onPreviousWeek={onPreviousWeek}
         onNextWeek={onNextWeek}
-        onCreatePost={(options) =>
-          onCreatePost({
-            status: options?.status,
-          })
-        }
       />
 
       <PlannerMatrix

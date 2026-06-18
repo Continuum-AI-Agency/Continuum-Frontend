@@ -6,6 +6,7 @@ import { Badge } from "@radix-ui/themes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { useDraftStoryboard } from "../hooks/useDraftStoryboard";
 import type { AgentJobState } from "./types";
 
 type JobGridProps = {
@@ -88,6 +89,9 @@ function JobCard({
   onCancelAction?: (jobId: string) => void;
 }) {
   const scheduledLabel = formatScheduledAt(job.scheduledAt);
+  // Durable storyboard from the persisted draft, so a deferred (storyboard-only)
+  // post still shows a thumbnail even when the live blueprint frame never arrived.
+  const draftStoryboard = useDraftStoryboard(job.draftId);
 
   if (job.status === "queued") {
     return (
@@ -145,7 +149,14 @@ function JobCard({
             </div>
           </div>
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-3/5 animate-pulse rounded-full bg-amber-400" />
+            {typeof job.pct === "number" ? (
+              <div
+                className="h-full rounded-full bg-amber-400 transition-[width] duration-500 ease-out"
+                style={{ width: `${Math.max(5, Math.min(100, job.pct))}%` }}
+              />
+            ) : (
+              <div className="h-full w-3/5 animate-pulse rounded-full bg-amber-400" />
+            )}
           </div>
           {job.agentName && (
             <p className="truncate text-xs text-muted-foreground">{job.agentName}</p>
@@ -174,6 +185,15 @@ function JobCard({
     const cta = job.placement?.content?.cta ?? null;
     const trendId = card?.trendId ?? job.placement?.seed?.trendId ?? job.trendId ?? null;
     const topic = card?.topic ?? job.placement?.content?.titleTopic ?? null;
+    // Prefer realized media (durable signed storageUrl), else the storyboard
+    // preview from the blueprint job. Never base64.
+    const thumbnailUrl =
+      job.placement?.publishingAssets?.find(
+        (asset) => typeof asset.storageUrl === "string" && asset.storageUrl.length > 0,
+      )?.storageUrl ??
+      job.previewImages?.[0] ??
+      draftStoryboard[0] ??
+      null;
 
     const previewCard = (
       <Card className="overflow-hidden">
@@ -194,6 +214,14 @@ function JobCard({
               <Badge variant="soft" color="green" size="1">Ready</Badge>
             </div>
           </div>
+          {thumbnailUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumbnailUrl}
+              alt="Draft preview"
+              className="aspect-[4/5] w-full rounded-md object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+            />
+          )}
           {caption && (
             <p className="line-clamp-2 text-xs text-foreground">{caption}</p>
           )}

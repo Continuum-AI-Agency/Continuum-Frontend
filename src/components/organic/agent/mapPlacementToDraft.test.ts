@@ -53,4 +53,35 @@ describe("mapPlacementToDraft", () => {
     expect(draft.mediaCount).toBe(0)
     expect(draft.publishingAssets).toBeUndefined()
   })
+
+  it("carries the persisted storyboard preview frames through to the draft", () => {
+    const placement = basePlacement({
+      creative: {
+        creativeIdea: "idea",
+        mediaSuggestion: {
+          mediaStatus: "pending",
+          storyboard: [
+            {
+              role: "primary",
+              bucket: "brand-profile-assets",
+              storagePath: "organic/d/preview/1.png",
+              storageUrl: "https://signed.example.com/1.png",
+              format: "post",
+            },
+          ],
+        },
+      },
+    } as Partial<CalendarPlacement>)
+
+    const draft = mapPlacementToDraft(placement, "draft-4")
+
+    expect(draft.mediaSuggestion?.storyboard).toHaveLength(1)
+    expect(draft.mediaSuggestion?.storyboard?.[0].storageUrl).toBe(
+      "https://signed.example.com/1.png",
+    )
+    expect(draft.mediaSuggestion?.storyboard?.[0].storagePath).toBe(
+      "organic/d/preview/1.png",
+    )
+    expect(draft.mediaSuggestion?.storyboard?.[0].bucket).toBe("brand-profile-assets")
+  })
 })

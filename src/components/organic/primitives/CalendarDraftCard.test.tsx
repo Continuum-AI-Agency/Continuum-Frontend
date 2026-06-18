@@ -2,12 +2,23 @@ import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 
+// happy-dom does not expose SyntaxError on its window object, which causes
+// @testing-library/dom's querySelectorAll internals to crash. Polyfill it.
+;(globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError = SyntaxError;
+
+// next/image uses querySelectorAll internally in this happy-dom version.
+// Replace with a plain <img> so the test environment doesn't crash.
+mock.module("next/image", () => ({
+  default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
+}));
+
 import { CalendarDraftCard } from "./CalendarDraftCard";
 import type { OrganicCalendarDraft } from "./types";
 
 const store = {
   updateDraft: mock(),
   bulkDeleteDrafts: mock(),
+  duplicateDraft: mock(),
 };
 
 mock.module("@/lib/organic/store", () => ({
@@ -93,7 +104,11 @@ const draft: OrganicCalendarDraft = {
 
 describe("CalendarDraftCard", () => {
   beforeEach(() => {
-    mock.restore();
+    // Reset only the store spies' call history between tests. A global
+    // mock.restore() here would unregister the mock.module() stubs above,
+    // letting real modules leak in and cross-contaminate sibling tests.
+    store.updateDraft.mockClear();
+    store.bulkDeleteDrafts.mockClear();
   });
 
   afterEach(() => {
@@ -163,10 +178,8 @@ describe("CalendarDraftCard", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("allows custom posting time edits from quick actions", () => {
+  it("applies a quick time preset directly from the context menu", () => {
     const onSelect = mock();
-    const originalPrompt = (window as unknown as { prompt?: unknown }).prompt;
-    (window as unknown as { prompt: () => string }).prompt = mock(() => "11:15 AM");
     render(
       <CalendarDraftCard
         draft={draft}
@@ -177,20 +190,20 @@ describe("CalendarDraftCard", () => {
       />
     );
 
-    fireEvent.click(screen.getAllByText("Time: Custom...")[0]);
+    fireEvent.click(screen.getAllByText("Time: 1:00 PM")[0]);
 
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
     const updater = store.updateDraft.mock.calls[0]?.[1] as (
       currentDraft: OrganicCalendarDraft
     ) => OrganicCalendarDraft;
-    expect(updater(draft).timeLabel).toBe("11:15 AM");
+    expect(updater(draft).timeLabel).toBe("1:00 PM");
     expect(onSelect).toHaveBeenCalledWith("draft-1");
-    (window as unknown as { prompt?: unknown }).prompt = originalPrompt;
   });
 
-  it("ignores invalid custom posting time edits", () => {
-    const originalPrompt = (window as unknown as { prompt?: unknown }).prompt;
-    (window as unknown as { prompt: () => string }).prompt = mock(() => "9 AM");
+  it("exposes a custom time picker entry that defers mutation to the popover", () => {
+    // The custom-time flow is deferred to the popover's Set button (not a direct
+    // store mutation). Assert the entry is present; the popover itself is a Radix
+    // portal exercised elsewhere.
     render(
       <CalendarDraftCard
         draft={draft}
@@ -201,10 +214,8 @@ describe("CalendarDraftCard", () => {
       />
     );
 
-    fireEvent.click(screen.getAllByText("Time: Custom...")[0]);
-
+    expect(screen.getAllByText("Time: Custom...")[0]).toBeTruthy();
     expect(store.updateDraft).not.toHaveBeenCalled();
-    (window as unknown as { prompt?: unknown }).prompt = originalPrompt;
   });
 
   it("only allows marking as scheduled when the time is valid", () => {
@@ -224,7 +235,7 @@ describe("CalendarDraftCard", () => {
       />
     );
 
-    fireEvent.click(screen.getAllByText("Mark as scheduled")[0]);
+    fireEvent.click(screen.getAllByText("Approve & Schedule")[0]);
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -237,7 +248,7 @@ describe("CalendarDraftCard", () => {
       />
     );
 
-    fireEvent.click(screen.getAllByText("Mark as scheduled")[0]);
+    fireEvent.click(screen.getAllByText("Approve & Schedule")[0]);
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
   });
 
@@ -265,7 +276,8 @@ describe("CalendarDraftCard", () => {
     expect(onClearFailure).toHaveBeenCalledWith("draft-failed");
   });
 
-  it("mouseover expands card into a quick preview state", () => {
+  it("invokes the onMouseEnter hover callback for the preview surface", () => {
+    const onMouseEnter = mock();
     const { container } = render(
       <CalendarDraftCard
         draft={draft}
@@ -273,6 +285,7 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
+        onMouseEnter={onMouseEnter}
       />
     );
     const cardButton = container.querySelector("button[aria-pressed]");
@@ -280,6 +293,114 @@ describe("CalendarDraftCard", () => {
     if (!cardButton) return;
 
     fireEvent.mouseEnter(cardButton);
-    expect(cardButton.className).toContain("scale-[1.015]");
+    expect(onMouseEnter).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an explicit 'Text only' state for a pending draft with no media or storyboard", () => {
+    const textOnly: OrganicCalendarDraft = {
+      ...draft,
+      id: "draft-text-only",
+      // mediaCount intentionally 1 to prove the chip no longer keys off it.
+      mediaCount: 1,
+      mediaSuggestion: { mediaStatus: "pending" },
+    };
+
+    render(
+      <CalendarDraftCard
+        draft={textOnly}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />
+    );
+
+    expect(screen.getByText("Text only — no media yet")).toBeTruthy();
+    expect(screen.queryByText("Blueprint ready")).toBeNull();
+  });
+
+  it("shows the storyboard + 'Blueprint ready' pill for a pending draft with a persisted storyboard", () => {
+    const withStoryboard: OrganicCalendarDraft = {
+      ...draft,
+      id: "draft-storyboard",
+      mediaCount: 1,
+      mediaSuggestion: {
+        mediaStatus: "pending",
+        storyboard: [
+          {
+            role: "primary",
+            bucket: "brand-profile-assets",
+            storagePath: "organic/d/preview/1.png",
+            storageUrl: "https://signed.example.com/1.png",
+          },
+        ],
+      },
+    };
+
+    render(
+      <CalendarDraftCard
+        draft={withStoryboard}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />
+    );
+
+    expect(screen.getByText("Blueprint ready")).toBeTruthy();
+    expect(screen.getByAltText("Storyboard frame 1")).toBeTruthy();
+    expect(screen.queryByText("Text only — no media yet")).toBeNull();
+  });
+
+  it("shows a generating indicator while media is generating", () => {
+    const generating: OrganicCalendarDraft = {
+      ...draft,
+      id: "draft-generating",
+      generationStage: "Generating media…",
+      mediaSuggestion: { mediaStatus: "generating" },
+    };
+
+    render(
+      <CalendarDraftCard
+        draft={generating}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />
+    );
+
+    expect(screen.getByText("Generating media…")).toBeTruthy();
+    expect(screen.queryByText("Text only — no media yet")).toBeNull();
+  });
+
+  it("does not render a text-only state when the draft has realized publishing assets", () => {
+    const realized: OrganicCalendarDraft = {
+      ...draft,
+      id: "draft-realized",
+      mediaCount: 0,
+      mediaSuggestion: { mediaStatus: "ready" },
+      publishingAssets: [
+        {
+          role: "primary",
+          kind: "image",
+          storagePath: "p/1.png",
+          storageUrl: "https://signed.example.com/r.png",
+        },
+      ],
+    };
+
+    render(
+      <CalendarDraftCard
+        draft={realized}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />
+    );
+
+    expect(screen.queryByText("Text only — no media yet")).toBeNull();
+    expect(screen.queryByText("Blueprint ready")).toBeNull();
   });
 });

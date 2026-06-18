@@ -79,6 +79,7 @@ export type ParsedOrganicStreamEvent =
   | { kind: "uiCard"; card: UiCard }
   | { kind: "postCard"; card: UiPostCard }
   | { kind: "jobUpdate"; job: Partial<AgentJobState> & { jobId: string } }
+  | { kind: "draftBlueprint"; draftId: string; previews: string[] }
   | { kind: "runStarted"; runId: string; jobId: string }
   | { kind: "pipelineStage"; event: ParsedPipelineStage }
   | { kind: "pipelineCard"; card: Partial<PipelineCardState> & { jobId: string } }
@@ -309,6 +310,23 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
         brandId,
       };
   }
+}
+
+// draft.blueprint_ready carries the persisted 512px storyboard frames. Pull the
+// draftId (the blueprint job's own jobId differs from the post-generation card's,
+// so callers match by draftId) and the signed preview URLs — base64 is excluded so
+// only re-signable URLs reach the chat thumbnails.
+function parseDraftBlueprint(
+  event: Record<string, unknown>,
+): { draftId: string; previews: string[] } | null {
+  const payload = getEventPayload(event);
+  const draftId = readNonEmptyString(payload.draftId);
+  if (!draftId) return null;
+  const rawPreviews = Array.isArray(payload.previews) ? payload.previews : [];
+  const previews = rawPreviews
+    .map((p) => (isRecord(p) ? readNonEmptyString(p.signedUrl) : undefined))
+    .filter((url): url is string => Boolean(url) && !url!.startsWith("data:"));
+  return { draftId, previews };
 }
 
 function parseUiPostCard(event: Record<string, unknown>): UiPostCard | null {
@@ -791,11 +809,14 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       if (!runId) return { kind: "invalid", type };
       return { kind: "runStarted", runId, jobId: readNonEmptyString(payload.jobId) ?? "" };
     }
+    case "draft.blueprint_ready": {
+      const blueprint = parseDraftBlueprint(raw);
+      return blueprint ? { kind: "draftBlueprint", ...blueprint } : { kind: "invalid", type };
+    }
     case "job.enqueued":
     case "job.progress":
     case "draft.ready":
     case "draft.text_ready":
-    case "draft.blueprint_ready":
     case "job.completed":
     case "job.failed":
     case "job.cancelled": {

@@ -6,7 +6,20 @@ export function mapPlacementToDraft(
   placement: CalendarPlacement,
   draftId: string
 ): OrganicCalendarDraft {
-  const mediaSuggestion = placement.creative?.mediaSuggestion ?? undefined
+  const rawMediaSuggestion = placement.creative?.mediaSuggestion ?? undefined
+  // Carry the persisted 512px storyboard preview frames through. They arrive
+  // re-signed from the backend on calendar load; the no-media card + editor
+  // render storageUrl directly (never base64).
+  const storyboard = (rawMediaSuggestion?.storyboard ?? undefined)?.map((frame) => ({
+    role: frame.role ?? undefined,
+    bucket: frame.bucket ?? undefined,
+    storagePath: frame.storagePath ?? undefined,
+    storageUrl: frame.storageUrl ?? undefined,
+    format: frame.format ?? undefined,
+  }))
+  const mediaSuggestion = rawMediaSuggestion
+    ? ({ ...rawMediaSuggestion, storyboard } as OrganicCalendarDraft["mediaSuggestion"])
+    : undefined
   const publishingAssets = (placement.publishingAssets ?? []).map((asset) => ({
     role: asset.role,
     kind: asset.kind,
@@ -40,7 +53,7 @@ export function mapPlacementToDraft(
     dateLabel: placement.schedule.dayId,
     status: "draft",
     mediaCount,
-    mediaSuggestion: mediaSuggestion as OrganicCalendarDraft["mediaSuggestion"],
+    mediaSuggestion,
     publishingAssets: publishingAssets.length > 0 ? publishingAssets : undefined,
     seedTrendId: placement.seed?.trendId ?? undefined,
     targetAccountId: placement.platform.accountId ?? undefined,

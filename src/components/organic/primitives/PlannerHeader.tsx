@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -12,7 +12,6 @@ type PlannerHeaderProps = {
   onViewModeChange: (mode: PlannerViewMode) => void
   onPreviousWeek: () => void
   onNextWeek: () => void
-  onCreatePost: (options?: { status?: "draft" | "scheduled" | "placeholder" }) => void
 }
 
 const VIEW_MODE_OPTIONS: Array<{ value: PlannerViewMode; label: string }> = [
@@ -27,7 +26,6 @@ export function PlannerHeader({
   onViewModeChange,
   onPreviousWeek,
   onNextWeek,
-  onCreatePost,
 }: PlannerHeaderProps) {
   return (
     <header
@@ -80,16 +78,6 @@ export function PlannerHeader({
           aria-label="Next week"
         >
           <ChevronRight className="size-4" />
-        </Button>
-
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="outline"
-          aria-label="Add placeholder"
-          onClick={() => onCreatePost({ status: "placeholder" })}
-        >
-          <Plus className="size-4" />
         </Button>
       </div>
     </header>

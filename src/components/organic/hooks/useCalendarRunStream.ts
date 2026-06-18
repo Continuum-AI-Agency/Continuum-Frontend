@@ -279,7 +279,11 @@ export function buildTextReadyEntry(d: Record<string, unknown>): TextReadyEntry 
     captionPreview: caption,
     creativeIdea,
     tags: [],
-    mediaCount: 1,
+    // Text checkpoint: no creative yet. Mirror the persisted row's media state so
+    // the card reads as a text-only draft immediately (no fake media chip, no
+    // flicker when the refetch reconciles) rather than relying on a stale count.
+    mediaCount: 0,
+    mediaSuggestion: { mediaStatus: "pending" },
   };
 
   return { placementId, dayId, draft };

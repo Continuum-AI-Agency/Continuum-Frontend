@@ -98,6 +98,9 @@ export function useOrganicAgentStream(
           case "jobUpdate":
             dispatch({ type: "JOB_UPDATE", job: parsed.job });
             break;
+          case "draftBlueprint":
+            dispatch({ type: "DRAFT_BLUEPRINT", draftId: parsed.draftId, previews: parsed.previews });
+            break;
           case "pipelineStage":
             dispatch({ type: "PIPELINE_STAGE", event: parsed.event });
             break;

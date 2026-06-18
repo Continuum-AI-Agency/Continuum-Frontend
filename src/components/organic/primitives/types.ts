@@ -88,6 +88,17 @@ export type OrganicCalendarDraft = {
       error?: string | null
       spec?: unknown
     } | null
+    // Persisted 512px Stage-2 blueprint storyboard preview frames. Durable
+    // bucket+storagePath references; storageUrl is a transient signed value the
+    // backend re-mints on every calendar load. Review-only — distinct from the
+    // final publishingAssets. Render storageUrl directly; never base64.
+    storyboard?: Array<{
+      role?: string | null
+      bucket?: string | null
+      storagePath?: string | null
+      storageUrl?: string | null
+      format?: string | null
+    }> | null
     reel?: {
       generated?: boolean | null
       url?: string | null

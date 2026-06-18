@@ -116,10 +116,16 @@ export type AgentJobState = {
   stage?: string
   agentName?: string
   message?: string
+  // Live progress percent mirrored from the pipeline card so the JobGrid bar
+  // reflects real advancement instead of an indeterminate pulse.
+  pct?: number
   error?: { code?: string; message: string }
   draftId?: string
   placement?: CalendarPlacement
   uiPostCard?: UiPostCard
+  // Signed 512px storyboard URLs from draft.blueprint_ready, keyed to this job's
+  // draft so the completed job card can show a thumbnail. Never base64.
+  previewImages?: string[]
 }
 
 // Canonical ordering comes straight from the contract enum — no FE duplicate.

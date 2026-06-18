@@ -45,8 +45,16 @@ const REEL_STAGE_LABELS: Record<string, string> = {
   persisting: "Saving video…",
 }
 
+// Synthesizes a stable generation-registry job id for an editor-triggered
+// realize. The realize stream has no backend job id, but the GenerationsPopover
+// only needs a stable key per draft to project live status/progress.
+function realizeJobId(feId: string): string {
+  return `realize:${feId}`
+}
+
 export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
+  const upsertGeneration = useCalendarStore((state) => state.upsertGeneration)
   const { show } = useToast()
   const [isGenerating, setIsGenerating] = React.useState(false)
   const abortRef = React.useRef<AbortController | null>(null)
@@ -70,6 +78,17 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
 
       setIsGenerating(true)
 
+      // Surface every editor-triggered realize in the shell-wide
+      // GenerationsPopover so closing the editor never hides in-flight work.
+      for (const target of [...reelTargets, ...imageTargets]) {
+        upsertGeneration({
+          jobId: realizeJobId(target.feId),
+          draftId: target.feId,
+          status: "running",
+          stage: "Generating media…",
+        })
+      }
+
       try {
         const token = await getBrowserAccessToken()
         const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
@@ -77,10 +96,10 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
         // Run reel generation + image/carousel realization in parallel.
         await Promise.all([
           reelTargets.length > 0
-            ? realizeReels(brandId, reelTargets, updateDraft, show, controller, authHeaders)
+            ? realizeReels(brandId, reelTargets, updateDraft, upsertGeneration, show, controller, authHeaders)
             : Promise.resolve(),
           imageTargets.length > 0
-            ? realizeImages(brandId, imageTargets, updateDraft, show, controller, authHeaders)
+            ? realizeImages(brandId, imageTargets, updateDraft, upsertGeneration, show, controller, authHeaders)
             : Promise.resolve(),
         ])
       } catch (error) {
@@ -95,17 +114,20 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
         setIsGenerating(false)
       }
     },
-    [updateDraft, show],
+    [updateDraft, upsertGeneration, show],
   )
 
   return { generateDraftMedia, isGenerating }
 }
+
+type UpsertGeneration = ReturnType<typeof useCalendarStore.getState>["upsertGeneration"]
 
 // Reel generation: reuses the /reels/generate endpoint + FE stitch path.
 async function realizeReels(
   brandId: string,
   targets: MediaGenerationDraftTarget[],
   updateDraft: ReturnType<typeof useCalendarStore.getState>["updateDraft"],
+  upsertGeneration: UpsertGeneration,
   show: ReturnType<typeof useToast>["show"],
   controller: AbortController,
   authHeaders: Record<string, string>,
@@ -127,6 +149,7 @@ async function realizeReels(
     const feId = feIdFor(backendDraftId)
     if (!feId) return
     patchUnlessUserSupplied(updateDraft, feId, (draft) => ({ ...draft, generationStage: stage }))
+    upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "running", stage })
   }
 
   const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/reels/generate`, {
@@ -141,6 +164,9 @@ async function realizeReels(
       response.status === 400
         ? "Too many reels selected for one batch."
         : "Could not start reel generation."
+    for (const target of targets) {
+      upsertGeneration({ jobId: realizeJobId(target.feId), draftId: target.feId, status: "failed", error: message })
+    }
     show({ title: "Reel generation failed", description: message, variant: "error" })
     return
   }
@@ -187,13 +213,16 @@ async function realizeReels(
               },
             },
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "completed", stage: undefined })
         } catch (err) {
           if (err instanceof DOMException && err.name === "AbortError") break
+          const message = err instanceof Error ? err.message : "Reel stitching failed."
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
-            generationError: err instanceof Error ? err.message : "Reel stitching failed.",
+            generationError: message,
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "failed", error: message })
         }
         break
       }
@@ -218,6 +247,7 @@ async function realizeReels(
               },
             },
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "completed", stage: undefined })
         }
         break
       }
@@ -229,6 +259,7 @@ async function realizeReels(
             generationStage: undefined,
             generationError: frame.error,
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "failed", error: frame.error })
         }
         break
       }
@@ -259,6 +290,7 @@ async function realizeImages(
   brandId: string,
   targets: MediaGenerationDraftTarget[],
   updateDraft: ReturnType<typeof useCalendarStore.getState>["updateDraft"],
+  upsertGeneration: UpsertGeneration,
   show: ReturnType<typeof useToast>["show"],
   controller: AbortController,
   authHeaders: Record<string, string>,
@@ -289,6 +321,7 @@ async function realizeImages(
         generationStage: undefined,
         mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: "pending" },
       }))
+      upsertGeneration({ jobId: realizeJobId(target.feId), draftId: target.feId, status: "failed", error: message })
     }
     show({ title: "Media generation failed", description: message, variant: "error" })
     return
@@ -313,16 +346,19 @@ async function realizeImages(
             generationStage: "Generating media…",
             mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: "generating" },
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "running", stage: "Generating media…" })
         }
         break
       }
       case "realize_progress": {
         const feId = feIdByBackendId.get(frame.draftId)
         if (feId) {
+          const stage = frame.message ?? "Generating…"
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
-            generationStage: frame.message ?? "Generating…",
+            generationStage: stage,
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "running", stage })
         }
         break
       }
@@ -336,6 +372,7 @@ async function realizeImages(
             generationError: undefined,
             mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: "ready" },
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "completed", stage: undefined })
         }
         break
       }
@@ -349,6 +386,7 @@ async function realizeImages(
             generationError: frame.error,
             mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: "pending" },
           }))
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "failed", error: frame.error })
         }
         break
       }

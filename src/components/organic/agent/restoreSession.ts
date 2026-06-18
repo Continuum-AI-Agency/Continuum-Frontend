@@ -20,6 +20,9 @@ export type RestoredSession = {
 export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): RestoredSession {
   const pipelineCards: RestoredSession["pipelineCards"] = [];
   const bulkRuns: BulkRunRef[] = [];
+  // Storyboard frames arrive from the (separate) blueprint job, usually after the
+  // live stream closed, so on reload they're merged into the restored card by draftId.
+  const blueprintsByDraftId = new Map<string, string[]>();
 
   const messages = msgs.map((m) => {
     const uiCards: UiCard[] = [];
@@ -34,6 +37,9 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
           break;
         case "pipelineCard":
           pipelineCards.push(parsed.card);
+          break;
+        case "draftBlueprint":
+          if (parsed.previews.length > 0) blueprintsByDraftId.set(parsed.draftId, parsed.previews);
           break;
         case "bulkRun":
           bulkRuns.push({ runId: parsed.run.runId, planId: parsed.run.planId, total: parsed.run.total });
@@ -76,6 +82,23 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
       ...(mediaSearchResults.length > 0 ? { mediaSearchResults } : {}),
     } satisfies ConversationMessage;
   });
+
+  // Merge restored storyboard frames onto their card (by draftId) so a reloaded
+  // session shows the 512px preview that the blueprint job produced.
+  if (blueprintsByDraftId.size > 0) {
+    for (const card of pipelineCards) {
+      const previews = card.draftId ? blueprintsByDraftId.get(card.draftId) : undefined;
+      if (previews && previews.length > 0) {
+        card.preview = {
+          caption: card.preview?.caption ?? null,
+          imageUrl: card.preview?.imageUrl ?? previews[0] ?? null,
+          images: previews,
+          format: card.preview?.format ?? null,
+        };
+        card.checkpoint = { ...card.checkpoint, blueprintReady: true };
+      }
+    }
+  }
 
   return { messages, pipelineCards, bulkRuns };
 }

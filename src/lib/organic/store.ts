@@ -134,6 +134,9 @@ interface CalendarState {
   // Cross-subtree signal: agent-side completion (bulk run done, single draft ready)
   // bumps this so the calendar workspace re-fetches persisted drafts from the backend.
   calendarRefetchNonce: number;
+  // Count of drafts that landed (via Realtime) outside the currently-loaded
+  // calendar window, so the planner can surface a "new draft elsewhere" nudge.
+  draftsElsewhere: number;
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -183,6 +186,8 @@ interface CalendarState {
   setViewMode: (mode: "week" | "month" | "list") => void;
   setShowPlanned: (value: boolean) => void;
   requestCalendarRefetch: () => void;
+  noteDraftElsewhere: () => void;
+  acknowledgeDraftsElsewhere: () => void;
 
   addBacklogDraft: (draft: OrganicCalendarDraft) => void;
   updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
@@ -204,12 +209,20 @@ type PersistedCalendarState = Pick<
 // Bump when the persisted shape changes in a breaking way.
 const CALENDAR_STORE_VERSION = 4;
 
-function stripDraftBlobs(draft: OrganicCalendarDraft): OrganicCalendarDraft {
+// Drop every base64 blob before the draft is persisted to sessionStorage: the
+// primary asset, each carousel slide, and the hyperframe cover. Media is re-signed
+// from durable storage paths on load, so base64 must never bloat persisted state.
+export function stripDraftBlobs(draft: OrganicCalendarDraft): OrganicCalendarDraft {
+  const media = draft.mediaSuggestion;
+  if (!media) return draft;
   return {
     ...draft,
-    mediaSuggestion: draft.mediaSuggestion
-      ? { ...draft.mediaSuggestion, assetBase64: null }
-      : undefined,
+    mediaSuggestion: {
+      ...media,
+      assetBase64: null,
+      assets: media.assets?.map((asset) => ({ ...asset, assetBase64: null })),
+      hyperframe: media.hyperframe ? { ...media.hyperframe, coverBase64: null } : media.hyperframe,
+    },
   };
 }
 
@@ -263,6 +276,7 @@ export const useCalendarStore = create<CalendarState>()(
       viewMode: "month",
       showPlanned: true,
       calendarRefetchNonce: 0,
+  draftsElsewhere: 0,
       eventHistory: [],
       backlogDrafts: [],
       weekCache: {},
@@ -505,6 +519,9 @@ export const useCalendarStore = create<CalendarState>()(
       setShowPlanned: (value) => set({ showPlanned: value }),
       requestCalendarRefetch: () =>
         set((state) => ({ calendarRefetchNonce: state.calendarRefetchNonce + 1 })),
+      noteDraftElsewhere: () =>
+        set((state) => ({ draftsElsewhere: state.draftsElsewhere + 1 })),
+      acknowledgeDraftsElsewhere: () => set({ draftsElsewhere: 0 }),
 
       addBacklogDraft: (draft) =>
         set((state) => ({

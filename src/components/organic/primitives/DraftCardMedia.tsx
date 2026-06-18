@@ -19,13 +19,6 @@ function hasText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0
 }
 
-function toDataUrl(base64: string, mimeType?: string | null): string {
-  const normalized = base64.trim()
-  if (normalized.startsWith("data:")) return normalized
-  const mime = hasText(mimeType) ? mimeType.trim() : "image/png"
-  return `data:${mime};base64,${normalized}`
-}
-
 /**
  * Single FE draft → image resolver. Persisted publishing assets win (durable
  * storage URL); otherwise defer to the shared contracts resolver so chat, list
@@ -65,8 +58,10 @@ export function resolveDraftHyperframeCover(
 ): DraftHyperframeCover | null {
   const hf = draft.mediaSuggestion?.hyperframe
   if (!hf) return null
-  const hasCover =
-    hasText(hf.coverImageUrl) || hasText(hf.coverBase64) || hasText(hf.coverPath)
+  // A re-signable cover is one with a live signed URL or a durable storage path
+  // (re-signed on load). Base64 covers are intentionally not considered — base64
+  // must never render in the calendar UI.
+  const hasCover = hasText(hf.coverImageUrl) || hasText(hf.coverPath)
   if (!hasCover) return null
   return {
     coverImageUrl: hf.coverImageUrl ?? null,
@@ -78,7 +73,6 @@ export function resolveDraftHyperframeCover(
 
 function resolveHyperframeCoverUrl(cover: DraftHyperframeCover): string | null {
   if (hasText(cover.coverImageUrl)) return cover.coverImageUrl.trim()
-  if (hasText(cover.coverBase64)) return toDataUrl(cover.coverBase64, "image/png")
   return null
 }
 

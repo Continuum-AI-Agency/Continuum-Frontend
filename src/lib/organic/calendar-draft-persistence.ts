@@ -69,6 +69,22 @@ function restoreReel(value: unknown): ReelMediaSuggestion | undefined {
   }
 }
 
+function restoreStoryboard(
+  value: unknown,
+): NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["storyboard"] {
+  const arr = asArray(value).filter(
+    (a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a)),
+  )
+  if (arr.length === 0) return undefined
+  return arr.map((item) => ({
+    role: readString(item.role) ?? null,
+    bucket: readString(item.bucket) ?? null,
+    storagePath: readString(item.storagePath) ?? null,
+    storageUrl: readString(item.storageUrl) ?? null,
+    format: readString(item.format) ?? null,
+  }))
+}
+
 function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSuggestion"] {
   const obj = asRecord(value)
   if (Object.keys(obj).length === 0) return undefined
@@ -83,6 +99,7 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSugg
     alt: readString(obj.alt) ?? null,
     hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
     reel: restoreReel(obj.reel) ?? null,
+    storyboard: restoreStoryboard(obj.storyboard),
     // assetBase64 intentionally excluded — too large for Supabase round-trips
     assets: asArray(obj.assets)
       .filter((a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a)))
@@ -299,6 +316,40 @@ export function buildPersistedDraftPayload(args: {
       title: draft.title,
     },
   }
+}
+
+/**
+ * Reconcile a server-authoritative day set with the local one WITHOUT dropping
+ * in-flight local drafts. A freshly-constructed manual draft lives only in the
+ * local store until the debounced autosave inserts it (~500ms); a refetch in that
+ * window must not wipe it. We preserve only NEVER-persisted local drafts (no
+ * backendDraftId) that the server hasn't echoed yet — a draft that already has a
+ * backendDraftId but is absent from the server was deleted/out-of-range, so it is
+ * intentionally NOT resurrected.
+ */
+export function mergeUnsavedLocalDrafts(
+  serverDays: OrganicCalendarDay[],
+  localDays: OrganicCalendarDay[]
+): OrganicCalendarDay[] {
+  const serverDraftIds = new Set<string>()
+  serverDays.forEach((day) => day.slots.forEach((slot) => serverDraftIds.add(slot.id)))
+
+  const unsavedByDayId = new Map<string, OrganicCalendarDraft[]>()
+  for (const localDay of localDays) {
+    for (const draft of localDay.slots) {
+      if (draft.backendDraftId) continue
+      if (serverDraftIds.has(draft.id)) continue
+      const pending = unsavedByDayId.get(localDay.id) ?? []
+      pending.push(draft)
+      unsavedByDayId.set(localDay.id, pending)
+    }
+  }
+
+  if (unsavedByDayId.size === 0) return serverDays
+  return serverDays.map((day) => {
+    const pending = unsavedByDayId.get(day.id)
+    return pending ? { ...day, slots: [...day.slots, ...pending] } : day
+  })
 }
 
 export function mapPersistedRowToCalendarEntry(

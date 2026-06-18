@@ -7,8 +7,6 @@ import type { OrganicCalendarDraft } from "./types"
 // @testing-library/dom's querySelectorAll internals to crash. Polyfill it.
 ;(globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError = SyntaxError
 
-// next/image uses querySelectorAll internally in this happy-dom version.
-// Replace with a plain <img> so the test environment doesn't crash.
 mock.module("next/image", () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
 }))
@@ -29,8 +27,12 @@ mock.module("@/components/organic/hooks/usePublishDraft", () => ({
 
 mock.module("@/lib/organic/store", () => ({
   useCalendarStore: mock((selector: (s: unknown) => unknown) =>
-    selector({ updateDraft: mock() }),
+    selector({ updateDraft: mock(), bulkDeleteDrafts: mock() }),
   ),
+}))
+
+mock.module("./AiStudioHandoffContext", () => ({
+  useOpenDraftInAiStudio: () => undefined,
 }))
 
 mock.module("@/lib/organic/hyperframeSign", () => ({
@@ -38,35 +40,52 @@ mock.module("@/lib/organic/hyperframeSign", () => ({
   signOrganicMediaAsset: mock(() => Promise.resolve(null)),
 }))
 
-mock.module("./LibraryPlacementRail", () => ({
-  LibraryPlacementRail: () => <div data-testid="library-rail" />,
-}))
-
 mock.module("./CarouselSlideStrip", () => ({
   CarouselSlideStrip: () => <div data-testid="carousel-strip" />,
 }))
 
-mock.module("./OrganicCreativesPicker", () => ({
-  OrganicCreativesPicker: () => <div data-testid="creatives-picker" />,
+mock.module("@/components/organic/hooks/useGenerateDraftMedia", () => ({
+  useGenerateDraftMedia: mock(() => ({ generateDraftMedia: mock(), isGenerating: false })),
 }))
 
-mock.module("@/components/organic/hooks/useGenerateDraftMedia", () => ({
-  useGenerateDraftMedia: mock(() => ({
-    generateDraftMedia: mock(),
-    isGenerating: false,
-  })),
+// The contextual children are tested in their own files. Stub them here: the
+// media Popover simply renders its anchor (so the media zone + storyboard still
+// render), the chips echo their props, the command menu is a marker.
+mock.module("./MediaSelectPopover", () => ({
+  MediaSelectPopover: ({ anchor }: { anchor: ReactNode }) => (
+    <div data-testid="media-select">{anchor}</div>
+  ),
+}))
+
+mock.module("./PostMetaChips", () => ({
+  PostMetaChips: ({
+    platform,
+    format,
+    timeLabel,
+    actions,
+  }: {
+    platform: string
+    format: string
+    timeLabel: string
+    actions?: ReactNode
+  }) => (
+    <div data-testid="meta-chips">
+      <span>{platform}</span>
+      <span>{format}</span>
+      <span>{timeLabel}</span>
+      {actions}
+    </div>
+  ),
+}))
+
+mock.module("./PostCommandMenu", () => ({
+  PostCommandMenu: () => <button type="button" aria-label="Post actions" />,
 }))
 
 mock.module("@dnd-kit/core", () => ({
   DndContext: ({ children }: { children: ReactNode }) => <>{children}</>,
   useDroppable: mock(() => ({ setNodeRef: mock(), isOver: false })),
-  useDraggable: mock(() => ({
-    setNodeRef: mock(),
-    attributes: {},
-    listeners: {},
-    transform: null,
-    isDragging: false,
-  })),
+  useDraggable: mock(() => ({ setNodeRef: mock(), attributes: {}, listeners: {}, transform: null, isDragging: false })),
   useSensor: mock(() => ({})),
   useSensors: mock((...sensors: unknown[]) => sensors),
   PointerSensor: class {},
@@ -76,14 +95,7 @@ mock.module("@dnd-kit/core", () => ({
 
 mock.module("@dnd-kit/sortable", () => ({
   SortableContext: ({ children }: { children: ReactNode }) => <>{children}</>,
-  useSortable: mock(() => ({
-    setNodeRef: mock(),
-    attributes: {},
-    listeners: {},
-    transform: null,
-    transition: undefined,
-    isDragging: false,
-  })),
+  useSortable: mock(() => ({ setNodeRef: mock(), attributes: {}, listeners: {}, transform: null, transition: undefined, isDragging: false })),
   sortableKeyboardCoordinates: {},
   horizontalListSortingStrategy: {},
 }))
@@ -91,11 +103,6 @@ mock.module("@dnd-kit/sortable", () => ({
 mock.module("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" }, Translate: { toString: () => "" } },
 }))
-
-// useDraftMediaPlacement is NOT mocked here — the real hook runs against the
-// mocked @/lib/organic/store above. OrganicDraftPreview tests only assert on
-// badge text and button visibility (driven by draft props), so the real hook is
-// sufficient and avoids poisoning the module registry for sibling test files.
 
 mock.module("motion/react", () => ({
   motion: {
@@ -108,18 +115,6 @@ mock.module("motion/react", () => ({
 
 mock.module("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}))
-
-mock.module("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-}))
-
-mock.module("@/components/ui/select", () => ({
-  Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  SelectTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: { placeholder: string }) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
 mock.module("@/components/ui/textarea", () => ({
@@ -136,20 +131,12 @@ mock.module("./social-preview-utils", () => ({
 }))
 
 mock.module("./PreviewMediaDropZone", () => ({
-  PreviewMediaDropZone: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="drop-zone">{children}</div>
-  ),
+  PreviewMediaDropZone: ({ children }: { children?: ReactNode }) => <div data-testid="drop-zone">{children}</div>,
   UseOwnCreativeCta: () => <div data-testid="use-own-cta" />,
 }))
 
-// Restore all mock.module stubs after this file's tests complete so sibling
-// source modules are not polluted when bun runs multiple test files in the
-// same process. Note: bun hoists mock.module() to collection time regardless
-// of where they appear, so afterAll here cleans up what was registered at start.
 afterAll(() => mock.restore())
 
-// OrganicDraftPreview is imported after all mocks are declared so bun's module
-// resolution picks up the mocked dependencies.
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
 
 function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
@@ -170,158 +157,86 @@ function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalend
   }
 }
 
-describe("OrganicDraftPreview — MediaStatusBadge", () => {
+describe("OrganicDraftPreview — contextual shell", () => {
   beforeEach(() => cleanup())
 
-  it("shows 'Your creative' when mediaStatus is user_supplied", () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "user_supplied" } })}
-        brandProfileId="brand-1"
-      />,
-    )
-    expect(screen.getByText("Your creative")).toBeTruthy()
+  it("renders the glanceable metadata chips and the ⋯ command menu", () => {
+    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />)
+    expect(screen.getByTestId("meta-chips")).toBeTruthy()
+    expect(screen.getByText("instagram")).toBeTruthy()
+    expect(screen.getByText("Post")).toBeTruthy()
+    expect(screen.getByText("9:00 AM")).toBeTruthy()
+    expect(screen.getByLabelText("Post actions")).toBeTruthy()
   })
 
-  it("shows 'Generating…' when mediaStatus is generating", () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "generating" } })}
-        brandProfileId="brand-1"
-      />,
-    )
-    expect(screen.getByText("Generating…")).toBeTruthy()
-  })
-
-  it("shows 'Ready' when mediaStatus is ready", () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "ready" } })}
-        brandProfileId="brand-1"
-      />,
-    )
-    expect(screen.getByText("Ready")).toBeTruthy()
-  })
-
-  it("shows 'Preparing media…' when pending + blueprintReady=true", () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "pending", blueprintReady: true } })}
-        brandProfileId="brand-1"
-      />,
-    )
-    expect(screen.getByText("Preparing media…")).toBeTruthy()
-  })
-
-  it("shows 'Pending' when mediaStatus is pending without blueprint", () => {
-    render(
-      <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "pending", blueprintReady: false } })}
-        brandProfileId="brand-1"
-      />,
-    )
-    expect(screen.getByText("Pending")).toBeTruthy()
+  it("renders the caption as click-to-edit text (no always-on textarea)", () => {
+    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />)
+    // EditableCaption read mode = a button labelled for editing carrying the text.
+    const caption = screen.getByLabelText("Edit instagram caption")
+    expect(caption.tagName).toBe("BUTTON")
+    expect(caption.textContent).toContain("Test caption")
   })
 })
 
-describe("OrganicDraftPreview — Generate button visibility", () => {
+describe("OrganicDraftPreview — media state", () => {
   beforeEach(() => cleanup())
 
-  it("shows Generate button when media is pending", () => {
-    const { container } = render(
+  it("shows the persisted storyboard 'Blueprint ready' state for a pending text-only draft", () => {
+    render(
       <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "pending" } })}
+        draft={baseDraft({
+          backendDraftId: "be-1",
+          mediaSuggestion: {
+            mediaStatus: "pending",
+            storyboard: [
+              {
+                role: "primary",
+                bucket: "brand-profile-assets",
+                storagePath: "organic/d/preview/1.png",
+                storageUrl: "https://signed.example.com/1.png",
+              },
+            ],
+          },
+        })}
         brandProfileId="brand-1"
       />,
     )
-    expect(container.querySelector('[aria-label="Generate media for this post"]')).not.toBeNull()
+    expect(screen.getByText("Blueprint ready")).toBeTruthy()
+    expect(screen.getByAltText("Test post — storyboard frame 1")).toBeTruthy()
+    expect(screen.getByText("Generate final media or use your own creative")).toBeTruthy()
   })
 
-  it("hides Generate button when media is user_supplied", () => {
-    const { container } = render(
+  it("suppresses the storyboard state once real media is attached", () => {
+    render(
       <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "user_supplied" } })}
+        draft={baseDraft({
+          format: "Carousel",
+          mediaSuggestion: { mediaStatus: "user_supplied", kind: "carousel" },
+          publishingAssets: [
+            { role: "primary", kind: "image", slideIndex: 0, storagePath: "p0.jpg", storageUrl: "https://cdn/p0.jpg" },
+            { role: "primary", kind: "image", slideIndex: 1, storagePath: "p1.jpg", storageUrl: "https://cdn/p1.jpg" },
+          ],
+        })}
         brandProfileId="brand-1"
       />,
     )
-    expect(container.querySelector('[aria-label="Generate media for this post"]')).toBeNull()
-  })
-
-  it("hides Generate button when media is ready", () => {
-    const { container } = render(
-      <OrganicDraftPreview
-        draft={baseDraft({ mediaSuggestion: { mediaStatus: "ready" } })}
-        brandProfileId="brand-1"
-      />,
-    )
-    expect(container.querySelector('[aria-label="Generate media for this post"]')).toBeNull()
+    expect(screen.queryByText("Blueprint ready")).toBeNull()
   })
 })
 
-describe("OrganicDraftPreview — user-supplied video render", () => {
+describe("OrganicDraftPreview — footer readiness", () => {
   beforeEach(() => cleanup())
 
-  it("renders reel draft with user_supplied badge and no Generate button", () => {
-    const draft = baseDraft({
-      format: "Reel",
-      mediaSuggestion: {
-        mediaStatus: "user_supplied",
-        kind: "reel",
-        reel: {
-          generated: true,
-          url: "brands/b/vid.mp4",
-          bucket: "media-library",
-          signedUrl: "https://cdn.example.com/vid.mp4",
-        },
-      },
-      publishingAssets: [
-        {
-          role: "primary",
-          kind: "video",
-          storagePath: "brands/b/vid.mp4",
-          storageUrl: "https://cdn.example.com/vid.mp4",
-          bucket: "media-library",
-        },
-      ],
-    })
-
-    const { container } = render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" />)
-
-    expect(screen.getByText("Your creative")).toBeTruthy()
-    expect(container.querySelector('[aria-label="Generate media for this post"]')).toBeNull()
-  })
-})
-
-describe("OrganicDraftPreview — carousel user-supplied render", () => {
-  beforeEach(() => cleanup())
-
-  it("renders carousel draft with user_supplied badge", () => {
-    const draft = baseDraft({
-      format: "Carousel",
-      mediaSuggestion: {
-        mediaStatus: "user_supplied",
-        kind: "carousel",
-      },
-      publishingAssets: [
-        {
-          role: "primary",
-          kind: "image",
-          slideIndex: 0,
-          storagePath: "p0.jpg",
-          storageUrl: "https://cdn/p0.jpg",
-        },
-        {
-          role: "primary",
-          kind: "image",
-          slideIndex: 1,
-          storagePath: "p1.jpg",
-          storageUrl: "https://cdn/p1.jpg",
-        },
-      ],
-    })
-
-    const { container } = render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" />)
-    expect(screen.getByText("Your creative")).toBeTruthy()
-    expect(container.querySelector('[aria-label="Generate media for this post"]')).toBeNull()
+  it("gates Approve & Schedule behind the readiness checklist", () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ captionPreview: "" })}
+        brandProfileId="brand-1"
+        onApprove={mock()}
+      />,
+    )
+    expect(screen.getByText("Needed to schedule")).toBeTruthy()
+    const approve = screen.getByText("Approve & Schedule").closest("button") as HTMLButtonElement
+    expect(approve.disabled).toBe(true)
   })
 })

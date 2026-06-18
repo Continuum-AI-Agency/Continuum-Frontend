@@ -44,6 +44,7 @@ export type PanelAction =
   | { type: "STREAM_UI_CARD"; card: UiCard }
   | { type: "STREAM_MEDIA_SEARCH_RESULTS"; frame: MediaSearchResultsFrame }
   | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
+  | { type: "DRAFT_BLUEPRINT"; draftId: string; previews: string[] }
   | { type: "PIPELINE_STAGE"; event: ParsedPipelineStage }
   | { type: "PIPELINE_CARD"; card: Partial<PipelineCardState> & { jobId: string } }
   | { type: "PLAN_STATUS"; event: ParsedPlanStatus }
@@ -302,6 +303,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           status: action.event.status === "failed" ? "failed" : "running",
           stage: action.event.stage,
           agentName: action.event.agentName,
+          ...(typeof action.event.pct === "number" ? { pct: action.event.pct } : {}),
         }),
       }
 
@@ -317,9 +319,55 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
             ? reconcileJobFromPipeline(state.jobs, action.card.jobId, {
                 status: "running",
                 ...(action.card.currentStage ? { stage: action.card.currentStage } : {}),
+                ...(typeof action.card.pct === "number" ? { pct: action.card.pct } : {}),
               })
             : state.jobs,
       }
+
+    case "DRAFT_BLUEPRINT": {
+      const { draftId, previews } = action
+      if (!draftId || previews.length === 0) return state
+      // The blueprint job's own jobId differs from the post-generation card, so
+      // match by draftId: stamp the storyboard onto that card's preview images and
+      // the job's thumbnail, and confirm the blueprint checkpoint step.
+      let pipelineChanged = false
+      const pipeline: Record<string, PipelineCardState> = {}
+      for (const [jobId, card] of Object.entries(state.pipeline)) {
+        if (card.draftId === draftId) {
+          pipelineChanged = true
+          pipeline[jobId] = {
+            ...card,
+            preview: {
+              caption: card.preview?.caption ?? null,
+              imageUrl: card.preview?.imageUrl ?? previews[0] ?? null,
+              images: previews,
+              format: card.preview?.format ?? null,
+            },
+            checkpoint: { ...card.checkpoint, blueprintReady: true },
+          }
+        } else {
+          pipeline[jobId] = card
+        }
+      }
+
+      let jobsChanged = false
+      const jobs: Record<string, AgentJobState> = {}
+      for (const [jobId, job] of Object.entries(state.jobs)) {
+        if (job.draftId === draftId) {
+          jobsChanged = true
+          jobs[jobId] = { ...job, previewImages: previews }
+        } else {
+          jobs[jobId] = job
+        }
+      }
+
+      if (!pipelineChanged && !jobsChanged) return state
+      return {
+        ...state,
+        pipeline: pipelineChanged ? pipeline : state.pipeline,
+        jobs: jobsChanged ? jobs : state.jobs,
+      }
+    }
 
     case "PLAN_STATUS":
       return {

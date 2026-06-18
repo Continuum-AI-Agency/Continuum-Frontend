@@ -4,20 +4,12 @@ import * as React from "react"
 import Image from "next/image"
 import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon } from "@radix-ui/react-icons"
 
-import { CheckCircle2, Circle, Loader2, Send, Wand2, ImagePlus } from "lucide-react"
+import { CheckCircle2, Circle, Loader2, Send } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDraft } from "./types"
 import { useCalendarStore } from "@/lib/organic/store"
-import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   DndContext,
   useSensor,
@@ -27,23 +19,29 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core"
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
-import { Textarea } from "@/components/ui/textarea"
 import { isOrganicPlatformKey } from "@/lib/organic/platforms"
+import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import {
   resolvePreviewAspectRatio,
   resolvePreviewMaxWidth,
 } from "./social-preview-utils"
-import { OrganicCreativesPicker } from "./OrganicCreativesPicker"
 import { HyperFramePlayer } from "./HyperFramePlayer"
 import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
+import { useOpenDraftInAiStudio } from "./AiStudioHandoffContext"
 import { signMediaAsset, signOrganicMediaAsset } from "@/lib/organic/hyperframeSign"
 import { PreviewMediaDropZone, UseOwnCreativeCta } from "./PreviewMediaDropZone"
 import { CarouselSlideStrip } from "./CarouselSlideStrip"
-import { LibraryPlacementRail } from "./LibraryPlacementRail"
-import { useDraftMediaPlacement } from "@/components/organic/hooks/useDraftMediaPlacement"
+import {
+  useDraftMediaPlacement,
+  type SlotTarget,
+} from "@/components/organic/hooks/useDraftMediaPlacement"
 import type { MediaAsset } from "@continuum/contracts"
 import { useGenerateDraftMedia } from "@/components/organic/hooks/useGenerateDraftMedia"
 import { evaluateDraftReadiness } from "@/lib/organic/draftReadiness"
+import { EditableCaption, InlinePreviewTextarea } from "./EditableCaption"
+import { PostMetaChips } from "./PostMetaChips"
+import { PostCommandMenu } from "./PostCommandMenu"
+import { MediaSelectPopover } from "./MediaSelectPopover"
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft
@@ -54,17 +52,11 @@ interface OrganicDraftPreviewProps {
 
 type SocialPreviewProps = {
   draft: OrganicCalendarDraft
-  mediaAspectRatio: number
   onCaptionChange: (value: string) => void
-  thumbnailDirection: string
   brandName?: string
-  // When truthy, render the media area as an interactive drop zone.
-  onMediaActivate?: () => void
-  mediaDropState?: "idle" | "drag-over-valid" | "drag-over-invalid" | "placing" | "success" | "fallback"
-  activeSlideIndex?: number
-  onSelectSlide?: (index: number) => void
-  placement?: ReturnType<typeof useDraftMediaPlacement>
-  onAddSlideRequest?: () => void
+  platform: string
+  // The media zone, pre-wired with its MediaSelectPopover by the parent.
+  mediaNode: React.ReactNode
 }
 
 function hasText(value: unknown): value is string {
@@ -111,14 +103,6 @@ function resolveCreativeDirection(draft: OrganicCalendarDraft): string {
   )
 }
 
-function resolveThumbnailDirection(draft: OrganicCalendarDraft): string {
-  return (
-    draft.thumbnailPrompt?.trim() ||
-    draft.mediaSuggestion?.prompt?.trim() ||
-    draft.assetHints?.[0]?.suggestion?.trim() ||
-    ""
-  )
-}
 
 function resolveCarouselSlides(draft: OrganicCalendarDraft): Array<{
   slideIndex: number
@@ -147,22 +131,61 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): Array<{
   return []
 }
 
-// Derive the display state of the media status badge.
-function resolveMediaStatusLabel(draft: OrganicCalendarDraft): string {
-  const ms = draft.mediaSuggestion?.mediaStatus
-  if (ms === "user_supplied") return "Your creative"
-  if (ms === "generating") return "Generating…"
-  if (ms === "ready") return "Ready"
-  // pending but blueprint done = "Preparing media…"
-  if (ms === "pending" && draft.mediaSuggestion?.blueprintReady) return "Preparing media…"
-  if (ms === "pending") return "Pending"
-  if (ms === "skipped") return "Skipped"
-  // No mediaSuggestion at all.
-  if (draft.mediaSuggestion?.textReady) return "Preparing media…"
-  return "Pending"
+type StoryboardFrame = {
+  role?: string | null
+  storageUrl: string
+  format?: string | null
 }
 
-// Derive the visual style of the badge.
+// Persisted 512px storyboard preview frames (Stage-2 blueprint). The backend
+// re-signs storageUrl on every calendar load, so render it directly. Only frames
+// with a usable signed URL are surfaced; base64 is never used.
+function resolveStoryboardFrames(draft: OrganicCalendarDraft): StoryboardFrame[] {
+  return (draft.mediaSuggestion?.storyboard ?? [])
+    .filter((frame): frame is { storageUrl: string } & typeof frame =>
+      hasText(frame?.storageUrl),
+    )
+    .map((frame) => ({
+      role: frame.role,
+      storageUrl: frame.storageUrl as string,
+      format: frame.format,
+    }))
+}
+
+// The blueprint preview shown in an empty (pending) media slot: surfaces the
+// persisted storyboard so a text-only draft reads honestly as "no final media
+// yet — here's the planned look" instead of an empty box.
+function StoryboardPreview({ frames, alt }: { frames: StoryboardFrame[]; alt: string }) {
+  return (
+    <div className="flex w-full flex-col items-center gap-2 px-4 py-5 text-center">
+      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+        Blueprint ready
+      </span>
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        {frames.slice(0, 4).map((frame, index) => (
+          <div
+            key={`${frame.storageUrl}-${index}`}
+            className="relative h-16 w-16 overflow-hidden rounded-md border border-border/60 bg-muted/40"
+          >
+            <Image
+              src={frame.storageUrl}
+              alt={`${alt} — storyboard frame ${index + 1}`}
+              fill
+              unoptimized
+              sizes="64px"
+              className="object-cover"
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] font-medium text-muted-foreground">
+        Generate final media or use your own creative
+      </p>
+    </div>
+  )
+}
+
+// Derive the visual style of the media status (drives Generate-button gating).
 function resolveMediaStatusVariant(
   draft: OrganicCalendarDraft,
 ): "default" | "generating" | "ready" | "user_supplied" | "pending" {
@@ -171,28 +194,6 @@ function resolveMediaStatusVariant(
   if (ms === "generating") return "generating"
   if (ms === "ready") return "ready"
   return "pending"
-}
-
-function MediaStatusBadge({ draft }: { draft: OrganicCalendarDraft }) {
-  const label = resolveMediaStatusLabel(draft)
-  const variant = resolveMediaStatusVariant(draft)
-
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-        variant === "user_supplied"
-          ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-          : variant === "generating"
-            ? "border border-primary/30 bg-primary/10 text-primary"
-            : variant === "ready"
-              ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "border border-border/50 bg-muted/40 text-muted-foreground/60",
-      )}
-    >
-      {label}
-    </span>
-  )
 }
 
 // Determines whether we should show the "Use your own creative" CTA in the media slot.
@@ -236,6 +237,14 @@ function InteractiveCarouselMediaArea({
   const total = slides.length
   const isCarousel = draft.format.toLowerCase() === "carousel"
   const showCta = shouldShowUseOwnCta(draft)
+  // A pending (text-only) draft with a persisted blueprint shows its storyboard
+  // in the otherwise-empty slot, making the no-final-media state explicit.
+  const storyboardFrames = resolveStoryboardFrames(draft)
+  const showStoryboard =
+    showCta &&
+    total === 0 &&
+    draft.mediaSuggestion?.mediaStatus === "pending" &&
+    storyboardFrames.length > 0
   const [successFlash, setSuccessFlash] = React.useState(false)
 
   // Flash success ring briefly after a new media placement.
@@ -328,9 +337,19 @@ function InteractiveCarouselMediaArea({
           </>
         )}
 
-        {showCta && (
-          <UseOwnCreativeCta onActivate={onActivate} format={draft.format} />
-        )}
+        {showCta &&
+          (showStoryboard ? (
+            <button
+              type="button"
+              onClick={onActivate}
+              aria-label="Blueprint ready — open the library to use your own creative"
+              className="flex w-full flex-col items-center transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <StoryboardPreview frames={storyboardFrames} alt={alt} />
+            </button>
+          ) : (
+            <UseOwnCreativeCta onActivate={onActivate} format={draft.format} />
+          ))}
       </PreviewMediaDropZone>
 
       {/* Carousel slide strip — editing surface (not the preview dots) */}
@@ -344,65 +363,6 @@ function InteractiveCarouselMediaArea({
           className="border-b border-border/60 px-2"
         />
       )}
-    </div>
-  )
-}
-
-// All user-supplied text is HTML-escaped before being inserted into the HTML
-// string, so dangerouslySetInnerHTML on the mirror div is XSS-safe.
-function buildCaptionMirrorHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return escaped
-    .replace(/@[^\s\n@&]+/g, '<mark class="mention-token">$&</mark>')
-    .replace(/\n/g, "<br>");
-}
-
-function InlinePreviewTextarea({
-  className,
-  value,
-  onScroll,
-  ...props
-}: React.ComponentProps<typeof Textarea>) {
-  const mirrorRef = React.useRef<HTMLDivElement>(null);
-
-  const mirrorHtml = React.useMemo(
-    () => buildCaptionMirrorHtml(String(value ?? "")),
-    [value]
-  );
-
-  const handleScroll = React.useCallback(
-    (e: React.UIEvent<HTMLTextAreaElement>) => {
-      if (mirrorRef.current) mirrorRef.current.scrollTop = e.currentTarget.scrollTop;
-      onScroll?.(e);
-    },
-    [onScroll]
-  );
-
-  const layoutClass = cn("px-3 py-2", className);
-
-  return (
-    <div className="relative">
-      <div
-        ref={mirrorRef}
-        aria-hidden
-        className={cn(
-          layoutClass,
-          "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-transparent"
-        )}
-        dangerouslySetInnerHTML={{ __html: mirrorHtml }}
-      />
-      <Textarea
-        value={value}
-        onScroll={handleScroll}
-        {...props}
-        className={cn(
-          "relative resize-none border-border/60 bg-transparent text-foreground placeholder:text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring/40",
-          className
-        )}
-      />
     </div>
   )
 }
@@ -551,27 +511,154 @@ function useDraftWithFreshMedia(
     }
   }, [brandProfileId, reelBucket, reelPath])
 
+  // Hyperframe MP4 + cover are durable bucket+path references too; re-sign both so
+  // the player/card render fresh URLs instead of an expired URL or a base64 cover.
+  const hyperframe = draft.mediaSuggestion?.hyperframe
+  const hfMp4Bucket = hasText(hyperframe?.mp4Path) ? (hyperframe?.mp4Bucket ?? null) : null
+  const hfMp4Path = hasText(hyperframe?.mp4Path) ? (hyperframe?.mp4Path ?? null) : null
+  const hfCoverBucket = hasText(hyperframe?.coverPath) ? (hyperframe?.bucket ?? null) : null
+  const hfCoverPath = hasText(hyperframe?.coverPath) ? (hyperframe?.coverPath ?? null) : null
+  const [freshHfMp4Url, setFreshHfMp4Url] = React.useState<string | null>(null)
+  const [freshHfCoverUrl, setFreshHfCoverUrl] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!brandProfileId) return
+    let cancelled = false
+    void (async () => {
+      if (hfMp4Bucket && hfMp4Path) {
+        const url = await signOrganicMediaAsset({ brandId: brandProfileId, bucket: hfMp4Bucket, path: hfMp4Path })
+        if (!cancelled && url) setFreshHfMp4Url(url)
+      }
+      if (hfCoverBucket && hfCoverPath) {
+        const url = await signOrganicMediaAsset({ brandId: brandProfileId, bucket: hfCoverBucket, path: hfCoverPath })
+        if (!cancelled && url) setFreshHfCoverUrl(url)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [brandProfileId, hfMp4Bucket, hfMp4Path, hfCoverBucket, hfCoverPath])
+
   return React.useMemo(() => {
     const freshPublishing = Object.keys(freshByPath).length > 0 && draft.publishingAssets
-    if (!freshPublishing && !freshReelUrl) return draft
+    const freshHyperframe = (freshHfMp4Url || freshHfCoverUrl) && draft.mediaSuggestion?.hyperframe
+    if (!freshPublishing && !freshReelUrl && !freshHyperframe) return draft
     const next: OrganicCalendarDraft = { ...draft }
     if (freshPublishing && draft.publishingAssets) {
       next.publishingAssets = draft.publishingAssets.map((asset) =>
         freshByPath[asset.storagePath] ? { ...asset, storageUrl: freshByPath[asset.storagePath] } : asset,
       )
     }
-    if (freshReelUrl && draft.mediaSuggestion?.reel) {
+    if ((freshReelUrl || freshHyperframe) && draft.mediaSuggestion) {
       next.mediaSuggestion = {
         ...draft.mediaSuggestion,
-        reel: { ...draft.mediaSuggestion.reel, signedUrl: freshReelUrl },
+        ...(freshReelUrl && draft.mediaSuggestion.reel
+          ? { reel: { ...draft.mediaSuggestion.reel, signedUrl: freshReelUrl } }
+          : {}),
+        ...(freshHyperframe
+          ? {
+              hyperframe: {
+                ...draft.mediaSuggestion.hyperframe,
+                ...(freshHfMp4Url ? { mp4Url: freshHfMp4Url } : {}),
+                ...(freshHfCoverUrl ? { coverImageUrl: freshHfCoverUrl } : {}),
+              },
+            }
+          : {}),
       }
     }
     return next
-  }, [draft, freshByPath, freshReelUrl])
+  }, [draft, freshByPath, freshReelUrl, freshHfMp4Url, freshHfCoverUrl])
+}
+
+// A titled inline panel that appears on demand (from the ⋯ menu) and collapses
+// when dismissed — the progressive-disclosure home for secondary editors.
+function ContextualPanel({
+  title,
+  onClose,
+  children,
+}: {
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={`Close ${title}`}
+          className="rounded p-0.5 text-muted-foreground/60 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <Cross2Icon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function HashtagTiers({
+  draft,
+  patchDraft,
+}: {
+  draft: OrganicCalendarDraft
+  patchDraft: (patch: Partial<OrganicCalendarDraft>) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {(["high", "medium", "low"] as const).map((tier) => {
+        const tags = draft.hashtags?.[tier]
+        if (!tags?.length) return null
+        return (
+          <div key={tier} className="space-y-1">
+            <p className="text-[10px] font-medium text-muted-foreground/70">
+              {tier === "high" ? "High Competition" : tier === "medium" ? "Medium Competition" : "Low Competition"}
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  #{tag.replace(/^#/, "")}
+                  <button
+                    type="button"
+                    className="ml-0.5 rounded-full p-0.5 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      patchDraft({
+                        hashtags: { ...draft.hashtags, [tier]: tags.filter((t) => t !== tag) },
+                      })
+                    }}
+                    aria-label={`Remove #${tag.replace(/^#/, "")}`}
+                  >
+                    <Cross2Icon className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      <HashtagInput
+        onAdd={(tag) => {
+          const current = draft.hashtags ?? {}
+          const medium = current.medium ?? []
+          patchDraft({ hashtags: { ...current, medium: [...medium, tag] } })
+        }}
+      />
+    </div>
+  )
 }
 
 export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprove }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
+  const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts)
+  const openInStudio = useOpenDraftInAiStudio()
   const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId)
   const isHyperframeFormat = draft.format.toLowerCase() === "hyperframe"
   const isCarouselFormat = draft.format.toLowerCase() === "carousel"
@@ -579,25 +666,20 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   const previewMaxWidth = resolvePreviewMaxWidth(selectedPlatform)
   const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform, draft.format)
   const creativeDirection = resolveCreativeDirection(draft)
-  const thumbnailDirection = resolveThumbnailDirection(draft)
 
-  // Media placement hook — write path for user-supplied creatives.
+  // Media placement hook — the single write path for user-supplied creatives.
   const placement = useDraftMediaPlacement(draft.id)
 
   // Active carousel slide index (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0)
 
-  // Manually-authored drafts lead with upload + Library; agent drafts default to
-  // the creatives surface. Tracks provenance so the editor can tailor media steps.
-  const isManual = draft.origin === "manual"
+  // Contextual surfaces — nothing is always-on; each reveals on demand.
+  const [mediaSelectOpen, setMediaSelectOpen] = React.useState(false)
+  const [creativeOpen, setCreativeOpen] = React.useState(false)
+  const [hashtagsOpen, setHashtagsOpen] = React.useState(false)
 
-  // Whether the library rail is focused for placement. Defaults open for manual
-  // drafts and resets to the per-draft default whenever a different draft loads
-  // (the preview panel instance is reused across selections).
-  const [railFocused, setRailFocused] = React.useState(isManual)
-  React.useEffect(() => {
-    setRailFocused(draft.origin === "manual")
-  }, [draft.id, draft.origin])
+  // Manual drafts construct from scratch (upload + Library, no headless gen).
+  const isManual = draft.origin === "manual"
 
   const { generateDraftMedia, isGenerating } = useGenerateDraftMedia()
 
@@ -607,16 +689,12 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   )
 
   const handleDragEnd = React.useCallback((_event: DragEndEvent) => {
-    // Top-level DnD context — individual sub-contexts (CarouselSlideStrip)
-    // handle their own onDragEnd. Nothing to do at this level.
+    // Top-level DnD context — sub-contexts (CarouselSlideStrip) own their drag end.
   }, [])
 
   const patchDraft = React.useCallback(
     (patch: Partial<OrganicCalendarDraft>) => {
-      updateDraft(draft.id, (current) => ({
-        ...current,
-        ...patch,
-      }))
+      updateDraft(draft.id, (current) => ({ ...current, ...patch }))
     },
     [draft.id, updateDraft]
   )
@@ -638,158 +716,117 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   const canPublish = isInstagram && !isPublished && draft.status !== "streaming"
   const showFooter = onApprove != null || canPublish || isPublished
 
-  // Handle a single asset placed from the library rail (click or drop). On a
-  // carousel a single asset appends a slide (place() would collapse the carousel
-  // to one image); otherwise it fills the single image or video slot.
-  const handleRailPlace = React.useCallback(
-    (asset: MediaAsset) => {
+  // Single unified attach path: every selection from the media Popover goes
+  // through useDraftMediaPlacement (gains undo + always emits publishable shapes).
+  // Carousels append slides; otherwise place() infers single/carousel/video.
+  const handleAttachAssets = React.useCallback(
+    (assets: MediaAsset[]) => {
+      if (assets.length === 0) return
       if (isCarouselFormat) {
-        placement.addSlide(asset)
+        assets.forEach((asset) => placement.addSlide(asset))
         return
       }
-      placement.place([asset], asset.kind === "video" ? { kind: "video" } : { kind: "single" })
+      const target: SlotTarget =
+        assets.length === 1 && assets[0].kind === "video" ? { kind: "video" } : { kind: "single" }
+      placement.place(assets, target)
     },
-    [placement, isCarouselFormat],
-  )
-
-  // Handle the picker attaching multi-selected assets (shapeUserSuppliedMedia already
-  // called inside OrganicCreativesPicker.handleAttach).
-  const handlePickerAttach = React.useCallback(
-    (assets: NonNullable<OrganicCalendarDraft["publishingAssets"]>) => {
-      updateDraft(draft.id, (current) => ({
-        ...current,
-        publishingAssets: assets,
-        mediaSuggestion: {
-          ...current.mediaSuggestion,
-          mediaStatus: "user_supplied",
-        },
-      }))
-    },
-    [draft.id, updateDraft],
+    [isCarouselFormat, placement],
   )
 
   const handleGenerateMedia = React.useCallback(() => {
-    // Requires a persisted backend draft; the realize stream keys every update
-    // off feId, so we must hand the hook the MediaGenerationDraftTarget shape.
+    // Requires a persisted backend draft; the realize stream keys updates off feId.
     if (!brandProfileId || !draft.backendDraftId) return
     void generateDraftMedia(brandProfileId, [
       { feId: draft.id, backendDraftId: draft.backendDraftId, format: draft.format },
     ])
   }, [brandProfileId, draft.id, draft.backendDraftId, draft.format, generateDraftMedia])
 
+  const handleDelete = React.useCallback(() => {
+    bulkDeleteDrafts([draft.id])
+  }, [bulkDeleteDrafts, draft.id])
+
   const mediaStatusVariant = resolveMediaStatusVariant(draft)
   const mediaIsPending = mediaStatusVariant === "pending"
   const mediaIsUserSupplied = draft.mediaSuggestion?.mediaStatus === "user_supplied"
+  // Generation requires a persisted backend draft id (autosave assigns one within
+  // ~500ms); manual drafts never headless-generate.
+  const canGenerate = mediaIsPending && !mediaIsUserSupplied && !isManual && !!draft.backendDraftId
+  const canMarkScheduled = readiness.ready && !isApproveDisabled
+
+  // The media zone, pre-wired with its contextual MediaSelectPopover. Clicking
+  // the empty/CTA area (or a carousel "+") opens the library Popover anchored here.
+  const mediaNode =
+    !isHyperframeFormat && brandProfileId ? (
+      <MediaSelectPopover
+        brandProfileId={brandProfileId}
+        open={mediaSelectOpen}
+        onOpenChange={setMediaSelectOpen}
+        onAttachAssets={handleAttachAssets}
+        onGenerate={handleGenerateMedia}
+        canGenerate={canGenerate}
+        isGenerating={isGenerating}
+        anchor={
+          <InteractiveCarouselMediaArea
+            draft={draftForPreview}
+            alt={resolveDraftMediaAltText(draftForPreview)}
+            aspectRatio={mediaAspectRatio}
+            slotId={`preview-media-${draft.id}`}
+            onActivate={() => setMediaSelectOpen(true)}
+            activeSlideIndex={activeSlideIndex}
+            onSelectSlide={setActiveSlideIndex}
+            placement={placement}
+            onAddSlideRequest={() => setMediaSelectOpen(true)}
+          />
+        }
+      />
+    ) : null
+
+  const commandMenu = (
+    <PostCommandMenu
+      onEditCreativeDirection={() => setCreativeOpen(true)}
+      onEditHashtags={() => setHashtagsOpen(true)}
+      onApproveSchedule={onApprove ? () => onApprove(draft.id) : undefined}
+      canSchedule={canMarkScheduled}
+      isScheduled={draft.status === "scheduled"}
+      onMoveBackToDraft={() => patchDraft({ status: "draft" })}
+      onPublish={canPublish ? () => publish(draft) : undefined}
+      canPublish={canPublish}
+      isPublishing={isPublishing}
+      onOpenInStudio={openInStudio ? () => openInStudio(draft.id) : undefined}
+      onDelete={handleDelete}
+    />
+  )
 
   return (
     <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
       <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
-        {/* Header */}
-        <div className="flex shrink-0 flex-col gap-2 border-b border-border/70 bg-muted/55 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={selectedPlatform}
-              onValueChange={(value) => {
-                if (!isOrganicPlatformKey(value)) return
-                patchDraft({ platforms: [value] })
-              }}
-            >
-              <SelectTrigger className="h-8 w-[9.5rem] border-border/60 bg-background text-xs font-semibold">
-                <SelectValue placeholder="Platform" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="instagram">Instagram</SelectItem>
-                <SelectItem value="facebook">Facebook</SelectItem>
-                <SelectItem value="linkedin">LinkedIn</SelectItem>
-              </SelectContent>
-            </Select>
+        {/* Glanceable metadata strip + ⋯ command menu. Nothing else lives here
+            permanently — every editing tool opens on demand. */}
+        <PostMetaChips
+          platform={selectedPlatform as OrganicPlatformKey}
+          format={toPublishFormat(draft.format)}
+          timeLabel={draft.timeLabel}
+          onPlatformChange={(value) => {
+            if (!isOrganicPlatformKey(value)) return
+            patchDraft({ platforms: [value] })
+          }}
+          onFormatChange={(value) => patchDraft({ format: value })}
+          onTimeChange={(value) => patchDraft({ timeLabel: value })}
+          actions={commandMenu}
+        />
 
-            <Input
-              value={draft.timeLabel}
-              onChange={(event) => patchDraft({ timeLabel: event.target.value })}
-              placeholder="9:00 AM"
-              className="h-8 w-[8rem] border-border/60 bg-background text-xs font-medium"
-            />
-
-            <Select
-              value={toPublishFormat(draft.format)}
-              onValueChange={(value) => patchDraft({ format: value })}
-            >
-              <SelectTrigger className="h-8 w-[7rem] border-border/60 bg-background text-xs font-semibold">
-                <SelectValue placeholder="Format" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Post">Post</SelectItem>
-                <SelectItem value="Carousel">Carousel</SelectItem>
-                <SelectItem value="Reel">Reel</SelectItem>
-                <SelectItem value="HyperFrame">HyperFrame</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
+        {/* Lifecycle + transient placement state — thin, contextual. */}
+        <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2">
           <LifecyclePill status={draft.status} />
-
-          {/* Media status badge + creative-source control */}
-          {!isHyperframeFormat && (
-            <div className="flex flex-wrap items-center gap-2">
-              <MediaStatusBadge draft={draft} />
-
-              {/* Undo inline — no confirm modal */}
-              {placement.canUndo && (
-                <button
-                  type="button"
-                  onClick={placement.undo}
-                  className="rounded px-2 py-0.5 text-[10px] font-medium text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  Undo
-                </button>
-              )}
-
-              <div className="ml-auto flex items-center gap-1.5">
-                {/* Attach control — focuses the library rail */}
-                <button
-                  type="button"
-                  aria-label="Attach your own creative"
-                  onClick={() => setRailFocused((v) => !v)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    railFocused
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border/60 bg-background text-muted-foreground hover:border-border hover:text-foreground",
-                  )}
-                >
-                  <ImagePlus className="h-3.5 w-3.5" />
-                  Attach
-                </button>
-
-                {/* Generate — explicit opt-in, token-heavy headless gen. Hidden for
-                    manual drafts: from-scratch posts use upload + Library, not AI. */}
-                {mediaIsPending && !mediaIsUserSupplied && !isManual && (
-                  <button
-                    type="button"
-                    aria-label="Generate media for this post"
-                    disabled={isGenerating || !draft.backendDraftId}
-                    onClick={handleGenerateMedia}
-                    className={cn(
-                      "flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      isGenerating || !draft.backendDraftId
-                        ? "cursor-not-allowed border-border/40 bg-muted/40 text-muted-foreground/50"
-                        : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
-                    )}
-                  >
-                    {isGenerating ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Wand2 className="h-3.5 w-3.5" />
-                    )}
-                    Generate
-                  </button>
-                )}
-              </div>
-            </div>
+          {placement.canUndo && (
+            <button
+              type="button"
+              onClick={placement.undo}
+              className="self-start rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Undo last media change
+            </button>
           )}
-
-          {/* Placement error — aria-live region for keyboard/SR users */}
           {placement.error && (
             <div
               role="alert"
@@ -808,227 +845,101 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
           )}
         </div>
 
-        {/* Scroll content */}
+        {/* Single scroll — media-first frame. Contextual editors (creative
+            direction, hashtags) reveal inline on demand from the ⋯ menu. */}
         <ScrollArea className="flex-1 bg-muted/10 p-3">
-          <div className="mx-auto flex w-full max-w-[48rem] flex-col gap-3">
-            {/* Creative direction */}
-            <div
-              className="mx-auto w-full rounded-xl border border-border/70 bg-background/90 p-3"
-              style={{ maxWidth: `${previewMaxWidth}px` }}
-            >
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Creative direction prompt
-              </p>
-              <InlinePreviewTextarea
-                value={creativeDirection}
-                onChange={(event) =>
-                  patchDraft({
-                    creativeDirectionPrompt: event.target.value,
-                    creativeIdea: event.target.value,
-                  })
-                }
-                placeholder="Describe the hook, visual intent, and mood."
-                className="min-h-[5.25rem] text-sm leading-relaxed"
-              />
-            </div>
-
-            {/* Library placement rail — docked below creative direction */}
-            {brandProfileId && railFocused && (
-              <div
-                className="mx-auto w-full"
-                style={{ maxWidth: `${previewMaxWidth}px` }}
-              >
-                <LibraryPlacementRail
-                  brandProfileId={brandProfileId}
-                  draftId={draft.id}
-                  onPlace={handleRailPlace}
-                  onAttach={handlePickerAttach}
+          <div
+            className="mx-auto flex w-full flex-col gap-3"
+            style={{ maxWidth: `${previewMaxWidth}px` }}
+          >
+            {creativeOpen && (
+              <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
+                <InlinePreviewTextarea
+                  value={creativeDirection}
+                  onChange={(event) =>
+                    patchDraft({
+                      creativeDirectionPrompt: event.target.value,
+                      creativeIdea: event.target.value,
+                    })
+                  }
+                  placeholder="Describe the hook, visual intent, and mood."
+                  className="min-h-[5rem] text-sm leading-relaxed"
                 />
-              </div>
+              </ContextualPanel>
             )}
 
-            {/* Legacy creatives section — still available when rail is not focused */}
-            {brandProfileId && !railFocused && (
-              <div
-                className="mx-auto w-full rounded-xl border border-border/70 bg-background/90 p-3"
-                style={{ maxWidth: `${previewMaxWidth}px` }}
-              >
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Creatives
-                </p>
-                <OrganicCreativesPicker
-                  brandProfileId={brandProfileId}
-                  draftId={draft.id}
-                  attached={draft.publishingAssets ?? []}
-                  onAttach={handlePickerAttach}
-                />
-              </div>
+            {hashtagsOpen && (
+              <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
+                <HashtagTiers draft={draft} patchDraft={patchDraft} />
+              </ContextualPanel>
             )}
 
-            {/* Hashtag Tiers */}
-            {draft.hashtags && (draft.hashtags.high?.length || draft.hashtags.medium?.length || draft.hashtags.low?.length) ? (
-              <div
-                className="mx-auto w-full rounded-xl border border-border/70 bg-background/90 p-3"
-                style={{ maxWidth: `${previewMaxWidth}px` }}
-              >
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Hashtags
+            {isHyperframeFormat ? (
+              <div className="flex flex-col gap-3">
+                <HyperFramePlayer draft={draft} brandId={brandProfileId ?? ""} />
+                <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Caption
                   </p>
-                  {(["high", "medium", "low"] as const).map((tier) => {
-                    const tags = draft.hashtags?.[tier]
-                    if (!tags?.length) return null
-                    return (
-                      <div key={tier} className="space-y-1">
-                        <p className="text-[10px] font-medium text-muted-foreground/70">
-                          {tier === "high" ? "High Competition" : tier === "medium" ? "Medium Competition" : "Low Competition"}
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground"
-                            >
-                              #{tag.replace(/^#/, "")}
-                              <button
-                                type="button"
-                                className="ml-0.5 rounded-full p-0.5 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  patchDraft({
-                                    hashtags: {
-                                      ...draft.hashtags,
-                                      [tier]: tags.filter((t) => t !== tag),
-                                    },
-                                  })
-                                }}
-                                aria-label={`Remove #${tag.replace(/^#/, "")}`}
-                              >
-                                <Cross2Icon className="h-2.5 w-2.5" />
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <HashtagInput
-                    onAdd={(tag) => {
-                      const current = draft.hashtags ?? {}
-                      const medium = current.medium ?? []
-                      patchDraft({
-                        hashtags: {
-                          ...current,
-                          medium: [...medium, tag],
-                        },
-                      })
-                    }}
+                  <EditableCaption
+                    value={draft.captionPreview}
+                    onChange={handleCaptionChange}
+                    platform={selectedPlatform}
                   />
                 </div>
               </div>
-            ) : null}
-
-            {/* Social preview mock */}
-            <div className="mx-auto w-full" style={{ maxWidth: `${previewMaxWidth}px` }}>
-              {isHyperframeFormat ? (
-                <div className="flex flex-col gap-3">
-                  <HyperFramePlayer draft={draft} brandId={brandProfileId ?? ""} />
-                  <div className="rounded-xl border border-border/70 bg-background/90 p-3">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Caption
-                    </p>
-                    <InlinePreviewTextarea
-                      value={draft.captionPreview}
-                      onChange={(event) => handleCaptionChange(event.target.value)}
-                      placeholder="Write a caption..."
-                      className="min-h-[5rem] text-sm leading-relaxed"
-                    />
+            ) : selectedPlatform === "instagram" ? (
+              <div className="overflow-hidden rounded-[2.5rem] border-[5px] border-foreground/10 shadow-2xl">
+                <div className="relative flex items-center justify-center bg-background px-4 pt-3 pb-2">
+                  <span className="absolute left-5 text-[9px] font-bold tabular-nums text-foreground/70">9:41</span>
+                  <div className="h-5 w-[88px] rounded-full bg-foreground/90" />
+                  <div className="absolute right-5 flex items-center gap-1 text-foreground/70">
+                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
+                      <path d="M1.5 8.5C5.082 4.918 9.795 3 12 3s6.918 1.918 10.5 5.5L21 11c-2.9-3.15-5.68-4.5-9-4.5S5.9 7.85 3 11L1.5 8.5z" />
+                      <path d="M4.5 11.5C7.2 8.8 9.7 7.5 12 7.5s4.8 1.3 7.5 4L18 13c-1.9-2.15-3.7-3-6-3s-4.1.85-6 3L4.5 11.5z" />
+                      <circle cx="12" cy="17" r="2" />
+                    </svg>
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
+                      <rect x="1" y="6" width="18" height="12" rx="2" fillOpacity="0.3" />
+                      <rect x="1" y="6" width="13" height="12" rx="2" />
+                      <path d="M21 10v4a2 2 0 0 0 0-4z" />
+                    </svg>
                   </div>
                 </div>
-              ) : null}
-
-              {!isHyperframeFormat && selectedPlatform === "instagram" ? (
-                <div className="overflow-hidden rounded-[2.5rem] border-[5px] border-foreground/10 shadow-2xl">
-                  <div className="relative flex items-center justify-center bg-background px-4 pt-3 pb-2">
-                    <span className="absolute left-5 text-[9px] font-bold tabular-nums text-foreground/70">9:41</span>
-                    <div className="h-5 w-[88px] rounded-full bg-foreground/90" />
-                    <div className="absolute right-5 flex items-center gap-1 text-foreground/70">
-                      <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
-                        <path d="M1.5 8.5C5.082 4.918 9.795 3 12 3s6.918 1.918 10.5 5.5L21 11c-2.9-3.15-5.68-4.5-9-4.5S5.9 7.85 3 11L1.5 8.5z" />
-                        <path d="M4.5 11.5C7.2 8.8 9.7 7.5 12 7.5s4.8 1.3 7.5 4L18 13c-1.9-2.15-3.7-3-6-3s-4.1.85-6 3L4.5 11.5z" />
-                        <circle cx="12" cy="17" r="2" />
-                      </svg>
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
-                        <rect x="1" y="6" width="18" height="12" rx="2" fillOpacity="0.3" />
-                        <rect x="1" y="6" width="13" height="12" rx="2" />
-                        <path d="M21 10v4a2 2 0 0 0 0-4z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div
-                    className="overflow-y-auto"
-                    style={{ maxHeight: 560 }}
-                  >
-                    <InstagramMobilePreview
-                      draft={draftForPreview}
-                      mediaAspectRatio={mediaAspectRatio}
-                      onCaptionChange={handleCaptionChange}
-                      thumbnailDirection={thumbnailDirection}
-                      brandName={brandName}
-                      onMediaActivate={() => setRailFocused(true)}
-                      activeSlideIndex={activeSlideIndex}
-                      onSelectSlide={setActiveSlideIndex}
-                      placement={placement}
-                      onAddSlideRequest={() => setRailFocused(true)}
-                    />
-                  </div>
-                  <div className="flex justify-center bg-background py-2">
-                    <div className="h-1 w-24 rounded-full bg-foreground/20" />
-                  </div>
-                </div>
-              ) : null}
-
-              {!isHyperframeFormat && selectedPlatform === "facebook" ? (
-                <FacebookFeedPreview
+                <InstagramMobilePreview
                   draft={draftForPreview}
-                  mediaAspectRatio={mediaAspectRatio}
                   onCaptionChange={handleCaptionChange}
-                  thumbnailDirection={thumbnailDirection}
                   brandName={brandName}
-                  onMediaActivate={() => setRailFocused(true)}
-                  activeSlideIndex={activeSlideIndex}
-                  onSelectSlide={setActiveSlideIndex}
-                  placement={placement}
-                  onAddSlideRequest={() => setRailFocused(true)}
+                  platform="instagram"
+                  mediaNode={mediaNode}
                 />
-              ) : null}
-
-              {!isHyperframeFormat && selectedPlatform === "linkedin" ? (
-                <LinkedInDesktopPreview
-                  draft={draftForPreview}
-                  mediaAspectRatio={mediaAspectRatio}
-                  onCaptionChange={handleCaptionChange}
-                  thumbnailDirection={thumbnailDirection}
-                  brandName={brandName}
-                  onMediaActivate={() => setRailFocused(true)}
-                  activeSlideIndex={activeSlideIndex}
-                  onSelectSlide={setActiveSlideIndex}
-                  placement={placement}
-                  onAddSlideRequest={() => setRailFocused(true)}
-                />
-              ) : null}
-
-              {!isHyperframeFormat &&
-              selectedPlatform !== "instagram" &&
-              selectedPlatform !== "facebook" &&
-              selectedPlatform !== "linkedin" ? (
-                <div className="flex min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-10">
-                  <p className="text-sm text-muted-foreground">
-                    Preview for {selectedPlatform} is coming soon.
-                  </p>
+                <div className="flex justify-center bg-background py-2">
+                  <div className="h-1 w-24 rounded-full bg-foreground/20" />
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : selectedPlatform === "facebook" ? (
+              <FacebookFeedPreview
+                draft={draftForPreview}
+                onCaptionChange={handleCaptionChange}
+                brandName={brandName}
+                platform="facebook"
+                mediaNode={mediaNode}
+              />
+            ) : selectedPlatform === "linkedin" ? (
+              <LinkedInDesktopPreview
+                draft={draftForPreview}
+                onCaptionChange={handleCaptionChange}
+                brandName={brandName}
+                platform="linkedin"
+                mediaNode={mediaNode}
+              />
+            ) : (
+              <div className="flex min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-10">
+                <p className="text-sm text-muted-foreground">
+                  Preview for {selectedPlatform} is coming soon.
+                </p>
+              </div>
+            )}
           </div>
         </ScrollArea>
 
@@ -1139,49 +1050,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   )
 }
 
-const CAPTION_LIMITS: Record<string, number> = {
-  instagram: 2200,
-  facebook: 63206,
-  linkedin: 3000,
-}
-
-function CaptionCharCount({ caption, platform }: { caption: string; platform: string }) {
-  const limit = CAPTION_LIMITS[platform] ?? 2200
-  const len = caption.length
-  return (
-    <div className="mt-1 flex justify-end">
-      <span
-        className={cn(
-          "text-[10px] tabular-nums",
-          len > limit
-            ? "text-destructive"
-            : len > limit * 0.9
-              ? "text-amber-600"
-              : "text-muted-foreground/50"
-        )}
-      >
-        {len.toLocaleString()} / {limit.toLocaleString()}
-      </span>
-    </div>
-  )
-}
-
-function InstagramMobilePreview({
-  draft,
-  mediaAspectRatio,
-  onCaptionChange,
-  thumbnailDirection,
-  brandName,
-  onMediaActivate,
-  activeSlideIndex = 0,
-  onSelectSlide,
-  placement,
-  onAddSlideRequest,
-}: SocialPreviewProps) {
-  const mediaAltText = React.useMemo(() => resolveDraftMediaAltText(draft), [
-    draft.mediaSuggestion,
-    draft.title,
-  ])
+function InstagramMobilePreview({ draft, onCaptionChange, brandName, platform, mediaNode }: SocialPreviewProps) {
   const displayName = brandName ?? "Your Brand"
   const initials = brandInitials(brandName)
 
@@ -1205,25 +1074,7 @@ function InstagramMobilePreview({
         </div>
       </div>
 
-      <InteractiveCarouselMediaArea
-        draft={draft}
-        alt={mediaAltText}
-        aspectRatio={mediaAspectRatio}
-        slotId={`preview-media-${draft.id}`}
-        onActivate={onMediaActivate ?? (() => {})}
-        activeSlideIndex={activeSlideIndex}
-        onSelectSlide={onSelectSlide ?? (() => {})}
-        placement={placement}
-        onAddSlideRequest={onAddSlideRequest}
-      />
-
-      {thumbnailDirection ? (
-        <div className="border-b border-border/70 px-3 py-2">
-          <p className="line-clamp-2 text-[11px] text-muted-foreground">
-            Thumbnail: {thumbnailDirection}
-          </p>
-        </div>
-      ) : null}
+      {mediaNode}
 
       {/* Engagement bar */}
       <div className="flex items-center justify-between border-b border-border/40 px-3 py-2">
@@ -1237,35 +1088,21 @@ function InstagramMobilePreview({
 
       <div className="px-3 pb-3 pt-2">
         <p className="mb-1 text-xs font-bold">{displayName}</p>
-        <InlinePreviewTextarea
+        <EditableCaption
           value={draft.captionPreview}
-          onChange={(event) => onCaptionChange(event.target.value)}
-          aria-label="Instagram caption"
-          className="min-h-[7rem] border-0 bg-transparent p-0 text-xs leading-relaxed focus-visible:ring-0"
-          placeholder="Write your caption..."
+          onChange={onCaptionChange}
+          platform={platform}
+          ariaLabel="Instagram caption"
+          placeholder="Write your caption…"
+          className="text-xs leading-relaxed"
+          editClassName="text-xs"
         />
-        <CaptionCharCount caption={draft.captionPreview} platform="instagram" />
       </div>
     </div>
   )
 }
 
-function FacebookFeedPreview({
-  draft,
-  mediaAspectRatio,
-  onCaptionChange,
-  thumbnailDirection,
-  brandName,
-  onMediaActivate,
-  activeSlideIndex = 0,
-  onSelectSlide,
-  placement,
-  onAddSlideRequest,
-}: SocialPreviewProps) {
-  const mediaAltText = React.useMemo(() => resolveDraftMediaAltText(draft), [
-    draft.mediaSuggestion,
-    draft.title,
-  ])
+function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, mediaNode }: SocialPreviewProps) {
   const displayName = brandName ?? "Your Brand"
 
   return (
@@ -1282,37 +1119,17 @@ function FacebookFeedPreview({
         </div>
       </div>
 
-      <div className="px-4 py-3 space-y-2">
-        <InlinePreviewTextarea
+      <div className="px-4 py-3">
+        <EditableCaption
           value={draft.captionPreview}
-          onChange={(event) => onCaptionChange(event.target.value)}
-          aria-label="Facebook post copy"
-          className="min-h-[7rem] border-0 bg-transparent p-0 text-sm leading-relaxed focus-visible:ring-0"
-          placeholder="Write your post copy..."
+          onChange={onCaptionChange}
+          platform={platform}
+          ariaLabel="Facebook post copy"
+          placeholder="Write your post copy…"
         />
-        <CaptionCharCount caption={draft.captionPreview} platform="facebook" />
       </div>
 
-      <InteractiveCarouselMediaArea
-        draft={draft}
-        alt={mediaAltText}
-        aspectRatio={mediaAspectRatio}
-        borderClass="border-y border-border/70"
-        slotId={`preview-media-fb-${draft.id}`}
-        onActivate={onMediaActivate ?? (() => {})}
-        activeSlideIndex={activeSlideIndex}
-        onSelectSlide={onSelectSlide ?? (() => {})}
-        placement={placement}
-        onAddSlideRequest={onAddSlideRequest}
-      />
-
-      {thumbnailDirection ? (
-        <div className="border-t border-border/70 px-4 py-2">
-          <p className="line-clamp-2 text-[11px] text-muted-foreground">
-            Thumbnail: {thumbnailDirection}
-          </p>
-        </div>
-      ) : null}
+      {mediaNode}
 
       {/* Engagement bar */}
       <div className="flex items-center gap-4 border-t border-border/40 px-4 py-2 text-[12px] font-medium text-muted-foreground/40 cursor-default">
@@ -1333,22 +1150,7 @@ function FacebookFeedPreview({
   )
 }
 
-function LinkedInDesktopPreview({
-  draft,
-  mediaAspectRatio,
-  onCaptionChange,
-  thumbnailDirection,
-  brandName,
-  onMediaActivate,
-  activeSlideIndex = 0,
-  onSelectSlide,
-  placement,
-  onAddSlideRequest,
-}: SocialPreviewProps) {
-  const mediaAltText = React.useMemo(() => resolveDraftMediaAltText(draft), [
-    draft.mediaSuggestion,
-    draft.title,
-  ])
+function LinkedInDesktopPreview({ draft, onCaptionChange, brandName, platform, mediaNode }: SocialPreviewProps) {
   const displayName = brandName ?? "Your Brand"
 
   return (
@@ -1366,36 +1168,16 @@ function LinkedInDesktopPreview({
       </div>
 
       <div className="px-4 py-3">
-        <InlinePreviewTextarea
+        <EditableCaption
           value={draft.captionPreview}
-          onChange={(event) => onCaptionChange(event.target.value)}
-          aria-label="LinkedIn post copy"
-          className="min-h-[7rem] border-0 bg-transparent p-0 text-sm leading-relaxed focus-visible:ring-0"
-          placeholder="Write your post copy..."
+          onChange={onCaptionChange}
+          platform={platform}
+          ariaLabel="LinkedIn post copy"
+          placeholder="Write your post copy…"
         />
-        <CaptionCharCount caption={draft.captionPreview} platform="linkedin" />
       </div>
 
-      <InteractiveCarouselMediaArea
-        draft={draft}
-        alt={mediaAltText}
-        aspectRatio={mediaAspectRatio}
-        borderClass="border-y border-border/70"
-        slotId={`preview-media-li-${draft.id}`}
-        onActivate={onMediaActivate ?? (() => {})}
-        activeSlideIndex={activeSlideIndex}
-        onSelectSlide={onSelectSlide ?? (() => {})}
-        placement={placement}
-        onAddSlideRequest={onAddSlideRequest}
-      />
-
-      {thumbnailDirection ? (
-        <div className="border-t border-border/70 px-4 py-2">
-          <p className="line-clamp-2 text-[11px] text-muted-foreground">
-            Thumbnail: {thumbnailDirection}
-          </p>
-        </div>
-      ) : null}
+      {mediaNode}
 
       {/* Engagement bar */}
       <div className="flex items-center gap-4 border-t border-border/40 px-4 py-2 text-[12px] font-medium text-muted-foreground/40 cursor-default">
