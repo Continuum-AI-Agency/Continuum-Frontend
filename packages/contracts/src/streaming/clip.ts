@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { clipPlanSchema } from "../media/clip";
+import { clipPlanSchema, clipScoreSchema } from "../media/clip";
 
 /**
  * NDJSON progress frames for `POST /api/clips/generate`. The backend job
@@ -35,6 +35,7 @@ export const clipGenerationFrameSchema = z.discriminatedUnion("type", [
       type: z.literal("clip_plan_ready"),
       plan: clipPlanSchema,
       sourceSignedUrl: z.string().min(1),
+      score: clipScoreSchema,
     })
     .strict(),
   z.object({ type: z.literal("section_started"), index: z.number().int().min(0) }).strict(),

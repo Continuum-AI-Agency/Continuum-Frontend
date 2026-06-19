@@ -6,10 +6,24 @@ export type WorkerClipInput = {
   muteAudio?: boolean;
 };
 
+export type SingleSourceWorkerRange = {
+  startSec: number;
+  endSec: number;
+  muteAudio?: boolean;
+};
+
 export type SpliceWorkerInbound =
   | {
       kind: 'start';
       clips: WorkerClipInput[];
+      videoBitrate?: number;
+      audioBitrate?: number;
+    }
+  | {
+      kind: 'start_single_source';
+      blob: Blob;
+      ranges: SingleSourceWorkerRange[];
+      maxShortEdgePx?: number;
       videoBitrate?: number;
       audioBitrate?: number;
     }

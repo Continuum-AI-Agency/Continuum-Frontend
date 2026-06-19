@@ -3,3 +3,4 @@ export * from "./insights";
 export * from "./awareness";
 export * from "./conversations";
 export * from "./creativeLeaderboard";
+export * from "./quick-create";

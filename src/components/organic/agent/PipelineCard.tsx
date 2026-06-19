@@ -17,21 +17,21 @@ import { AgentCard, MetaRow, PlatformTag, StatusLabel } from "./agentCardKit";
 import type { CheckpointState, PipelineCardState, PipelinePreview, PipelineStage, PipelineStageNode } from "./types";
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
-  strategist: "Strategy",
+  strategist: "Concept",
   concept: "Concept",
-  draft: "Draft",
-  blueprint: "Blueprint",
-  assets: "Assets",
-  quality: "Quality",
-  merge: "Merge",
+  draft: "Copy",
+  blueprint: "Preview",
+  assets: "Preview",
+  quality: "Fully fleshed out",
+  merge: "Fully fleshed out",
 };
 
 const STATUS: Record<
   PipelineCardState["status"],
   { label: string; tone: "running" | "done" | "failed" | "neutral" }
 > = {
-  running: { label: "Generating", tone: "running" },
-  completed: { label: "Drafts ready", tone: "done" },
+  running: { label: "Enriching", tone: "running" },
+  completed: { label: "Fully fleshed out", tone: "done" },
   failed: { label: "Failed", tone: "failed" },
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
@@ -114,11 +114,12 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
   );
 }
 
-// Three-step media checkpoint labels shown once text-ready is received.
+// Four experiential enrichment checkpoints shown once copy is received.
 const CHECKPOINT_STEPS = [
-  { key: "caption" as const, label: "Caption" },
-  { key: "creative" as const, label: "Creative direction" },
-  { key: "media" as const, label: "Media" },
+  { key: "concept" as const, label: "Concept" },
+  { key: "copy" as const, label: "Copy" },
+  { key: "preview" as const, label: "Preview" },
+  { key: "realized" as const, label: "Fully fleshed out" },
 ] as const;
 
 type CheckpointStepKey = typeof CHECKPOINT_STEPS[number]["key"];
@@ -127,12 +128,12 @@ function checkpointStepStatus(
   key: CheckpointStepKey,
   cp: CheckpointState,
 ): "done" | "active" | "awaiting" | "generating" | "ready" | "user_supplied" | "pending" {
-  if (key === "caption") return cp.textReady ? "done" : "active";
-  if (key === "creative") {
+  if (key === "concept") return cp.textReady ? "done" : "active";
+  if (key === "copy") return cp.textReady ? "done" : "active";
+  if (key === "preview") {
     if (!cp.textReady) return "pending";
     return cp.blueprintReady ? "done" : "active";
   }
-  // media step
   if (!cp.blueprintReady) return "pending";
   if (cp.awaitingMediaChoice) return "awaiting";
   if (cp.mediaStatus === "generating") return "generating";
@@ -165,7 +166,7 @@ function CheckpointStepNode({ stepKey, label, checkpoint }: {
     status === "awaiting"
       ? "Awaiting your choice"
       : status === "generating"
-        ? "Generating…"
+        ? "Fleshing out…"
         : status === "user_supplied"
           ? "Your creative"
           : status === "ready"

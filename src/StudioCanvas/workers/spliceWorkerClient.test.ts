@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { runSpliceInWorker } from './spliceWorkerClient';
+import { runSingleSourceSpliceInWorker, runSpliceInWorker } from './spliceWorkerClient';
 import type {
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
@@ -209,5 +209,75 @@ describe('runSpliceInWorker', () => {
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(factoryCalled).toBe(false);
+  });
+});
+
+describe('runSingleSourceSpliceInWorker', () => {
+  const sourceBlob = new Blob([new Uint8Array([9, 9, 9])], { type: 'video/mp4' });
+  const ranges = [
+    { startSec: 0, endSec: 12 },
+    { startSec: 14, endSec: 30 },
+  ];
+
+  it('rejects synchronously when no ranges are supplied', async () => {
+    await expect(runSingleSourceSpliceInWorker({ blob: sourceBlob, ranges: [] })).rejects.toThrow(/at least one range/i);
+  });
+
+  it('posts a start_single_source message with the blob, ranges, quality cap, and bitrates', async () => {
+    const worker = new FakeWorker();
+    const promise = runSingleSourceSpliceInWorker({
+      blob: sourceBlob,
+      ranges,
+      maxShortEdgePx: 720,
+      videoBitrate: 2_000_000,
+      audioBitrate: 96_000,
+      workerFactory: () => worker as unknown as Worker,
+    });
+
+    expect(worker.posted).toHaveLength(1);
+    const message = worker.posted[0];
+    expect(message.kind).toBe('start_single_source');
+    if (message.kind === 'start_single_source') {
+      expect(message.blob).toBe(sourceBlob);
+      expect(message.ranges).toHaveLength(2);
+      expect(message.maxShortEdgePx).toBe(720);
+      expect(message.videoBitrate).toBe(2_000_000);
+      expect(message.audioBitrate).toBe(96_000);
+    }
+
+    worker.emit({ kind: 'result', blob: fakeBlob, width: 720, height: 1280, durationSec: 27 });
+    const result = await promise;
+    expect(result.objectUrl).toMatch(/^blob:/);
+    expect(worker.terminated).toBe(true);
+    URL.revokeObjectURL(result.objectUrl);
+  });
+
+  it('rejects with the reason on a support message', async () => {
+    const worker = new FakeWorker();
+    const promise = runSingleSourceSpliceInWorker({
+      blob: sourceBlob,
+      ranges,
+      workerFactory: () => worker as unknown as Worker,
+    });
+    worker.emit({ kind: 'support', ok: false, reason: 'H.264 unsupported' });
+    await expect(promise).rejects.toThrow(/H\.264 unsupported/);
+  });
+
+  it('posts cancel and terminates when the abort signal fires', async () => {
+    const worker = new FakeWorker();
+    const controller = new AbortController();
+    const promise = runSingleSourceSpliceInWorker({
+      blob: sourceBlob,
+      ranges,
+      signal: controller.signal,
+      workerFactory: () => worker as unknown as Worker,
+    });
+
+    controller.abort();
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(worker.posted.find((m) => m.kind === 'cancel')).toBeDefined();
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(worker.terminated).toBe(true);
   });
 });

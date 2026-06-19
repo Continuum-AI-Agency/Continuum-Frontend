@@ -59,6 +59,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { TrendWorkbench } from "./TrendWorkbench"
+import { AiPostComposer } from "./AiPostComposer"
 import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
 import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge"
 import { getLocalStorageJSON } from "@/lib/storage"
@@ -152,6 +153,8 @@ export function OrganicCalendarWorkspaceClient({
     gridError,
     weekCache,
     setWeekCache,
+    acknowledgeDraftsElsewhere,
+    requestCalendarRefetch,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -178,6 +181,8 @@ export function OrganicCalendarWorkspaceClient({
       gridError: state.gridError,
       weekCache: state.weekCache,
       setWeekCache: state.setWeekCache,
+      acknowledgeDraftsElsewhere: state.acknowledgeDraftsElsewhere,
+      requestCalendarRefetch: state.requestCalendarRefetch,
     }))
   )
 
@@ -358,6 +363,26 @@ export function OrganicCalendarWorkspaceClient({
     previous.setDate(weekStart.getDate() - 7)
     handleWeekChange(previous)
   }, [handleWeekChange, weekStart])
+
+  const handleJumpToExternalDraft = React.useCallback(
+    (target: { draftId?: string | null; scheduledDate: string }, targetView: "month" | "list") => {
+      const date = new Date(`${target.scheduledDate.slice(0, 10)}T12:00:00`)
+      if (Number.isNaN(date.getTime())) return
+      handleWeekChange(date)
+      setMonthAnchorDate(date)
+      setViewMode(targetView)
+      if (target.draftId) setSelectedDraftId(target.draftId)
+      requestCalendarRefetch()
+      acknowledgeDraftsElsewhere()
+    },
+    [
+      acknowledgeDraftsElsewhere,
+      handleWeekChange,
+      requestCalendarRefetch,
+      setSelectedDraftId,
+      setViewMode,
+    ]
+  )
 
   const handleNextWeek = React.useCallback(() => {
     const next = new Date(weekStart)
@@ -558,6 +583,12 @@ export function OrganicCalendarWorkspaceClient({
     [activePlatforms, addDraft, calendarDays, handleSelect, platformAccountIds]
   )
 
+  // "Create with AI" composer (direction + tagged creatives + trends → durable job).
+  const [aiComposer, setAiComposer] = React.useState<{
+    platform: OrganicPlatformKey
+    scheduledAt: string
+  } | null>(null)
+
   const handleGoDraft = React.useCallback(
     (context?: {
       dayId?: string
@@ -567,7 +598,22 @@ export function OrganicCalendarWorkspaceClient({
       mode?: CreatePostMode
     }) => {
       const mode = context?.mode ?? "ai"
-      const status = context?.status ?? (mode === "manual" ? "draft" : "placeholder")
+      // AI mode opens the composer and tasks a durable single-post agent; manual
+      // mode seeds an editable draft from scratch.
+      if (mode === "ai") {
+        const platform =
+          (isSchedulablePlannerPlatform(context?.platform) && context?.platform) || "instagram"
+        const targetDay = context?.dayId
+          ? calendarDays.find((day) => day.id === context.dayId) ?? calendarDays[0] ?? null
+          : calendarDays[0] ?? null
+        const dayId = (targetDay?.id ?? context?.dayId ?? "").slice(0, 10)
+        const scheduledAt = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
+          ? `${dayId}T12:00:00.000Z`
+          : new Date().toISOString()
+        setAiComposer({ platform: platform as OrganicPlatformKey, scheduledAt })
+        return
+      }
+      const status = context?.status ?? "draft"
       const createdDraftId = createQuickDraft({
         dayId: context?.dayId,
         platform: context?.platform,
@@ -577,7 +623,7 @@ export function OrganicCalendarWorkspaceClient({
       })
       if (!createdDraftId) return
     },
-    [createQuickDraft]
+    [calendarDays, createQuickDraft]
   )
 
   const handleGenerateSelectedDrafts = React.useCallback(() => {
@@ -763,7 +809,7 @@ export function OrganicCalendarWorkspaceClient({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <DraftsElsewhereBadge />
+      <DraftsElsewhereBadge onJump={handleJumpToExternalDraft} />
       <CalendarDndContext
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -949,6 +995,19 @@ export function OrganicCalendarWorkspaceClient({
               onFetch={brandProfileId ? refreshTrends : undefined}
               isFetching={isFetchingTrends}
             />
+
+            {brandProfileId && aiComposer && (
+              <AiPostComposer
+                open
+                onOpenChange={(next) => {
+                  if (!next) setAiComposer(null)
+                }}
+                brandProfileId={brandProfileId}
+                platform={aiComposer.platform}
+                scheduledAt={aiComposer.scheduledAt}
+                trends={resolvedTrends}
+              />
+            )}
           </motion.section>
 
           <AnimatePresence initial={false}>

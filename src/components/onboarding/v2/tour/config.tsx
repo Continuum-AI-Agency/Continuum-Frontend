@@ -31,54 +31,21 @@ export const dashboardTour: Tour = {
   tour: TOUR_DASHBOARD,
   steps: [
     {
-      icon: "🏠",
-      title: "Your dashboard",
-      content: paragraph(
-        "This is home base — a live read on how your brand is performing across organic and paid, in one place."
-      ),
-      selector: "[data-tour-id='dashboard-overview']",
-      side: "bottom",
-      showControls: true,
-      showSkip: true,
-    },
-    {
-      icon: "📊",
-      title: "Organic metrics",
-      content: paragraph(
-        "Reach, engagement, and follower growth from your connected social accounts — updated automatically."
-      ),
-      selector: "[data-tour-id='dashboard-organic-metrics']",
-      side: "bottom",
-      showControls: true,
-      showSkip: true,
-    },
-    {
-      icon: "🔀",
-      title: "Pick an account",
-      content: paragraph(
-        "Switch the account selector to focus the metrics on any connected profile."
-      ),
-      selector: "[data-tour-id='dashboard-account-selector']",
-      side: "bottom",
-      showControls: true,
-      showSkip: true,
-    },
-    {
       icon: "✨",
-      title: "Trends to act on",
+      title: "Your top content & trends",
       content: paragraph(
-        "We surface trends relevant to your brand. Click any trend to spin up a campaign that inherits your brand DNA."
+        "Your best-performing posts and the trend signals worth acting on, ranked. Sort any column, right-click a row to act on it, or click to expand the insight."
       ),
-      selector: "[data-tour-id='brand-trends']",
-      side: "left",
+      selector: "[data-tour-id='dashboard-top-content']",
+      side: "bottom",
       showControls: true,
       showSkip: true,
     },
     {
       icon: "💰",
-      title: "Switch to Paid",
+      title: "Now your paid side",
       content: paragraph(
-        "Flip to the Paid view to see ad performance and automated optimizations alongside your organic numbers."
+        "Flip to Paid for your top-performing ads — the same ranked, sortable tables."
       ),
       selector: "[data-tour-id='dashboard-paid-toggle']",
       side: "bottom-right",
@@ -87,23 +54,12 @@ export const dashboardTour: Tour = {
     },
     {
       icon: "📈",
-      title: "Paid metrics",
+      title: "Top ads by ROAS",
       content: paragraph(
-        "Spend, ROAS, and efficiency across your ad accounts — the same at-a-glance read, for paid."
+        "Your top campaigns and ad sets, ranked. Click any row for the spend, CPC, and conversion detail."
       ),
-      selector: "[data-tour-id='dashboard-paid-metrics']",
-      side: "top",
-      showControls: true,
-      showSkip: true,
-    },
-    {
-      icon: "🪙",
-      title: "Budget pacing",
-      content: paragraph(
-        "Budget Pace shows spend against target so you catch under- or over-pacing before it costs you."
-      ),
-      selector: "[data-tour-id='dashboard-budget-pacing']",
-      side: "top",
+      selector: "[data-tour-id='dashboard-top-ads']",
+      side: "bottom",
       showControls: true,
       showSkip: true,
     },

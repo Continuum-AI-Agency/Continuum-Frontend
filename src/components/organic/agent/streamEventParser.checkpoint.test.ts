@@ -105,12 +105,24 @@ describe("parseOrganicStreamEvent — checkpoint frames", () => {
   it("parses draft.text_ready as a jobUpdate", () => {
     const parsed = parseOrganicStreamEvent({
       type: "draft.text_ready",
-      data: { jobId: "job-6", brandId: "brand-1", draftId: "draft-placeholder-1" },
+      data: {
+        jobId: "job-6",
+        brandId: "brand-1",
+        draftId: "draft-placeholder-1",
+        placement: {
+          placementId: "item-1",
+          schedule: { dayId: "2026-06-19", scheduledAt: "2026-06-19T16:00:00Z" },
+          platform: { name: "facebook", accountId: "fb-1" },
+        },
+      },
     })
     expect(parsed.kind).toBe("jobUpdate")
     if (parsed.kind === "jobUpdate") {
       expect(parsed.job.jobId).toBe("job-6")
       expect(parsed.job.brandId).toBe("brand-1")
+      expect(parsed.job.status).toBe("running")
+      expect(parsed.job.draftId).toBe("draft-placeholder-1")
+      expect(parsed.job.placement?.platform.name).toBe("facebook")
     }
   })
 })

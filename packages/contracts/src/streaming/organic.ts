@@ -9,6 +9,22 @@ const jobEventDataSchema = z.object({
 const uiCardDataSchema = z.record(z.string(), z.unknown());
 
 /**
+ * Canonical user-selectable post formats. HyperFrame is intentionally absent: it
+ * is a video-production METHOD whose rendered MP4 publishes as a reel, not a post
+ * type the user picks.
+ */
+export const organicPostFormatEnum = z.enum(["reel", "post", "carousel", "story"]);
+export type OrganicPostFormat = z.infer<typeof organicPostFormatEnum>;
+
+/**
+ * Plans/drafts persisted before HyperFrame was demoted stored "hyperframe" as a
+ * format. Normalize it to "reel" on read so legacy rows keep parsing. Used as a
+ * `z.preprocess` so the visible union no longer advertises hyperframe.
+ */
+export const coerceLegacyHyperframeFormat = (value: unknown): unknown =>
+  value === "hyperframe" ? "reel" : value;
+
+/**
  * Canonical ordered content-creation pipeline timeline. The backend content
  * runner's raw stages collapse onto these steps; the Frontend renders one
  * timeline node per member, in this order. `blueprint` is the Stage-2 creative
@@ -44,7 +60,7 @@ export const creativeBriefSchema = z.object({
   // platform_strategist); when absent it defaults. Kept optional so older peers
   // and plan items without it keep parsing under a rolling deploy.
   funnelStage: z.enum(["top", "middle", "bottom", "retention"]).optional(),
-  formatSuggestion: z.enum(["reel", "post", "carousel", "story", "hyperframe"]),
+  formatSuggestion: z.preprocess(coerceLegacyHyperframeFormat, organicPostFormatEnum),
   productionNotes: z.array(z.string()),
 });
 export type CreativeBrief = z.infer<typeof creativeBriefSchema>;
@@ -67,7 +83,7 @@ export const planItemSchema = z.object({
   kind: z.enum(["create_post", "create_draft", "edit_draft", "publish_draft"]),
   platform: z.enum(["instagram", "facebook", "linkedin", "tiktok", "youtube"]),
   scheduledAt: z.string().describe("ISO datetime"),
-  format: z.enum(["reel", "post", "carousel", "story", "hyperframe"]).nullable(),
+  format: z.preprocess(coerceLegacyHyperframeFormat, organicPostFormatEnum.nullable()),
   // trend_id is a uuid FK column. The planner sometimes emits a slug derived
   // from the trend title; coerce anything that isn't a real uuid to null.
   trendId: z.string().uuid().nullable().catch(null),
@@ -326,9 +342,21 @@ const draftTextReadySchema = z.object({
 // and persisted it onto the draft (blueprintReady=true, mediaStatus still
 // pending). Carries the draftId so the FE can surface the storyboard / preview
 // frames mid-run, before the gated media realization (Stage 3).
+// Transient preview frame for a single 512px storyboard image. Carries a signed
+// URL for instant in-stream display only — the durable, re-signable copy is
+// persisted on the draft as `mediaSuggestion.storyboard` (organic-pipeline.ts).
+const draftStoryboardPreviewFrameSchema = z.object({
+  role: z.string(),
+  signedUrl: z.string(),
+  format: z.string().nullable().optional(),
+}).loose();
+
 const draftBlueprintReadySchema = z.object({
   type: z.literal("draft.blueprint_ready"),
-  data: jobEventDataSchema,
+  data: jobEventDataSchema.extend({
+    draftId: z.string().min(1).optional(),
+    previews: z.array(draftStoryboardPreviewFrameSchema).optional(),
+  }),
 });
 
 const pipelineStageSchema = z.object({

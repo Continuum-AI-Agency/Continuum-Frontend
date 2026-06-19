@@ -38,6 +38,7 @@ import {
 import { useToast } from "@/components/ui/ToastProvider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { OnboardingState } from "@/lib/onboarding/state";
+import { resolveSafeBrandName } from "@/lib/onboarding/brandName";
 import { useBrandProfileRevealCache } from "@/lib/onboarding/revealCache";
 import { timing, trackOnboardingEvent } from "@/lib/onboarding/telemetry";
 import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
@@ -271,10 +272,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     if (!userId) return;
 
     const scrape = await scrapePromise;
-    const brandName =
-      scrape?.title ??
-      initialState.brand.name ??
-      new URL(/^https?:\/\//.test(url) ? url : `https://${url}`).hostname;
+    const brandName = resolveSafeBrandName({
+      scrapeTitle: scrape?.title,
+      fallbackName: initialState.brand.name,
+      url,
+    });
 
     void (async () => {
       const previewTimer = timing();

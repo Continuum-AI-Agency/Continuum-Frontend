@@ -1,9 +1,8 @@
 import type { ResolvedClip } from './resolveClipSources';
-import { drawLetterboxed } from './letterbox';
+import { appendRange, loadMediabunny, throwIfAborted } from './appendRange';
 
 const TARGET_SAMPLE_RATE = 48_000;
 const TARGET_CHANNEL_COUNT = 2;
-const SILENCE_CHUNK_SECONDS = 0.5;
 
 export type SpliceProgress = {
   progress: number;
@@ -30,16 +29,6 @@ export type SpliceResult = {
 
 const DEFAULT_VIDEO_BITRATE = 6_000_000;
 const DEFAULT_AUDIO_BITRATE = 192_000;
-
-async function loadMediabunny() {
-  return import('mediabunny');
-}
-
-function throwIfAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) {
-    throw new DOMException('Splice aborted', 'AbortError');
-  }
-}
 
 export async function spliceClips(options: SpliceOptions): Promise<SpliceResult> {
   const { clips, signal } = options;
@@ -127,65 +116,29 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
     for (let i = 0; i < inputs.length; i += 1) {
       const input = inputs[i];
       const range = trimRanges[i];
-      const clip = clips[i];
-      const muteAudio = Boolean((clip as ResolvedClip & { muteAudio?: boolean }).muteAudio);
-      const videoTrack = await input.getPrimaryVideoTrack();
-      if (!videoTrack) {
-        throw new Error(`Clip ${i + 1}: no video track found`);
-      }
+      const muteAudio = Boolean((clips[i] as ResolvedClip & { muteAudio?: boolean }).muteAudio);
 
-      const sourceWidth = await videoTrack.getCodedWidth();
-      const sourceHeight = await videoTrack.getCodedHeight();
-      const canvasSink = new mb.CanvasSink(videoTrack);
-      const frames = canvasSink.canvases(range.startSec, range.endSec);
-
-      let clipProcessedSec = 0;
-
-      for await (const wrapped of frames) {
-        throwIfAborted(signal);
-        const localTimestamp = wrapped.timestamp - range.startSec;
-        if (localTimestamp < 0) continue;
-        const outputTimestamp = cumulativeOffset + localTimestamp;
-        const duration = Math.max(wrapped.duration, 1 / 240);
-        drawLetterboxed(ctx, wrapped.canvas, sourceWidth, sourceHeight, targetWidth, targetHeight);
-        await videoSource.add(outputTimestamp, duration);
-        clipProcessedSec = Math.max(clipProcessedSec, localTimestamp + duration);
-        const progress = totalDuration > 0 ? (processedDuration + clipProcessedSec) / totalDuration : 0;
-        options.onProgress?.({
-          progress: Math.min(0.99, progress),
-          processedClips: i,
-          totalClips: clips.length,
-        });
-      }
-
-      const audioTrack = muteAudio ? null : await input.getPrimaryAudioTrack();
-      if (audioTrack) {
-        const sampleSink = new mb.AudioSampleSink(audioTrack);
-        for await (const sample of sampleSink.samples(range.startSec, range.endSec)) {
-          throwIfAborted(signal);
-          const localTimestamp = Math.max(0, sample.timestamp - range.startSec);
-          sample.setTimestamp(cumulativeOffset + localTimestamp);
-          await audioSource.add(sample);
-          sample.close();
-        }
-      } else {
-        let silenceOffset = 0;
-        while (silenceOffset < range.durationSec) {
-          throwIfAborted(signal);
-          const chunkDuration = Math.min(SILENCE_CHUNK_SECONDS, range.durationSec - silenceOffset);
-          const frames = Math.max(1, Math.round(chunkDuration * TARGET_SAMPLE_RATE));
-          const silenceSample = new mb.AudioSample({
-            data: new Float32Array(frames * TARGET_CHANNEL_COUNT),
-            format: 'f32-planar',
-            sampleRate: TARGET_SAMPLE_RATE,
-            numberOfChannels: TARGET_CHANNEL_COUNT,
-            timestamp: cumulativeOffset + silenceOffset,
+      await appendRange({
+        mb,
+        input,
+        range,
+        ctx,
+        videoSource,
+        audioSource,
+        targetWidth,
+        targetHeight,
+        cumulativeOffset,
+        muteAudio,
+        signal,
+        onRangeProgress: (processedSecInRange) => {
+          const progress = totalDuration > 0 ? (processedDuration + processedSecInRange) / totalDuration : 0;
+          options.onProgress?.({
+            progress: Math.min(0.99, progress),
+            processedClips: i,
+            totalClips: clips.length,
           });
-          await audioSource.add(silenceSample);
-          silenceSample.close();
-          silenceOffset += chunkDuration;
-        }
-      }
+        },
+      });
 
       processedDuration += range.durationSec;
       cumulativeOffset += range.durationSec;

@@ -45,16 +45,21 @@ export function ConceptPlan({
     pipeline.find((p) => p.planItemId === itemId);
 
   const visibleItems = items.filter((item) => !dismissedIds.has(item.itemId));
+  const pendingVisibleItems = visibleItems.filter((item) => resolveStatus(item) === "pending");
   const anyActioned = items.some((item) => resolveStatus(item) !== "pending");
   const allActioned = items.length > 0 && items.every((item) => resolveStatus(item) !== "pending");
-  const footerLocked = dismissed || generatingAll || allActioned;
+  const footerLocked = dismissed || generatingAll || pendingVisibleItems.length === 0 || allActioned;
 
   const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
   function handleGenerateAll() {
     if (footerLocked) return;
     setGeneratingAll(true);
-    onGenerateAllAction();
+    if (dismissedIds.size === 0 && !anyActioned) {
+      onGenerateAllAction();
+      return;
+    }
+    pendingVisibleItems.forEach((item) => onGenerateItemAction(item.itemId));
   }
 
   function handleDismissAll() {
@@ -104,7 +109,7 @@ export function ConceptPlan({
             Dismiss all
           </AgentButton>
           <AgentButton variant="primary" loading={generatingAll} disabled={footerLocked} onClick={handleGenerateAll}>
-            Generate all {visibleItems.length}
+            Create copy for {pendingVisibleItems.length}
           </AgentButton>
         </div>
       )}

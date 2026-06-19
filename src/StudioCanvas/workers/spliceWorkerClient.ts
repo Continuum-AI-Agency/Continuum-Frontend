@@ -1,4 +1,5 @@
 import type {
+  SingleSourceWorkerRange,
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
   WorkerClipInput,
@@ -19,12 +20,29 @@ export type RunSpliceInWorkerOptions = {
   workerFactory?: () => Worker;
 };
 
+export type RunSingleSourceSpliceInWorkerOptions = {
+  blob: Blob;
+  ranges: SingleSourceWorkerRange[];
+  maxShortEdgePx?: number;
+  videoBitrate?: number;
+  audioBitrate?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: WorkerSpliceProgress) => void;
+  workerFactory?: () => Worker;
+};
+
 export type WorkerSpliceResult = {
   blob: Blob;
   objectUrl: string;
   width: number;
   height: number;
   durationSec: number;
+};
+
+type WorkerJobOptions = {
+  signal?: AbortSignal;
+  onProgress?: (progress: WorkerSpliceProgress) => void;
+  workerFactory?: () => Worker;
 };
 
 const TERMINATE_GRACE_MS = 100;
@@ -36,14 +54,14 @@ function createDefaultWorker(): Worker {
   });
 }
 
-export function runSpliceInWorker(
-  options: RunSpliceInWorkerOptions,
+// Shared worker lifecycle: spawn, relay progress, resolve on result, reject on
+// support/error/crash/abort. The start message (a `start` or `start_single_source`
+// frame) is the only difference between the two public entry points.
+function runWorkerJob(
+  startMessage: Extract<SpliceWorkerInbound, { kind: 'start' | 'start_single_source' }>,
+  options: WorkerJobOptions,
 ): Promise<WorkerSpliceResult> {
-  const { clips, videoBitrate, audioBitrate, signal, onProgress, workerFactory } = options;
-
-  if (clips.length < 2) {
-    return Promise.reject(new Error('Splice requires at least two clips'));
-  }
+  const { signal, onProgress, workerFactory } = options;
 
   return new Promise<WorkerSpliceResult>((resolve, reject) => {
     if (signal?.aborted) {
@@ -146,11 +164,29 @@ export function runSpliceInWorker(
     worker.addEventListener('messageerror', onMessageError as EventListener);
     signal?.addEventListener('abort', onAbort, { once: true });
 
-    worker.postMessage({
-      kind: 'start',
-      clips,
-      videoBitrate,
-      audioBitrate,
-    } satisfies SpliceWorkerInbound);
+    worker.postMessage(startMessage satisfies SpliceWorkerInbound);
   });
+}
+
+export function runSpliceInWorker(
+  options: RunSpliceInWorkerOptions,
+): Promise<WorkerSpliceResult> {
+  const { clips, videoBitrate, audioBitrate } = options;
+  if (clips.length < 2) {
+    return Promise.reject(new Error('Splice requires at least two clips'));
+  }
+  return runWorkerJob({ kind: 'start', clips, videoBitrate, audioBitrate }, options);
+}
+
+export function runSingleSourceSpliceInWorker(
+  options: RunSingleSourceSpliceInWorkerOptions,
+): Promise<WorkerSpliceResult> {
+  const { blob, ranges, maxShortEdgePx, videoBitrate, audioBitrate } = options;
+  if (ranges.length < 1) {
+    return Promise.reject(new Error('Single-source splice requires at least one range'));
+  }
+  return runWorkerJob(
+    { kind: 'start_single_source', blob, ranges, maxShortEdgePx, videoBitrate, audioBitrate },
+    options,
+  );
 }

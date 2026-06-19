@@ -20,7 +20,8 @@ const PLATFORM_OPTIONS: { value: OrganicPlatformKey; label: string }[] = [
   { value: "linkedin", label: "LinkedIn" },
 ]
 
-const FORMAT_OPTIONS = ["Post", "Carousel", "Reel", "HyperFrame"] as const
+// HyperFrame is a video-production method, not a selectable post format.
+const FORMAT_OPTIONS = ["Post", "Carousel", "Reel"] as const
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const
 
 const PLATFORM_DOT: Record<string, string> = {

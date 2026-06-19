@@ -6,6 +6,7 @@ import {
   organicHyperframeToneSchema,
   organicPipelinePlatformSchema,
 } from "./organic-pipeline";
+import { coerceLegacyHyperframeFormat } from "./organic";
 
 /**
  * Bulk content generation (Milestone 1) — canonical contracts.
@@ -27,8 +28,10 @@ export const bulkContentFormatEnum = z.enum([
   "post",
   "carousel",
   "story",
-  "hyperframe",
 ]);
+
+/** Format field that coerces legacy "hyperframe" → "reel" (HyperFrame is a method, not a format). */
+const bulkContentFormatField = z.preprocess(coerceLegacyHyperframeFormat, bulkContentFormatEnum);
 
 export const bulkContentObjectiveEnum = z.enum([
   "follow",
@@ -57,10 +60,11 @@ export const bulkReelShotSchema = z
   .strict();
 
 /**
- * Brief for a HyperFrames (HTML video composition) placement. Carried on the
- * placement spec for `format: 'hyperframe'` (parallel to reels' `shots[]`), it
- * rides into the runV2 PlacementSeed `metadata` and is synthesized into the
- * backend `HyperframeBrief` that drives `produceHyperframesComposition`.
+ * Brief for a HyperFrames (HTML video composition) placement. HyperFrame is a
+ * production METHOD, not a post format: a placement carrying this brief is a
+ * `format: 'reel'` whose media is produced via HyperFrames. It rides into the
+ * runV2 PlacementSeed `metadata` and is synthesized into the backend
+ * `HyperframeBrief` that drives `produceHyperframesComposition`.
  */
 export const bulkHyperframeBriefSchema = z
   .object({
@@ -82,7 +86,7 @@ export const bulkPillarSchema = z
 /** Target proportion of the batch that should be a given format. */
 export const bulkFormatMixSchema = z
   .object({
-    format: bulkContentFormatEnum,
+    format: bulkContentFormatField,
     weight: z.number().min(0).max(1),
   })
   .strict();
@@ -156,7 +160,7 @@ export const bulkPlacementSpecSchema = z
   .object({
     specId: z.string().min(1),
     platform: organicPipelinePlatformSchema,
-    format: bulkContentFormatEnum,
+    format: bulkContentFormatField,
     pillar: z.string().min(1),
     angle: z.string().min(1),
     hook: z.string().min(1),
@@ -170,7 +174,8 @@ export const bulkPlacementSpecSchema = z
     scheduledAt: z.string().nullable().optional(),
     // Multi-shot storyboard (reels). Null/absent for non-reel formats.
     shots: z.array(bulkReelShotSchema).nullable().optional(),
-    // HyperFrames composition brief. Null/absent for non-hyperframe formats.
+    // HyperFrames composition brief (production method on a reel placement).
+    // Null/absent when the reel is not produced via HyperFrames.
     hyperframe: bulkHyperframeBriefSchema.nullable().optional(),
   })
   .strict();

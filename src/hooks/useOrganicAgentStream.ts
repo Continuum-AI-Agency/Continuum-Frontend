@@ -13,13 +13,21 @@ import {
 const RECONNECT_BACKOFF_MS = 750;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+type OrganicAgentStreamOptions = {
+  onRunStarted?: (runId: string) => void;
+  onCalendarDraftSignal?: (event: Record<string, unknown>) => void;
+};
+
+type StreamMode = "chat" | "control";
+
 export function useOrganicAgentStream(
   dispatch: React.Dispatch<PanelAction>,
-  opts?: { onRunStarted?: (runId: string) => void }
+  opts?: OrganicAgentStreamOptions
 ) {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const controlAbortRefs = useRef<Set<AbortController>>(new Set());
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -29,15 +37,28 @@ export function useOrganicAgentStream(
     setIsStreaming(false);
   }, []);
 
-  useEffect(() => () => cancel(), [cancel]);
-
-  const start = useCallback(
-    async (input: AgentChatInput): Promise<{ error?: string }> => {
+  useEffect(
+    () => () => {
       cancel();
-      setIsStreaming(true);
+      for (const controller of controlAbortRefs.current) controller.abort();
+      controlAbortRefs.current.clear();
+    },
+    [cancel]
+  );
+
+  const runStream = useCallback(
+    async (input: AgentChatInput, mode: StreamMode): Promise<{ error?: string }> => {
+      if (mode === "chat") {
+        cancel();
+        setIsStreaming(true);
+      }
 
       const controller = new AbortController();
-      abortRef.current = controller;
+      if (mode === "chat") {
+        abortRef.current = controller;
+      } else {
+        controlAbortRefs.current.add(controller);
+      }
 
       let chatRunId: string | null = null;
       let lastSeq = -1;
@@ -63,12 +84,15 @@ export function useOrganicAgentStream(
 
         switch (parsed.kind) {
           case "delta":
+            if (mode === "control") break;
             dispatch({ type: "STREAM_DELTA", delta: parsed.delta });
             break;
           case "toolCall":
+            if (mode === "control") break;
             dispatch({ type: "STREAM_TOOL_CALL", event: parsed.event });
             break;
           case "toolResult": {
+            if (mode === "control") break;
             dispatch({
               type: "STREAM_TOOL_RESULT",
               toolCallId: parsed.toolCallId,
@@ -79,14 +103,15 @@ export function useOrganicAgentStream(
             break;
           }
           case "error":
-            dispatch({ type: "STREAM_ERROR", error: parsed.message });
+            if (mode === "chat") dispatch({ type: "STREAM_ERROR", error: parsed.message });
             terminal = true;
             break;
           case "complete":
-            dispatch({ type: "STREAM_COMPLETE" });
+            if (mode === "chat") dispatch({ type: "STREAM_COMPLETE" });
             terminal = true;
             break;
           case "uiCard":
+            if (mode === "control") break;
             dispatch({ type: "STREAM_UI_CARD", card: parsed.card });
             break;
           case "postCard":
@@ -97,6 +122,13 @@ export function useOrganicAgentStream(
             break;
           case "jobUpdate":
             dispatch({ type: "JOB_UPDATE", job: parsed.job });
+            if (
+              type === "draft.text_ready" ||
+              type === "draft.ready" ||
+              type === "job.completed"
+            ) {
+              opts?.onCalendarDraftSignal?.(event);
+            }
             break;
           case "draftBlueprint":
             dispatch({ type: "DRAFT_BLUEPRINT", draftId: parsed.draftId, previews: parsed.previews });
@@ -111,6 +143,7 @@ export function useOrganicAgentStream(
             dispatch({ type: "PLAN_STATUS", event: parsed.event });
             break;
           case "toolApproval":
+            if (mode === "control") break;
             dispatch({ type: "TOOL_APPROVAL_ADD", approval: parsed.approval });
             break;
           case "bulkRun":
@@ -120,6 +153,7 @@ export function useOrganicAgentStream(
             });
             break;
           case "mediaSearchResults":
+            if (mode === "control") break;
             dispatch({ type: "STREAM_MEDIA_SEARCH_RESULTS", frame: parsed.frame });
             break;
           case "runStarted":
@@ -196,7 +230,7 @@ export function useOrganicAgentStream(
         }
 
         const initialReader = response.body.getReader();
-        readerRef.current = initialReader;
+        if (mode === "chat") readerRef.current = initialReader;
         await consumeReader(initialReader);
 
         // Stream closed. If we never saw a terminal frame and we have a
@@ -235,18 +269,22 @@ export function useOrganicAgentStream(
           }
 
           const resumeReader = resumeResponse.body.getReader();
-          readerRef.current = resumeReader;
+          if (mode === "chat") readerRef.current = resumeReader;
           await consumeReader(resumeReader);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Stream failed";
-        if (!controller.signal.aborted) {
+        if (mode === "chat" && !controller.signal.aborted) {
           dispatch({ type: "STREAM_ERROR", error: message });
         }
         return { error: message };
       } finally {
-        dispatch({ type: "STREAM_COMPLETE" });
-        setIsStreaming(false);
+        if (mode === "chat") {
+          dispatch({ type: "STREAM_COMPLETE" });
+          setIsStreaming(false);
+        } else {
+          controlAbortRefs.current.delete(controller);
+        }
       }
 
       return {};
@@ -257,5 +295,8 @@ export function useOrganicAgentStream(
     [dispatch, cancel]
   );
 
-  return { start, cancel, isStreaming };
+  const start = useCallback((input: AgentChatInput) => runStream(input, "chat"), [runStream]);
+  const startControl = useCallback((input: AgentChatInput) => runStream(input, "control"), [runStream]);
+
+  return { start, startControl, cancel, isStreaming };
 }

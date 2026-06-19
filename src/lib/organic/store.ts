@@ -100,6 +100,11 @@ export type GenerationEntry = {
 
 export type GenerationEntryInput = Partial<GenerationEntry> & { jobId: string };
 
+export type DraftsElsewhereTarget = {
+  draftId?: string | null;
+  scheduledDate: string;
+};
+
 interface CalendarState {
   days: OrganicCalendarDay[];
   ghosts: Record<string, number>;
@@ -137,6 +142,7 @@ interface CalendarState {
   // Count of drafts that landed (via Realtime) outside the currently-loaded
   // calendar window, so the planner can surface a "new draft elsewhere" nudge.
   draftsElsewhere: number;
+  draftsElsewhereTarget: DraftsElsewhereTarget | null;
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -186,7 +192,7 @@ interface CalendarState {
   setViewMode: (mode: "week" | "month" | "list") => void;
   setShowPlanned: (value: boolean) => void;
   requestCalendarRefetch: () => void;
-  noteDraftElsewhere: () => void;
+  noteDraftElsewhere: (target?: DraftsElsewhereTarget | null) => void;
   acknowledgeDraftsElsewhere: () => void;
 
   addBacklogDraft: (draft: OrganicCalendarDraft) => void;
@@ -276,7 +282,8 @@ export const useCalendarStore = create<CalendarState>()(
       viewMode: "month",
       showPlanned: true,
       calendarRefetchNonce: 0,
-  draftsElsewhere: 0,
+      draftsElsewhere: 0,
+      draftsElsewhereTarget: null,
       eventHistory: [],
       backlogDrafts: [],
       weekCache: {},
@@ -519,9 +526,12 @@ export const useCalendarStore = create<CalendarState>()(
       setShowPlanned: (value) => set({ showPlanned: value }),
       requestCalendarRefetch: () =>
         set((state) => ({ calendarRefetchNonce: state.calendarRefetchNonce + 1 })),
-      noteDraftElsewhere: () =>
-        set((state) => ({ draftsElsewhere: state.draftsElsewhere + 1 })),
-      acknowledgeDraftsElsewhere: () => set({ draftsElsewhere: 0 }),
+      noteDraftElsewhere: (target) =>
+        set((state) => ({
+          draftsElsewhere: state.draftsElsewhere + 1,
+          draftsElsewhereTarget: target ?? state.draftsElsewhereTarget,
+        })),
+      acknowledgeDraftsElsewhere: () => set({ draftsElsewhere: 0, draftsElsewhereTarget: null }),
 
       addBacklogDraft: (draft) =>
         set((state) => ({
@@ -615,6 +625,8 @@ export const useCalendarStore = create<CalendarState>()(
           gridError: null,
           gridJobId: null,
           scheduledEvents: {},
+          draftsElsewhere: 0,
+          draftsElsewhereTarget: null,
           eventHistory: [],
           backlogDrafts: [],
           weekCache: {},

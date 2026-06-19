@@ -14,6 +14,7 @@ type WorkflowLibraryQueryResult = {
 };
 
 type WorkflowLibraryQuery = PromiseLike<WorkflowLibraryQueryResult> & {
+  eq: (column: string, value: string) => WorkflowLibraryQuery;
   order: (column: string, options?: { ascending?: boolean }) => WorkflowLibraryQuery;
 };
 
@@ -27,6 +28,7 @@ async function fetchGlobalWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
   const { data, error } = await brandSchema
     .from("workflow_library")
     .select("id, name, description, content, tags, created_at, updated_at")
+    .eq("visibility", "global")
     .order("name", { ascending: true });
 
   if (error) throw new Error(error.message ?? "Failed to load workflow library");

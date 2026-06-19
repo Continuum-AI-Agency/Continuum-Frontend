@@ -98,6 +98,41 @@ function matchesMentionQuery(query: string, values: Array<string | null | undefi
   return values.some((value) => value?.toLowerCase().includes(normalized));
 }
 
+function readDraftSignalPayload(event: Record<string, unknown>): Record<string, unknown> {
+  return typeof event.data === "object" && event.data !== null && !Array.isArray(event.data)
+    ? (event.data as Record<string, unknown>)
+    : event;
+}
+
+function readDraftSignalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function noteOffWindowDraftSignal(event: Record<string, unknown>) {
+  const payload = readDraftSignalPayload(event);
+  const placement = typeof payload.placement === "object" && payload.placement !== null
+    ? (payload.placement as Record<string, unknown>)
+    : null;
+  const schedule = typeof placement?.schedule === "object" && placement.schedule !== null
+    ? (placement.schedule as Record<string, unknown>)
+    : null;
+  const scheduledDate =
+    readDraftSignalString(schedule?.dayId) ??
+    readDraftSignalString(schedule?.scheduledAt)?.slice(0, 10) ??
+    readDraftSignalString(payload.scheduledAt)?.slice(0, 10);
+  if (!scheduledDate) return;
+
+  const days = useCalendarStore.getState().days;
+  if (days.length === 0) return;
+  const dayIds = days.map((day) => day.id).filter(Boolean).sort();
+  if (scheduledDate < dayIds[0] || scheduledDate > dayIds[dayIds.length - 1]) {
+    useCalendarStore.getState().noteDraftElsewhere({
+      draftId: readDraftSignalString(payload.draftId),
+      scheduledDate,
+    });
+  }
+}
+
 function createOrganicSuggestion(
   reference: AgentMentionReference,
   options: {
@@ -161,7 +196,18 @@ function canvasNodeToMentionSuggestion(node: StudioNode): AgentMentionSuggestion
 export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { attachRun } = useCalendarRunStream();
-  const { start, isStreaming } = useOrganicAgentStream(dispatch, { onRunStarted: attachRun });
+  const requestCalendarRefetch = useCalendarStore((s) => s.requestCalendarRefetch);
+  const handleCalendarDraftSignal = useCallback(
+    (event: Record<string, unknown>) => {
+      requestCalendarRefetch();
+      noteOffWindowDraftSignal(event);
+    },
+    [requestCalendarRefetch]
+  );
+  const { start, startControl, isStreaming } = useOrganicAgentStream(dispatch, {
+    onRunStarted: attachRun,
+    onCalendarDraftSignal: handleCalendarDraftSignal,
+  });
   const { user } = useSession();
   const addDraft = useCalendarStore((s) => s.addDraft);
   const upsertGeneration = useCalendarStore((s) => s.upsertGeneration);
@@ -263,7 +309,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         error: job.error?.message ?? pipe?.error?.message ?? null,
       });
     }
-    // Pipeline cards without a matching job (e.g. concept "Generate this post").
+    // Pipeline cards without a matching job (for example, concept-card copy creation).
     for (const pipe of Object.values(state.pipeline)) {
       if (state.jobs[pipe.jobId]) continue;
       upsertGeneration({
@@ -374,9 +420,14 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   const handlePlanDecision = useCallback(
     (decision: PlanApprovalDecision) => {
       const currentSessionId = state.sessionId ?? activeSessionId;
-      if (!currentSessionId || isStreaming) return;
+      if (!currentSessionId) return;
 
-      dispatch({ type: "BEGIN_STREAMING" });
+      if (decision.decision === "approve" && decision.itemId) {
+        dispatch({
+          type: "PLAN_STATUS",
+          event: { planId: decision.planId, itemId: decision.itemId, status: "executing" },
+        });
+      }
 
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const now = new Date();
@@ -388,11 +439,11 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       const decisionContent =
         decision.decision === "approve"
           ? decision.itemId
-            ? "Generate this post"
-            : "Generate all posts"
+            ? "Create copy draft"
+            : "Create copy drafts"
           : "Dismiss plan";
 
-      start({
+      startControl({
         brandId,
         sessionId: currentSessionId,
         messages: [
@@ -410,7 +461,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         .then(() => debouncedRefreshSessions())
         .catch(() => {});
     },
-    [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, debouncedRefreshSessions]
+    [state.sessionId, brandId, platformAccountIds, startControl, activeSessionId, debouncedRefreshSessions]
   );
 
   const handleToolApproval = useCallback(

@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  eventSignalSchema,
+  questionSignalSchema,
+  signalPlatformRecommendationSchema,
+  trendSignalSchema,
+} from "@continuum/contracts";
 
 export const BRAND_TRENDS_SCHEMA = "brand_trends" as const;
 
@@ -31,10 +37,9 @@ export const brandInsightsPlatformSchema = z.enum([
   "reddit_basic",
 ]);
 
-export const brandInsightsPlatformRecommendationSchema = z.object({
-  platform: z.string(),
-  reason: z.string(),
-});
+// Canonical trend-signal shapes live in @continuum/contracts; re-exported under
+// the existing names so the brand-insights panels' import sites stay stable.
+export const brandInsightsPlatformRecommendationSchema = signalPlatformRecommendationSchema;
 
 export const brandInsightsCitationSchema = z.object({
   id: z.string(),
@@ -48,63 +53,11 @@ export const brandInsightsCitationSchema = z.object({
   rationale: z.string().optional(),
 });
 
-export const brandInsightsTrendSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  relevanceToBrand: z.string().optional(),
-  platforms: z.array(z.string()).optional(),
-  source: z.string().optional(),
-  sourceUrl: z.string().optional(),
-  confidence: z.number().min(0).max(1).optional(),
-  analysisTags: z.array(z.string()).optional(),
-  sourceSignalCount: z.number().int().nonnegative().optional(),
-  signalWindowStart: z.string().optional(),
-  signalWindowEnd: z.string().optional(),
-  recommendedPlatforms: z.array(z.string()).optional(),
-  platformRecommendations: z.array(brandInsightsPlatformRecommendationSchema).optional(),
-  isSelected: z.boolean().default(false),
-  timesUsed: z.number().int().nonnegative().default(0),
-});
+export const brandInsightsTrendSchema = trendSignalSchema;
 
-export const brandInsightsEventSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  date: z.string().optional(),
-  description: z.string().optional(),
-  opportunity: z.string().optional(),
-  source: z.string().optional(),
-  sourceUrl: z.string().optional(),
-  relevanceToBrand: z.string().optional(),
-  confidence: z.number().min(0).max(1).optional(),
-  analysisTags: z.array(z.string()).optional(),
-  sourceSignalCount: z.number().int().nonnegative().optional(),
-  signalWindowStart: z.string().optional(),
-  signalWindowEnd: z.string().optional(),
-  recommendedPlatforms: z.array(z.string()).optional(),
-  platformRecommendations: z.array(brandInsightsPlatformRecommendationSchema).optional(),
-  platforms: z.array(z.string()).optional(),
-  isSelected: z.boolean().default(false),
-  timesUsed: z.number().int().nonnegative().default(0),
-});
+export const brandInsightsEventSchema = eventSignalSchema;
 
-export const brandInsightsQuestionSchema = z.object({
-  id: z.string(),
-  question: z.string(),
-  socialPlatform: z.string().optional(),
-  socialPlatforms: z.array(z.string()).optional(),
-  contentTypeSuggestion: z.string().optional(),
-  whyRelevant: z.string().optional(),
-  niche: z.string().optional(),
-  confidence: z.number().min(0).max(1).optional(),
-  analysisTags: z.array(z.string()).optional(),
-  sourceSignalCount: z.number().int().nonnegative().optional(),
-  recommendedPlatforms: z.array(z.string()).optional(),
-  platformRecommendations: z.array(brandInsightsPlatformRecommendationSchema).optional(),
-  platformDistribution: z.record(z.string(), z.number()).optional(),
-  isSelected: z.boolean().default(false),
-  timesUsed: z.number().int().nonnegative().default(0),
-});
+export const brandInsightsQuestionSchema = questionSignalSchema;
 
 export const brandInsightsNicheQuestionsSchema = z.union([
   z.object({

@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Copy, Check, ImageOff, Loader2 } from "lucide-react";
+import { Copy, Check, ImageOff, Loader2, Scissors } from "lucide-react";
 import type { MediaAsset } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { SOURCE_LABEL } from "@/lib/media/filters";
 import { MediaBoundingBoxes } from "./MediaBoundingBoxes";
+import { useGenerateClips } from "./hooks/useGenerateClips";
+import { useClipQualityPreference } from "./hooks/useClipQualityPreference";
+import { ClipProgressStrip } from "./ClipProgressStrip";
+import { ClipQualityToggle } from "./ClipQualityToggle";
 
 type Props = {
   asset: MediaAsset;
@@ -207,13 +211,35 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
   );
 }
 
+function GenerateClipsButton({ onGenerate, disabled }: { onGenerate: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onGenerate();
+      }}
+      disabled={disabled}
+      className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
+      title="Generate clips from this video"
+    >
+      <Scissors className="size-3" />
+      Clips
+    </button>
+  );
+}
+
 export function MediaCard({ asset, showBoundingBoxes = false }: Props) {
   const reduceMotion = useReducedMotion();
+  const { generate, isGenerating, progress } = useGenerateClips();
+  const { quality, setQuality } = useClipQualityPreference();
   const formattedDate = new Date(asset.createdAt).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+  const canGenerateClips = asset.kind === "video" && asset.status === "ready";
+  const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
 
   return (
     <HoverCard openDelay={150} closeDelay={100}>
@@ -246,7 +272,17 @@ export function MediaCard({ asset, showBoundingBoxes = false }: Props) {
               </div>
             )}
 
-            <p className="text-[11px] tabular-nums text-muted-foreground/60">{formattedDate}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] tabular-nums text-muted-foreground/60">{formattedDate}</p>
+              {canGenerateClips && !activeProgress && (
+                <div className="flex items-center gap-1.5">
+                  <ClipQualityToggle value={quality} onChange={setQuality} disabled={isGenerating} />
+                  <GenerateClipsButton onGenerate={() => void generate(asset, quality)} disabled={isGenerating} />
+                </div>
+              )}
+            </div>
+
+            {activeProgress && <ClipProgressStrip progress={activeProgress} />}
           </div>
         </motion.div>
       </HoverCardTrigger>

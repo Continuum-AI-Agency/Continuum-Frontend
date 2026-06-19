@@ -24,7 +24,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
  */
 export function noteIfDraftLandedOffWindow(payload: {
   eventType?: string
-  new?: { scheduled_date?: string | null; status?: string | null } | null
+  new?: { id?: string | null; scheduled_date?: string | null; status?: string | null } | null
 }): void {
   try {
     if (payload.eventType !== "INSERT") return
@@ -37,7 +37,10 @@ export function noteIfDraftLandedOffWindow(payload: {
     const dayIds = days.map((day) => day.id).filter(Boolean).sort()
     const date = scheduledDate.slice(0, 10)
     if (date < dayIds[0] || date > dayIds[dayIds.length - 1]) {
-      useCalendarStore.getState().noteDraftElsewhere()
+      useCalendarStore.getState().noteDraftElsewhere({
+        draftId: typeof row.id === "string" ? row.id : null,
+        scheduledDate: date,
+      })
     }
   } catch {
     // Off-window detection is a nicety; never let it disrupt the refetch nudge.

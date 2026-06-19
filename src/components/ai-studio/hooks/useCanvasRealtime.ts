@@ -260,6 +260,33 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     }, "catchup");
   }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
 
+  // Presence heartbeat: record which room this user is actively viewing so the
+  // MCP co-pilot can target the live canvas (resolveCanvasRoom). Best-effort.
+  useEffect(() => {
+    if (!brandProfileId || !roomId) return;
+    let cancelled = false;
+
+    const beat = async () => {
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user?.id;
+      if (!userId || cancelled) return;
+      await supabase
+        .schema("brand_profiles" as any)
+        .from("canvas_active_view" as any)
+        .upsert(
+          { user_id: userId, brand_profile_id: brandProfileId, room_id: roomId, last_seen_at: new Date().toISOString() },
+          { onConflict: "user_id,brand_profile_id" }
+        );
+    };
+
+    void beat();
+    const interval = setInterval(() => void beat(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [brandProfileId, roomId, supabase]);
+
   useEffect(() => {
     syncLatestCanvasSessionRef.current = syncLatestCanvasSession;
     return () => {

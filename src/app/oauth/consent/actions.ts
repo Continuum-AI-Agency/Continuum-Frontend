@@ -3,12 +3,15 @@
 import { getServerSession } from "@/lib/supabase/server";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { getApiUrl } from "@/lib/api/config";
+import { resolveConfirmBrandId } from "./brandSelection";
 
 export type ConfirmMcpRegistrationInput = {
   authorizationId: string;
   clientId: string;
   clientName?: string | null;
   scope?: string | null;
+  /** User-selected brand to bind the connector to; validated server-side. */
+  brandId?: string | null;
 };
 
 export type ConfirmMcpRegistrationResult = {
@@ -16,6 +19,31 @@ export type ConfirmMcpRegistrationResult = {
   brandId: string | null;
   error?: string;
 };
+
+export type ConsentBrandOption = { id: string; name: string };
+
+export type ListConsentBrandsResult = {
+  brands: ConsentBrandOption[];
+  activeBrandId: string | null;
+};
+
+/**
+ * List the brands the authorizing user can bind a connector to, plus their
+ * current active brand (the picker default), for the OAuth consent screen.
+ */
+export async function listConsentBrandsAction(): Promise<ListConsentBrandsResult> {
+  try {
+    const context = await getActiveBrandContext();
+    return {
+      brands: context.brandSummaries
+        .filter((brand) => !brand.isPending)
+        .map((brand) => ({ id: brand.id, name: brand.name })),
+      activeBrandId: context.activeBrandId,
+    };
+  } catch {
+    return { brands: [], activeBrandId: null };
+  }
+}
 
 /**
  * Records, app-side, that the user authorized an MCP connector at OAuth approval
@@ -39,9 +67,15 @@ export async function confirmMcpRegistrationAction(
   let brandId: string | null = null;
   try {
     const context = await getActiveBrandContext();
-    brandId = context.activeBrandId;
+    brandId = resolveConfirmBrandId(
+      input.brandId,
+      context.brandSummaries.map((brand) => brand.id),
+      context.activeBrandId
+    );
   } catch {
-    brandId = null;
+    // The backend confirm endpoint re-verifies brand access, so a requested
+    // brand is safe to forward even if the context lookup failed.
+    brandId = input.brandId ?? null;
   }
 
   try {

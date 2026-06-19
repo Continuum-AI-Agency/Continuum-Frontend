@@ -143,6 +143,28 @@ export const registerClipErrorSchema = z
   })
   .strict();
 
+/** Ask the `clip-asset` edge fn to mint a service-role signed upload URL so the
+ *  browser can PUT the extracted audio (`target:"audio"`) or a stitched clip MP4
+ *  (`target:"clip"`) straight to storage — no base64 through nginx/Vercel. */
+export const clipSignUploadRequestSchema = z
+  .object({
+    brandId: z.string().min(1),
+    sourceAssetId: z.string().min(1),
+    target: z.enum(["audio", "clip"]),
+    sectionIndex: z.number().int().min(0).optional(),
+    fileName: z.string().min(1).optional(),
+  })
+  .strict();
+
+/** What a sign request returns: feed `path` + `token` to `uploadToSignedUrl`. */
+export const clipUploadTicketSchema = z
+  .object({
+    bucket: z.string().min(1),
+    path: z.string().min(1),
+    token: z.string().min(1),
+  })
+  .strict();
+
 export type ClipWord = z.infer<typeof clipWordSchema>;
 export type TimestampedTranscript = z.infer<typeof timestampedTranscriptSchema>;
 export type ClipKeepRange = z.infer<typeof clipKeepRangeSchema>;
@@ -154,3 +176,5 @@ export type ClipGenerateRequest = z.infer<typeof clipGenerateRequestSchema>;
 export type RegisterClipRequest = z.infer<typeof registerClipRequestSchema>;
 export type RegisterClipResponse = z.infer<typeof registerClipResponseSchema>;
 export type RegisterClipError = z.infer<typeof registerClipErrorSchema>;
+export type ClipSignUploadRequest = z.infer<typeof clipSignUploadRequestSchema>;
+export type ClipUploadTicket = z.infer<typeof clipUploadTicketSchema>;

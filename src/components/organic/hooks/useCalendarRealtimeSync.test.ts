@@ -18,8 +18,12 @@ describe("noteIfDraftLandedOffWindow", () => {
   });
 
   it("flags a brand-new draft scheduled outside the loaded week", () => {
-    noteIfDraftLandedOffWindow({ eventType: "INSERT", new: { scheduled_date: "2026-07-01T12:00:00Z" } });
+    noteIfDraftLandedOffWindow({ eventType: "INSERT", new: { id: "draft-1", scheduled_date: "2026-07-01T12:00:00Z" } });
     expect(useCalendarStore.getState().draftsElsewhere).toBe(1);
+    expect(useCalendarStore.getState().draftsElsewhereTarget).toEqual({
+      draftId: "draft-1",
+      scheduledDate: "2026-07-01",
+    });
   });
 
   it("ignores a draft scheduled inside the loaded window", () => {

@@ -172,6 +172,7 @@ const workflowBaseSchema = z.object({
   nodes: z.array(z.unknown()).optional().default([]),
   edges: z.array(z.unknown()).optional().default([]),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  source: z.enum(["brand", "global"]).optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema.optional(),
 });
@@ -219,6 +220,7 @@ export function mapAiStudioWorkflowRow(row: AiStudioWorkflowRow): AiStudioWorkfl
     nodes: row.nodes ?? [],
     edges: row.edges ?? [],
     metadata: row.metadata ?? undefined,
+    source: row.metadata?.workflow_library ? "global" : "brand",
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? undefined,
   };

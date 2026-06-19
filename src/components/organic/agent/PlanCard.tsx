@@ -24,8 +24,8 @@ const STATUS_TONE: Record<PlanItemStatus, "neutral" | "running" | "done" | "fail
 
 const STATUS_LABEL: Record<PlanItemStatus, string> = {
   pending: "Pending",
-  executing: "Generating",
-  completed: "Ready",
+  executing: "Copy in progress",
+  completed: "Copy ready",
   failed: "Failed",
   cancelled: "Cancelled",
 };

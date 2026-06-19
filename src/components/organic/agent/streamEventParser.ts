@@ -273,9 +273,11 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
         message: readNonEmptyString(payload.message) ?? undefined,
       };
     case "draft.ready":
+    case "draft.text_ready":
       return {
         jobId,
         brandId,
+        status: "running" as const,
         draftId: readNonEmptyString(payload.draftId) ?? undefined,
         placement: payload.placement as CalendarPlacement | undefined,
       };

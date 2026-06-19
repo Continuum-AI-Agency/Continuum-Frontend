@@ -4,7 +4,7 @@ import * as React from "react"
 import Image from "next/image"
 import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon } from "@radix-ui/react-icons"
 
-import { CheckCircle2, Circle, Loader2, Send } from "lucide-react"
+import { CheckCircle2, Circle, Hash, Loader2, Send, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDraft } from "./types"
@@ -29,16 +29,18 @@ import { HyperFramePlayer } from "./HyperFramePlayer"
 import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
 import { useOpenDraftInAiStudio } from "./AiStudioHandoffContext"
 import { signMediaAsset, signOrganicMediaAsset } from "@/lib/organic/hyperframeSign"
-import { PreviewMediaDropZone, UseOwnCreativeCta } from "./PreviewMediaDropZone"
+import { PreviewMediaDropZone } from "./PreviewMediaDropZone"
 import { CarouselSlideStrip } from "./CarouselSlideStrip"
 import {
   useDraftMediaPlacement,
   type SlotTarget,
 } from "@/components/organic/hooks/useDraftMediaPlacement"
 import type { MediaAsset } from "@continuum/contracts"
+import { uploadDraftCreatives } from "@/lib/creative-assets/uploadDraftCreative"
 import { useGenerateDraftMedia } from "@/components/organic/hooks/useGenerateDraftMedia"
 import { evaluateDraftReadiness } from "@/lib/organic/draftReadiness"
 import { EditableCaption, InlinePreviewTextarea } from "./EditableCaption"
+import { flattenHashtags } from "@/lib/organic/hashtags"
 import { PostMetaChips } from "./PostMetaChips"
 import { PostCommandMenu } from "./PostCommandMenu"
 import { MediaSelectPopover } from "./MediaSelectPopover"
@@ -57,6 +59,9 @@ type SocialPreviewProps = {
   platform: string
   // The media zone, pre-wired with its MediaSelectPopover by the parent.
   mediaNode: React.ReactNode
+  // Hover-revealed edit affordances — open the existing inline editors.
+  onEditCreativeDirection?: () => void
+  onEditHashtags?: () => void
 }
 
 function hasText(value: unknown): value is string {
@@ -216,6 +221,9 @@ function InteractiveCarouselMediaArea({
   slotId,
   onActivate,
   onNativeDrop,
+  onSelectLibrary,
+  onFilesChosen,
+  isUploading,
   activeSlideIndex,
   onSelectSlide,
   placement,
@@ -228,6 +236,9 @@ function InteractiveCarouselMediaArea({
   slotId: string
   onActivate: () => void
   onNativeDrop?: (assetId: string) => void
+  onSelectLibrary?: () => void
+  onFilesChosen?: (files: File[]) => void
+  isUploading?: boolean
   activeSlideIndex: number
   onSelectSlide: (i: number) => void
   placement?: ReturnType<typeof useDraftMediaPlacement>
@@ -259,11 +270,16 @@ function InteractiveCarouselMediaArea({
     prevAssetsLength.current = total
   }, [total])
 
-  const dropState = successFlash
-    ? "success"
-    : showCta
-      ? "fallback"
-      : "idle"
+  // The blank-state split (library / upload) is the dropzone's "fallback" overlay.
+  // When a storyboard preview is present we show that instead (rendered as
+  // children below), so suppress the split there to avoid stacking both.
+  const dropState = isUploading
+    ? "placing"
+    : successFlash
+      ? "success"
+      : showCta && !showStoryboard
+        ? "fallback"
+        : "idle"
 
   const activeSlide = slides[activeSlideIndex] ?? slides[0]
 
@@ -275,6 +291,8 @@ function InteractiveCarouselMediaArea({
         slotId={slotId}
         onNativeDrop={onNativeDrop}
         onActivate={onActivate}
+        onSelectLibrary={onSelectLibrary}
+        onFilesChosen={onFilesChosen}
         aspectRatio={aspectRatio}
         className={cn("w-full", borderClass)}
         error={placement?.error}
@@ -337,19 +355,16 @@ function InteractiveCarouselMediaArea({
           </>
         )}
 
-        {showCta &&
-          (showStoryboard ? (
-            <button
-              type="button"
-              onClick={onActivate}
-              aria-label="Blueprint ready — open the library to use your own creative"
-              className="flex w-full flex-col items-center transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <StoryboardPreview frames={storyboardFrames} alt={alt} />
-            </button>
-          ) : (
-            <UseOwnCreativeCta onActivate={onActivate} format={draft.format} />
-          ))}
+        {showStoryboard && (
+          <button
+            type="button"
+            onClick={onActivate}
+            aria-label="Blueprint ready — open the library to use your own creative"
+            className="flex w-full flex-col items-center transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <StoryboardPreview frames={storyboardFrames} alt={alt} />
+          </button>
+        )}
       </PreviewMediaDropZone>
 
       {/* Carousel slide strip — editing surface (not the preview dots) */}
@@ -409,10 +424,11 @@ function LifecyclePill({ status }: { status: OrganicCalendarDraft["status"] }) {
   )
 }
 
-function toPublishFormat(format: string): "Post" | "Carousel" | "Reel" | "HyperFrame" {
+function toPublishFormat(format: string): "Post" | "Carousel" | "Reel" {
   const f = format.toLowerCase()
-  if (f === "hyperframe") return "HyperFrame"
-  if (f === "reel" || f === "video") return "Reel"
+  // Legacy 'hyperframe' drafts display as Reel — HyperFrames is a production
+  // method whose rendered MP4 publishes as a reel, not a selectable post type.
+  if (f === "hyperframe" || f === "reel" || f === "video") return "Reel"
   if (f === "carousel") return "Carousel"
   return "Post"
 }
@@ -655,6 +671,52 @@ function HashtagTiers({
   )
 }
 
+/**
+ * Hover-revealed toolbar on the post preview. Each button opens the existing
+ * inline editor panel (creative direction / hashtags) — so the editors are
+ * reachable on mouseover instead of only through the ⋯ command menu.
+ */
+function PreviewHoverActions({
+  onEditCreativeDirection,
+  onEditHashtags,
+}: {
+  onEditCreativeDirection?: () => void
+  onEditHashtags?: () => void
+}) {
+  if (!onEditCreativeDirection && !onEditHashtags) return null
+  const buttonClass =
+    "flex items-center gap-1 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+  return (
+    <div className="pointer-events-none absolute right-2 top-2 z-30 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+      {onEditCreativeDirection && (
+        <button type="button" onClick={onEditCreativeDirection} aria-label="Edit creative direction" className={buttonClass}>
+          <Sparkles className="h-3 w-3" />
+          Direction
+        </button>
+      )}
+      {onEditHashtags && (
+        <button type="button" onClick={onEditHashtags} aria-label="Edit hashtags" className={buttonClass}>
+          <Hash className="h-3 w-3" />
+          Hashtags
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Flattened, #-prefixed hashtag list shown under the caption — as on a real post. */
+function HashtagDisplayBlock({ hashtags }: { hashtags: OrganicCalendarDraft["hashtags"] }) {
+  const tags = flattenHashtags(hashtags)
+  if (tags.length === 0) return null
+  return (
+    <p className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5 text-xs leading-relaxed text-primary/80">
+      {tags.map((tag) => (
+        <span key={tag}>{tag}</span>
+      ))}
+    </p>
+  )
+}
+
 export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprove }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts)
@@ -672,6 +734,9 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
   // Active carousel slide index (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0)
+
+  // Drives the dropzone "placing" shimmer while disk uploads run.
+  const [isUploading, setIsUploading] = React.useState(false)
 
   // Contextual surfaces — nothing is always-on; each reveals on demand.
   const [mediaSelectOpen, setMediaSelectOpen] = React.useState(false)
@@ -733,6 +798,23 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
     [isCarouselFormat, placement],
   )
 
+  // Upload-from-computer: register each dropped/selected file into the library,
+  // mint a signed URL, then route through the same attach path the library
+  // picker uses (multi-file ⇒ carousel slides).
+  const handleUploadFiles = React.useCallback(
+    async (files: File[]) => {
+      if (!brandProfileId || files.length === 0) return
+      setIsUploading(true)
+      try {
+        const assets = await uploadDraftCreatives({ files, brandId: brandProfileId })
+        if (assets.length > 0) handleAttachAssets(assets)
+      } finally {
+        setIsUploading(false)
+      }
+    },
+    [brandProfileId, handleAttachAssets],
+  )
+
   const handleGenerateMedia = React.useCallback(() => {
     // Requires a persisted backend draft; the realize stream keys updates off feId.
     if (!brandProfileId || !draft.backendDraftId) return
@@ -772,6 +854,9 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             aspectRatio={mediaAspectRatio}
             slotId={`preview-media-${draft.id}`}
             onActivate={() => setMediaSelectOpen(true)}
+            onSelectLibrary={() => setMediaSelectOpen(true)}
+            onFilesChosen={handleUploadFiles}
+            isUploading={isUploading}
             activeSlideIndex={activeSlideIndex}
             onSelectSlide={setActiveSlideIndex}
             placement={placement}
@@ -912,6 +997,8 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
                   brandName={brandName}
                   platform="instagram"
                   mediaNode={mediaNode}
+                  onEditCreativeDirection={() => setCreativeOpen(true)}
+                  onEditHashtags={() => setHashtagsOpen(true)}
                 />
                 <div className="flex justify-center bg-background py-2">
                   <div className="h-1 w-24 rounded-full bg-foreground/20" />
@@ -924,6 +1011,8 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
                 brandName={brandName}
                 platform="facebook"
                 mediaNode={mediaNode}
+                onEditCreativeDirection={() => setCreativeOpen(true)}
+                onEditHashtags={() => setHashtagsOpen(true)}
               />
             ) : selectedPlatform === "linkedin" ? (
               <LinkedInDesktopPreview
@@ -932,6 +1021,8 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
                 brandName={brandName}
                 platform="linkedin"
                 mediaNode={mediaNode}
+                onEditCreativeDirection={() => setCreativeOpen(true)}
+                onEditHashtags={() => setHashtagsOpen(true)}
               />
             ) : (
               <div className="flex min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-10">
@@ -1050,12 +1141,13 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   )
 }
 
-function InstagramMobilePreview({ draft, onCaptionChange, brandName, platform, mediaNode }: SocialPreviewProps) {
+function InstagramMobilePreview({ draft, onCaptionChange, brandName, platform, mediaNode, onEditCreativeDirection, onEditHashtags }: SocialPreviewProps) {
   const displayName = brandName ?? "Your Brand"
   const initials = brandInitials(brandName)
 
   return (
-    <div className="w-full overflow-hidden bg-card text-foreground">
+    <div className="group/preview relative w-full overflow-hidden bg-card text-foreground">
+      <PreviewHoverActions onEditCreativeDirection={onEditCreativeDirection} onEditHashtags={onEditHashtags} />
       <div className="flex items-center p-3 border-b border-border/70">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary/70 via-accent/70 to-secondary/70 p-[2px] flex items-center justify-center text-[10px] font-bold text-foreground">
@@ -1097,16 +1189,18 @@ function InstagramMobilePreview({ draft, onCaptionChange, brandName, platform, m
           className="text-xs leading-relaxed"
           editClassName="text-xs"
         />
+        <HashtagDisplayBlock hashtags={draft.hashtags} />
       </div>
     </div>
   )
 }
 
-function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, mediaNode }: SocialPreviewProps) {
+function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, mediaNode, onEditCreativeDirection, onEditHashtags }: SocialPreviewProps) {
   const displayName = brandName ?? "Your Brand"
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+    <div className="group/preview relative w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+      <PreviewHoverActions onEditCreativeDirection={onEditCreativeDirection} onEditHashtags={onEditHashtags} />
       <div className="p-3 flex items-center border-b border-border/70">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/30 bg-primary/15 font-bold text-primary">
@@ -1127,6 +1221,7 @@ function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, medi
           ariaLabel="Facebook post copy"
           placeholder="Write your post copy…"
         />
+        <HashtagDisplayBlock hashtags={draft.hashtags} />
       </div>
 
       {mediaNode}
@@ -1150,11 +1245,12 @@ function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, medi
   )
 }
 
-function LinkedInDesktopPreview({ draft, onCaptionChange, brandName, platform, mediaNode }: SocialPreviewProps) {
+function LinkedInDesktopPreview({ draft, onCaptionChange, brandName, platform, mediaNode, onEditCreativeDirection, onEditHashtags }: SocialPreviewProps) {
   const displayName = brandName ?? "Your Brand"
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+    <div className="group/preview relative w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+      <PreviewHoverActions onEditCreativeDirection={onEditCreativeDirection} onEditHashtags={onEditHashtags} />
       <div className="p-3 flex items-center justify-between border-b border-border/70">
         <div className="flex items-center gap-2">
           <div className="flex h-11 w-11 items-center justify-center rounded border border-primary/30 bg-primary/15 text-lg font-bold text-primary">
@@ -1175,6 +1271,7 @@ function LinkedInDesktopPreview({ draft, onCaptionChange, brandName, platform, m
           ariaLabel="LinkedIn post copy"
           placeholder="Write your post copy…"
         />
+        <HashtagDisplayBlock hashtags={draft.hashtags} />
       </div>
 
       {mediaNode}

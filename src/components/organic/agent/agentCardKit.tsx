@@ -178,7 +178,7 @@ export function AgentButton({ variant = "primary", loading, className, children,
       {loading ? (
         <>
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {variant === "primary" && <span>Queued…</span>}
+          {variant === "primary" && <span>Starting…</span>}
         </>
       ) : children}
     </button>

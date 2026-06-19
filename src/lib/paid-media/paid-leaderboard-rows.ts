@@ -4,7 +4,14 @@ import type {
   PaidRankingScope,
 } from "@continuum/contracts";
 import type { PersistedCampaignInsight } from "@/lib/paid-media/insight-history-client";
-import type { LeaderboardRow } from "@/components/dashboard/briefing/InsightLeaderboard";
+
+export type PaidLeaderboardRow = {
+  id: string;
+  name: string;
+  subLabel?: string;
+  insightLine?: string;
+  metricValue: string;
+};
 
 // Only the fields the leaderboard join needs from a persisted paid insight, so
 // this stays a pure, testable mapping with no dependency on the full insight row.
@@ -62,7 +69,7 @@ export function buildPaidLeaderboardRows(params: {
   entities: PaidRankedEntity[];
   insights: LeaderboardInsight[];
   scope: PaidRankingScope;
-}): LeaderboardRow[] {
+}): PaidLeaderboardRow[] {
   const byCampaignId = new Map<string, LeaderboardInsight>();
   const byCampaignName = new Map<string, LeaderboardInsight>();
   for (const insight of params.insights) {

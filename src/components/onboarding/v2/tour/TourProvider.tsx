@@ -41,11 +41,12 @@ function paidMediaTabForStep(step: number): PaidMediaTourTab {
   return "dashboard";
 }
 
-// Step 4 pre-switches to the paid view so steps 5-6 find paid widgets already
-// mounted when nextstepjs queries. The toggle button (step 4 target) is in the
-// header and visible on both views, so the switch is transparent to the user.
+// Dashboard: 0 top content & trends (organic), 1 switch-to-paid toggle, 2 top
+// ads (paid). The switch happens at the toggle step (1) — the toggle lives in
+// the header and is visible on both views, so it is transparent — giving the
+// paid tables a step to mount before step 2 queries.
 function dashboardViewForStep(step: number): DashboardTourView {
-  return step >= 4 ? "paid" : "organic";
+  return step >= 1 ? "paid" : "organic";
 }
 
 export function TourProvider({ children }: { children: React.ReactNode }) {

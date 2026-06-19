@@ -17,8 +17,8 @@ const STATUS_TONE: Record<PlanItemStatus, "neutral" | "running" | "done" | "fail
 
 const STATUS_LABEL: Record<PlanItemStatus, string> = {
   pending: "Concept",
-  executing: "Generating",
-  completed: "Ready",
+  executing: "Copy in progress",
+  completed: "Copy ready",
   failed: "Failed",
   cancelled: "Cancelled",
 };
@@ -64,6 +64,20 @@ export function ConceptCard({
   const isFailed = status === "failed" || pipeline?.status === "failed";
   const pct = Math.max(5, Math.min(100, pipeline?.pct ?? 10));
   const draftId = pipeline?.draftId ?? concept.draftId ?? null;
+  const hasTextDraft = Boolean(draftId && (pipeline?.checkpoint?.textReady || isDone));
+  const mediaStatus = pipeline?.checkpoint?.mediaStatus;
+  const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
+  const statusLabel =
+    mediaStatus === "ready" || mediaStatus === "user_supplied"
+      ? "Fully fleshed out"
+      : mediaStatus === "generating"
+        ? "Fleshing out"
+        : hasPreviewReady
+          ? "Preview ready"
+          : hasTextDraft
+            ? "Copy ready"
+            : STATUS_LABEL[status];
+  const statusTone = hasTextDraft ? "done" : STATUS_TONE[status];
 
   return (
     <AgentCard className="mt-0 flex flex-col overflow-hidden p-0">
@@ -113,7 +127,7 @@ export function ConceptCard({
             items={[concept.format ?? undefined, formatScheduledAt(concept.scheduledAt)]}
             className="text-[10.5px]"
           />
-          <StatusLabel tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusLabel>
+          <StatusLabel tone={statusTone}>{statusLabel}</StatusLabel>
         </div>
         {concept.trendTitle && (
           <p className="text-[10px] text-muted-foreground/60">↑ {concept.trendTitle}</p>
@@ -130,7 +144,7 @@ export function ConceptCard({
 
       {/* ── Action row ──────────────────────────────────────── */}
       <div className="flex items-stretch border-t border-border/40">
-        {isDone && draftId && onViewDraft ? (
+        {hasTextDraft && draftId && onViewDraft ? (
           <>
             <button
               onClick={() => onViewDraft(draftId, "calendar")}
@@ -151,7 +165,7 @@ export function ConceptCard({
         ) : isGenerating || (dispatched && !isFailed) ? (
           <div className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[10.5px] text-muted-foreground/50">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {isGenerating ? "Generating…" : "Queued…"}
+            {isGenerating ? "Writing copy…" : "Queued for copy…"}
           </div>
         ) : (
           <>
@@ -169,6 +183,8 @@ export function ConceptCard({
             </button>
             <div className="w-px self-stretch bg-border/40" />
             <button
+              aria-label={isFailed ? "Retry copy draft" : "Create copy draft"}
+              title={isFailed ? "Retry copy draft" : "Create copy draft"}
               disabled={locked || isGenerating}
               onClick={() => {
                 setDispatched(true);

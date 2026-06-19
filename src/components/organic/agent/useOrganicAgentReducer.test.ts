@@ -221,6 +221,66 @@ describe("PIPELINE_CARD", () => {
     expect(card.stages.find((s) => s.stage === "assets")?.status).toBe("failed")
     expect(card.error?.message).toBe("boom")
   })
+
+  it("keeps interleaved job and draft identity on the matching pipeline cards", () => {
+    let state = panelReducer(initialPanelState(), {
+      type: "PIPELINE_STAGE",
+      event: {
+        jobId: "job-a",
+        brandId: "brand-1",
+        planId: "plan-1",
+        planItemId: "item-a",
+        stage: "draft",
+        status: "active",
+      },
+    })
+    state = panelReducer(state, {
+      type: "PIPELINE_STAGE",
+      event: {
+        jobId: "job-c",
+        brandId: "brand-1",
+        planId: "plan-1",
+        planItemId: "item-c",
+        stage: "draft",
+        status: "active",
+      },
+    })
+    state = panelReducer(state, {
+      type: "PIPELINE_CARD",
+      card: {
+        jobId: "job-c",
+        planId: "plan-1",
+        planItemId: "item-c",
+        status: "running",
+        draftId: "draft-c",
+        checkpoint: { textReady: true },
+      },
+    })
+    state = panelReducer(state, {
+      type: "PIPELINE_CARD",
+      card: {
+        jobId: "job-a",
+        planId: "plan-1",
+        planItemId: "item-a",
+        status: "running",
+        draftId: "draft-a",
+        checkpoint: { textReady: true },
+      },
+    })
+    state = panelReducer(state, {
+      type: "DRAFT_BLUEPRINT",
+      draftId: "draft-c",
+      previews: ["https://cdn.example/c.png"],
+    })
+
+    expect(state.pipeline["job-a"].planItemId).toBe("item-a")
+    expect(state.pipeline["job-a"].draftId).toBe("draft-a")
+    expect(state.pipeline["job-a"].preview?.images).toBeUndefined()
+    expect(state.pipeline["job-c"].planItemId).toBe("item-c")
+    expect(state.pipeline["job-c"].draftId).toBe("draft-c")
+    expect(state.pipeline["job-c"].preview?.images).toEqual(["https://cdn.example/c.png"])
+    expect(state.pipeline["job-c"].checkpoint?.blueprintReady).toBe(true)
+  })
 })
 
 describe("PLAN_STATUS + tool approvals", () => {

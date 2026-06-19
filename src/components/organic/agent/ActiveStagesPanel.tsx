@@ -5,13 +5,13 @@ import { CheckCircle2Icon, CircleDotIcon, AlertCircleIcon } from "lucide-react";
 import type { PipelineStage, PipelineStageNode } from "./types";
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
-  strategist: "Strategizing",
-  concept: "Concepting",
-  draft: "Drafting",
-  blueprint: "Storyboarding",
-  assets: "Generating assets",
-  quality: "Reviewing",
-  merge: "Merging",
+  strategist: "Concept",
+  concept: "Concept",
+  draft: "Copy",
+  blueprint: "Preview",
+  assets: "Preview",
+  quality: "Fully fleshed out",
+  merge: "Fully fleshed out",
 };
 
 const TOTAL_STAGES = 7;

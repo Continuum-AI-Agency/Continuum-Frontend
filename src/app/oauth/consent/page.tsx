@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { confirmMcpRegistrationAction } from './actions'
+import { confirmMcpRegistrationAction, listConsentBrandsAction, type ConsentBrandOption } from './actions'
 
 type AuthorizationDetails = {
   authorization_id: string
@@ -22,6 +22,8 @@ function ConsentContent() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [brands, setBrands] = useState<ConsentBrandOption[]>([])
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authorizationId) {
@@ -38,6 +40,11 @@ function ConsentContent() {
         router.replace(`/login?redirectTo=${encodeURIComponent(returnPath)}`)
         return
       }
+
+      void listConsentBrandsAction().then((result) => {
+        setBrands(result.brands)
+        setSelectedBrandId(result.activeBrandId ?? result.brands[0]?.id ?? null)
+      })
 
       supabase.auth.oauth.getAuthorizationDetails(authorizationId).then(({ data, error: detailsError }) => {
         if (detailsError || !data) {
@@ -66,6 +73,7 @@ function ConsentContent() {
       clientId: details.client.id,
       clientName: details.client.name,
       scope: details.scope,
+      brandId: selectedBrandId,
     })
     if (!confirmation.registered) {
       setError('Could not register this connection. Please try again.')
@@ -145,6 +153,39 @@ function ConsentContent() {
         Authorizing as{' '}
         <span className="font-medium text-zinc-900 dark:text-zinc-100">{details.user.email}</span>
       </div>
+
+      {brands.length > 0 && (
+        <div className="space-y-2">
+          <label
+            htmlFor="consent-brand"
+            className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide block"
+          >
+            Brand to connect
+          </label>
+          {brands.length === 1 ? (
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100">
+              {brands[0].name}
+            </div>
+          ) : (
+            <select
+              id="consent-brand"
+              value={selectedBrandId ?? ''}
+              onChange={(event) => setSelectedBrandId(event.target.value)}
+              disabled={submitting}
+              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#5A48F9]/40 disabled:opacity-50"
+            >
+              {brands.map((brand) => (
+                <option key={brand.id} value={brand.id}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">
+            The connector starts on this brand. Switch anytime with brands_select.
+          </p>
+        </div>
+      )}
 
       {scopes.length > 0 && (
         <div className="space-y-2">

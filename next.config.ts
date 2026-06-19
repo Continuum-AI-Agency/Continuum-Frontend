@@ -21,7 +21,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '25mb',
     },
     viewTransition: true,
-    optimizePackageImports: ['lucide-react'],
+    optimizePackageImports: [
+      '@phosphor-icons/react',
+      '@radix-ui/react-icons',
+      '@radix-ui/themes',
+      'lucide-react',
+    ],
   },
   turbopack: {
     root: workspaceRoot,

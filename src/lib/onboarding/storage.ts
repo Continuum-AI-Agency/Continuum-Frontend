@@ -21,6 +21,7 @@ import {
   normalizeOnboardingState,
   parseOnboardingMetadata,
 } from "./state";
+import { findReusableBrandId } from "./reusableBrand";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 import type { Database, Json } from "@/lib/supabase/types";
 
@@ -582,7 +583,8 @@ async function loadOnboardingContext(
   }
 
   if (Object.keys(metadata.brands).length === 0) {
-    const initialBrandId = createBrandId();
+    const reusableBrandId = await findReusableBrandId(supabase, owner.id);
+    const initialBrandId = reusableBrandId ?? createBrandId();
     metadata = createDefaultMetadata(initialBrandId, owner);
     await persistMetadata(supabase, user, metadata);
   }

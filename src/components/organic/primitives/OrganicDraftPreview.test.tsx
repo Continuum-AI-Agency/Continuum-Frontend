@@ -132,7 +132,6 @@ mock.module("./social-preview-utils", () => ({
 
 mock.module("./PreviewMediaDropZone", () => ({
   PreviewMediaDropZone: ({ children }: { children?: ReactNode }) => <div data-testid="drop-zone">{children}</div>,
-  UseOwnCreativeCta: () => <div data-testid="use-own-cta" />,
 }))
 
 afterAll(() => mock.restore())

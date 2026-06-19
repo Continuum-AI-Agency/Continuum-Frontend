@@ -10,7 +10,7 @@
 import * as React from "react"
 import { useDroppable } from "@dnd-kit/core"
 import { useReducedMotion } from "motion/react"
-import { ImageIcon, VideoIcon, Upload } from "lucide-react"
+import { ImageIcon, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PlacementError } from "@/components/organic/hooks/useDraftMediaPlacement"
 
@@ -32,6 +32,10 @@ type PreviewMediaDropZoneProps = {
   onNativeDrop?: (assetId: string) => void
   // Called when the user activates the zone (Enter/Space) to trigger click-to-place.
   onActivate?: () => void
+  // Blank-state split: top half opens the library; bottom half uploads from disk.
+  // OS-file drop anywhere on the zone also routes to onFilesChosen.
+  onSelectLibrary?: () => void
+  onFilesChosen?: (files: File[]) => void
   // Forwarded error from the placement hook for aria-live announcements.
   error?: PlacementError | null
   aspectRatio?: number
@@ -51,6 +55,8 @@ export function PreviewMediaDropZone({
   slotId,
   onNativeDrop,
   onActivate,
+  onSelectLibrary,
+  onFilesChosen,
   error,
   aspectRatio,
   children,
@@ -76,12 +82,19 @@ export function PreviewMediaDropZone({
     (e: React.DragEvent) => {
       e.preventDefault()
       e.stopPropagation()
+      // OS-file drop (from the desktop) takes precedence over an asset-id drag
+      // (from the library rail) — they are mutually exclusive on a single drop.
+      const files = e.dataTransfer.files
+      if (files && files.length > 0 && onFilesChosen) {
+        onFilesChosen(Array.from(files))
+        return
+      }
       const assetId = e.dataTransfer.getData("application/x-asset-id")
       if (assetId && onNativeDrop) {
         onNativeDrop(assetId)
       }
     },
-    [onNativeDrop],
+    [onNativeDrop, onFilesChosen],
   )
 
   const handleKeyDown = React.useCallback(
@@ -181,20 +194,48 @@ export function PreviewMediaDropZone({
         </div>
       </div>
 
-      {/* Fallback / blank CTA — "Use your own creative" */}
+      {/* Blank-state split: top half browses the library, bottom half uploads
+          from the computer. Each half highlights on hover. OS-file drop anywhere
+          on the zone also uploads (handleNativeDrop). */}
       {isFallback && !isDragOver && !isPlacing && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/60">
-          <div className="flex flex-col items-center gap-2 px-4 text-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-background">
-              <ImageIcon className="h-5 w-5 text-muted-foreground" />
+        <div className="absolute inset-0 z-10 flex flex-col">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelectLibrary?.()
+            }}
+            className="group/lib flex flex-1 flex-col items-center justify-center gap-1.5 border-b border-border/50 bg-muted/60 px-4 text-center transition-colors duration-150 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background transition-colors group-hover/lib:border-primary/40">
+              <ImageIcon className="h-4 w-4 text-muted-foreground transition-colors group-hover/lib:text-primary" />
             </div>
-            <p className="text-xs font-medium text-muted-foreground">
-              Use your own creative
+            <p className="text-xs font-medium text-muted-foreground transition-colors group-hover/lib:text-foreground">
+              Select from library
             </p>
-            <p className="text-[10px] text-muted-foreground/60">
-              Click to browse library
+          </button>
+          <label
+            onClick={(e) => e.stopPropagation()}
+            className="group/up flex flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 bg-muted/60 px-4 text-center transition-colors duration-150 hover:bg-primary/5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background transition-colors group-hover/up:border-primary/40">
+              <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover/up:text-primary" />
+            </div>
+            <p className="text-xs font-medium text-muted-foreground transition-colors group-hover/up:text-foreground">
+              Upload from your computer
             </p>
-          </div>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                const files = e.target.files ? Array.from(e.target.files) : []
+                e.currentTarget.value = ""
+                if (files.length > 0) onFilesChosen?.(files)
+              }}
+            />
+          </label>
         </div>
       )}
 
@@ -210,31 +251,3 @@ export function PreviewMediaDropZone({
   )
 }
 
-// A CTA rendered inside a failed or blank media slot.
-export function UseOwnCreativeCta({
-  onActivate,
-  format,
-}: {
-  onActivate: () => void
-  format?: string
-}) {
-  const isVideo = format?.toLowerCase() === "reel" || format?.toLowerCase() === "video"
-
-  return (
-    <button
-      type="button"
-      onClick={onActivate}
-      className="flex w-full flex-col items-center gap-2 px-4 py-6 text-center transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-background">
-        {isVideo ? (
-          <VideoIcon className="h-5 w-5 text-muted-foreground" />
-        ) : (
-          <ImageIcon className="h-5 w-5 text-muted-foreground" />
-        )}
-      </div>
-      <p className="text-xs font-medium text-muted-foreground">Use your own creative</p>
-      <p className="text-[10px] text-muted-foreground/60">Click to browse library</p>
-    </button>
-  )
-}

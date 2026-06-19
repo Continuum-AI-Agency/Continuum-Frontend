@@ -9,9 +9,16 @@ import {
 } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
+import { PaidStatCards } from "@/components/dashboard/briefing/PaidStatCards";
+import { PaidKpiSelect } from "@/components/dashboard/briefing/PaidKpiSelect";
+import { CompetitorAdsTable } from "@/components/dashboard/competitor/CompetitorAdsTable";
+import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
+
+const PAID_SELECTION_KEY = "paid";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { NorthStarActions } from "@/components/dashboard/briefing/NorthStarActions";
-import { PaidEntityLeaderboard } from "@/components/dashboard/briefing/PaidEntityLeaderboard";
+import { PaidEntityTable } from "@/components/dashboard/briefing/PaidEntityTable";
 import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
 import {
   Tooltip,
@@ -203,8 +210,9 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
 }
 
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
+  const setSelection = useAccountSelectionStore((store) => store.setSelection);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
-    null,
+    () => useAccountSelectionStore.getState().getSelection(brandId, PAID_SELECTION_KEY),
   );
   const [selectedMetric, setSelectedMetric] =
     useState<PaidPerformanceMetricKey>("spend");
@@ -214,6 +222,16 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   useEffect(() => {
     setCollapsed(readCollapsed());
   }, []);
+
+  // Remember the last ad account this brand looked at (shared store, same as
+  // organic) so it is restored on the next visit instead of re-defaulting.
+  const handleAccountChange = useCallback(
+    (id: string) => {
+      setSelectedAccountId(id);
+      setSelection(brandId, PAID_SELECTION_KEY, id);
+    },
+    [brandId, setSelection],
+  );
 
   const handleCollapse = useCallback(() => {
     setCollapsed(true);
@@ -230,7 +248,8 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
       <div className="min-w-0">
         <PaidMediaReportingWidget
           brandId={brandId}
-          onAccountChange={setSelectedAccountId}
+          accountId={selectedAccountId ?? undefined}
+          onAccountChange={handleAccountChange}
           selectedMetric={selectedMetric}
           onSelectedMetricChange={setSelectedMetric}
         />
@@ -252,28 +271,34 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
 
   return (
     <div className="flex flex-col gap-[var(--app-shell-gap)]">
+      <DashboardWarmOnMount brandId={brandId} isCold={false} />
+      <PaidStatCards brandId={brandId} adAccountId={selectedAccountId} />
       <section className="flex flex-col gap-3">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
           <p className="text-xs text-muted-foreground">Your paid performance at a glance. Pick your next move.</p>
         </div>
         <NorthStarActions />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <PaidEntityLeaderboard
+        <div className="flex justify-end">
+          <PaidKpiSelect />
+        </div>
+        <div data-tour-id="dashboard-top-ads" className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <PaidEntityTable
             brandId={brandId}
             adAccountId={selectedAccountId}
             scope="top_campaigns"
-            title="Top campaigns by ROAS"
+            title="Top campaigns"
             emptyMessage="No campaign performance yet for this account."
           />
-          <PaidEntityLeaderboard
+          <PaidEntityTable
             brandId={brandId}
             adAccountId={selectedAccountId}
             scope="top_adsets"
-            title="Top ad sets by ROAS"
+            title="Top ad sets"
             emptyMessage="No ad set performance yet for this account."
           />
         </div>
+        <CompetitorAdsTable brandId={brandId} />
       </section>
 
       <div className="grid min-h-[clamp(500px,80dvh,1400px)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">

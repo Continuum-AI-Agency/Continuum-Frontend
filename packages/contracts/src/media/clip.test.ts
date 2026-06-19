@@ -5,6 +5,8 @@ import {
   clipPlanSchema,
   clipScoreSchema,
   clipSectionSchema,
+  clipSignUploadRequestSchema,
+  clipUploadTicketSchema,
   registerClipRequestSchema,
   timestampedTranscriptSchema,
 } from "./clip";
@@ -157,32 +159,53 @@ describe("clipGenerateRequestSchema", () => {
   });
 });
 
+const PENDING_SCORE = {
+  status: "pending" as const,
+  hookPotential: null,
+  comparedAgainst: null,
+  computedAt: "2026-06-15T00:00:00Z",
+};
+
+const PLAN_READY_PLAN = {
+  sourceAssetId: "asset-1",
+  durationSec: 60,
+  sections: [
+    {
+      index: 0,
+      startSec: 0,
+      endSec: 30,
+      title: "Intro",
+      summary: "opening",
+      transcriptExcerpt: "hi",
+      keepRanges: [{ startSec: 0, endSec: 18 }],
+    },
+  ],
+};
+
 describe("clipGenerationFrameSchema", () => {
-  it("accepts a clip_plan_ready frame carrying the plan + signed source url", () => {
+  it("accepts a clip_plan_ready frame carrying the plan + signed source url + score", () => {
     const frame = {
       type: "clip_plan_ready",
-      plan: {
-        sourceAssetId: "asset-1",
-        durationSec: 60,
-        sections: [
-          {
-            index: 0,
-            startSec: 0,
-            endSec: 30,
-            title: "Intro",
-            summary: "opening",
-            transcriptExcerpt: "hi",
-            keepRanges: [{ startSec: 0, endSec: 18 }],
-          },
-        ],
-      },
+      plan: PLAN_READY_PLAN,
       sourceSignedUrl: "https://signed.example/asset-1.mp4",
+      score: PENDING_SCORE,
     };
     const parsed = clipGenerationFrameSchema.safeParse(frame);
     expect(parsed.success).toBe(true);
     if (parsed.success && parsed.data.type === "clip_plan_ready") {
       expect(parsed.data.plan.sections).toHaveLength(1);
+      expect(parsed.data.score.status).toBe("pending");
     }
+  });
+
+  it("rejects a clip_plan_ready frame missing the score stub", () => {
+    expect(
+      clipGenerationFrameSchema.safeParse({
+        type: "clip_plan_ready",
+        plan: PLAN_READY_PLAN,
+        sourceSignedUrl: "https://signed.example/asset-1.mp4",
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts the section + stage + terminal frames", () => {
@@ -201,5 +224,49 @@ describe("clipGenerationFrameSchema", () => {
 
   it("rejects an out-of-enum stage", () => {
     expect(clipGenerationFrameSchema.safeParse({ type: "stage", stage: "nope" }).success).toBe(false);
+  });
+});
+
+describe("clipSignUploadRequestSchema", () => {
+  it("accepts an audio sign request without a section index", () => {
+    expect(
+      clipSignUploadRequestSchema.safeParse({
+        brandId: "b1",
+        sourceAssetId: "asset-1",
+        target: "audio",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a clip sign request with a section index + filename", () => {
+    const parsed = clipSignUploadRequestSchema.parse({
+      brandId: "b1",
+      sourceAssetId: "asset-1",
+      target: "clip",
+      sectionIndex: 2,
+      fileName: "2.mp4",
+    });
+    expect(parsed.sectionIndex).toBe(2);
+  });
+
+  it("rejects an unknown target + unknown keys", () => {
+    expect(
+      clipSignUploadRequestSchema.safeParse({ brandId: "b1", sourceAssetId: "asset-1", target: "thumbnail" }).success,
+    ).toBe(false);
+    expect(
+      clipSignUploadRequestSchema.safeParse({ brandId: "b1", sourceAssetId: "asset-1", target: "audio", extra: 1 })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("clipUploadTicketSchema", () => {
+  it("parses the bucket/path/token returned by the edge fn", () => {
+    const parsed = clipUploadTicketSchema.parse({
+      bucket: "media-library",
+      path: "b1/clips/asset-1/0.mp4",
+      token: "signed-token",
+    });
+    expect(parsed.path).toBe("b1/clips/asset-1/0.mp4");
   });
 });

@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { spliceClips } from '../utils/splice/spliceClips';
+import { spliceSingleSource } from '../utils/splice/spliceSingleSource';
 import { checkSpliceSupport } from '../utils/splice/webcodecsSupport';
 import type {
   SpliceWorkerInbound,
@@ -60,6 +61,49 @@ async function handleStart(input: Extract<SpliceWorkerInbound, { kind: 'start' }
   }
 }
 
+async function handleStartSingleSource(
+  input: Extract<SpliceWorkerInbound, { kind: 'start_single_source' }>,
+): Promise<void> {
+  const support = await checkSpliceSupport();
+  if (!support.ok) {
+    post({ kind: 'support', ok: false, reason: support.reason });
+    return;
+  }
+
+  activeAbortController = new AbortController();
+
+  try {
+    const result = await spliceSingleSource({
+      blob: input.blob,
+      ranges: input.ranges,
+      maxShortEdgePx: input.maxShortEdgePx,
+      videoBitrate: input.videoBitrate,
+      audioBitrate: input.audioBitrate,
+      signal: activeAbortController.signal,
+      onProgress: ({ progress, processedClips, totalClips }) => {
+        if (aborted) return;
+        post({ kind: 'progress', progress, processedClips, totalClips });
+      },
+    });
+
+    if (aborted) return;
+
+    post({
+      kind: 'result',
+      blob: result.blob,
+      width: result.width,
+      height: result.height,
+      durationSec: result.durationSec,
+    });
+  } catch (error) {
+    if (aborted) return;
+    const message = error instanceof Error ? error.message : String(error);
+    post({ kind: 'error', message });
+  } finally {
+    activeAbortController = null;
+  }
+}
+
 self.addEventListener('message', (event: MessageEvent<SpliceWorkerInbound>) => {
   const message = event.data;
   if (!message || typeof message !== 'object') return;
@@ -72,5 +116,10 @@ self.addEventListener('message', (event: MessageEvent<SpliceWorkerInbound>) => {
 
   if (message.kind === 'start') {
     void handleStart(message);
+    return;
+  }
+
+  if (message.kind === 'start_single_source') {
+    void handleStartSingleSource(message);
   }
 });
