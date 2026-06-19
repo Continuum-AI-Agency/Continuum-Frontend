@@ -200,7 +200,9 @@ describe("OrganicDraftPreview — media state", () => {
         brandProfileId="brand-1"
       />,
     )
-    expect(screen.getByText("Blueprint ready")).toBeTruthy()
+    // "Blueprint ready" now appears both as the header enrichment pill (media_stage
+    // = storyboard_ready) and the detailed media-section label, hence getAllByText.
+    expect(screen.getAllByText("Blueprint ready").length).toBeGreaterThan(0)
     expect(screen.getByAltText("Test post — storyboard frame 1")).toBeTruthy()
     expect(screen.getByText("Generate final media or use your own creative")).toBeTruthy()
   })

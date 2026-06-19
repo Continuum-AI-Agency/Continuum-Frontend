@@ -32,9 +32,9 @@ export const dashboardTour: Tour = {
   steps: [
     {
       icon: "✨",
-      title: "Your top content & trends",
+      title: "Your insights & top content",
       content: paragraph(
-        "Your best-performing posts and the trend signals worth acting on, ranked. Sort any column, right-click a row to act on it, or click to expand the insight."
+        "Your account's performance insights, beside your best-performing posts. Sort any column, right-click a row to act on it, or click to expand."
       ),
       selector: "[data-tour-id='dashboard-top-content']",
       side: "bottom",

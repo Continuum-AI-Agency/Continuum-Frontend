@@ -133,6 +133,67 @@ export const organicDraftMediaStatusSchema = z.enum([
 ]);
 
 /**
+ * First-class ENRICHMENT stage of a calendar draft, tracked as its own indexed
+ * column (`organic_calendar_drafts.media_stage`) so "how enriched is this draft"
+ * is a cheap, queryable fact rather than a JSONB `content_json` scan. This axis
+ * is ORTHOGONAL to the publish-lifecycle `status` column (draft → scheduled →
+ * published): a `draft` can be at any media stage.
+ *
+ *   text_only        caption ready, no media yet (initial state)
+ *   storyboard_ready 512px blueprint persisted, awaiting a realize choice
+ *   realizing        final media generation in flight
+ *   realized         final media present (generated OR user-supplied)
+ *   failed           draft generation terminally failed
+ */
+export const organicMediaStageSchema = z.enum([
+  "text_only",
+  "storyboard_ready",
+  "realizing",
+  "realized",
+  "failed",
+]);
+
+/**
+ * Derive the media stage from the durable signals already in a placement /
+ * `content_json`. This is the SINGLE source of truth for the `media_stage`
+ * column: every persist re-derives and stamps it, so the column can never drift
+ * from the JSON it summarizes. `failed` is intentionally NOT derivable here — it
+ * is a terminal lifecycle signal stamped explicitly by the failure handlers, not
+ * inferred from media content.
+ */
+export function deriveOrganicMediaStage(
+  placement:
+    | {
+        publishingAssets?: unknown;
+        creative?: {
+          mediaSuggestion?: {
+            mediaStatus?: string | null;
+            storyboard?: unknown;
+          } | null;
+        } | null;
+      }
+    | null
+    | undefined,
+): z.infer<typeof organicMediaStageSchema> {
+  const mediaSuggestion = placement?.creative?.mediaSuggestion ?? null;
+  const mediaStatus = mediaSuggestion?.mediaStatus ?? null;
+  const publishingAssets = placement?.publishingAssets;
+  const hasPublishingAssets = Array.isArray(publishingAssets) && publishingAssets.length > 0;
+
+  if (mediaStatus === "user_supplied" || mediaStatus === "ready" || hasPublishingAssets) {
+    return "realized";
+  }
+  if (mediaStatus === "generating") {
+    return "realizing";
+  }
+  const storyboard = mediaSuggestion?.storyboard;
+  if (Array.isArray(storyboard) && storyboard.length > 0) {
+    return "storyboard_ready";
+  }
+  return "text_only";
+}
+
+/**
  * How strongly brand assets are imprinted on the GENERATED media for a concept.
  * Chosen contextually by the blueprint stage (visual_technical): brand-aligned
  * media should match the brand's vision/voice/aesthetic, NOT always stamp the
@@ -208,6 +269,18 @@ export const organicMediaCheckpointContextSchema = z.object({
 }).strict();
 
 /**
+ * A signed-URL string for a durable, displayed media slot. Rejects an inline
+ * base64 `data:` URL at the boundary — final/preview media must render from a
+ * re-signed storage URL, never a base64 blob (which bloats the UI and persisted
+ * state). An empty string is allowed (transient, before the first sign).
+ */
+const signedMediaUrl = z
+  .string()
+  .refine((v) => !v.startsWith("data:"), {
+    message: "must be a signed storage URL, not an inline base64 data: URL",
+  });
+
+/**
  * Durable, re-signable storage reference for one published media slot. The FE
  * re-signs via /api/library/sign (assetId) or the bucket+storagePath. Written by
  * the generation pipeline (source 'ai_generated') AND by user-supplied attach
@@ -220,10 +293,25 @@ export const organicPublishingAssetSchema = z.object({
   assetId: z.string().optional(),
   bucket: z.string().optional(),
   storagePath: z.string(),
-  storageUrl: z.string(),
+  storageUrl: signedMediaUrl,
   mimeType: z.string().optional(),
   width: z.number().optional(),
   height: z.number().optional(),
+}).strict();
+
+/**
+ * Durable, re-signable storage reference for one 512px storyboard preview frame
+ * (Stage 2 blueprint). Review-only — distinct from `organicPublishingAssetSchema`
+ * (the final published media). Stored as bucket+storagePath so the calendar
+ * re-signs a fresh URL on every load (the upload-time signed URL expires ~1h)
+ * instead of relying on a stale URL or a base64 blob.
+ */
+export const organicStoryboardPreviewSchema = z.object({
+  role: z.string(),
+  bucket: z.string(),
+  storagePath: z.string().min(1),
+  storageUrl: signedMediaUrl,
+  format: z.string().nullable().optional(),
 }).strict();
 
 export const organicMediaSuggestionSchema = z.object({
@@ -283,6 +371,10 @@ export const organicMediaSuggestionSchema = z.object({
   }).strict()).optional(),
   reel: organicReelAssetSchema.optional(),
   hyperframe: organicHyperframeAssetSchema.optional(),
+  // Persisted 512px storyboard preview frames from the Stage 2 blueprint, kept as
+  // durable bucket+storagePath references so the no-media draft re-displays them
+  // (re-signed) after a reload. Review-only; NOT the final publishingAssets.
+  storyboard: z.array(organicStoryboardPreviewSchema).optional(),
 }).strict();
 
 export const organicCalendarPlacementSchema = z.object({
@@ -607,12 +699,14 @@ export type OrganicHyperframeStylePreset = z.infer<typeof organicHyperframeStyle
 export type OrganicHyperframeTone = z.infer<typeof organicHyperframeToneSchema>;
 export type OrganicHyperframeAspectRatio = z.infer<typeof organicHyperframeAspectRatioSchema>;
 export type OrganicDraftMediaStatus = z.infer<typeof organicDraftMediaStatusSchema>;
+export type OrganicMediaStage = z.infer<typeof organicMediaStageSchema>;
 export type OrganicBrandTreatment = z.infer<typeof organicBrandTreatmentSchema>;
 export type OrganicBrandReference = z.infer<typeof organicBrandReferenceSchema>;
 export type OrganicMediaBrandGrounding = z.infer<typeof organicMediaBrandGroundingSchema>;
 export type OrganicMediaAudioConcept = z.infer<typeof organicMediaAudioConceptSchema>;
 export type OrganicMediaCheckpointContext = z.infer<typeof organicMediaCheckpointContextSchema>;
 export type OrganicMediaSuggestion = z.infer<typeof organicMediaSuggestionSchema>;
+export type OrganicStoryboardPreview = z.infer<typeof organicStoryboardPreviewSchema>;
 export type OrganicPublishingAsset = z.infer<typeof organicPublishingAssetSchema>;
 export type OrganicCalendarPlacement = z.infer<typeof organicCalendarPlacementSchema>;
 export type OrganicCalendarProgressEvent = z.infer<typeof organicCalendarProgressEventSchema>;

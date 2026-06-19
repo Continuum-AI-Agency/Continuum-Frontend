@@ -119,11 +119,11 @@
   --bg-galaxy-c1-overlay-light: rgba(255,210,238,0.10);
 
   /* Layout and viewport density tokens.
-     Sizing is FIXED across resolutions (1080p renders identically to 4K) so
-     density stays consistent; a gentle downscale applies only on short
-     viewports (the hybrid model) to keep dense pages fitting without scroll. */
+     The dashboard is dense by default, then gently compacts on laptop-sized
+     canvases. Keep this balanced: prefer scroll/reflow over tiny controls. */
   --font-size-root: 15px;
   --layout-density: 1;
+  --particle-layer-opacity: 0.1;
 
   /* App chrome heights — single source of truth for viewport scroll math.
      The header is DashboardHeader (h-16 = 4rem). Pages that fill the viewport
@@ -163,6 +163,14 @@
   --ai-chat-preview-min-width: 28rem;
   --workspace-min-height: 32rem;
   --dashboard-min-panel-height: 24rem;
+  --dashboard-home-organic-min-height: clamp(28rem, 70dvh, 72rem);
+  --dashboard-home-paid-min-height: clamp(34rem, 76dvh, 86rem);
+  --dashboard-reporting-min-height: clamp(32rem, 72dvh, 80rem);
+  --dashboard-compact-panel-min-height: clamp(12rem, 24dvh, 24rem);
+  --dashboard-section-gap: 0.75rem;
+  --dashboard-chart-min-height: 16rem;
+  --dashboard-chart-fixed-height: clamp(15rem, 36svh, 28rem);
+  --dashboard-side-rail-width: 20rem;
 }
 
 html {
@@ -171,15 +179,42 @@ html {
   text-size-adjust: 100%;
 }
 
-/* Hybrid downscale: triggered by viewport HEIGHT only (never width) so that
-   1080p and 4K stay identical, while short laptops get just enough shrink to
-   avoid overflow on dense pages. */
+/* Balanced compact tiers for common laptop canvases. These tighten layout
+   rhythm without using global zoom or pushing controls into cramped sizes. */
+@media (max-width: 1536px), (max-height: 900px) {
+  :root {
+    --font-size-root: 14.5px;
+    --layout-density: 0.97;
+    --shell-gutter: 1rem;
+    --shell-stack-gap: 0.875rem;
+    --app-shell-gap: 0.3125rem;
+    --app-shell-pad-inline: 1rem;
+    --page-pad-block: 0.875rem;
+    --page-section-gap: 0.875rem;
+    --card-pad: 0.875rem;
+    --workspace-min-height: 30rem;
+    --dashboard-min-panel-height: 22rem;
+    --dashboard-home-organic-min-height: clamp(25rem, 66dvh, 54rem);
+    --dashboard-home-paid-min-height: clamp(30rem, 70dvh, 62rem);
+    --dashboard-reporting-min-height: clamp(29rem, 68dvh, 60rem);
+    --dashboard-compact-panel-min-height: clamp(11rem, 22dvh, 20rem);
+    --dashboard-section-gap: 0.625rem;
+    --dashboard-chart-min-height: 15rem;
+    --dashboard-chart-fixed-height: clamp(14rem, 34svh, 25rem);
+  }
+}
+
 @media (max-height: 860px) {
   :root {
     --ai-chat-shell-min-height: 34rem;
     --ai-chat-row-min-height: 24rem;
     --workspace-min-height: 28rem;
     --dashboard-min-panel-height: 22rem;
+    --dashboard-home-organic-min-height: clamp(24rem, 64dvh, 48rem);
+    --dashboard-home-paid-min-height: clamp(28rem, 68dvh, 56rem);
+    --dashboard-reporting-min-height: clamp(27rem, 66dvh, 54rem);
+    --dashboard-chart-min-height: 14.5rem;
+    --dashboard-chart-fixed-height: clamp(13.5rem, 32svh, 23rem);
   }
 }
 
@@ -190,11 +225,21 @@ html {
     --page-pad-block: 0.75rem;
     --page-section-gap: 0.75rem;
     --shell-stack-gap: 0.875rem;
+    --shell-gutter: 0.875rem;
+    --app-shell-pad-inline: 0.875rem;
     --ai-chat-shell-offset: 0.75rem;
     --ai-chat-shell-min-height: 28rem;
     --ai-chat-row-min-height: 20rem;
     --workspace-min-height: 24rem;
     --dashboard-min-panel-height: 20rem;
+    --dashboard-home-organic-min-height: clamp(22rem, 62dvh, 42rem);
+    --dashboard-home-paid-min-height: clamp(25rem, 66dvh, 48rem);
+    --dashboard-reporting-min-height: clamp(24rem, 64dvh, 46rem);
+    --dashboard-compact-panel-min-height: clamp(10rem, 20dvh, 17rem);
+    --dashboard-section-gap: 0.5rem;
+    --dashboard-chart-min-height: 13.5rem;
+    --dashboard-chart-fixed-height: clamp(12.5rem, 30svh, 20rem);
+    --dashboard-side-rail-width: 18rem;
   }
 }
 
@@ -204,6 +249,11 @@ html {
     --layout-density: 0.88;
     --workspace-min-height: 22rem;
     --dashboard-min-panel-height: 18rem;
+    --dashboard-home-organic-min-height: 20rem;
+    --dashboard-home-paid-min-height: 23rem;
+    --dashboard-reporting-min-height: 22rem;
+    --dashboard-chart-min-height: 12.5rem;
+    --dashboard-chart-fixed-height: clamp(11.5rem, 28svh, 18rem);
   }
 }
 
@@ -537,7 +587,7 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 5;
-  opacity: 0.14;
+  opacity: var(--particle-layer-opacity);
   mix-blend-mode: screen;
   background-size: 200% 200%;
   animation-duration: 28s;
@@ -640,8 +690,8 @@ body {
 /* Slow, subtle 3-layer wave background */
 :root {
   /* Optional: tune opacity/blur globally */
-  --waves-opacity: 0.7;
-  --waves-blur: 80px;
+  --waves-opacity: 0.42;
+  --waves-blur: 72px;
   --waves-overscan: 25%;
 
   /* Light theme wave colors (kept brand-consistent) */

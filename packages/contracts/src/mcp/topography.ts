@@ -13,8 +13,22 @@ export const topographyAccountSchema = z.object({
   display_name: z.string().nullable().optional(),
   account_type: z.string().nullable().optional(),
   follower_count: z.number().nullable().optional(),
+  // What the account can do (e.g. publish, insights) — the most useful signal
+  // for an orientation tool deciding which downstream calls are possible.
+  capabilities: z.array(z.string()).optional(),
 });
 export type TopographyAccount = z.infer<typeof topographyAccountSchema>;
+
+// A paid ad account (Meta `act_<id>` / Google Ads customer id). `account_id` is
+// the external identifier the paid analytics tools require — not the asset UUID.
+export const topographyAdAccountSchema = z.object({
+  platform: z.enum(["meta_ads", "google_ads"]),
+  account_id: z.string(),
+  name: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  currency: z.string().nullable().optional(),
+});
+export type TopographyAdAccount = z.infer<typeof topographyAdAccountSchema>;
 
 export const topographyPlatformSchema = z.object({
   platform: z.string(),
@@ -37,5 +51,8 @@ export const brandTopographySchema = z.object({
   role: z.string().nullable().optional(),
   depth: brandTopographyDepthSchema,
   platforms: z.array(topographyPlatformSchema),
+  // Connected paid ad accounts (read-only; populated at depth >= "accounts").
+  // The id here is the one analytics_query needs to query paid performance.
+  ad_accounts: z.array(topographyAdAccountSchema).optional(),
 });
 export type BrandTopography = z.infer<typeof brandTopographySchema>;

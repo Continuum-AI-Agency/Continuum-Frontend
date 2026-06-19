@@ -5,6 +5,7 @@ import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrg
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { DashboardBriefing } from "@/components/dashboard/briefing/DashboardBriefing";
 import { OrganicCreativesTable } from "@/components/dashboard/briefing/OrganicCreativesTable";
+import { OrganicInsightsList } from "@/components/dashboard/briefing/OrganicInsightsList";
 import { OrganicStatCards } from "@/components/dashboard/briefing/OrganicStatCards";
 import { CompetitorOrganicTable } from "@/components/dashboard/competitor/CompetitorOrganicTable";
 import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
@@ -47,8 +48,14 @@ export function OrganicDashboardView({
       <OrganicStatCards brandId={brandId} accounts={instagramAccounts} youtubeAccounts={youtubeAccounts} />
       <DashboardBriefing
         brandId={brandId}
-        trends={trendsAndEvents.trends}
         lastGeneratedAt={generatedAt}
+        insightsSlot={
+          <OrganicInsightsList
+            brandId={brandId}
+            accounts={instagramAccounts}
+            youtubeAccounts={youtubeAccounts}
+          />
+        }
         creativesSlot={
           <OrganicCreativesTable
             brandId={brandId}
@@ -58,7 +65,7 @@ export function OrganicDashboardView({
         }
       />
 
-      <section className="min-h-[clamp(220px,28dvh,500px)]">
+      <section className="min-h-[var(--dashboard-compact-panel-min-height)]">
         <BrandTrendsPanel
           trends={trendsAndEvents.trends}
           events={trendsAndEvents.events}

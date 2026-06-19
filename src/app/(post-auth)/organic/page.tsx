@@ -369,7 +369,7 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
       : "month";
 
   return (
-    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
       <Suspense fallback={<OrganicContentSkeleton />}>
         <OrganicContent
           initialSelectedDraftId={initialSelectedDraftId}

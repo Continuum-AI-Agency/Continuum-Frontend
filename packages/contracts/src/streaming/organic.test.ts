@@ -196,8 +196,9 @@ describe("canonical plan schemas", () => {
       expect(parsed.data.evidence).toEqual([]);
       expect(parsed.data.items[0].status).toBe("pending");
       expect(parsed.data.items[0].creativeBrief).toBeNull();
-      // 'hyperframe' is a valid format (FE drift fix).
-      expect(parsed.data.items[0].format).toBe("hyperframe");
+      // Legacy 'hyperframe' format normalizes to 'reel' — HyperFrame is a
+      // video-production method, not a selectable post type.
+      expect(parsed.data.items[0].format).toBe("reel");
     }
   });
 
@@ -217,5 +218,60 @@ describe("canonical plan schemas", () => {
     const parsed = planItemSchema.safeParse({ ...validItem, trendId: "not-a-uuid-slug" });
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.trendId).toBeNull();
+  });
+});
+
+describe("post format — HyperFrame is not a selectable post type", () => {
+  const validItem = {
+    itemId: "item-1",
+    kind: "create_post",
+    platform: "instagram",
+    scheduledAt: "2026-06-01T12:00:00.000Z",
+    format: "post",
+    trendId: null,
+    trendTitle: null,
+    angle: "back to school",
+    objective: "save",
+    audienceSegment: "students",
+    rationale: "evidence-cited",
+    guidancePrompt: null,
+    draftId: null,
+  };
+
+  it.each(["reel", "post", "carousel", "story"])("accepts canonical format %s", (format) => {
+    const parsed = planItemSchema.safeParse({ ...validItem, format });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.format).toBe(format);
+  });
+
+  it("normalizes a legacy hyperframe plan-item format to reel", () => {
+    const parsed = planItemSchema.safeParse({ ...validItem, format: "hyperframe" });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.format).toBe("reel");
+  });
+
+  it("keeps a null plan-item format", () => {
+    const parsed = planItemSchema.safeParse({ ...validItem, format: null });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.format).toBeNull();
+  });
+
+  it("rejects a truly invalid plan-item format", () => {
+    const parsed = planItemSchema.safeParse({ ...validItem, format: "tweet" });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("normalizes a legacy hyperframe creativeBrief formatSuggestion to reel", () => {
+    const parsed = creativeBriefSchema.safeParse({
+      contentObjective: "drive saves",
+      targetAudience: "gen-z students",
+      angle: "back to school hacks",
+      trendIntegration: null,
+      toneAndVoice: "playful",
+      formatSuggestion: "hyperframe",
+      productionNotes: ["bright palette"],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.formatSuggestion).toBe("reel");
   });
 });

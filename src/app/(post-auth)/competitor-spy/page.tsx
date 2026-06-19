@@ -15,7 +15,7 @@ export default async function CompetitorSpyPage() {
   }
 
   return (
-    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full overflow-hidden">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full min-w-0 overflow-hidden">
       <CompetitorSpyClient brandId={activeBrandId} />
     </div>
   );

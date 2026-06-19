@@ -83,11 +83,11 @@ export function HomeBaseDashboard({
   const tourReady = useReadyAfterPaint(activeView === "organic");
 
   return (
-    <div className="flex min-h-full w-full flex-col">
+    <div className="flex min-h-full w-full min-w-0 flex-col">
       <SurfaceTourTrigger tourName={TOUR_DASHBOARD} ready={tourReady} />
       <section
         data-tour-id="dashboard-overview"
-        className="flex min-h-full flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
+        className="flex min-h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
       >
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <h1 className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -122,14 +122,14 @@ export function HomeBaseDashboard({
           </nav>
         </div>
 
-        <div className="flex-1 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+        <div className="min-h-0 flex-1 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <motion.div
             key={activeView}
             data-dashboard-panel={activeView}
             className={cn(
               isPaidView
-                ? "min-h-[clamp(500px,80dvh,1400px)]"
-                : "min-h-[clamp(400px,75dvh,1200px)]"
+                ? "min-h-[var(--dashboard-home-paid-min-height)]"
+                : "min-h-[var(--dashboard-home-organic-min-height)]"
             )}
             initial={shouldReduceMotion ? false : { opacity: 0.96 }}
             animate={shouldReduceMotion ? undefined : { opacity: 1 }}

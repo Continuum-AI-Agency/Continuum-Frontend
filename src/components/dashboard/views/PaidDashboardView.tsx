@@ -12,8 +12,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
 import { PaidStatCards } from "@/components/dashboard/briefing/PaidStatCards";
 import { PaidKpiSelect } from "@/components/dashboard/briefing/PaidKpiSelect";
+import { PaidScopeToggle } from "@/components/dashboard/briefing/PaidScopeToggle";
+import { PaidInsightsList } from "@/components/dashboard/briefing/PaidInsightsList";
 import { CompetitorAdsTable } from "@/components/dashboard/competitor/CompetitorAdsTable";
 import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
+import { useDashboardPrefsStore } from "@/stores/dashboardPrefs";
 
 const PAID_SELECTION_KEY = "paid";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
@@ -210,6 +213,7 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
 }
 
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
+  const paidScope = useDashboardPrefsStore((store) => store.paidScope);
   const setSelection = useAccountSelectionStore((store) => store.setSelection);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     () => useAccountSelectionStore.getState().getSelection(brandId, PAID_SELECTION_KEY),
@@ -254,7 +258,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
           onSelectedMetricChange={setSelectedMetric}
         />
       </div>
-      <div className="min-w-0 min-h-[clamp(200px,28dvh,400px)] overflow-hidden rounded-lg border bg-card">
+      <div className="min-w-0 min-h-[var(--dashboard-compact-panel-min-height)] overflow-hidden rounded-lg border bg-card">
         <BudgetPacingWidget
           brandId={brandId}
           selectedAccountId={selectedAccountId}
@@ -270,38 +274,39 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   }, []);
 
   return (
-    <div className="flex flex-col gap-[var(--app-shell-gap)]">
+    <div className="flex min-w-0 flex-col gap-[var(--app-shell-gap)]">
       <DashboardWarmOnMount brandId={brandId} isCold={false} />
       <PaidStatCards brandId={brandId} adAccountId={selectedAccountId} />
-      <section className="flex flex-col gap-3">
+      <section className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
           <p className="text-xs text-muted-foreground">Your paid performance at a glance. Pick your next move.</p>
         </div>
         <NorthStarActions />
-        <div className="flex justify-end">
-          <PaidKpiSelect />
-        </div>
-        <div data-tour-id="dashboard-top-ads" className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <PaidEntityTable
-            brandId={brandId}
-            adAccountId={selectedAccountId}
-            scope="top_campaigns"
-            title="Top campaigns"
-            emptyMessage="No campaign performance yet for this account."
-          />
-          <PaidEntityTable
-            brandId={brandId}
-            adAccountId={selectedAccountId}
-            scope="top_adsets"
-            title="Top ad sets"
-            emptyMessage="No ad set performance yet for this account."
-          />
+        <div data-tour-id="dashboard-top-ads" className="grid grid-cols-1 gap-[var(--dashboard-section-gap)] lg:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
+            <div className="flex items-center justify-between gap-2">
+              <PaidScopeToggle />
+              <PaidKpiSelect />
+            </div>
+            <PaidEntityTable
+              brandId={brandId}
+              adAccountId={selectedAccountId}
+              scope={paidScope}
+              title={paidScope === "top_adsets" ? "Top ad sets" : "Top campaigns"}
+              emptyMessage={
+                paidScope === "top_adsets"
+                  ? "No ad set performance yet for this account."
+                  : "No campaign performance yet for this account."
+              }
+            />
+          </div>
+          <PaidInsightsList brandId={brandId} adAccountId={selectedAccountId} />
         </div>
         <CompetitorAdsTable brandId={brandId} />
       </section>
 
-      <div className="grid min-h-[clamp(500px,80dvh,1400px)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
+      <div className="grid min-h-[var(--dashboard-reporting-min-height)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
         <div className="min-w-0">{reportingArea}</div>
 
       <AnimatePresence

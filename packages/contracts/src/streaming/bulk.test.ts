@@ -18,7 +18,7 @@ function makeStrategyBrief() {
       { format: "carousel" as const, weight: 0.4 },
       { format: "reel" as const, weight: 0.25 },
       { format: "post" as const, weight: 0.25 },
-      { format: "hyperframe" as const, weight: 0.1 },
+      { format: "story" as const, weight: 0.1 },
     ],
     platformSplit: [{ platform: "instagram" as const, weight: 1 }],
     cadencePerDayPerPlatform: 2.5,
@@ -71,7 +71,7 @@ describe("bulk content contracts", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("accepts a hyperframe placement spec with a composition brief", () => {
+  it("normalizes a legacy hyperframe placement to a reel carrying its composition brief", () => {
     const parsed = bulkPlacementSpecSchema.safeParse(
       makePlacementSpec({
         format: "hyperframe",
@@ -86,6 +86,7 @@ describe("bulk content contracts", () => {
     );
     expect(parsed.success).toBe(true);
     if (parsed.success) {
+      expect(parsed.data.format).toBe("reel");
       expect(parsed.data.hyperframe?.stylePreset).toBe("kinetic-type");
     }
   });
@@ -93,7 +94,7 @@ describe("bulk content contracts", () => {
   it("rejects a hyperframe brief with an out-of-range duration", () => {
     const parsed = bulkPlacementSpecSchema.safeParse(
       makePlacementSpec({
-        format: "hyperframe",
+        format: "reel",
         shots: null,
         hyperframe: {
           stylePreset: "minimal",

@@ -168,6 +168,11 @@ export function useCalendarDraftPersistence({
       .flatMap((day) =>
         day.slots
           .filter((draft) => draft.status !== "streaming")
+          // Server-owned drafts (agent/MCP pre-mint, enriched by the backend
+          // pipeline) are never written by the browser autosave — the writer owns
+          // only manual drafts. This is the invariant that stops the autosave from
+          // clobbering an agent post mid-enrichment.
+          .filter((draft) => draft.origin !== "agent")
           .map((draft) => ({ dayId: day.id, draft }))
       )
     const signature = serializeEntries(persistableEntries)

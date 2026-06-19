@@ -36,6 +36,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { MediaStagePill, resolveDraftMediaStage } from "./DraftLifecycle";
 import type { OrganicCalendarDraft } from "./types";
 import { PlatformBadge, StatusDot } from "./DraftCardBadges";
 import { DraftHoverCardContent } from "./DraftHoverCardContent";
@@ -135,20 +136,20 @@ export function CalendarDraftCard({
     draft.status !== "streaming";
 
   const accentColor = resolveAccentColor(draft, platform);
-  // Media presence is derived from ACTUAL realized media — durable
-  // publishingAssets or a `ready` mediaStatus — never the seeded mediaCount,
-  // which was historically defaulted to 1 even for text-only drafts.
+  // Enrichment state is the authoritative backend media_stage (with a derived
+  // fallback for ephemeral stream drafts) — the single source the card and the
+  // editor share, never re-classified ad-hoc per surface.
   const realizedMediaCount = draft.publishingAssets?.length ?? 0;
-  const mediaStatus = draft.mediaSuggestion?.mediaStatus;
-  const hasRealizedMedia = realizedMediaCount > 0 || mediaStatus === "ready";
-  const isMediaGenerating = mediaStatus === "generating";
   const storyboardFrames =
     draft.mediaSuggestion?.storyboard?.filter((frame) => hasTextValue(frame?.storageUrl)) ?? [];
-  // A text-only (blueprint) draft: no realized media yet, not actively
-  // generating, and not a status that already telegraphs its own state.
+  const mediaStage = resolveDraftMediaStage(draft);
+  const isMediaGenerating = mediaStage === "realizing";
+  const hasRealizedMedia = mediaStage === "realized";
+  const isStoryboardReady = mediaStage === "storyboard_ready";
+  // A text-only draft awaiting enrichment — but not while a status already
+  // telegraphs its own state (streaming/placeholder/published).
   const isTextOnlyDraft =
-    !hasRealizedMedia &&
-    !isMediaGenerating &&
+    mediaStage === "text_only" &&
     draft.status !== "streaming" &&
     draft.status !== "placeholder" &&
     draft.status !== "published";
@@ -420,34 +421,38 @@ export function CalendarDraftCard({
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
                     {draft.generationStage ?? "Generating media…"}
                   </p>
-                ) : isTextOnlyDraft && storyboardFrames.length > 0 ? (
+                ) : isStoryboardReady ? (
                   <div className="mt-2 space-y-1">
-                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
-                      Blueprint ready
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {storyboardFrames.slice(0, 3).map((frame, index) => (
-                        <div
-                          key={`${frame.storagePath ?? frame.storageUrl}-${index}`}
-                          className="relative h-9 w-9 overflow-hidden rounded border border-border/60 bg-muted/40"
-                        >
-                          <Image
-                            src={frame.storageUrl as string}
-                            alt={`Storyboard frame ${index + 1}`}
-                            fill
-                            unoptimized
-                            sizes="36px"
-                            className="object-cover"
-                          />
-                        </div>
-                      ))}
-                      {storyboardFrames.length > 3 && (
-                        <span className="text-[10px] font-medium text-muted-foreground/60">
-                          +{storyboardFrames.length - 3}
-                        </span>
-                      )}
-                    </div>
+                    <MediaStagePill mediaStage="storyboard_ready" />
+                    {storyboardFrames.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        {storyboardFrames.slice(0, 3).map((frame, index) => (
+                          <div
+                            key={`${frame.storagePath ?? frame.storageUrl}-${index}`}
+                            className="relative h-9 w-9 overflow-hidden rounded border border-border/60 bg-muted/40"
+                          >
+                            <Image
+                              src={frame.storageUrl as string}
+                              alt={`Storyboard frame ${index + 1}`}
+                              fill
+                              unoptimized
+                              sizes="36px"
+                              className="object-cover"
+                            />
+                          </div>
+                        ))}
+                        {storyboardFrames.length > 3 && (
+                          <span className="text-[10px] font-medium text-muted-foreground/60">
+                            +{storyboardFrames.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
+                ) : mediaStage === "failed" ? (
+                  <p className="mt-1.5">
+                    <MediaStagePill mediaStage="failed" />
+                  </p>
                 ) : isTextOnlyDraft ? (
                   <p className="mt-1.5 text-[10px] italic text-muted-foreground/60">
                     Text only — no media yet

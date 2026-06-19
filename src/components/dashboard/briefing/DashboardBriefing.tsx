@@ -1,25 +1,24 @@
 import type { ReactNode } from "react";
-import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
-import { TrendSignalsTable } from "./TrendSignalsTable";
 import { NorthStarActions } from "./NorthStarActions";
-import { DashboardBriefingEmptyState } from "./DashboardBriefingEmptyState";
 
 type DashboardBriefingProps = {
   brandId: string;
-  trends: BrandInsightsTrend[];
   lastGeneratedAt?: string;
-  // The right column beside Brand Trends — the organic creatives leaderboard.
+  // Left column: the account insights list. Right column: the top creatives.
+  insightsSlot?: ReactNode;
   creativesSlot?: ReactNode;
 };
 
-// The lead value moment for the home board: an "Overview" header, the ranked
-// insight leaderboard (or a teaching empty state), the competitor stub, and the
-// three North Star actions. Insights refresh automatically (onboarding + daily
-// cron); the manual refresh is a low-key secondary control, not a CTA.
-export function DashboardBriefing({ brandId, trends, lastGeneratedAt, creativesSlot }: DashboardBriefingProps) {
-  const hasInsights = trends.length > 0;
-
+// The lead value moment for the home board: an "Overview" header + manual
+// refresh, the three North Star actions, then the account insights beside the
+// top creatives. Trends live in the Brand Trends data table below.
+export function DashboardBriefing({
+  brandId,
+  lastGeneratedAt,
+  insightsSlot,
+  creativesSlot,
+}: DashboardBriefingProps) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -33,11 +32,7 @@ export function DashboardBriefing({ brandId, trends, lastGeneratedAt, creativesS
       <NorthStarActions />
 
       <div data-tour-id="dashboard-top-content" className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {hasInsights ? (
-          <TrendSignalsTable trends={trends} />
-        ) : (
-          <DashboardBriefingEmptyState />
-        )}
+        {insightsSlot}
         {creativesSlot}
       </div>
     </section>

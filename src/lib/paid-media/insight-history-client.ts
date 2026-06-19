@@ -21,18 +21,22 @@ export type PersistedCampaignInsight = GeneratedCampaignInsight & {
   createdAt: string;
 };
 
+// The durable paid insights now live in the unified brand_profiles.media_insights
+// surface (channel='paid'); ad_account_id→account_id, campaign_id→entity_id,
+// campaign_name→entity_name. We project that row back onto the stable
+// PersistedCampaignInsight shape so paid consumers are unchanged.
 type RawInsightRow = {
   id: string;
   snapshot_id: string;
   brand_id: string;
-  ad_account_id: string;
-  campaign_id: string | null;
-  campaign_name: string | null;
+  account_id: string;
+  entity_id: string | null;
+  entity_name: string | null;
   scope: GeneratedCampaignInsight["scope"];
   severity: GeneratedCampaignInsight["severity"];
   status: CampaignInsightStatus;
   primary_metric: CampaignInsightMetric;
-  title: string;
+  title: string | null;
   summary: string;
   recommendation: string | null;
   source: GeneratedCampaignInsight["source"];
@@ -47,14 +51,14 @@ function toPersistedInsight(row: RawInsightRow): PersistedCampaignInsight {
     rowId: row.id,
     snapshotId: row.snapshot_id,
     brandId: row.brand_id,
-    adAccountId: row.ad_account_id,
-    campaignId: row.campaign_id,
-    campaignName: row.campaign_name,
+    adAccountId: row.account_id,
+    campaignId: row.entity_id,
+    campaignName: row.entity_name,
     scope: row.scope,
     severity: row.severity,
     status: row.status,
     primaryMetric: row.primary_metric,
-    title: row.title,
+    title: row.title ?? "",
     summary: row.summary,
     recommendation: row.recommendation ?? undefined,
     source: row.source,
@@ -72,9 +76,10 @@ export async function getLatestInsights(params: {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
     .schema("brand_profiles")
-    .rpc("get_latest_paid_media_insights", {
+    .rpc("get_latest_media_insights", {
       p_brand_id: params.brandId,
-      p_ad_account_id: params.adAccountId,
+      p_account_id: params.adAccountId,
+      p_channel: "paid",
       p_limit: params.limit ?? 20,
     });
 
@@ -95,10 +100,11 @@ export async function getInsightStreak(params: {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
     .schema("brand_profiles")
-    .rpc("get_paid_media_insight_streak", {
+    .rpc("get_media_insight_streak", {
       p_brand_id: params.brandId,
-      p_ad_account_id: params.adAccountId,
+      p_account_id: params.adAccountId,
       p_fingerprint: params.fingerprint,
+      p_channel: "paid",
       p_lookback_days: params.lookbackDays ?? 14,
     });
 

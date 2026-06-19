@@ -43,6 +43,7 @@ import { EditableCaption, InlinePreviewTextarea } from "./EditableCaption"
 import { flattenHashtags } from "@/lib/organic/hashtags"
 import { PostMetaChips } from "./PostMetaChips"
 import { PostCommandMenu } from "./PostCommandMenu"
+import { MediaStagePill, resolveDraftMediaStage } from "./DraftLifecycle"
 import { MediaSelectPopover } from "./MediaSelectPopover"
 
 interface OrganicDraftPreviewProps {
@@ -900,9 +901,15 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
           actions={commandMenu}
         />
 
-        {/* Lifecycle + transient placement state — thin, contextual. */}
+        {/* Two lifecycle axes: publish status (stepper) + media enrichment stage. */}
         <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2">
           <LifecyclePill status={draft.status} />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+              Media
+            </span>
+            <MediaStagePill mediaStage={resolveDraftMediaStage(draft)} />
+          </div>
           {placement.canUndo && (
             <button
               type="button"

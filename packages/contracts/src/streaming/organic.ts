@@ -4,6 +4,16 @@ import { mediaSearchResultsFrameSchema } from "./media";
 const jobEventDataSchema = z.object({
   jobId: z.string().min(1),
   brandId: z.string().min(1),
+  // The pre-minted organic_calendar_drafts row id. Present from job.enqueued /
+  // ui.post_enqueued onward (and on draft.text_ready / draft.ready) so the FE can
+  // render the real, durable calendar row immediately and reconcile the stream
+  // card, refetch, and Realtime to the SAME id — no duplicate/ghost cards.
+  draftId: z.string().optional(),
+  // YYYY-MM-DD slot the draft belongs to (= scheduledAt date), so the calendar can
+  // place the card and navigate to its week without parsing scheduledAt.
+  dayId: z.string().optional(),
+  scheduledAt: z.string().optional(),
+  platform: z.string().optional(),
 }).loose();
 
 const uiCardDataSchema = z.record(z.string(), z.unknown());

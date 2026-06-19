@@ -62,12 +62,12 @@ export default function DashboardLayoutShell({
 
           <SidebarProvider defaultOpen={false}>
             <AppSidebar />
-            <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-dvh">
+            <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
               <TourProvider>
                 <DashboardHeader />
-                <main className="@container/app-main flex-1 min-h-0 overflow-y-auto px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
+                <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
                   <BrandWelcomeBanner />
-                  <div className="w-full min-h-full">{children}</div>
+                  <div className="min-h-full w-full min-w-0">{children}</div>
                 </main>
               </TourProvider>
             </SidebarInset>

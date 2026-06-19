@@ -9,12 +9,13 @@ const AD_ACCOUNT_ID = "act_123";
 type SnapshotRow = {
   id: string;
   brand_id: string;
-  ad_account_id: string;
+  account_id: string;
+  channel: string;
   insight_count: number;
   source: string;
 };
 
-type InsightRow = { snapshot_id: string; campaign_id: string | null };
+type InsightRow = { snapshot_id: string; entity_id: string | null; channel: string };
 
 type FakeState = {
   snapshots: SnapshotRow[];
@@ -49,14 +50,14 @@ function buildClient() {
       return builder;
     },
     insert(row: unknown) {
-      if (builder._table === "paid_media_insight_snapshots") {
+      if (builder._table === "media_insight_snapshots") {
         const r = row as Omit<SnapshotRow, "id">;
         const snapshot: SnapshotRow = { ...r, id: `snap-${state.snapshots.length + 1}` };
         builder._pendingInsert = { row: snapshot, returnsId: true };
         state.snapshots.push(snapshot);
         return builder;
       }
-      if (builder._table === "paid_media_campaign_insights") {
+      if (builder._table === "media_insights") {
         if (state.failInsightInsert) {
           return {
             select: () => ({ single: async () => ({ data: null, error: { message: "boom" } }) }),

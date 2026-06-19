@@ -58,6 +58,11 @@ function buildInsightLine(hookRate: number | undefined, vsAveragePct: number | u
   return base;
 }
 
+function resolveMetricValue(post: OrganicPost, metric: OrganicCreativeMetric): number | undefined {
+  const value = post.metrics?.[metric];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 // Pure join of ranked organic posts with their Engine B hook-rate insight (or a
 // client-derived hook-rate-vs-average fallback). Kept hook-free so it is unit
 // testable without React or the browser.
@@ -69,10 +74,12 @@ export function buildOrganicCreativeRows(params: {
 }): OrganicCreativeRow[] {
   const { posts, metric, awarenessHookRateById, limit = 5 } = params;
   const accountAvgHookRate = meanHookRate(posts);
-  const ranked = sortPosts(posts, metric).slice(0, limit);
+  const ranked = sortPosts(posts, metric)
+    .filter((post) => resolveMetricValue(post, metric) !== undefined)
+    .slice(0, limit);
 
   return ranked.map((post) => {
-    const metricValue = post.metrics?.[metric] ?? 0;
+    const metricValue = resolveMetricValue(post, metric) ?? 0;
     const hookRate = awarenessHookRateById?.get(post.id) ?? calculateHookRate(post);
     const vsAveragePct =
       typeof hookRate === "number" && typeof accountAvgHookRate === "number" && accountAvgHookRate > 0

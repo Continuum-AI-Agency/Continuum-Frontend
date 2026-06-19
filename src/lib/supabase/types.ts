@@ -1330,6 +1330,38 @@ export type Database = {
           },
         ]
       }
+      canvas_active_view: {
+        Row: {
+          brand_profile_id: string
+          last_seen_at: string
+          room_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_profile_id: string
+          last_seen_at?: string
+          room_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          last_seen_at?: string
+          room_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_active_view_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       canvas_rooms: {
         Row: {
           brand_profile_id: string
@@ -1355,6 +1387,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "canvas_rooms_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      canvas_run_requests: {
+        Row: {
+          brand_profile_id: string
+          created_at: string
+          error: string | null
+          id: string
+          node_ids: Json | null
+          requested_by: string
+          result: Json | null
+          room_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          node_ids?: Json | null
+          requested_by: string
+          result?: Json | null
+          room_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          node_ids?: Json | null
+          requested_by?: string
+          result?: Json | null
+          room_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_run_requests_brand_profile_id_fkey"
             columns: ["brand_profile_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
@@ -1595,6 +1674,164 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      media_insight_snapshots: {
+        Row: {
+          account_id: string
+          brand_id: string
+          channel: string
+          computed_at: string
+          computed_by: string | null
+          id: string
+          insight_count: number
+          peer_set_size: number
+          platform: string
+          range_preset: string
+          range_since: string | null
+          range_until: string | null
+          source: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          channel: string
+          computed_at?: string
+          computed_by?: string | null
+          id?: string
+          insight_count?: number
+          peer_set_size?: number
+          platform: string
+          range_preset: string
+          range_since?: string | null
+          range_until?: string | null
+          source?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          channel?: string
+          computed_at?: string
+          computed_by?: string | null
+          id?: string
+          insight_count?: number
+          peer_set_size?: number
+          platform?: string
+          range_preset?: string
+          range_since?: string | null
+          range_until?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_insight_snapshots_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_insights: {
+        Row: {
+          account_id: string
+          acknowledged_at: string | null
+          action_state: string
+          brand_id: string
+          category: string | null
+          channel: string
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_name: string | null
+          entity_permalink: string | null
+          evidence: Json
+          fingerprint: string | null
+          id: string
+          platform: string
+          primary_metric: string | null
+          recommendation: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          scope: string
+          severity: string
+          snapshot_id: string
+          source: string
+          status: string
+          summary: string
+          title: string | null
+        }
+        Insert: {
+          account_id: string
+          acknowledged_at?: string | null
+          action_state?: string
+          brand_id: string
+          category?: string | null
+          channel: string
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_name?: string | null
+          entity_permalink?: string | null
+          evidence?: Json
+          fingerprint?: string | null
+          id?: string
+          platform: string
+          primary_metric?: string | null
+          recommendation?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          scope: string
+          severity: string
+          snapshot_id: string
+          source: string
+          status: string
+          summary: string
+          title?: string | null
+        }
+        Update: {
+          account_id?: string
+          acknowledged_at?: string | null
+          action_state?: string
+          brand_id?: string
+          category?: string | null
+          channel?: string
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_name?: string | null
+          entity_permalink?: string | null
+          evidence?: Json
+          fingerprint?: string | null
+          id?: string
+          platform?: string
+          primary_metric?: string | null
+          recommendation?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          scope?: string
+          severity?: string
+          snapshot_id?: string
+          source?: string
+          status?: string
+          summary?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_insights_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_insights_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "media_insight_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paid_media_campaign_indexes: {
         Row: {
@@ -3329,6 +3566,49 @@ export type Database = {
         Returns: string
       }
       get_brand_timezone: { Args: { brand_id: string }; Returns: string }
+      get_latest_media_insights: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_channel?: string
+          p_limit?: number
+          p_scope?: string
+        }
+        Returns: {
+          account_id: string
+          acknowledged_at: string | null
+          action_state: string
+          brand_id: string
+          category: string | null
+          channel: string
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_name: string | null
+          entity_permalink: string | null
+          evidence: Json
+          fingerprint: string | null
+          id: string
+          platform: string
+          primary_metric: string | null
+          recommendation: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          scope: string
+          severity: string
+          snapshot_id: string
+          source: string
+          status: string
+          summary: string
+          title: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "media_insights"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_latest_paid_media_insights: {
         Args: { p_ad_account_id: string; p_brand_id: string; p_limit?: number }
         Returns: {
@@ -3356,6 +3636,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_media_insight_streak: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_channel?: string
+          p_fingerprint: string
+          p_lookback_days?: number
+        }
+        Returns: number
       }
       get_paid_media_insight_streak: {
         Args: {
@@ -5318,6 +5608,7 @@ export type Database = {
           created_at: string
           id: string
           instagram_post_id: string | null
+          media_stage: string
           platform: string | null
           platform_account_id: string
           position: Json | null
@@ -5337,6 +5628,7 @@ export type Database = {
           created_at?: string
           id?: string
           instagram_post_id?: string | null
+          media_stage?: string
           platform?: string | null
           platform_account_id: string
           position?: Json | null
@@ -5356,6 +5648,7 @@ export type Database = {
           created_at?: string
           id?: string
           instagram_post_id?: string | null
+          media_stage?: string
           platform?: string | null
           platform_account_id?: string
           position?: Json | null

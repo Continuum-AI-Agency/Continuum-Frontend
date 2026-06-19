@@ -76,6 +76,7 @@ export function OrganicCreativesTable({
       platform,
       range: { preset: RANGE_PRESET },
       scope: "posts",
+      postsLimit: 25,
     })
       .then((response) => {
         if (!cancelled) setPostsState({ status: "success", posts: response.posts ?? [] });

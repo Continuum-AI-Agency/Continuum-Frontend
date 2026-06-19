@@ -76,7 +76,7 @@ export default async function LibraryPage({
   const kind_ = parsedKind.success ? parsedKind.data : undefined;
 
   return (
-    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full overflow-hidden">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full min-w-0 overflow-hidden">
       {/* Stable Suspense boundary (no per-filter key): filter/collection changes
           are soft navigations, so React keeps the current grid mounted during the
           refetch instead of tearing it down to the skeleton. The skeleton shows

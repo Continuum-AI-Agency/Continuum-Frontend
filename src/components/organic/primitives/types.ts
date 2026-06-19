@@ -1,7 +1,9 @@
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation"
+import type { OrganicMediaStage } from "@continuum/contracts"
 
 export type { CalendarGenerationEvent }
+export type { OrganicMediaStage }
 
 export type OrganicPlatformTag = OrganicPlatformKey
 
@@ -20,6 +22,10 @@ export type OrganicCalendarDraft = {
   timeLabel: string
   dateLabel: string
   status: OrganicDraftStatus
+  // Enrichment ladder (orthogonal to publish status): text_only -> storyboard_ready
+  // -> realizing -> realized | failed. Authoritative value comes from the backend
+  // media_stage column; the card lifecycle pill reads this, not ad-hoc media flags.
+  mediaStage?: OrganicMediaStage
   platforms: OrganicPlatformTag[]
   format: string
   objective: string

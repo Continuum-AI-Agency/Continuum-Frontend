@@ -6,14 +6,13 @@ import {
   computeInsightFingerprint,
   primaryMetricFor,
   primaryStatusFor,
-} from "./insight-data-points";
-import type { CampaignPerformanceRow } from "./performance-types";
+  type InsightCampaignInput,
+} from "./insight-model";
 
-const campaigns: CampaignPerformanceRow[] = [
+const campaigns: InsightCampaignInput[] = [
   {
     id: "campaign-a",
     name: "A",
-    status: "ACTIVE",
     metrics: {
       spend: 100,
       roas: 5,
@@ -27,7 +26,6 @@ const campaigns: CampaignPerformanceRow[] = [
   {
     id: "campaign-b",
     name: "B",
-    status: "ACTIVE",
     metrics: {
       spend: 200,
       roas: 1,
@@ -47,8 +45,12 @@ describe("campaign insight data points", () => {
       evidenceWindow: "last_14d",
     });
 
-    const strongRoas = points.find((point) => point.campaignId === "campaign-a" && point.metric === "roas");
-    const riskyCpa = points.find((point) => point.campaignId === "campaign-b" && point.metric === "cpa");
+    const strongRoas = points.find(
+      (point) => point.campaignId === "campaign-a" && point.metric === "roas",
+    );
+    const riskyCpa = points.find(
+      (point) => point.campaignId === "campaign-b" && point.metric === "cpa",
+    );
 
     expect(strongRoas?.status).toBe("strong");
     expect(riskyCpa?.status).toBe("risk");
@@ -63,6 +65,20 @@ describe("campaign insight data points", () => {
 
     expect(insights.length).toBeGreaterThan(0);
     expect(insights.some((insight) => insight.evidence.length > 0)).toBe(true);
+  });
+
+  it("flags an overspending pace row as risk", () => {
+    const points = buildCampaignInsightDataPoints({
+      campaigns,
+      budgetPacing: {
+        campaigns: [
+          { campaignId: "campaign-a", campaignName: "A", pacePct: 130, paceStatus: "overspending" },
+        ],
+      },
+      evidenceWindow: "last_14d",
+    });
+    const pace = points.find((point) => point.metric === "pace");
+    expect(pace?.status).toBe("risk");
   });
 });
 
@@ -88,7 +104,7 @@ describe("computeInsightFingerprint", () => {
         campaignId: null,
         primaryMetric: "spend",
         status: "watch",
-      })
+      }),
     ).toBe("account:spend:watch");
   });
 
@@ -107,7 +123,7 @@ describe("computeInsightFingerprint", () => {
   });
 
   it("matches the SQL generated-column formula", () => {
-    // The DB computes: coalesce(campaign_id, 'account') || ':' || primary_metric || ':' || status
+    // The DB computes: coalesce(entity_id, 'account') || ':' || primary_metric || ':' || status
     // Client must match exactly so streak queries are consistent.
     const cases: Array<[string | null, string, string, string]> = [
       ["camp-1", "roas", "risk", "camp-1:roas:risk"],
@@ -120,7 +136,7 @@ describe("computeInsightFingerprint", () => {
           campaignId,
           primaryMetric: metric as never,
           status: status as never,
-        })
+        }),
       ).toBe(expected);
     }
   });
@@ -141,4 +157,3 @@ describe("primaryMetricFor / primaryStatusFor", () => {
     }
   });
 });
-

@@ -114,6 +114,65 @@ describe("calendar draft persistence utils", () => {
     expect(mapped?.draft.mediaCount).toBe(2)
   })
 
+  it("tags pre-minted agent/mcp rows as agent-origin (server-owned) from slot_data.origin", () => {
+    const days = buildWeekDays(new Date("2026-04-20T12:00:00"))
+    const agentRow: PersistedOrganicDraftRow = {
+      id: "agent-1",
+      status: "placeholder",
+      scheduled_date: "2026-04-21",
+      platform_account_id: "acct-1",
+      slot_data: { dayId: "2026-04-21", platform: "instagram", origin: "agent" },
+    }
+    expect(mapPersistedRowToCalendarEntry(agentRow, days)?.draft.origin).toBe("agent")
+
+    const mcpRow: PersistedOrganicDraftRow = { ...agentRow, id: "mcp-1", slot_data: { dayId: "2026-04-21", origin: "mcp" } }
+    expect(mapPersistedRowToCalendarEntry(mcpRow, days)?.draft.origin).toBe("agent")
+
+    const manualRow: PersistedOrganicDraftRow = {
+      ...agentRow,
+      id: "manual-1",
+      slot_data: { dayId: "2026-04-21", draftSnapshot: { id: "l", status: "draft", origin: "manual" } },
+    }
+    expect(mapPersistedRowToCalendarEntry(manualRow, days)?.draft.origin).toBe("manual")
+  })
+
+  it("maps the authoritative media_stage column onto the draft", () => {
+    const days = buildWeekDays(new Date("2026-04-20T12:00:00"))
+    const row: PersistedOrganicDraftRow = {
+      id: "stage-1",
+      status: "draft",
+      scheduled_date: "2026-04-21",
+      platform_account_id: "acct-1",
+      media_stage: "storyboard_ready",
+      slot_data: { dayId: "2026-04-21" },
+    }
+    expect(mapPersistedRowToCalendarEntry(row, days)?.draft.mediaStage).toBe("storyboard_ready")
+  })
+
+  it("derives a media_stage fallback from content_json when the column is null (legacy rows)", () => {
+    const days = buildWeekDays(new Date("2026-04-20T12:00:00"))
+    const realizedRow: PersistedOrganicDraftRow = {
+      id: "legacy-realized",
+      status: "draft",
+      scheduled_date: "2026-04-21",
+      platform_account_id: "acct-1",
+      media_stage: null,
+      slot_data: { dayId: "2026-04-21" },
+      content_json: {
+        schedule: { dayId: "2026-04-21" },
+        publishingAssets: [{ storagePath: "p/1.jpg" }],
+      },
+    }
+    expect(mapPersistedRowToCalendarEntry(realizedRow, days)?.draft.mediaStage).toBe("realized")
+
+    const textOnlyRow: PersistedOrganicDraftRow = {
+      ...realizedRow,
+      id: "legacy-text",
+      content_json: { schedule: { dayId: "2026-04-21" } },
+    }
+    expect(mapPersistedRowToCalendarEntry(textOnlyRow, days)?.draft.mediaStage).toBe("text_only")
+  })
+
   it("checks day id range within a week", () => {
     expect(isDayIdInWeekRange("2026-04-20", "2026-04-20")).toBe(true)
     expect(isDayIdInWeekRange("2026-04-26", "2026-04-20")).toBe(true)

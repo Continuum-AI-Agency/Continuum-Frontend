@@ -196,8 +196,8 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   clicks: "#84cc16",
 };
 
-const CHART_MIN_HEIGHT_CLASS = "min-h-[260px] flex-1";
-const CHART_FIXED_HEIGHT_CLASS = "h-[clamp(260px,42svh,460px)]";
+const CHART_MIN_HEIGHT_CLASS = "min-h-[var(--dashboard-chart-min-height)] flex-1";
+const CHART_FIXED_HEIGHT_CLASS = "h-[var(--dashboard-chart-fixed-height)]";
 const RAIL_HEIGHT_CLASS = "h-full";
 const RAIL_SCROLL_HEIGHT_CLASS = "h-full";
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
@@ -2478,7 +2478,7 @@ export function CampaignAdSetWorkspace({
           </ResizablePanelGroup>
         ) : (
           <section className="flex h-full min-h-0 flex-col gap-1.5 overflow-auto p-1.5">
-            <div className="grid min-h-0 gap-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid min-h-0 gap-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,var(--dashboard-side-rail-width))]">
             <div className="space-y-1.5">
               {adSetErrors.length > 0 ? (
                 <IntegrationErrorBanner
@@ -2722,7 +2722,7 @@ export function CampaignAdSetWorkspace({
                     Scope
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
-                    <ScrollArea className="h-[150px] px-1 pb-1">
+                    <ScrollArea className="h-[min(11rem,24dvh)] px-1 pb-1">
                       {scopeRailItems.length === 0 ? (
                         <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">No available scope.</div>
                       ) : (
@@ -2785,7 +2785,7 @@ export function CampaignAdSetWorkspace({
                     Ad Sets ({selectedScopedAdSets.length} selected)
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
-                    <ScrollArea className="h-[300px] px-1 pb-1">
+                    <ScrollArea className="h-[min(20rem,38dvh)] px-1 pb-1">
                       {isAdSetLoading ? (
                         <div className="space-y-1 px-1">
                           {Array.from({ length: 8 }).map((_, idx) => (

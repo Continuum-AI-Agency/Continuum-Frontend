@@ -1,6 +1,7 @@
 import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from "@/components/organic/primitives/types"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import { isOrganicPlatformKey } from "@/lib/organic/platforms"
+import { deriveOrganicMediaStage, organicMediaStageSchema, type OrganicMediaStage } from "@continuum/contracts"
 
 type PersistedDraftStatus = "draft" | "scheduled" | "published" | "failed" | "placeholder"
 
@@ -171,6 +172,9 @@ export type PersistedOrganicDraftRow = {
   content_json?: unknown
   // Non-null for drafts that belong to a bulk plan — the "planned" provenance tag.
   content_plan_id?: string | null
+  // Authoritative enrichment ladder stamped by the backend on every persist.
+  // Legacy rows (pre-column) are null; we derive a fallback from content_json.
+  media_stage?: string | null
 }
 
 export type PersistedDraftWritePayload = {
@@ -352,6 +356,25 @@ export function mergeUnsavedLocalDrafts(
   })
 }
 
+// Server-owned provenance. The agent/MCP pre-mint writes origin at slot_data.origin
+// (top level); the manual flow writes it under draftSnapshot.origin. 'mcp' collapses
+// to 'agent' — both are server-owned (the browser autosave must never write them).
+function resolveDraftOrigin(value: unknown): OrganicCalendarDraft["origin"] {
+  if (value === "manual") return "manual"
+  if (value === "agent" || value === "mcp") return "agent"
+  return undefined
+}
+
+function resolveMediaStage(
+  columnValue: string | null | undefined,
+  placement: Record<string, unknown>,
+): OrganicMediaStage {
+  const parsed = organicMediaStageSchema.safeParse(columnValue)
+  if (parsed.success) return parsed.data
+  // Legacy rows predate the column: derive from the durable placement signals.
+  return deriveOrganicMediaStage(placement as Parameters<typeof deriveOrganicMediaStage>[0])
+}
+
 export function mapPersistedRowToCalendarEntry(
   row: PersistedOrganicDraftRow,
   days: OrganicCalendarDay[]
@@ -413,6 +436,7 @@ export function mapPersistedRowToCalendarEntry(
       "9:00 AM",
     dateLabel: `${day.label}, ${day.dateLabel}`,
     status: normalizePersistedStatus(row.status),
+    mediaStage: resolveMediaStage(row.media_stage, placement),
     platforms,
     contentPlanId: readString(row.content_plan_id) ?? null,
     format: readString(snapshot.format) ?? readString(placementContent.format) ?? "Post",
@@ -425,10 +449,7 @@ export function mapPersistedRowToCalendarEntry(
     tags: readStringArray(snapshot.tags),
     mediaCount: readNumber(snapshot.mediaCount) ?? 1,
     seedTrendId: readString(snapshot.seedTrendId) ?? undefined,
-    origin:
-      snapshot.origin === "manual" || snapshot.origin === "agent"
-        ? snapshot.origin
-        : undefined,
+    origin: resolveDraftOrigin(snapshot.origin ?? slotData.origin),
     targetAccountId: readString(snapshot.targetAccountId) ?? readString(row.platform_account_id) ?? undefined,
     creativeIdea: readString(snapshot.creativeIdea) ?? undefined,
     titleTopic: readString(snapshot.titleTopic) ?? undefined,

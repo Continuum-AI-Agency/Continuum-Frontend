@@ -6,9 +6,13 @@ import type { PaidEntityKpi } from "@continuum/contracts";
 // by — kept here (not component state) so both tables share it and the choice
 // survives navigation. Account memory lives in the shared
 // useAccountSelectionStore (brandId:platform), reused by organic and paid.
+export type PaidEntityScope = "top_campaigns" | "top_adsets";
+
 type DashboardPrefsState = {
   paidKpi: PaidEntityKpi;
   setPaidKpi: (kpi: PaidEntityKpi) => void;
+  paidScope: PaidEntityScope;
+  setPaidScope: (scope: PaidEntityScope) => void;
 };
 
 export const useDashboardPrefsStore = create<DashboardPrefsState>()(
@@ -16,6 +20,8 @@ export const useDashboardPrefsStore = create<DashboardPrefsState>()(
     (set) => ({
       paidKpi: "roas",
       setPaidKpi: (kpi) => set({ paidKpi: kpi }),
+      paidScope: "top_campaigns",
+      setPaidScope: (scope) => set({ paidScope: scope }),
     }),
     { name: "continuum:dashboard-prefs", version: 1 },
   ),

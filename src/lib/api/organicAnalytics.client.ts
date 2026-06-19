@@ -18,6 +18,8 @@ export type OrganicAnalyticsRequest = {
   };
   scope?: OrganicAnalyticsScope;
   selectedPostId?: string;
+  postsLimit?: number;
+  commentsLimit?: number;
   forceRefresh?: boolean;
 };
 

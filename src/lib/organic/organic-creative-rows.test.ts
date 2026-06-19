@@ -36,6 +36,18 @@ describe("buildOrganicCreativeRows", () => {
     expect(rows[0]?.metricValue).toBe(9000);
   });
 
+  it("does not coerce missing reach into a ranked zero", () => {
+    const rows = buildOrganicCreativeRows({
+      metric: "reach",
+      posts: [
+        post({ id: "missing", mediaUrl: "missing.jpg" }),
+        post({ id: "real", reach: 1200, mediaUrl: "real.jpg" }),
+      ],
+    });
+    expect(rows.map((row) => row.id)).toEqual(["real"]);
+    expect(rows[0]?.metricValue).toBe(1200);
+  });
+
   it("derives a hook-rate-vs-average insight line when no awareness data", () => {
     const rows = buildOrganicCreativeRows({
       metric: "reach",

@@ -22,7 +22,8 @@
     "./competitor-spy": "./src/competitor-spy/index.ts",
     "./organic": "./src/organic/index.ts",
     "./brands": "./src/brands/index.ts",
-    "./mcp": "./src/mcp/index.ts"
+    "./mcp": "./src/mcp/index.ts",
+    "./ai-studio": "./src/ai-studio/index.ts"
   },
   "peerDependencies": {
     "zod": "^3.22.0 || ^4.0.0"

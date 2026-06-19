@@ -23,6 +23,8 @@ const requestSchema = z.object({
   forceRefresh: z.boolean().optional(),
   scope: organicAnalyticsScopeSchema.optional(),
   selectedPostId: z.string().optional(),
+  postsLimit: z.number().int().min(1).max(25).optional(),
+  commentsLimit: z.number().int().min(1).max(50).optional(),
 });
 
 export async function POST(request: Request) {
@@ -54,6 +56,8 @@ export async function POST(request: Request) {
         forceRefresh: parsed.data.forceRefresh ?? false,
         scope: parsed.data.scope ?? "all",
         selectedPostId: parsed.data.selectedPostId,
+        postsLimit: parsed.data.postsLimit,
+        commentsLimit: parsed.data.commentsLimit,
       },
     });
 

@@ -80,10 +80,11 @@ export async function persistCampaignInsightsSnapshot(
 
   const { data: snapshot, error: snapshotError } = await supabase
     .schema("brand_profiles")
-    .from("paid_media_insight_snapshots")
+    .from("media_insight_snapshots")
     .insert({
       brand_id: brandId,
-      ad_account_id: adAccountId,
+      account_id: adAccountId,
+      channel: "paid",
       platform,
       range_preset: rangePreset,
       range_since: rangeSince ?? null,
@@ -103,18 +104,20 @@ export async function persistCampaignInsightsSnapshot(
     };
   }
 
-  const rows = insights.map((insight) => buildInsightRow(insight, snapshot.id, brandId, adAccountId));
+  const rows = insights.map((insight) =>
+    buildInsightRow(insight, snapshot.id, brandId, adAccountId, platform),
+  );
 
   const { error: insightsError } = await supabase
     .schema("brand_profiles")
-    .from("paid_media_campaign_insights")
+    .from("media_insights")
     .insert(rows);
 
   if (insightsError) {
     // Roll back the snapshot so we don't keep an empty parent row.
     await supabase
       .schema("brand_profiles")
-      .from("paid_media_insight_snapshots")
+      .from("media_insight_snapshots")
       .delete()
       .eq("id", snapshot.id);
     return { ok: false, error: insightsError.message };
@@ -127,7 +130,8 @@ function buildInsightRow(
   insight: GeneratedCampaignInsight,
   snapshotId: string,
   brandId: string,
-  adAccountId: string
+  adAccountId: string,
+  platform: string
 ) {
   const primaryMetric = primaryMetricFor(insight);
   const status = primaryStatusFor(insight);
@@ -143,9 +147,11 @@ function buildInsightRow(
   return {
     snapshot_id: snapshotId,
     brand_id: brandId,
-    ad_account_id: adAccountId,
-    campaign_id: campaignId,
-    campaign_name: campaignName,
+    account_id: adAccountId,
+    channel: "paid",
+    platform,
+    entity_id: campaignId,
+    entity_name: campaignName,
     scope: insight.scope,
     severity: insight.severity,
     status,
