@@ -52,6 +52,16 @@ mock.module("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }))
 
+mock.module("@/components/ui/calendar", () => ({
+  Calendar: () => <div data-testid="calendar" />,
+}))
+
+mock.module("@/components/ui/popover", () => ({
+  Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}))
+
 mock.module("@/components/ui/ToastProvider", () => ({
   useToast: () => ({ show: mock() }),
   useToastContext: () => ({ show: mock() }),
@@ -100,6 +110,8 @@ function defaultProps(
   return {
     viewMode: "week",
     onViewModeChange: mock(),
+    dateRange: null,
+    onDateRangeChange: mock(),
     selectedTrendCount: 2,
     maxTrendSelections: 5,
     seededDraftCount: 3,
@@ -214,5 +226,55 @@ describe("CalendarToolbar", () => {
 
     expect(generateButton).toBeTruthy()
     expect(generateButton!.disabled).toBe(true)
+  })
+
+  it("shows the timeframe selector only in list view", () => {
+    const week = render(<CalendarToolbar {...defaultProps({ viewMode: "week" })} />)
+    expect(Array.from(week.container.querySelectorAll("button")).map((b) => b.textContent?.trim())).toContain(
+      "Planned",
+    )
+    cleanup()
+
+    const list = render(<CalendarToolbar {...defaultProps({ viewMode: "list" })} />)
+    const labels = Array.from(list.container.querySelectorAll("button")).map((b) => b.textContent?.trim())
+    expect(labels).toContain("All")
+    expect(labels).toContain("Week")
+    expect(labels).toContain("Month")
+    expect(labels).not.toContain("Planned")
+  })
+
+  it("emits a calendar-month range when the Month preset is clicked", () => {
+    const onDateRangeChange = mock()
+    const { container } = render(
+      <CalendarToolbar {...defaultProps({ viewMode: "list", onDateRangeChange })} />,
+    )
+    // "Month" appears twice (view switch + timeframe preset); the timeframe
+    // preset is the later one in DOM order.
+    const monthButtons = Array.from(container.querySelectorAll("button")).filter(
+      (b) => b.textContent?.trim() === "Month",
+    )
+    fireEvent.click(monthButtons[monthButtons.length - 1])
+    expect(onDateRangeChange).toHaveBeenCalledTimes(1)
+    const range = onDateRangeChange.mock.calls[0][0] as { from: string; to: string }
+    expect(range.from).toMatch(/^\d{4}-\d{2}-01$/)
+    expect(range.from <= range.to).toBe(true)
+  })
+
+  it("clears the timeframe when the All preset is clicked", () => {
+    const onDateRangeChange = mock()
+    const { container } = render(
+      <CalendarToolbar
+        {...defaultProps({
+          viewMode: "list",
+          dateRange: { from: "2026-06-01", to: "2026-06-30" },
+          onDateRangeChange,
+        })}
+      />,
+    )
+    const allButton = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "All",
+    )
+    fireEvent.click(allButton!)
+    expect(onDateRangeChange).toHaveBeenCalledWith(null)
   })
 })

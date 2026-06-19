@@ -22,10 +22,12 @@ import { CalendarDndContext } from "./CalendarDndContext"
 import { TimeGridCanvas } from "./TimeGridCanvas"
 import { CalendarDraftCard } from "./CalendarDraftCard"
 import {
+  UNSCHEDULED_DAY_ID,
   buildWeekDays,
   formatDayId,
   formatWeekHeading,
   formatWeekRange,
+  sliceWeekDays,
   startOfWeek,
 } from "./calendar-utils"
 import { useCalendarSelection } from "../hooks/useCalendarSelection"
@@ -33,7 +35,6 @@ import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
 import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistence"
 import { useCalendarRealtimeSync } from "../hooks/useCalendarRealtimeSync"
-import { DraftsElsewhereBadge } from "./DraftsElsewhereBadge"
 import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
@@ -151,10 +152,8 @@ export function OrganicCalendarWorkspaceClient({
     promoteBacklogDraft,
     setAccountContext,
     gridError,
-    weekCache,
-    setWeekCache,
-    acknowledgeDraftsElsewhere,
-    requestCalendarRefetch,
+    dateRange,
+    setDateRange,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -179,10 +178,8 @@ export function OrganicCalendarWorkspaceClient({
       promoteBacklogDraft: state.promoteBacklogDraft,
       setAccountContext: state.setAccountContext,
       gridError: state.gridError,
-      weekCache: state.weekCache,
-      setWeekCache: state.setWeekCache,
-      acknowledgeDraftsElsewhere: state.acknowledgeDraftsElsewhere,
-      requestCalendarRefetch: state.requestCalendarRefetch,
+      dateRange: state.dateRange,
+      setDateRange: state.setDateRange,
     }))
   )
 
@@ -243,11 +240,6 @@ export function OrganicCalendarWorkspaceClient({
     }
     return startOfWeek(new Date())
   }, [initialWeekStart, persistedWeekStartId])
-  const resolvedInitialWeekStartId = React.useMemo(
-    () => formatDayId(resolvedInitialWeekStart),
-    [resolvedInitialWeekStart]
-  )
-
   const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart)
   const [monthAnchorDate, setMonthAnchorDate] = React.useState<Date>(resolvedInitialWeekStart)
   const [localGridViewMode, setLocalGridViewMode] = React.useState<"day" | "week">("week")
@@ -262,7 +254,6 @@ export function OrganicCalendarWorkspaceClient({
 
   const { refetch: refetchCalendarDrafts } = useCalendarDraftPersistence({
     brandProfileId,
-    weekStartId,
     calendarDays,
     setCalendarDays,
     updateDraftById,
@@ -315,47 +306,24 @@ export function OrganicCalendarWorkspaceClient({
     setPersistedWeekStartId(weekStartId)
   }, [setPersistedWeekStartId, weekStartId])
 
-  // Keep the store's week cache in sync with the current week's days.
-  // Runs after render so it never triggers a synchronous re-render loop.
-  React.useEffect(() => {
-    if (calendarDays.length > 0) {
-      setWeekCache(weekStartId, calendarDays)
-    }
-  }, [calendarDays, weekStartId, setWeekCache])
-
-  // Populate calendar days when the store is empty for the current week.
+  // Pre-fetch placeholder: seed a week scaffold so the grid paints before the
+  // fetch-all refetch hydrates the full loaded-day set. Once drafts load (or for a
+  // brand with none, the visible-month scaffold), this no longer fires.
   React.useEffect(() => {
     if (calendarDays.length > 0) return
+    setCalendarDays(initialDays.length > 0 ? initialDays : buildWeekDays(weekStart))
+  }, [calendarDays.length, initialDays, setCalendarDays, weekStart])
 
-    const cachedWeek = weekCache[weekStartId]
-    const fallbackDays =
-      cachedWeek ??
-      (weekStartId === resolvedInitialWeekStartId
-        ? initialDays
-        : buildWeekDays(weekStart))
-    setCalendarDays(fallbackDays)
-  }, [
-    calendarDays.length,
-    weekCache,
-    initialDays,
-    resolvedInitialWeekStartId,
-    setCalendarDays,
-    weekStart,
-    weekStartId,
-  ])
-
+  // Week navigation is now a pure cursor move over already-loaded data — no per-week
+  // fetch or cache swap. The week grid re-slices the loaded set for the new week.
   const handleWeekChange = React.useCallback(
     (date: Date) => {
       const nextWeekStart = startOfWeek(date)
-      const nextWeekId = formatDayId(nextWeekStart)
-      if (nextWeekId === weekStartId) return
-      setWeekCache(weekStartId, calendarDays)
-      const nextDays = weekCache[nextWeekId] ?? buildWeekDays(nextWeekStart)
-      setCalendarDays(nextDays)
+      if (formatDayId(nextWeekStart) === weekStartId) return
       clearAll()
       setWeekStart(nextWeekStart)
     },
-    [calendarDays, clearAll, setCalendarDays, setWeekCache, weekCache, weekStartId]
+    [clearAll, weekStartId]
   )
 
   const handlePreviousWeek = React.useCallback(() => {
@@ -363,26 +331,6 @@ export function OrganicCalendarWorkspaceClient({
     previous.setDate(weekStart.getDate() - 7)
     handleWeekChange(previous)
   }, [handleWeekChange, weekStart])
-
-  const handleJumpToExternalDraft = React.useCallback(
-    (target: { draftId?: string | null; scheduledDate: string }, targetView: "month" | "list") => {
-      const date = new Date(`${target.scheduledDate.slice(0, 10)}T12:00:00`)
-      if (Number.isNaN(date.getTime())) return
-      handleWeekChange(date)
-      setMonthAnchorDate(date)
-      setViewMode(targetView)
-      if (target.draftId) setSelectedDraftId(target.draftId)
-      requestCalendarRefetch()
-      acknowledgeDraftsElsewhere()
-    },
-    [
-      acknowledgeDraftsElsewhere,
-      handleWeekChange,
-      requestCalendarRefetch,
-      setSelectedDraftId,
-      setViewMode,
-    ]
-  )
 
   const handleNextWeek = React.useCallback(() => {
     const next = new Date(weekStart)
@@ -422,6 +370,25 @@ export function OrganicCalendarWorkspaceClient({
           })),
     [calendarDays, showPlanned]
   )
+
+  // Week VIEW MODEL: exactly the 7 days of the current week, sliced from the full
+  // loaded set (synthesizing any missing day) so the grid stays 7 columns wide.
+  const visibleWeekDays = React.useMemo(
+    () => sliceWeekDays(gridDays, weekStart),
+    [gridDays, weekStart]
+  )
+
+  // List VIEW MODEL: the loaded set narrowed to the custom timeframe (null = all).
+  // Undated drafts (the "unscheduled" sentinel) bypass the date filter so they are
+  // always reachable — they are exactly the drafts that were previously invisible.
+  const listDays = React.useMemo(() => {
+    const scheduled = gridDays.filter((day) => day.id !== UNSCHEDULED_DAY_ID)
+    const unscheduled = gridDays.filter((day) => day.id === UNSCHEDULED_DAY_ID)
+    const filtered = dateRange
+      ? scheduled.filter((day) => day.id >= dateRange.from && day.id <= dateRange.to)
+      : scheduled
+    return [...filtered, ...unscheduled]
+  }, [gridDays, dateRange])
 
   const selectedDraft = React.useMemo(() => {
     if (!selectedId) return null
@@ -809,7 +776,6 @@ export function OrganicCalendarWorkspaceClient({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <DraftsElsewhereBadge onJump={handleJumpToExternalDraft} />
       <CalendarDndContext
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -842,6 +808,8 @@ export function OrganicCalendarWorkspaceClient({
               <CalendarToolbar
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
                 selectedTrendCount={selectedTrendIds.length}
                 maxTrendSelections={maxTrendSelections}
                 seededDraftCount={seededDraftCount}
@@ -881,7 +849,7 @@ export function OrganicCalendarWorkspaceClient({
                       <ResizablePanel defaultSize={74} minSize={48}>
                         <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
                           <TimeGridCanvas
-                            days={gridDays}
+                            days={visibleWeekDays}
                             platforms={plannerPlatforms}
                             selectedDraftId={selectedId}
                             selectedDraftIds={selectedIds}
@@ -963,7 +931,7 @@ export function OrganicCalendarWorkspaceClient({
                     className="h-full"
                   >
                     <OrganicListView
-                      days={gridDays}
+                      days={listDays}
                       platforms={plannerPlatforms}
                       selectedDraftId={selectedId}
                       selectedDraftIds={selectedIds}

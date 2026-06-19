@@ -1,4 +1,5 @@
 import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from "@/components/organic/primitives/types"
+import { UNSCHEDULED_DAY_ID, makeCalendarDay } from "@/components/organic/primitives/calendar-utils"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import { isOrganicPlatformKey } from "@/lib/organic/platforms"
 import { deriveOrganicMediaStage, organicMediaStageSchema, type OrganicMediaStage } from "@continuum/contracts"
@@ -269,6 +270,26 @@ function mapSlotDataDraftId(slotData: Record<string, unknown>, rowId: string): s
   )
 }
 
+/**
+ * Resolve the calendar day a persisted row belongs on, across every persist
+ * shape (manual slot_data, generated content_json, raw scheduled_date). Rows with
+ * no resolvable date (a null scheduled_date from an agent/bulk write) collapse to
+ * the UNSCHEDULED sentinel so they surface in the list instead of vanishing.
+ */
+export function resolvePersistedRowDayId(row: PersistedOrganicDraftRow): string {
+  const slotData = asRecord(row.slot_data)
+  const scheduleData = asRecord(slotData.schedule)
+  const placementSchedule = asRecord(asRecord(row.content_json).schedule)
+  const scheduledIso = readString(row.scheduled_date)
+  return (
+    readString(slotData.dayId) ??
+    readString(scheduleData.dayId) ??
+    readString(placementSchedule.dayId) ??
+    (scheduledIso ? scheduledIso.slice(0, 10) : null) ??
+    UNSCHEDULED_DAY_ID
+  )
+}
+
 export function isDayIdInWeekRange(dayId: string, weekStartId: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dayId) || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartId)) {
     return false
@@ -329,7 +350,10 @@ export function buildPersistedDraftPayload(args: {
  * window must not wipe it. We preserve only NEVER-persisted local drafts (no
  * backendDraftId) that the server hasn't echoed yet — a draft that already has a
  * backendDraftId but is absent from the server was deleted/out-of-range, so it is
- * intentionally NOT resurrected.
+ * intentionally NOT resurrected. A never-persisted draft on a day the server
+ * scaffold doesn't yet cover (e.g. a manual draft on a far day, created before
+ * its autosave landed) carries over on a re-created day so the refetch can't wipe
+ * in-flight work.
  */
 export function mergeUnsavedLocalDrafts(
   serverDays: OrganicCalendarDay[],
@@ -350,10 +374,20 @@ export function mergeUnsavedLocalDrafts(
   }
 
   if (unsavedByDayId.size === 0) return serverDays
-  return serverDays.map((day) => {
+
+  const serverDayIds = new Set(serverDays.map((day) => day.id))
+  const merged = serverDays.map((day) => {
     const pending = unsavedByDayId.get(day.id)
     return pending ? { ...day, slots: [...day.slots, ...pending] } : day
   })
+
+  const localById = new Map(localDays.map((day) => [day.id, day]))
+  for (const [dayId, pending] of unsavedByDayId) {
+    if (serverDayIds.has(dayId)) continue
+    const base = localById.get(dayId)
+    merged.push(base ? { ...base, slots: [...pending] } : { ...makeCalendarDay(dayId), slots: [...pending] })
+  }
+  return merged
 }
 
 // Server-owned provenance. The agent/MCP pre-mint writes origin at slot_data.origin
@@ -384,26 +418,19 @@ export function mapPersistedRowToCalendarEntry(
   const slotData = asRecord(row.slot_data)
   const snapshot = asRecord(slotData.draftSnapshot)
   // Backend-generated drafts (createPost + bulk) have no draftSnapshot; their
-  // content lives in content_json (the CalendarPlacement) and the day under
-  // slot_data.schedule. Resolve from both shapes so generated content places
-  // on the grid instead of being dropped or rendered empty.
-  const scheduleData = asRecord(slotData.schedule)
+  // content lives in content_json (the CalendarPlacement). Resolve from both
+  // shapes so generated content places on the grid instead of being dropped.
   const placement = asRecord(row.content_json)
-  const placementSchedule = asRecord(placement.schedule)
   const placementContent = asRecord(placement.content)
   const placementCopy = asRecord(placement.copy)
   const placementPlatform = asRecord(placement.platform)
   const placementCreative = asRecord(placement.creative)
   const scheduledIso = readString(row.scheduled_date)
 
-  const dayId =
-    readString(slotData.dayId) ??
-    readString(scheduleData.dayId) ??
-    readString(placementSchedule.dayId) ??
-    (scheduledIso ? scheduledIso.slice(0, 10) : null)
-  if (!dayId) return null
+  const dayId = resolvePersistedRowDayId(row)
   const day = days.find((item) => item.id === dayId)
   if (!day) return null
+  const isUnscheduled = dayId === UNSCHEDULED_DAY_ID
 
   const snapshotPlatforms = readStringArray(snapshot.platforms)
   const platforms =
@@ -434,7 +461,7 @@ export function mapPersistedRowToCalendarEntry(
       formatIsoTimeLabel(scheduledIso) ??
       day.suggestedTimes[0] ??
       "9:00 AM",
-    dateLabel: `${day.label}, ${day.dateLabel}`,
+    dateLabel: isUnscheduled ? "" : `${day.label}, ${day.dateLabel}`,
     status: normalizePersistedStatus(row.status),
     mediaStage: resolveMediaStage(row.media_stage, placement),
     platforms,

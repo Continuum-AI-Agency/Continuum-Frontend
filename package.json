@@ -8,7 +8,7 @@
     "dev": "bun run --bun next dev --turbopack",
     "build": "bun run --bun next build --turbopack",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "cd .. && bun run agent:check -- --staged --scope Continuum-Frontend",
     "typecheck": "bunx tsc --noEmit",
     "tests": "bun test",
     "test": "bun run tests",

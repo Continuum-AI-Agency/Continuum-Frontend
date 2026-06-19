@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from "./types"
 import type { CreatePostMode, PlannerPlatform } from "./planner-platforms"
+import { UNSCHEDULED_DAY_ID } from "./calendar-utils"
 import { DraftHoverCardContent } from "./DraftHoverCardContent"
 import { resolveDraftMediaAssetUrl } from "./DraftCardMedia"
 import { statusFrameClasses } from "./draft-card-styles"
@@ -317,8 +318,14 @@ export function OrganicListView({
   const bulkDeleteDrafts = useCalendarStore((s) => s.bulkDeleteDrafts)
   const updateDraft = useCalendarStore((s) => s.updateDraft)
 
+  // Undated drafts (the "unscheduled" sentinel day) get their own group; the
+  // status groups below cover only dated drafts so each draft appears once.
+  const unscheduledDrafts = React.useMemo(
+    () => days.find((day) => day.id === UNSCHEDULED_DAY_ID)?.slots ?? [],
+    [days]
+  )
   const allDrafts = React.useMemo(
-    () => days.flatMap((day) => day.slots),
+    () => days.filter((day) => day.id !== UNSCHEDULED_DAY_ID).flatMap((day) => day.slots),
     [days]
   )
 
@@ -401,6 +408,35 @@ export function OrganicListView({
         </>
       ),
     },
+    // Drafts with no scheduled date (agent/bulk rows that never got a slot). They
+    // can't sit on a date grid, so the list is the only place they surface.
+    ...(unscheduledDrafts.length > 0
+      ? [
+          {
+            key: "unscheduled",
+            label: "Unscheduled",
+            count: unscheduledDrafts.length,
+            colorClass: "text-muted-foreground",
+            showAdd: false,
+            content: (
+              <>
+                {unscheduledDrafts.map((draft) => (
+                  <DraftRow
+                    key={draft.id}
+                    draft={draft}
+                    isSelected={draft.id === selectedDraftId}
+                    isMultiSelected={selectedIdSet.has(draft.id)}
+                    onSelect={() => onSelectDraft(draft.id)}
+                    onToggle={() => onToggleSelection(draft.id)}
+                    onDelete={() => bulkDeleteDrafts([draft.id])}
+                    onRegenerate={() => onRegenerate(draft.id)}
+                  />
+                ))}
+              </>
+            ),
+          },
+        ]
+      : []),
     {
       key: "draft",
       label: "Draft",

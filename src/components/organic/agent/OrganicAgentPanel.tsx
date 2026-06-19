@@ -98,41 +98,6 @@ function matchesMentionQuery(query: string, values: Array<string | null | undefi
   return values.some((value) => value?.toLowerCase().includes(normalized));
 }
 
-function readDraftSignalPayload(event: Record<string, unknown>): Record<string, unknown> {
-  return typeof event.data === "object" && event.data !== null && !Array.isArray(event.data)
-    ? (event.data as Record<string, unknown>)
-    : event;
-}
-
-function readDraftSignalString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function noteOffWindowDraftSignal(event: Record<string, unknown>) {
-  const payload = readDraftSignalPayload(event);
-  const placement = typeof payload.placement === "object" && payload.placement !== null
-    ? (payload.placement as Record<string, unknown>)
-    : null;
-  const schedule = typeof placement?.schedule === "object" && placement.schedule !== null
-    ? (placement.schedule as Record<string, unknown>)
-    : null;
-  const scheduledDate =
-    readDraftSignalString(schedule?.dayId) ??
-    readDraftSignalString(schedule?.scheduledAt)?.slice(0, 10) ??
-    readDraftSignalString(payload.scheduledAt)?.slice(0, 10);
-  if (!scheduledDate) return;
-
-  const days = useCalendarStore.getState().days;
-  if (days.length === 0) return;
-  const dayIds = days.map((day) => day.id).filter(Boolean).sort();
-  if (scheduledDate < dayIds[0] || scheduledDate > dayIds[dayIds.length - 1]) {
-    useCalendarStore.getState().noteDraftElsewhere({
-      draftId: readDraftSignalString(payload.draftId),
-      scheduledDate,
-    });
-  }
-}
-
 function createOrganicSuggestion(
   reference: AgentMentionReference,
   options: {
@@ -197,13 +162,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { attachRun } = useCalendarRunStream();
   const requestCalendarRefetch = useCalendarStore((s) => s.requestCalendarRefetch);
-  const handleCalendarDraftSignal = useCallback(
-    (event: Record<string, unknown>) => {
-      requestCalendarRefetch();
-      noteOffWindowDraftSignal(event);
-    },
-    [requestCalendarRefetch]
-  );
+  const handleCalendarDraftSignal = useCallback(() => {
+    // Fetch-all reload pulls in the new draft wherever it landed.
+    requestCalendarRefetch();
+  }, [requestCalendarRefetch]);
   const { start, startControl, isStreaming } = useOrganicAgentStream(dispatch, {
     onRunStarted: attachRun,
     onCalendarDraftSignal: handleCalendarDraftSignal,

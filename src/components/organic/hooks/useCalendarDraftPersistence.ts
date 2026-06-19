@@ -2,16 +2,23 @@
 
 import * as React from "react"
 
-import { buildWeekDays } from "@/components/organic/primitives/calendar-utils"
+import {
+  UNSCHEDULED_DAY_ID,
+  buildScaffoldForRange,
+  buildUnscheduledDay,
+  formatDayId,
+  startOfWeek,
+} from "@/components/organic/primitives/calendar-utils"
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "@/components/organic/primitives/types"
 import { request } from "@/lib/api/http"
+import { getVisibleMonthRange } from "@/lib/organic/calendar-posts"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import {
   buildPersistedDraftPayload,
-  isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
   mergeUnsavedLocalDrafts,
+  resolvePersistedRowDayId,
   type PersistedOrganicDraftRow,
 } from "@/lib/organic/calendar-draft-persistence"
 
@@ -22,7 +29,6 @@ type CalendarEntry = {
 
 type UseCalendarDraftPersistenceOptions = {
   brandProfileId?: string
-  weekStartId: string
   calendarDays: OrganicCalendarDay[]
   setCalendarDays: (days: OrganicCalendarDay[]) => void
   updateDraftById: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void
@@ -35,16 +41,16 @@ function parseUpdatedAt(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function weekScaffold(weekStartId: string): OrganicCalendarDay[] {
-  const [yearRaw, monthRaw, dayRaw] = weekStartId.split("-")
-  const year = Number(yearRaw)
-  const month = Number(monthRaw)
-  const day = Number(dayRaw)
-  const fallback = new Date(`${weekStartId}T12:00:00`)
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return buildWeekDays(fallback)
-  }
-  return buildWeekDays(new Date(year, month - 1, day, 12, 0, 0, 0))
+// The week a given day falls in — written as informational metadata into slot_data
+// so a draft on any day records a correct (per-day) week, not one ambient week.
+function weekStartIdForDay(dayId: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayId)
+  if (!match) return ""
+  return formatDayId(startOfWeek(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))))
+}
+
+function parseDayBoundary(dayId: string): Date {
+  return new Date(`${dayId}T12:00:00`)
 }
 
 function serializeEntries(entries: CalendarEntry[]): string {
@@ -69,7 +75,6 @@ function serializeEntries(entries: CalendarEntry[]): string {
 
 export function useCalendarDraftPersistence({
   brandProfileId,
-  weekStartId,
   calendarDays,
   setCalendarDays,
   updateDraftById,
@@ -90,24 +95,30 @@ export function useCalendarDraftPersistence({
   calendarDaysRef.current = calendarDays
 
   const refetch = React.useCallback(async () => {
-    if (!brandProfileId || !weekStartId) return
+    if (!brandProfileId) return
 
-    const weekEnd = (() => {
-      const [year, month, day] = weekStartId.split("-").map(Number)
-      const next = new Date(Date.UTC(year, month - 1, day))
-      next.setUTCDate(next.getUTCDate() + 6)
-      const nextYear = next.getUTCFullYear()
-      const nextMonth = String(next.getUTCMonth() + 1).padStart(2, "0")
-      const nextDay = String(next.getUTCDate()).padStart(2, "0")
-      return `${nextYear}-${nextMonth}-${nextDay}`
-    })()
-
-    const params = new URLSearchParams({ brandId: brandProfileId, start: weekStartId, end: weekEnd })
+    // Fetch ALL of the brand's drafts (no date window). The calendar is no longer
+    // week-scoped: every draft is loaded once, and each view filters/derives its
+    // own slice locally, so a draft can never be hidden by the fetch range again.
+    const params = new URLSearchParams({ brandId: brandProfileId })
     const { drafts } = await request<{ drafts: PersistedOrganicDraftRow[] }>({
       path: `/api/organic/calendar/drafts?${params}`,
     })
 
-    const days = weekScaffold(weekStartId).map((day) => ({ ...day, slots: [] as OrganicCalendarDraft[] }))
+    // Scaffold must contain a home day for every loaded draft (or the mapper drops
+    // it), so pre-scan day ids before mapping. The visible month around today seeds
+    // an always-paintable span even for a brand with no drafts there.
+    const loadedDayIds = drafts.filter((row) => row?.id).map((row) => resolvePersistedRowDayId(row))
+    const visibleMonth = getVisibleMonthRange(new Date())
+    const days = buildScaffoldForRange(
+      loadedDayIds,
+      parseDayBoundary(visibleMonth.start),
+      parseDayBoundary(visibleMonth.end)
+    )
+    if (loadedDayIds.includes(UNSCHEDULED_DAY_ID)) {
+      days.push(buildUnscheduledDay())
+    }
+
     const dedupedByDraftId = new Map<string, { updatedAt: number; entry: CalendarEntry }>()
     const knownIds = new Set<string>()
 
@@ -116,7 +127,6 @@ export function useCalendarDraftPersistence({
 
       const entry = mapPersistedRowToCalendarEntry(row, days)
       if (!entry) continue
-      if (!isDayIdInWeekRange(entry.dayId, weekStartId)) continue
 
       const updatedAt = parseUpdatedAt(row.updated_at)
       const existing = dedupedByDraftId.get(entry.draft.id)
@@ -136,12 +146,12 @@ export function useCalendarDraftPersistence({
     // hasn't echoed yet, so a refetch racing a fresh manual construction can't wipe it.
     setCalendarDays(mergeUnsavedLocalDrafts(days, calendarDaysRef.current))
     knownBackendIdsRef.current = knownIds
-  }, [brandProfileId, setCalendarDays, weekStartId])
+  }, [brandProfileId, setCalendarDays])
 
   React.useEffect(() => {
-    if (!brandProfileId || !weekStartId) return
+    if (!brandProfileId) return
 
-    const key = `${brandProfileId}:${weekStartId}`
+    const key = brandProfileId
     hydratedKeyRef.current = null
     lastSyncedSignatureRef.current = ""
     knownBackendIdsRef.current = new Set()
@@ -157,14 +167,16 @@ export function useCalendarDraftPersistence({
     }
 
     void load()
-  }, [brandProfileId, refetch, weekStartId])
+  }, [brandProfileId, refetch])
 
   React.useEffect(() => {
     if (!brandProfileId) return
-    const activeKey = `${brandProfileId}:${weekStartId}`
-    if (hydratedKeyRef.current !== activeKey) return
+    if (hydratedKeyRef.current !== brandProfileId) return
 
     const persistableEntries = calendarDays
+      // The unscheduled sentinel is not a real date; its drafts are server-owned
+      // and must never be written back with a bogus scheduled_date.
+      .filter((day) => day.id !== UNSCHEDULED_DAY_ID)
       .flatMap((day) =>
         day.slots
           .filter((draft) => draft.status !== "streaming")
@@ -214,7 +226,7 @@ export function useCalendarDraftPersistence({
           for (const entry of persistableEntries) {
             const payload = buildPersistedDraftPayload({
               brandId: brandProfileId,
-              weekStartId,
+              weekStartId: weekStartIdForDay(entry.dayId),
               dayId: entry.dayId,
               draft: entry.draft,
               platformAccountIds,
@@ -275,7 +287,7 @@ export function useCalendarDraftPersistence({
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById, weekStartId])
+  }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById])
 
   return { refetch }
 }

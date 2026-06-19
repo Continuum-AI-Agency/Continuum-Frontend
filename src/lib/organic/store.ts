@@ -8,6 +8,9 @@ import type {
   EventHistory
 } from "@/components/organic/primitives/types";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import { makeCalendarDay } from "@/components/organic/primitives/calendar-utils";
+
+export type CalendarDateRange = { from: string; to: string };
 
 export type GridSlot = {
   slotId: string;
@@ -100,11 +103,6 @@ export type GenerationEntry = {
 
 export type GenerationEntryInput = Partial<GenerationEntry> & { jobId: string };
 
-export type DraftsElsewhereTarget = {
-  draftId?: string | null;
-  scheduledDate: string;
-};
-
 interface CalendarState {
   days: OrganicCalendarDay[];
   ghosts: Record<string, number>;
@@ -134,15 +132,14 @@ interface CalendarState {
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
   viewMode: "week" | "month" | "list";
+  // Custom timeframe filter for the LIST view (null = show all loaded drafts).
+  // A pure view filter over the fully-loaded draft set — never refetches.
+  dateRange: CalendarDateRange | null;
   // Calendar lens: show/hide drafts that belong to a bulk content plan ("planned").
   showPlanned: boolean;
   // Cross-subtree signal: agent-side completion (bulk run done, single draft ready)
   // bumps this so the calendar workspace re-fetches persisted drafts from the backend.
   calendarRefetchNonce: number;
-  // Count of drafts that landed (via Realtime) outside the currently-loaded
-  // calendar window, so the planner can surface a "new draft elsewhere" nudge.
-  draftsElsewhere: number;
-  draftsElsewhereTarget: DraftsElsewhereTarget | null;
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -190,10 +187,9 @@ interface CalendarState {
   updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
   moveEventToDay: (eventId: string, targetDate: string) => void;
   setViewMode: (mode: "week" | "month" | "list") => void;
+  setDateRange: (range: CalendarDateRange | null) => void;
   setShowPlanned: (value: boolean) => void;
   requestCalendarRefetch: () => void;
-  noteDraftElsewhere: (target?: DraftsElsewhereTarget | null) => void;
-  acknowledgeDraftsElsewhere: () => void;
 
   addBacklogDraft: (draft: OrganicCalendarDraft) => void;
   updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
@@ -202,18 +198,15 @@ interface CalendarState {
   duplicateDraft: (sourceDraftId: string, targetDayId?: string, newTimeLabel?: string) => void;
   setAccountContext: (ctx: { igAccountId: string | null; brandId: string | null }) => void;
 
-  // Week navigation cache — module-level (not persisted), survives soft navigation
-  weekCache: Record<string, OrganicCalendarDay[]>;
-  setWeekCache: (weekId: string, days: OrganicCalendarDay[]) => void;
 }
 
 type PersistedCalendarState = Pick<
   CalendarState,
-  "selectedTrendIds" | "persistedWeekStartId" | "viewMode" | "days" | "backlogDrafts"
+  "selectedTrendIds" | "persistedWeekStartId" | "viewMode" | "dateRange" | "days" | "backlogDrafts"
 >;
 
 // Bump when the persisted shape changes in a breaking way.
-const CALENDAR_STORE_VERSION = 4;
+const CALENDAR_STORE_VERSION = 5;
 
 // Drop every base64 blob before the draft is persisted to sessionStorage: the
 // primary asset, each carousel slide, and the hyperframe cover. Media is re-signed
@@ -250,6 +243,15 @@ function sanitizePersistedCalendarState(
       ? state.viewMode
       : "month";
 
+  const candidateRange = state?.dateRange;
+  const dateRange: CalendarDateRange | null =
+    candidateRange &&
+    typeof candidateRange === "object" &&
+    typeof candidateRange.from === "string" &&
+    typeof candidateRange.to === "string"
+      ? { from: candidateRange.from, to: candidateRange.to }
+      : null;
+
   // Strip large binary blobs (assetBase64) to keep sessionStorage lean.
   const days: OrganicCalendarDay[] = Array.isArray(state?.days)
     ? state.days.map((day) => ({ ...day, slots: day.slots.map(stripDraftBlobs) }))
@@ -259,7 +261,7 @@ function sanitizePersistedCalendarState(
     ? state.backlogDrafts.map(stripDraftBlobs)
     : [];
 
-  return { selectedTrendIds, persistedWeekStartId, viewMode, days, backlogDrafts };
+  return { selectedTrendIds, persistedWeekStartId, viewMode, dateRange, days, backlogDrafts };
 }
 
 export const useCalendarStore = create<CalendarState>()(
@@ -280,13 +282,11 @@ export const useCalendarStore = create<CalendarState>()(
       generations: {},
       scheduledEvents: {},
       viewMode: "month",
+      dateRange: null,
       showPlanned: true,
       calendarRefetchNonce: 0,
-      draftsElsewhere: 0,
-      draftsElsewhereTarget: null,
       eventHistory: [],
       backlogDrafts: [],
-      weekCache: {},
 
       setDays: (days) => set({ days }),
       
@@ -313,6 +313,13 @@ export const useCalendarStore = create<CalendarState>()(
           });
 
           if (!movedDraft) return { days: nextDays };
+
+          // The drop target may be a synthesized day not yet in the loaded set
+          // (the week grid renders 7 days regardless of what's loaded). Materialize
+          // it so the dragged draft isn't lost.
+          if (!nextDays.some((day) => day.id === targetDayId)) {
+            return { days: [...nextDays, { ...makeCalendarDay(targetDayId), slots: [movedDraft] }] };
+          }
 
           return {
             days: nextDays.map((day) => {
@@ -354,6 +361,12 @@ export const useCalendarStore = create<CalendarState>()(
 
       addDraft: (dayId, draft) =>
         set((state) => {
+          // The target day may not be loaded (e.g. a "+" on a month-grid cell
+          // outside the loaded set). Materialize it so the draft has a home rather
+          // than being silently dropped by a day-id miss.
+          if (!state.days.some((day) => day.id === dayId)) {
+            return { days: [...state.days, { ...makeCalendarDay(dayId), slots: [draft] }] };
+          }
           return {
             days: state.days.map((day) => {
               if (day.id !== dayId) return day;
@@ -523,15 +536,10 @@ export const useCalendarStore = create<CalendarState>()(
         }),
 
       setViewMode: (mode) => set({ viewMode: mode }),
+      setDateRange: (range) => set({ dateRange: range }),
       setShowPlanned: (value) => set({ showPlanned: value }),
       requestCalendarRefetch: () =>
         set((state) => ({ calendarRefetchNonce: state.calendarRefetchNonce + 1 })),
-      noteDraftElsewhere: (target) =>
-        set((state) => ({
-          draftsElsewhere: state.draftsElsewhere + 1,
-          draftsElsewhereTarget: target ?? state.draftsElsewhereTarget,
-        })),
-      acknowledgeDraftsElsewhere: () => set({ draftsElsewhere: 0, draftsElsewhereTarget: null }),
 
       addBacklogDraft: (draft) =>
         set((state) => ({
@@ -608,9 +616,6 @@ export const useCalendarStore = create<CalendarState>()(
 
       setAccountContext: (ctx) => set({ accountContext: ctx }),
 
-      setWeekCache: (weekId, days) =>
-        set((state) => ({ weekCache: { ...state.weekCache, [weekId]: days } })),
-
       resetForBrandSwitch: () =>
         set({
           days: [],
@@ -625,11 +630,8 @@ export const useCalendarStore = create<CalendarState>()(
           gridError: null,
           gridJobId: null,
           scheduledEvents: {},
-          draftsElsewhere: 0,
-          draftsElsewhereTarget: null,
           eventHistory: [],
           backlogDrafts: [],
-          weekCache: {},
         }),
     }),
     {
@@ -641,8 +643,13 @@ export const useCalendarStore = create<CalendarState>()(
         typeof window !== "undefined" ? window.sessionStorage : localStorage
       ),
       partialize: (state) => sanitizePersistedCalendarState(state),
-      migrate: (persistedState) =>
-        sanitizePersistedCalendarState(persistedState as Partial<CalendarState>),
+      // v4 -> v5 introduces the month-default redesign + dateRange filter. Reset
+      // viewMode to "month" on migration so existing sessions land on the new
+      // primary view; ongoing persists keep whatever the user chooses thereafter.
+      migrate: (persistedState) => ({
+        ...sanitizePersistedCalendarState(persistedState as Partial<CalendarState>),
+        viewMode: "month" as const,
+      }),
     }
   )
 );

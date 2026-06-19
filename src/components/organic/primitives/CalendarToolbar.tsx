@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   CheckIcon,
@@ -10,10 +11,23 @@ import {
   RocketIcon,
   TrashIcon,
 } from "@radix-ui/react-icons"
-import { RefreshCw } from "lucide-react"
+import { CalendarIcon, RefreshCw } from "lucide-react"
+import {
+  endOfMonth,
+  endOfWeek,
+  format,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns"
+import type { DateRange } from "react-day-picker"
 
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCalendarStore } from "@/lib/organic/store"
+import type { CalendarDateRange } from "@/lib/organic/store"
+import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -25,9 +39,117 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 
+const WEEK_OPTS = { weekStartsOn: 1 } as const // Monday-started, matches the planner
+
+function toDayId(date: Date): string {
+  return format(date, "yyyy-MM-dd")
+}
+
+function presetRange(preset: "week" | "month"): CalendarDateRange {
+  const today = new Date()
+  if (preset === "week") {
+    return { from: toDayId(startOfWeek(today, WEEK_OPTS)), to: toDayId(endOfWeek(today, WEEK_OPTS)) }
+  }
+  return { from: toDayId(startOfMonth(today)), to: toDayId(endOfMonth(today)) }
+}
+
+function rangesEqual(a: CalendarDateRange | null, b: CalendarDateRange): boolean {
+  return a !== null && a.from === b.from && a.to === b.to
+}
+
+function formatRangeLabel(range: CalendarDateRange): string {
+  const from = parseISO(range.from)
+  const to = parseISO(range.to)
+  const fmt = (d: Date) => format(d, "MMM d")
+  return range.from === range.to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`
+}
+
+/**
+ * Timeframe control for the list view: pick a window wider than a week or narrower
+ * than a month. A pure view filter over the fully-loaded draft set (no refetch).
+ */
+function TimeframeSelector({
+  dateRange,
+  onDateRangeChange,
+}: {
+  dateRange: CalendarDateRange | null
+  onDateRangeChange: (range: CalendarDateRange | null) => void
+}) {
+  const [customOpen, setCustomOpen] = React.useState(false)
+
+  const activePreset: "all" | "week" | "month" | "custom" = !dateRange
+    ? "all"
+    : rangesEqual(dateRange, presetRange("week"))
+      ? "week"
+      : rangesEqual(dateRange, presetRange("month"))
+        ? "month"
+        : "custom"
+
+  const calendarSelection: DateRange | undefined = dateRange
+    ? { from: parseISO(dateRange.from), to: parseISO(dateRange.to) }
+    : undefined
+
+  const handleCustomSelect = (range: DateRange | undefined) => {
+    if (!range?.from) {
+      onDateRangeChange(null)
+      return
+    }
+    onDateRangeChange({ from: toDayId(range.from), to: toDayId(range.to ?? range.from) })
+  }
+
+  const presetButton = (key: "all" | "week" | "month", label: string) => (
+    <Button
+      type="button"
+      size="sm"
+      variant={activePreset === key ? "secondary" : "ghost"}
+      aria-pressed={activePreset === key}
+      className="h-7 rounded px-2 text-xs"
+      onClick={() => onDateRangeChange(key === "all" ? null : presetRange(key))}
+    >
+      {label}
+    </Button>
+  )
+
+  return (
+    <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/35 p-0.5">
+      {presetButton("all", "All")}
+      {presetButton("week", "Week")}
+      {presetButton("month", "Month")}
+      <Popover open={customOpen} onOpenChange={setCustomOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            size="sm"
+            variant={activePreset === "custom" ? "secondary" : "ghost"}
+            aria-pressed={activePreset === "custom"}
+            className={cn("h-7 gap-1.5 rounded px-2 text-xs font-normal")}
+          >
+            <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              {activePreset === "custom" && dateRange ? formatRangeLabel(dateRange) : "Custom"}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-0">
+          <Calendar
+            mode="range"
+            autoFocus
+            defaultMonth={calendarSelection?.from}
+            selected={calendarSelection}
+            onSelect={handleCustomSelect}
+            numberOfMonths={2}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
 type CalendarToolbarProps = {
   viewMode: "week" | "month" | "list"
   onViewModeChange: (mode: "week" | "month" | "list") => void
+  dateRange: CalendarDateRange | null
+  onDateRangeChange: (range: CalendarDateRange | null) => void
   selectedTrendCount: number
   maxTrendSelections?: number
   seededDraftCount: number
@@ -50,6 +172,8 @@ type CalendarToolbarProps = {
 export function CalendarToolbar({
   viewMode,
   onViewModeChange,
+  dateRange,
+  onDateRangeChange,
   selectedTrendCount,
   maxTrendSelections,
   seededDraftCount,
@@ -114,7 +238,9 @@ export function CalendarToolbar({
                 >
                   Planned
                 </Button>
-              ) : null}
+              ) : (
+                <TimeframeSelector dateRange={dateRange} onDateRangeChange={onDateRangeChange} />
+              )}
               <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                 {selectedTrendCount}
                 {typeof maxTrendSelections === "number"

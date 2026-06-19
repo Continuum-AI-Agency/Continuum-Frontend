@@ -14,39 +14,9 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
  *
  * It does not mutate the store itself; it requests a refetch so the canonical
  * server rows (re-signed media, correct keying) win. Bursts (text -> blueprint
- * -> media on one draft) are coalesced by a short debounce.
+ * -> media on one draft) are coalesced by a short debounce. The fetch-all reload
+ * pulls in the draft wherever it landed, so no off-window nudge is needed.
  */
-/**
- * A row written outside the currently-loaded calendar window won't surface via
- * the week-scoped refetch. When a brand-new draft (INSERT) is scheduled beyond
- * the loaded day range, flag it so the planner can nudge the user to navigate.
- * Non-fatal best-effort; reads store state non-reactively to avoid re-subscribing.
- */
-export function noteIfDraftLandedOffWindow(payload: {
-  eventType?: string
-  new?: { id?: string | null; scheduled_date?: string | null; status?: string | null } | null
-}): void {
-  try {
-    if (payload.eventType !== "INSERT") return
-    const row = payload.new
-    const scheduledDate = row?.scheduled_date
-    if (!scheduledDate || row?.status === "deleted") return
-
-    const days = useCalendarStore.getState().days
-    if (days.length === 0) return
-    const dayIds = days.map((day) => day.id).filter(Boolean).sort()
-    const date = scheduledDate.slice(0, 10)
-    if (date < dayIds[0] || date > dayIds[dayIds.length - 1]) {
-      useCalendarStore.getState().noteDraftElsewhere({
-        draftId: typeof row.id === "string" ? row.id : null,
-        scheduledDate: date,
-      })
-    }
-  } catch {
-    // Off-window detection is a nicety; never let it disrupt the refetch nudge.
-  }
-}
-
 export function useCalendarRealtimeSync(args: { brandProfileId?: string }) {
   const { brandProfileId } = args
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch)
@@ -56,8 +26,7 @@ export function useCalendarRealtimeSync(args: { brandProfileId?: string }) {
     if (!brandProfileId) return
 
     let debounce: ReturnType<typeof setTimeout> | null = null
-    const handleChange = (payload: Parameters<typeof noteIfDraftLandedOffWindow>[0]) => {
-      noteIfDraftLandedOffWindow(payload)
+    const handleChange = () => {
       if (debounce) clearTimeout(debounce)
       debounce = setTimeout(() => requestCalendarRefetch(), 400)
     }

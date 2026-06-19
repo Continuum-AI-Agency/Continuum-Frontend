@@ -1,7 +1,13 @@
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "./types"
 import { parseTimeLabel } from "@/lib/organic/scheduling"
 
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+const DEFAULT_SUGGESTED_TIMES = ["9:00 AM", "1:00 PM", "5:00 PM"] as const
+const DAY_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+// Sentinel day for drafts with no real scheduled date (agent/bulk rows that
+// persisted a null scheduled_date). They have no place on a date grid, so they
+// live under this id and surface only in the list view's "Unscheduled" group.
+export const UNSCHEDULED_DAY_ID = "unscheduled"
 
 export function startOfWeek(date: Date): Date {
   const next = new Date(date)
@@ -41,28 +47,102 @@ export function formatWeekHeading(weekStart: Date): string {
   return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`
 }
 
-export function buildWeekDays(weekStart: Date): OrganicCalendarDay[] {
-  const days: OrganicCalendarDay[] = []
-  const base = startOfWeek(weekStart)
+function parseDayId(dayId: string): Date | null {
+  const match = DAY_ID_PATTERN.exec(dayId)
+  if (!match) return null
+  return new Date(Number(dayId.slice(0, 4)), Number(dayId.slice(5, 7)) - 1, Number(dayId.slice(8, 10)))
+}
 
+function dayFromDate(date: Date): OrganicCalendarDay {
+  const monthName = date.toLocaleString("en-US", { month: "short" })
+  return {
+    id: formatDayId(date),
+    label: date.toLocaleString("en-US", { weekday: "short" }),
+    dateLabel: `${monthName} ${date.getDate()}`,
+    suggestedTimes: [...DEFAULT_SUGGESTED_TIMES],
+    slots: [],
+  }
+}
+
+// Build an empty calendar day for a single YYYY-MM-DD id. Used to materialize a
+// day on demand (manual create / drag onto a day that isn't in the loaded set).
+export function makeCalendarDay(dayId: string): OrganicCalendarDay {
+  const date = parseDayId(dayId)
+  if (!date) {
+    return { id: dayId, label: "", dateLabel: "", suggestedTimes: [...DEFAULT_SUGGESTED_TIMES], slots: [] }
+  }
+  return dayFromDate(date)
+}
+
+// The list-view sentinel for undated drafts.
+export function buildUnscheduledDay(): OrganicCalendarDay {
+  return {
+    id: UNSCHEDULED_DAY_ID,
+    label: "Unscheduled",
+    dateLabel: "",
+    suggestedTimes: [...DEFAULT_SUGGESTED_TIMES],
+    slots: [],
+  }
+}
+
+// Build empty calendar days for every date in [start, end] (inclusive).
+export function buildDayRange(start: Date, end: Date): OrganicCalendarDay[] {
+  const days: OrganicCalendarDay[] = []
+  const cursor = new Date(start)
+  cursor.setHours(0, 0, 0, 0)
+  const last = new Date(end)
+  last.setHours(0, 0, 0, 0)
+  while (cursor.getTime() <= last.getTime()) {
+    days.push(dayFromDate(new Date(cursor)))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return days
+}
+
+export function buildWeekDays(weekStart: Date): OrganicCalendarDay[] {
+  const base = startOfWeek(weekStart)
+  const end = new Date(base)
+  end.setDate(base.getDate() + 6)
+  return buildDayRange(base, end)
+}
+
+// View model for the week grid: exactly the 7 Mon..Sun days for `weekStart`,
+// pulled from `days` when present so loaded drafts show, synthesizing empty days
+// for any of the seven missing from the loaded set. This keeps the grid at 7
+// columns no matter how many days are loaded into the canonical day array.
+export function sliceWeekDays(days: OrganicCalendarDay[], weekStart: Date): OrganicCalendarDay[] {
+  const base = startOfWeek(weekStart)
+  const byId = new Map(days.map((day) => [day.id, day]))
+  const result: OrganicCalendarDay[] = []
   for (let i = 0; i < 7; i++) {
     const current = new Date(base)
     current.setDate(base.getDate() + i)
-
     const id = formatDayId(current)
-    const monthName = current.toLocaleString("en-US", { month: "short" })
-    const dateLabel = `${monthName} ${current.getDate()}`
-
-    days.push({
-      id,
-      label: WEEKDAY_LABELS[i],
-      dateLabel,
-      suggestedTimes: ["9:00 AM", "1:00 PM", "5:00 PM"],
-      slots: [],
-    })
+    result.push(byId.get(id) ?? dayFromDate(current))
   }
+  return result
+}
 
-  return days
+// Canonical loaded-day scaffold: the union of (every day in the visible span)
+// and (every distinct day that a loaded draft falls on). Guarantees every loaded
+// draft has a home day even when it sits far outside the current month, while the
+// span keeps the current view paintable when a brand has no drafts there. The
+// "unscheduled" sentinel is intentionally NOT date-buildable — the caller appends
+// it separately when undated drafts exist.
+export function buildScaffoldForRange(
+  loadedDayIds: string[],
+  spanStart: Date,
+  spanEnd: Date
+): OrganicCalendarDay[] {
+  const byId = new Map<string, OrganicCalendarDay>()
+  for (const day of buildDayRange(spanStart, spanEnd)) {
+    byId.set(day.id, day)
+  }
+  for (const id of loadedDayIds) {
+    if (!DAY_ID_PATTERN.test(id)) continue
+    if (!byId.has(id)) byId.set(id, makeCalendarDay(id))
+  }
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id))
 }
 
 export function moveDraftToDay(

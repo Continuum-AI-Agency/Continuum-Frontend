@@ -42,10 +42,23 @@ describe("mergeUnsavedLocalDrafts", () => {
     expect(merged).toBe(server)
   })
 
-  it("ignores local drafts whose day is absent from the server set", () => {
+  it("carries over an unsaved local draft on a day absent from the server set", () => {
+    // Fetch-all scaffolds only days that have server rows (+ the visible span), so
+    // a fresh manual draft on a far day won't be in serverDays yet. It must survive
+    // the refetch on its own appended day rather than being wiped.
     const server = [day("2026-06-18", [])]
     const local = [day("2026-06-19", [draft({ id: "manual-local", backendDraftId: undefined })])]
     const merged = mergeUnsavedLocalDrafts(server, local)
+    expect(merged).toHaveLength(2)
+    const carried = merged.find((d) => d.id === "2026-06-19")
+    expect(carried?.slots.map((s) => s.id)).toEqual(["manual-local"])
+  })
+
+  it("does NOT carry over a persisted draft on a day absent from the server set", () => {
+    const server = [day("2026-06-18", [])]
+    const local = [day("2026-06-19", [draft({ id: "gone", backendDraftId: "be-gone" })])]
+    const merged = mergeUnsavedLocalDrafts(server, local)
+    expect(merged).toHaveLength(1)
     expect(merged[0].slots).toEqual([])
   })
 })
