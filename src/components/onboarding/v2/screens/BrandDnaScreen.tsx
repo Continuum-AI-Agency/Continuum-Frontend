@@ -11,6 +11,7 @@ import { HorizontalRow } from "../dna/HorizontalRow";
 import { WebsiteSummaryCard } from "../dna/WebsiteSummaryCard";
 import { UnderstandingCard } from "../dna/UnderstandingCard";
 import { ReadinessCard } from "../dna/ReadinessCard";
+import { StrategyGuidelinesRow } from "../dna/StrategyGuidelinesRow";
 import { RunProgressBanner } from "../dna/RunProgressBanner";
 import { DimensionChip } from "../readiness/DimensionChip";
 import { FindingsStack } from "../readiness/FindingsStack";
@@ -58,7 +59,7 @@ const isTerminal = (status: SectionStatus | undefined): boolean =>
   status === "done" || status === "error" || status === "skipped";
 
 const proseSkeleton = (
-  <div className="space-y-2" aria-label="Drafting">
+  <div className="space-y-2" role="status" aria-label="Drafting">
     <Skeleton className="h-3 w-3/4" />
     <Skeleton className="h-3 w-full" />
     <Skeleton className="h-3 w-5/6" />
@@ -67,7 +68,7 @@ const proseSkeleton = (
 );
 
 const voiceSkeleton = (
-  <div className="space-y-2.5" aria-label="Drafting">
+  <div className="space-y-2.5" role="status" aria-label="Drafting">
     <Skeleton className="h-3 w-1/3" />
     <Skeleton className="h-6 w-full rounded-md" />
     <Skeleton className="h-3 w-1/4" />
@@ -270,6 +271,10 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             {audience ? <AudienceDetail audience={audience} /> : null}
           </CardSurface>
         </HorizontalRow>
+      </motion.div>
+
+      <motion.div variants={card} className="mb-4">
+        <StrategyGuidelinesRow buckets={agentBuckets} />
       </motion.div>
 
       <motion.div variants={card} className="mb-4">

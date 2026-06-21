@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import type { OnboardingPreviewEvent } from "@/lib/onboarding/agentClient";
+import type {
+  OnboardingPreviewEvent,
+  OnboardingPreviewWorkflowResult,
+} from "@/lib/onboarding/agentClient";
 
 const runOnboardingPreviewMock = mock<
   (options: {
@@ -30,6 +33,7 @@ import {
   runAgentPreview,
   emptyBuckets,
   makeEventHandler,
+  seedBucketsFromSnapshot,
   type AgentPreviewBuckets,
 } from "@/components/onboarding/v2/state/agentPreview";
 
@@ -242,6 +246,44 @@ describe("makeEventHandler (reducer)", () => {
     expect(buckets.firstImpression?.headline).toBe("Late landing");
   });
 
+  it("strategy + guidelines data events populate their buckets", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "strategy", payload: { taglines: { primary: "Ship it." } } as never });
+    reduce({ type: "guidelines", payload: { voice_rules: { dos: ["Name the segment"], donts: [] } } as never });
+    expect((buckets.strategy as { taglines?: { primary?: string } } | null)?.taglines?.primary).toBe("Ship it.");
+    expect((buckets.guidelines as { voice_rules?: { dos?: string[] } } | null)?.voice_rules?.dos).toEqual([
+      "Name the segment",
+    ]);
+  });
+
+  it("audit.strategy / audit.guidelines enrich into buckets.audits", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "enrich", section: "audit.strategy", data: { score: 77 }, seq: 11 });
+    reduce({ type: "enrich", section: "audit.guidelines", data: { score: 84 }, seq: 12 });
+    expect(buckets.audits.strategy).toEqual({ score: 77 });
+    expect(buckets.audits.guidelines).toEqual({ score: 84 });
+    expect(buckets.auditStatus.strategy).toBe("available");
+  });
+
+  it("complete.result fills strategy + guidelines from structured", () => {
+    const { buckets, reduce } = setup();
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: {
+        structured: {
+          strategy: { taglines: { primary: "From the report." } },
+          guidelines: { content_pillars: [{ pillar: "x", description: "y" }] },
+        },
+      },
+    } as Parameters<typeof reduce>[0]);
+    expect((buckets.strategy as { taglines?: { primary?: string } } | null)?.taglines?.primary).toBe(
+      "From the report.",
+    );
+    expect(buckets.guidelines).not.toBeNull();
+  });
+
   it("complete with status=error flips running sections to error", () => {
     const { buckets, reduce } = setup();
     reduce({ type: "status", section: "audience", status: "running" });
@@ -385,5 +427,49 @@ describe("makeEventHandler (reducer)", () => {
     } as Parameters<typeof reduce>[0]);
     expect(buckets.citations.voice).toEqual({ source: "scrape" });
     expect(buckets.citations.audience).toEqual({ source: "research" });
+  });
+});
+
+describe("seedBucketsFromSnapshot", () => {
+  it("seeds audits + audit status + readiness + synthesis sections from a completed snapshot result", () => {
+    // Scores now arrive on the post-complete scorer lane, so a returning user
+    // who loads via the persisted snapshot (not the live stream) must still get
+    // the per-section audit scores + readiness. Previously the snapshot path
+    // copied only brand_profile/first_impression/readiness and dropped audits.
+    const result = {
+      prompt_version: 1,
+      brand_profile: { id: "brand-1", brand_name: "Acme" },
+      understanding: {
+        positioning_thesis: "x",
+        hypothesis_icp: "y",
+        brand_pillars: ["p"],
+        tonal_signal: "t",
+      },
+      structured: {
+        strategy: { taglines: { primary: "Ship it" } },
+        guidelines: { messaging_guardrails: { banned_words: ["leverage"] } },
+      },
+      audits: {
+        voice: { score: 80, severity: "low", findings: [] },
+        strategy: { score: 75, severity: "low", findings: [] },
+      },
+      readiness: {
+        overall_score: 78,
+        dimensions: {},
+        findings: [],
+        generated_at: "2026-06-21T00:00:00.000Z",
+      },
+    } as unknown as OnboardingPreviewWorkflowResult;
+
+    const buckets = seedBucketsFromSnapshot(result);
+
+    expect(buckets.audits.voice?.score).toBe(80);
+    expect(buckets.audits.strategy?.score).toBe(75);
+    expect(buckets.auditStatus.voice).toBe("available");
+    expect(buckets.auditStatus.strategy).toBe("available");
+    expect(buckets.readiness?.overall_score).toBe(78);
+    expect(buckets.strategy?.taglines.primary).toBe("Ship it");
+    expect(buckets.guidelines?.messaging_guardrails.banned_words).toEqual(["leverage"]);
+    expect(buckets.result).toBe(result);
   });
 });

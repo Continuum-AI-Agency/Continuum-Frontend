@@ -20,7 +20,12 @@ import { InspirationGenerationScreen } from "./screens/InspirationGenerationScre
 import { WelcomeScreen, hasSeenWelcome } from "./screens/WelcomeScreen";
 import { BackgroundJobsProvider, useBackgroundJobs } from "./state/BackgroundJobsProvider";
 import { runScrape, runTrendsPrewarm, runStrategicPrewarm, runCreativePrewarm } from "./state/jobRunners";
-import { runAgentPreview, emptyBuckets, type AgentPreviewBuckets } from "./state/agentPreview";
+import {
+  runAgentPreview,
+  emptyBuckets,
+  seedBucketsFromSnapshot,
+  type AgentPreviewBuckets,
+} from "./state/agentPreview";
 import {
   computePreviewInputHash,
   fetchPreviewLatest,
@@ -461,12 +466,10 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         try {
           const snapshot = await fetchPreviewSnapshot(latest.run_id);
           if (cancelled || !snapshot?.result) return;
-          const buckets = emptyBuckets();
-          const result = snapshot.result;
-          if (result.brand_profile) buckets.brandProfile = result.brand_profile;
-          if (result.first_impression) buckets.firstImpression = result.first_impression;
-          if (result.readiness) buckets.readiness = result.readiness;
-          buckets.result = { ...result };
+          // Seed via the shared merge so the scorer-lane outputs (per-section
+          // audit scores + readiness) on the persisted snapshot are surfaced —
+          // a manual field copy here used to drop audits entirely.
+          const buckets = seedBucketsFromSnapshot(snapshot.result);
           await start("agentPreview", () => Promise.resolve({ runId: latest!.run_id, buckets }));
         } catch (error) {
           console.warn("[onboarding] fetchPreviewSnapshot failed", error);

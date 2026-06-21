@@ -14,6 +14,12 @@ import {
   firstImpressionSchema,
   brandProfileSchema,
   onboardingReportStructuredSchema,
+  brandReportSectionSchema,
+  brandReportEnrichSectionSchema,
+  brandStrategySchema,
+  brandGuidelinesSchema,
+  type BrandStrategy,
+  type BrandGuidelines,
   type ReadinessDimensionKey as ReadinessDimension,
   type ReadinessFinding,
   type ReadinessAnalysis,
@@ -154,24 +160,13 @@ export type AgentRequestPayload = {
   scrape?: ScrapeResult | null;
 };
 
-export const previewSectionSchema = z.enum([
-  "brand_profile",
-  "voice",
-  "audience",
-  "website",
-  "business",
-  "readiness",
-  "first_impression",
-]);
+// Single-source: the section + enrich-section enums come from @continuum/contracts
+// (no parallel hand-rolled copy, monorepo §4). New sections — strategy,
+// guidelines — flow in automatically.
+export const previewSectionSchema = brandReportSectionSchema;
 export type PreviewSection = z.infer<typeof previewSectionSchema>;
 
-const auditEnrichSectionSchema = z.enum([
-  "audit.voice",
-  "audit.audience",
-  "audit.website",
-  "audit.business",
-]);
-const enrichSectionSchema = z.union([previewSectionSchema, auditEnrichSectionSchema]);
+const enrichSectionSchema = brandReportEnrichSectionSchema;
 export type EnrichSection = z.infer<typeof enrichSectionSchema>;
 
 export const understandingSchema = z
@@ -199,6 +194,8 @@ export const auditsSchema = z
     audience: sectionAuditSchema.optional(),
     website: sectionAuditSchema.optional(),
     business: sectionAuditSchema.optional(),
+    strategy: sectionAuditSchema.optional(),
+    guidelines: sectionAuditSchema.optional(),
   })
   .passthrough();
 
@@ -336,6 +333,8 @@ export type OnboardingPreviewEvent =
   | { type: "brand_profile"; payload: AgentBrandProfile; seq?: number }
   | { type: "website"; payload: WebsiteSummary | null; seq?: number }
   | { type: "business"; payload: BusinessSummary | null; seq?: number }
+  | { type: "strategy"; payload: BrandStrategy | null; seq?: number }
+  | { type: "guidelines"; payload: BrandGuidelines | null; seq?: number }
   | { type: "readiness"; payload: ReadinessAnalysis; seq?: number }
   | { type: "first_impression"; payload: FirstImpression; seq?: number }
   | { type: "spark"; section: PreviewSection; label: string; seq?: number }
@@ -735,6 +734,18 @@ async function consumePreviewStream(
         const parsed = businessSummarySchema.nullable().safeParse(payload.data);
         if (!parsed.success) return skipMalformedSection("business", parsed.error);
         dispatch({ type: "business", payload: parsed.data });
+        break;
+      }
+      case "strategy": {
+        const parsed = brandStrategySchema.nullable().safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("strategy", parsed.error);
+        dispatch({ type: "strategy", payload: parsed.data });
+        break;
+      }
+      case "guidelines": {
+        const parsed = brandGuidelinesSchema.nullable().safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("guidelines", parsed.error);
+        dispatch({ type: "guidelines", payload: parsed.data });
         break;
       }
       case "readiness": {

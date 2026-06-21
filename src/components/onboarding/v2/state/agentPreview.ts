@@ -15,6 +15,7 @@ import {
   type UnderstandingBrief,
   type WebsiteSummary,
 } from "@/lib/onboarding/agentClient";
+import type { BrandGuidelines, BrandStrategy } from "@continuum/contracts";
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
 
 async function trackPreviewRecovery(runId: string, status: string): Promise<void> {
@@ -50,6 +51,8 @@ export type AgentPreviewAudits = {
   audience?: unknown;
   website?: unknown;
   business?: unknown;
+  strategy?: unknown;
+  guidelines?: unknown;
 };
 
 export type AuditAvailability = "available" | "unavailable";
@@ -63,6 +66,8 @@ export type AgentPreviewBuckets = {
   audience: TargetAudience | null;
   business: BusinessSummary | null;
   website: WebsiteSummary | null;
+  strategy: BrandStrategy | null;
+  guidelines: BrandGuidelines | null;
   readiness: ReadinessAnalysis | null;
   firstImpression: FirstImpression | null;
   understanding: UnderstandingBrief | null;
@@ -91,6 +96,8 @@ export function emptyBuckets(): AgentPreviewBuckets {
     audience: null,
     business: null,
     website: null,
+    strategy: null,
+    guidelines: null,
     readiness: null,
     firstImpression: null,
     understanding: null,
@@ -150,6 +157,12 @@ function applyEnrichProseSection(buckets: AgentPreviewBuckets, section: PreviewS
     case "business":
       buckets.business = data as BusinessSummary | null;
       break;
+    case "strategy":
+      buckets.strategy = data as BrandStrategy | null;
+      break;
+    case "guidelines":
+      buckets.guidelines = data as BrandGuidelines | null;
+      break;
     case "readiness":
       buckets.readiness = data as ReadinessAnalysis;
       break;
@@ -182,11 +195,15 @@ export function mergeCompleteResult(
         target_audience?: TargetAudience;
         business?: BusinessSummary;
         website?: WebsiteSummary | null;
+        strategy?: BrandStrategy | null;
+        guidelines?: BrandGuidelines | null;
       }
     | undefined;
   buckets.voice ??= structured?.brand_voice ?? null;
   buckets.audience ??= structured?.target_audience ?? null;
   buckets.business ??= structured?.business ?? null;
+  buckets.strategy ??= structured?.strategy ?? null;
+  buckets.guidelines ??= structured?.guidelines ?? null;
   if (buckets.website === null && structured?.website !== undefined) {
     buckets.website = structured.website;
   }
@@ -206,6 +223,19 @@ export function mergeCompleteResult(
   }
 
   buckets.result = result;
+}
+
+// Seed a fresh bucket set from a persisted run snapshot (the returning-user /
+// completed-or-partial path, where there is no live stream to replay). Routes
+// through mergeCompleteResult so the scorer-lane outputs (per-section audits +
+// readiness) — which now land on the snapshot rather than the live `complete`
+// — are surfaced, not dropped.
+export function seedBucketsFromSnapshot(
+  result: OnboardingPreviewWorkflowResult
+): AgentPreviewBuckets {
+  const buckets = emptyBuckets();
+  mergeCompleteResult(buckets, result);
+  return buckets;
 }
 
 export function makeEventHandler(buckets: AgentPreviewBuckets, dispatch: () => void) {
@@ -228,6 +258,12 @@ export function makeEventHandler(buckets: AgentPreviewBuckets, dispatch: () => v
         break;
       case "website":
         buckets.website = event.payload;
+        break;
+      case "strategy":
+        buckets.strategy = event.payload;
+        break;
+      case "guidelines":
+        buckets.guidelines = event.payload;
         break;
       case "readiness":
         buckets.readiness = event.payload;
