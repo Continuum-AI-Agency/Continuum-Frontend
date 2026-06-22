@@ -3,6 +3,7 @@ import {
   Building2,
   CreditCard,
   IdCard,
+  Library,
   Link2,
   Plug,
   ScrollText,
@@ -19,6 +20,7 @@ export type SectionDef = {
 
 export const BRAND_SECTIONS = [
   { key: "general", label: "General", icon: IdCard, scope: "brand" },
+  { key: "brand-book", label: "Brand Book", icon: Library, scope: "brand" },
   { key: "integrations", label: "Integrations", icon: Plug, scope: "brand" },
   { key: "knowledge", label: "Knowledge", icon: BookOpen, scope: "brand" },
   { key: "billing", label: "Billing", icon: CreditCard, scope: "brand" },
@@ -33,6 +35,7 @@ export const ACCOUNT_SECTIONS = [
 
 export const ALL_SECTION_KEYS = [
   "general",
+  "brand-book",
   "integrations",
   "knowledge",
   "billing",

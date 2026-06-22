@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Heading, Text } from "@radix-ui/themes";
 import { BrandDocumentsSection } from "@/components/settings/BrandDocumentsSection";
 import { BrandGuidelineSection } from "@/components/settings/BrandGuidelineSection";
+import { BrandBookSection } from "@/components/settings/brand/BrandBookSection";
 import { BrandMembersSection } from "@/components/settings/BrandMembersSection";
 import { RunStrategicAnalysisButton } from "@/components/strategic-analyses/RunStrategicAnalysisButton";
 import { BrandIdentityHeader } from "@/components/settings/brand/BrandIdentityHeader";
@@ -20,6 +21,7 @@ import { UserBrandsPanel } from "@/components/settings/account/UserBrandsPanel";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { fetchBrandProfileDetails } from "@/lib/brands/profile";
 import { fetchBrandDocuments } from "@/lib/brands/documents";
+import { fetchBrandBook } from "@/lib/brands/brandBook";
 import {
   createEmptyUserIntegrationSummary,
   fetchUserIntegrationSummary,
@@ -129,6 +131,20 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       ) : null}
       </>);
+  } else if (initialSection === "brand-book") {
+    const brandBook = await fetchBrandBook(activeBrandId);
+
+    activeSectionSlot = (
+      <>
+        {createBrandHeader(defaultBrandName)}
+        <SettingsSection
+          title="Brand Book"
+          description="Your living brand identity — shown shallow during onboarding, deepened automatically over time."
+        >
+          <BrandBookSection brandBook={brandBook} />
+        </SettingsSection>
+      </>
+    );
   } else if (initialSection === "integrations") {
     const repo = createBrandProfileRepository();
     const [integrationSummary, members] = await Promise.all([
