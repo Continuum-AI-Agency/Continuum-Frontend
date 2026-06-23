@@ -1,11 +1,17 @@
 import { Badge, Heading, Text } from "@radix-ui/themes";
 import {
   DOCUMENT_CATEGORY_LABELS,
+  parseBrandMd,
   type BrandBookResponse,
+  type BrandColorToken,
   type DocumentCategory,
 } from "@continuum/contracts";
 import { buildBrandBookView } from "./brandBookView";
 import { BrandBookActions } from "./BrandBookActions";
+import { BrandMdDirtyProvider } from "./BrandMdDirtyContext";
+import { BrandMdEditor } from "./BrandMdEditor";
+import { BrandScorecard } from "./BrandScorecard";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 
 // Renders one section's markdown-ish body lines: groups consecutive table rows
 // (`| … |`) into a monospace block and treats `### ` lines as sub-headings.
@@ -87,22 +93,38 @@ function DocumentsPanel({ documents }: { documents: BrandBookResponse["documents
   );
 }
 
-export function BrandBookSection({ brandBook }: { brandBook: BrandBookResponse | null }) {
-  if (!brandBook) {
-    return (
-      <Text color="gray">
-        Your Brand Book appears here once onboarding has generated your brand report.
-      </Text>
-    );
-  }
-
-  const view = buildBrandBookView(brandBook.composite);
-
+// Palette swatch strip rendered from the brand_tokens.colors array.
+function ColorSwatchStrip({ colors }: { colors: BrandColorToken[] }) {
+  if (colors.length === 0) return null;
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <BrandBookActions brandId={brandBook.brand_id} />
-      </div>
+    <div className="flex flex-wrap gap-2">
+      {colors.map((token, i) => (
+        <div key={`${token.value}-${i}`} className="flex items-center gap-1.5">
+          <span
+            className="inline-block h-5 w-5 rounded-sm border border-white/20 shrink-0"
+            style={{ backgroundColor: token.value }}
+            aria-label={token.name ?? token.value}
+          />
+          <span className="text-xs text-gray-400">
+            {token.name ? `${token.name} ` : ""}
+            <span className="font-mono text-gray-500">{token.value}</span>
+            {token.role ? (
+              <span className="ml-1 text-gray-600">· {token.role}</span>
+            ) : null}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Tier groups + scorecard rendered from the structured composite.
+// Kept as backward-compat fallback when brand_md is null (un-migrated brand)
+// and also rendered alongside the brand.md prose for supplemental structure.
+function StructuredTierGroups({ brandBook }: { brandBook: BrandBookResponse }) {
+  const view = buildBrandBookView(brandBook.composite);
+  return (
+    <>
       {view.groups.map((group) => (
         <section key={group.tier} className="space-y-3">
           <Heading size="3" className="text-white">
@@ -136,13 +158,87 @@ export function BrandBookSection({ brandBook }: { brandBook: BrandBookResponse |
           </div>
         </section>
       ))}
+    </>
+  );
+}
 
-      <section className="space-y-2">
-        <Heading size="3" className="text-white">
-          Source documents
-        </Heading>
-        <DocumentsPanel documents={brandBook.documents} />
-      </section>
-    </div>
+// BrandMdDirtyProvider must wrap both BrandBookActions (which reads the dirty
+// flag to suppress auto-refresh) and BrandMdEditor (which sets it). Since
+// BrandBookSection is an RSC the provider is a thin "use client" wrapper
+// declared in BrandMdDirtyContext.tsx — no "use client" needed here.
+export function BrandBookSection({ brandBook }: { brandBook: BrandBookResponse | null }) {
+  if (!brandBook) {
+    return (
+      <Text color="gray">
+        Your Brand Book appears here once onboarding has generated your brand report.
+      </Text>
+    );
+  }
+
+  const colors = brandBook.brand_tokens?.colors ?? [];
+  const hasBrandMd = brandBook.brand_md !== null;
+
+  return (
+    <BrandMdDirtyProvider>
+      <div className="space-y-6">
+        <div className="flex items-center justify-end">
+          <BrandBookActions brandId={brandBook.brand_id} />
+        </div>
+
+        {/* Readiness scorecard — always shown when data is present */}
+        <BrandScorecard result={brandBook.composite} brandId={brandBook.brand_id} />
+
+        {/* Color palette from brand tokens */}
+        {colors.length > 0 ? (
+          <section className="space-y-2">
+            <Heading size="3" className="text-white">
+              Brand colors
+            </Heading>
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3">
+              <ColorSwatchStrip colors={colors} />
+            </div>
+          </section>
+        ) : null}
+
+        {/* Brand document prose — SafeMarkdown body when brand_md is present,
+            structured tier groups as fallback for un-migrated brands */}
+        {hasBrandMd ? (
+          <section className="space-y-3">
+            <Heading size="3" className="text-white">
+              Brand document
+            </Heading>
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3">
+              <SafeMarkdown
+                content={parseBrandMd(brandBook.brand_md!).body}
+                mode="static"
+                className="prose prose-invert prose-sm max-w-none"
+              />
+            </div>
+          </section>
+        ) : (
+          <StructuredTierGroups brandBook={brandBook} />
+        )}
+
+        {/* Editor — mounted for all brands; shows an empty-state CTA when
+            brand_md has not been generated yet */}
+        <section className="space-y-3">
+          <Heading size="3" className="text-white">
+            Edit brand document
+          </Heading>
+          <BrandMdEditor
+            brandId={brandBook.brand_id}
+            initialBrandMd={brandBook.brand_md}
+            isEdited={brandBook.brand_md_is_edited}
+          />
+        </section>
+
+        <section className="space-y-2">
+          <Heading size="3" className="text-white">
+            Source documents
+          </Heading>
+          <DocumentsPanel documents={brandBook.documents} />
+        </section>
+      </div>
+    </BrandMdDirtyProvider>
   );
 }

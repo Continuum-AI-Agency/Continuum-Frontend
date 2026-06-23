@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useTransition } from "react";
+import { useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@radix-ui/themes";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/ToastProvider";
 import { deepenBrandBook } from "@/lib/api/brandBook.client";
+import { useBrandMdDirtyOptional } from "./BrandMdDirtyContext";
 
 /**
  * Brand Book interactivity: a "Deepen analysis" trigger + a realtime listener
@@ -19,6 +20,15 @@ export function BrandBookActions({ brandId }: { brandId: string }) {
   const router = useRouter();
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
+  // Suppress auto-refresh while the user has unsaved edits in BrandMdEditor —
+  // a Realtime-triggered router.refresh() would wipe in-flight draft content.
+  const editorIsDirty = useBrandMdDirtyOptional();
+  // Keep a ref so the channel callback always reads the latest value without
+  // re-subscribing on every dirty/clean toggle.
+  const editorIsDirtyRef = useRef(editorIsDirty);
+  useEffect(() => {
+    editorIsDirtyRef.current = editorIsDirty;
+  }, [editorIsDirty]);
 
   useEffect(() => {
     const channel = supabase
@@ -34,7 +44,11 @@ export function BrandBookActions({ brandId }: { brandId: string }) {
         () => {
           // The composite changed (e.g. the deep pass landed) — re-run the RSC
           // fetch so the viewer reflects the new tiers without a manual reload.
-          router.refresh();
+          // Skip the refresh when the editor has unsaved changes: blowing away a
+          // draft mid-edit is worse than the viewer being briefly stale.
+          if (!editorIsDirtyRef.current) {
+            router.refresh();
+          }
         },
       )
       .subscribe();
