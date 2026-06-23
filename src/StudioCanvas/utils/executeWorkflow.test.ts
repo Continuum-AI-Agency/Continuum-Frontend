@@ -330,6 +330,82 @@ describe('executeWorkflow', () => {
     expect(videoNode?.data.generatedVideo).toBe('video_url');
   });
 
+  it('runs the upstream closure when a node is targeted and an upstream generator is not yet complete', async () => {
+    // Chained generators: img-a -> (ref-image) -> img-b, with img-a NOT yet
+    // generated. Targeting img-b (node "Run") must execute img-a first, then img-b
+    // — previously only img-b ran, so it failed with a missing reference input.
+    const nodes: StudioNode[] = [
+      { id: 'prompt-1', position: { x: 0, y: 0 }, data: { value: 'a cat' }, type: 'string' },
+      { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'first image' }, type: 'nanoGen' },
+      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'prompt-1', sourceHandle: 'text', target: 'img-b', targetHandle: 'prompt' },
+      { id: 'e2', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (nodeId: string) => ({
+      success: true,
+      output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' },
+    }));
+
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(2);
+    // img-a (the upstream dependency) runs before the target img-b.
+    expect(executeGeneration.mock.calls[0][0]).toBe('img-a');
+    expect(executeGeneration.mock.calls[1][0]).toBe('img-b');
+
+    const targetPayload = executeGeneration.mock.calls[1][1];
+    expect(targetPayload.prompt).toBe('a cat');
+    expect(targetPayload.reference_images?.[0]?.data).toBe('out-img-a');
+  });
+
+  it('reuses a completed upstream generator instead of re-running it when targeting a node', async () => {
+    // img-a is already generated; targeting img-b must reuse img-a's output and run
+    // only img-b.
+    const nodes: StudioNode[] = [
+      {
+        id: 'img-a',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', generatedImage: 'data:image/png;base64,existing_a', isComplete: true },
+        type: 'nanoGen',
+      },
+      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'second' }, type: 'nanoGen' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (nodeId: string) => ({
+      success: true,
+      output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' },
+    }));
+
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    expect(executeGeneration.mock.calls[0][0]).toBe('img-b');
+    expect(executeGeneration.mock.calls[0][1].reference_images?.[0]?.data).toBe('existing_a');
+
+    // img-a is reused, not reset.
+    const imgA = useStudioStore.getState().nodes.find((node) => node.id === 'img-a');
+    expect(imgA?.data.generatedImage).toBe('data:image/png;base64,existing_a');
+    expect(imgA?.data.isComplete).toBe(true);
+  });
+
   it('should keep string node content untouched during workflow runs', async () => {
     const nodes: StudioNode[] = [
       { id: 'string-1', position: { x: 0, y: 0 }, data: { value: 'persistent prompt' }, type: 'string' },

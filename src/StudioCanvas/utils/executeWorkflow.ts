@@ -373,13 +373,49 @@ const getNodeReadiness = (
   return { ready: true };
 };
 
-const resolveExecutableNodes = (nodes: StudioNode[], targetNodeId?: string): StudioNode[] => {
+const isRunnableNodeType = (nodeType: string | undefined): boolean =>
+  nodeType === 'string' || nodeType === 'videoDecode' || isMediaNodeType(nodeType);
+
+// Walk edges backward from the target to gather every node that feeds it
+// (directly or transitively). Running a single node must also execute this
+// dependency closure so its prompt/reference inputs are produced — a whole-graph
+// run scoped to the target's subgraph rather than the target in isolation.
+const collectUpstreamClosure = (targetNodeId: string, edges: Edge[]): Set<string> => {
+  const ancestors = new Set<string>();
+  const queue = [targetNodeId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const edge of edges) {
+      if (edge.target !== current || ancestors.has(edge.source)) continue;
+      ancestors.add(edge.source);
+      queue.push(edge.source);
+    }
+  }
+  return ancestors;
+};
+
+const resolveExecutableNodes = (
+  nodes: StudioNode[],
+  edges: Edge[],
+  targetNodeId?: string
+): StudioNode[] => {
   if (!targetNodeId) return nodes.filter((node) => isMediaNodeType(node.type));
   const target = nodes.find((node) => node.id === targetNodeId);
-  if (!target) return [];
-  return target.type === 'string' || target.type === 'videoDecode' || isMediaNodeType(target.type)
-    ? [target]
-    : [];
+  if (!target || !isRunnableNodeType(target.type)) return [];
+  const scope = collectUpstreamClosure(targetNodeId, edges);
+  scope.add(targetNodeId);
+  return nodes.filter((node) => scope.has(node.id) && isRunnableNodeType(node.type));
+};
+
+// Mirrors the pre-populate condition below: a node whose previous output can be
+// reused as-is (so a targeted run does not re-run finished upstream nodes).
+const nodeHasUsableOutput = (node: StudioNode): boolean => {
+  const data = node.data as Record<string, unknown>;
+  if (node.type === 'string' || node.type === 'videoDecode') {
+    return normalizeText(data.value as string | undefined) !== undefined;
+  }
+  if (Boolean(data.error) || !data.isComplete) return false;
+  return Boolean(data.generatedImage || data.generatedImageUrl || data.generatedVideo || data.generatedVideoUrl);
 };
 
 const REFERENCE_INPUT_HANDLES = new Set([
@@ -475,7 +511,7 @@ export async function executeWorkflow(
   // all. This mirrors the load path so the hot path is equally robust.
   {
     const snapshot = useStudioStore.getState();
-    const scopeNodeIds = resolveExecutableNodes(snapshot.nodes, options.targetNodeId).map((node) => node.id);
+    const scopeNodeIds = resolveExecutableNodes(snapshot.nodes, snapshot.edges, options.targetNodeId).map((node) => node.id);
     if (scopeNodeIds.length === 0) {
       console.log("No executable nodes found");
       return;
@@ -492,7 +528,7 @@ export async function executeWorkflow(
   });
 
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const executableNodes = resolveExecutableNodes(nodes, options.targetNodeId);
+  const executableNodes = resolveExecutableNodes(nodes, edges, options.targetNodeId);
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
@@ -507,7 +543,16 @@ export async function executeWorkflow(
   const nodesToReset = new Set(executableNodeIds);
 
   const resetNodeIds = nodes
-    .filter((node) => (node.type === 'string' || node.type === 'videoDecode' || isMediaNodeType(node.type)) && nodesToReset.has(node.id))
+    .filter((node) => {
+      if (!isRunnableNodeType(node.type) || !nodesToReset.has(node.id)) return false;
+      // Targeted runs reuse finished upstream results: reset only the target and
+      // any dependency that has not yet produced a usable output. Completed
+      // upstreams keep their state so they are pre-populated and reused below.
+      if (options.targetNodeId && node.id !== options.targetNodeId && nodeHasUsableOutput(node)) {
+        return false;
+      }
+      return true;
+    })
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {

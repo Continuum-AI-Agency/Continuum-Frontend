@@ -16,8 +16,16 @@ import {
 
 // A reference image for a generation/enrich payload. A signed `imageUrl` is the
 // source of truth; base64 `data` is the emergency fallback (un-uploaded media).
-// The Backend resolves the URL to bytes for the provider.
-type ImageRef = { data?: string; imageUrl?: string; mimeType: string };
+// `storageBucket`/`storagePath` accompany a generated canvas image so the Backend
+// can download the bytes via the service-role client instead of fetching a signed
+// URL that may have expired or is not publicly reachable.
+type ImageRef = {
+  data?: string;
+  imageUrl?: string;
+  mimeType: string;
+  storageBucket?: string;
+  storagePath?: string;
+};
 
 const isHttpUrl = (value?: string | null): value is string =>
   typeof value === 'string' && /^https?:\/\//i.test(value.trim());
@@ -25,7 +33,14 @@ const isHttpUrl = (value?: string | null): value is string =>
 const imageRefFromOutput = (output: NodeOutput | undefined): ImageRef | undefined => {
   if (output?.type !== 'image') return undefined;
   if (output.base64) return { data: output.base64, mimeType: output.mimeType };
-  if (isHttpUrl(output.url)) return { imageUrl: output.url.trim(), mimeType: output.mimeType };
+  if (isHttpUrl(output.url)) {
+    return {
+      imageUrl: output.url.trim(),
+      mimeType: output.mimeType,
+      storageBucket: output.storageBucket,
+      storagePath: output.storagePath,
+    };
+  }
   return undefined;
 };
 
@@ -398,6 +413,8 @@ export function buildNanoGenPayload(
           data: ref.data,
           imageUrl: ref.imageUrl,
           mimeType: ref.mimeType,
+          storageBucket: ref.storageBucket,
+          storagePath: ref.storagePath,
           weight: 1,
           referenceType: 'asset' as const,
         };
@@ -677,6 +694,8 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     reference_images: payload.referenceImages?.map((img) => ({
       data: img.data,
       image_url: img.imageUrl,
+      storage_bucket: img.storageBucket,
+      storage_path: img.storagePath,
       mime_type: img.mimeType,
       filename: img.filename,
       weight: img.weight,

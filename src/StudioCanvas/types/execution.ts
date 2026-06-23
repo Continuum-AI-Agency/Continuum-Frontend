@@ -76,6 +76,8 @@ export interface GenerationPayload {
   referenceImages?: Array<{
     data?: string;
     imageUrl?: string;
+    storageBucket?: string;
+    storagePath?: string;
     mimeType: string;
     filename?: string;
     weight?: number;
