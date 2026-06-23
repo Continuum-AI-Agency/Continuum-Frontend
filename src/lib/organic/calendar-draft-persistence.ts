@@ -176,6 +176,9 @@ export type PersistedOrganicDraftRow = {
   // Authoritative enrichment ladder stamped by the backend on every persist.
   // Legacy rows (pre-column) are null; we derive a fallback from content_json.
   media_stage?: string | null
+  // Immutable per-brand identity (UNIQUE (brand_id, client_key)). Legacy rows are
+  // null; we fall back to the snapshot/row id when mapping.
+  client_key?: string | null
 }
 
 export type PersistedDraftWritePayload = {
@@ -187,6 +190,9 @@ export type PersistedDraftWritePayload = {
   status: PersistedDraftStatus
   scheduled_date: string | null
   slot_data: Record<string, unknown>
+  // Canonical per-brand identity for UPSERT (brand_id, client_key) — keeps the
+  // autosave from inserting a second row for the same logical draft.
+  client_key: string
 }
 
 export type PersistedCalendarEntry = {
@@ -330,6 +336,9 @@ export function buildPersistedDraftPayload(args: {
     platform_account_id: platformAccountId,
     status,
     scheduled_date: dayId,
+    // Stable identity == the draft's minted clientKey (fallback to its local id for
+    // legacy drafts created before clientKey existed).
+    client_key: draft.clientKey ?? draft.id,
     slot_data: {
       placementId: draft.id,
       weekStart: weekStartId,
@@ -359,14 +368,29 @@ export function mergeUnsavedLocalDrafts(
   serverDays: OrganicCalendarDay[],
   localDays: OrganicCalendarDay[]
 ): OrganicCalendarDay[] {
+  // Index server rows on EVERY identity axis. A logical draft can appear locally
+  // as an optimistic copy whose `id` differs from the server row's mapped id; the
+  // canonical link is `clientKey`. Deduping by id alone let the optimistic copy
+  // survive and the autosave re-INSERT it — the duplicate-posts bug.
   const serverDraftIds = new Set<string>()
-  serverDays.forEach((day) => day.slots.forEach((slot) => serverDraftIds.add(slot.id)))
+  const serverBackendIds = new Set<string>()
+  const serverClientKeys = new Set<string>()
+  serverDays.forEach((day) =>
+    day.slots.forEach((slot) => {
+      serverDraftIds.add(slot.id)
+      if (slot.backendDraftId) serverBackendIds.add(slot.backendDraftId)
+      if (slot.clientKey) serverClientKeys.add(slot.clientKey)
+    }),
+  )
 
   const unsavedByDayId = new Map<string, OrganicCalendarDraft[]>()
   for (const localDay of localDays) {
     for (const draft of localDay.slots) {
       if (draft.backendDraftId) continue
       if (serverDraftIds.has(draft.id)) continue
+      // Already represented server-side under the canonical key — not unsaved.
+      if (draft.clientKey && serverClientKeys.has(draft.clientKey)) continue
+      if (draft.clientKey && serverBackendIds.has(draft.clientKey)) continue
       const pending = unsavedByDayId.get(localDay.id) ?? []
       pending.push(draft)
       unsavedByDayId.set(localDay.id, pending)
@@ -449,6 +473,8 @@ export function mapPersistedRowToCalendarEntry(
   const draft: OrganicCalendarDraft = {
     id: draftId,
     backendDraftId: row.id,
+    // Canonical identity from the column (fallback: snapshot, else the local id).
+    clientKey: readString(row.client_key) ?? readString(snapshot.clientKey) ?? draftId,
     title:
       readString(snapshot.title) ??
       readString(slotData.title) ??

@@ -54,6 +54,10 @@ export type OrganicCalendarDraft = {
   generationError?: string
   generationAttempts?: number
   backendDraftId?: string
+  // Immutable per-brand identity, minted once at create and carried across
+  // FE<->BE so a draft is enriched in place (UPSERT on (brand_id, client_key))
+  // instead of duplicated. Stable across refetches, unlike `id`.
+  clientKey?: string
   instagram_post_id?: string | null
   mediaSuggestion?: {
     provider?: string | null

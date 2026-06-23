@@ -5603,6 +5603,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           brand_id: string
+          client_key: string | null
           content_json: Json | null
           content_plan_id: string | null
           created_at: string
@@ -5623,6 +5624,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           brand_id: string
+          client_key?: string | null
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
@@ -5643,6 +5645,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           brand_id?: string
+          client_key?: string | null
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
@@ -6667,6 +6670,20 @@ export type Database = {
       requeue_post_generation_job: {
         Args: { p_backoff_sec: number; p_job_id: string; p_worker_id: string }
         Returns: boolean
+      }
+      start_inline_post_generation_job: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_job_type: string
+          p_payload: Json
+          p_platform: string
+          p_scheduled_at: string
+          p_session_id: string
+          p_user_id: string
+          p_worker_id: string
+        }
+        Returns: string
       }
       update_post_generation_job_progress: {
         Args: { p_job_id: string; p_progress: Json }

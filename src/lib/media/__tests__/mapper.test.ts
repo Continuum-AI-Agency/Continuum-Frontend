@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { rowToMediaAsset } from "../mapper";
 import { mediaAssetSchema } from "@continuum/contracts";
 import type { MediaAssetRow } from "../schema";

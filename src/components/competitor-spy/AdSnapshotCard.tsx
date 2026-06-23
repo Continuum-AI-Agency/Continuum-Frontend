@@ -1,6 +1,9 @@
 "use client";
 
 import { useCreativeUrl } from "@/lib/api/competitorSpy";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import type { TimelineEntry } from "@continuum/contracts";
 
 function formatDate(iso: string | null): string {
@@ -8,6 +11,12 @@ function formatDate(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatCompactList(values: string[]): string {
+  if (values.length === 0) return "";
+  const visible = values.slice(0, 2).join(", ");
+  return values.length > 2 ? `${visible} +${values.length - 2}` : visible;
 }
 
 function daysActive(firstSeenAt: string, lastSeenAt: string): number {
@@ -18,11 +27,7 @@ function daysActive(firstSeenAt: string, lastSeenAt: string): number {
 }
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] capitalize text-foreground/80">
-      {children}
-    </span>
-  );
+  return <Badge variant="secondary" className="text-[10px] capitalize text-foreground/80">{children}</Badge>;
 }
 
 export function AdSnapshotCard({
@@ -35,9 +40,12 @@ export function AdSnapshotCard({
   const hasMedia = entry.hasCreativeMedia ?? false;
   const { data: creativeUrl } = useCreativeUrl(entry.snapshotId, hasMedia);
   const analysis = entry.analysis ?? null;
+  const metadata = entry.publicMetadata;
+  const platformLabel = formatCompactList(metadata?.platforms ?? entry.platforms);
+  const languageLabel = formatCompactList(metadata?.languages ?? []);
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
+    <Card className="gap-0 overflow-hidden rounded-lg border-border py-0 shadow-sm">
       <div className="relative aspect-[4/5] w-full bg-muted">
         {creativeUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- arbitrary, short-lived signed URLs
@@ -47,21 +55,20 @@ export function AdSnapshotCard({
             {hasMedia ? "Loading…" : "No creative"}
           </div>
         )}
-        <span
-          className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium text-white ${
-            entry.status === "active" ? "bg-emerald-500/90" : "bg-muted-foreground/80"
-          }`}
+        <Badge
+          variant={entry.status === "active" ? "success" : "secondary"}
+          className="absolute left-2 top-2 text-[10px] capitalize shadow-sm"
         >
           {entry.status}
-        </span>
+        </Badge>
         {inspiration ? (
-          <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+          <Badge className="absolute right-2 top-2 bg-black/55 text-[10px] text-white backdrop-blur-sm">
             Inspiration
-          </span>
+          </Badge>
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-3">
+      <CardContent className="flex flex-1 flex-col gap-2 p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-medium">{entry.competitorName}</span>
           <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -70,6 +77,19 @@ export function AdSnapshotCard({
         </div>
 
         {entry.body ? <p className="line-clamp-3 text-xs text-muted-foreground">{entry.body}</p> : null}
+
+        <div className="grid gap-1 rounded-md bg-muted/35 p-2 text-[10px] text-muted-foreground">
+          {metadata?.creationTime ? <span>Created {formatDate(metadata.creationTime)}</span> : null}
+          <span>First seen {formatDate(entry.firstSeenAt)}</span>
+          {metadata?.deliveryStart ? (
+            <span>
+              Delivery {formatDate(metadata.deliveryStart)}
+              {metadata.deliveryStop ? ` to ${formatDate(metadata.deliveryStop)}` : ""}
+            </span>
+          ) : null}
+          {platformLabel ? <span>Platforms {platformLabel}</span> : null}
+          {languageLabel ? <span>Languages {languageLabel}</span> : null}
+        </div>
 
         {analysis ? (
           <div className="flex flex-wrap gap-1">
@@ -82,14 +102,16 @@ export function AdSnapshotCard({
         ) : null}
 
         <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
-          <span>First seen {formatDate(entry.firstSeenAt)}</span>
+          <span>{metadata?.pageName ?? entry.competitorName}</span>
           {entry.snapshotUrl ? (
-            <a href={entry.snapshotUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-              View on Meta
-            </a>
+            <Button asChild variant="link" size="xs" className="h-auto p-0 text-[11px]">
+              <a href={entry.snapshotUrl} target="_blank" rel="noreferrer">
+                View on Meta
+              </a>
+            </Button>
           ) : null}
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

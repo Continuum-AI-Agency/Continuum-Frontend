@@ -52,7 +52,16 @@ export const reelClipSchema = z
 
 export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("batch_started"), total: z.number().int().nonnegative() }).strict(),
-  z.object({ type: z.literal("reel_started"), draftId: z.string().min(1) }).strict(),
+  z
+    .object({
+      type: z.literal("reel_started"),
+      draftId: z.string().min(1),
+      // Real organic.post_generation_jobs uuid backing this inline reel batch, so
+      // the FE can cancel via POST /jobs/:jobId/cancel. Optional (graceful
+      // degradation if job-row creation fails).
+      jobId: z.string().min(1).optional(),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("reel_progress"),

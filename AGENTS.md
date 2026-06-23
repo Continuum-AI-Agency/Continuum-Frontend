@@ -144,7 +144,8 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 * **Don't cheat, don't be lazy, just be Honest.** Write tests that cover TRUE functionality. NEVER simulate a pass condition, and it should always attempt the function's intended behavior.
 * **Tests are Atomized** Tests should cover the smallest amount of functions at a time, to give clarity on what is breaking. A test can have multiple calls/arguments at a time, but it should be for the function they are covering.
 * **Tests are Critical** Tests are critical to effective codebases, functions, and behavior. Always write the full test, covering 100% of functionality.
-* **You can Iterate on them yourself** Running `bun test path/to/function` runs that singular test. `bun tests` runs all tests in the codebase. You may run them iteratively within your context in order to confirm your work.
+* **You can Iterate on them yourself** Running `bun test path/to/function` runs that singular test. `bun run tests` runs all frontend tests. You may run them iteratively within your context in order to confirm your work.
+* **Bun test only** Use `bun:test` for test APIs. Do not add Vitest configs, Vitest scripts, or `vitest` dependencies.
 * **Logging in Edge Functions** Putting logs into Edge Functions is critical for tracing and debugging.
 
 ## Plan Mode

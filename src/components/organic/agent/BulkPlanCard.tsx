@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 import {
-  AgentCard,
   AgentCardEyebrow,
   AgentCardSummary,
   AgentCardTitle,
+  AgentDecisionCard,
   ApproveRejectActions,
   MetaRow,
   PlatformTag,
-} from "./agentCardKit";
-import type { BulkContentPlan } from "./types";
+} from './agentCardKit';
+import type { BulkContentPlan } from './types';
 
 function formatMix(plan: BulkContentPlan): string[] {
   const mix = plan.strategyBrief.mix;
@@ -37,7 +37,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
   }
 
   return (
-    <AgentCard>
+    <AgentDecisionCard className="p-4">
       <AgentCardEyebrow
         label="Bulk plan"
         right={
@@ -63,10 +63,11 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
       </div>
 
       <button
+        type="button"
         onClick={() => setExpanded((v) => !v)}
         className="mt-3 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
-        {expanded ? "Hide" : "Show"} {placements.length} scheduled pieces
+        {expanded ? 'Hide' : 'Show'} {placements.length} scheduled pieces
       </button>
 
       {expanded && (
@@ -75,7 +76,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
             <div key={spec.specId} className="space-y-0.5">
               <div className="flex min-w-0 items-center gap-2">
                 <PlatformTag platform={spec.platform} />
-                <MetaRow items={[spec.format, spec.dayId ?? "unscheduled"]} />
+                <MetaRow items={[spec.format, spec.dayId ?? 'unscheduled']} />
               </div>
               <p className="truncate text-[12px] text-foreground/80">{spec.angle}</p>
             </div>
@@ -89,6 +90,6 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
         onApprove={() => decide(onApproveAction)}
         onReject={() => decide(onRejectAction)}
       />
-    </AgentCard>
+    </AgentDecisionCard>
   );
 }

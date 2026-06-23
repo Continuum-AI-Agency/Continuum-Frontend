@@ -20,6 +20,12 @@ function describeFrame(frame: CompetitorSpyStreamFrame): string {
       return "Fetching creatives…";
     case "creative_analyzed":
       return "Analyzing creatives…";
+    case "paid_page_resolved":
+      return `Resolved ${frame.data.competitorName} to ${frame.data.pageName}.`;
+    case "paid_page_needs_review":
+      return `${frame.data.competitorName} needs a Meta Page review before paid sync.`;
+    case "competitor_skipped":
+      return `${frame.data.competitorName} skipped: missing Meta Page ID.`;
     case "awareness_block":
       return "Building awareness report…";
     case "run_completed":
@@ -95,7 +101,7 @@ export function CompetitorManager({ brandId }: { brandId: string }) {
 
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Tracked competitors</h3>
-        <button onClick={runSync} className={BTN_CLASS} disabled={running}>
+          <button type="button" onClick={runSync} className={BTN_CLASS} disabled={running}>
           {running ? "Syncing…" : "Sync now"}
         </button>
       </div>
@@ -121,6 +127,7 @@ export function CompetitorManager({ brandId }: { brandId: string }) {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => remove.mutate(c.id)}
                 className="text-xs text-destructive hover:underline"
                 disabled={remove.isPending}

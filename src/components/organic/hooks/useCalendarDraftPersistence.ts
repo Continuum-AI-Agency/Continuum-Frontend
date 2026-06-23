@@ -173,20 +173,32 @@ export function useCalendarDraftPersistence({
     if (!brandProfileId) return
     if (hydratedKeyRef.current !== brandProfileId) return
 
-    const persistableEntries = calendarDays
+    const rawPersistableEntries = calendarDays
       // The unscheduled sentinel is not a real date; its drafts are server-owned
       // and must never be written back with a bogus scheduled_date.
       .filter((day) => day.id !== UNSCHEDULED_DAY_ID)
       .flatMap((day) =>
         day.slots
           .filter((draft) => draft.status !== "streaming")
-          // Server-owned drafts (agent/MCP pre-mint, enriched by the backend
-          // pipeline) are never written by the browser autosave — the writer owns
-          // only manual drafts. This is the invariant that stops the autosave from
-          // clobbering an agent post mid-enrichment.
-          .filter((draft) => draft.origin !== "agent")
+          // The browser autosave owns ONLY manually-authored drafts. Everything the
+          // generation pipeline produces (agent posts, grid/trend seeds, "Generate
+          // with AI" placeholders — all origin 'agent' or undefined) is server-owned
+          // and persisted by the backend with a canonical client_key. A positive
+          // allowlist (origin === 'manual') is the fix for duplicate posts: the old
+          // denylist (origin !== 'agent') let undefined-origin generation drafts slip
+          // through and get inserted a second time alongside the backend's own row.
+          .filter((draft) => draft.origin === "manual")
           .map((draft) => ({ dayId: day.id, draft }))
       )
+    // Collapse any same-clientKey entries (a store-level duplicate) so each logical
+    // draft is written exactly once per tick.
+    const seenClientKeys = new Set<string>()
+    const persistableEntries = rawPersistableEntries.filter((entry) => {
+      const key = entry.draft.clientKey ?? entry.draft.id
+      if (seenClientKeys.has(key)) return false
+      seenClientKeys.add(key)
+      return true
+    })
     const signature = serializeEntries(persistableEntries)
     if (signature === lastSyncedSignatureRef.current) return
 
@@ -233,17 +245,24 @@ export function useCalendarDraftPersistence({
             })
 
             if (!entry.draft.backendDraftId) {
+              // UPSERT on the canonical (brand_id, client_key): if a refetch already
+              // echoed this logical draft (or a write-back was missed), this updates
+              // the existing row instead of minting a duplicate.
               const { data: created, error } = await organicSchema
                 .from("organic_calendar_drafts")
-                .insert({
-                  brand_id: payload.brand_id,
-                  platform: payload.platform,
-                  platform_account_id: payload.platform_account_id,
-                  status: payload.status,
-                  scheduled_date: payload.scheduled_date,
-                  slot_data: payload.slot_data,
-                  user_id: user.id,
-                })
+                .upsert(
+                  {
+                    brand_id: payload.brand_id,
+                    client_key: payload.client_key,
+                    platform: payload.platform,
+                    platform_account_id: payload.platform_account_id,
+                    status: payload.status,
+                    scheduled_date: payload.scheduled_date,
+                    slot_data: payload.slot_data,
+                    user_id: user.id,
+                  },
+                  { onConflict: "brand_id,client_key" },
+                )
                 .select("id")
                 .single()
               if (error) continue
@@ -262,6 +281,7 @@ export function useCalendarDraftPersistence({
               .from("organic_calendar_drafts")
               .update({
                 brand_id: payload.brand_id,
+                client_key: payload.client_key,
                 platform: payload.platform,
                 platform_account_id: payload.platform_account_id,
                 status: payload.status,

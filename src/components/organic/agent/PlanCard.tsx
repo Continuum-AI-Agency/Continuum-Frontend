@@ -1,38 +1,38 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { format } from "date-fns";
+import { format } from 'date-fns';
+import { useState } from 'react';
 import {
-  AgentCard,
   AgentCardEyebrow,
   AgentCardSummary,
   AgentCardTitle,
+  AgentDecisionCard,
   ApproveRejectActions,
   MetaRow,
   PlatformTag,
   StatusLabel,
-} from "./agentCardKit";
-import type { PlanEvidence, PlanItem, PlanItemStatus, UiPlanCard } from "./types";
+} from './agentCardKit';
+import type { PlanEvidence, PlanItem, PlanItemStatus, UiPlanCard } from './types';
 
-const STATUS_TONE: Record<PlanItemStatus, "neutral" | "running" | "done" | "failed"> = {
-  pending: "neutral",
-  executing: "running",
-  completed: "done",
-  failed: "failed",
-  cancelled: "neutral",
+const STATUS_TONE: Record<PlanItemStatus, 'neutral' | 'running' | 'done' | 'failed'> = {
+  pending: 'neutral',
+  executing: 'running',
+  completed: 'done',
+  failed: 'failed',
+  cancelled: 'neutral',
 };
 
 const STATUS_LABEL: Record<PlanItemStatus, string> = {
-  pending: "Pending",
-  executing: "Copy in progress",
-  completed: "Copy ready",
-  failed: "Failed",
-  cancelled: "Cancelled",
+  pending: 'Pending',
+  executing: 'Copy in progress',
+  completed: 'Copy ready',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 function formatScheduledAt(iso: string): string {
   try {
-    return format(new Date(iso), "EEE MMM d · h:mm a");
+    return format(new Date(iso), 'EEE MMM d · h:mm a');
   } catch {
     return iso;
   }
@@ -44,11 +44,17 @@ function PlanItemRow({ item, status }: { item: PlanItem; status: PlanItemStatus 
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <PlatformTag platform={item.platform} />
-          <MetaRow items={[item.format ?? undefined, formatScheduledAt(item.scheduledAt), item.objective]} />
+          <MetaRow
+            items={[item.format ?? undefined, formatScheduledAt(item.scheduledAt), item.objective]}
+          />
         </div>
-        {status !== "pending" && <StatusLabel tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusLabel>}
+        {status !== 'pending' && (
+          <StatusLabel tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusLabel>
+        )}
       </div>
-      {item.angle && <p className="text-[13px] leading-snug text-foreground/90 text-pretty">{item.angle}</p>}
+      {item.angle && (
+        <p className="text-[13px] leading-snug text-foreground/90 text-pretty">{item.angle}</p>
+      )}
       {item.trendTitle && (
         <p className="text-[11.5px] text-muted-foreground">Trend · {item.trendTitle}</p>
       )}
@@ -59,7 +65,9 @@ function PlanItemRow({ item, status }: { item: PlanItem; status: PlanItemStatus 
 function EvidenceRow({ evidence }: { evidence: PlanEvidence }) {
   return (
     <p className="text-[11.5px] leading-snug text-muted-foreground">
-      <span className="font-medium capitalize text-foreground/70">{evidence.kind.replace("_", " ")}</span>
+      <span className="font-medium capitalize text-foreground/70">
+        {evidence.kind.replace('_', ' ')}
+      </span>
       <span className="px-1.5 text-muted-foreground/40">·</span>
       {evidence.summary}
     </p>
@@ -76,15 +84,15 @@ type Props = {
 export function PlanCard({ plan, planItemStatus, onApproveAction, onRejectAction }: Props) {
   const [decided, setDecided] = useState(false);
 
-  const title = typeof plan?.title === "string" ? plan.title : "";
-  const summary = typeof plan?.summary === "string" ? plan.summary : "";
+  const title = typeof plan?.title === 'string' ? plan.title : '';
+  const summary = typeof plan?.summary === 'string' ? plan.summary : '';
   const items = Array.isArray(plan?.items) ? plan.items : [];
   const evidence = Array.isArray(plan?.evidence) ? plan.evidence : [];
 
   const resolveStatus = (item: PlanItem): PlanItemStatus =>
-    planItemStatus?.[item.itemId] ?? item.status ?? "pending";
+    planItemStatus?.[item.itemId] ?? item.status ?? 'pending';
   // Once any item has started, the plan has been acted on — lock the buttons.
-  const alreadyActioned = items.some((item) => resolveStatus(item) !== "pending");
+  const alreadyActioned = items.some((item) => resolveStatus(item) !== 'pending');
   const locked = decided || alreadyActioned;
 
   function handleApprove() {
@@ -100,7 +108,7 @@ export function PlanCard({ plan, planItemStatus, onApproveAction, onRejectAction
   }
 
   return (
-    <AgentCard>
+    <AgentDecisionCard className="p-4">
       <AgentCardEyebrow label="Weekly plan" />
       {title && <AgentCardTitle>{title}</AgentCardTitle>}
       {summary && <AgentCardSummary>{summary}</AgentCardSummary>}
@@ -127,6 +135,6 @@ export function PlanCard({ plan, planItemStatus, onApproveAction, onRejectAction
         onApprove={handleApprove}
         onReject={handleReject}
       />
-    </AgentCard>
+    </AgentDecisionCard>
   );
 }

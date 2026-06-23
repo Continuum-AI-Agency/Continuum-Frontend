@@ -520,6 +520,7 @@ export function OrganicCalendarWorkspaceClient({
 
       const nextDraft: OrganicCalendarDraft = {
         id: draftId,
+        clientKey: draftId,
         title:
           status === "placeholder"
             ? "Content idea"

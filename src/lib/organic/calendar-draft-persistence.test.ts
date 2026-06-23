@@ -179,6 +179,42 @@ describe("calendar draft persistence utils", () => {
     expect(isDayIdInWeekRange("2026-04-27", "2026-04-20")).toBe(false)
     expect(isDayIdInWeekRange("invalid", "2026-04-20")).toBe(false)
   })
+
+  it("writes the canonical client_key (clientKey, else the local id) into the payload", () => {
+    const withKey = buildPersistedDraftPayload({
+      brandId: "b",
+      weekStartId: "2026-04-20",
+      dayId: "2026-04-21",
+      draft: makeDraft({ id: "draft-x", clientKey: "ck-stable" }),
+    })
+    expect(withKey.client_key).toBe("ck-stable")
+
+    const noKey = buildPersistedDraftPayload({
+      brandId: "b",
+      weekStartId: "2026-04-20",
+      dayId: "2026-04-21",
+      draft: makeDraft({ id: "draft-x" }),
+    })
+    expect(noKey.client_key).toBe("draft-x")
+  })
+
+  it("stamps clientKey from the client_key column (fallback: the mapped local id)", () => {
+    const days = buildWeekDays(new Date("2026-04-20T12:00:00"))
+    const row: PersistedOrganicDraftRow = {
+      id: "be-1",
+      status: "draft",
+      scheduled_date: "2026-04-21",
+      platform_account_id: "a",
+      client_key: "ck-123",
+      slot_data: { dayId: "2026-04-21" },
+    }
+    expect(mapPersistedRowToCalendarEntry(row, days)?.draft.clientKey).toBe("ck-123")
+
+    const noKeyRow: PersistedOrganicDraftRow = { ...row, client_key: null }
+    // No column + no placementId -> mapSlotDataDraftId falls back to rowId, so the
+    // clientKey converges on the row id (still stable for that row).
+    expect(mapPersistedRowToCalendarEntry(noKeyRow, days)?.draft.clientKey).toBe("be-1")
+  })
 })
 
 describe("mapPersistedRowToCalendarEntry — generated drafts (content_json shape)", () => {

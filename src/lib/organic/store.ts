@@ -86,7 +86,11 @@ export type GenerationCheckpoint = {
 // panel reducer + the bulk run stream so the shell-wide GenerationsPopover can show
 // status/progress/preview from any organic tab. Ephemeral — never persisted.
 export type GenerationEntry = {
+  // Stable UI registry key (e.g. the synthetic `realize:<feId>` for realize streams).
   jobId: string;
+  // Real organic.post_generation_jobs uuid when one backs this entry (set from the
+  // realize/reel started frame). The cancel button uses THIS, not `jobId`.
+  backendJobId?: string | null;
   planItemId?: string | null;
   platform?: string | null;
   scheduledAt?: string | null;
@@ -586,9 +590,15 @@ export const useCalendarStore = create<CalendarState>()(
           if (!resolvedTargetDayId) return {};
 
           const targetDay = state.days.find((d) => d.id === resolvedTargetDayId);
+          const clonedId = `draft-${crypto.randomUUID()}`;
           const cloned: OrganicCalendarDraft = {
             ...sourceDraft,
-            id: `draft-${crypto.randomUUID()}`,
+            id: clonedId,
+            // A duplicate is a NEW logical post the user now owns: fresh canonical
+            // identity (override the spread source's) + manual origin so the autosave
+            // persists it as its own row instead of colliding with the source.
+            clientKey: clonedId,
+            origin: "manual",
             title: sourceDraft.title.endsWith(" (copy)") ? sourceDraft.title : `${sourceDraft.title} (copy)`,
             status: "draft",
             timeLabel: newTimeLabel ?? sourceDraft.timeLabel,

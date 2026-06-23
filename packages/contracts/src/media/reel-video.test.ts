@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
@@ -68,6 +68,20 @@ describe("reelVideoBatchFrameSchema", () => {
     }
   });
 
+  it("accepts reel_started with an optional backend jobId (and without it)", () => {
+    expect(
+      reelVideoBatchFrameSchema.safeParse({
+        type: "reel_started",
+        draftId: "d1",
+        jobId: "11111111-1111-4111-8111-111111111111",
+      }).success,
+    ).toBe(true);
+    // Graceful degradation: still valid when no job row was created.
+    expect(reelVideoBatchFrameSchema.safeParse({ type: "reel_started", draftId: "d1" }).success).toBe(
+      true,
+    );
+  });
+
   it("rejects an unknown stage", () => {
     expect(
       reelVideoBatchFrameSchema.safeParse({
@@ -95,7 +109,9 @@ describe("reelVideoBatchFrameSchema", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("rejects a reel_clips_ready frame with fewer than 2 clips", () => {
+  it("accepts a reel_clips_ready frame with a single verified clip (single-scene reel)", () => {
+    // The schema is min(1) by design: a single-scene reel is valid — the browser
+    // passes the lone clip through without splicing. (Empty clips IS rejected.)
     expect(
       reelVideoBatchFrameSchema.safeParse({
         type: "reel_clips_ready",
@@ -103,6 +119,15 @@ describe("reelVideoBatchFrameSchema", () => {
         aspectRatio: "9:16",
         durationSec: 6,
         clips: [clip(0)],
+      }).success,
+    ).toBe(true);
+    expect(
+      reelVideoBatchFrameSchema.safeParse({
+        type: "reel_clips_ready",
+        draftId: "d1",
+        aspectRatio: "9:16",
+        durationSec: 6,
+        clips: [],
       }).success,
     ).toBe(false);
   });

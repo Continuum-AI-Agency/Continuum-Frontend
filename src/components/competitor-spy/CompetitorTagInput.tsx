@@ -8,7 +8,8 @@ import {
   useCompetitors,
   useCreateCompetitor,
   useDeleteCompetitor,
-  useInstagramCompetitorSearch,
+  useCompetitorSearch,
+  useResolvePaidPage,
 } from "@/lib/api/competitorSpy";
 import { streamCompetitorSync } from "@/lib/api/competitorSpyStream";
 
@@ -24,6 +25,12 @@ function describeFrame(frame: CompetitorSpyStreamFrame): string {
       return "Fetching creatives…";
     case "creative_analyzed":
       return "Analyzing creatives…";
+    case "paid_page_resolved":
+      return `Resolved ${frame.data.competitorName} to ${frame.data.pageName}.`;
+    case "paid_page_needs_review":
+      return `${frame.data.competitorName} needs a Meta Page review before paid sync.`;
+    case "competitor_skipped":
+      return `${frame.data.competitorName} skipped: missing Meta Page ID.`;
     case "awareness_block":
       return "Building report…";
     case "run_completed":
@@ -40,6 +47,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
   const { data: competitors } = useCompetitors(brandId);
   const create = useCreateCompetitor(brandId);
   const remove = useDeleteCompetitor(brandId);
+  const resolvePaid = useResolvePaidPage(brandId);
 
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -49,19 +57,18 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query), 300);
+    const timer = setTimeout(() => {
+      setDebounced(query);
+      setSelectedPageId(null);
+    }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => {
-    setSelectedPageId(null);
-  }, [debounced]);
-
   const {
-    data: instagramResult,
+    data: competitorResult,
     isFetching,
     error: searchError,
-  } = useInstagramCompetitorSearch(brandId, debounced);
+  } = useCompetitorSearch(brandId, debounced);
 
   const tracked = competitors ?? [];
   const taggedCount = tracked.filter((c) => c.source === "user" && c.status === "active").length;
@@ -75,29 +82,39 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
         c.name.toLowerCase() === name.trim().toLowerCase(),
     );
 
-  const selectedPage =
-    instagramResult?.metaPageCandidates.find((page) => page.pageId === selectedPageId) ??
-    instagramResult?.metaPageCandidates[0] ??
+  const selectedCandidate =
+    competitorResult?.metaPageResolution.candidates.find((page) => page.pageId === selectedPageId) ??
+    competitorResult?.metaPageResolution.candidates[0] ??
     null;
-  const instagramName = instagramResult?.account.name ?? instagramResult?.account.username ?? "";
-  const resultAlreadyTracked = instagramResult
-    ? alreadyTracked(selectedPage?.pageId ?? null, instagramResult.account.username, instagramName)
+  const account = competitorResult?.account ?? null;
+  const instagramName = account?.name ?? account?.username ?? "";
+  const resultAlreadyTracked = competitorResult && account
+    ? alreadyTracked(selectedCandidate?.pageId ?? null, account.username, instagramName)
     : false;
   const limitError =
     create.error instanceof Error && create.error.message === "competitor_limit_reached";
 
   const addInstagramCompetitor = () => {
-    if (!instagramResult || atLimit) return;
-    const name = instagramResult.account.name ?? selectedPage?.pageName ?? instagramResult.account.username;
-    if (alreadyTracked(selectedPage?.pageId ?? null, instagramResult.account.username, name)) return;
+    if (!competitorResult || !account || atLimit) return;
+    const resolved = competitorResult.metaPageResolution;
+    const selectedPageIdForCreate =
+      selectedCandidate?.pageId ?? (resolved.status === "resolved" ? resolved.selectedPageId : null);
+    const selectedPageNameForCreate =
+      selectedCandidate?.pageName ?? (resolved.status === "resolved" ? resolved.selectedPageName : null);
+    const name = account.name ?? selectedPageNameForCreate ?? account.username;
+    if (alreadyTracked(selectedPageIdForCreate ?? null, account.username, name)) return;
     create.mutate(
       {
         name,
-        metaPageId: selectedPage?.pageId,
-        instagramUsername: instagramResult.account.username,
-        instagramUserId: instagramResult.account.id ?? undefined,
-        instagramName: instagramResult.account.name ?? undefined,
-        instagramFollowersCount: instagramResult.account.followersCount ?? undefined,
+        metaPageId: selectedPageIdForCreate ?? undefined,
+        metaPageName: selectedPageNameForCreate ?? undefined,
+        metaPageResolutionStatus: selectedPageIdForCreate ? "resolved" : resolved.status,
+        metaPageResolutionConfidence: selectedCandidate?.confidence ?? resolved.confidence ?? undefined,
+        metaPageResolutionCandidates: resolved.candidates,
+        instagramUsername: account.username,
+        instagramUserId: account.id ?? undefined,
+        instagramName: account.name ?? undefined,
+        instagramFollowersCount: account.followersCount ?? undefined,
       },
       {
         onSuccess: () => {
@@ -155,20 +172,40 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
         />
         {!atLimit && debounced.trim().length >= 2 ? (
           <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-md">
-            {isFetching ? <div className="px-3 py-2 text-xs text-muted-foreground">Searching Instagram…</div> : null}
+            {isFetching ? <div className="px-3 py-2 text-xs text-muted-foreground">Searching competitor…</div> : null}
 
-            {!isFetching && instagramResult ? (
+            {!isFetching && competitorResult && account ? (
               <div className="space-y-3 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">
-                      {instagramResult.account.name ?? instagramResult.account.username}
+                      {account.name ?? account.username}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      @{instagramResult.account.username}
-                      {instagramResult.account.followersCount !== null
-                        ? ` · ${instagramResult.account.followersCount.toLocaleString()} followers`
+                      @{account.username}
+                      {account.followersCount !== null
+                        ? ` · ${account.followersCount.toLocaleString()} followers`
                         : ""}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                        Organic ready
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          competitorResult.paidStatus === "ready"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : competitorResult.paidStatus === "needs_review"
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                              : "border-border bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {competitorResult.paidStatus === "ready"
+                          ? "Paid ready"
+                          : competitorResult.paidStatus === "needs_review"
+                            ? "Paid needs review"
+                            : "Paid unresolved"}
+                      </span>
                     </div>
                   </div>
                   <button
@@ -182,9 +219,9 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                   </button>
                 </div>
 
-                {instagramResult.posts.length > 0 ? (
+                {competitorResult.posts.length > 0 ? (
                   <div className="grid grid-cols-6 gap-1">
-                    {instagramResult.posts.slice(0, 6).map((post) => (
+                    {competitorResult.posts.slice(0, 6).map((post) => (
                       <div key={post.id} className="aspect-square overflow-hidden rounded-md bg-muted">
                         {post.coverUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -199,20 +236,20 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                   <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Meta ad Page ID
                   </div>
-                  {instagramResult.metaPageCandidates.length > 0 ? (
+                  {competitorResult.metaPageResolution.candidates.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {instagramResult.metaPageCandidates.slice(0, 5).map((page) => (
+                      {competitorResult.metaPageResolution.candidates.slice(0, 5).map((page) => (
                         <button
                           key={page.pageId}
                           type="button"
                           onClick={() => setSelectedPageId(page.pageId)}
                           className={`rounded-full border px-2 py-0.5 text-[11px] ${
-                            (selectedPage?.pageId ?? null) === page.pageId
+                            (selectedCandidate?.pageId ?? null) === page.pageId
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border text-muted-foreground hover:bg-muted"
                           }`}
                         >
-                          {page.pageName} · {page.pageId}
+                          {page.pageName} · {Math.round(page.confidence * 100)}%
                         </button>
                       ))}
                     </div>
@@ -223,10 +260,12 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                   )}
                 </div>
 
-                {instagramResult.warnings.length > 0 ? (
+                {competitorResult.warnings.length > 0 ? (
                   <div className="text-[11px] text-muted-foreground">
-                    {instagramResult.warnings.includes("meta_page_search_failed")
+                    {competitorResult.warnings.includes("meta_page_search_failed")
                       ? "Ad Library Page lookup failed; Instagram lookup succeeded."
+                      : competitorResult.warnings.includes("paid_page_needs_review")
+                        ? "Pick the exact Meta Page before paid ad tracking runs."
                       : "Some lookup data may be incomplete."}
                   </div>
                 ) : null}
@@ -264,7 +303,19 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
               <span className="font-medium">{c.name}</span>
               {c.instagramUsername ? <span className="text-[10px] text-muted-foreground">@{c.instagramUsername}</span> : null}
               {c.metaPageId ? <span className="text-[10px] text-muted-foreground">Page {c.metaPageId}</span> : null}
+              {!c.metaPageId && c.paidStatus === "needs_review" ? <span className="text-[10px] text-amber-600">paid review</span> : null}
+              {!c.metaPageId && c.paidStatus === "unresolved" ? <span className="text-[10px] text-muted-foreground">organic only</span> : null}
               {c.source === "auto" ? <span className="text-[10px] text-muted-foreground">auto</span> : null}
+              {!c.metaPageId ? (
+                <button
+                  type="button"
+                  onClick={() => resolvePaid.mutate(c.id)}
+                  disabled={resolvePaid.isPending}
+                  className="text-[10px] font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  Resolve paid
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => remove.mutate(c.id)}

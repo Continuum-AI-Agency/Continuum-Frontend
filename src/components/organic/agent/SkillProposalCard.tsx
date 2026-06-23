@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { AgentButton, AgentCard, AgentCardEyebrow, AgentCardTitle } from "./agentCardKit";
-import { createBrandSkill } from "@/lib/organic/skills";
-import type { SkillProposalCardData } from "./types";
+import { useState } from 'react';
+import { createBrandSkill } from '@/lib/organic/skills';
+import { AgentButton, AgentCardEyebrow, AgentCardTitle, AgentDecisionCard } from './agentCardKit';
+import type { SkillProposalCardData } from './types';
 
 type Props = {
   proposal: SkillProposalCardData;
@@ -20,7 +20,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const kindLabel = proposal.kind === "analytic" ? "Analytic" : "Creative direction";
+  const kindLabel = proposal.kind === 'analytic' ? 'Analytic' : 'Creative direction';
 
   async function save() {
     if (saving || saved) return;
@@ -38,14 +38,14 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
       setSaved(true);
       onSavedAction?.();
     } catch {
-      setError("Could not save the skill. Try again.");
+      setError('Could not save the skill. Try again.');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <AgentCard>
+    <AgentDecisionCard className="p-4">
       <AgentCardEyebrow
         label="New skill"
         right={<span className="shrink-0 text-[11px] text-muted-foreground">{kindLabel}</span>}
@@ -82,7 +82,9 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
 
       <div className="mt-3 flex items-center gap-2">
         {saved ? (
-          <span className="text-[12.5px] font-medium text-emerald-600">Saved to your brand skills</span>
+          <span className="text-[12.5px] font-medium text-emerald-600">
+            Saved to your brand skills
+          </span>
         ) : (
           <>
             <AgentButton
@@ -94,11 +96,11 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
               Save skill
             </AgentButton>
             <AgentButton variant="ghost" onClick={() => setEditing((v) => !v)}>
-              {editing ? "Done editing" : "Edit"}
+              {editing ? 'Done editing' : 'Edit'}
             </AgentButton>
           </>
         )}
       </div>
-    </AgentCard>
+    </AgentDecisionCard>
   );
 }

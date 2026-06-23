@@ -1,45 +1,52 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import { AlertCircle, Check, Clock, ImageOff, Loader2, Sparkles } from "lucide-react";
-import { motion } from "motion/react";
-import { useCalendarStore } from "@/lib/organic/store";
-import { useDraftStoryboard } from "../hooks/useDraftStoryboard";
+import { AlertCircle, Check, Clock, ImageOff, Loader2, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
+import { useEffect, useRef } from 'react';
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-} from "@/components/ui/carousel";
-import { cn } from "@/lib/utils";
-import { AgentCard, MetaRow, PlatformTag, StatusLabel } from "./agentCardKit";
-import type { CheckpointState, PipelineCardState, PipelinePreview, PipelineStage, PipelineStageNode } from "./types";
+} from '@/components/ui/carousel';
+import { Progress } from '@/components/ui/progress';
+import { useCalendarStore } from '@/lib/organic/store';
+import { cn } from '@/lib/utils';
+import { useDraftStoryboard } from '../hooks/useDraftStoryboard';
+import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
+import type {
+  CheckpointState,
+  PipelineCardState,
+  PipelinePreview,
+  PipelineStage,
+  PipelineStageNode,
+} from './types';
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
-  strategist: "Concept",
-  concept: "Concept",
-  draft: "Copy",
-  blueprint: "Preview",
-  assets: "Preview",
-  quality: "Fully fleshed out",
-  merge: "Fully fleshed out",
+  strategist: 'Concept',
+  concept: 'Concept',
+  draft: 'Copy',
+  blueprint: 'Preview',
+  assets: 'Preview',
+  quality: 'Fully fleshed out',
+  merge: 'Fully fleshed out',
 };
 
 const STATUS: Record<
-  PipelineCardState["status"],
-  { label: string; tone: "running" | "done" | "failed" | "neutral" }
+  PipelineCardState['status'],
+  { label: string; tone: 'running' | 'done' | 'failed' | 'neutral' }
 > = {
-  running: { label: "Enriching", tone: "running" },
-  completed: { label: "Fully fleshed out", tone: "done" },
-  failed: { label: "Failed", tone: "failed" },
-  cancelled: { label: "Cancelled", tone: "neutral" },
+  running: { label: 'Enriching', tone: 'running' },
+  completed: { label: 'Fully fleshed out', tone: 'done' },
+  failed: { label: 'Failed', tone: 'failed' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
 };
 
-const IMAGE_OUTLINE = "outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10";
+const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
 function qualityPercent(score: number | undefined): number | null {
-  if (typeof score !== "number" || !Number.isFinite(score)) return null;
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   return score <= 1 ? Math.round(score * 100) : Math.round(score);
 }
 
@@ -60,7 +67,11 @@ function PreviewImages({ images }: { images: string[] }) {
           {images.map((url, i) => (
             <CarouselItem key={i}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Slide ${i + 1}`} className={cn("aspect-[4/5] w-full rounded-lg object-cover", IMAGE_OUTLINE)} />
+              <img
+                src={url}
+                alt={`Slide ${i + 1}`}
+                className={cn('aspect-[4/5] w-full rounded-lg object-cover', IMAGE_OUTLINE)}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>
@@ -72,23 +83,27 @@ function PreviewImages({ images }: { images: string[] }) {
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={images[0]} alt="Preview" className={cn("aspect-[4/5] w-full rounded-lg object-cover", IMAGE_OUTLINE)} />
+    <img
+      src={images[0]}
+      alt="Preview"
+      className={cn('aspect-[4/5] w-full rounded-lg object-cover', IMAGE_OUTLINE)}
+    />
   );
 }
 
 function StageNode({ node, index }: { node: PipelineStageNode; index: number }) {
   const dot =
-    node.status === "active" ? (
+    node.status === 'active' ? (
       <motion.div
         initial={{ scale: 0.25, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+        transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
       >
         <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
       </motion.div>
-    ) : node.status === "done" ? (
+    ) : node.status === 'done' ? (
       <Check className="h-3 w-3 text-emerald-500" />
-    ) : node.status === "failed" ? (
+    ) : node.status === 'failed' ? (
       <AlertCircle className="h-3 w-3 text-destructive" />
     ) : (
       <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
@@ -104,8 +119,8 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
       <div className="flex h-3 items-center justify-center">{dot}</div>
       <span
         className={cn(
-          "text-[10px] leading-none",
-          node.status === "pending" ? "text-muted-foreground/50" : "text-muted-foreground",
+          'text-[10px] leading-none',
+          node.status === 'pending' ? 'text-muted-foreground/50' : 'text-muted-foreground',
         )}
       >
         {STAGE_LABELS[node.stage]}
@@ -116,33 +131,37 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
 
 // Four experiential enrichment checkpoints shown once copy is received.
 const CHECKPOINT_STEPS = [
-  { key: "concept" as const, label: "Concept" },
-  { key: "copy" as const, label: "Copy" },
-  { key: "preview" as const, label: "Preview" },
-  { key: "realized" as const, label: "Fully fleshed out" },
+  { key: 'concept' as const, label: 'Concept' },
+  { key: 'copy' as const, label: 'Copy' },
+  { key: 'preview' as const, label: 'Preview' },
+  { key: 'realized' as const, label: 'Fully fleshed out' },
 ] as const;
 
-type CheckpointStepKey = typeof CHECKPOINT_STEPS[number]["key"];
+type CheckpointStepKey = (typeof CHECKPOINT_STEPS)[number]['key'];
 
 function checkpointStepStatus(
   key: CheckpointStepKey,
   cp: CheckpointState,
-): "done" | "active" | "awaiting" | "generating" | "ready" | "user_supplied" | "pending" {
-  if (key === "concept") return cp.textReady ? "done" : "active";
-  if (key === "copy") return cp.textReady ? "done" : "active";
-  if (key === "preview") {
-    if (!cp.textReady) return "pending";
-    return cp.blueprintReady ? "done" : "active";
+): 'done' | 'active' | 'awaiting' | 'generating' | 'ready' | 'user_supplied' | 'pending' {
+  if (key === 'concept') return cp.textReady ? 'done' : 'active';
+  if (key === 'copy') return cp.textReady ? 'done' : 'active';
+  if (key === 'preview') {
+    if (!cp.textReady) return 'pending';
+    return cp.blueprintReady ? 'done' : 'active';
   }
-  if (!cp.blueprintReady) return "pending";
-  if (cp.awaitingMediaChoice) return "awaiting";
-  if (cp.mediaStatus === "generating") return "generating";
-  if (cp.mediaStatus === "ready") return "ready";
-  if (cp.mediaStatus === "user_supplied") return "user_supplied";
-  return "pending";
+  if (!cp.blueprintReady) return 'pending';
+  if (cp.awaitingMediaChoice) return 'awaiting';
+  if (cp.mediaStatus === 'generating') return 'generating';
+  if (cp.mediaStatus === 'ready') return 'ready';
+  if (cp.mediaStatus === 'user_supplied') return 'user_supplied';
+  return 'pending';
 }
 
-function CheckpointStepNode({ stepKey, label, checkpoint }: {
+function CheckpointStepNode({
+  stepKey,
+  label,
+  checkpoint,
+}: {
   stepKey: CheckpointStepKey;
   label: string;
   checkpoint: CheckpointState;
@@ -150,27 +169,27 @@ function CheckpointStepNode({ stepKey, label, checkpoint }: {
   const status = checkpointStepStatus(stepKey, checkpoint);
 
   const dot =
-    status === "done" ? (
+    status === 'done' ? (
       <Check className="h-3 w-3 text-emerald-500" />
-    ) : status === "active" || status === "generating" ? (
+    ) : status === 'active' || status === 'generating' ? (
       <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
-    ) : status === "awaiting" ? (
+    ) : status === 'awaiting' ? (
       <Clock className="h-3 w-3 text-muted-foreground" />
-    ) : status === "ready" || status === "user_supplied" ? (
+    ) : status === 'ready' || status === 'user_supplied' ? (
       <Sparkles className="h-3 w-3 text-emerald-500" />
     ) : (
       <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
     );
 
   const sublabel =
-    status === "awaiting"
-      ? "Awaiting your choice"
-      : status === "generating"
-        ? "Fleshing out…"
-        : status === "user_supplied"
-          ? "Your creative"
-          : status === "ready"
-            ? "Ready"
+    status === 'awaiting'
+      ? 'Awaiting your choice'
+      : status === 'generating'
+        ? 'Fleshing out…'
+        : status === 'user_supplied'
+          ? 'Your creative'
+          : status === 'ready'
+            ? 'Ready'
             : null;
 
   return (
@@ -178,8 +197,8 @@ function CheckpointStepNode({ stepKey, label, checkpoint }: {
       <div className="flex h-4 items-center justify-center">{dot}</div>
       <span
         className={cn(
-          "text-center text-[10px] leading-none",
-          status === "pending" ? "text-muted-foreground/40" : "text-muted-foreground",
+          'text-center text-[10px] leading-none',
+          status === 'pending' ? 'text-muted-foreground/40' : 'text-muted-foreground',
         )}
       >
         {label}
@@ -195,10 +214,27 @@ function CheckpointStepNode({ stepKey, label, checkpoint }: {
 
 function CheckpointStepper({ checkpoint }: { checkpoint: CheckpointState }) {
   return (
-    <div className="flex items-start gap-1">
-      {CHECKPOINT_STEPS.map(({ key, label }) => (
-        <CheckpointStepNode key={key} stepKey={key} label={label} checkpoint={checkpoint} />
-      ))}
+    <div className="grid gap-2 rounded-lg bg-muted/25 px-2.5 py-2">
+      <div className="flex items-start gap-1">
+        {CHECKPOINT_STEPS.map(({ key, label }) => (
+          <CheckpointStepNode key={key} stepKey={key} label={label} checkpoint={checkpoint} />
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        {CHECKPOINT_STEPS.map(({ key }) => {
+          const stepStatus = checkpointStepStatus(key, checkpoint);
+          const active = stepStatus !== 'pending';
+          return (
+            <span
+              key={key}
+              className={cn(
+                'h-0.5 rounded-full',
+                active ? 'bg-brand-primary/70' : 'bg-muted-foreground/15',
+              )}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -206,7 +242,7 @@ function CheckpointStepper({ checkpoint }: { checkpoint: CheckpointState }) {
 export function PipelineCard({ card }: { card: PipelineCardState }) {
   const status = STATUS[card.status];
   const quality = qualityPercent(card.quality?.overallScore);
-  const isRunning = card.status === "running";
+  const isRunning = card.status === 'running';
 
   // A finished single-post pipeline persists a calendar draft; signal the calendar
   // to reconcile so it appears without a manual reload (debounced workspace-side).
@@ -220,14 +256,14 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
-    if (card.status === "completed" && card.draftId) {
+    if (card.status === 'completed' && card.draftId) {
       reconciledRef.current = true;
       requestCalendarRefetch();
     }
   }, [card.status, card.draftId, requestCalendarRefetch]);
 
   return (
-    <AgentCard className="space-y-3">
+    <AgentArtifactCard className="space-y-3 p-3.5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {card.platform && <PlatformTag platform={card.platform} />}
@@ -235,7 +271,7 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
         </div>
         <StatusLabel tone={status.tone}>
           {status.label}
-          {quality != null ? ` · ${quality}%` : ""}
+          {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
       </div>
 
@@ -250,12 +286,10 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
       )}
 
       {isRunning && (
-        <div className="h-0.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-brand-primary transition-[width] duration-500 ease-out"
-            style={{ width: `${Math.max(5, Math.min(100, card.pct ?? 10))}%` }}
-          />
-        </div>
+        <Progress
+          value={Math.max(5, Math.min(100, card.pct ?? 10))}
+          className="h-1 bg-muted/70 [&_[data-slot=progress-indicator]]:bg-brand-primary [&_[data-slot=progress-indicator]]:transition-transform [&_[data-slot=progress-indicator]]:duration-500"
+        />
       )}
 
       <PreviewImages images={previewImages} />
@@ -266,9 +300,9 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
         </p>
       )}
 
-      {card.status === "failed" && card.error?.message && (
+      {card.status === 'failed' && card.error?.message && (
         <p className="line-clamp-2 text-[12px] text-destructive/80">{card.error.message}</p>
       )}
-    </AgentCard>
+    </AgentArtifactCard>
   );
 }

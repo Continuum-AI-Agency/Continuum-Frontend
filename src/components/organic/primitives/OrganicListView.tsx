@@ -351,8 +351,13 @@ export function OrganicListView({
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const handleCreateBacklog = (title: string) => {
+    const backlogId = `backlog-${crypto.randomUUID()}`
     const draft: OrganicCalendarDraft = {
-      id: `backlog-${crypto.randomUUID()}`,
+      id: backlogId,
+      // User-authored → browser-owned: stable clientKey + manual origin so the
+      // autosave persists it (the allowlist writes only origin === 'manual').
+      clientKey: backlogId,
+      origin: "manual",
       title,
       summary: "",
       timeLabel: "",

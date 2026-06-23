@@ -35,10 +35,14 @@ function formatStage(stage: string | null | undefined): string {
   return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-async function cancelGeneration(jobId: string, brandId: string): Promise<void> {
+// Cancel a real durable job by its backend uuid. NEVER pass the synthetic
+// registry key (`realize:<feId>`) here — that is not a job id and the cancel route
+// rejects it (uuid-only). Entries with no backendJobId have no server job to
+// cancel; the caller just marks them cancelled locally.
+async function cancelGeneration(backendJobId: string, brandId: string): Promise<void> {
   try {
     const token = await getBrowserAccessToken();
-    await fetch(`${getApiBaseUrl()}/api/organic/agent/jobs/${jobId}/cancel`, {
+    await fetch(`${getApiBaseUrl()}/api/organic/agent/jobs/${backendJobId}/cancel`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -112,6 +116,7 @@ function GenerationRow({
   brandId: string | null;
   onViewDraftAction?: (draftId: string) => void;
 }) {
+  const upsertGeneration = useCalendarStore((s) => s.upsertGeneration);
   const active = isActive(entry.status);
   const pct = Math.max(5, Math.min(100, entry.pct ?? (entry.status === "queued" ? 5 : 10)));
   const label = active ? formatStage(entry.stage) || "Working" : entry.status;
@@ -155,7 +160,13 @@ function GenerationRow({
           size="sm"
           variant="ghost"
           className="h-5 w-5 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-          onClick={() => void cancelGeneration(entry.jobId, brandId)}
+          onClick={() => {
+            // Optimistically mark cancelled (the backend suppresses the failure
+            // frame on cancel, so the UI must reflect it immediately), then cancel
+            // the real durable job if one backs this entry.
+            upsertGeneration({ jobId: entry.jobId, status: "cancelled" });
+            if (entry.backendJobId) void cancelGeneration(entry.backendJobId, brandId);
+          }}
           aria-label="Abort generation"
         >
           <X className="h-3 w-3" />

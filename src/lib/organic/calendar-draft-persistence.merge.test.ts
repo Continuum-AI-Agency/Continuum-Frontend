@@ -36,6 +36,20 @@ describe("mergeUnsavedLocalDrafts", () => {
     expect(merged[0].slots).toHaveLength(1)
   })
 
+  it("drops an optimistic local draft when the server has the same clientKey under a different id", () => {
+    // The duplicate-posts bug: an optimistic draft (no backendDraftId, local id) and
+    // the server row map to DIFFERENT ids but share the canonical clientKey. Deduping
+    // by id alone let the optimistic copy survive and re-insert; clientKey catches it.
+    const server = [
+      day("2026-06-18", [draft({ id: "be-row", backendDraftId: "be-row", clientKey: "ck-1" })]),
+    ]
+    const local = [
+      day("2026-06-18", [draft({ id: "optimistic-local", backendDraftId: undefined, clientKey: "ck-1" })]),
+    ]
+    const merged = mergeUnsavedLocalDrafts(server, local)
+    expect(merged[0].slots.map((s) => s.id)).toEqual(["be-row"])
+  })
+
   it("returns the server set unchanged when there are no unsaved local drafts", () => {
     const server = [day("2026-06-18", [draft({ id: "be-1", backendDraftId: "be-1" })])]
     const merged = mergeUnsavedLocalDrafts(server, server)

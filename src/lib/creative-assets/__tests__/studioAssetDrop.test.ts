@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { MediaAsset } from "@continuum/contracts";
 import {
   STUDIO_ASSET_DROP_MIME,

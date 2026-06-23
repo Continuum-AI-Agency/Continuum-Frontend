@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { MediaSource } from "@continuum/contracts";
 import { mediaSourceSchema } from "@continuum/contracts";
 import {

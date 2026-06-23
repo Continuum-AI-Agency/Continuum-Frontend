@@ -103,7 +103,20 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
             : Promise.resolve(),
         ])
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return
+        if (error instanceof DOMException && error.name === "AbortError") {
+          // The batch fetch was aborted (editor unmounted / a newer run started).
+          // Mark only still-in-flight entries cancelled so they don't hang on
+          // "running" forever in the GenerationsPopover.
+          const gens = useCalendarStore.getState().generations
+          for (const target of [...reelTargets, ...imageTargets]) {
+            const key = realizeJobId(target.feId)
+            const current = gens[key]?.status
+            if (current === "running" || current === "queued") {
+              upsertGeneration({ jobId: key, draftId: target.feId, status: "cancelled" })
+            }
+          }
+          return
+        }
         show({
           title: "Media generation failed",
           description: error instanceof Error ? error.message : "Unexpected error.",
@@ -177,9 +190,14 @@ async function realizeReels(
     const frame = parsed.data
 
     switch (frame.type) {
-      case "reel_started":
+      case "reel_started": {
         setStage(frame.draftId, REEL_STAGE_LABELS.planning)
+        const feId = feIdFor(frame.draftId)
+        if (feId && frame.jobId) {
+          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "running", backendJobId: frame.jobId })
+        }
         break
+      }
       case "reel_progress":
         setStage(frame.draftId, REEL_STAGE_LABELS[frame.stage] ?? "Working…")
         break
@@ -346,7 +364,13 @@ async function realizeImages(
             generationStage: "Generating media…",
             mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: "generating" },
           }))
-          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "running", stage: "Generating media…" })
+          upsertGeneration({
+            jobId: realizeJobId(feId),
+            draftId: feId,
+            status: "running",
+            stage: "Generating media…",
+            ...(frame.jobId ? { backendJobId: frame.jobId } : {}),
+          })
         }
         break
       }
