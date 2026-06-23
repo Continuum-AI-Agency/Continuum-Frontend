@@ -4,6 +4,7 @@ import {
   competitorAdAnalysisSchema,
   competitorSchema,
   instagramCompetitorSearchResultSchema,
+  competitorSearchResultSchema,
   competitorOrganicPostSchema,
   timelineEntrySchema,
   adLifecycleEventSchema,
@@ -73,6 +74,44 @@ describe("timelineEntrySchema v2 fields", () => {
     };
     expect(() => timelineEntrySchema.parse(entry)).not.toThrow();
   });
+
+  it("accepts public Ad Library metadata for rankable display signals", () => {
+    const parsed = timelineEntrySchema.parse({
+      snapshotId: "11111111-1111-4111-8111-111111111111",
+      competitorId: "22222222-2222-4222-8222-222222222222",
+      competitorName: "Acme",
+      competitorSlug: "acme",
+      sourceAdId: "abc",
+      firstSeenAt: "2026-06-01T00:00:00.000Z",
+      lastSeenAt: "2026-06-04T00:00:00.000Z",
+      status: "active",
+      snapshotUrl: "https://www.facebook.com/ads/library/?id=abc",
+      imageUrl: null,
+      body: "Buy our thing",
+      cta: "Shop now",
+      platforms: ["instagram", "facebook"],
+      deliveryStart: "2026-05-30T00:00:00.000Z",
+      deliveryStop: null,
+      publicMetadata: {
+        sourceAdId: "abc",
+        pageId: "123",
+        pageName: "Acme",
+        linkTitle: "Summer offer",
+        linkCaption: "acme.example",
+        snapshotUrl: "https://www.facebook.com/ads/library/?id=abc",
+        creationTime: "2026-05-29T00:00:00.000Z",
+        deliveryStart: "2026-05-30T00:00:00.000Z",
+        deliveryStop: null,
+        firstSeenAt: "2026-06-01T00:00:00.000Z",
+        lastSeenAt: "2026-06-04T00:00:00.000Z",
+        fetchedAt: "2026-06-04T00:00:00.000Z",
+        observedActiveDays: 3,
+        platforms: ["instagram", "facebook"],
+        languages: ["en"],
+      },
+    });
+    expect(parsed.publicMetadata?.observedActiveDays).toBe(3);
+  });
 });
 
 describe("adLifecycleEventSchema", () => {
@@ -99,6 +138,9 @@ describe("competitorSpyStreamFrameSchema", () => {
       { type: "snapshot_diff", data: { competitorId: "c1", fetched: 10, inserted: 4, updated: 6, lifecycleEvents: 4 } },
       { type: "media_extracted", data: { snapshotId: "s1", status: "stored" } },
       { type: "creative_analyzed", data: { snapshotId: "s1", sourceAdId: "abc", sentiment: "urgent", hookArchetype: "scarcity", primaryTheme: "sale", analyzedFromImage: true } },
+      { type: "paid_page_resolved", data: { competitorId: "c1", competitorName: "Acme", pageId: "123", pageName: "Acme", confidence: 0.96 } },
+      { type: "paid_page_needs_review", data: { competitorId: "c1", competitorName: "Acme", candidates: 3 } },
+      { type: "competitor_skipped", data: { competitorId: "c1", competitorName: "Acme", reason: "missing_meta_page_id" } },
       { type: "run_completed", data: { runId: "run_1", competitorsProcessed: 3, snapshotsInserted: 4, snapshotsUpdated: 6, analysisCompleted: 10, durationMs: 1234 } },
       { type: "run_error", data: { message: "boom" } },
     ];
@@ -185,6 +227,38 @@ describe("instagramCompetitorSearchResultSchema", () => {
 
     expect(parsed.account.username).toBe("apple");
     expect(parsed.metaPageCandidates[0]?.pageId).toBe("123");
+  });
+});
+
+describe("competitorSearchResultSchema", () => {
+  it("validates organic identity plus paid page resolution state", () => {
+    const parsed = competitorSearchResultSchema.parse({
+      query: "Apple",
+      resolvedUsername: "apple",
+      account: {
+        id: "17841400000000000",
+        username: "apple",
+        name: "Apple",
+        followersCount: 100,
+        mediaCount: 10,
+        profilePictureUrl: "https://example.com/apple.jpg",
+      },
+      posts: [],
+      metaPageCandidates: [{ pageId: "123", pageName: "Apple" }],
+      metaPageResolution: {
+        status: "resolved",
+        selectedPageId: "123",
+        selectedPageName: "Apple",
+        confidence: 0.95,
+        candidates: [{ pageId: "123", pageName: "Apple", confidence: 0.95, reasons: ["exact match"], source: "deterministic" }],
+        resolvedAt: "2026-06-01T00:00:00.000Z",
+        error: null,
+      },
+      organicStatus: "ready",
+      paidStatus: "ready",
+      warnings: [],
+    });
+    expect(parsed.metaPageResolution.selectedPageId).toBe("123");
   });
 });
 

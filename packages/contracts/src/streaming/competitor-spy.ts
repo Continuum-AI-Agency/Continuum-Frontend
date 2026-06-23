@@ -55,6 +55,41 @@ const creativeAnalyzedFrame = z.object({
     .loose(),
 });
 
+const paidPageResolvedFrame = z.object({
+  type: z.literal("paid_page_resolved"),
+  data: z
+    .object({
+      competitorId: z.string(),
+      competitorName: z.string(),
+      pageId: z.string(),
+      pageName: z.string(),
+      confidence: z.number().min(0).max(1),
+    })
+    .loose(),
+});
+
+const paidPageNeedsReviewFrame = z.object({
+  type: z.literal("paid_page_needs_review"),
+  data: z
+    .object({
+      competitorId: z.string(),
+      competitorName: z.string(),
+      candidates: z.number().int().nonnegative(),
+    })
+    .loose(),
+});
+
+const competitorSkippedFrame = z.object({
+  type: z.literal("competitor_skipped"),
+  data: z
+    .object({
+      competitorId: z.string(),
+      competitorName: z.string(),
+      reason: z.enum(["missing_meta_page_id", "archived", "brand_mismatch"]),
+    })
+    .loose(),
+});
+
 const awarenessBlockFrame = z.object({
   type: z.literal("awareness_block"),
   data: z
@@ -94,6 +129,9 @@ export const competitorSpyStreamFrameSchema = z.discriminatedUnion("type", [
   snapshotDiffFrame,
   mediaExtractedFrame,
   creativeAnalyzedFrame,
+  paidPageResolvedFrame,
+  paidPageNeedsReviewFrame,
+  competitorSkippedFrame,
   awarenessBlockFrame,
   runCompletedFrame,
   runErrorFrame,

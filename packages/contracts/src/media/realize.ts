@@ -28,7 +28,16 @@ export type MediaRealizeStage = z.infer<typeof mediaRealizeStageEnum>;
 
 export const mediaRealizeFrameSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("realize_batch_started"), total: z.number().int().min(0) }).strict(),
-  z.object({ type: z.literal("realize_started"), draftId: z.string().min(1) }).strict(),
+  z
+    .object({
+      type: z.literal("realize_started"),
+      draftId: z.string().min(1),
+      // Real organic.post_generation_jobs uuid backing this inline realize, so the
+      // FE can cancel via POST /jobs/:jobId/cancel. Optional: if job-row creation
+      // fails the stream still runs and the FE falls back to local cancel.
+      jobId: z.string().min(1).optional(),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("realize_progress"),

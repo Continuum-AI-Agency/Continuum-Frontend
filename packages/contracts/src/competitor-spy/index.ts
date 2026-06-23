@@ -16,6 +16,33 @@ export const competitorSourceSchema = z.enum(["auto", "user"]);
 export const competitorStatusSchema = z.enum(["active", "archived"]);
 export const adStatusSchema = z.enum(["active", "paused"]);
 export const adSourceSchema = z.enum(["meta_ad_library"]);
+export const competitorOrganicStatusSchema = z.enum(["ready", "needs_instagram", "unavailable"]);
+export const competitorPaidStatusSchema = z.enum(["ready", "resolving", "needs_review", "unresolved", "error"]);
+export const metaPageResolutionStatusSchema = z.enum(["unresolved", "resolving", "resolved", "needs_review", "error"]);
+
+export const metaPageResolutionCandidateSchema = z
+  .object({
+    pageId: z.string(),
+    pageName: z.string(),
+    confidence: z.number().min(0).max(1).default(0),
+    reasons: z.array(z.string()).default([]),
+    source: z.enum(["meta_ad_library", "deterministic", "ai"]).default("meta_ad_library"),
+  })
+  .strict();
+export type MetaPageResolutionCandidate = z.infer<typeof metaPageResolutionCandidateSchema>;
+
+export const metaPageResolutionSchema = z
+  .object({
+    status: metaPageResolutionStatusSchema,
+    selectedPageId: z.string().nullable(),
+    selectedPageName: z.string().nullable(),
+    confidence: z.number().min(0).max(1).nullable(),
+    candidates: z.array(metaPageResolutionCandidateSchema).default([]),
+    resolvedAt: z.string().nullable(),
+    error: z.string().nullable(),
+  })
+  .strict();
+export type MetaPageResolution = z.infer<typeof metaPageResolutionSchema>;
 
 export const competitorSchema = z.object({
   id: z.string().uuid(),
@@ -28,6 +55,14 @@ export const competitorSchema = z.object({
   instagramUserId: z.string().nullable().optional(),
   instagramName: z.string().nullable().optional(),
   instagramFollowersCount: z.number().int().nonnegative().nullable().optional(),
+  metaPageName: z.string().nullable().optional(),
+  metaPageResolutionStatus: metaPageResolutionStatusSchema.nullable().optional(),
+  metaPageResolutionConfidence: z.number().min(0).max(1).nullable().optional(),
+  metaPageResolutionCandidates: z.array(metaPageResolutionCandidateSchema).nullable().optional(),
+  metaPageResolvedAt: z.string().nullable().optional(),
+  metaPageResolutionError: z.string().nullable().optional(),
+  organicStatus: competitorOrganicStatusSchema.optional(),
+  paidStatus: competitorPaidStatusSchema.optional(),
   status: competitorStatusSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -50,6 +85,16 @@ export const instagramCompetitorSearchWarningSchema = z.enum([
 ]);
 export type InstagramCompetitorSearchWarning = z.infer<typeof instagramCompetitorSearchWarningSchema>;
 
+export const competitorSearchWarningSchema = z.enum([
+  "meta_page_search_failed",
+  "meta_page_not_found",
+  "instagram_handle_resolved_by_fallback",
+  "paid_page_resolved_by_ai",
+  "paid_page_needs_review",
+  "paid_page_unresolved",
+]);
+export type CompetitorSearchWarning = z.infer<typeof competitorSearchWarningSchema>;
+
 export const instagramCompetitorSearchResultSchema = z
   .object({
     query: z.string(),
@@ -61,6 +106,21 @@ export const instagramCompetitorSearchResultSchema = z
   })
   .strict();
 export type InstagramCompetitorSearchResult = z.infer<typeof instagramCompetitorSearchResultSchema>;
+
+export const competitorSearchResultSchema = z
+  .object({
+    query: z.string(),
+    resolvedUsername: z.string().nullable(),
+    account: instagramAccountSchema.nullable(),
+    posts: z.array(instagramPostSchema),
+    metaPageCandidates: z.array(metaPageSearchResultSchema),
+    metaPageResolution: metaPageResolutionSchema,
+    organicStatus: competitorOrganicStatusSchema,
+    paidStatus: competitorPaidStatusSchema,
+    warnings: z.array(competitorSearchWarningSchema).default([]),
+  })
+  .strict();
+export type CompetitorSearchResult = z.infer<typeof competitorSearchResultSchema>;
 
 export const competitorOrganicPostSchema = z
   .object({
@@ -90,6 +150,27 @@ export const competitorAdSchema = z.object({
   languages: z.array(z.string()),
 });
 export type CompetitorAd = z.infer<typeof competitorAdSchema>;
+
+export const competitorAdPublicMetadataSchema = z
+  .object({
+    sourceAdId: z.string(),
+    pageId: z.string().nullable(),
+    pageName: z.string().nullable(),
+    linkTitle: z.string().nullable(),
+    linkCaption: z.string().nullable(),
+    snapshotUrl: z.string().url().nullable(),
+    creationTime: z.string().nullable(),
+    deliveryStart: z.string().nullable(),
+    deliveryStop: z.string().nullable(),
+    firstSeenAt: z.string(),
+    lastSeenAt: z.string(),
+    fetchedAt: z.string(),
+    observedActiveDays: z.number().int().nonnegative(),
+    platforms: z.array(z.string()),
+    languages: z.array(z.string()),
+  })
+  .strict();
+export type CompetitorAdPublicMetadata = z.infer<typeof competitorAdPublicMetadataSchema>;
 
 export const adSnapshotSchema = z.object({
   id: z.string().uuid(),
@@ -127,6 +208,7 @@ export const timelineEntrySchema = z.object({
   analysisStatus: z.string().nullable().optional(),
   creativeMediaStatus: z.string().nullable().optional(),
   hasCreativeMedia: z.boolean().optional(),
+  publicMetadata: competitorAdPublicMetadataSchema.optional(),
 });
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>;
 

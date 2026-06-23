@@ -149,6 +149,86 @@ export const proposedPlanSchema = z.object({
 });
 export type ProposedPlan = z.infer<typeof proposedPlanSchema>;
 
+// --- Typed ui.* card frame payloads -----------------------------------------
+// These card frames carry structured payloads built by typed Backend builders
+// (cards/postCard.ts, cards/trendChart.ts) and tools. Typing the `data` here —
+// instead of leaving it a loose Record — makes the contract the single source of
+// truth so the Frontend consumes the typed payload instead of re-deriving it
+// field-by-field. (ui.plan_card stays loose at the union level: its payload is a
+// ProposedPlan | BulkContentPlan and binding bulkContentPlanSchema here would
+// create an organic<->bulk import cycle — the Frontend validates it via those
+// schemas at the parse site instead.)
+
+export const organicTrendChartSeriesLabelEnum = z.enum(["Trends", "Events", "Questions"]);
+
+export const organicTrendChartDataSchema = z.object({
+  chartType: z.literal("bar"),
+  title: z.string(),
+  windows: z.array(z.number()),
+  series: z.array(
+    z.object({
+      label: organicTrendChartSeriesLabelEnum,
+      data: z.array(z.object({ window: z.number(), value: z.number() })),
+    }),
+  ),
+  topSignals: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      type: z.enum(["trend", "event", "question"]),
+      confidence: z.number().nullable(),
+      platform: z.string().nullable(),
+      windowDays: z.number(),
+    }),
+  ),
+});
+export type OrganicTrendChartData = z.infer<typeof organicTrendChartDataSchema>;
+
+export const organicPostCardDataSchema = z.object({
+  draftId: z.string(),
+  jobId: z.string(),
+  brandId: z.string(),
+  platform: z.string(),
+  scheduledAt: z.string(),
+  caption: z.string().nullable(),
+  hashtags: z.array(z.string()),
+  imageUrl: z.string().nullable(),
+  format: z.string().nullable(),
+  topic: z.string().nullable(),
+  quality: z.object({ score: z.number(), passed: z.boolean() }).nullable(),
+  trendId: z.string().nullable(),
+});
+export type OrganicPostCardData = z.infer<typeof organicPostCardDataSchema>;
+
+// plan_status carries per-item progress. jobId/brandId are present only when the
+// worker emits it (the planExecution path omits them); error only on failed,
+// draftId only on completed — hence optional. .loose() keeps forward-compat.
+export const organicPlanStatusDataSchema = z
+  .object({
+    jobId: z.string().optional(),
+    brandId: z.string().optional(),
+    planId: z.string().nullable().optional(),
+    itemId: z.string(),
+    status: planItemStatusSchema,
+    draftId: z.string().optional(),
+    error: z.object({ code: z.string().optional(), message: z.string() }).optional(),
+  })
+  .loose();
+export type OrganicPlanStatusData = z.infer<typeof organicPlanStatusDataSchema>;
+
+export const organicPostEnqueuedDataSchema = z
+  .object({
+    jobId: z.string(),
+    platform: z.string(),
+    scheduledAt: z.string(),
+    trendId: z.string().nullable(),
+    draftId: z.string().optional(),
+    dayId: z.string().optional(),
+    planItemId: z.string().optional(),
+  })
+  .loose();
+export type OrganicPostEnqueuedData = z.infer<typeof organicPostEnqueuedDataSchema>;
+
 const responseCreatedSchema = z.object({
   type: z.literal("response.created"),
   data: z.object({ responseId: z.string().optional() }).loose(),
@@ -228,9 +308,12 @@ const toolOutputDeniedSchema = z.object({
 
 const uiTrendChartSchema = z.object({
   type: z.literal("ui.trend_chart"),
-  data: uiCardDataSchema,
+  data: organicTrendChartDataSchema,
 });
 
+// ui.plan_card data is a ProposedPlan or BulkContentPlan (discriminated by
+// data.kind === "bulk"); left loose here to avoid an organic<->bulk import cycle.
+// The Frontend parser validates it via proposedPlanSchema / bulkContentPlanSchema.
 const uiPlanCardSchema = z.object({
   type: z.literal("ui.plan_card"),
   data: uiCardDataSchema,
@@ -238,17 +321,17 @@ const uiPlanCardSchema = z.object({
 
 const uiPostCardSchema = z.object({
   type: z.literal("ui.post_card"),
-  data: uiCardDataSchema,
+  data: organicPostCardDataSchema,
 });
 
 const uiPostEnqueuedSchema = z.object({
   type: z.literal("ui.post_enqueued"),
-  data: uiCardDataSchema,
+  data: organicPostEnqueuedDataSchema,
 });
 
 const uiPlanStatusSchema = z.object({
   type: z.literal("ui.plan_status"),
-  data: uiCardDataSchema,
+  data: organicPlanStatusDataSchema,
 });
 
 /**
@@ -507,7 +590,7 @@ export type OrganicUiBulkRunFrame = z.infer<typeof uiBulkRunSchema>;
 /**
  * Normalized display shape for a post fetched by any of the organic agent's
  * content-retrieval tools (listDrafts, getTopPosts, listOwnInstagramMedia,
- * getCalendarPostedContent, rankPostPerformers). Consumed by PostContentCard.
+ * getCalendarPostedContent). Consumed by PostContentCard.
  */
 export type UiFetchedPost = {
   postId: string
@@ -531,7 +614,6 @@ export const POST_FETCHING_TOOL_NAMES = [
   "getTopPosts",
   "listOwnInstagramMedia",
   "getCalendarPostedContent",
-  "rankPostPerformers",
   "getCompetitorInstagramTopPosts",
 ] as const
 

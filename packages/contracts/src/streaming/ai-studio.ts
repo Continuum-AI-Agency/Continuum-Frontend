@@ -13,18 +13,25 @@ import { z } from "zod";
 
 const REFERENCE_SOURCE_MESSAGE = "reference image requires base64 data or image_url";
 
-// One reference image input. At least one of { data, image_url, url } must be
-// present. `url` is accepted as an alias for `image_url` for caller convenience.
+// One reference image input. At least one of { data, image_url, url, or
+// storage_bucket+storage_path } must be present. `url` is accepted as an alias
+// for `image_url`. `storage_bucket`+`storage_path` let the Backend download the
+// bytes via the service-role storage client instead of an unauthenticated fetch
+// of a signed URL (which expires and is not always publicly reachable) — this is
+// how a generated canvas image round-trips back as a reference.
 export const aiStudioReferenceImageSchema = z
   .object({
     data: z.string().min(10, "reference image data must be base64").optional(),
     image_url: z.string().min(1).optional(),
     url: z.string().min(1).optional(),
+    storage_bucket: z.string().min(1).optional(),
+    storage_path: z.string().min(1).optional(),
     mime_type: z.string().default("image/png"),
     filename: z.string().optional(),
   })
   .superRefine((image, ctx) => {
-    if (!(image.data ?? image.image_url ?? image.url)) {
+    const hasStorageCoords = Boolean(image.storage_bucket && image.storage_path);
+    if (!(image.data ?? image.image_url ?? image.url) && !hasStorageCoords) {
       ctx.addIssue({
         code: "custom",
         path: ["data"],

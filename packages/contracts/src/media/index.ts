@@ -1,4 +1,5 @@
 export * from "./asset";
+export * from "./metadataSearch";
 export * from "./attach";
 export * from "./realize";
 export * from "./preview";
@@ -11,3 +12,4 @@ export * from "./hyperframe-mp4";
 export * from "./reel-video";
 export * from "./reel-finalize";
 export * from "./clip";
+export * from "./library-upload";

@@ -46,9 +46,12 @@ export type OrganicChatSessionsResponse = z.infer<typeof organicChatSessionsResp
  * uiCards }. id/sessionId/createdAt are not emitted by the store, so they stay
  * optional for the Frontend to backfill stable fallbacks.
  *
- * `metadata` is intentionally loose here (z.unknown): the rich agent-mention
- * metadata shape is a Frontend domain concern and is narrowed there. `uiCards`
- * are raw persisted stream frames replayed through the organic stream parser.
+ * This is the FE<->BE WIRE shape, kept intentionally loose: the Backend produces
+ * it directly from unknown DB JSON, so tightening these fields here would force a
+ * Backend type change. The typed narrowing happens on the Frontend read boundary
+ * — `metadata` via agentMentionMetadataSchema, `uiCards` via
+ * persistedOrganicFrameSchema (both in @continuum/contracts) — so the contract
+ * still owns the typed shapes, applied where the data is consumed.
  */
 export const organicChatMessageDtoSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
