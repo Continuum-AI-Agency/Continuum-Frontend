@@ -5,13 +5,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField, Tooltip } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, MagicWandIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
+import { MODEL_CATALOG, CHAT_PANEL_MODEL_IDS, getStatusBadgeLabel, isModelSelectable } from "@continuum/contracts";
+import type { ChatPanelModelId } from "@continuum/contracts";
 import { getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
-import type { SupportedModel } from "@/lib/types/chatImage";
 import type { PromptTemplate, PromptTemplateCreateInput, PromptTemplateUpdateInput } from "@/lib/schemas/promptTemplates";
 import { PromptTemplatePicker } from "./PromptTemplatePicker";
 import { z } from "zod";
 
-type ChatPanelModel = Exclude<SupportedModel, "kling-omni">;
+type ChatPanelModel = ChatPanelModelId;
 
 type FormValues = {
   model: ChatPanelModel;
@@ -27,7 +28,7 @@ type FormValues = {
 };
 
 const chatPanelFormSchema = z.object({
-  model: z.enum(["nano-banana", "gemini-3-pro-image-preview", "veo-3-1", "veo-3-1-fast", "sora-2"]),
+  model: z.enum(CHAT_PANEL_MODEL_IDS),
   prompt: z.string().min(1, "Prompt is required"),
   aspectRatio: z.string().optional(),
   durationSeconds: z.number().optional(),
@@ -63,13 +64,10 @@ type ChatPanelProps = {
   };
 };
 
-const MODEL_OPTIONS: { value: ChatPanelModel; label: string; disabled?: boolean }[] = [
-  { value: "nano-banana", label: "Nano Banana (Gemini 2.5 Flash Image)" },
-  { value: "gemini-3-pro-image-preview", label: "Nano Banana Pro (Gemini 3 Pro Image Preview)" },
-  { value: "veo-3-1", label: "Veo 3.1 (Video)" },
-  { value: "veo-3-1-fast", label: "Veo 3.1 Fast (Video)" },
-  { value: "sora-2", label: "Sora 2 (Coming soon)", disabled: true },
-];
+const MODEL_OPTIONS = MODEL_CATALOG.filter(
+  (m): m is (typeof MODEL_CATALOG)[number] & { id: ChatPanelModel } =>
+    (CHAT_PANEL_MODEL_IDS as readonly string[]).includes(m.id)
+);
 
 const NANO_RES_OPTIONS = [
   { value: "1024x1024", label: "1024 x 1024 (1:1)" },
@@ -190,15 +188,30 @@ export function ChatPanel({
           >
             <Select.Trigger className="w-full" />
             <Select.Content>
-              {MODEL_OPTIONS.map((option) => (
-                <Select.Item
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.disabled}
-                >
-                  {option.label}
-                </Select.Item>
-              ))}
+              {MODEL_OPTIONS.map((option) => {
+                const badgeLabel = getStatusBadgeLabel(option.status)
+                const selectable = isModelSelectable(option.status)
+                return (
+                  <Select.Item
+                    key={option.id}
+                    value={option.id}
+                    disabled={!selectable}
+                  >
+                    <Flex align="center" gap="2">
+                      <span>{option.label}</span>
+                      {badgeLabel ? (
+                        <Badge
+                          size="1"
+                          variant="soft"
+                          color={option.status === "beta" ? "blue" : "gray"}
+                        >
+                          {badgeLabel}
+                        </Badge>
+                      ) : null}
+                    </Flex>
+                  </Select.Item>
+                )
+              })}
             </Select.Content>
           </Select.Root>
         </div>

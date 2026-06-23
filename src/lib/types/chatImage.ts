@@ -1,10 +1,12 @@
 // Shared types for chat-based image/video generation in AI Studio.
+// SupportedModel is kept in sync with MODEL_CATALOG in @continuum/contracts.
 
 export type SupportedModel =
   | "nano-banana"
   | "gemini-3-pro-image-preview"
   | "veo-3-1"
   | "veo-3-1-fast"
+  | "veo-3-1-lite"
   | "kling-omni"
   | "sora-2";
 
@@ -22,6 +24,7 @@ export const modelMediumMap: Record<SupportedModel, "image" | "video"> = {
   "gemini-3-pro-image-preview": "image",
   "veo-3-1": "video",
   "veo-3-1-fast": "video",
+  "veo-3-1-lite": "video",
   "kling-omni": "video",
   "sora-2": "video",
 };

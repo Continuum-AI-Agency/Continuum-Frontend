@@ -1,22 +1,19 @@
+import { MODEL_CATALOG } from '@continuum/contracts';
 import { z } from "zod";
 
 import { providerAspectRatioOptions } from "@/lib/schemas/aiStudio";
 import type { SupportedModel } from "@/lib/types/chatImage";
 
-export const supportedModels = [
-  "nano-banana",
-  "gemini-3-pro-image-preview",
-  "veo-3-1",
-  "veo-3-1-fast",
-  "kling-omni",
-  "sora-2",
-] as const satisfies ReadonlyArray<SupportedModel>;
+export const supportedModels = MODEL_CATALOG.filter(
+  (m) => m.medium === 'image' || m.medium === 'video',
+).map((m) => m.id) as unknown as readonly [SupportedModel, ...SupportedModel[]];
 
 const modelMedium: Record<SupportedModel, "image" | "video"> = {
   "nano-banana": "image",
   "gemini-3-pro-image-preview": "image",
   "veo-3-1": "video",
   "veo-3-1-fast": "video",
+  "veo-3-1-lite": "video",
   "kling-omni": "video",
   "sora-2": "video",
 };

@@ -1,12 +1,14 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import React from "react";
-import { Handle, Position } from "@xyflow/react";
-import { Badge, Button, Select, Text, TextArea } from "@radix-ui/themes";
+import { getLlmModelsByProvider, getStatusBadgeLabel, isModelSelectable } from "@continuum/contracts";
 import { ChatBubbleIcon } from "@radix-ui/react-icons";
+import { Badge, Button, Flex, Select, Text, TextArea } from "@radix-ui/themes";
+import { Handle, Position } from "@xyflow/react";
 
 import type { LLMNodeData } from "@/lib/ai-studio/nodeTypes";
+
+type LLMProvider = 'openai' | 'anthropic' | 'google';
 
 type LLMNodeProps = {
   id: string;
@@ -14,14 +16,16 @@ type LLMNodeProps = {
   selected: boolean;
 };
 
-const PROVIDER_MODELS = {
-  openai: ["gpt-4", "gpt-3.5-turbo"],
-  anthropic: ["claude-3-sonnet", "claude-3-haiku"],
-  google: ["gemini-pro", "gemini-pro-vision"],
+const PROVIDER_LABEL: Record<LLMProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  google: 'Google',
 };
 
 export function LLMNode({ id: nodeId, data, selected }: LLMNodeProps) {
-  const providerLabel = data.provider === "openai" ? "OpenAI" : data.provider === "anthropic" ? "Anthropic" : "Google";
+  const provider = data.provider as LLMProvider;
+  const providerLabel = PROVIDER_LABEL[provider] ?? provider;
+  const providerModels = getLlmModelsByProvider(data.provider);
 
   return (
     <div className={`relative w-80 rounded-xl border ${selected ? "border-green-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
@@ -39,7 +43,7 @@ export function LLMNode({ id: nodeId, data, selected }: LLMNodeProps) {
             value={data.provider}
             onValueChange={(value) =>
               window.dispatchEvent(new CustomEvent("node:edit", {
-                detail: { id: nodeId, field: "provider", value: value as "openai" | "anthropic" | "google" }
+                detail: { id: nodeId, field: "provider", value: value as LLMProvider }
               }))
             }
           >
@@ -64,11 +68,21 @@ export function LLMNode({ id: nodeId, data, selected }: LLMNodeProps) {
           >
             <Select.Trigger className="w-full" />
             <Select.Content>
-              {PROVIDER_MODELS[data.provider].map((model) => (
-                <Select.Item key={model} value={model}>
-                  {model}
-                </Select.Item>
-              ))}
+              {providerModels.map((m) => {
+                const badgeLabel = getStatusBadgeLabel(m.status)
+                return (
+                  <Select.Item key={m.id} value={m.id} disabled={!isModelSelectable(m.status)}>
+                    <Flex align="center" gap="2">
+                      <span>{m.label}</span>
+                      {badgeLabel ? (
+                        <Badge size="1" variant="soft" color={m.status === "beta" ? "blue" : "gray"}>
+                          {badgeLabel}
+                        </Badge>
+                      ) : null}
+                    </Flex>
+                  </Select.Item>
+                )
+              })}
             </Select.Content>
           </Select.Root>
         </div>
@@ -127,7 +141,7 @@ export function LLMNode({ id: nodeId, data, selected }: LLMNodeProps) {
               value={data.maxTokens ?? 500}
               onChange={(e) =>
                 window.dispatchEvent(new CustomEvent("node:edit", {
-                  detail: { id: nodeId, field: "maxTokens", value: parseInt(e.target.value) }
+                  detail: { id: nodeId, field: "maxTokens", value: parseInt(e.target.value, 10) }
                 }))
               }
               className="w-full rounded-md bg-slate-800 border border-white/10 px-2 py-1 text-white text-sm"

@@ -1,9 +1,14 @@
+import { getStatusBadgeLabel, isModelSelectable, MODEL_CATALOG, MODEL_NODE_MODEL_IDS } from "@continuum/contracts";
+import { Badge, Button, Text } from "@radix-ui/themes";
 import { Handle, Position } from "@xyflow/react";
-import { Text, Button } from "@radix-ui/themes";
 
-import { getPortColor } from "@/lib/ai-studio/portTypes";
-import { providerAspectRatioOptions, type AiStudioProvider } from "@/lib/schemas/aiStudio";
 import type { ModelNodeData } from "@/lib/ai-studio/nodeTypes";
+import { getPortColor } from "@/lib/ai-studio/portTypes";
+import { type AiStudioProvider, providerAspectRatioOptions } from "@/lib/schemas/aiStudio";
+
+const MODEL_NODE_OPTIONS = MODEL_CATALOG.filter(
+  (m) => (MODEL_NODE_MODEL_IDS as readonly string[]).includes(m.id)
+);
 
 type ModelNodeProps = {
   id: string;
@@ -25,14 +30,23 @@ export function ModelNode({ id: nodeId, data, selected }: ModelNodeProps) {
           window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "provider", value: e.target.value as AiStudioProvider } }))
         }
       >
-        <option value="nano-banana">Nano Banana</option>
-        <option value="veo-3-1" disabled>
-          Veo 3.1 (coming soon)
-        </option>
-        <option value="sora-2" disabled>
-          Sora 2 (coming soon)
-        </option>
+        {MODEL_NODE_OPTIONS.map((m) => (
+          <option key={m.id} value={m.id} disabled={!isModelSelectable(m.status)}>
+            {m.label}{getStatusBadgeLabel(m.status) ? ` (${getStatusBadgeLabel(m.status)})` : ""}
+          </option>
+        ))}
       </select>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {MODEL_NODE_OPTIONS.map((m) => {
+          const badgeLabel = getStatusBadgeLabel(m.status)
+          if (!badgeLabel || data.provider !== m.id) return null
+          return (
+            <Badge key={m.id} size="1" variant="soft" color="gray">
+              {badgeLabel}
+            </Badge>
+          )
+        })}
+      </div>
       
       <div className="mt-2 flex flex-wrap gap-1">
         {(providerAspectRatioOptions[data.provider]?.[data.medium] ?? ["1:1", "16:9"]).map((ratio) => (
