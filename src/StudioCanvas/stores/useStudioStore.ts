@@ -12,6 +12,7 @@ import {
   NodeChange,
   EdgeChange,
 } from '@xyflow/react';
+import { toast } from 'sonner';
 import { StudioNode } from '../types';
 import {
   isValidConnection,
@@ -25,6 +26,11 @@ import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 export type InteractionMode = 'pan' | 'select';
+
+// The canvas always renders edges as bezier curves. The type is fixed so that
+// consumers reading defaultEdgeType get a stable value and serialized workflows
+// with any edge type load correctly (they all become bezier on load).
+const FIXED_EDGE_TYPE: EdgeType = 'bezier';
 
 interface StudioState {
   nodes: StudioNode[];
@@ -46,6 +52,7 @@ interface StudioState {
   setInteractionMode: (mode: InteractionMode) => void;
   duplicateNode: (id: string) => void;
   deleteNode: (id: string) => void;
+  detachNodeConnections: (id: string) => void;
   getDeletedNodeIds: () => string[];
   getDeletedEdgeIds: () => string[];
   clearDeletedIds: (nodeIds: string[], edgeIds: string[]) => void;
@@ -53,7 +60,7 @@ interface StudioState {
   triggerSave: () => void;
   brandId?: string;
   setBrandId: (id: string) => void;
-  
+
   history: {
     past: Array<{ nodes: StudioNode[]; edges: Edge[] }>;
     future: Array<{ nodes: StudioNode[]; edges: Edge[] }>;
@@ -62,6 +69,12 @@ interface StudioState {
   undo: () => void;
   redo: () => void;
   resetForBrandSwitch: () => void;
+
+  // Clipboard — canvas-level copy/cut/paste for selected nodes
+  clipboard: StudioNode[];
+  copySelectedNodes: () => void;
+  cutSelectedNodes: () => void;
+  pasteNodes: () => void;
 }
 
 // Data type mapping for edges
@@ -107,38 +120,73 @@ const getEdgeStyle = (sourceHandle: string | null) => {
   };
 };
 
+// Legacy target-handle names that existed before the canonical handle vocabulary
+// was locked in @continuum/contracts. Remapped on load so stored workflows
+// survive across schema updates. Keys are the old handle name; values are
+// functions that return the canonical handle for a given node type, or null
+// when the handle genuinely has no mapping (edge should be dropped).
+const remapLegacyTargetHandle = (
+  handle: string,
+  targetNodeType: string | undefined,
+): string | null => {
+  // 'text' was used as a target handle before the string-node vocabulary was
+  // locked. The canonical vocabulary is: nanoGen uses 'prompt', video generators
+  // use 'prompt-in'. There is no 'text' target on any current node type.
+  if (handle === 'text') {
+    if (targetNodeType === 'nanoGen') return 'prompt';
+    if (isVideoGeneratorNodeType(targetNodeType)) return 'prompt-in';
+    // extendVideo and string nodes don't accept 'text' as an input — drop.
+    return null;
+  }
+
+  // 'prompt' was used for video-generator prompt before 'prompt-in' was
+  // introduced as the canonical name.
+  if (handle === 'prompt' && isVideoGeneratorNodeType(targetNodeType)) {
+    return 'prompt-in';
+  }
+
+  // Single 'ref-image' was used before video generators standardised on
+  // 'ref-images' (plural).
+  if (handle === 'ref-image' && isVideoGeneratorNodeType(targetNodeType)) {
+    return 'ref-images';
+  }
+
+  // 'input' was an early alias for the string node's image slot.
+  if (handle === 'input' && targetNodeType === 'string') return 'image';
+
+  return handle;
+};
+
 const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
   if (!nodes || !Array.isArray(nodes)) return edges || [];
   if (!edges || !Array.isArray(edges)) return [];
-  
+
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   const normalizedCandidates = edges.flatMap((edge) => {
     const targetNode = nodeById.get(edge.target);
     if (!targetNode || !edge.targetHandle) return edge;
 
-    let targetHandle = edge.targetHandle;
-    if (targetHandle === 'text') {
-      if (targetNode.type === 'nanoGen') {
-        targetHandle = 'prompt';
-      } else if (isVideoGeneratorNodeType(targetNode.type)) {
-        targetHandle = 'prompt-in';
-      }
+    const remapped = remapLegacyTargetHandle(edge.targetHandle, targetNode.type);
+    if (remapped === null) {
+      console.warn(
+        `[normalizeEdges] dropping edge ${edge.id}: target handle '${edge.targetHandle}' has no canonical mapping for node type '${targetNode.type}'`,
+      );
+      return [];
     }
-
-    if (targetHandle === 'prompt' && isVideoGeneratorNodeType(targetNode.type)) {
-      targetHandle = 'prompt-in';
-    }
-
-    if (targetHandle === 'ref-image' && isVideoGeneratorNodeType(targetNode.type)) {
-      targetHandle = 'ref-images';
-    }
+    const targetHandle = remapped;
 
     const allowedTargets = getAllowedTargetHandles(targetNode);
-    const isFrameHandle = targetHandle.startsWith('frame-');
-    const isValidTarget = allowedTargets.includes(targetHandle) || isFrameHandle;
+    // frame-N handles are dynamic (clip slots, frame references) — accept any
+    // that start with known prefixes rather than enumerating every possible id.
+    const isDynamicHandle =
+      targetHandle.startsWith('frame-') || targetHandle.startsWith('clip-');
+    const isValidTarget = allowedTargets.includes(targetHandle) || isDynamicHandle;
 
     if (!isValidTarget) {
+      console.warn(
+        `[normalizeEdges] dropping edge ${edge.id}: target handle '${targetHandle}' is not in the allowed set [${allowedTargets.join(', ')}] for node type '${targetNode.type}'`,
+      );
       return [];
     }
 
@@ -146,6 +194,9 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     if (edge.sourceHandle && sourceNode) {
       const allowedSources = getAllowedSourceHandles(sourceNode);
       if (allowedSources.length > 0 && !allowedSources.includes(edge.sourceHandle)) {
+        console.warn(
+          `[normalizeEdges] dropping edge ${edge.id}: source handle '${edge.sourceHandle}' is not in the allowed set [${allowedSources.join(', ')}] for node type '${sourceNode.type}'`,
+        );
         return [];
       }
     }
@@ -212,12 +263,13 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
 export const useStudioStore = create<StudioState>((set, get) => ({
   nodes: [],
   edges: [],
-  defaultEdgeType: 'bezier',
+  defaultEdgeType: FIXED_EDGE_TYPE,
   interactionMode: 'pan',
   deletedNodeIds: [],
   deletedEdgeIds: [],
   saveTrigger: 0,
   brandId: undefined,
+  clipboard: [],
 
   setBrandId: (id: string) => set({ brandId: id }),
 
@@ -273,8 +325,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const normalized = normalizeFrameConnection(connection, get().nodes);
 
     if (!isValidConnection(normalized, get().edges, get().nodes)) {
-      console.warn('Invalid connection:', connection);
-      return; 
+      toast.error("Can't connect those nodes — incompatible handles or connection limit reached.");
+      return;
     }
 
     const edgeType = get().defaultEdgeType;
@@ -353,9 +405,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     });
   },
 
-  setDefaultEdgeType: (type: EdgeType) => {
-    set({ defaultEdgeType: type });
-  },
+  // No-op: defaultEdgeType is fixed to 'bezier'. Kept for consumer compatibility
+  // (WorkflowLibrary, LoadWorkflowDialog, useCanvasRealtime, workflowSerialization).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  setDefaultEdgeType: (_type: EdgeType) => {},
 
   setInteractionMode: (mode: InteractionMode) => {
     set({ interactionMode: mode });
@@ -394,6 +447,18 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           .filter((e) => e.source === id || e.target === id)
           .map((e) => e.id),
       ],
+      saveTrigger: state.saveTrigger + 1,
+    }));
+  },
+
+  detachNodeConnections: (id: string) => {
+    const connectedEdges = get().getConnectedEdges(id);
+    if (connectedEdges.length === 0) return;
+    get().takeSnapshot();
+    const connectedEdgeIds = new Set(connectedEdges.map((e) => e.id));
+    set((state) => ({
+      edges: state.edges.filter((e) => !connectedEdgeIds.has(e.id)),
+      deletedEdgeIds: [...state.deletedEdgeIds, ...connectedEdgeIds],
       saveTrigger: state.saveTrigger + 1,
     }));
   },
@@ -474,6 +539,65 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set((state) => ({ saveTrigger: state.saveTrigger + 1 }));
   },
 
+  copySelectedNodes: () => {
+    const { nodes } = get();
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+    set({ clipboard: selected });
+  },
+
+  cutSelectedNodes: () => {
+    const { nodes, edges } = get();
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+    const selectedIds = new Set(selected.map((n) => n.id));
+
+    get().takeSnapshot();
+    set((state) => ({
+      clipboard: selected,
+      nodes: state.nodes.filter((n) => !n.selected),
+      edges: state.edges.filter(
+        (e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)
+      ),
+      deletedNodeIds: [
+        ...state.deletedNodeIds,
+        ...selected.map((n) => n.id),
+      ],
+      deletedEdgeIds: [
+        ...state.deletedEdgeIds,
+        ...edges
+          .filter((e) => selectedIds.has(e.source) || selectedIds.has(e.target))
+          .map((e) => e.id),
+      ],
+      saveTrigger: state.saveTrigger + 1,
+    }));
+  },
+
+  pasteNodes: () => {
+    const { clipboard } = get();
+    if (clipboard.length === 0) return;
+
+    get().takeSnapshot();
+    const now = Date.now();
+    const pasted = clipboard.map((node, index) => ({
+      ...node,
+      id: `${node.type ?? 'node'}-paste-${now}-${index}`,
+      position: {
+        x: node.position.x + 20,
+        y: node.position.y + 20,
+      },
+      data: { ...node.data },
+      selected: true,
+    }));
+
+    set((state) => ({
+      nodes: state.nodes
+        .map((n) => ({ ...n, selected: false }))
+        .concat(pasted),
+      saveTrigger: state.saveTrigger + 1,
+    }));
+  },
+
   resetForBrandSwitch: () =>
     set({
       nodes: [],
@@ -482,6 +606,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       deletedEdgeIds: [],
       saveTrigger: 0,
       brandId: undefined,
+      clipboard: [],
       history: { past: [], future: [] },
     }),
 }));
