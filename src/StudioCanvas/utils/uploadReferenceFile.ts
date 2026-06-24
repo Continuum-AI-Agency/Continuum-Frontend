@@ -4,15 +4,19 @@
 //
 // Signed URL is the source of truth: after upload the node carries a signed URL +
 // storage path/bucket (re-signed on load). On failure the node keeps whatever
-// local base64 preview it already has (emergency fallback) and shows "error".
+// local base64 preview it already has (emergency fallback), shows "error", and
+// records the server's error message in referenceError so the badge can surface
+// the real reason on hover.
 //
-// Dependencies are injected so the orchestration is testable without the network.
+// Uploads go through the library-upload edge function (uploadMediaAsset): the
+// browser PUTs straight to storage and the row is registered server-side, so a
+// dropped reference also becomes a browsable library asset. Dependencies are
+// injected so the orchestration is testable without the network.
 
 import type { ImageNodeData, VideoNodeData } from "../types";
+import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from "@/lib/library/uploadMediaAsset";
 
-// Reference uploads reuse the existing media-library upload route, so a dropped
-// reference also becomes a browsable library asset.
-export const REFERENCE_UPLOAD_BUCKET = "media-library";
+export const REFERENCE_UPLOAD_BUCKET = MEDIA_LIBRARY_BUCKET;
 
 // Client kill switch (default on). Set NEXT_PUBLIC_AI_STUDIO_UPLOAD_ON_DROP=false
 // to keep dropped files as local base64 only (legacy behavior).
@@ -29,27 +33,7 @@ type UpdateNodeData = (id: string, data: Partial<ImageNodeData & VideoNodeData>)
 
 export interface UploadReferenceDeps {
   updateNodeData: UpdateNodeData;
-  upload?: (file: File, brandId: string) => Promise<{ assetId: string; storagePath: string }>;
-  sign?: (brandId: string, assetId: string) => Promise<{ signedUrl: string }>;
-}
-
-async function defaultUpload(file: File, brandId: string): Promise<{ assetId: string; storagePath: string }> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("brandId", brandId);
-  const resp = await fetch("/api/library/upload", { method: "POST", body: form });
-  if (!resp.ok) throw new Error(`reference upload failed (${resp.status})`);
-  return (await resp.json()) as { assetId: string; storagePath: string };
-}
-
-async function defaultSign(brandId: string, assetId: string): Promise<{ signedUrl: string }> {
-  const resp = await fetch("/api/library/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ brandId, assetId }),
-  });
-  if (!resp.ok) throw new Error(`reference sign failed (${resp.status})`);
-  return (await resp.json()) as { signedUrl: string };
+  uploadAsset?: (params: { file: File; brandId: string }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
 }
 
 export async function uploadReferenceFile(
@@ -58,24 +42,24 @@ export async function uploadReferenceFile(
 ): Promise<UploadReferenceResult | null> {
   const { nodeId, file, brandId } = params;
   const field = params.field ?? "image";
-  const upload = deps.upload ?? defaultUpload;
-  const sign = deps.sign ?? defaultSign;
+  const uploadAsset = deps.uploadAsset ?? ((p) => uploadMediaAsset(p));
 
-  deps.updateNodeData(nodeId, { referenceStatus: "processing" });
+  deps.updateNodeData(nodeId, { referenceStatus: "processing", referenceError: undefined });
   try {
-    const { assetId, storagePath } = await upload(file, brandId);
-    const { signedUrl } = await sign(brandId, assetId);
+    const { storagePath, signedUrl } = await uploadAsset({ file, brandId });
     deps.updateNodeData(nodeId, {
       [field]: signedUrl,
       sourcePath: storagePath,
       bucket: REFERENCE_UPLOAD_BUCKET,
       sourceUrl: signedUrl,
       referenceStatus: "ready",
+      referenceError: undefined,
     } as Partial<ImageNodeData & VideoNodeData>);
     return { signedUrl, storagePath, bucket: REFERENCE_UPLOAD_BUCKET };
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload failed";
     console.warn("[studio] uploadReferenceFile failed; keeping local preview", err);
-    deps.updateNodeData(nodeId, { referenceStatus: "error" });
+    deps.updateNodeData(nodeId, { referenceStatus: "error", referenceError: message });
     return null;
   }
 }

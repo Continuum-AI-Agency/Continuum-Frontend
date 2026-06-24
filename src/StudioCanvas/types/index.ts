@@ -69,6 +69,8 @@ export interface ImageNodeData extends BaseNodeData {
   markupLayer?: string;
   hasMarkup?: boolean;
   referenceStatus?: 'processing' | 'ready' | 'error';
+  // Server error reason for a failed upload, surfaced on the "Failed" badge hover.
+  referenceError?: string;
 }
 
 export interface VideoNodeData extends BaseNodeData {
@@ -78,6 +80,7 @@ export interface VideoNodeData extends BaseNodeData {
   bucket?: string;
   sourceUrl?: string;
   referenceStatus?: 'processing' | 'ready' | 'error';
+  referenceError?: string;
 }
 
 export interface AudioNodeData extends BaseNodeData {

@@ -9,12 +9,15 @@ describe('uploadReferenceFile', () => {
     const updateNodeData = mock((_id: string, data: Record<string, unknown>) => {
       updates.push(data);
     });
-    const upload = mock(async () => ({ assetId: 'asset-1', storagePath: 'brand/asset-1/ref.png' }));
-    const sign = mock(async () => ({ signedUrl: 'https://x.supabase.co/sign/ref.png?token=t' }));
+    const uploadAsset = mock(async () => ({
+      assetId: 'asset-1',
+      storagePath: 'brand/asset-1/ref.png',
+      signedUrl: 'https://x.supabase.co/sign/ref.png?token=t',
+    }));
 
     const result = await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'brand-1', field: 'image' },
-      { updateNodeData, upload, sign },
+      { updateNodeData, uploadAsset },
     );
 
     expect(result).toEqual({
@@ -22,8 +25,8 @@ describe('uploadReferenceFile', () => {
       storagePath: 'brand/asset-1/ref.png',
       bucket: REFERENCE_UPLOAD_BUCKET,
     });
-    // first update marks processing
-    expect(updates[0]).toEqual({ referenceStatus: 'processing' });
+    // first update marks processing and clears any prior error
+    expect(updates[0]).toEqual({ referenceStatus: 'processing', referenceError: undefined });
     // final update carries the signed URL + storage pointers + ready
     expect(updates[1]).toMatchObject({
       image: 'https://x.supabase.co/sign/ref.png?token=t',
@@ -37,33 +40,30 @@ describe('uploadReferenceFile', () => {
   it('sets the video field when field is video', async () => {
     const updates: Array<Record<string, unknown>> = [];
     const updateNodeData = mock((_id: string, data: Record<string, unknown>) => updates.push(data));
-    const upload = mock(async () => ({ assetId: 'a', storagePath: 'p/v.mp4' }));
-    const sign = mock(async () => ({ signedUrl: 'https://x/v.mp4?t=1' }));
+    const uploadAsset = mock(async () => ({ assetId: 'a', storagePath: 'p/v.mp4', signedUrl: 'https://x/v.mp4?t=1' }));
 
     await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'b', field: 'video' },
-      { updateNodeData, upload, sign },
+      { updateNodeData, uploadAsset },
     );
 
     expect(updates[1]).toMatchObject({ video: 'https://x/v.mp4?t=1', referenceStatus: 'ready' });
   });
 
-  it('marks error and returns null when upload fails (base64 preview kept)', async () => {
+  it('marks error with the server message and returns null when upload fails (base64 preview kept)', async () => {
     const updates: Array<Record<string, unknown>> = [];
     const updateNodeData = mock((_id: string, data: Record<string, unknown>) => updates.push(data));
-    const upload = mock(async () => {
-      throw new Error('413');
+    const uploadAsset = mock(async () => {
+      throw new Error('File exceeds 50 MB limit');
     });
-    const sign = mock(async () => ({ signedUrl: 'unused' }));
 
     const result = await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'b' },
-      { updateNodeData, upload, sign },
+      { updateNodeData, uploadAsset },
     );
 
     expect(result).toBeNull();
-    expect(updates[0]).toEqual({ referenceStatus: 'processing' });
-    expect(updates[1]).toEqual({ referenceStatus: 'error' });
-    expect(sign).not.toHaveBeenCalled();
+    expect(updates[0]).toEqual({ referenceStatus: 'processing', referenceError: undefined });
+    expect(updates[1]).toEqual({ referenceStatus: 'error', referenceError: 'File exceeds 50 MB limit' });
   });
 });

@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ImageNodeData, ImageReferenceType } from '../types';
-import { Cross1Icon, ImageIcon, Pencil2Icon, ReloadIcon, UploadIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, ImageIcon, LinkBreak2Icon, Pencil2Icon, ReloadIcon, UploadIcon } from '@radix-ui/react-icons';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
@@ -76,6 +76,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const detachNodeConnections = useStudioStore((state) => state.detachNodeConnections);
+  const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
@@ -242,6 +244,26 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       reader.readAsDataURL(file);
     }
   }, [applyPreviewImage, uploadLocalReference]);
+
+  // Retry a failed upload from the retained local preview (the base64 the node
+  // kept on failure). If no local bytes remain (e.g. after a reload), reopen the
+  // file picker instead.
+  const handleRetryUpload = useCallback(async () => {
+    const src = data.image;
+    if (!src || !src.startsWith('data:')) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const blob = await (await fetch(src)).blob();
+      const file = new File([blob], data.fileName || 'upload', {
+        type: blob.type || 'application/octet-stream',
+      });
+      uploadLocalReference(file);
+    } catch {
+      fileInputRef.current?.click();
+    }
+  }, [data.image, data.fileName, uploadLocalReference]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -438,20 +460,41 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                     <span>Marked up</span>
                   </div>
                 )}
-                {refBadge && (
+                {refBadge && refBadge.tone !== "error" && (
                   <div
                     className={cn(
                       "absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm",
                       refBadge.tone === "processing" && "bg-blue-500/90",
                       refBadge.tone === "ready" && "bg-emerald-500/90",
-                      refBadge.tone === "error" && "bg-red-500/90",
                     )}
                   >
                     {refBadge.tone === "processing" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
                     {refBadge.tone === "ready" && <CheckCircle2 className="h-2.5 w-2.5" />}
-                    {refBadge.tone === "error" && <XCircle className="h-2.5 w-2.5" />}
                     <span>{refBadge.label}</span>
                   </div>
+                )}
+                {refBadge && refBadge.tone === "error" && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
+                        <XCircle className="h-2.5 w-2.5" />
+                        <span>{refBadge.label}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
+                      <p className="text-xs">{data.referenceError ?? "Upload failed — try again"}</p>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-6 px-2 text-[11px]"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={handleRetryUpload}
+                      >
+                        <ReloadIcon className="mr-1 h-3 w-3" />
+                        Retry
+                      </Button>
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </div>
             ) : (
@@ -550,6 +593,13 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             <Copy className="mr-2 h-4 w-4" />
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={getConnectedEdges(id).length === 0}
+            onClick={() => detachNodeConnections(id)}
+          >
+            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            Detach connections
           </ContextMenuItem>
           <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
             <Trash2 className="mr-2 h-4 w-4" />

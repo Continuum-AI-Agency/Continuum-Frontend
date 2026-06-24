@@ -6,15 +6,18 @@ import { uploadDraftCreative, uploadDraftCreatives } from "./uploadDraftCreative
 const makeFile = (name = "photo.jpg", type = "image/jpeg") =>
   new File([new Uint8Array([1, 2, 3])], name, { type })
 
-const okUpload = async (_file: File) => ({ assetId: "asset-1", storagePath: "brand-1/asset-1/photo.jpg" })
-const okSign = async () => ({ signedUrl: "https://signed/url" })
+const okUpload = async (_params: { file: File; brandId: string }) => ({
+  assetId: "asset-1",
+  storagePath: "brand-1/asset-1/photo.jpg",
+  signedUrl: "https://signed/url",
+})
 
 describe("uploadDraftCreative", () => {
   it("uploads, signs, and returns a schema-valid MediaAsset", async () => {
     const onStatus = mock((_status: string, _index: number) => {})
     const asset = await uploadDraftCreative(
       { file: makeFile(), brandId: "brand-1" },
-      { upload: okUpload, sign: okSign, onStatus },
+      { uploadAsset: okUpload, onStatus },
     )
     expect(asset).not.toBeNull()
     expect(() => mediaAssetSchema.parse(asset)).not.toThrow()
@@ -29,7 +32,7 @@ describe("uploadDraftCreative", () => {
   it("derives video kind from the file mime type", async () => {
     const asset = await uploadDraftCreative(
       { file: makeFile("clip.mp4", "video/mp4"), brandId: "brand-1" },
-      { upload: okUpload, sign: okSign },
+      { uploadAsset: okUpload },
     )
     expect(asset?.kind).toBe("video")
   })
@@ -41,7 +44,7 @@ describe("uploadDraftCreative", () => {
     }
     const asset = await uploadDraftCreative(
       { file: makeFile(), brandId: "brand-1" },
-      { upload: failUpload, sign: okSign, onStatus },
+      { uploadAsset: failUpload, onStatus },
     )
     expect(asset).toBeNull()
     expect(onStatus.mock.calls.map((c) => c[0])).toEqual(["processing", "error"])
@@ -51,13 +54,13 @@ describe("uploadDraftCreative", () => {
 describe("uploadDraftCreatives", () => {
   it("preserves selection order and drops failures", async () => {
     let n = 0
-    const upload = async (file: File) => {
+    const uploadAsset = async ({ file }: { file: File; brandId: string }) => {
       if (file.name === "bad.jpg") throw new Error("fail")
       n += 1
-      return { assetId: `asset-${n}`, storagePath: `brand-1/asset-${n}/${file.name}` }
+      return { assetId: `asset-${n}`, storagePath: `brand-1/asset-${n}/${file.name}`, signedUrl: "https://signed/url" }
     }
     const files = [makeFile("a.jpg"), makeFile("bad.jpg"), makeFile("c.jpg")]
-    const assets = await uploadDraftCreatives({ files, brandId: "brand-1" }, { upload, sign: okSign })
+    const assets = await uploadDraftCreatives({ files, brandId: "brand-1" }, { uploadAsset })
     expect(assets.map((a) => a.fileName)).toEqual(["a.jpg", "c.jpg"])
   })
 })

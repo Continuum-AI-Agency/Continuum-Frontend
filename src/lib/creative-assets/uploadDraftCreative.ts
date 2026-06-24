@@ -3,43 +3,29 @@
 // useDraftMediaPlacement. Mirrors StudioCanvas/utils/uploadReferenceFile.ts (the
 // canvas equivalent) but writes into a draft instead of a canvas node.
 //
-// Flow: POST /api/library/upload (registers into media.assets, source "upload")
-// → POST /api/library/sign (mint a signed URL) → synthesize a MediaAsset. Deps
-// are injected so the orchestration is testable without the network.
+// Flow: uploadMediaAsset (library-upload edge fn — browser PUTs straight to
+// storage, registers the media.assets row, returns a signed URL) → synthesize a
+// MediaAsset. Deps are injected so the orchestration is testable without the
+// network.
 
 import { mediaAssetSchema, type MediaAsset } from "@continuum/contracts"
 
-// Uploads reuse the media-library route, so a dropped creative also becomes a
+import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from "@/lib/library/uploadMediaAsset"
+
+// Uploads reuse the media-library bucket, so a dropped creative also becomes a
 // browsable library asset.
-export const DRAFT_UPLOAD_BUCKET = "media-library"
+export const DRAFT_UPLOAD_BUCKET = MEDIA_LIBRARY_BUCKET
 
 export type UploadStatus = "processing" | "ready" | "error"
 
 export interface UploadDraftCreativeDeps {
-  upload?: (file: File, brandId: string) => Promise<{ assetId: string; storagePath: string }>
-  sign?: (brandId: string, assetId: string) => Promise<{ signedUrl: string }>
+  uploadAsset?: (params: {
+    file: File
+    brandId: string
+  }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>
   // Called as each file moves through its lifecycle; `index` is its position in a
   // multi-file batch (0 for the single-file path).
   onStatus?: (status: UploadStatus, index: number) => void
-}
-
-async function defaultUpload(file: File, brandId: string): Promise<{ assetId: string; storagePath: string }> {
-  const form = new FormData()
-  form.append("file", file)
-  form.append("brandId", brandId)
-  const resp = await fetch("/api/library/upload", { method: "POST", body: form })
-  if (!resp.ok) throw new Error(`draft creative upload failed (${resp.status})`)
-  return (await resp.json()) as { assetId: string; storagePath: string }
-}
-
-async function defaultSign(brandId: string, assetId: string): Promise<{ signedUrl: string }> {
-  const resp = await fetch("/api/library/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ brandId, assetId }),
-  })
-  if (!resp.ok) throw new Error(`draft creative sign failed (${resp.status})`)
-  return (await resp.json()) as { signedUrl: string }
 }
 
 function synthesizeAsset(params: {
@@ -75,12 +61,10 @@ async function uploadOne(
   index: number,
   deps: UploadDraftCreativeDeps,
 ): Promise<MediaAsset | null> {
-  const upload = deps.upload ?? defaultUpload
-  const sign = deps.sign ?? defaultSign
+  const uploadAsset = deps.uploadAsset ?? ((p) => uploadMediaAsset(p))
   deps.onStatus?.("processing", index)
   try {
-    const { assetId, storagePath } = await upload(file, brandId)
-    const { signedUrl } = await sign(brandId, assetId)
+    const { assetId, storagePath, signedUrl } = await uploadAsset({ file, brandId })
     const asset = synthesizeAsset({ assetId, storagePath, signedUrl, file, brandId })
     deps.onStatus?.("ready", index)
     return asset

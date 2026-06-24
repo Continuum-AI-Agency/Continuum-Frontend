@@ -3,7 +3,8 @@ import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, useEdg
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { BaseNodeData } from '../types';
-import { VideoIcon, UploadIcon } from '@radix-ui/react-icons';
+import { LinkBreak2Icon, ReloadIcon, VideoIcon, UploadIcon } from '@radix-ui/react-icons';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
@@ -33,6 +34,7 @@ export interface VideoNodeData extends BaseNodeData {
   bucket?: string;
   sourceUrl?: string;
   referenceStatus?: 'processing' | 'ready' | 'error';
+  referenceError?: string;
 }
 
 import {
@@ -52,6 +54,8 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const detachNodeConnections = useStudioStore((state) => state.detachNodeConnections);
+  const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
@@ -89,6 +93,26 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
       reader.readAsDataURL(file);
     }
   }, [id, triggerSave, updateNodeData, uploadLocalReference]);
+
+  // Retry a failed upload from the retained local preview (the base64 the node
+  // kept on failure). If no local bytes remain (e.g. after a reload), reopen the
+  // file picker instead.
+  const handleRetryUpload = useCallback(async () => {
+    const src = data.video;
+    if (!src || !src.startsWith('data:')) {
+      document.getElementById(`video-file-${id}`)?.click();
+      return;
+    }
+    try {
+      const blob = await (await fetch(src)).blob();
+      const file = new File([blob], data.fileName || 'upload', {
+        type: blob.type || 'application/octet-stream',
+      });
+      uploadLocalReference(file);
+    } catch {
+      document.getElementById(`video-file-${id}`)?.click();
+    }
+  }, [data.video, data.fileName, id, uploadLocalReference]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -203,20 +227,41 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
         <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
-            {refBadge && (
+            {refBadge && refBadge.tone !== 'error' && (
               <div
                 className={cn(
                   "absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm",
                   refBadge.tone === 'processing' && "bg-blue-500/90 text-white",
                   refBadge.tone === 'ready' && "bg-emerald-500/90 text-white",
-                  refBadge.tone === 'error' && "bg-red-500/90 text-white",
                 )}
               >
                 {refBadge.tone === 'processing' && <Loader2 className="h-3 w-3 animate-spin" />}
                 {refBadge.tone === 'ready' && <CheckCircle2 className="h-3 w-3" />}
-                {refBadge.tone === 'error' && <XCircle className="h-3 w-3" />}
                 {refBadge.label}
               </div>
+            )}
+            {refBadge && refBadge.tone === 'error' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="absolute left-2 top-2 z-20 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm">
+                    <XCircle className="h-3 w-3" />
+                    {refBadge.label}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
+                  <p className="text-xs">{data.referenceError ?? "Upload failed — try again"}</p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2 text-[11px]"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={handleRetryUpload}
+                  >
+                    <ReloadIcon className="mr-1 h-3 w-3" />
+                    Retry
+                  </Button>
+                </TooltipContent>
+              </Tooltip>
             )}
             <label
               htmlFor={`video-file-${id}`}
@@ -295,6 +340,13 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
             <Copy className="mr-2 h-4 w-4" />
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={getConnectedEdges(id).length === 0}
+            onClick={() => detachNodeConnections(id)}
+          >
+            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            Detach connections
           </ContextMenuItem>
           <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
             <Trash2 className="mr-2 h-4 w-4" />

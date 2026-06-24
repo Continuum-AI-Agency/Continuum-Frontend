@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { uploadMediaAsset } from "@/lib/library/uploadMediaAsset";
+
 const MAX_CONCURRENCY = 3;
 const ACCEPTED_PREFIXES = ["image/", "video/"];
 
@@ -30,15 +32,8 @@ export function useMediaUpload(brandId: string) {
 
   const uploadOne = useCallback(
     async (file: File, id: string) => {
-      const form = new FormData();
-      form.append("brandId", brandId);
-      form.append("file", file);
       try {
-        const resp = await fetch("/api/library/upload", { method: "POST", body: form });
-        if (!resp.ok) {
-          const data = (await resp.json().catch(() => ({}))) as { error?: string };
-          throw new Error(data.error ?? `Upload failed (${resp.status})`);
-        }
+        await uploadMediaAsset({ file, brandId });
         patch(id, { status: "done" });
         // Drop the chip a moment after success so the strip self-clears.
         setTimeout(() => setUploads((prev) => prev.filter((u) => u.id !== id)), 2500);
