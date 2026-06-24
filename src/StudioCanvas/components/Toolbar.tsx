@@ -3,19 +3,12 @@ import { Button } from '@/components/ui/button';
 import { PlayIcon, StopIcon } from '@radix-ui/react-icons';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
-import { useStudioStore, type EdgeType } from '../stores/useStudioStore';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { useStudioStore } from '../stores/useStudioStore';
 import { Progress } from '@/components/ui/progress';
 
 export function Toolbar() {
   const [isRunning, setIsRunning] = useState(false);
-  const { defaultEdgeType, setDefaultEdgeType, brandId } = useStudioStore();
+  const { brandId } = useStudioStore();
   const executionControls = useWorkflowExecution();
   const { streamState, cancel } = executionControls;
 
@@ -35,19 +28,6 @@ export function Toolbar() {
 
   return (
     <div className="flex gap-2 items-center">
-      <Select value={defaultEdgeType} onValueChange={(v) => setDefaultEdgeType(v as EdgeType)}>
-        <SelectTrigger className="h-8 w-24 text-xs" aria-label="Edge type">
-          <SelectValue placeholder="Edge type" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="bezier">Curve</SelectItem>
-          <SelectItem value="straight">Straight</SelectItem>
-          <SelectItem value="step">Step</SelectItem>
-          <SelectItem value="smoothstep">Square</SelectItem>
-        </SelectContent>
-      </Select>
-
-      <div className="w-px h-6 bg-border mx-1" />
 
       {!isRunning ? (
         <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>

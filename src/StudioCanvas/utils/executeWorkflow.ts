@@ -13,14 +13,14 @@ import { resolveVideoGeneratorModel, isVideoGeneratorNodeType } from "./videoMod
 import { resolveClipSources } from "./splice/resolveClipSources";
 import { checkSpliceSupport } from "./splice/webcodecsSupport";
 import { runSpliceInWorker } from "../workers/spliceWorkerClient";
-import type { ClipSlot, VideoEditorNodeData } from "../types";
+import type { ClipSlot, VideoEditorNodeData, TimelineItem, TimelineEditorNodeData } from "../types";
 import { registerCanvasOutput } from "@/lib/creative-assets/registerCanvasAsset";
 import { rehydrateWorkflowMediaNodes } from "./rehydrateWorkflowMedia";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
 const MAX_CONCURRENT_EXECUTIONS = 3;
-const MEDIA_NODE_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo', 'videoEditor']);
+const MEDIA_NODE_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo', 'videoEditor', 'timelineEditor']);
 
 const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
   typeof nodeType === 'string' && MEDIA_NODE_TYPES.has(nodeType);
@@ -28,6 +28,11 @@ const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
 type NodeReadiness = {
   ready: boolean;
   reason?: string;
+  // The Video Editor (timelineEditor) is a manual break-point: it becomes
+  // "awaiting" once its inputs resolve but a human hasn't rendered yet. The
+  // scheduler parks awaiting nodes (and their descendants) instead of failing
+  // them, so the run halts cleanly at the gate.
+  awaiting?: boolean;
 };
 
 const normalizeText = (value?: string | null): string | undefined => {
@@ -166,21 +171,42 @@ const resolveAudioInput = (
   return undefined;
 };
 
+type ResolvedDocumentEntry = {
+  name: string;
+  type: 'pdf' | 'txt';
+  extractedText?: string;
+  sourceUrl?: string;
+  sourceDocumentId?: string;
+  content?: string;
+};
+
 const resolveDocumentInput = (
   edge: Edge,
   nodeById: Map<string, StudioNode>
-): Array<{ name: string; content: string }> | undefined => {
+): ResolvedDocumentEntry[] | undefined => {
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type !== 'document') return undefined;
   const documents = ((sourceNode.data as any).documents ?? []) as Array<Record<string, unknown>>;
   const validDocuments = documents
-    .map((document) => {
-      const content = typeof document.content === 'string' ? document.content : '';
-      if (!content.trim()) return null;
-      const name = typeof document.name === 'string' && document.name.trim() ? document.name : 'document';
-      return { name, content };
+    .map((doc): ResolvedDocumentEntry | null => {
+      const hasSource =
+        (typeof doc.extractedText === 'string' && doc.extractedText.trim()) ||
+        (typeof doc.sourceUrl === 'string' && doc.sourceUrl.trim()) ||
+        (typeof doc.sourceDocumentId === 'string' && doc.sourceDocumentId.trim()) ||
+        (typeof doc.content === 'string' && doc.content.trim());
+      if (!hasSource) return null;
+      const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name : 'document';
+      const type: 'pdf' | 'txt' = doc.type === 'pdf' ? 'pdf' : 'txt';
+      return {
+        name,
+        type,
+        extractedText: typeof doc.extractedText === 'string' ? doc.extractedText : undefined,
+        sourceUrl: typeof doc.sourceUrl === 'string' ? doc.sourceUrl : undefined,
+        sourceDocumentId: typeof doc.sourceDocumentId === 'string' ? doc.sourceDocumentId : undefined,
+        content: typeof doc.content === 'string' ? doc.content : undefined,
+      };
     })
-    .filter((document): document is { name: string; content: string } => document !== null);
+    .filter((doc): doc is ResolvedDocumentEntry => doc !== null);
 
   return validDocuments.length > 0 ? validDocuments : undefined;
 };
@@ -263,7 +289,8 @@ const getNodeReadiness = (
   edges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
-  failedNodes: Set<string>
+  failedNodes: Set<string>,
+  awaitingNodes: Set<string> = new Set()
 ): NodeReadiness => {
   const incomingEdges = getIncomingEdges(edges, node.id);
 
@@ -302,6 +329,13 @@ const getNodeReadiness = (
   const failedEdge = incomingEdges.find((edge) => failedNodes.has(edge.source));
   if (failedEdge) {
     return { ready: false, reason: 'Upstream dependency failed' };
+  }
+
+  // Park anything downstream of a Video Editor gate that is still awaiting a
+  // human render, mirroring the failed-dependency propagation above.
+  const awaitingEdge = incomingEdges.find((edge) => awaitingNodes.has(edge.source));
+  if (awaitingEdge) {
+    return { ready: false, awaiting: true, reason: 'Waiting on an upstream Video Editor' };
   }
 
   if (node.type === 'videoDecode') {
@@ -357,6 +391,33 @@ const getNodeReadiness = (
     return { ready: true };
   }
 
+  if (node.type === 'timelineEditor') {
+    const data = node.data as TimelineEditorNodeData;
+    const items = (data.items ?? []) as TimelineItem[];
+    if (items.length < 1) {
+      return { ready: false, reason: 'Add at least one timeline item' };
+    }
+    for (const item of items) {
+      const handleId = `media-${item.id}`;
+      const edge = incomingEdges.find((candidate) => candidate.targetHandle === handleId);
+      if (!edge) {
+        return { ready: false, reason: `Timeline item ${item.order + 1} is not connected` };
+      }
+      const hasVideo = Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }));
+      const hasImage = Boolean(resolveImageInput(edge, resolvedOutputs, nodeById));
+      if (!hasVideo && !hasImage) {
+        return { ready: false, reason: `Timeline item ${item.order + 1} has no resolvable media` };
+      }
+    }
+    // Hard manual break-point: only "ready" (resumable) once a human has rendered
+    // and the clip has been persisted this session. Until then it is "awaiting".
+    const committedUrl = data.generatedVideoUrl ?? (typeof data.generatedVideo === 'string' ? data.generatedVideo : undefined);
+    if (data.committed && committedUrl) {
+      return { ready: true };
+    }
+    return { ready: false, awaiting: true, reason: 'Awaiting manual edit — open the Video Editor and render' };
+  }
+
   const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
   if (!prompt.value) {
     return {
@@ -375,6 +436,35 @@ const getNodeReadiness = (
 
 const isRunnableNodeType = (nodeType: string | undefined): boolean =>
   nodeType === 'string' || nodeType === 'videoDecode' || isMediaNodeType(nodeType);
+
+// Runnable leaf nodes reachable downstream of `startId`. Used to resume a run
+// after a Video Editor break-point: targeting each leaf re-runs the parked
+// downstream chain (via each leaf's upstream closure) while reusing the now-
+// committed gate and any already-completed upstream generators.
+export const collectDownstreamLeafIds = (
+  startId: string,
+  edges: Edge[],
+  nodeById: Map<string, { type?: string }>,
+): string[] => {
+  const runnableTargets = (id: string): string[] =>
+    edges
+      .filter((edge) => edge.source === id)
+      .map((edge) => edge.target)
+      .filter((target) => isRunnableNodeType(nodeById.get(target)?.type));
+
+  const leaves = new Set<string>();
+  const seen = new Set<string>();
+  const stack = [...runnableTargets(startId)];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    const next = runnableTargets(current);
+    if (next.length === 0) leaves.add(current);
+    else stack.push(...next);
+  }
+  return [...leaves];
+};
 
 // Walk edges backward from the target to gather every node that feeds it
 // (directly or transitively). Running a single node must also execute this
@@ -575,6 +665,10 @@ export async function executeWorkflow(
 
   const resolvedOutputs = new Map<string, NodeOutput>();
   const failedNodes = new Set<string>();
+  // Nodes parked at (or downstream of) a Video Editor break-point awaiting a
+  // human render. Tracked separately from failedNodes so the run halts cleanly
+  // rather than cascading failures past the gate.
+  const awaitingNodes = new Set<string>();
 
   const imageNodePromises: Promise<void>[] = [];
   
@@ -667,7 +761,7 @@ export async function executeWorkflow(
          } else if (genImageUrl) {
             resolvedOutputs.set(node.id, { type: 'image', base64: '', mimeType: 'image/png', url: genImageUrl });
          }
-      } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo' || node.type === 'videoEditor') {
+      } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo' || node.type === 'videoEditor' || node.type === 'timelineEditor') {
          const genVideo = ((node.data as any).generatedVideo as string | undefined) ?? ((node.data as any).generatedVideoUrl as string | undefined);
          if (genVideo) {
              resolvedOutputs.set(node.id, { type: 'video', url: genVideo });
@@ -686,10 +780,12 @@ export async function executeWorkflow(
     await Promise.all(imageNodePromises);
   }
 
-  const updateNodeStatus = (nodeId: string, status: 'running' | 'completed' | 'failed', error?: string) => {
+  const updateNodeStatus = (nodeId: string, status: 'running' | 'awaiting' | 'completed' | 'failed', error?: string) => {
     useStudioStore.getState().updateNodeData(nodeId, {
       isExecuting: status === 'running',
       isComplete: status === 'completed',
+      // Surfaced by the Video Editor node as a "paused — needs editing" badge.
+      awaitingInput: status === 'awaiting',
       error: error,
     });
     if (status !== 'running') {
@@ -1093,6 +1189,23 @@ export async function executeWorkflow(
         return false;
       }
 
+      if (node.type === 'timelineEditor') {
+        // The render happens in the node UI on "Render & Continue" (a manual
+        // break-point), so by the time the scheduler runs this node it is either
+        // already committed — in which case we just surface the persisted clip to
+        // downstream consumers — or it should never have been scheduled (readiness
+        // parks the uncommitted gate as "awaiting").
+        const data = node.data as TimelineEditorNodeData;
+        const committedUrl = data.generatedVideoUrl ?? (typeof data.generatedVideo === 'string' ? data.generatedVideo : undefined);
+        if (data.committed && committedUrl) {
+          setNodeOutput(nodeId, { type: 'video', url: committedUrl });
+          updateNodeStatus(nodeId, 'completed');
+          return true;
+        }
+        updateNodeStatus(nodeId, 'awaiting');
+        return false;
+      }
+
       if (node.type === 'videoEditor') {
         const support = await checkSpliceSupport();
         if (!support.ok) {
@@ -1184,7 +1297,7 @@ export async function executeWorkflow(
     const readyNodes = Array.from(pendingNodes).filter((nodeId) => {
       const node = nodeById.get(nodeId);
       if (!node) return false;
-      const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes);
+      const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, awaitingNodes);
       console.info("[studio] checking readiness", { nodeId, type: node.type, ready: readiness.ready, reason: readiness.reason });
       return readiness.ready;
     });
@@ -1197,10 +1310,32 @@ export async function executeWorkflow(
     }
 
     if (runningNodes.size === 0) {
+      // Nothing left to run. Classify the stalled nodes: a Video Editor gate (and
+      // everything downstream of it) that is merely awaiting a human render is
+      // PARKED, not failed — the run halts cleanly and resumes when the human
+      // clicks "Render & Continue". Iterate to a fixed point so the awaiting state
+      // propagates through the full downstream chain regardless of scan order.
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const nodeId of pendingNodes) {
+          if (awaitingNodes.has(nodeId)) continue;
+          const node = nodeById.get(nodeId);
+          if (!node) continue;
+          const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, awaitingNodes);
+          if (readiness.awaiting) {
+            awaitingNodes.add(nodeId);
+            updateNodeStatus(nodeId, 'awaiting');
+            changed = true;
+          }
+        }
+      }
+
       for (const nodeId of pendingNodes) {
+        if (awaitingNodes.has(nodeId)) continue;
         const node = nodeById.get(nodeId);
         if (!node) continue;
-        const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes);
+        const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, awaitingNodes);
         updateNodeStatus(nodeId, 'failed', readiness.reason ?? 'Missing required inputs or prompt');
         failedNodes.add(nodeId);
       }

@@ -261,30 +261,53 @@ function resolveAudioInput(
   return undefined;
 }
 
+// Resolved document entry for the enrich/generation payload. The server reads
+// these in priority order: extractedText > sourceUrl > sourceDocumentId > content.
+type ResolvedDocument = {
+  name: string;
+  // Pre-extracted text (brand_documents with pre-parsed chunks; best path).
+  extractedText?: string;
+  // Signed storage URL (server fetches and reads the file).
+  sourceUrl?: string;
+  // brand_profiles.brand_documents row id (server loads pre-extracted chunks).
+  sourceDocumentId?: string;
+  // Base64 data URL (last-resort fallback for locally-uploaded files).
+  content?: string;
+  type: 'pdf' | 'txt';
+};
+
 function resolveDocumentInput(
   nodeId: string,
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
   edges: Edge[]
-): Array<{ name: string; content: string }> | undefined {
+): ResolvedDocument[] | undefined {
   const incomingEdges = edges.filter(
     (e) => e.target === nodeId && e.targetHandle === handleId
   );
 
   if (incomingEdges.length === 0) return undefined;
 
-  const documents: Array<{ name: string; content: string }> = [];
+  const documents: ResolvedDocument[] = [];
 
   for (const edge of incomingEdges) {
     const sourceNode = nodes.find(n => n.id === edge.source);
-    if (sourceNode?.type === 'document') {
-        const docs = (sourceNode.data as any).documents || [];
-        for (const doc of docs) {
-            if (doc.content) {
-                documents.push({ name: doc.name || 'document', content: doc.content });
-            }
-        }
+    if (sourceNode?.type !== 'document') continue;
+    const docs = (sourceNode.data as any).documents || [];
+    for (const doc of docs) {
+      // Only include if there is at least one data source to read.
+      const hasSource =
+        doc.extractedText || doc.sourceUrl || doc.sourceDocumentId || doc.content;
+      if (!hasSource) continue;
+      documents.push({
+        name: doc.name || 'document',
+        extractedText: doc.extractedText ?? undefined,
+        sourceUrl: doc.sourceUrl ?? undefined,
+        sourceDocumentId: doc.sourceDocumentId ?? undefined,
+        content: doc.content ?? undefined,
+        type: doc.type ?? 'txt',
+      });
     }
   }
 

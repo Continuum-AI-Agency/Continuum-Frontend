@@ -5,7 +5,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { StringNodeData } from '../types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { MagicWandIcon } from '@radix-ui/react-icons';
+import { LinkBreak2Icon, MagicWandIcon } from '@radix-ui/react-icons';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -26,6 +26,8 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const detachNodeConnections = useStudioStore((state) => state.detachNodeConnections);
+  const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
@@ -204,6 +206,13 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={getConnectedEdges(id).length === 0}
+          onClick={() => detachNodeConnections(id)}
+        >
+          <LinkBreak2Icon className="mr-2 h-4 w-4" />
+          Detach connections
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>

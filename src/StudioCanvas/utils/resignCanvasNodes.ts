@@ -1,4 +1,4 @@
-import type { StudioNode } from "../types";
+import type { StudioNode, CanvasDocument } from "../types";
 import { request } from "@/lib/api/http";
 
 type SignItem = { bucket: string; path: string };
@@ -33,6 +33,16 @@ function collectSignItems(nodes: StudioNode[]): SignItem[] {
     if (typeof refPath === "string" && typeof refBucket === "string") {
       items.push({ bucket: refBucket, path: refPath });
     }
+
+    // Document nodes: each CanvasDocument with a storagePath + bucket needs re-signing.
+    if (node.type === "document") {
+      const docs = (data.documents ?? []) as CanvasDocument[];
+      for (const doc of docs) {
+        if (typeof doc.storagePath === "string" && typeof doc.bucket === "string") {
+          items.push({ bucket: doc.bucket, path: doc.storagePath });
+        }
+      }
+    }
   }
   return items;
 }
@@ -58,6 +68,30 @@ function applySignedUrls(nodes: StudioNode[], urlMap: Map<string, string>): Stud
       typeof refPath === "string" && typeof refBucket === "string"
         ? urlMap.get(signKey(refBucket, refPath))
         : undefined;
+
+    // Re-sign document entries that have durable storage coordinates.
+    if (node.type === "document") {
+      const docs = (data.documents ?? []) as CanvasDocument[];
+      const resignedDocs = docs.map((doc) => {
+        if (typeof doc.storagePath !== "string" || typeof doc.bucket !== "string") return doc;
+        const freshUrl = urlMap.get(signKey(doc.bucket, doc.storagePath));
+        if (!freshUrl) return doc;
+        return { ...doc, sourceUrl: freshUrl };
+      });
+      const hasChanges = resignedDocs.some((doc, i) => doc !== docs[i]);
+      if (!hasChanges && !imgUrl && !vidUrl && !refUrl) return node;
+      return {
+        ...node,
+        data: {
+          ...data,
+          documents: hasChanges ? resignedDocs : data.documents,
+          ...(imgUrl ? { generatedImageUrl: imgUrl } : {}),
+          ...(vidUrl ? { generatedVideoUrl: vidUrl } : {}),
+          ...(refUrl ? { image: refUrl, sourceUrl: refUrl } : {}),
+        } as StudioNode["data"],
+      };
+    }
+
     if (!imgUrl && !vidUrl && !refUrl) return node;
 
     const refField = node.type === "video" ? "video" : "image";

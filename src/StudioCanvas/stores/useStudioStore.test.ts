@@ -266,3 +266,205 @@ describe('useStudioStore', () => {
     expect(refImageEdges).toHaveLength(4);
   });
 });
+
+// ---------------------------------------------------------------------------
+// normalizeEdges — legacy handle remapping and survival tests
+// These verify the root cause fix: setEdges/setNodes must not silently drop
+// edges whose handles need a canonical rename.
+// ---------------------------------------------------------------------------
+describe('normalizeEdges legacy handle remapping', () => {
+  beforeEach(() => {
+    useStudioStore.setState({ nodes: [], edges: [] });
+  });
+
+  it('remaps legacy "text" targetHandle to "prompt" on nanoGen and keeps the edge', () => {
+    const nodes: StudioNode[] = [
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'nano1', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    // Inject a stored edge with the legacy "text" targetHandle.
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-legacy-text',
+        source: 'str1',
+        sourceHandle: 'text',
+        target: 'nano1',
+        targetHandle: 'text',
+        type: 'dataType',
+      },
+    ]);
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('prompt');
+  });
+
+  it('remaps legacy "text" targetHandle to "prompt-in" on videoGen and keeps the edge', () => {
+    const nodes: StudioNode[] = [
+      { id: 'str1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1-fast' }, type: 'string' },
+      { id: 'vid1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1-fast' }, type: 'videoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-legacy-vid-text',
+        source: 'str1',
+        sourceHandle: 'text',
+        target: 'vid1',
+        targetHandle: 'text',
+        type: 'dataType',
+      },
+    ]);
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('prompt-in');
+  });
+
+  it('remaps legacy "prompt" targetHandle to "prompt-in" on videoGen', () => {
+    const nodes: StudioNode[] = [
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'vid1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1' }, type: 'videoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-legacy-prompt',
+        source: 'str1',
+        sourceHandle: 'text',
+        target: 'vid1',
+        targetHandle: 'prompt',
+        type: 'dataType',
+      },
+    ]);
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('prompt-in');
+  });
+
+  it('remaps legacy "ref-image" targetHandle to "ref-images" on videoGen', () => {
+    const nodes: StudioNode[] = [
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'vid1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1' }, type: 'videoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-legacy-ref-image',
+        source: 'img1',
+        sourceHandle: 'image',
+        target: 'vid1',
+        targetHandle: 'ref-image',
+        type: 'dataType',
+      },
+    ]);
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('ref-images');
+  });
+
+  it('keeps a canonical prompt-in edge on videoGen without remapping', () => {
+    const nodes: StudioNode[] = [
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'vid1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1-fast' }, type: 'videoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-canonical',
+        source: 'str1',
+        sourceHandle: 'text',
+        target: 'vid1',
+        targetHandle: 'prompt-in',
+        type: 'dataType',
+      },
+    ]);
+
+    const edges = useStudioStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetHandle).toBe('prompt-in');
+  });
+
+  it('detachNodeConnections removes only the target node edges and keeps the node', () => {
+    const nodes: StudioNode[] = [
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'nano1', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-img-nano',
+        source: 'img1',
+        sourceHandle: 'image',
+        target: 'nano1',
+        targetHandle: 'ref-image',
+        type: 'dataType',
+      },
+      {
+        id: 'e-str-nano',
+        source: 'str1',
+        sourceHandle: 'text',
+        target: 'nano1',
+        targetHandle: 'prompt',
+        type: 'dataType',
+      },
+    ]);
+
+    useStudioStore.getState().detachNodeConnections('img1');
+
+    const state = useStudioStore.getState();
+    // Node is preserved
+    expect(state.nodes.some((n) => n.id === 'img1')).toBe(true);
+    // img1's edge is gone; str1's edge to nano1 is intact
+    expect(state.edges).toHaveLength(1);
+    expect(state.edges[0].id).toBe('e-str-nano');
+    // Detached edge id is tracked for sync
+    expect(state.deletedEdgeIds).toContain('e-img-nano');
+  });
+
+  it('detachNodeConnections is a no-op when the node has no connections', () => {
+    const nodes: StudioNode[] = [
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    const snapshotBefore = useStudioStore.getState().history.past.length;
+
+    useStudioStore.getState().detachNodeConnections('img1');
+
+    const state = useStudioStore.getState();
+    expect(state.nodes).toHaveLength(1);
+    expect(state.edges).toHaveLength(0);
+    // No snapshot taken (no change)
+    expect(state.history.past.length).toBe(snapshotBefore);
+  });
+
+  it('drops an edge whose targetHandle has no valid mapping (genuinely invalid)', () => {
+    const nodes: StudioNode[] = [
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'nano1', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e-bogus',
+        source: 'str1',
+        sourceHandle: 'text',
+        target: 'nano1',
+        targetHandle: 'totally-unknown-handle',
+        type: 'dataType',
+      },
+    ]);
+
+    expect(useStudioStore.getState().edges).toHaveLength(0);
+  });
+});

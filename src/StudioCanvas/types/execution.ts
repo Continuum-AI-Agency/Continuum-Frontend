@@ -59,7 +59,18 @@ export interface EnrichPromptPayload {
       sourcePath?: string;
       sourceUrl?: string;
     };
-    documents?: Array<{ name: string; content: string }>;
+    documents?: Array<{
+      name: string;
+      type: 'pdf' | 'txt';
+      // Pre-extracted text from brand_document_chunks (best path; no fetch needed).
+      extractedText?: string;
+      // Signed storage URL — server fetches and reads the file.
+      sourceUrl?: string;
+      // brand_profiles.brand_documents row id — server loads pre-extracted chunks.
+      sourceDocumentId?: string;
+      // Base64 data URL — last-resort fallback for locally-uploaded files.
+      content?: string;
+    }>;
   };
 }
 

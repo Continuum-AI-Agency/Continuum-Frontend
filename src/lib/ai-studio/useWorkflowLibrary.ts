@@ -53,5 +53,6 @@ export function useWorkflowLibrary(options?: { enabled?: boolean }) {
     items: query.data ?? [],
     isLoading: query.isLoading,
     isError: query.isError,
+    refetch: query.refetch,
   };
 }

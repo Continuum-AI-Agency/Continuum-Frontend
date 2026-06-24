@@ -32,6 +32,7 @@ import { Connection as ConnectionLine } from '@/components/ai-elements/connectio
 import { Edge as AiElementsEdge } from '@/components/ai-elements/edge';
 
 import { useStudioStore } from '../stores/useStudioStore';
+import { NoteNode } from '../nodes/NoteNode';
 import { StringNode } from '../nodes/StringNode';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { VideoGenBlock } from '../nodes/VideoGenBlock';
@@ -42,6 +43,7 @@ import { DocumentNode } from '../nodes/DocumentNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { VideoDecoderBlock } from '../nodes/VideoDecoderBlock';
 import { VideoEditorBlock } from '../nodes/VideoEditorBlock';
+import { TimelineEditorBlock } from '../nodes/TimelineEditorBlock';
 import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
@@ -104,7 +106,9 @@ type StudioCanvasNodeType =
   | 'veoFast'
   | 'extendVideo'
   | 'videoEditor'
+  | 'timelineEditor'
   | 'string'
+  | 'note'
   | 'image'
   | 'audio'
   | 'document'
@@ -169,6 +173,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         tag: 'Editing',
       },
       {
+        type: 'timelineEditor',
+        label: 'Video Editor',
+        desc: 'Trim & sequence clips + stills — manual break-point',
+        tag: 'Editing',
+      },
+      {
         type: 'video',
         label: 'Video Reference',
         desc: 'Video file input',
@@ -204,6 +214,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         desc: 'Prompt and enrichment input',
         tag: 'Intelligence',
       },
+      {
+        type: 'note',
+        label: 'Note / Annotation',
+        desc: 'Free-text canvas note with bold (⌘B)',
+        tag: 'Utility',
+      },
     ],
   },
 ];
@@ -215,7 +231,9 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'veoFast',
   'extendVideo',
   'videoEditor',
+  'timelineEditor',
   'string',
+  'note',
   'image',
   'audio',
   'document',
@@ -270,8 +288,31 @@ const createNodeConfig = (
     };
   }
 
+  if (type === 'timelineEditor') {
+    return {
+      data: {
+        items: [
+          { id: crypto.randomUUID?.() ?? `item-${Date.now()}-1`, order: 0 },
+          { id: crypto.randomUUID?.() ?? `item-${Date.now()}-2`, order: 1 },
+        ],
+        outputFormat: 'mp4',
+        videoCodec: 'avc',
+        audioCodec: 'aac',
+        committed: false,
+      },
+      style: { width: 440, height: 520 },
+    };
+  }
+
   if (type === 'string') {
     return { data: { value: '' } };
+  }
+
+  if (type === 'note') {
+    return {
+      data: { content: '' },
+      style: { width: 260, height: 160 },
+    };
   }
 
   if (type === 'videoDecode') {
@@ -312,7 +353,9 @@ const nodeTypes = {
   veoFast: VideoGenBlock,
   extendVideo: ExtendVideoBlock,
   videoEditor: VideoEditorBlock,
+  timelineEditor: TimelineEditorBlock,
   string: StringNode,
+  note: NoteNode,
   image: ImageNode,
   audio: AudioNode,
   document: DocumentNode,
@@ -666,6 +709,9 @@ function Flow({
     triggerSave,
     setBrandId,
     updateNodeData,
+    copySelectedNodes,
+    cutSelectedNodes,
+    pasteNodes,
   } = useStudioStore();
 
   const { remoteCursors, updateCursor, isLoading } = realtime;
@@ -849,6 +895,24 @@ function Flow({
         return;
       }
 
+      if ((event.metaKey || event.ctrlKey) && event.key === 'c') {
+        copySelectedNodes();
+        event.preventDefault();
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === 'x') {
+        cutSelectedNodes();
+        event.preventDefault();
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
+        pasteNodes();
+        event.preventDefault();
+        return;
+      }
+
       if (event.key.toLowerCase() === 'h') {
         setInteractionMode('pan');
         return;
@@ -872,7 +936,7 @@ function Flow({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [deleteElements, edges, nodes, redo, setInteractionMode, takeSnapshot, undo]);
+  }, [copySelectedNodes, cutSelectedNodes, deleteElements, edges, nodes, pasteNodes, redo, setInteractionMode, takeSnapshot, undo]);
 
   const readyNodeIds = useMemo(() => {
     const isGeneratorReady = (node: StudioNode) => {
@@ -1083,6 +1147,7 @@ function Flow({
   }
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: canvas wrapper tracks cursor position for real-time collaboration; no semantic role applies
     <div
       className="h-full min-h-0 w-full"
       ref={reactFlowWrapper}
@@ -1149,6 +1214,20 @@ function Flow({
 
             <Panel position="bottom-right" className="mb-4 mr-4 border-none bg-transparent p-0 shadow-none">
               <AIStudioChat brandProfileId={brandProfileId || ''} roomId={activeRoomId} />
+            </Panel>
+
+            <Panel position="bottom-center" className="flex items-center gap-1.5 px-3 py-1.5 bg-background/80 backdrop-blur border-border/50">
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘C</kbd>
+              <span className="text-[10px] text-muted-foreground">copy</span>
+              <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘V</kbd>
+              <span className="text-[10px] text-muted-foreground">paste</span>
+              <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘X</kbd>
+              <span className="text-[10px] text-muted-foreground">cut</span>
+              <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">Del</kbd>
+              <span className="text-[10px] text-muted-foreground">delete</span>
             </Panel>
           </Canvas>
         </ContextMenuTrigger>

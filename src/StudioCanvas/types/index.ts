@@ -88,12 +88,24 @@ export interface AudioNodeData extends BaseNodeData {
   fileName?: string;
 }
 
+export interface CanvasDocument {
+  name: string;
+  // Pre-extracted text (preferred for brand_documents). When present, content
+  // and sourceUrl are not needed for enrichment.
+  extractedText?: string;
+  // Storage-first: signed URL is the source of truth. base64 is fallback only.
+  sourceUrl?: string;
+  storagePath?: string;
+  bucket?: string;
+  // brand_profiles.brand_documents row id — enables chunk lookup on the server.
+  sourceDocumentId?: string;
+  type: 'pdf' | 'txt';
+  // Raw base64 data URL (last-resort fallback; not stored after a successful upload).
+  content?: string;
+}
+
 export interface DocumentNodeData extends BaseNodeData {
-  documents?: Array<{
-    name: string;
-    content: string;
-    type: 'pdf' | 'txt';
-  }>;
+  documents?: CanvasDocument[];
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
@@ -145,10 +157,41 @@ export interface VideoDecodeNodeData extends BaseNodeData {
   value: string;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | VideoEditorNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData | VideoDecodeNodeData;
+// One entry on the Video Editor (timelineEditor) visual track. A `video` item
+// trims a connected clip; an `image` item holds for `durationSec` as a still.
+// Reorder/split are pure data: split duplicates the item into two trim ranges.
+export interface TimelineItem {
+  id: string;
+  order: number;
+  kind?: 'video' | 'image';
+  trimStartSec?: number;
+  trimEndSec?: number;
+  // For image stills: how long the frame holds in the output (seconds).
+  durationSec?: number;
+  muteAudio?: boolean;
+}
+
+export interface TimelineEditorNodeData extends BaseNodeData {
+  items: TimelineItem[];
+  outputFormat?: 'mp4';
+  videoCodec?: 'avc';
+  audioCodec?: 'aac';
+  progress?: number;
+  // Break-point gate: the workflow halts at this node until the human renders.
+  // `committed` flips true once a render has been persisted this session, which
+  // lets the scheduler resume downstream without re-rendering.
+  committed?: boolean;
+  generatedVideo?: string;
+  generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
+  unsupportedReason?: string;
+}
+
+export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | VideoEditorNodeData | TimelineEditorNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData | VideoDecodeNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
-export type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed';
+export type ExecutionStatus = 'idle' | 'running' | 'awaiting' | 'completed' | 'failed';
 export interface NodeExecutionState {
   status: ExecutionStatus;
   output?: any;

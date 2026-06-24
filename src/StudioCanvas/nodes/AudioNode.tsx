@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { AudioNodeData } from '../types';
-import { PauseIcon, PlayIcon, SpeakerLoudIcon } from '@radix-ui/react-icons';
+import { LinkBreak2Icon, PauseIcon, PlayIcon, SpeakerLoudIcon } from '@radix-ui/react-icons';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
@@ -42,6 +42,8 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const detachNodeConnections = useStudioStore((state) => state.detachNodeConnections);
+  const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
   const edges = useEdges();
   const [audioSrc, setAudioSrc] = useState<string | undefined>(data.audio);
   const { show } = useToast();
@@ -186,7 +188,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         selected={selected}
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
-        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
+        <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30">
             <Label
               htmlFor={`file-${id}`}
               className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
@@ -195,14 +197,14 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
             >
                 {audioSrc ? (
                     <div className="flex h-full w-full items-center justify-center p-4">
-                        <audio 
-                          ref={audioRef} 
-                          src={audioSrc} 
+                        <audio
+                          ref={audioRef}
+                          src={audioSrc}
                           onEnded={handleEnded}
-                          className="hidden" 
+                          className="hidden"
                         />
 
-                        <div className="flex w-full max-w-[220px] items-center gap-3 rounded-md border border-border/70 bg-background/90 px-3 py-2 shadow-sm">
+                        <div className="nodrag flex w-full max-w-[220px] items-center gap-3 rounded-md border border-border/70 bg-background/90 px-3 py-2 shadow-sm">
                           <button
                             onClick={togglePlay}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
@@ -233,11 +235,11 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                     </Empty>
                 )}
             </Label>
-            <Input 
-                id={`file-${id}`} 
-                type="file" 
-                accept="audio/*" 
-                className="hidden" 
+            <Input
+                id={`file-${id}`}
+                type="file"
+                accept="audio/*"
+                className="hidden"
                 onChange={handleFileUpload}
             />
         </NodeContent>
@@ -266,6 +268,13 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
             <Copy className="mr-2 h-4 w-4" />
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={getConnectedEdges(id).length === 0}
+            onClick={() => detachNodeConnections(id)}
+          >
+            <LinkBreak2Icon className="mr-2 h-4 w-4" />
+            Detach connections
           </ContextMenuItem>
           <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
             <Trash2 className="mr-2 h-4 w-4" />

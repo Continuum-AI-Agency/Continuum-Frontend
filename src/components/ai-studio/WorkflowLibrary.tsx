@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, RefreshCw, LayoutTemplate } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 import type { Edge } from "@xyflow/react";
 
@@ -115,6 +115,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
       preserveAspectRatio="xMidYMid meet"
       className="block"
+      aria-hidden="true"
     >
       {rawEdges.map((e) => {
         const src = nodeMap.get(e.source);
@@ -232,7 +233,7 @@ export function WorkflowLibrary() {
   const [query, setQuery] = React.useState("");
   const [activeTag, setActiveTag] = React.useState<string | null>(null);
 
-  const { items, isLoading, isError } = useWorkflowLibrary({ enabled: isOpen });
+  const { items, isLoading, isError, refetch } = useWorkflowLibrary({ enabled: isOpen });
   const { setNodes, setEdges, takeSnapshot, defaultEdgeType } = useStudioStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
@@ -267,7 +268,7 @@ export function WorkflowLibrary() {
       fitView({ padding: 0.2, duration: 300 });
     });
 
-    show({ title: "Workflow loaded", description: item.name, variant: "success" });
+    show({ title: "Template applied", description: item.name, variant: "success" });
     setIsOpen(false);
   }
 
@@ -285,22 +286,21 @@ export function WorkflowLibrary() {
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm">
           <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-          Library
+          Templates
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[440px] p-0" align="end">
         <div className="border-b border-border p-3">
-          <p className="text-sm font-semibold">Workflow Library</p>
+          <p className="text-sm font-semibold">Workflow Templates</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Browse, preview and launch pre-built workflows.
+            Pre-built starting points — pick one to apply it to the canvas. Looking for your own work? Use <span className="font-medium">My Workflows</span>.
           </p>
           <input
             type="text"
-            placeholder="Search starter workflows…"
+            placeholder="Search templates…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-            className="mt-2.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                    className="mt-2.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
 
@@ -336,18 +336,54 @@ export function WorkflowLibrary() {
 
         <div className="max-h-[420px] space-y-3 overflow-y-auto p-3">
           {isLoading && (
-            <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">Loading templates…</p>
           )}
-          {isError && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Could not load library.
-            </p>
+
+          {isError && !isLoading && (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <RefreshCw className="h-8 w-8 text-muted-foreground/40" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Templates unavailable</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Could not load the template library. Check your connection and try again.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
+            </div>
           )}
+
           {!isLoading && !isError && filtered.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No workflows found.
-            </p>
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <LayoutTemplate className="h-8 w-8 text-muted-foreground/40" />
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {query ? "No templates match your search" : "No templates yet"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {query
+                    ? "Try a different search term or clear the filter."
+                    : "Templates will appear here once the library is populated."}
+                </p>
+              </div>
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Clear search
+                </button>
+              )}
+            </div>
           )}
+
           {!isLoading &&
             !isError &&
             filtered.map((item) => (

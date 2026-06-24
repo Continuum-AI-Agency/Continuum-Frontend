@@ -2,7 +2,9 @@ import { z } from "zod";
 
 export const aiStudioProviderSchema = z.enum([
   "nano-banana",
+  "gemini-3-pro-image-preview",
   "veo-3-1",
+  "veo-3-1-fast",
   "veo-3-1-lite",
   "kling-omni",
   "sora-2",
@@ -31,7 +33,13 @@ export const providerAspectRatioOptions: Record<AiStudioProvider, Partial<Record
   "nano-banana": {
     image: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const,
   },
+  "gemini-3-pro-image-preview": {
+    image: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const,
+  },
   "veo-3-1": {
+    video: ["16:9", "9:16"] as const,
+  },
+  "veo-3-1-fast": {
     video: ["16:9", "9:16"] as const,
   },
   "veo-3-1-lite": {

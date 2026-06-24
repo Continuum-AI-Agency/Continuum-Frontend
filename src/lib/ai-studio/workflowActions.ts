@@ -25,6 +25,21 @@ const createSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+const updateSchema = z.object({
+  brandProfileId: z.string().uuid("brandProfileId must be a valid UUID"),
+  workflowId: z.string().uuid("workflowId must be a valid UUID"),
+  name: z.string().min(1, "Workflow name is required").optional(),
+  description: z.string().optional(),
+  nodes: z.array(z.unknown()).optional(),
+  edges: z.array(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+const deleteSchema = z.object({
+  brandProfileId: z.string().uuid("brandProfileId must be a valid UUID"),
+  workflowId: z.string().uuid("workflowId must be a valid UUID"),
+});
+
 type WorkflowAction =
   | {
       action: "list";
@@ -38,6 +53,21 @@ type WorkflowAction =
       nodes?: unknown[];
       edges?: unknown[];
       metadata?: Record<string, unknown>;
+    }
+  | {
+      action: "update";
+      brandProfileId: string;
+      workflowId: string;
+      name?: string;
+      description?: string;
+      nodes?: unknown[];
+      edges?: unknown[];
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      action: "delete";
+      brandProfileId: string;
+      workflowId: string;
     };
 
 type ListResponse = { workflows: AiStudioWorkflowRow[] };
@@ -96,4 +126,33 @@ export async function createAiStudioWorkflowAction(
   });
 
   return mapAiStudioWorkflowRow(aiStudioWorkflowRowSchema.parse(data.workflow));
+}
+
+export async function updateAiStudioWorkflowAction(
+  input: z.infer<typeof updateSchema>
+): Promise<AiStudioWorkflow> {
+  const parsed = updateSchema.parse(input);
+  const data = await invokeWorkflows<SingleResponse>({
+    action: "update",
+    brandProfileId: parsed.brandProfileId,
+    workflowId: parsed.workflowId,
+    name: parsed.name,
+    description: parsed.description,
+    nodes: parsed.nodes,
+    edges: parsed.edges,
+    metadata: parsed.metadata,
+  });
+
+  return mapAiStudioWorkflowRow(aiStudioWorkflowRowSchema.parse(data.workflow));
+}
+
+export async function deleteAiStudioWorkflowAction(
+  input: z.infer<typeof deleteSchema>
+): Promise<void> {
+  const parsed = deleteSchema.parse(input);
+  await invokeWorkflows<{ deleted: boolean }>({
+    action: "delete",
+    brandProfileId: parsed.brandProfileId,
+    workflowId: parsed.workflowId,
+  });
 }
