@@ -4,6 +4,8 @@ import { pipelineStageEnum } from "@continuum/contracts"
 import type {
   BulkContentPlan,
   MediaSearchResultsFrame,
+  OrganicPostCardData,
+  OrganicTrendChartData,
   PipelineStage,
   PlanItem,
   ProposedPlan,
@@ -25,38 +27,12 @@ export type ToolCallEvent = {
   result?: unknown
 }
 
-export type UiTrendChart = {
-  chartType: "bar"
-  title: string
-  windows: number[]
-  series: Array<{
-    label: "Trends" | "Events" | "Questions"
-    data: Array<{ window: number; value: number }>
-  }>
-  topSignals: Array<{
-    id: string
-    title: string
-    type: "trend" | "event" | "question"
-    confidence: number | null
-    platform: string | null
-    windowDays: number
-  }>
-}
+// Render shapes are owned by the contract (organicTrendChartDataSchema /
+// organicPostCardDataSchema) — alias them so the Frontend can never drift from
+// what the Backend emits.
+export type UiTrendChart = OrganicTrendChartData
 
-export type UiPostCard = {
-  draftId: string
-  jobId: string
-  brandId: string
-  platform: string
-  scheduledAt: string
-  caption: string | null
-  hashtags: string[]
-  imageUrl: string | null
-  format: string | null
-  topic: string | null
-  quality: { score: number; passed: boolean } | null
-  trendId: string | null
-}
+export type UiPostCard = OrganicPostCardData
 
 // PlanItem, PlanItemStatus, PlanEvidence, PlanStatus are re-exported from
 // @continuum/contracts above. UiPlanCard is the canonical proposed-plan shape.
@@ -200,6 +176,9 @@ export type ConversationMessage = {
   toolCalls?: ToolCallEvent[]
   uiCards?: UiCard[]
   mediaSearchResults?: MediaSearchResultsFrame[]
+  // Set when a turn failed; the partial `content` (if any) is preserved so the
+  // user keeps what streamed, and a styled error row + Retry can render below it.
+  error?: string
 }
 
 export type AgentChatInput = {

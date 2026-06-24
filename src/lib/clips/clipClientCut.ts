@@ -12,6 +12,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { runSingleSourceSpliceInWorker } from "@/StudioCanvas/workers/spliceWorkerClient"
 import { extractAudioWav } from "@/StudioCanvas/utils/clip/extractAudioWav"
 import { DEFAULT_CLIP_QUALITY, clipQualityToShortEdge, type ClipQuality } from "@/lib/clips/clipQuality"
+import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle"
 
 // Browser orchestration for clip generation: cut each section from the single
 // source video (mediabunny worker), upload the bytes straight to storage via a
@@ -43,6 +44,11 @@ export type CutAndPersistSectionParams = {
   // User-selected output quality; caps the on-device encode resolution. Defaults
   // to 1080p when omitted.
   quality?: ClipQuality
+  // Burn word-synced captions into the clip from the section's transcript words.
+  // Defaults to off when omitted.
+  captionsEnabled?: boolean
+  // Brand-derived caption colors/font; only applied when captions are enabled.
+  captionStyle?: CaptionStyle
   signal?: AbortSignal
   onStage?: (label: string) => void
 }
@@ -81,15 +87,21 @@ export async function cutAndPersistSection(
   params: CutAndPersistSectionParams,
   deps: ClipClientDeps = {},
 ): Promise<{ assetId: string }> {
-  const { brandId, sourceAssetId, sourceBlob, section, score, quality, signal, onStage } = params
+  const { brandId, sourceAssetId, sourceBlob, section, score, quality, captionsEnabled, captionStyle, signal, onStage } =
+    params
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)()
   const splice = deps.splice ?? runSingleSourceSpliceInWorker
 
+  const withCaptions = Boolean(captionsEnabled && section.words.length > 0)
   onStage?.("Cutting…")
   const spliced = await splice({
     blob: sourceBlob,
     ranges: section.keepRanges.map((r) => ({ startSec: r.startSec, endSec: r.endSec })),
     maxShortEdgePx: clipQualityToShortEdge(quality ?? DEFAULT_CLIP_QUALITY),
+    captionWords: withCaptions
+      ? section.words.map((w) => ({ text: w.text, startSec: w.startSec, endSec: w.endSec }))
+      : undefined,
+    captionStyle: withCaptions ? captionStyle : undefined,
     signal,
   })
 

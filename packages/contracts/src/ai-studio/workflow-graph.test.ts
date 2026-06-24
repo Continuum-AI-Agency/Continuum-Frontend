@@ -8,6 +8,7 @@ import {
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
   isValidConnection,
+  isTimelineMediaHandle,
   mediaKindForHandle,
   isMediaKindCompatibleWithHandle,
   createNodeData,
@@ -34,13 +35,15 @@ const nodes = [
   node("video1", "video", { video: "" }),
   node("extend1", "extendVideo", { prompt: "" }),
   node("videoGen1", "videoGen", { model: "kling-omni", prompt: "" }),
+  node("timeline1", "timelineEditor", { items: [{ id: "a", order: 0 }, { id: "b", order: 1 }] }),
 ];
 
 describe("node type enum + schema", () => {
-  it("exposes the twelve canvas node types", () => {
+  it("exposes the canvas node types including timelineEditor", () => {
     expect(STUDIO_NODE_TYPES).toContain("nanoGen");
     expect(STUDIO_NODE_TYPES).toContain("videoDecode");
-    expect(STUDIO_NODE_TYPES).toHaveLength(12);
+    expect(STUDIO_NODE_TYPES).toContain("timelineEditor");
+    expect(STUDIO_NODE_TYPES).toHaveLength(13);
   });
 
   it("rejects an unknown node type", () => {
@@ -184,6 +187,59 @@ describe("isValidConnection — connection limits", () => {
   it("reports the connection limit for a known handle", () => {
     expect(getTargetHandleConnectionLimit(node("e", "extendVideo"), "video", [])).toBe(1);
     expect(getTargetHandleConnectionLimit(node("n", "nanoGen"), "ref-image", [])).toBe(14);
+  });
+});
+
+describe("timelineEditor (Video Editor break-point node)", () => {
+  it("identifies media-* handles", () => {
+    expect(isTimelineMediaHandle("media-a")).toBe(true);
+    expect(isTimelineMediaHandle("clip-a")).toBe(false);
+    expect(isTimelineMediaHandle(null)).toBe(false);
+  });
+
+  it("outputs video and exposes one media handle per item", () => {
+    expect(getAllowedSourceHandles(node("t", "timelineEditor"))).toEqual(["video"]);
+    expect(getAllowedTargetHandles(nodes.find((n) => n.id === "timeline1")!)).toEqual(["media-a", "media-b"]);
+  });
+
+  it("accepts video, generated-video, and image stills on a media handle", () => {
+    expect(
+      isValidConnection({ source: "video1", sourceHandle: "video", target: "timeline1", targetHandle: "media-a" }, [], nodes),
+    ).toBe(true);
+    expect(
+      isValidConnection({ source: "extend1", sourceHandle: "video", target: "timeline1", targetHandle: "media-a" }, [], nodes),
+    ).toBe(true);
+    expect(
+      isValidConnection({ source: "image1", sourceHandle: "image", target: "timeline1", targetHandle: "media-a" }, [], nodes),
+    ).toBe(true);
+    expect(
+      isValidConnection({ source: "nano1", sourceHandle: "image", target: "timeline1", targetHandle: "media-a" }, [], nodes),
+    ).toBe(true);
+  });
+
+  it("rejects text sources and non-media handles", () => {
+    expect(
+      isValidConnection({ source: "string1", sourceHandle: "text", target: "timeline1", targetHandle: "media-a" }, [], nodes),
+    ).toBe(false);
+    expect(
+      isValidConnection({ source: "video1", sourceHandle: "video", target: "timeline1", targetHandle: "prompt" }, [], nodes),
+    ).toBe(false);
+  });
+
+  it("limits each media handle to a single source", () => {
+    expect(getTargetHandleConnectionLimit(nodes.find((n) => n.id === "timeline1")!, "media-a", [])).toBe(1);
+    const edges = [{ id: "e1", source: "video1", sourceHandle: "video", target: "timeline1", targetHandle: "media-a" }];
+    expect(
+      isValidConnection({ source: "extend1", sourceHandle: "video", target: "timeline1", targetHandle: "media-a" }, edges, nodes),
+    ).toBe(false);
+  });
+
+  it("seeds two media items and mp4 defaults", () => {
+    const { data, style } = createNodeData("timelineEditor");
+    expect((data.items as unknown[]).length).toBe(2);
+    expect(data.outputFormat).toBe("mp4");
+    expect(data.committed).toBe(false);
+    expect(style).toEqual({ width: 440, height: 520 });
   });
 });
 

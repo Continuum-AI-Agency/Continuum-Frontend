@@ -10,6 +10,7 @@ import { parseNdjson } from "@/components/organic/hooks/useGenerateReelVideos"
 import { checkSpliceSupport } from "@/StudioCanvas/utils/splice/webcodecsSupport"
 import { cutAndPersistSection, extractAndUploadAudio } from "@/lib/clips/clipClientCut"
 import { DEFAULT_CLIP_QUALITY, type ClipQuality } from "@/lib/clips/clipQuality"
+import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle"
 
 export type ClipSectionStatus = "pending" | "active" | "done" | "error"
 export type ClipSectionProgress = { index: number; title: string; status: ClipSectionStatus }
@@ -20,8 +21,10 @@ export type ClipGenerationProgress = {
   done: boolean
 }
 
+export type GenerateClipsOptions = { quality?: ClipQuality; captionsEnabled?: boolean; captionStyle?: CaptionStyle }
+
 export type UseGenerateClipsResult = {
-  generate: (asset: MediaAsset, quality?: ClipQuality) => Promise<void>
+  generate: (asset: MediaAsset, options?: GenerateClipsOptions) => Promise<void>
   isGenerating: boolean
   progress: ClipGenerationProgress | null
   dismiss: () => void
@@ -51,7 +54,10 @@ export function useGenerateClips(): UseGenerateClipsResult {
   React.useEffect(() => () => abortRef.current?.abort(), [])
 
   const generate = React.useCallback(
-    async (asset: MediaAsset, quality: ClipQuality = DEFAULT_CLIP_QUALITY) => {
+    async (asset: MediaAsset, options: GenerateClipsOptions = {}) => {
+      const quality = options.quality ?? DEFAULT_CLIP_QUALITY
+      const captionsEnabled = options.captionsEnabled ?? false
+      const captionStyle = options.captionStyle
       if (asset.kind !== "video") return
       if (!asset.signedUrl) {
         show({ title: "Can't generate clips", description: "This video isn't ready yet.", variant: "error" })
@@ -138,6 +144,8 @@ export function useGenerateClips(): UseGenerateClipsResult {
                   section,
                   score: frame.score,
                   quality,
+                  captionsEnabled,
+                  captionStyle,
                   signal: controller.signal,
                 })
                 setSection(section.index, "done")

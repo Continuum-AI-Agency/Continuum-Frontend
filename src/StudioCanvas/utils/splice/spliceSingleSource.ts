@@ -1,6 +1,8 @@
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 import { appendRange, loadMediabunny, throwIfAborted } from './appendRange';
 import { computeCappedDimensions } from './cappedDimensions';
+import { buildCaptionCues, type CaptionWord } from './captionCues';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 
 // Single-source variant of the splice engine: open ONE input and concatenate N
 // ordered keep-ranges into one MP4, shifting timestamps by a cumulative offset.
@@ -33,6 +35,11 @@ export type SpliceSingleSourceOptions = {
   // Downscale the output so its short edge is at most this many pixels (e.g. 1080
   // or 720). Omitted/0 keeps the source resolution. Aspect ratio is preserved.
   maxShortEdgePx?: number;
+  // Source-time transcript words for this clip. When present, word-synced captions
+  // are re-mapped onto the cut timeline and burned into each frame.
+  captionWords?: CaptionWord[];
+  // Brand-derived caption colors/font. Falls back to the renderer default.
+  captionStyle?: CaptionStyle;
   videoBitrate?: number;
   audioBitrate?: number;
   onProgress?: (progress: SpliceProgress) => void;
@@ -77,6 +84,17 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
     if (clamped.length === 0) {
       throw new Error('Single-source splice ranges produced zero duration');
     }
+
+    // Re-map the source-time words onto the same concatenated output timeline the
+    // append loop builds (cumulative range durations), so caption timing matches the
+    // cut frame-for-frame. Built from `clamped` so clamping stays consistent.
+    const cues =
+      options.captionWords && options.captionWords.length > 0
+        ? buildCaptionCues(
+            options.captionWords,
+            clamped.map((r) => ({ startSec: r.startSec, endSec: r.endSec })),
+          )
+        : null;
 
     const offscreen = new OffscreenCanvas(targetWidth, targetHeight);
     const ctx = offscreen.getContext('2d');
@@ -125,6 +143,8 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
         targetHeight,
         cumulativeOffset,
         muteAudio: range.muteAudio,
+        cues,
+        captionStyle: options.captionStyle,
         signal,
         onRangeProgress: (processedSecInRange) => {
           const progress = totalDuration > 0 ? (processedDuration + processedSecInRange) / totalDuration : 0;

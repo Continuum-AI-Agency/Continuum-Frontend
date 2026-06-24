@@ -16,10 +16,14 @@ export type SkillStatus = z.infer<typeof skillStatusSchema>;
 // `directives` is the body injected into the agent's context when the skill is
 // applied (picked / @-mentioned / loaded on demand). `slug` is a stable token
 // for @-mention rendering; `name` is the human label.
+// `brandId` is null for first-party global templates (`isTemplate: true`), which
+// are curated, cross-brand, and seed-managed (never user-editable). A regular
+// brand skill always has a `brandId` and `isTemplate: false`.
 export const skillSchema = z
   .object({
     id: z.string().min(1),
-    brandId: z.string().min(1),
+    brandId: z.string().min(1).nullable(),
+    isTemplate: z.boolean().default(false),
     createdBy: z.string().nullable().optional(),
     name: z.string().min(1),
     slug: z.string().nullable().optional(),
@@ -35,7 +39,8 @@ export const skillSchema = z
 export type Skill = z.infer<typeof skillSchema>;
 
 // Lightweight shape for the prompt-injected skill index (name + description only,
-// never the full directives) and for mention suggestions.
+// never the full directives) and for mention suggestions. `isTemplate` lets the
+// FE split brand skills from the first-party library.
 export const skillSummarySchema = z
   .object({
     id: z.string().min(1),
@@ -43,6 +48,7 @@ export const skillSummarySchema = z
     slug: z.string().nullable().optional(),
     kind: skillKindSchema,
     description: z.string().nullable().optional(),
+    isTemplate: z.boolean().default(false),
   })
   .strict();
 export type SkillSummary = z.infer<typeof skillSummarySchema>;

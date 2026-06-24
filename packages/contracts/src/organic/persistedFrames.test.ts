@@ -14,6 +14,13 @@ describe("PERSISTED_*_FRAME_TYPES", () => {
     expect(PERSISTED_CARD_FRAME_TYPES).toContain("draft.blueprint_ready");
   });
 
+  it("includes the brand-report-craft cards so the loop survives reload", () => {
+    expect(PERSISTED_CARD_FRAME_TYPES).toContain("ui.brand_book");
+    expect(PERSISTED_CARD_FRAME_TYPES).toContain("ui.readiness_scorecard");
+    expect(PERSISTED_CARD_FRAME_TYPES).toContain("ui.brand_book_proposal");
+    expect(PERSISTED_CARD_FRAME_TYPES).toContain("ui.brand_book_applied");
+  });
+
   it("keeps tool + media frames in the aux set", () => {
     expect(PERSISTED_AUX_FRAME_TYPES).toEqual(["tool.call", "tool.result", "media.search_results"]);
   });
@@ -49,6 +56,15 @@ describe("persistedFrameKey", () => {
 
   it("keys draft.blueprint_ready by draftId", () => {
     expect(persistedFrameKey("draft.blueprint_ready", { draftId: "d7" }, 0)).toBe("blueprint:d7");
+  });
+
+  it("keys the brand-report-craft cards (brand_book/scorecard/applied by brandId, proposal by proposalId)", () => {
+    expect(persistedFrameKey("ui.brand_book", { brandId: "b1" }, 0)).toBe("brandbook:b1");
+    expect(persistedFrameKey("ui.readiness_scorecard", { brandId: "b1" }, 0)).toBe("scorecard:b1");
+    expect(persistedFrameKey("ui.brand_book_proposal", { proposalId: "prop_3" }, 0)).toBe(
+      "brandbook_proposal:prop_3",
+    );
+    expect(persistedFrameKey("ui.brand_book_applied", { brandId: "b1" }, 0)).toBe("brandbook_applied:b1");
   });
 
   it("keeps tool.call and tool.result under distinct keys", () => {

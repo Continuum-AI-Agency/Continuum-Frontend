@@ -1,6 +1,10 @@
 import type { MediaSearchResultsFrame } from "@continuum/contracts";
 import type { OrganicSessionMessage } from "@/lib/organic/agent-sessions";
-import { parseOrganicStreamEvent, postListCardFromToolResult } from "./streamEventParser";
+import {
+  parseOrganicStreamEvent,
+  postListCardFromToolResult,
+  type ParsedPlanStatus,
+} from "./streamEventParser";
 import type { BulkRunRef } from "./useOrganicAgentReducer";
 import type { ConversationMessage, PipelineCardState, ToolCallEvent, UiCard } from "./types";
 
@@ -8,6 +12,7 @@ export type RestoredSession = {
   messages: ConversationMessage[];
   pipelineCards: Array<Partial<PipelineCardState> & { jobId: string }>;
   bulkRuns: BulkRunRef[];
+  planStatuses: ParsedPlanStatus[];
 };
 
 /**
@@ -20,6 +25,7 @@ export type RestoredSession = {
 export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): RestoredSession {
   const pipelineCards: RestoredSession["pipelineCards"] = [];
   const bulkRuns: BulkRunRef[] = [];
+  const planStatuses: ParsedPlanStatus[] = [];
   // Storyboard frames arrive from the (separate) blueprint job, usually after the
   // live stream closed, so on reload they're merged into the restored card by draftId.
   const blueprintsByDraftId = new Map<string, string[]>();
@@ -43,6 +49,9 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
           break;
         case "bulkRun":
           bulkRuns.push({ runId: parsed.run.runId, planId: parsed.run.planId, total: parsed.run.total });
+          break;
+        case "planStatus":
+          planStatuses.push(parsed.event);
           break;
         case "toolCall":
           toolCallsById.set(parsed.event.toolCallId, parsed.event);
@@ -100,5 +109,5 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
     }
   }
 
-  return { messages, pipelineCards, bulkRuns };
+  return { messages, pipelineCards, bulkRuns, planStatuses };
 }

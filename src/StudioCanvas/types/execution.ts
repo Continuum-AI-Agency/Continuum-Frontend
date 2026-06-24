@@ -80,6 +80,8 @@ export interface GenerationPayload {
   medium: 'image' | 'video';
   prompt: string;
   negativePrompt?: string;
+  // Creative-direction skill ids resolved + folded into the prompt by the Backend.
+  skillIds?: string[];
   aspectRatio?: string;
   resolution?: string;
   imageSize?: '512px' | '1K' | '2K' | '4K';

@@ -491,6 +491,7 @@ export function buildNanoGenPayload(
     resolution,
     imageSize: isHighFidelityNanoModel ? imageSize : undefined,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
   };
 }
 
@@ -657,6 +658,7 @@ export function buildVeoPayload(
     imageReferences,
     // seedance-2.0 uses imageReferences (data/mimeType/filename); original referenceImages intentionally omitted to avoid duplicate payload
     referenceImages: model !== 'seedance-2.0' && referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
   };
 }
 
@@ -724,6 +726,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       weight: img.weight,
       referenceType: img.referenceType,
     })),
+    skill_ids: payload.skillIds,
   };
 }
 

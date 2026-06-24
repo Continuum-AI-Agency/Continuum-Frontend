@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ChevronRight, ImageIcon, Paperclip, Video, Workflow, X } from "lucide-react";
+import { ChevronRight, ImageIcon, Paperclip, Square, Video, Workflow, X } from "lucide-react";
 
 import { Attachments, type Attachment } from "./attachments";
 import { SpeechInput } from "./speech-input";
@@ -80,12 +80,18 @@ type PromptInputProps = {
   ) => void;
   disabled?: boolean;
   placeholder?: string;
+  ariaLabel?: string;
   actions?: React.ReactNode;
   className?: string;
   mentionProvider?: AgentMentionProvider;
   mentionSource?: AgentMentionReference["source"];
   queuedMentionSuggestions?: AgentMentionSuggestion[];
   onQueuedMentionSuggestionsConsumed?: () => void;
+  // While a turn is streaming, the submit button becomes a stop button that
+  // calls onStop (the consumer aborts its stream). Stays enabled so the user
+  // can always interrupt a running turn.
+  isStreaming?: boolean;
+  onStop?: () => void;
 };
 
 type ActiveMention = {
@@ -235,12 +241,15 @@ export function PromptInput({
   onSubmit,
   disabled,
   placeholder,
+  ariaLabel = "Message input",
   actions,
   className,
   mentionProvider,
   mentionSource = "organic",
   queuedMentionSuggestions,
   onQueuedMentionSuggestionsConsumed,
+  isStreaming = false,
+  onStop,
 }: PromptInputProps) {
   const [value, setValue] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
@@ -550,7 +559,7 @@ export function PromptInput({
               dangerouslySetInnerHTML={{ __html: highlightHtml }}
             />
             <InputGroupTextarea
-              aria-label="Message Jaina Analyst"
+              aria-label={ariaLabel}
               className={cn(
                 "relative min-h-[74px] max-h-[160px] overflow-y-auto border-none bg-transparent py-3.5 text-sm leading-6 focus-visible:ring-0",
                 "placeholder:text-muted-foreground/85"
@@ -563,7 +572,7 @@ export function PromptInput({
                 const target = event.currentTarget;
                 setActiveMention(findActiveMention(target.value, target.selectionStart));
               }}
-              placeholder={placeholder ?? "Ask Jaina..."}
+              placeholder={placeholder ?? "Send a message…"}
               ref={textareaRef}
               value={value}
             />
@@ -714,15 +723,27 @@ export function PromptInput({
                   <Paperclip className="size-4" />
                 </InputGroupButton>
 
-                <Button
-                  aria-label="Send message"
-                  className="h-8 rounded-lg px-2.5"
-                  disabled={!canSubmit || disabled}
-                  size="icon"
-                  type="submit"
-                >
-                  <ArrowUpIcon className="size-4" />
-                </Button>
+                {isStreaming ? (
+                  <Button
+                    aria-label="Stop generating"
+                    className="h-8 rounded-lg px-2.5"
+                    onClick={onStop}
+                    size="icon"
+                    type="button"
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </Button>
+                ) : (
+                  <Button
+                    aria-label="Send message"
+                    className="h-8 rounded-lg px-2.5"
+                    disabled={!canSubmit || disabled}
+                    size="icon"
+                    type="submit"
+                  >
+                    <ArrowUpIcon className="size-4" />
+                  </Button>
+                )}
               </motion.div>
             </div>
           </InputGroupAddon>

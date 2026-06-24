@@ -110,7 +110,9 @@ describe("restoreSessionFromMessages", () => {
 
   it("ignores unparseable frames without throwing", () => {
     const { messages, pipelineCards } = restoreSessionFromMessages([
-      message({ uiCardFrames: [{ type: "ui.plan_card", data: {} }, null, "garbage", 42] as unknown[] }),
+      message({
+        uiCardFrames: [{ type: "ui.plan_card", data: {} }, null, "garbage", 42] as unknown as OrganicSessionMessage["uiCardFrames"],
+      }),
     ])
 
     expect(messages[0]!.uiCards).toBeUndefined()
@@ -168,5 +170,44 @@ describe("restoreSessionFromMessages", () => {
 
     expect(messages[0]!.mediaSearchResults).toHaveLength(1)
     expect(messages[0]!.mediaSearchResults![0]).toMatchObject({ type: "media.search_results" })
+  })
+
+  it("collects ui.plan_status frames so the reducer can reseed per-item status", () => {
+    const { planStatuses } = restoreSessionFromMessages([
+      message({
+        uiCardFrames: [
+          { type: "ui.plan_status", data: { planId: "plan_1", itemId: "item_1", status: "completed" } },
+          { type: "ui.plan_status", data: { planId: "plan_1", itemId: "item_2", status: "executing" } },
+        ],
+      }),
+    ])
+
+    expect(planStatuses).toEqual([
+      { planId: "plan_1", itemId: "item_1", status: "completed", jobId: undefined, draftId: undefined },
+      { planId: "plan_1", itemId: "item_2", status: "executing", jobId: undefined, draftId: undefined },
+    ])
+  })
+
+  it("merges a draft.blueprint_ready storyboard onto its pipeline card by draftId", () => {
+    const { pipelineCards } = restoreSessionFromMessages([
+      message({
+        uiCardFrames: [
+          { type: "ui.pipeline_card", data: { jobId: "job_1", brandId: "b1", status: "running", draftId: "d1" } },
+          {
+            type: "draft.blueprint_ready",
+            data: {
+              jobId: "blueprint_job",
+              brandId: "b1",
+              draftId: "d1",
+              previews: [{ role: "scene_1", signedUrl: "https://cdn/scene_1.png" }],
+            },
+          },
+        ],
+      }),
+    ])
+
+    expect(pipelineCards).toHaveLength(1)
+    expect(pipelineCards[0]!.preview?.images).toEqual(["https://cdn/scene_1.png"])
+    expect(pipelineCards[0]!.checkpoint?.blueprintReady).toBe(true)
   })
 })

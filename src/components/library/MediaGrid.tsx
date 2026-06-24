@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
-import { Loader2 } from "lucide-react";
+import { ImagePlus, Loader2 } from "lucide-react";
 import type { MediaAsset } from "@continuum/contracts";
+import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle";
 import { stagger } from "@/components/ui/Motion";
 import { MediaCard } from "./MediaCard";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   assets: MediaAsset[];
   showBoundingBoxes?: boolean;
+  captionStyle?: CaptionStyle;
   emptyHint?: string;
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -29,6 +31,7 @@ const GRID_CLASS = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid
 export function MediaGrid({
   assets,
   showBoundingBoxes = false,
+  captionStyle,
   emptyHint,
   onLoadMore,
   hasMore = false,
@@ -38,6 +41,9 @@ export function MediaGrid({
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // assets.length is intentional: re-arm the IntersectionObserver after each loaded
+  // page so the sentinel keeps firing as the grid grows.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: assets.length re-arms the observer per page
   useEffect(() => {
     if (!onLoadMore || !hasMore) return;
     const el = sentinelRef.current;
@@ -54,11 +60,14 @@ export function MediaGrid({
 
   if (assets.length === 0) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
-        <p className="text-sm">{emptyHint ?? "No media yet."}</p>
-        {!emptyHint && (
-          <p className="text-xs text-muted-foreground/60">Upload images or videos to get started.</p>
-        )}
+      <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 text-muted-foreground">
+        <ImagePlus className="size-8 text-muted-foreground/30" />
+        <div className="flex flex-col items-center gap-1 text-center">
+          <p className="text-sm">{emptyHint ?? "No media yet."}</p>
+          {!emptyHint && (
+            <p className="text-xs text-muted-foreground/60">Upload images or videos, or drop files anywhere on the page.</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -67,8 +76,8 @@ export function MediaGrid({
     <div className="flex flex-col gap-4">
       {reduceMotion ? (
         <div className={cn(GRID_CLASS, className)}>
-          {assets.map((asset) => (
-            <MediaCard key={asset.id} asset={asset} showBoundingBoxes={showBoundingBoxes} />
+          {assets.map((asset, i) => (
+            <MediaCard key={asset.id} asset={asset} index={i} showBoundingBoxes={showBoundingBoxes} captionStyle={captionStyle} />
           ))}
         </div>
       ) : (
@@ -79,9 +88,9 @@ export function MediaGrid({
           animate="visible"
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            {assets.map((asset) => (
+            {assets.map((asset, i) => (
               <motion.div key={asset.id} layout variants={cardVariants} exit="exit">
-                <MediaCard asset={asset} showBoundingBoxes={showBoundingBoxes} />
+                <MediaCard asset={asset} index={i} showBoundingBoxes={showBoundingBoxes} captionStyle={captionStyle} />
               </motion.div>
             ))}
           </AnimatePresence>

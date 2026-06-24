@@ -11,6 +11,11 @@ const cacheComponentsEnabled = process.env.NEXT_CACHE_COMPONENTS === "1";
 const workspaceRoot = path.resolve(process.cwd(), "..");
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/sign/**" },
+    ],
+  },
   // Disable fetch cache in development to prevent infinite cache growth
   ...(process.env.NODE_ENV === 'development' && {
     cacheHandler: require.resolve('./cache-handler.js'),

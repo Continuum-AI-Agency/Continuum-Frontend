@@ -41,6 +41,7 @@ export type PanelAction =
   | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown }
   | { type: "STREAM_COMPLETE" }
   | { type: "STREAM_ERROR"; error: string }
+  | { type: "RETRY_FROM_ASSISTANT"; assistantMessageId: string }
   | { type: "STREAM_UI_CARD"; card: UiCard }
   | { type: "STREAM_MEDIA_SEARCH_RESULTS"; frame: MediaSearchResultsFrame }
   | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
@@ -55,6 +56,12 @@ export type PanelAction =
   | { type: "LOAD_MESSAGES_START" }
 
 const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES
+
+// Unique per assistant turn. A random suffix avoids same-millisecond collisions
+// (two turns opened in the same tick would otherwise share an id and a React key).
+function newAssistantMessageId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-assistant`
+}
 
 function buildStages(
   currentStage: PipelineStage,
@@ -179,7 +186,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       return { ...state, inputValue: action.value }
 
     case "SUBMIT_USER_MESSAGE": {
-      const streamingId = `msg-${Date.now()}-assistant`
+      const streamingId = newAssistantMessageId()
       return {
         ...state,
         messages: [
@@ -193,7 +200,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     }
 
     case "BEGIN_STREAMING": {
-      const streamingId = `msg-${Date.now()}-assistant`
+      const streamingId = newAssistantMessageId()
       return {
         ...state,
         messages: [
@@ -274,11 +281,25 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         ...state,
         streamingMessageId: null,
         messages: state.messages.map((m) =>
-          m.id === state.streamingMessageId
-            ? { ...m, content: m.content || `Error: ${action.error}` }
-            : m
+          m.id === state.streamingMessageId ? { ...m, error: action.error } : m
         ),
       }
+
+    case "RETRY_FROM_ASSISTANT": {
+      // Drop the failed/stale assistant turn (and anything after it) and re-open
+      // a fresh empty assistant message; the caller re-runs the prior user turn.
+      const idx = state.messages.findIndex((m) => m.id === action.assistantMessageId)
+      if (idx === -1) return state
+      const streamingId = newAssistantMessageId()
+      return {
+        ...state,
+        messages: [
+          ...state.messages.slice(0, idx),
+          { id: streamingId, role: "assistant" as const, content: "" },
+        ],
+        streamingMessageId: streamingId,
+      }
+    }
 
     case "JOB_UPDATE":
       return {

@@ -129,6 +129,8 @@ export type BackendChatImageRequestPayload = {
   reference_video?: { data: string; mime_type: string; filename?: string };
   image_references?: { data?: string; image_url?: string; mime_type: string; filename?: string }[];
   negative_prompt?: string;
+  // Creative-direction skill ids; the Backend folds their directives into the prompt.
+  skill_ids?: string[];
   seed?: number;
   cfg_scale?: number;
   steps?: number;

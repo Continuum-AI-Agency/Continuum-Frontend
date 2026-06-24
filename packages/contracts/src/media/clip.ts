@@ -52,7 +52,9 @@ export const clipSectionSchema = z
 /**
  * A section enriched with the deterministic cut plan: the keep-ranges (section
  * span minus silence gaps) the browser splices into one clip. Computed in the
- * backend worker, not by the LLM.
+ * backend worker, not by the LLM. `words` are the section's transcript words that
+ * fall inside the keep-ranges (source-time), carried so the browser can burn in
+ * word-synced captions; it re-maps them onto the cut (dead-space-removed) timeline.
  */
 export const clipPlanSectionSchema = z
   .object({
@@ -64,6 +66,7 @@ export const clipPlanSectionSchema = z
     hookLine: z.string().nullable().optional(),
     transcriptExcerpt: z.string(),
     keepRanges: z.array(clipKeepRangeSchema).min(1),
+    words: z.array(clipWordSchema),
   })
   .strict();
 

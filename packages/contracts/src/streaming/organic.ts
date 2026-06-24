@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { mediaSearchResultsFrameSchema } from "./media";
+import {
+  uiBrandBookFrameSchema,
+  uiReadinessScorecardFrameSchema,
+  uiBrandBookProposalFrameSchema,
+  uiBrandBookAppliedFrameSchema,
+} from "./brand-report-craft";
 
 const jobEventDataSchema = z.object({
   jobId: z.string().min(1),
@@ -567,6 +573,10 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   uiPipelineCardSchema,
   mediaSearchResultsFrameSchema,
   contextMediaResolutionSchema,
+  uiBrandBookFrameSchema,
+  uiReadinessScorecardFrameSchema,
+  uiBrandBookProposalFrameSchema,
+  uiBrandBookAppliedFrameSchema,
 ]);
 
 export type OrganicStreamFrame = z.infer<typeof organicStreamFrameSchema>;

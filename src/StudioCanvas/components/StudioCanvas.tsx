@@ -22,7 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { AtSign, FolderOpen, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AtSign, FolderOpen, Plus, ScanLine, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -48,6 +48,7 @@ import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
+import { CreateSkillFromSelectionDialog } from './CreateSkillFromSelectionDialog';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
@@ -744,7 +745,14 @@ function Flow({
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
+  const [isCreateSkillOpen, setIsCreateSkillOpen] = useState(false);
+  const [skillSelectionNodes, setSkillSelectionNodes] = useState<StudioNode[]>([]);
   const hydratedPlannerSeedRef = useRef<string | null>(null);
+
+  const openCreateSkillFromSelection = useCallback(() => {
+    setSkillSelectionNodes(nodes.filter((node) => node.selected));
+    setIsCreateSkillOpen(true);
+  }, [nodes]);
 
   // Places unfurled media as unattached reference nodes, laid out in a centered
   // row at the viewport center. Nodes have no edges, so they are inert references
@@ -1293,6 +1301,15 @@ function Flow({
             Import from Instagram
           </ContextMenuItem>
 
+          <ContextMenuItem
+            inset
+            disabled={!nodes.some((node) => node.selected)}
+            onSelect={openCreateSkillFromSelection}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Create skill from selection
+          </ContextMenuItem>
+
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
               <ScanLine className="mr-2 h-4 w-4" />
@@ -1336,6 +1353,12 @@ function Flow({
         open={isLoadWorkflowOpen}
         onOpenChange={setIsLoadWorkflowOpen}
         showTrigger={false}
+      />
+      <CreateSkillFromSelectionDialog
+        open={isCreateSkillOpen}
+        onOpenChange={setIsCreateSkillOpen}
+        brandId={brandProfileId}
+        nodes={skillSelectionNodes}
       />
     </div>
   );

@@ -5,6 +5,8 @@ import { mediaKindSchema, mediaSourceSchema } from "@continuum/contracts";
 import type { MediaKind, MediaSource } from "@continuum/contracts";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { fetchMediaAssets, fetchMediaCollections, fetchStorageUsedBytes } from "@/lib/media/fetchers.server";
+import { fetchBrandStyle } from "@/lib/ai-studio/brandStyle.server";
+import { buildCaptionStyle } from "@/lib/clips/clipCaptionStyle";
 import { isPaidTier } from "@/lib/media/tier";
 import { LibraryViewer } from "@/components/library/LibraryViewer";
 
@@ -44,10 +46,11 @@ async function LibraryContent({
     redirect("/onboarding");
   }
 
-  const [assets, collections, storageUsedBytes] = await Promise.all([
+  const [assets, collections, storageUsedBytes, brandStyle] = await Promise.all([
     fetchMediaAssets(activeBrandId, { collectionId, source, kind }),
     fetchMediaCollections(activeBrandId),
     fetchStorageUsedBytes(activeBrandId),
+    fetchBrandStyle(activeBrandId),
   ]);
 
   return (
@@ -57,6 +60,7 @@ async function LibraryContent({
       initialAssets={assets}
       initialCollections={collections}
       storageUsedBytes={storageUsedBytes}
+      captionStyle={buildCaptionStyle(brandStyle)}
       selectedCollectionId={collectionId ?? null}
       selectedSource={source ?? null}
       selectedKind={kind ?? null}

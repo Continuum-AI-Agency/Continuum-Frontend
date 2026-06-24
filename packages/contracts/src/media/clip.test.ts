@@ -53,6 +53,7 @@ describe("clipPlanSchema", () => {
           summary: "opening",
           transcriptExcerpt: "hi",
           keepRanges: [{ startSec: 0, endSec: 12 }, { startSec: 14, endSec: 30 }],
+          words: [{ text: "hi", startSec: 0, endSec: 0.4 }],
         },
       ],
     });
@@ -70,10 +71,43 @@ describe("clipPlanSchema", () => {
           summary: "opening",
           transcriptExcerpt: "hi",
           keepRanges: [],
+          words: [],
         },
       ],
     });
     expect(noRanges.success).toBe(false);
+  });
+
+  it("carries the section's word timings and rejects a malformed word", () => {
+    const base = {
+      index: 0,
+      startSec: 0,
+      endSec: 30,
+      title: "Intro",
+      summary: "opening",
+      transcriptExcerpt: "hi there",
+      keepRanges: [{ startSec: 0, endSec: 18 }],
+    };
+    const ok = clipPlanSchema.safeParse({
+      sourceAssetId: "asset-1",
+      durationSec: 60,
+      sections: [{ ...base, words: [{ text: "hi", startSec: 0, endSec: 0.4 }, { text: "there", startSec: 0.4, endSec: 0.9 }] }],
+    });
+    expect(ok.success).toBe(true);
+
+    const missingWords = clipPlanSchema.safeParse({
+      sourceAssetId: "asset-1",
+      durationSec: 60,
+      sections: [base],
+    });
+    expect(missingWords.success).toBe(false);
+
+    const badWord = clipPlanSchema.safeParse({
+      sourceAssetId: "asset-1",
+      durationSec: 60,
+      sections: [{ ...base, words: [{ text: "hi", startSec: -1, endSec: 0.4 }] }],
+    });
+    expect(badWord.success).toBe(false);
   });
 });
 
@@ -138,6 +172,7 @@ describe("registerClipRequestSchema", () => {
         summary: "opening",
         transcriptExcerpt: "hi",
         keepRanges: [{ startSec: 0, endSec: 18 }],
+        words: [{ text: "hi", startSec: 0, endSec: 0.4 }],
       },
       score: { status: "pending", hookPotential: null, comparedAgainst: null, computedAt: "2026-06-15T00:00:00Z" },
     });
@@ -178,6 +213,7 @@ const PLAN_READY_PLAN = {
       summary: "opening",
       transcriptExcerpt: "hi",
       keepRanges: [{ startSec: 0, endSec: 18 }],
+      words: [{ text: "hi", startSec: 0, endSec: 0.4 }],
     },
   ],
 };

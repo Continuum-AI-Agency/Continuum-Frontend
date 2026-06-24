@@ -1,8 +1,10 @@
 import {
   organicChatMessageDtoSchema,
   organicChatSessionDtoSchema,
+  persistedOrganicFrameSchema,
   type OrganicChatMessageDto,
   type OrganicChatSessionDto,
+  type PersistedOrganicFrame,
 } from "@continuum/contracts";
 import { request } from "@/lib/api/http";
 import { agentMentionMetadataSchema, type AgentMentionMetadata } from "@/lib/agent-references";
@@ -24,8 +26,8 @@ export type OrganicSessionMessage = {
   role: "user" | "assistant";
   content: string;
   metadata?: AgentMentionMetadata;
-  /** Raw embedded card frames persisted with the message; replayed on load. */
-  uiCardFrames: unknown[];
+  /** Persisted card frames stored with the message; replayed on load. */
+  uiCardFrames: PersistedOrganicFrame[];
   createdAt: string;
 };
 
@@ -78,12 +80,22 @@ function mapSession(row: OrganicChatSessionDto): OrganicSession {
   };
 }
 
-// metadata is loose (unknown) in the contract; narrow it to the Frontend's
-// agent-mention shape here, dropping it if it doesn't match rather than failing.
+// The wire DTO keeps metadata/uiCards loose (the Backend produces them from
+// unknown DB JSON). Narrow them here against the shared @continuum/contracts
+// schemas so the contract still owns the typed shapes — dropping anything that
+// doesn't match rather than failing, the same resilience the reload path needs.
 function narrowMetadata(metadata: unknown): AgentMentionMetadata | undefined {
   if (metadata === undefined || metadata === null) return undefined;
   const parsed = agentMentionMetadataSchema.safeParse(metadata);
   return parsed.success ? parsed.data : undefined;
+}
+
+function toPersistedFrames(uiCards: unknown[] | undefined): PersistedOrganicFrame[] {
+  if (!Array.isArray(uiCards)) return [];
+  return uiCards.flatMap((frame) => {
+    const parsed = persistedOrganicFrameSchema.safeParse(frame);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 function mapMessage(
@@ -97,7 +109,7 @@ function mapMessage(
     role: row.role,
     content: row.content,
     metadata: narrowMetadata(row.metadata),
-    uiCardFrames: Array.isArray(row.uiCards) ? row.uiCards : [],
+    uiCardFrames: toPersistedFrames(row.uiCards),
     createdAt: row.createdAt ?? "",
   };
 }

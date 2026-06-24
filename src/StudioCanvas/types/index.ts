@@ -36,6 +36,9 @@ export interface NanoGenNodeData extends BaseNodeData {
   imageSize?: '512px' | '1K' | '2K' | '4K';
   maxReferenceImages?: number;
   stylePreset?: ImageStylePreset;
+  // Creative-direction skill ids applied to this generation; the Backend resolves
+  // their directives and folds them into the prompt.
+  skillIds?: string[];
   seed?: number;
   steps?: number;
   guidance?: number;
@@ -113,6 +116,9 @@ export interface VideoGenNodeData extends BaseNodeData {
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
+  // Creative-direction skill ids applied to this generation; the Backend resolves
+  // their directives and folds them into the prompt.
+  skillIds?: string[];
   aspectRatio?: '16:9' | '9:16';
   resolution?: '720p' | '1080p' | '2K' | '4K' | '4k';
   durationSeconds?: 4 | 6 | 8;

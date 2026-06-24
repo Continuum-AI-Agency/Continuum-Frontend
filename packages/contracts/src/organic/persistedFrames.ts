@@ -30,6 +30,10 @@ export const PERSISTED_CARD_FRAME_TYPES = [
   "ui.skill_proposal",
   "ui.plan_status",
   "draft.blueprint_ready",
+  "ui.brand_book",
+  "ui.readiness_scorecard",
+  "ui.brand_book_proposal",
+  "ui.brand_book_applied",
 ] as const;
 
 /**
@@ -93,6 +97,14 @@ export const persistedCardKey = (type: string, data: Record<string, unknown>): s
       return `plan_status:${readString(data, "itemId")}`;
     case "draft.blueprint_ready":
       return `blueprint:${readString(data, "draftId")}`;
+    case "ui.brand_book":
+      return `brandbook:${readString(data, "brandId")}`;
+    case "ui.readiness_scorecard":
+      return `scorecard:${readString(data, "brandId")}`;
+    case "ui.brand_book_proposal":
+      return `brandbook_proposal:${readString(data, "proposalId")}`;
+    case "ui.brand_book_applied":
+      return `brandbook_applied:${readString(data, "brandId")}`;
     default:
       return `${type}:${readString(data, "id")}`;
   }

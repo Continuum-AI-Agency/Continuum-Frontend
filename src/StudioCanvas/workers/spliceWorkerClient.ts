@@ -2,8 +2,11 @@ import type {
   SingleSourceWorkerRange,
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
+  TimelineWorkerItem,
   WorkerClipInput,
 } from './spliceWorkerProtocol';
+import type { CaptionWord } from '../utils/splice/captionCues';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 
 export type WorkerSpliceProgress = {
   progress: number;
@@ -24,6 +27,17 @@ export type RunSingleSourceSpliceInWorkerOptions = {
   blob: Blob;
   ranges: SingleSourceWorkerRange[];
   maxShortEdgePx?: number;
+  captionWords?: CaptionWord[];
+  captionStyle?: CaptionStyle;
+  videoBitrate?: number;
+  audioBitrate?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: WorkerSpliceProgress) => void;
+  workerFactory?: () => Worker;
+};
+
+export type RunTimelineInWorkerOptions = {
+  items: TimelineWorkerItem[];
   videoBitrate?: number;
   audioBitrate?: number;
   signal?: AbortSignal;
@@ -58,7 +72,7 @@ function createDefaultWorker(): Worker {
 // support/error/crash/abort. The start message (a `start` or `start_single_source`
 // frame) is the only difference between the two public entry points.
 function runWorkerJob(
-  startMessage: Extract<SpliceWorkerInbound, { kind: 'start' | 'start_single_source' }>,
+  startMessage: Extract<SpliceWorkerInbound, { kind: 'start' | 'start_single_source' | 'start_timeline' }>,
   options: WorkerJobOptions,
 ): Promise<WorkerSpliceResult> {
   const { signal, onProgress, workerFactory } = options;
@@ -181,12 +195,22 @@ export function runSpliceInWorker(
 export function runSingleSourceSpliceInWorker(
   options: RunSingleSourceSpliceInWorkerOptions,
 ): Promise<WorkerSpliceResult> {
-  const { blob, ranges, maxShortEdgePx, videoBitrate, audioBitrate } = options;
+  const { blob, ranges, maxShortEdgePx, captionWords, captionStyle, videoBitrate, audioBitrate } = options;
   if (ranges.length < 1) {
     return Promise.reject(new Error('Single-source splice requires at least one range'));
   }
   return runWorkerJob(
-    { kind: 'start_single_source', blob, ranges, maxShortEdgePx, videoBitrate, audioBitrate },
+    { kind: 'start_single_source', blob, ranges, maxShortEdgePx, captionWords, captionStyle, videoBitrate, audioBitrate },
     options,
   );
+}
+
+export function runTimelineInWorker(
+  options: RunTimelineInWorkerOptions,
+): Promise<WorkerSpliceResult> {
+  const { items, videoBitrate, audioBitrate } = options;
+  if (items.length < 1) {
+    return Promise.reject(new Error('Timeline requires at least one item'));
+  }
+  return runWorkerJob({ kind: 'start_timeline', items, videoBitrate, audioBitrate }, options);
 }

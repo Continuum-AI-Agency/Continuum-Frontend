@@ -1,9 +1,8 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Sparkles } from "lucide-react";
-import type { Skill } from "@continuum/contracts";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { Skill } from '@continuum/contracts';
+import { Sparkles } from 'lucide-react';
+import { useState } from 'react';
 import {
   Command,
   CommandEmpty,
@@ -11,18 +10,26 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 type Props = {
   skills: Skill[];
+  templates?: Skill[];
   onPickAction: (skill: Skill) => void;
   isError?: boolean;
 };
 
-// Composer-adjacent picker so users can browse and apply brand skills without
-// typing "@". Selecting a skill adds it as a chat reference (same channel the
-// @-mention uses), so it is loaded into the agent's context for the next turn.
-export function SkillPickerButton({ skills, onPickAction, isError = false }: Props) {
+// Composer-adjacent picker so users can browse and apply brand skills (and the
+// first-party library) without typing "@". Selecting a skill adds it as a chat
+// reference (same channel the @-mention uses), so it is loaded into the agent's
+// context for the next turn.
+export function SkillPickerButton({
+  skills,
+  templates = [],
+  onPickAction,
+  isError = false,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -44,13 +51,13 @@ export function SkillPickerButton({ skills, onPickAction, isError = false }: Pro
             <CommandEmpty>
               {isError
                 ? "Couldn't load brand skills. Check your connection and try again."
-                : "No skills yet — ask the agent to save one (e.g. “save this as a skill”)."}
+                : 'No skills yet — ask the agent to save one (e.g. “save this as a skill”).'}
             </CommandEmpty>
             <CommandGroup heading="Brand skills">
               {skills.map((skill) => (
                 <CommandItem
                   key={skill.id}
-                  value={`${skill.name} ${skill.description ?? ""}`}
+                  value={`${skill.name} ${skill.description ?? ''}`}
                   onSelect={() => {
                     onPickAction(skill);
                     setOpen(false);
@@ -65,6 +72,29 @@ export function SkillPickerButton({ skills, onPickAction, isError = false }: Pro
                 </CommandItem>
               ))}
             </CommandGroup>
+            {templates.length > 0 && (
+              <CommandGroup heading="Library">
+                {templates.map((skill) => (
+                  <CommandItem
+                    key={skill.id}
+                    value={`${skill.name} ${skill.description ?? ''}`}
+                    onSelect={() => {
+                      onPickAction(skill);
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-medium">{skill.name}</span>
+                      {skill.description && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {skill.description}
+                        </span>
+                      )}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

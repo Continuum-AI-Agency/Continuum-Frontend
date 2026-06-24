@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload } from './buildNodePayload';
+import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload, toBackendPayload } from './buildNodePayload';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 import { NodeOutput } from '../types/execution';
@@ -505,6 +505,44 @@ describe('buildNodePayload', () => {
         const payload = await buildEnrichPayload(node, new Map(), [], [], 'brand-1');
         expect(payload).not.toBeNull();
         expect(payload?.prompt).toBe('');
+    });
+  });
+
+  describe('creative skills', () => {
+    it('passes nanoGen skillIds through to the backend payload as skill_ids', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'A cat', skillIds: ['sk_1', 'sk_2'] },
+      };
+      const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
+      expect(payload?.skillIds).toEqual(['sk_1', 'sk_2']);
+      expect(toBackendPayload(payload!).skill_ids).toEqual(['sk_1', 'sk_2']);
+    });
+
+    it('omits skillIds when none are selected', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'A cat' },
+      };
+      const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
+      expect(payload?.skillIds).toBeUndefined();
+      expect(toBackendPayload(payload!).skill_ids).toBeUndefined();
+    });
+
+    it('passes video skillIds through to the backend payload', () => {
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: 'A video', enhancePrompt: false, skillIds: ['sk_9'] },
+      };
+      const payload = buildVeoPayload(node, new Map(), [], [], 'brand-1');
+      expect(payload?.skillIds).toEqual(['sk_9']);
+      expect(toBackendPayload(payload!).skill_ids).toEqual(['sk_9']);
     });
   });
 });

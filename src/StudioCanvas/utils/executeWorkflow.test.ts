@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { executeWorkflow } from './executeWorkflow';
+import { executeWorkflow, collectDownstreamLeafIds } from './executeWorkflow';
 import { useStudioStore } from '../stores/useStudioStore';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
@@ -892,5 +892,102 @@ describe('executeWorkflow', () => {
 
     const imgNode = useStudioStore.getState().nodes.find((node) => node.id === 'img');
     expect((imgNode?.data as any).image).toBe(freshBase64);
+  });
+
+  it('parks the run at an uncommitted Video Editor break-point without failing downstream', async () => {
+    // vid -> (media) -> timelineEditor -> (video) -> extendVideo. The editor is a
+    // manual gate: with no committed render, the run must HALT at it — the editor
+    // is "awaiting", and the downstream extend never runs and is not marked failed.
+    const nodes: StudioNode[] = [
+      { id: 'vid', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,vvv' }, type: 'video' },
+      { id: 'edit', position: { x: 0, y: 0 }, data: { items: [{ id: 'i1', order: 0 }] }, type: 'timelineEditor' },
+      { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-i1' },
+      { id: 'e2', source: 'edit', sourceHandle: 'video', target: 'ext', targetHandle: 'video' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => ({ success: true, output: { type: 'image', base64: 'x', mimeType: 'image/png' } }));
+    const executeVideoExtension = mock(async () => ({ success: true, output: { type: 'video', url: 'should_not_run' } }));
+    const controls = buildControls(executeGeneration, executeVideoExtension);
+
+    await executeWorkflow(controls as any);
+
+    expect(executeVideoExtension).toHaveBeenCalledTimes(0);
+    const finalNodes = useStudioStore.getState().nodes;
+    const editNode = finalNodes.find((n) => n.id === 'edit');
+    const extNode = finalNodes.find((n) => n.id === 'ext');
+    expect((editNode?.data as any).awaitingInput).toBe(true);
+    expect(editNode?.data.error).toBeUndefined();
+    expect(extNode?.data.error).toBeUndefined();
+    expect(extNode?.data.isComplete).toBeFalsy();
+  });
+
+  it('resumes downstream once the Video Editor clip is committed', async () => {
+    // Same graph, but the editor has a committed render. The gate now surfaces its
+    // persisted clip to the downstream extend node (no re-render), which runs.
+    const editedUrl = 'https://cdn.continuum.test/videos/edited.mp4';
+    const nodes: StudioNode[] = [
+      { id: 'vid', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,vvv' }, type: 'video' },
+      {
+        id: 'edit',
+        position: { x: 0, y: 0 },
+        data: { items: [{ id: 'i1', order: 0 }], committed: true, generatedVideoUrl: editedUrl },
+        type: 'timelineEditor',
+      },
+      { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-i1' },
+      { id: 'e2', source: 'edit', sourceHandle: 'video', target: 'ext', targetHandle: 'video' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => ({ success: true, output: { type: 'image', base64: 'x', mimeType: 'image/png' } }));
+    const executeVideoExtension = mock(async (_id: string, _payload: unknown) => ({
+      success: true,
+      output: { type: 'video', url: 'data:video/mp4;base64,extended' },
+    }));
+    const controls = buildControls(executeGeneration, executeVideoExtension);
+
+    await executeWorkflow(controls as any);
+
+    expect(executeVideoExtension).toHaveBeenCalledTimes(1);
+    const payload = executeVideoExtension.mock.calls[0][1] as { video?: { uri?: string } };
+    expect(payload.video?.uri).toBe(editedUrl);
+    const editNode = useStudioStore.getState().nodes.find((n) => n.id === 'edit');
+    expect(editNode?.data.isComplete).toBe(true);
+  });
+
+  describe('collectDownstreamLeafIds', () => {
+    it('finds the runnable leaf descendants downstream of a node', () => {
+      const nodeById = new Map<string, { type?: string }>([
+        ['gate', { type: 'timelineEditor' }],
+        ['ext', { type: 'extendVideo' }],
+        ['dec', { type: 'videoDecode' }],
+      ]);
+      const edges: Edge[] = [
+        { id: 'e1', source: 'gate', target: 'ext' },
+        { id: 'e2', source: 'ext', target: 'dec' },
+      ];
+      expect(collectDownstreamLeafIds('gate', edges, nodeById)).toEqual(['dec']);
+    });
+
+    it('ignores non-runnable downstream targets and returns empty for a terminal node', () => {
+      const nodeById = new Map<string, { type?: string }>([
+        ['gate', { type: 'timelineEditor' }],
+        ['ref', { type: 'video' }],
+      ]);
+      // gate -> a plain video reference node (not runnable) => no runnable leaves.
+      const edges: Edge[] = [{ id: 'e1', source: 'gate', target: 'ref' }];
+      expect(collectDownstreamLeafIds('gate', edges, nodeById)).toEqual([]);
+      expect(collectDownstreamLeafIds('gate', [], nodeById)).toEqual([]);
+    });
   });
 });

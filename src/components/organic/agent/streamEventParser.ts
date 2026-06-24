@@ -2,7 +2,10 @@ import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
 import {
   bulkContentPlanSchema,
   mediaSearchResultsFrameSchema,
+  organicPlanStatusDataSchema,
+  organicPostCardDataSchema,
   organicStreamFrameSchema,
+  organicTrendChartDataSchema,
   POST_FETCHING_TOOL_NAMES,
   proposedPlanSchema,
   type BulkContentPlan,
@@ -35,7 +38,6 @@ export const POST_TOOL_LABELS: Record<string, string> = {
   getTopPosts: "Top Posts",
   listOwnInstagramMedia: "Recent Media",
   getCalendarPostedContent: "Posted Content",
-  rankPostPerformers: "Top Performers",
   getCompetitorInstagramTopPosts: "Competitor Posts",
 };
 
@@ -99,17 +101,6 @@ export type ParsedBulkRun = {
 
 export type OrganicWireFrame = OrganicStreamFrame;
 
-type UiTrendPoint = { window: number; value: number };
-type UiTrendSeries = { label: "Trends" | "Events" | "Questions"; data: UiTrendPoint[] };
-type UiTopSignal = {
-  id: string;
-  title: string;
-  type: "trend" | "event" | "question";
-  confidence: number | null;
-  platform: string | null;
-  windowDays: number;
-};
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -170,76 +161,15 @@ export function normalizeToolResultEvent(event: Record<string, unknown>) {
   };
 }
 
-function normalizeTrendSeries(raw: unknown): UiTrendSeries[] {
-  if (!Array.isArray(raw)) return [];
-
-  const labelMap = new Map<string, UiTrendSeries["label"]>([
-    ["trends", "Trends"],
-    ["events", "Events"],
-    ["questions", "Questions"],
-  ]);
-
-  return raw.flatMap((entry) => {
-    if (!isRecord(entry)) return [];
-    const label = labelMap.get((readNonEmptyString(entry.label) ?? "").toLowerCase());
-    if (!label) return [];
-
-    const data = Array.isArray(entry.data)
-      ? entry.data.flatMap((point) => {
-          if (!isRecord(point)) return [];
-          if (typeof point.window !== "number" || !Number.isFinite(point.window)) return [];
-          if (typeof point.value !== "number" || !Number.isFinite(point.value)) return [];
-          return [{ window: point.window, value: point.value }];
-        })
-      : [];
-
-    return [{ label, data }];
-  });
-}
-
-function normalizeTopSignals(raw: unknown): UiTopSignal[] {
-  if (!Array.isArray(raw)) return [];
-
-  return raw.flatMap((entry, index) => {
-    if (!isRecord(entry)) return [];
-    if (entry.type !== "trend" && entry.type !== "event" && entry.type !== "question") return [];
-
-    const id = readNonEmptyString(entry.id) ?? `${entry.type}-${index}`;
-    const title = typeof entry.title === "string" ? entry.title : "";
-    const confidence =
-      typeof entry.confidence === "number" && Number.isFinite(entry.confidence)
-        ? entry.confidence
-        : null;
-    const platform = typeof entry.platform === "string" ? entry.platform : null;
-    const windowDays =
-      typeof entry.windowDays === "number" && Number.isFinite(entry.windowDays) ? entry.windowDays : 0;
-
-    return [
-      {
-        id,
-        title,
-        type: entry.type,
-        confidence,
-        platform,
-        windowDays,
-      },
-    ];
-  });
-}
-
+// The Backend builds a clean TrendChartData (cards/trendChart.ts) typed against
+// the shared organicTrendChartDataSchema, so the parse here is a contract
+// safeParse rather than a hand-rolled re-normalization. A malformed payload
+// degrades to an empty chart instead of throwing.
 export function normalizeTrendChartEvent(event: Record<string, unknown>): UiTrendChart {
-  const payload = getEventPayload(event);
-  const windows = Array.isArray(payload.windows)
-    ? payload.windows.filter((window): window is number => typeof window === "number" && Number.isFinite(window))
-    : [];
-
-  return {
-    chartType: "bar",
-    title: typeof payload.title === "string" ? payload.title : "",
-    windows,
-    series: normalizeTrendSeries(payload.series),
-    topSignals: normalizeTopSignals(payload.topSignals),
-  };
+  const result = organicTrendChartDataSchema.safeParse(getEventPayload(event));
+  return result.success
+    ? result.data
+    : { chartType: "bar", title: "", windows: [], series: [], topSignals: [] };
 }
 
 function parseJobUpdate(type: string, event: Record<string, unknown>) {
@@ -331,34 +261,12 @@ function parseDraftBlueprint(
   return { draftId, previews };
 }
 
+// The Backend builds a typed PostCardData (cards/postCard.ts) against the shared
+// organicPostCardDataSchema, so this is a contract safeParse — drop the card on a
+// shape mismatch (caller's tolerant fallthrough) rather than re-deriving fields.
 function parseUiPostCard(event: Record<string, unknown>): UiPostCard | null {
-  const payload = getEventPayload(event);
-  const draftId = readNonEmptyString(payload.draftId);
-  const jobId = readNonEmptyString(payload.jobId);
-  const brandId = readNonEmptyString(payload.brandId);
-  if (!draftId || !jobId || !brandId) return null;
-
-  return {
-    draftId,
-    jobId,
-    brandId,
-    platform: readNonEmptyString(payload.platform) ?? "unknown",
-    scheduledAt: readNonEmptyString(payload.scheduledAt) ?? "",
-    caption: typeof payload.caption === "string" ? payload.caption : null,
-    hashtags: Array.isArray(payload.hashtags)
-      ? payload.hashtags.filter((tag): tag is string => typeof tag === "string")
-      : [],
-    imageUrl: typeof payload.imageUrl === "string" ? payload.imageUrl : null,
-    format: typeof payload.format === "string" ? payload.format : null,
-    topic: typeof payload.topic === "string" ? payload.topic : null,
-    quality: isRecord(payload.quality)
-      ? {
-          score: typeof payload.quality.score === "number" ? payload.quality.score : 0,
-          passed: payload.quality.passed === true,
-        }
-      : null,
-    trendId: typeof payload.trendId === "string" ? payload.trendId : null,
-  };
+  const result = organicPostCardDataSchema.safeParse(getEventPayload(event));
+  return result.success ? result.data : null;
 }
 
 // The Backend emits the full ProposedPlan as the ui.plan_card payload, so the
@@ -520,18 +428,13 @@ function parsePipelineCard(
   };
 }
 
+// Validated against the shared organicPlanStatusDataSchema (status is the
+// canonical planItemStatus enum); mapped to the parser's render shape.
 function parsePlanStatus(event: Record<string, unknown>): ParsedPlanStatus | null {
-  const payload = getEventPayload(event);
-  const itemId = readNonEmptyString(payload.itemId);
-  if (!itemId) return null;
-  const status = (readNonEmptyString(payload.status) ?? "pending") as PlanItemStatus;
-  return {
-    planId: typeof payload.planId === "string" ? payload.planId : null,
-    itemId,
-    status,
-    jobId: readNonEmptyString(payload.jobId) ?? undefined,
-    draftId: readNonEmptyString(payload.draftId) ?? undefined,
-  };
+  const result = organicPlanStatusDataSchema.safeParse(getEventPayload(event));
+  if (!result.success) return null;
+  const { planId, itemId, status, jobId, draftId } = result.data;
+  return { planId: planId ?? null, itemId, status, jobId, draftId };
 }
 
 function parseToolApproval(event: Record<string, unknown>): ToolApproval | null {
@@ -560,9 +463,16 @@ function extractArray(result: unknown, ...keys: string[]): unknown[] {
 }
 
 export function normalizePostToolResult(toolName: string, result: unknown): UiFetchedPost[] {
+  // Organic tools return a unified envelope `{ status, summary, data }`. Unwrap
+  // to the structured payload here; a non-success status carries no post rows.
+  const envelope =
+    isRecord(result) && typeof result.status === "string" ? result : null;
+  if (envelope && envelope.status === "error") return [];
+  const payload: unknown = envelope ? envelope.data : result;
+
   switch (toolName) {
     case "listDrafts": {
-      return extractArray(result, "drafts").flatMap((item) => {
+      return extractArray(payload, "drafts").flatMap((item) => {
         if (!isRecord(item)) return [];
         const draftId = readNonEmptyString(item.draftId);
         if (!draftId) return [];
@@ -586,9 +496,9 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
     }
 
     case "getTopPosts": {
-      if (!isRecord(result) || !result.ok) return [];
-      const platform = toSourcePlatform(result.platform);
-      return extractArray(result, "rows").flatMap((item) => {
+      if (!isRecord(payload)) return [];
+      const platform = toSourcePlatform(payload.platform);
+      return extractArray(payload, "rows").flatMap((item) => {
         if (!isRecord(item)) return [];
         const postId = readNonEmptyString(item.post_id);
         if (!postId) return [];
@@ -598,7 +508,7 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
         return [{
           postId,
           source: platform,
-          platform: typeof result.platform === "string" ? result.platform : null,
+          platform: typeof payload.platform === "string" ? payload.platform : null,
           caption: readNonEmptyString(item.caption_snippet),
           mediaUrl: readNonEmptyString(item.thumbnail_url),
           permalink: readNonEmptyString(item.permalink),
@@ -615,7 +525,7 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
     }
 
     case "listOwnInstagramMedia": {
-      return extractArray(result, "posts").flatMap((item) => {
+      return extractArray(payload, "posts").flatMap((item) => {
         if (!isRecord(item)) return [];
         const mediaId = readNonEmptyString(item.mediaId);
         if (!mediaId) return [];
@@ -641,8 +551,8 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
     }
 
     case "getCalendarPostedContent": {
-      if (!isRecord(result) || !result.ok) return [];
-      return extractArray(result, "posts").flatMap((item) => {
+      if (!isRecord(payload)) return [];
+      return extractArray(payload, "posts").flatMap((item) => {
         if (!isRecord(item)) return [];
         const postId = readNonEmptyString(item.post_id);
         if (!postId) return [];
@@ -669,40 +579,9 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
       });
     }
 
-    case "rankPostPerformers": {
-      if (!isRecord(result) || !result.ok) return [];
-      const metric = readNonEmptyString(result.metric);
-      const allRows = [
-        ...extractArray(result, "top"),
-        ...extractArray(result, "bottom"),
-      ];
-      return allRows.flatMap((item, i) => {
-        if (!isRecord(item)) return [];
-        const mediaId = readNonEmptyString(item.mediaId);
-        if (!mediaId) return [];
-        const metricValue = typeof item.metricValue === "number" ? item.metricValue : null;
-        return [{
-          postId: mediaId,
-          source: "instagram" as const,
-          platform: "instagram",
-          caption: readNonEmptyString(item.captionSnippet),
-          mediaUrl: null,
-          permalink: readNonEmptyString(item.permalink),
-          postedAt: null,
-          scheduledAt: null,
-          format: null,
-          status: typeof item.bucket === "string" ? item.bucket : "published",
-          topic: metric ?? null,
-          metrics: metric && metricValue !== null ? { [metric]: metricValue } : null,
-          rank: i + 1,
-          quality: null,
-        }];
-      });
-    }
-
     case "getCompetitorInstagramTopPosts": {
-      if (!isRecord(result) || !result.found) return [];
-      return extractArray(result, "posts").flatMap((item) => {
+      if (!isRecord(payload)) return [];
+      return extractArray(payload, "posts").flatMap((item) => {
         if (!isRecord(item)) return [];
         const postId = readNonEmptyString(item.id);
         if (!postId) return [];
@@ -746,13 +625,22 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
 
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
   if (!isRecord(raw)) return { kind: "invalid" };
-  const type = readNonEmptyString(raw.type);
-  if (!type) return { kind: "invalid" };
 
+  // The shared contract schema is both the boundary check AND the source: on
+  // success the validated frame drives routing (its discriminant) and supplies
+  // the normalized payload to the handlers below, so the parse result is used
+  // rather than computed-then-discarded. On failure we fall back to the raw
+  // frame's string type so a newer peer's frame (or a partial one) still routes
+  // and is never silently dropped — the same resilience the reload path needs.
   const validation = organicStreamFrameSchema.safeParse(raw);
+  const type = validation.success ? validation.data.type : readNonEmptyString(raw.type);
+  if (!type) return { kind: "invalid" };
   if (!validation.success && type !== "response.source" && type !== "response.output_text.done") {
     console.warn("Invalid Organic stream frame schema for type:", type);
   }
+  const frame: Record<string, unknown> = validation.success
+    ? (validation.data as unknown as Record<string, unknown>)
+    : raw;
 
   switch (type) {
     case "response.created":
@@ -763,56 +651,56 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       return {
         kind: "delta",
         delta: (() => {
-          const payload = getEventPayload(raw);
+          const payload = getEventPayload(frame);
           return typeof payload.delta === "string" ? payload.delta : "";
         })(),
       };
     case "response.done":
       return { kind: "complete" };
     case "response.error": {
-      const payload = getEventPayload(raw);
+      const payload = getEventPayload(frame);
       const message =
         readNonEmptyString(payload.message) ??
         "Unknown stream error";
       return { kind: "error", message };
     }
     case "tool.call":
-      return { kind: "toolCall", event: normalizeToolCallEvent(raw) };
+      return { kind: "toolCall", event: normalizeToolCallEvent(frame) };
     case "tool.result": {
-      const { toolCallId, toolName, result } = normalizeToolResultEvent(raw);
+      const { toolCallId, toolName, result } = normalizeToolResultEvent(frame);
       return { kind: "toolResult", toolCallId, toolName, result };
     }
     case "ui.trend_chart":
-      return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(raw) } };
+      return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(frame) } };
     case "ui.plan_card": {
       // The bulk plan rides on the same frame, discriminated by data.kind.
-      if (getEventPayload(raw).kind === "bulk") {
-        const bulk = parseBulkPlanCard(raw);
+      if (getEventPayload(frame).kind === "bulk") {
+        const bulk = parseBulkPlanCard(frame);
         return bulk
           ? { kind: "uiCard", card: { type: "bulk_plan_card", data: bulk } }
           : { kind: "invalid", type };
       }
-      const card = parseUiPlanCard(raw);
+      const card = parseUiPlanCard(frame);
       return card ? { kind: "uiCard", card: { type: "plan_card", data: card } } : { kind: "invalid", type };
     }
     case "ui.post_card": {
-      const card = parseUiPostCard(raw);
+      const card = parseUiPostCard(frame);
       return card ? { kind: "postCard", card } : { kind: "invalid", type };
     }
     case "ui.skill_proposal": {
-      const card = parseSkillProposalCard(raw);
+      const card = parseSkillProposalCard(frame);
       return card
         ? { kind: "uiCard", card: { type: "skill_proposal", data: card } }
         : { kind: "invalid", type };
     }
     case "agent.run_started": {
-      const payload = getEventPayload(raw);
+      const payload = getEventPayload(frame);
       const runId = readNonEmptyString(payload.runId);
       if (!runId) return { kind: "invalid", type };
       return { kind: "runStarted", runId, jobId: readNonEmptyString(payload.jobId) ?? "" };
     }
     case "draft.blueprint_ready": {
-      const blueprint = parseDraftBlueprint(raw);
+      const blueprint = parseDraftBlueprint(frame);
       return blueprint ? { kind: "draftBlueprint", ...blueprint } : { kind: "invalid", type };
     }
     case "job.enqueued":
@@ -822,31 +710,31 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "job.completed":
     case "job.failed":
     case "job.cancelled": {
-      const job = parseJobUpdate(type, raw);
+      const job = parseJobUpdate(type, frame);
       return job ? { kind: "jobUpdate", job } : { kind: "invalid", type };
     }
     case "pipeline.stage": {
-      const event = parsePipelineStage(raw);
+      const event = parsePipelineStage(frame);
       return event ? { kind: "pipelineStage", event } : { kind: "invalid", type };
     }
     case "ui.pipeline_card": {
-      const card = parsePipelineCard(raw);
+      const card = parsePipelineCard(frame);
       return card ? { kind: "pipelineCard", card } : { kind: "invalid", type };
     }
     case "ui.plan_status": {
-      const event = parsePlanStatus(raw);
+      const event = parsePlanStatus(frame);
       return event ? { kind: "planStatus", event } : { kind: "invalid", type };
     }
     case "tool.approval_required": {
-      const approval = parseToolApproval(raw);
+      const approval = parseToolApproval(frame);
       return approval ? { kind: "toolApproval", approval } : { kind: "invalid", type };
     }
     case "ui.bulk_run": {
-      const run = parseBulkRun(raw);
+      const run = parseBulkRun(frame);
       return run ? { kind: "bulkRun", run } : { kind: "invalid", type };
     }
     case "media.search_results": {
-      const result = mediaSearchResultsFrameSchema.safeParse(raw);
+      const result = mediaSearchResultsFrameSchema.safeParse(frame);
       return result.success
         ? { kind: "mediaSearchResults", frame: result.data }
         : { kind: "invalid", type };

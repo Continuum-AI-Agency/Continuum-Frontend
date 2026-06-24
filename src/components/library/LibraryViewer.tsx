@@ -11,6 +11,7 @@ import type {
   MediaSearchResultItem,
   MediaSource,
 } from "@continuum/contracts";
+import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle";
 import { Button } from "@/components/ui/button";
 import { LibrarySidebar } from "./LibrarySidebar";
 import { LibraryFilterBar } from "./LibraryFilterBar";
@@ -32,6 +33,7 @@ type Props = {
   initialAssets: MediaAsset[];
   initialCollections: MediaCollection[];
   storageUsedBytes: number;
+  captionStyle: CaptionStyle;
   selectedCollectionId: string | null;
   selectedSource: MediaSource | null;
   selectedKind: MediaKind | null;
@@ -43,6 +45,7 @@ export function LibraryViewer({
   initialAssets,
   initialCollections,
   storageUsedBytes,
+  captionStyle,
   selectedCollectionId,
   selectedSource,
   selectedKind,
@@ -101,7 +104,7 @@ export function LibraryViewer({
         router.push(qs ? `/library?${qs}` : "/library");
       });
     },
-    [brandId, router, selectedCollectionId, sourceFilter, kindFilter, setOptimisticSource, setOptimisticKind, startFilterTransition],
+    [brandId, router, selectedCollectionId, sourceFilter, kindFilter, setOptimisticSource, setOptimisticKind],
   );
 
   // Selecting a real collection clears the source filter (membership spans
@@ -143,6 +146,7 @@ export function LibraryViewer({
         {(["media", "inspiration"] as const).map((id) => (
           <button
             key={id}
+            type="button"
             role="tab"
             aria-selected={view === id}
             onClick={() => setView(id)}
@@ -171,6 +175,7 @@ export function LibraryViewer({
         storageUsedBytes={storageUsedBytes}
       />
 
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
       <div
         className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4"
         onDragEnter={handleDragEnter}
@@ -252,6 +257,7 @@ export function LibraryViewer({
           <MediaGrid
             assets={displayedAssets}
             showBoundingBoxes={showBoundingBoxes}
+            captionStyle={captionStyle}
             emptyHint={isSearching ? "No results. Try a different search." : undefined}
             onLoadMore={isSearching ? undefined : loadMore}
             hasMore={isSearching ? false : hasMore}

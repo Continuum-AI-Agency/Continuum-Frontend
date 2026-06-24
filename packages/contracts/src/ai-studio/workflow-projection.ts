@@ -23,6 +23,7 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   veoFast: ["model", "prompt", "negativePrompt", "aspectRatio", "durationSeconds", "resolution"],
   extendVideo: ["prompt"],
   videoEditor: ["outputFormat"],
+  timelineEditor: ["outputFormat"],
   image: ["fileName", "referenceType", "aspectRatio"],
   video: ["fileName"],
   audio: ["fileName"],
@@ -84,7 +85,7 @@ function projectConfig(type: string, data: Record<string, unknown>): Record<stri
 }
 
 const OUTPUT_IMAGE_TYPES = new Set(["nanoGen"]);
-const OUTPUT_VIDEO_TYPES = new Set(["videoGen", "veoDirector", "veoFast", "extendVideo", "videoEditor"]);
+const OUTPUT_VIDEO_TYPES = new Set(["videoGen", "veoDirector", "veoFast", "extendVideo", "videoEditor", "timelineEditor"]);
 
 function attachmentFor(
   node: GraphNodeLike & { type?: string },

@@ -3058,6 +3058,7 @@ export function JainaChatSurface({
                   handleSubmit(value, attachments, references)
                 }
                 disabled={isInputDisabled}
+                ariaLabel="Message Jaina"
                 mentionProvider={jainaMentionProvider}
                 mentionSource="jaina"
                 placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}

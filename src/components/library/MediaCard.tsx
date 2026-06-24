@@ -1,21 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Copy, Check, ImageOff, Loader2, Scissors } from "lucide-react";
+import { Copy, Check, ImageOff, Loader2, Play, Scissors } from "lucide-react";
+import Image from "next/image";
 import type { MediaAsset } from "@continuum/contracts";
+import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { SOURCE_LABEL } from "@/lib/media/filters";
 import { MediaBoundingBoxes } from "./MediaBoundingBoxes";
 import { useGenerateClips } from "./hooks/useGenerateClips";
 import { useClipQualityPreference } from "./hooks/useClipQualityPreference";
+import { useClipCaptionPreference } from "./hooks/useClipCaptionPreference";
 import { ClipProgressStrip } from "./ClipProgressStrip";
 import { ClipQualityToggle } from "./ClipQualityToggle";
+import { ClipCaptionToggle } from "./ClipCaptionToggle";
 
 type Props = {
   asset: MediaAsset;
+  index?: number;
   showBoundingBoxes?: boolean;
+  captionStyle?: CaptionStyle;
 };
 
 function formatBytes(bytes: number): string {
@@ -27,6 +33,29 @@ function formatBytes(bytes: number): string {
 
 const BADGE_BASE =
   "absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]";
+
+// Matches MediaGrid column breakpoints: 2-col mobile → 3-col sm → 4-col lg → 5-col xl
+const IMAGE_SIZES =
+  "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw";
+
+// Defers assigning src to the video element until the card is near the viewport,
+// preventing preload="metadata" range requests for every off-screen video card.
+function useLazyVideoSrc(src: string | null | undefined, immediate: boolean) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [active, setActive] = useState(immediate);
+  useEffect(() => {
+    if (active || !ref.current) return;
+    const ob = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting) setActive(true);
+      },
+      { rootMargin: "200px" },
+    );
+    ob.observe(ref.current);
+    return () => ob.disconnect();
+  }, [active]);
+  return { ref, activeSrc: active && src ? src : undefined };
+}
 
 function StatusBadge({ status }: { status: MediaAsset["status"] }) {
   const reduceMotion = useReducedMotion();
@@ -61,10 +90,19 @@ function StatusBadge({ status }: { status: MediaAsset["status"] }) {
   );
 }
 
-function Thumbnail({ asset, showBoundingBoxes }: { asset: MediaAsset; showBoundingBoxes: boolean }) {
-  const [imgError, setImgError] = useState(false);
+function Thumbnail({
+  asset,
+  showBoundingBoxes,
+  priority,
+}: {
+  asset: MediaAsset;
+  showBoundingBoxes: boolean;
+  priority: boolean;
+}) {
+  const [mediaError, setMediaError] = useState(false);
+  const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority);
 
-  if (!asset.signedUrl || imgError) {
+  if (!asset.signedUrl || mediaError) {
     return (
       <div className="flex size-full items-center justify-center bg-muted">
         <ImageOff className="size-8 text-muted-foreground/40" />
@@ -74,25 +112,37 @@ function Thumbnail({ asset, showBoundingBoxes }: { asset: MediaAsset; showBoundi
 
   if (asset.kind === "video") {
     return (
-      <video
-        src={asset.signedUrl}
-        className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-        muted
-        playsInline
-        preload="metadata"
-        onError={() => setImgError(true)}
-      />
+      <>
+        <video
+          ref={videoRef}
+          src={activeSrc}
+          className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+          muted
+          playsInline
+          preload="metadata"
+          onError={() => setMediaError(true)}
+          onPointerEnter={() => {
+            if (activeSrc) videoRef.current?.play();
+          }}
+          onPointerLeave={() => videoRef.current?.pause()}
+        />
+        <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 p-1.5 text-white transition-opacity group-hover:opacity-0">
+          <Play className="size-3 fill-current" />
+        </div>
+      </>
     );
   }
 
   return (
     <>
-      <img
+      <Image
         src={asset.signedUrl}
         alt={asset.title ?? asset.fileName}
-        className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-        onError={() => setImgError(true)}
-        loading="lazy"
+        fill
+        sizes={IMAGE_SIZES}
+        priority={priority}
+        className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+        onError={() => setMediaError(true)}
       />
       {showBoundingBoxes && asset.detectedObjects.length > 0 && (
         <MediaBoundingBoxes objects={asset.detectedObjects} />
@@ -136,10 +186,12 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
           {asset.signedUrl && asset.kind === "image" ? (
-            <img
+            <Image
               src={asset.signedUrl}
               alt={asset.title ?? asset.fileName}
-              className="h-full w-full object-contain"
+              fill
+              sizes="320px"
+              className="object-contain"
             />
           ) : asset.signedUrl && asset.kind === "video" ? (
             <video src={asset.signedUrl} muted playsInline preload="metadata" className="h-full w-full object-contain" />
@@ -229,10 +281,12 @@ function GenerateClipsButton({ onGenerate, disabled }: { onGenerate: () => void;
   );
 }
 
-export function MediaCard({ asset, showBoundingBoxes = false }: Props) {
+export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyle }: Props) {
   const reduceMotion = useReducedMotion();
   const { generate, isGenerating, progress } = useGenerateClips();
   const { quality, setQuality } = useClipQualityPreference();
+  const { captionsEnabled, setCaptionsEnabled } = useClipCaptionPreference();
+  const priority = (index ?? Infinity) < 10;
   const formattedDate = new Date(asset.createdAt).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -254,7 +308,7 @@ export function MediaCard({ asset, showBoundingBoxes = false }: Props) {
           transition={{ type: "spring", duration: 0.3, bounce: 0 }}
         >
           <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-            <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} />
+            <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} priority={priority} />
             <StatusBadge status={asset.status} />
           </div>
 
@@ -276,8 +330,12 @@ export function MediaCard({ asset, showBoundingBoxes = false }: Props) {
               <p className="text-[11px] tabular-nums text-muted-foreground/60">{formattedDate}</p>
               {canGenerateClips && !activeProgress && (
                 <div className="flex items-center gap-1.5">
+                  <ClipCaptionToggle value={captionsEnabled} onChange={setCaptionsEnabled} disabled={isGenerating} />
                   <ClipQualityToggle value={quality} onChange={setQuality} disabled={isGenerating} />
-                  <GenerateClipsButton onGenerate={() => void generate(asset, quality)} disabled={isGenerating} />
+                  <GenerateClipsButton
+                    onGenerate={() => void generate(asset, { quality, captionsEnabled, captionStyle })}
+                    disabled={isGenerating}
+                  />
                 </div>
               )}
             </div>

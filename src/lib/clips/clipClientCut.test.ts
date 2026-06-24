@@ -11,6 +11,10 @@ const SECTION = {
   hookLine: "watch this",
   transcriptExcerpt: "hello world",
   keepRanges: [{ startSec: 0, endSec: 12 }, { startSec: 14, endSec: 28 }],
+  words: [
+    { text: "hello", startSec: 0, endSec: 0.5 },
+    { text: "world", startSec: 0.6, endSec: 1.0 },
+  ],
 }
 const SCORE = { status: "pending" as const, hookPotential: null, comparedAgainst: null, computedAt: "2026-06-15T00:00:00Z" }
 
@@ -73,6 +77,62 @@ describe("cutAndPersistSection", () => {
     expect((invoke.mock.calls[1][1].body as { score: unknown }).score).toEqual(SCORE)
     expect(revokeSpy).toHaveBeenCalledWith("blob:fake-clip")
     expect(stages).toEqual(["Cutting…", "Uploading…", "Saving…"])
+  })
+
+  it("forwards mapped caption words to the splice only when captions are enabled", async () => {
+    const { client } = makeFakeSupabase()
+    const makeSplice = () =>
+      mock(async () => ({
+        blob: new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+        objectUrl: "blob:c",
+        width: 1,
+        height: 1,
+        durationSec: 5,
+      }))
+
+    const spliceOn = makeSplice()
+    await cutAndPersistSection(
+      { brandId: "b1", sourceAssetId: "asset-1", sourceBlob: new Blob([new Uint8Array([0])]), section: SECTION, score: SCORE, captionsEnabled: true },
+      { createClient: client, splice: spliceOn as never },
+    )
+    expect((spliceOn.mock.calls[0][0] as { captionWords?: unknown[] }).captionWords).toEqual([
+      { text: "hello", startSec: 0, endSec: 0.5 },
+      { text: "world", startSec: 0.6, endSec: 1.0 },
+    ])
+
+    const spliceOff = makeSplice()
+    await cutAndPersistSection(
+      { brandId: "b1", sourceAssetId: "asset-1", sourceBlob: new Blob([new Uint8Array([0])]), section: SECTION, score: SCORE },
+      { createClient: client, splice: spliceOff as never },
+    )
+    expect((spliceOff.mock.calls[0][0] as { captionWords?: unknown[] }).captionWords).toBeUndefined()
+  })
+
+  it("forwards the brand caption style only when captions are enabled", async () => {
+    const { client } = makeFakeSupabase()
+    const style = { textColor: "#ffffff", highlightColor: "#1e90ff", outlineColor: "#000000", fontFamily: "Inter" }
+    const makeSplice = () =>
+      mock(async () => ({
+        blob: new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+        objectUrl: "blob:s",
+        width: 1,
+        height: 1,
+        durationSec: 5,
+      }))
+
+    const spliceOn = makeSplice()
+    await cutAndPersistSection(
+      { brandId: "b1", sourceAssetId: "asset-1", sourceBlob: new Blob([new Uint8Array([0])]), section: SECTION, score: SCORE, captionsEnabled: true, captionStyle: style },
+      { createClient: client, splice: spliceOn as never },
+    )
+    expect((spliceOn.mock.calls[0][0] as { captionStyle?: unknown }).captionStyle).toEqual(style)
+
+    const spliceOff = makeSplice()
+    await cutAndPersistSection(
+      { brandId: "b1", sourceAssetId: "asset-1", sourceBlob: new Blob([new Uint8Array([0])]), section: SECTION, score: SCORE, captionsEnabled: false, captionStyle: style },
+      { createClient: client, splice: spliceOff as never },
+    )
+    expect((spliceOff.mock.calls[0][0] as { captionStyle?: unknown }).captionStyle).toBeUndefined()
   })
 
   it("forwards the selected 720p quality as a 720px short-edge cap to the splice", async () => {

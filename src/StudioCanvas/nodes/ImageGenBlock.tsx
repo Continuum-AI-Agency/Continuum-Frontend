@@ -37,6 +37,7 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { CreativeSkillMenu, toggleSkillId } from '../components/CreativeSkillMenu';
 import { getAspectRatioValue, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
@@ -137,6 +138,20 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           },
         };
       });
+      triggerSave();
+    },
+    [id, triggerSave, updateNode]
+  );
+
+  const handleToggleSkill = useCallback(
+    (skillId: string) => {
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as NanoGenNodeData),
+          skillIds: toggleSkillId((node.data as NanoGenNodeData).skillIds, skillId),
+        },
+      }));
       triggerSave();
     },
     [id, triggerSave, updateNode]
@@ -434,6 +449,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             ))}
           </ContextMenuSubContent>
         </ContextMenuSub>
+        <CreativeSkillMenu
+          brandId={brandId}
+          selectedSkillIds={data.skillIds ?? []}
+          onToggle={handleToggleSkill}
+        />
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleRun}>
           <PlayIcon className="mr-2 h-4 w-4" />

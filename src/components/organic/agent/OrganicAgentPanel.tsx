@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { AnimatePresence, motion } from "motion/react";
 import { Message } from "@/components/ai-elements/message";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
+import { Conversation } from "@/components/ai-elements/conversation";
+import { Suggestion } from "@/components/ai-elements/suggestion";
 import { MentionifiedText } from "@/components/ai-elements/mentionified-text";
+import { RefreshCw } from "lucide-react";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { useCalendarStore } from "@/lib/organic/store";
@@ -14,7 +17,7 @@ import { initialPanelState, panelReducer } from "./useOrganicAgentReducer";
 import { mapPlacementToDraft } from "./mapPlacementToDraft";
 import { resolveConceptPreviewUrl } from "./conceptPreview";
 import { restoreSessionFromMessages } from "./restoreSession";
-import type { AgentJobState } from "./types";
+import type { AgentJobState, ConversationMessage, UiCard } from "./types";
 import { JobGrid } from "./JobGrid";
 import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
 import { ActiveStagesPanel } from "./ActiveStagesPanel";
@@ -28,6 +31,10 @@ import { MediaLibrarySearchResults } from "./MediaLibrarySearchResults";
 import { PostContentCardGrid } from "./PostContentCardGrid";
 import { SkillProposalCard } from "./SkillProposalCard";
 import { SkillPickerButton } from "./SkillPickerButton";
+import { SkillWizardLauncher } from "./SkillWizard/SkillWizardLauncher";
+import { MessageActions } from "./MessageActions";
+import { AgentWorkingIndicator } from "./AgentWorkingIndicator";
+import { AgentButton } from "./agentCardKit";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useOrganicSessions } from "./useOrganicSessions";
 import { useSession } from "@/hooks/useSession";
@@ -92,6 +99,41 @@ export type OrganicAgentMentionContext = {
   }>;
 };
 
+const STARTER_PROMPTS = ["Plan this week's posts", "Show me trending topics", "Draft an Instagram reel"];
+
+function resolveTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+// ISO date (YYYY-MM-DD) of the Monday at or before today, in local time.
+function currentWeekStartIso(): string {
+  const now = new Date();
+  const daysToMonday = (now.getDay() + 6) % 7;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysToMonday);
+  return monday.toISOString().slice(0, 10);
+}
+
+// Stable identity per rendered card so React reconciliation and enter-animations
+// key off the card's own id instead of its array index (which shifts as cards
+// interleave during a turn).
+function cardKey(card: UiCard, index: number): string {
+  switch (card.type) {
+    case "plan_card":
+      return `plan_card:${card.data.planId}`;
+    case "bulk_plan_card":
+      return `bulk_plan_card:${card.data.planId}`;
+    case "trend_chart":
+      return `trend_chart:${card.data.title || index}`;
+    case "post_list":
+      return `post_list:${card.label ?? index}`;
+    case "skill_proposal":
+      return `skill_proposal:${card.data.proposalId}`;
+    default:
+      return String(index);
+  }
+}
+
 function matchesMentionQuery(query: string, values: Array<string | null | undefined>) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
@@ -121,13 +163,14 @@ function createOrganicSuggestion(
   };
 }
 
-function skillToMentionSuggestion(skill: Skill): AgentMentionSuggestion {
+function skillToMentionSuggestion(skill: Skill, group = "Skills"): AgentMentionSuggestion {
   return createOrganicSuggestion(
     {
       id: skill.id,
       type: "skill",
       // The @-mention token renders the stable slug (no spaces); resolution is by
-      // skill id (metadata.skillId), never by this label.
+      // skill id (metadata.skillId), never by this label. Template ids resolve
+      // server-side via the widened getSkillsByIds (brand OR global template).
       label: skill.slug ?? skill.name,
       source: "organic",
       metadata: {
@@ -138,7 +181,7 @@ function skillToMentionSuggestion(skill: Skill): AgentMentionSuggestion {
     },
     {
       key: `skill:${skill.id}`,
-      group: "Skills",
+      group,
       description: [skill.kind === "analytic" ? "analytic" : "creative direction", skill.description]
         .filter(Boolean)
         .join(" · "),
@@ -166,7 +209,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     // Fetch-all reload pulls in the new draft wherever it landed.
     requestCalendarRefetch();
   }, [requestCalendarRefetch]);
-  const { start, startControl, isStreaming } = useOrganicAgentStream(dispatch, {
+  const { start, startControl, cancel, isStreaming } = useOrganicAgentStream(dispatch, {
     onRunStarted: attachRun,
     onCalendarDraftSignal: handleCalendarDraftSignal,
   });
@@ -181,14 +224,14 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   const setViewMode = useCalendarStore((s) => s.setViewMode);
   const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const canvasNodes = useStudioStore((s) => s.nodes);
-  const { skills: brandSkills, refresh: refreshBrandSkills, isError: brandSkillsError } = useBrandSkills(brandId);
+  const {
+    skills: brandSkills,
+    templates: brandSkillTemplates,
+    refresh: refreshBrandSkills,
+    isError: brandSkillsError,
+  } = useBrandSkills(brandId);
   const [queuedMentionSuggestions, setQueuedMentionSuggestions] = useState<AgentMentionSuggestion[]>([]);
   const syncedJobsRef = useRef(new Set<string>());
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // Whether the user is pinned near the bottom. When they scroll up to read
-  // earlier output we stop auto-scrolling so streaming doesn't yank them down.
-  const stickToBottomRef = useRef(true);
   const newSessionIdRef = useRef<string | null>(null);
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -289,20 +332,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     }
   }, [state.jobs, state.pipeline, upsertGeneration]);
 
-  // Auto-scroll on new messages only while the user is near the bottom; scrolling
-  // up to read earlier output detaches the view until they return to the bottom.
-  useEffect(() => {
-    if (stickToBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [state.messages]);
-
-  const handleMessagesScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
-  }, []);
-
   const handleSelectSession = useCallback(
     async (sessionId: string) => {
       if (isStreaming) return;
@@ -359,24 +388,17 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       const metadata = references.length > 0 ? { references } : undefined;
       dispatch({ type: "SUBMIT_USER_MESSAGE", content, messageId, metadata });
 
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const now = new Date();
-      const daysToMonday = (now.getDay() + 6) % 7;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - daysToMonday);
-      const weekStart = monday.toISOString().slice(0, 10);
-
       start({
         brandId,
         sessionId: currentSessionId,
         messages: [{ id: messageId, role: "user" as const, content, metadata }],
         references,
-        weekStart,
-        timezone,
+        weekStart: currentWeekStartIso(),
+        timezone: resolveTimezone(),
         platformAccountIds,
       }).then(() => debouncedRefreshSessions()).catch(() => {});
     },
-    [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, debouncedRefreshSessions]
+    [state.sessionId, isStreaming, brandId, platformAccountIds, start, activeSessionId, debouncedRefreshSessions]
   );
 
   const handlePlanDecision = useCallback(
@@ -390,13 +412,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
           event: { planId: decision.planId, itemId: decision.itemId, status: "executing" },
         });
       }
-
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const now = new Date();
-      const daysToMonday = (now.getDay() + 6) % 7;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - daysToMonday);
-      const weekStart = monday.toISOString().slice(0, 10);
 
       const decisionContent =
         decision.decision === "approve"
@@ -416,8 +431,8 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
             metadata: { references: [], planApproval: decision },
           },
         ],
-        weekStart,
-        timezone,
+        weekStart: currentWeekStartIso(),
+        timezone: resolveTimezone(),
         platformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
@@ -433,20 +448,57 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
 
       dispatch({ type: "TOOL_APPROVAL_RESOLVE", approvalId: approval.approvalId });
 
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const now = new Date();
-      const daysToMonday = (now.getDay() + 6) % 7;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - daysToMonday);
-      const weekStart = monday.toISOString().slice(0, 10);
-
       start({
         brandId,
         sessionId: currentSessionId,
         messages: [],
         approvals: [{ id: approval.approvalId, approved }],
-        weekStart,
-        timezone,
+        weekStart: currentWeekStartIso(),
+        timezone: resolveTimezone(),
+        platformAccountIds,
+      })
+        .then(() => debouncedRefreshSessions())
+        .catch(() => {});
+    },
+    [state.sessionId, isStreaming, brandId, platformAccountIds, start, activeSessionId, debouncedRefreshSessions]
+  );
+
+  // Regenerate a turn (used by the per-message action and the error-state Retry):
+  // drop the stale assistant turn and re-run the nearest preceding user message.
+  const handleRetryTurn = useCallback(
+    (assistantMessageId: string) => {
+      const currentSessionId = state.sessionId ?? activeSessionId;
+      if (!currentSessionId || isStreaming) return;
+
+      const idx = state.messages.findIndex((m) => m.id === assistantMessageId);
+      if (idx === -1) return;
+
+      let userMessage: ConversationMessage | undefined;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (state.messages[i].role === "user") {
+          userMessage = state.messages[i];
+          break;
+        }
+      }
+      if (!userMessage) return;
+
+      dispatch({ type: "RETRY_FROM_ASSISTANT", assistantMessageId });
+
+      const references = userMessage.metadata?.references ?? [];
+      start({
+        brandId,
+        sessionId: currentSessionId,
+        messages: [
+          {
+            id: crypto.randomUUID(),
+            role: "user" as const,
+            content: userMessage.content,
+            metadata: userMessage.metadata,
+          },
+        ],
+        references,
+        weekStart: currentWeekStartIso(),
+        timezone: resolveTimezone(),
         platformAccountIds,
       })
         .then(() => debouncedRefreshSessions())
@@ -617,7 +669,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     );
 
     const canvasSuggestions = canvasNodes.map(canvasNodeToMentionSuggestion);
-    const skillSuggestions = brandSkills.map(skillToMentionSuggestion);
+    const skillSuggestions = [
+      ...brandSkills.map((s) => skillToMentionSuggestion(s, "Skills")),
+      ...brandSkillTemplates.map((s) => skillToMentionSuggestion(s, "Library")),
+    ];
     const docSuggestions = (mentionContext?.documents ?? []).map((doc) =>
       createOrganicSuggestion(
         {
@@ -651,6 +706,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     calendarDays,
     canvasNodes,
     brandSkills,
+    brandSkillTemplates,
     mentionContext,
     selectedDraftId,
     selectedTrendIds,
@@ -660,6 +716,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     type FolderMeta = { type: AgentMentionSuggestion["type"]; childrenLabel: string };
     const FOLDER_META: Record<string, FolderMeta> = {
       Skills:           { type: "skill",       childrenLabel: "Brand skills" },
+      Library:          { type: "skill",       childrenLabel: "First-party skills" },
       Brain:            { type: "document",    childrenLabel: "Brand documents" },
       Drafts:           { type: "draft",        childrenLabel: "Scheduled & backlog" },
       Trends:           { type: "trend",        childrenLabel: "Active trends" },
@@ -742,13 +799,9 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         </div>
       )}
 
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleMessagesScroll}
-        className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1"
-      >
+      <Conversation className="min-h-0 flex-1">
         {isLoadingMessages ? (
-          <div className="space-y-3 p-1">
+          <div className="space-y-3 p-3">
             <Skeleton className="h-10 w-3/4" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-10 w-1/2" />
@@ -759,25 +812,36 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
               Your AI marketing strategist. Start by describing what you need.
             </p>
             <div className="flex flex-wrap justify-center gap-1.5">
-              {["Plan this week's posts", "Show me trending topics", "Draft an Instagram reel"].map((s) => (
-                <span key={s} className="rounded-full border border-border/50 px-3 py-1 text-[11.5px] text-muted-foreground/60 select-none">
-                  {s}
-                </span>
+              {STARTER_PROMPTS.map((s) => (
+                <Suggestion
+                  key={s}
+                  suggestion={s}
+                  disabled={inputDisabled}
+                  onClick={(text) => handleSubmit(text)}
+                  className="h-auto px-3 py-1 text-[12px] font-normal text-muted-foreground"
+                />
               ))}
             </div>
           </div>
         ) : (
+          <div className="space-y-3 p-1 pr-1.5">
           <AnimatePresence initial={false}>
           {state.messages.map((msg) => (
             <Message key={msg.id} role={msg.role}>
               <div className="space-y-2">
                 {msg.role === "assistant" ? (
-                  <SafeMarkdown
-                    content={msg.content}
-                    className="text-[15px] leading-7 text-foreground text-pretty"
-                    mode={msg.id === state.streamingMessageId ? "streaming" : "static"}
-                    isAnimating={msg.id === state.streamingMessageId}
-                  />
+                  msg.content ? (
+                    <SafeMarkdown
+                      content={msg.content}
+                      className="text-[15px] leading-7 text-foreground text-pretty"
+                      mode={msg.id === state.streamingMessageId ? "streaming" : "static"}
+                      isAnimating={msg.id === state.streamingMessageId}
+                    />
+                  ) : msg.id === state.streamingMessageId &&
+                    (msg.toolCalls?.length ?? 0) === 0 &&
+                    !msg.error ? (
+                    <AgentWorkingIndicator />
+                  ) : null
                 ) : (
                   <p className="whitespace-pre-wrap text-[15px] leading-relaxed"><MentionifiedText text={msg.content} references={msg.metadata?.references} /></p>
                 )}
@@ -793,7 +857,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                   <div className="space-y-2">
                     {msg.mediaSearchResults.map((frame, i) => (
                       <MediaLibrarySearchResults
-                        key={`${frame.type}:${i}`}
+                        key={`media:${i}:${typeof frame.data?.query === "string" ? frame.data.query : ""}`}
                         frame={frame}
                         disabled={inputDisabled}
                         onUseAsset={(item) =>
@@ -813,7 +877,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                       const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
                       if (card.type === "trend_chart") {
                         return (
-                          <motion.div key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
+                          <motion.div key={cardKey(card, i)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
                             <TrendChartCard chart={card.data} />
                           </motion.div>
                         );
@@ -824,7 +888,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                           (p) => p.planId === planId
                         );
                         return (
-                          <motion.div key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
+                          <motion.div key={cardKey(card, i)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
                             <ConceptPlan
                               plan={card.data}
                               planItemStatus={state.planItemStatus}
@@ -851,7 +915,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                         const runId = `run_${planId}`;
                         const run = state.bulkRuns[runId];
                         return (
-                          <motion.div key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }} className="space-y-2">
+                          <motion.div key={cardKey(card, i)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }} className="space-y-2">
                             <BulkPlanCard
                               plan={card.data}
                               onApproveAction={() => {
@@ -869,14 +933,14 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                       }
                       if (card.type === "post_list") {
                         return (
-                          <motion.div key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
+                          <motion.div key={cardKey(card, i)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
                             <PostContentCardGrid posts={card.data} label={card.label} />
                           </motion.div>
                         );
                       }
                       if (card.type === "skill_proposal") {
                         return (
-                          <motion.div key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
+                          <motion.div key={cardKey(card, i)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
                             <SkillProposalCard
                               proposal={card.data}
                               onSavedAction={() => {
@@ -891,31 +955,60 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                     </AnimatePresence>
                   </div>
                 )}
+                {msg.role === "assistant" && msg.error ? (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+                    <span className="min-w-0 text-[13px] text-destructive">{msg.error}</span>
+                    <AgentButton variant="ghost" disabled={isStreaming} onClick={() => handleRetryTurn(msg.id)}>
+                      <RefreshCw className="size-3.5" />
+                      Retry
+                    </AgentButton>
+                  </div>
+                ) : null}
+                {msg.role === "assistant" && !msg.error && msg.content && msg.id !== state.streamingMessageId ? (
+                  <MessageActions
+                    content={msg.content}
+                    onRegenerate={() => handleRetryTurn(msg.id)}
+                    disabled={isStreaming}
+                  />
+                ) : null}
               </div>
             </Message>
           ))}
           </AnimatePresence>
-        )}
-        {state.pendingToolApprovals.length > 0 && (
-          <div className="flex gap-3 overflow-x-auto pb-1 pl-1">
-            {state.pendingToolApprovals.map((approval) => (
-              <ToolApprovalCard
-                key={approval.approvalId}
-                approval={approval}
-                disabled={isStreaming}
-                onApproveAction={() => handleToolApproval(approval, true)}
-                onDenyAction={() => handleToolApproval(approval, false)}
-              />
-            ))}
+          {state.pendingToolApprovals.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pb-1 pl-1">
+              {state.pendingToolApprovals.map((approval) => (
+                <ToolApprovalCard
+                  key={approval.approvalId}
+                  approval={approval}
+                  disabled={isStreaming}
+                  onApproveAction={() => handleToolApproval(approval, true)}
+                  onDenyAction={() => handleToolApproval(approval, false)}
+                />
+              ))}
+            </div>
+          )}
           </div>
         )}
-        <div ref={messagesEndRef} />
-      </div>
+      </Conversation>
 
-      <div className="shrink-0">
+      <div className="relative shrink-0">
+        {brandId && (
+          <div className="absolute bottom-full right-2 z-50 mb-2">
+            <SkillWizardLauncher
+              brandId={brandId}
+              skills={brandSkills}
+              templates={brandSkillTemplates}
+              onChangedAction={() => void refreshBrandSkills()}
+            />
+          </div>
+        )}
         <PromptInput
           onSubmit={(value, _attachments, references) => handleSubmit(value, references)}
           disabled={inputDisabled}
+          isStreaming={isStreaming}
+          onStop={cancel}
+          ariaLabel="Message the organic agent"
           className="px-0"
           mentionProvider={mentionProviderObj}
           queuedMentionSuggestions={queuedMentionSuggestions}
@@ -923,6 +1016,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
           actions={
             <SkillPickerButton
               skills={brandSkills}
+              templates={brandSkillTemplates}
               isError={brandSkillsError}
               onPickAction={(skill) =>
                 setQueuedMentionSuggestions((current) => [...current, skillToMentionSuggestion(skill)])

@@ -14,6 +14,7 @@ export const STUDIO_NODE_TYPES = [
   "veoFast",
   "extendVideo",
   "videoEditor",
+  "timelineEditor",
   "image",
   "video",
   "audio",
@@ -202,12 +203,22 @@ const FRAME_HANDLE_SET = new Set<string>(VIDEO_FRAME_HANDLES);
 const isVideoGeneratorNode = (node: GraphNodeLike): boolean => isVideoGeneratorNodeType(node.type);
 
 const isVideoProducingSource = (node: GraphNodeLike): boolean =>
-  node.type === "video" || node.type === "extendVideo" || node.type === "videoEditor" || isVideoGeneratorNodeType(node.type);
+  node.type === "video" ||
+  node.type === "extendVideo" ||
+  node.type === "videoEditor" ||
+  node.type === "timelineEditor" ||
+  isVideoGeneratorNodeType(node.type);
 
 const isTextProducingSource = (node: GraphNodeLike): boolean => node.type === "string" || node.type === "videoDecode";
 
 export const isClipSlotHandle = (handleId?: string | null): boolean =>
   typeof handleId === "string" && handleId.startsWith("clip-");
+
+// Timeline Editor (timelineEditor) visual-track handle: `media-<itemId>`. Each
+// handle accepts one video-producing source or one image (still). Distinct from
+// the Video Splicer's `clip-<slotId>` vocabulary so both nodes coexist.
+export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
+  typeof handleId === "string" && handleId.startsWith("media-");
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === "string" && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
@@ -243,6 +254,7 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
       return ["image"];
     case "extendVideo":
     case "videoEditor":
+    case "timelineEditor":
       return ["video"];
     default:
       return isVideoGeneratorNode(node) ? ["video"] : [];
@@ -259,6 +271,12 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
       const slots = (node.data as { clipSlots?: Array<{ id?: string }> } | undefined)?.clipSlots ?? [];
       return slots
         .map((slot) => (typeof slot?.id === "string" ? `clip-${slot.id}` : null))
+        .filter((handle): handle is string => Boolean(handle));
+    }
+    case "timelineEditor": {
+      const items = (node.data as { items?: Array<{ id?: string }> } | undefined)?.items ?? [];
+      return items
+        .map((item) => (typeof item?.id === "string" ? `media-${item.id}` : null))
         .filter((handle): handle is string => Boolean(handle));
     }
     case "string":
@@ -290,6 +308,7 @@ export function getTargetHandleConnectionLimit(
   if (node.type === "extendVideo" && targetHandle === "video") return 1;
   if (node.type === "videoDecode" && targetHandle === "video") return 1;
   if (node.type === "videoEditor" && isClipSlotHandle(targetHandle)) return 1;
+  if (node.type === "timelineEditor" && isTimelineMediaHandle(targetHandle)) return 1;
 
   if (!isVideoGeneratorNode(node)) return undefined;
 
@@ -359,6 +378,10 @@ export function isValidConnection(
   } else if (targetNode.type === "videoEditor") {
     if (!isClipSlotHandle(targetHandle)) return false;
     if (!isVideoProducingSource(sourceNode)) return false;
+  } else if (targetNode.type === "timelineEditor") {
+    if (!isTimelineMediaHandle(targetHandle)) return false;
+    const isImageSource = sourceNode.type === "image" || sourceNode.type === "nanoGen";
+    if (!isVideoProducingSource(sourceNode) && !isImageSource) return false;
   } else if (targetNode.type === "videoDecode") {
     if (targetHandle !== "video") return false;
     if (!isVideoProducingSource(sourceNode)) return false;
@@ -477,6 +500,20 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
           audioCodec: "aac",
         },
         style: { width: 380, height: 460 },
+      };
+    case "timelineEditor":
+      return {
+        data: {
+          items: [
+            { id: newSlotId(1), order: 0 },
+            { id: newSlotId(2), order: 1 },
+          ],
+          outputFormat: "mp4",
+          videoCodec: "avc",
+          audioCodec: "aac",
+          committed: false,
+        },
+        style: { width: 440, height: 520 },
       };
     case "string":
       return { data: { value: "" } };

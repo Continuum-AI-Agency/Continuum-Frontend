@@ -283,6 +283,56 @@ describe("PIPELINE_CARD", () => {
   })
 })
 
+describe("STREAM_ERROR", () => {
+  it("sets the error field on the streaming message without clobbering streamed content", () => {
+    const submitted = panelReducer(initialPanelState(), {
+      type: "SUBMIT_USER_MESSAGE",
+      content: "plan my week",
+      messageId: "u1",
+    })
+    const partial = panelReducer(submitted, { type: "STREAM_DELTA", delta: "Here is a plan" })
+    const errored = panelReducer(partial, { type: "STREAM_ERROR", error: "connection lost" })
+
+    const assistant = errored.messages.find((m) => m.role === "assistant")
+    expect(assistant?.content).toBe("Here is a plan")
+    expect(assistant?.error).toBe("connection lost")
+    expect(errored.streamingMessageId).toBeNull()
+  })
+})
+
+describe("RETRY_FROM_ASSISTANT", () => {
+  it("drops the failed assistant turn and re-opens a fresh streaming message", () => {
+    const submitted = panelReducer(initialPanelState(), {
+      type: "SUBMIT_USER_MESSAGE",
+      content: "plan my week",
+      messageId: "u1",
+    })
+    const assistantId = submitted.streamingMessageId!
+    const errored = panelReducer(submitted, { type: "STREAM_ERROR", error: "boom" })
+
+    const retried = panelReducer(errored, { type: "RETRY_FROM_ASSISTANT", assistantMessageId: assistantId })
+
+    // The user message is preserved; the stale assistant turn is replaced.
+    expect(retried.messages).toHaveLength(2)
+    expect(retried.messages[0]).toMatchObject({ id: "u1", role: "user", content: "plan my week" })
+    expect(retried.messages[1].role).toBe("assistant")
+    expect(retried.messages[1].id).not.toBe(assistantId)
+    expect(retried.messages[1].content).toBe("")
+    expect(retried.messages[1].error).toBeUndefined()
+    expect(retried.streamingMessageId).toBe(retried.messages[1].id)
+  })
+
+  it("is a no-op when the assistant message id is unknown", () => {
+    const submitted = panelReducer(initialPanelState(), {
+      type: "SUBMIT_USER_MESSAGE",
+      content: "hi",
+      messageId: "u1",
+    })
+    const next = panelReducer(submitted, { type: "RETRY_FROM_ASSISTANT", assistantMessageId: "missing" })
+    expect(next).toBe(submitted)
+  })
+})
+
 describe("PLAN_STATUS + tool approvals", () => {
   it("records plan item status by itemId", () => {
     const next = panelReducer(initialPanelState(), {

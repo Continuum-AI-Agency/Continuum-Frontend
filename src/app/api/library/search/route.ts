@@ -38,6 +38,7 @@ export async function POST(request: Request) {
   // `limit` (acceptable for chip-level filtering — no RPC/migration change).
   const filterSource = req.filters?.source;
   const filterKind = req.filters?.kind;
+  const filterTags = req.filters?.tags && req.filters.tags.length > 0 ? req.filters.tags : undefined;
 
   // Verify the caller belongs to the brand. has_brand_access is SECURITY
   // DEFINER and reads auth.uid(), so it must run on the user-scoped client.
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
         .in("id", ids);
       if (filterSource) assetQuery = assetQuery.eq("source", filterSource);
       if (filterKind) assetQuery = assetQuery.eq("kind", filterKind);
+      if (filterTags) assetQuery = assetQuery.contains("tags", filterTags);
       const { data: assetRows, error: assetError } = await assetQuery;
 
       if (assetError) {
@@ -158,6 +160,7 @@ export async function POST(request: Request) {
       .in("id", ids);
     if (filterSource) similarQuery = similarQuery.eq("source", filterSource);
     if (filterKind) similarQuery = similarQuery.eq("kind", filterKind);
+    if (filterTags) similarQuery = similarQuery.contains("tags", filterTags);
     const { data: assetRows, error: assetError } = await similarQuery;
 
     if (assetError) {

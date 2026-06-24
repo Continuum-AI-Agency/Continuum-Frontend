@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { spliceClips } from '../utils/splice/spliceClips';
 import { spliceSingleSource } from '../utils/splice/spliceSingleSource';
+import { composeTimeline } from '../utils/splice/composeTimeline';
 import { checkSpliceSupport } from '../utils/splice/webcodecsSupport';
 import type {
   SpliceWorkerInbound,
@@ -77,6 +78,49 @@ async function handleStartSingleSource(
       blob: input.blob,
       ranges: input.ranges,
       maxShortEdgePx: input.maxShortEdgePx,
+      captionWords: input.captionWords,
+      captionStyle: input.captionStyle,
+      videoBitrate: input.videoBitrate,
+      audioBitrate: input.audioBitrate,
+      signal: activeAbortController.signal,
+      onProgress: ({ progress, processedClips, totalClips }) => {
+        if (aborted) return;
+        post({ kind: 'progress', progress, processedClips, totalClips });
+      },
+    });
+
+    if (aborted) return;
+
+    post({
+      kind: 'result',
+      blob: result.blob,
+      width: result.width,
+      height: result.height,
+      durationSec: result.durationSec,
+    });
+  } catch (error) {
+    if (aborted) return;
+    const message = error instanceof Error ? error.message : String(error);
+    post({ kind: 'error', message });
+  } finally {
+    activeAbortController = null;
+  }
+}
+
+async function handleStartTimeline(
+  input: Extract<SpliceWorkerInbound, { kind: 'start_timeline' }>,
+): Promise<void> {
+  const support = await checkSpliceSupport();
+  if (!support.ok) {
+    post({ kind: 'support', ok: false, reason: support.reason });
+    return;
+  }
+
+  activeAbortController = new AbortController();
+
+  try {
+    const result = await composeTimeline({
+      items: input.items,
       videoBitrate: input.videoBitrate,
       audioBitrate: input.audioBitrate,
       signal: activeAbortController.signal,
@@ -121,5 +165,10 @@ self.addEventListener('message', (event: MessageEvent<SpliceWorkerInbound>) => {
 
   if (message.kind === 'start_single_source') {
     void handleStartSingleSource(message);
+    return;
+  }
+
+  if (message.kind === 'start_timeline') {
+    void handleStartTimeline(message);
   }
 });

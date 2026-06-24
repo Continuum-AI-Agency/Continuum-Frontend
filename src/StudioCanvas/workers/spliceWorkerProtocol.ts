@@ -1,3 +1,6 @@
+import type { CaptionWord } from '../utils/splice/captionCues';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+
 export type WorkerClipInput = {
   slotId: string;
   blob: Blob;
@@ -9,6 +12,18 @@ export type WorkerClipInput = {
 export type SingleSourceWorkerRange = {
   startSec: number;
   endSec: number;
+  muteAudio?: boolean;
+};
+
+// One resolved Video Editor (timelineEditor) item. Structurally matches
+// composeTimeline's TimelineRenderItem so it passes straight through.
+export type TimelineWorkerItem = {
+  itemId: string;
+  kind: 'video' | 'image';
+  blob: Blob;
+  trimStartSec?: number;
+  trimEndSec?: number;
+  durationSec?: number;
   muteAudio?: boolean;
 };
 
@@ -24,6 +39,14 @@ export type SpliceWorkerInbound =
       blob: Blob;
       ranges: SingleSourceWorkerRange[];
       maxShortEdgePx?: number;
+      captionWords?: CaptionWord[];
+      captionStyle?: CaptionStyle;
+      videoBitrate?: number;
+      audioBitrate?: number;
+    }
+  | {
+      kind: 'start_timeline';
+      items: TimelineWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;
     }

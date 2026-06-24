@@ -276,3 +276,8 @@ export const awarenessReportSchema = z.object({
   storagePath: z.string().nullable().optional(),
 });
 export type AwarenessReport = z.infer<typeof awarenessReportSchema>;
+
+// Shared DI read cores (paid ads + organic posts). Imported here last so their
+// type-only imports of the shapes above resolve without a runtime cycle.
+export * from "./adsQuery";
+export * from "./organicQuery";

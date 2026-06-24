@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VideoGenNodeData } from '../types';
+import { CreativeSkillMenu, toggleSkillId } from '../components/CreativeSkillMenu';
 import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon, VideoIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -130,6 +131,20 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vid
         data: {
           ...(node.data as VideoGenNodeData),
           resolution: value as VideoGenNodeData['resolution'],
+        },
+      }));
+      triggerSave();
+    },
+    [id, triggerSave, updateNode]
+  );
+
+  const handleToggleSkill = useCallback(
+    (skillId: string) => {
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as VideoGenNodeData),
+          skillIds: toggleSkillId((node.data as VideoGenNodeData).skillIds, skillId),
         },
       }));
       triggerSave();
@@ -407,6 +422,11 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vid
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+          <CreativeSkillMenu
+            brandId={brandId}
+            selectedSkillIds={data.skillIds ?? []}
+            onToggle={handleToggleSkill}
+          />
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
             <PlayIcon className="mr-2 h-4 w-4" />
