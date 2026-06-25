@@ -40,6 +40,23 @@ describe('workflowSerialization', () => {
     expect(firstNode.data).toEqual({ value: 'hello' });
   });
 
+  it('preserves the generation signature across persist and broadcast serialization', () => {
+    // The signature gates reuse-vs-regenerate on load; its delimiters must keep it
+    // from matching the base64 strip so it survives a save/reload round-trip.
+    const sig = 'sig1:nanoGen|positivePrompt=a prompt|model=nano-banana|refs()';
+    const node = buildNode({
+      id: 'gen',
+      type: 'nanoGen',
+      data: { positivePrompt: 'a prompt', model: 'nano-banana', generationSignature: sig },
+    });
+
+    const persisted = serializeWorkflowSnapshot([node], [], 'bezier');
+    const broadcast = serializeForBroadcast([node], [], 'bezier');
+
+    expect((persisted.nodes[0].data as Record<string, unknown>).generationSignature).toBe(sig);
+    expect((broadcast.nodes[0].data as Record<string, unknown>).generationSignature).toBe(sig);
+  });
+
   it('drops edges referencing missing nodes', () => {
     const snapshot = normalizeWorkflowSnapshot(
       {

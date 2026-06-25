@@ -87,6 +87,7 @@ function applySignedUrls(nodes: StudioNode[], urlMap: Map<string, string>): Stud
           documents: hasChanges ? resignedDocs : data.documents,
           ...(imgUrl ? { generatedImageUrl: imgUrl } : {}),
           ...(vidUrl ? { generatedVideoUrl: vidUrl } : {}),
+          ...(imgUrl || vidUrl ? { isComplete: true } : {}),
           ...(refUrl ? { image: refUrl, sourceUrl: refUrl } : {}),
         } as StudioNode["data"],
       };
@@ -101,6 +102,10 @@ function applySignedUrls(nodes: StudioNode[], urlMap: Map<string, string>): Stud
         ...data,
         ...(imgUrl ? { generatedImageUrl: imgUrl } : {}),
         ...(vidUrl ? { generatedVideoUrl: vidUrl } : {}),
+        // Restore the completed badge for a re-signed generated output; the flag
+        // is stripped on save, so a reloaded finished node would otherwise look
+        // unfinished. Reference (image/video) nodes carry no completed state.
+        ...(imgUrl || vidUrl ? { isComplete: true } : {}),
         ...(refUrl ? { [refField]: refUrl, sourceUrl: refUrl } : {}),
       } as StudioNode["data"],
     };

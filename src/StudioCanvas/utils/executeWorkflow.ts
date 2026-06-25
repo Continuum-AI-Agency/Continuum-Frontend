@@ -17,6 +17,7 @@ import { runSpliceInWorker } from "../workers/spliceWorkerClient";
 import type { ClipSlot, VideoEditorNodeData, TimelineItem, TimelineEditorNodeData } from "../types";
 import { registerCanvasOutput } from "@/lib/creative-assets/registerCanvasAsset";
 import { rehydrateWorkflowMediaNodes } from "./rehydrateWorkflowMedia";
+import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from "./generationSignature";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
@@ -499,15 +500,46 @@ const resolveExecutableNodes = (
   return nodes.filter((node) => scope.has(node.id) && isRunnableNodeType(node.type));
 };
 
-// Mirrors the pre-populate condition below: a node whose previous output can be
-// reused as-is (so a targeted run does not re-run finished upstream nodes).
+// A node whose previous output can be reused as-is (so a run does not re-run a
+// node that already has content). Keyed on the durable generated output itself,
+// NOT the transient `isComplete` flag: that flag is stripped on every save and
+// not restored on load, so gating on it made reloaded/synced nodes regenerate
+// even though their output (re-signed `generatedImageUrl`) is present.
 const nodeHasUsableOutput = (node: StudioNode): boolean => {
   const data = node.data as Record<string, unknown>;
   if (node.type === 'string' || node.type === 'videoDecode') {
     return normalizeText(data.value as string | undefined) !== undefined;
   }
-  if (Boolean(data.error) || !data.isComplete) return false;
+  if (Boolean(data.error)) return false;
   return Boolean(data.generatedImage || data.generatedImageUrl || data.generatedVideo || data.generatedVideoUrl);
+};
+
+// Forward mirror of collectUpstreamClosure: every node reachable downstream of
+// the roots, bounded to `scope`. Used to cascade regeneration — when a node is
+// regenerated (empty, errored, edited, or the explicit target), every in-scope
+// node it feeds must regenerate too, since their input just changed.
+const collectDownstreamClosure = (
+  rootIds: Iterable<string>,
+  edges: Edge[],
+  scope: Set<string>
+): Set<string> => {
+  const closure = new Set<string>();
+  const queue: string[] = [];
+  for (const id of rootIds) {
+    if (scope.has(id) && !closure.has(id)) {
+      closure.add(id);
+      queue.push(id);
+    }
+  }
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const edge of edges) {
+      if (edge.source !== current || closure.has(edge.target) || !scope.has(edge.target)) continue;
+      closure.add(edge.target);
+      queue.push(edge.target);
+    }
+  }
+  return closure;
 };
 
 const REFERENCE_INPUT_HANDLES = new Set([
@@ -642,19 +674,26 @@ export async function executeWorkflow(
     executableNodeIds,
   });
 
-  const nodesToReset = new Set(executableNodeIds);
+  const executableNodeIdSet = new Set(executableNodeIds);
 
-  const resetNodeIds = nodes
+  // A run regenerates a node only when it must: the explicit Run target, a node
+  // with no usable output (empty or errored), or a node edited since it
+  // generated (signature drift). Everything downstream of such a node also
+  // regenerates — its input just changed. Every other node that already has
+  // content is reused. This unifies the per-node Run (scope = target + its
+  // upstream closure) and the global Run-all (scope = all media nodes).
+  const regenerationRoots = executableNodes
     .filter((node) => {
-      if (!isRunnableNodeType(node.type) || !nodesToReset.has(node.id)) return false;
-      // Targeted runs reuse finished upstream results: reset only the target and
-      // any dependency that has not yet produced a usable output. Completed
-      // upstreams keep their state so they are pre-populated and reused below.
-      if (options.targetNodeId && node.id !== options.targetNodeId && nodeHasUsableOutput(node)) {
-        return false;
-      }
-      return true;
+      if (options.targetNodeId === node.id) return true;
+      if (!nodeHasUsableOutput(node)) return true;
+      return nodeIsStale(node, edges, nodeById);
     })
+    .map((node) => node.id);
+
+  const mustRegenerate = collectDownstreamClosure(regenerationRoots, edges, executableNodeIdSet);
+
+  const resetNodeIds = executableNodes
+    .filter((node) => mustRegenerate.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
@@ -760,8 +799,9 @@ export async function executeWorkflow(
       }
     }
 
-    // Pre-populate completed generator outputs if they were not reset
-    if (!resetNodeIds.includes(node.id) && (node.data as any).isComplete && !(node.data as any).error) {
+    // Reuse a node's existing output (feed it to downstream consumers) when the
+    // node is not slated to regenerate and already holds usable content.
+    if (!mustRegenerate.has(node.id) && nodeHasUsableOutput(node)) {
       if (node.type === 'nanoGen') {
          const genImage = (node.data as any).generatedImage as string | undefined;
          const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
@@ -836,6 +876,18 @@ export async function executeWorkflow(
     });
   };
 
+  // Stamp the signature of the inputs that produced this output so a later run
+  // can tell whether the node was edited since (see generationSignature.ts).
+  // Read fresh store state: the node's input fields are stable during its own
+  // generation, and upstream text-source values must be current.
+  const generationSignatureFor = (nodeId: string): string | undefined => {
+    const state = useStudioStore.getState();
+    const node = state.nodes.find((n) => n.id === nodeId);
+    if (!node || !isSignatureTracked(node.type)) return undefined;
+    const lookup = new Map(state.nodes.map((n) => [n.id, n]));
+    return computeGenerationSignature(node, state.edges, lookup);
+  };
+
   const setNodeOutput = (nodeId: string, output: NodeOutput) => {
     resolvedOutputs.set(nodeId, output);
     if (output.type === 'image') {
@@ -858,6 +910,7 @@ export async function executeWorkflow(
         generatedImageUrl: persistentUrl,
         generatedImageStoragePath: output.storagePath,
         generatedImageBucket: output.storageBucket,
+        generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false
       });
@@ -885,6 +938,7 @@ export async function executeWorkflow(
         generatedVideoUrl: persistentUrl,
         generatedVideoStoragePath: output.storagePath,
         generatedVideoBucket: output.storageBucket,
+        generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false
       });

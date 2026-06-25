@@ -1,5 +1,6 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
 import { executeWorkflow, collectDownstreamLeafIds } from './executeWorkflow';
+import { computeGenerationSignature } from './generationSignature';
 import { useStudioStore } from '../stores/useStudioStore';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
@@ -928,15 +929,16 @@ describe('executeWorkflow', () => {
   });
 
   it('resumes downstream once the Video Editor clip is committed', async () => {
-    // Same graph, but the editor has a committed render. The gate now surfaces its
-    // persisted clip to the downstream extend node (no re-render), which runs.
+    // Same graph, but the editor has a committed render (isComplete set at render
+    // time). Its persisted clip is reused as-is — surfaced to the downstream
+    // extend node without re-rendering the editor — and the extend node runs.
     const editedUrl = 'https://cdn.continuum.test/videos/edited.mp4';
     const nodes: StudioNode[] = [
       { id: 'vid', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,vvv' }, type: 'video' },
       {
         id: 'edit',
         position: { x: 0, y: 0 },
-        data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }], committed: true, generatedVideoUrl: editedUrl },
+        data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }], committed: true, generatedVideoUrl: editedUrl, isComplete: true },
         type: 'timelineEditor',
       },
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
@@ -963,6 +965,151 @@ describe('executeWorkflow', () => {
     expect(payload.video?.uri).toBe(editedUrl);
     const editNode = useStudioStore.getState().nodes.find((n) => n.id === 'edit');
     expect(editNode?.data.isComplete).toBe(true);
+  });
+
+  describe('skip / regenerate by content', () => {
+    const imgOutput = (nodeId: string) => ({
+      success: true,
+      output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' },
+    });
+
+    it('reuses an upstream generator that has output but no isComplete (post-reload) instead of regenerating it', async () => {
+      // The regression: a node loaded from persistence has its output present
+      // (re-signed URL / kept inline) but isComplete stripped on save. Reuse must
+      // key on the output, not the transient flag.
+      const nodes: StudioNode[] = [
+        {
+          id: 'img-a',
+          position: { x: 0, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'first', generatedImage: 'data:image/png;base64,existing_a' },
+          type: 'nanoGen',
+        },
+        { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'second' }, type: 'nanoGen' },
+      ];
+      const edges: Edge[] = [
+        { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][0]).toBe('img-b');
+      expect(executeGeneration.mock.calls[0][1].reference_images?.[0]?.data).toBe('existing_a');
+      const imgA = useStudioStore.getState().nodes.find((n) => n.id === 'img-a');
+      expect(imgA?.data.generatedImage).toBe('data:image/png;base64,existing_a');
+    });
+
+    it('Run-all reuses every node that already has content (no regeneration)', async () => {
+      const nodes: StudioNode[] = [
+        { id: 'a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'a', generatedImage: 'data:image/png;base64,aaa' }, type: 'nanoGen' },
+        { id: 'b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b', generatedImage: 'data:image/png;base64,bbb' }, type: 'nanoGen' },
+      ];
+      const edges: Edge[] = [
+        { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, {});
+
+      expect(executeGeneration).toHaveBeenCalledTimes(0);
+    });
+
+    it('Run-all fills an empty node while reusing its completed upstream', async () => {
+      const nodes: StudioNode[] = [
+        { id: 'a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'a', generatedImage: 'data:image/png;base64,aaa' }, type: 'nanoGen' },
+        { id: 'b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b' }, type: 'nanoGen' },
+      ];
+      const edges: Edge[] = [
+        { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, {});
+
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][0]).toBe('b');
+      expect(executeGeneration.mock.calls[0][1].reference_images?.[0]?.data).toBe('aaa');
+    });
+
+    it('regenerates a node edited since it generated, and cascades to its downstream consumers', async () => {
+      // img-a was generated with prompt OLD (signature stamped), then edited to
+      // NEW. img-b is unedited but consumes img-a. Run-all must regenerate BOTH:
+      // img-a is stale, img-b is downstream of a regenerating node.
+      const aOld: StudioNode = { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'OLD' }, type: 'nanoGen' };
+      const staleSig = computeGenerationSignature(aOld, [], new Map([['img-a', aOld]]));
+      const nodes: StudioNode[] = [
+        { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'NEW', generatedImage: 'data:image/png;base64,old_a', generationSignature: staleSig }, type: 'nanoGen' },
+        { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b', generatedImage: 'data:image/png;base64,old_b' }, type: 'nanoGen' },
+      ];
+      const edges: Edge[] = [
+        { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, {});
+
+      const called = executeGeneration.mock.calls.map((c) => c[0]).sort();
+      expect(called).toEqual(['img-a', 'img-b']);
+    });
+
+    it('reuses a completed upstream whose stored signature still matches (not stale)', async () => {
+      const aNode: StudioNode = { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'first', generatedImage: 'data:image/png;base64,a' }, type: 'nanoGen' };
+      const edges: Edge[] = [
+        { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+      ];
+      (aNode.data as Record<string, unknown>).generationSignature = computeGenerationSignature(aNode, edges, new Map([['img-a', aNode]]));
+      const nodes: StudioNode[] = [
+        aNode,
+        { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'second' }, type: 'nanoGen' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][0]).toBe('img-b');
+      const imgA = useStudioStore.getState().nodes.find((n) => n.id === 'img-a');
+      expect(imgA?.data.generatedImage).toBe('data:image/png;base64,a');
+    });
+
+    it('stamps a generation signature onto a node when it produces output', async () => {
+      const nodes: StudioNode[] = [
+        { id: 'solo', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'hello' }, type: 'nanoGen' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges([]);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, { targetNodeId: 'solo', clearDownstream: false });
+
+      const solo = useStudioStore.getState().nodes.find((n) => n.id === 'solo');
+      const sig = (solo?.data as Record<string, unknown>).generationSignature;
+      expect(typeof sig).toBe('string');
+      expect((sig as string).startsWith('sig1:')).toBe(true);
+    });
   });
 
   describe('collectDownstreamLeafIds', () => {

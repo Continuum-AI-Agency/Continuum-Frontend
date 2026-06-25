@@ -17,6 +17,10 @@ export interface BaseNodeData extends Record<string, unknown> {
   executionTime?: number;
   isToolbarVisible?: boolean;
   isTourSeed?: boolean;
+  // Canonical signature of the generation inputs that produced the current
+  // output. A run reuses a node's existing output unless this no longer matches
+  // the node's current settings/wiring (the node was edited since it generated).
+  generationSignature?: string;
 }
 
 export type LLMModel = 'claude-3-5-sonnet' | 'gpt-4o' | 'gemini-1.5-pro';
