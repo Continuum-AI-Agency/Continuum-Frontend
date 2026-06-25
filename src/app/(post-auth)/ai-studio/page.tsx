@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
+import { hasProduct } from "@continuum/contracts";
+
 import AIStudioClient from "./AIStudioClient";
 import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
@@ -18,13 +20,13 @@ function AIStudioSkeleton() {
 }
 
 export default async function AIStudioPage() {
-  const { activeBrandId, brandSummaries, activeBrandTier } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, entitlements } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
-  if (activeBrandTier === 0) {
+  if (!entitlements || !hasProduct(entitlements, "studio")) {
     return (
       <TierAccessRedirect description="AI Studio is a paid feature. Please contact an Administrator." />
     );

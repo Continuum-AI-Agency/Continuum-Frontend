@@ -1,6 +1,8 @@
 import "server-only";
 
 import { cache } from "react";
+import { type Entitlements, entitlementsSchema } from "@continuum/contracts";
+import { billingSchema } from "@/lib/billing/supabase-billing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { resolveActiveBrandId } from "@/lib/brands/resolve-active-brand";
@@ -37,7 +39,10 @@ export type ActiveBrandContext = {
     brand_profile_id: string;
     role: string | null;
   }>;
+  // activeBrandTier is the legacy monetization gate; superseded by `entitlements`.
+  // Kept readable through the tier→entitlements transition; removed in M4.
   activeBrandTier: number;
+  entitlements: Entitlements | null;
   user: AuthIdentity | null;
 };
 
@@ -57,6 +62,30 @@ function isStatementTooComplex(error: unknown): boolean {
   }
 
   return (error as { code?: string }).code === "54001";
+}
+
+async function fetchActiveBrandEntitlements(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  brandId: string,
+): Promise<Entitlements | null> {
+  try {
+    const { data, error } = await billingSchema(supabase).rpc("get_brand_entitlements", {
+      p_brand_id: brandId,
+    });
+    if (error) {
+      console.error("[activeBrand] entitlements rpc failed", error);
+      return null;
+    }
+    const parsed = entitlementsSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error("[activeBrand] entitlements parse failed", parsed.error.message);
+      return null;
+    }
+    return parsed.data;
+  } catch (error) {
+    console.error("[activeBrand] entitlements fetch threw", describeError(error));
+    return null;
+  }
 }
 
 async function fetchAccessibleBrandRows(user: AuthIdentity, supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
@@ -229,6 +258,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       brandSummaries,
       permissions: perms ?? [],
       activeBrandTier: 0,
+      entitlements: null,
       user
     };
   }
@@ -253,5 +283,8 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   }
 
   const activeBrandTier = activeBrandId ? brandMap.get(activeBrandId)?.tier ?? 0 : 0;
-  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier, user };
+  const entitlements = activeBrandId
+    ? await fetchActiveBrandEntitlements(supabase, activeBrandId)
+    : null;
+  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier, entitlements, user };
 });

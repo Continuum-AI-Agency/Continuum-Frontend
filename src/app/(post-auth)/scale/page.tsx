@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { hasProduct } from "@continuum/contracts";
 
 import PaidMediaClientPage from "./PaidMediaClient";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
@@ -6,14 +7,14 @@ import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import { fetchTimelineAccounts } from "@/lib/paid-media/paid-media-data.server";
 
 export default async function PaidMediaPage() {
-  const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
+  const { activeBrandId, entitlements, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
-  // Permission gate: allow only tiers 1,2,3; tier 0 (or missing) is blocked.
-  if (activeBrandTier === 0) {
+  // Entitlement gate: Paid Media requires the `paid_media` product.
+  if (!entitlements || !hasProduct(entitlements, "paid_media")) {
     return (
       <TierAccessRedirect description="Paid Media is a paid feature. Please contact an Administrator." />
     );

@@ -12,4 +12,5 @@ export * from "./brands/index";
 export * from "./mcp/index";
 export * from "./ai-studio/index";
 export * from "./skills/index";
+export * from "./billing/index";
 export * from "./errors/integration-error";

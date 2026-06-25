@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { documentCategorySchema } from "@continuum/contracts";
+import { addOnSchema, documentCategorySchema, productSchema } from "@continuum/contracts";
 import {
   compressToEncodedURIComponent,
   decompressFromEncodedURIComponent,
@@ -181,8 +181,29 @@ const brandInviteSchema = z.object({
   expiresAt: z.union([isoDateString, z.null()]).optional(),
 });
 
+// Product/add-on selection captured during onboarding. Drives entitlement
+// provisioning (trial on complete) + the activate-plan checkout afterwards.
+const planSelectionSchema = z.object({
+  interestArea: z.enum(["paid_media", "organic", "both"]).nullable().default(null),
+  products: z.array(productSchema).default([]),
+  addons: z.array(addOnSchema).default([]),
+  trendsTier: z.enum(["base", "pro"]).nullable().default(null),
+  planCode: z.union([z.string(), z.null()]).default(null),
+  checkoutCompleted: z.boolean().default(false),
+});
+
+const defaultPlanSelection = (): z.infer<typeof planSelectionSchema> => ({
+  interestArea: null,
+  products: [],
+  addons: [],
+  trendsTier: null,
+  planCode: null,
+  checkoutCompleted: false,
+});
+
 const onboardingStateSchema = z.object({
   step: z.number().int().min(0).max(4),
+  plan: planSelectionSchema.default(defaultPlanSelection),
   brand: brandSchema,
   documents: z.array(onboardingDocumentSchema),
   connections: z.object(connectionShape),
@@ -200,6 +221,7 @@ const onboardingStateSchema = z.object({
 
 const onboardingPatchSchema = z.object({
   step: z.number().int().min(0).max(4).optional(),
+  plan: planSelectionSchema.partial().optional(),
   brand: brandSchema.partial().optional(),
   documents: z.array(onboardingDocumentSchema).optional(),
   connections: z.object(connectionPatchShape).partial().optional(),
@@ -252,6 +274,7 @@ function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState
 export function createDefaultOnboardingState(owner?: BrandMember): OnboardingState {
   return {
     step: 0,
+    plan: defaultPlanSelection(),
     brand: {
       name: owner ? `${owner.email.split("@")[0]}'s Brand` : "",
       industry: "",
@@ -344,6 +367,7 @@ export function mergeOnboardingState(
 ): OnboardingState {
   const next: OnboardingState = {
     step: current.step,
+    plan: { ...current.plan },
     brand: { ...current.brand },
     documents: [...current.documents],
     connections: { ...current.connections },
@@ -355,6 +379,18 @@ export function mergeOnboardingState(
 
   if (patch.step !== undefined) {
     next.step = clampStep(patch.step);
+  }
+
+  if (patch.plan) {
+    next.plan = {
+      interestArea:
+        patch.plan.interestArea === undefined ? next.plan.interestArea : patch.plan.interestArea,
+      products: patch.plan.products ?? next.plan.products,
+      addons: patch.plan.addons ?? next.plan.addons,
+      trendsTier: patch.plan.trendsTier === undefined ? next.plan.trendsTier : patch.plan.trendsTier,
+      planCode: patch.plan.planCode === undefined ? next.plan.planCode : patch.plan.planCode,
+      checkoutCompleted: patch.plan.checkoutCompleted ?? next.plan.checkoutCompleted,
+    };
   }
 
   if (patch.brand) {

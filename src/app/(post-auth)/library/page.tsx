@@ -7,7 +7,7 @@ import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { fetchMediaAssets, fetchMediaCollections, fetchStorageUsedBytes } from "@/lib/media/fetchers.server";
 import { fetchBrandStyle } from "@/lib/ai-studio/brandStyle.server";
 import { buildCaptionStyle } from "@/lib/clips/clipCaptionStyle";
-import { isPaidTier } from "@/lib/media/tier";
+import { hasProduct } from "@continuum/contracts";
 import { LibraryViewer } from "@/components/library/LibraryViewer";
 
 export const metadata: Metadata = {
@@ -40,7 +40,7 @@ async function LibraryContent({
   source?: MediaSource;
   kind?: MediaKind;
 }) {
-  const { activeBrandId, activeBrandTier } = await getActiveBrandContext();
+  const { activeBrandId, entitlements } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
@@ -56,7 +56,7 @@ async function LibraryContent({
   return (
     <LibraryViewer
       brandId={activeBrandId}
-      isPaid={isPaidTier(activeBrandTier)}
+      isPaid={entitlements ? hasProduct(entitlements, "studio") : false}
       initialAssets={assets}
       initialCollections={collections}
       storageUsedBytes={storageUsedBytes}

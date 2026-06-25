@@ -1,18 +1,19 @@
 import { redirect } from "next/navigation";
+import { hasProduct } from "@continuum/contracts";
 
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import ApprovalsClient from "./ApprovalsClient";
 
 export default async function ApprovalsPage() {
-  const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
+  const { activeBrandId, entitlements, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
-  // Match the paid-media tier gate: tiers 1-3 only.
-  if (activeBrandTier === 0) {
+  // Match the paid-media entitlement gate.
+  if (!entitlements || !hasProduct(entitlements, "paid_media")) {
     return (
       <TierAccessRedirect description="Approvals is a paid feature. Please contact an Administrator." />
     );
