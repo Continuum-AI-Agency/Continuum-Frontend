@@ -390,13 +390,28 @@ async function realizeImages(
         const feId = feIdByBackendId.get(frame.draftId)
         ready++
         if (feId) {
+          // Mount the persisted, render-ready assets the server returned so the
+          // card shows the generated creative immediately — no refetch/reload.
+          // publishingAssets is the shape every card resolver reads (incl. the
+          // carousel-only detail-preview strip); assetUrl mirrors the primary.
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
             generationError: undefined,
-            mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: "ready" },
+            ...(frame.publishingAssets ? { publishingAssets: frame.publishingAssets } : {}),
+            mediaSuggestion: {
+              ...draft.mediaSuggestion,
+              mediaStatus: "ready",
+              ...(frame.assetUrl ? { assetUrl: frame.assetUrl, signedUrl: frame.assetUrl } : {}),
+            },
           }))
-          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: "completed", stage: undefined })
+          upsertGeneration({
+            jobId: realizeJobId(feId),
+            draftId: feId,
+            status: "completed",
+            stage: undefined,
+            ...(frame.assetUrl ? { previewUrl: frame.assetUrl } : {}),
+          })
         }
         break
       }
@@ -421,6 +436,10 @@ async function realizeImages(
             description: `${frame.ready} draft${frame.ready === 1 ? "" : "s"} have media ready${frame.failed > 0 ? `, ${frame.failed} failed` : ""}.`,
             variant: frame.failed > 0 ? "error" : "success",
           })
+          // Convergence safety net: realize_ready already mounted the assets for
+          // an instant render; a refetch pulls the durable re-signed draft so the
+          // calendar stays correct even if a frame was missed.
+          useCalendarStore.getState().requestCalendarRefetch()
         } else if (frame.failed > 0) {
           show({
             title: "Media generation failed",
