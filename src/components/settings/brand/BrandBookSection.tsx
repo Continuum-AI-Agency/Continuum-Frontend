@@ -8,10 +8,18 @@ import {
 } from "@continuum/contracts";
 import { buildBrandBookView } from "./brandBookView";
 import { BrandBookActions } from "./BrandBookActions";
+import { BrandBookEmptyState } from "./BrandBookEmptyState";
 import { BrandMdDirtyProvider } from "./BrandMdDirtyContext";
 import { BrandMdEditor } from "./BrandMdEditor";
 import { BrandScorecard } from "./BrandScorecard";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import type { BrandBookGenerationPayload } from "./brandBookGeneration";
+
+export type BrandBookGeneration = {
+  brandId: string;
+  brandName: string;
+  payload: BrandBookGenerationPayload | null;
+};
 
 // Renders one section's markdown-ish body lines: groups consecutive table rows
 // (`| … |`) into a monospace block and treats `### ` lines as sub-headings.
@@ -101,6 +109,7 @@ function ColorSwatchStrip({ colors }: { colors: BrandColorToken[] }) {
       {colors.map((token, i) => (
         <div key={`${token.value}-${i}`} className="flex items-center gap-1.5">
           <span
+            role="img"
             className="inline-block h-5 w-5 rounded-sm border border-white/20 shrink-0"
             style={{ backgroundColor: token.value }}
             aria-label={token.name ?? token.value}
@@ -166,8 +175,23 @@ function StructuredTierGroups({ brandBook }: { brandBook: BrandBookResponse }) {
 // flag to suppress auto-refresh) and BrandMdEditor (which sets it). Since
 // BrandBookSection is an RSC the provider is a thin "use client" wrapper
 // declared in BrandMdDirtyContext.tsx — no "use client" needed here.
-export function BrandBookSection({ brandBook }: { brandBook: BrandBookResponse | null }) {
+export function BrandBookSection({
+  brandBook,
+  generation,
+}: {
+  brandBook: BrandBookResponse | null;
+  generation?: BrandBookGeneration | null;
+}) {
   if (!brandBook) {
+    if (generation) {
+      return (
+        <BrandBookEmptyState
+          brandId={generation.brandId}
+          brandName={generation.brandName}
+          payload={generation.payload}
+        />
+      );
+    }
     return (
       <Text color="gray">
         Your Brand Book appears here once onboarding has generated your brand report.

@@ -28,7 +28,9 @@ import {
 } from "@/lib/integrations/userIntegrations";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
-import { ensureOnboardingState } from "@/lib/onboarding/storage";
+import { ensureOnboardingState, fetchOnboardingState } from "@/lib/onboarding/storage";
+import { mapOnboardingStateToAgentPayload } from "@/lib/onboarding/mapping";
+import type { AgentRequestPayload } from "@/lib/onboarding/agentClient";
 import { SettingsShell } from "@/components/settings/shell/SettingsShell";
 import { SettingsSection } from "@/components/settings/shell/SettingsSection";
 import { BrandNavPill } from "@/components/settings/shell/BrandNavPill";
@@ -134,6 +136,22 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   } else if (initialSection === "brand-book") {
     const brandBook = await fetchBrandBook(activeBrandId);
 
+    // No composite yet → let the empty state kick off a first-time report run.
+    // Build the same payload onboarding sends from stored onboarding state, but
+    // prefer the canonical brand record name over the mapper's derived fallback.
+    let generationPayload: AgentRequestPayload | null = null;
+    if (!brandBook && user?.id) {
+      const onboardingState = await fetchOnboardingState(activeBrandId);
+      const mapped = mapOnboardingStateToAgentPayload(activeBrandId, user.id, onboardingState);
+      const brandName =
+        defaultBrandName !== "Untitled Brand" ? defaultBrandName : mapped.runContext.brand_name;
+      generationPayload = {
+        ...mapped,
+        brandProfile: { ...mapped.brandProfile, brand_name: brandName },
+        runContext: { ...mapped.runContext, brand_name: brandName },
+      };
+    }
+
     activeSectionSlot = (
       <>
         {createBrandHeader(defaultBrandName)}
@@ -141,7 +159,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           title="Brand Book"
           description="Your living brand identity — shown shallow during onboarding, deepened automatically over time."
         >
-          <BrandBookSection brandBook={brandBook} />
+          <BrandBookSection
+            brandBook={brandBook}
+            generation={{
+              brandId: activeBrandId,
+              brandName: defaultBrandName,
+              payload: generationPayload,
+            }}
+          />
         </SettingsSection>
       </>
     );
