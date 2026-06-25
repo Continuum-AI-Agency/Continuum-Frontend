@@ -1093,6 +1093,26 @@ describe('executeWorkflow', () => {
       expect(imgA?.data.generatedImage).toBe('data:image/png;base64,a');
     });
 
+    it('forceRegenerateAll re-runs every node even when they already have content', async () => {
+      const nodes: StudioNode[] = [
+        { id: 'a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'a', generatedImage: 'data:image/png;base64,aaa' }, type: 'nanoGen' },
+        { id: 'b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b', generatedImage: 'data:image/png;base64,bbb' }, type: 'nanoGen' },
+      ];
+      const edges: Edge[] = [
+        { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, { forceRegenerateAll: true });
+
+      const called = executeGeneration.mock.calls.map((c) => c[0]).sort();
+      expect(called).toEqual(['a', 'b']);
+    });
+
     it('stamps a generation signature onto a node when it produces output', async () => {
       const nodes: StudioNode[] = [
         { id: 'solo', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'hello' }, type: 'nanoGen' },
