@@ -93,6 +93,13 @@ export async function mutateOnboardingStateAction(
   return applyOnboardingPatch(brandId, patch);
 }
 
+export async function selectPlanAction(
+  brandId: string,
+  plan: NonNullable<OnboardingPatch["plan"]>
+): Promise<OnboardingState> {
+  return applyOnboardingPatch(brandId, { plan });
+}
+
 export async function resetOnboardingStateAction(brandId: string): Promise<OnboardingState> {
   return resetOnboardingState(brandId);
 }

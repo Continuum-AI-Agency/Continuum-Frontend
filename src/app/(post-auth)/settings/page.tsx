@@ -13,6 +13,7 @@ import { BrandIntegrationsSwitcher } from "@/components/settings/brand/BrandInte
 import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection";
 import { MyConnectionsSharingSection } from "@/components/integrations/MyConnectionsSharingSection";
 import { BrandBillingPanel } from "@/components/settings/brand/BrandBillingPanel";
+import { fetchCreditSummary } from "@/lib/billing/summary.server";
 import { UserProfileSection } from "@/components/settings/account/UserProfileSection";
 import { UserConnectionsSwitcher } from "@/components/settings/account/UserConnectionsSwitcher";
 import { McpConnectionsSection } from "@/components/settings/account/McpConnectionsSection";
@@ -46,11 +47,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     activeBrandId,
     brandSummaries,
     permissions,
-    activeBrandTier,
+    entitlements,
     user,
   } = await getActiveBrandContext();
   const params = await searchParams;
   const initialSection = resolveSection(params?.section);
+  const creditSummary =
+    activeBrandId && initialSection === "billing" ? await fetchCreditSummary(activeBrandId) : null;
 
   if (!activeBrandId) {
     return (
@@ -236,7 +239,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           title="Billing & credits"
           description="AI Studio tier, credits, and plan management."
         >
-          <BrandBillingPanel tier={activeBrandTier} />
+          <BrandBillingPanel
+            brandId={activeBrandId ?? ""}
+            entitlements={entitlements}
+            credit={creditSummary}
+          />
         </SettingsSection>
       </>
     );
