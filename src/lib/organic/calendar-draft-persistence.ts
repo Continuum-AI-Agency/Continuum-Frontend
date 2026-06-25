@@ -98,6 +98,11 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSugg
     width: readNumber(obj.width) ?? null,
     height: readNumber(obj.height) ?? null,
     assetUrl: readString(obj.assetUrl) ?? readString(obj.url) ?? readString(obj.signedUrl) ?? null,
+    // Preserve mediaStatus so a 'user_supplied' attach/apply survives the round-trip
+    // — both the attach-wins guard and the refetch-merge protection key off it.
+    mediaStatus: (readString(obj.mediaStatus) ?? undefined) as NonNullable<
+      OrganicCalendarDraft["mediaSuggestion"]
+    >["mediaStatus"],
     alt: readString(obj.alt) ?? null,
     hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
     reel: restoreReel(obj.reel) ?? null,
@@ -383,6 +388,36 @@ export function mergeUnsavedLocalDrafts(
     }),
   )
 
+  // A draft the user gave their own creative (AI Studio apply / manual attach) is
+  // marked 'user_supplied'. The server row for an agent draft still carries the
+  // OLD generated creative, so a refetch would clobber the applied one. Keep the
+  // local user-supplied media (keyed on every identity axis) and splice it back
+  // onto the matching server slot so the applied creative does not flicker away.
+  const userSuppliedLocal = new Map<string, OrganicCalendarDraft>()
+  for (const localDay of localDays) {
+    for (const draft of localDay.slots) {
+      if (draft.mediaSuggestion?.mediaStatus !== "user_supplied") continue
+      if (draft.backendDraftId) userSuppliedLocal.set(draft.backendDraftId, draft)
+      if (draft.clientKey) userSuppliedLocal.set(draft.clientKey, draft)
+    }
+  }
+  const preserveUserSuppliedMedia = (slot: OrganicCalendarDraft): OrganicCalendarDraft => {
+    const local =
+      (slot.backendDraftId ? userSuppliedLocal.get(slot.backendDraftId) : undefined) ??
+      (slot.clientKey ? userSuppliedLocal.get(slot.clientKey) : undefined)
+    if (!local) return slot
+    return {
+      ...slot,
+      mediaSuggestion: local.mediaSuggestion,
+      publishingAssets: local.publishingAssets,
+      mediaCount: local.mediaCount,
+    }
+  }
+  const serverDaysWithLocalMedia =
+    userSuppliedLocal.size === 0
+      ? serverDays
+      : serverDays.map((day) => ({ ...day, slots: day.slots.map(preserveUserSuppliedMedia) }))
+
   const unsavedByDayId = new Map<string, OrganicCalendarDraft[]>()
   for (const localDay of localDays) {
     for (const draft of localDay.slots) {
@@ -397,10 +432,10 @@ export function mergeUnsavedLocalDrafts(
     }
   }
 
-  if (unsavedByDayId.size === 0) return serverDays
+  if (unsavedByDayId.size === 0) return serverDaysWithLocalMedia
 
-  const serverDayIds = new Set(serverDays.map((day) => day.id))
-  const merged = serverDays.map((day) => {
+  const serverDayIds = new Set(serverDaysWithLocalMedia.map((day) => day.id))
+  const merged = serverDaysWithLocalMedia.map((day) => {
     const pending = unsavedByDayId.get(day.id)
     return pending ? { ...day, slots: [...day.slots, ...pending] } : day
   })

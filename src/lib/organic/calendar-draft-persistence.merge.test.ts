@@ -75,4 +75,53 @@ describe("mergeUnsavedLocalDrafts", () => {
     expect(merged).toHaveLength(1)
     expect(merged[0].slots).toEqual([])
   })
+
+  it("preserves an applied user_supplied creative on an agent draft over the stale server media", () => {
+    // The AI-Studio-apply / manual-attach revert: the server row still carries the
+    // OLD agent creative; the local store draft is user_supplied with the NEW one.
+    const server = [
+      day("2026-06-18", [
+        draft({
+          id: "be-1",
+          backendDraftId: "be-1",
+          mediaSuggestion: { mediaStatus: "ready", assetUrl: "OLD-agent.png" },
+          publishingAssets: [
+            { role: "primary", kind: "image", storagePath: "p/old.png", storageUrl: "OLD-agent.png" },
+          ],
+        }),
+      ]),
+    ]
+    const local = [
+      day("2026-06-18", [
+        draft({
+          id: "be-1",
+          backendDraftId: "be-1",
+          mediaSuggestion: { mediaStatus: "user_supplied", assetUrl: "NEW-applied.png" },
+          publishingAssets: [
+            { role: "primary", kind: "image", storagePath: "p/new.png", storageUrl: "NEW-applied.png" },
+          ],
+          mediaCount: 1,
+        }),
+      ]),
+    ]
+    const slot = mergeUnsavedLocalDrafts(server, local)[0].slots[0]
+    expect(slot.mediaSuggestion?.mediaStatus).toBe("user_supplied")
+    expect(slot.mediaSuggestion?.assetUrl).toBe("NEW-applied.png")
+    expect(slot.publishingAssets?.[0]?.storageUrl).toBe("NEW-applied.png")
+  })
+
+  it("does not override server media when the local draft is not user_supplied", () => {
+    const server = [
+      day("2026-06-18", [
+        draft({ id: "be-1", backendDraftId: "be-1", mediaSuggestion: { mediaStatus: "ready", assetUrl: "agent.png" } }),
+      ]),
+    ]
+    const local = [
+      day("2026-06-18", [
+        draft({ id: "be-1", backendDraftId: "be-1", mediaSuggestion: { mediaStatus: "ready", assetUrl: "stale-local.png" } }),
+      ]),
+    ]
+    const slot = mergeUnsavedLocalDrafts(server, local)[0].slots[0]
+    expect(slot.mediaSuggestion?.assetUrl).toBe("agent.png")
+  })
 })
