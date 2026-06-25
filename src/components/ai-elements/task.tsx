@@ -99,7 +99,7 @@ export const TaskTrigger = ({
           {title}
         </p>
         {progress && (
-          <span className="text-[10px] font-mono text-muted-foreground/60 uppercase">
+          <span className="text-2xs font-mono text-muted-foreground/60 uppercase">
             {progress.current}/{progress.total}
           </span>
         )}

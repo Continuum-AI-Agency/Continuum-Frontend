@@ -68,17 +68,17 @@ export function ApprovalsCompact({ brandId, className }: Props) {
     <div className={cn("flex h-full min-h-0 flex-col gap-3 p-3", className)}>
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Pending
           </span>
           <LiveStatusDot isDryRun={isDryRun} isFetching={list.isFetching} />
-          <span className="font-data text-[11px] tabular-nums text-muted-foreground">
+          <span className="font-data text-xs tabular-nums text-muted-foreground">
             {total}
           </span>
         </div>
         <Link
           href="/scale/approvals"
-          className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
         >
           Full surface
           <ArrowUpRight className="h-3 w-3" strokeWidth={1.5} />

@@ -11,7 +11,7 @@ export function TypographyCard({ primary, secondary, chip }: Props) {
   return (
     <Card className="border-[#e5e7eb] shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide text-[#64748b]">
           Typography
         </CardTitle>
         {chip}
@@ -23,7 +23,7 @@ export function TypographyCard({ primary, secondary, chip }: Props) {
             <FontSample family={secondary} role="Secondary" weight={400} />
           </div>
         ) : (
-          <p className="text-[12px] italic text-[#94a3b8]">No fonts detected.</p>
+          <p className="text-sm italic text-[#94a3b8]">No fonts detected.</p>
         )}
       </CardContent>
     </Card>

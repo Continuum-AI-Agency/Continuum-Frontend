@@ -27,7 +27,7 @@ export function OnboardingBrandSwitcher() {
         <button
           type="button"
           disabled={isSwitching}
-          className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-[12px] font-medium text-[var(--sidebar-foreground)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_8%,transparent)] disabled:opacity-60 dark:bg-card"
+          className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--sidebar-foreground)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_8%,transparent)] disabled:opacity-60 dark:bg-card"
         >
           {isSwitching ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

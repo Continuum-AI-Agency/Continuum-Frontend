@@ -63,7 +63,7 @@ function AssetTile({ asset, order, onToggle }: { asset: MediaAsset; order: numbe
         )}
       >
         {isSelected && (
-          <div className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground">
+          <div className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
             {order}
           </div>
         )}
@@ -146,7 +146,7 @@ export function MediaSelectPopover({
       </PopoverAnchor>
       <PopoverContent side="right" align="start" sideOffset={10} className="w-[22rem] p-2.5">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Add media
           </p>
           {canGenerate && onGenerate && (
@@ -156,7 +156,7 @@ export function MediaSelectPopover({
               variant="outline"
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="h-7 gap-1 border-primary/40 bg-primary/10 px-2 text-[11px] text-primary hover:bg-primary/20"
+              className="h-7 gap-1 border-primary/40 bg-primary/10 px-2 text-xs text-primary hover:bg-primary/20"
             >
               {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
               Generate
@@ -174,20 +174,25 @@ export function MediaSelectPopover({
           />
         </div>
 
-        <LibraryFilterBar
-          source={filters.source}
-          kind={filters.kind}
-          onSourceChange={(value) => setFilters({ source: value })}
-          onKindChange={(value) => setFilters({ kind: value })}
-          variant="compact"
-        />
+        {/* Scroll/shrink wrapper: the source + kind pill groups can together exceed
+            the fixed-width popover; keep them reachable instead of clipped. */}
+        <div className="min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <LibraryFilterBar
+            source={filters.source}
+            kind={filters.kind}
+            onSourceChange={(value) => setFilters({ source: value })}
+            onKindChange={(value) => setFilters({ kind: value })}
+            variant="compact"
+            className="flex-nowrap"
+          />
+        </div>
 
         <div className="mt-2 max-h-64 overflow-y-auto pr-0.5">
           {assets.length === 0 && loading ? (
             <SkeletonGrid />
           ) : assets.length === 0 ? (
             <div className="flex min-h-[6rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-4">
-              <p className="text-center text-[11px] text-muted-foreground/60">
+              <p className="text-center text-xs text-muted-foreground/60">
                 {query.trim() ? (
                   "No matching creatives."
                 ) : (

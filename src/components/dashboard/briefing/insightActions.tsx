@@ -38,7 +38,7 @@ export function InsightContextActions({ permalink }: { permalink?: string }) {
   const router = useRouter();
   return (
     <>
-      <ContextMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+      <ContextMenuLabel className="text-2xs uppercase tracking-wide text-muted-foreground">
         Take action
       </ContextMenuLabel>
       {NORTH_STAR_VERBS.map((verb) => (

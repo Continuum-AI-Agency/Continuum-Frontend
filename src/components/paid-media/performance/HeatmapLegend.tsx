@@ -22,7 +22,7 @@ export function HeatmapLegend({ className }: HeatmapLegendProps) {
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-[0.08em] text-muted-foreground",
+        "flex flex-wrap items-center gap-3 text-2xs uppercase tracking-[0.08em] text-muted-foreground",
         className
       )}
     >

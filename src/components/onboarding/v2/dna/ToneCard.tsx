@@ -12,7 +12,7 @@ export function ToneCard({ chip, finding }: Props) {
   return (
     <Card className="border-[#e5e7eb] shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide text-[#64748b]">
           Tone of voice
         </CardTitle>
         {chip}

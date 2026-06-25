@@ -16,7 +16,7 @@ export function StepPill({ label, state, onClick }: StepPillProps) {
       onClick={interactive ? onClick : undefined}
       disabled={!interactive}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors",
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
         state === "done" && "bg-[color-mix(in_srgb,var(--cs-teal,#0daea2)_12%,transparent)] text-[var(--cs-teal,#0daea2)]",
         state === "active" && "bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_12%,transparent)] text-[var(--cs-violet,#5a39ff)]",
         state === "pending" && "cursor-default bg-muted text-muted-foreground",

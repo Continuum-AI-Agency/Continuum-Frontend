@@ -59,7 +59,7 @@ export function DnaProgressPill() {
         <div className="flex items-center justify-between gap-3">
           <p
             className={cn(
-              "truncate text-[12px] font-semibold",
+              "truncate text-sm font-semibold",
               allComplete ? "text-[var(--ob-teal)]" : "text-[#0b1220]"
             )}
           >
@@ -78,7 +78,7 @@ export function DnaProgressPill() {
               </motion.span>
             </AnimatePresence>
           </p>
-          <span className="shrink-0 text-[10px] font-semibold tabular-nums text-[#94a3b8]">
+          <span className="shrink-0 text-2xs font-semibold tabular-nums text-[#94a3b8]">
             {Math.round(progressPercent)}%
           </span>
         </div>

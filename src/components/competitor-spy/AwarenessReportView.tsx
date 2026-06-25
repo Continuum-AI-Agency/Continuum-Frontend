@@ -1,6 +1,8 @@
 "use client";
 
 import type { AwarenessBlock, AwarenessReportPayload } from "@continuum/contracts";
+import { MetricStrip } from "@/components/shared/MetricStrip";
+import { SectionHeader } from "@/components/shared/SectionHeader";
 
 interface Metric {
   label: string;
@@ -18,16 +20,7 @@ interface FeedRow {
 }
 
 function MetricGrid({ metrics }: { metrics: Metric[] }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {metrics.map((m) => (
-        <div key={m.label} className="rounded-lg bg-muted/60 p-3">
-          <div className="text-2xl font-semibold">{m.value}</div>
-          <div className="text-xs text-muted-foreground">{m.label}</div>
-        </div>
-      ))}
-    </div>
-  );
+  return <MetricStrip items={metrics.map((m) => ({ label: m.label, value: String(m.value) }))} />;
 }
 
 function CountList({ items }: { items: CountItem[] }) {
@@ -63,15 +56,17 @@ function Feed({ rows }: { rows: FeedRow[] }) {
 function BlockCard({ block }: { block: AwarenessBlock }) {
   const data = (block.data ?? {}) as Record<string, unknown>;
   return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-3 text-sm font-semibold">{block.title}</h3>
-      {block.category === "summary" ? (
-        <MetricGrid metrics={(data.metrics as Metric[]) ?? []} />
-      ) : block.category === "lifecycle_feed" ? (
-        <Feed rows={(data.rows as FeedRow[]) ?? []} />
-      ) : (
-        <CountList items={(data.items as CountItem[]) ?? []} />
-      )}
+    <section className="rounded-lg border border-border bg-card">
+      <SectionHeader title={block.title} />
+      <div className="p-4">
+        {block.category === "summary" ? (
+          <MetricGrid metrics={(data.metrics as Metric[]) ?? []} />
+        ) : block.category === "lifecycle_feed" ? (
+          <Feed rows={(data.rows as FeedRow[]) ?? []} />
+        ) : (
+          <CountList items={(data.items as CountItem[]) ?? []} />
+        )}
+      </div>
     </section>
   );
 }

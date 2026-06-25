@@ -634,7 +634,7 @@ export function ObservabilityLightweightChart({
             <button
               key={bookmark.key}
               type="button"
-              className="pointer-events-auto absolute inline-flex max-w-[180px] -translate-x-1/2 items-center gap-1 rounded-[5px] border border-amber-500/40 bg-amber-500/14 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 shadow-sm dark:text-amber-200"
+              className="pointer-events-auto absolute inline-flex max-w-[180px] -translate-x-1/2 items-center gap-1 rounded-[5px] border border-amber-500/40 bg-amber-500/14 px-1.5 py-0.5 text-2xs font-medium text-amber-800 shadow-sm dark:text-amber-200"
               style={{
                 left: bookmark.x,
                 top: overlayGeometry.lineBottom + 4,
@@ -683,7 +683,7 @@ export function ObservabilityLightweightChart({
 
       {!compact && hover ? (
         <div
-          className="pointer-events-none absolute z-20 max-w-[240px] rounded-md border border-border/80 bg-background/95 px-2 py-1.5 text-[11px] shadow-md backdrop-blur-sm"
+          className="pointer-events-none absolute z-20 max-w-[240px] rounded-md border border-border/80 bg-background/95 px-2 py-1.5 text-xs shadow-md backdrop-blur-sm"
           style={{ left: hover.x, top: hover.y }}
         >
           <div className="mb-1 font-medium text-foreground">{hover.timeLabel}</div>
@@ -703,7 +703,7 @@ export function ObservabilityLightweightChart({
 
       {!compact && annotationHover ? (
         <div
-          className="pointer-events-none absolute z-30 max-w-[240px] rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-800 shadow-sm dark:text-amber-200"
+          className="pointer-events-none absolute z-30 max-w-[240px] rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-2xs text-amber-800 shadow-sm dark:text-amber-200"
           style={{
             left: Math.max(8, annotationHover.x),
             top: Math.max(8, annotationHover.y),

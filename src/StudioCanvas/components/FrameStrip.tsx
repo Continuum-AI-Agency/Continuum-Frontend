@@ -56,14 +56,14 @@ export function FrameStrip({ frames, onFrameClick, onRemoveFrame, activeFrameInd
               </button>
             </>
           ) : (
-            <span className="text-[10px] text-slate-400 font-mono">{index + 1}</span>
+            <span className="text-2xs text-slate-400 font-mono">{index + 1}</span>
           )}
         </div>
       ))}
       
       {frames.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-[10px] text-slate-400 opacity-50">Drag inputs to slots below</span>
+          <span className="text-2xs text-slate-400 opacity-50">Drag inputs to slots below</span>
         </div>
       )}
     </div>

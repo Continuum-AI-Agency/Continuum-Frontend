@@ -17,6 +17,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SectionHeader } from "@/components/shared/SectionHeader";
 
 export type InsightColumn<T> = {
   id: string;
@@ -98,25 +99,15 @@ export function InsightDataTable<T>({
 
   return (
     <div className={cn("overflow-hidden rounded-lg border border-border/70 bg-card", className)}>
-      {title || metricLabel || headerAction ? (
-        <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
-          {title ? (
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {title}
-            </p>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-3">
-            {metricLabel ? (
-              <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                {metricLabel}
-              </p>
-            ) : null}
-            {headerAction}
-          </div>
-        </div>
-      ) : null}
+      <SectionHeader
+        title={title}
+        meta={
+          metricLabel ? (
+            <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">{metricLabel}</p>
+          ) : null
+        }
+        action={headerAction}
+      />
 
       <Table>
         <TableHeader className="[&_tr]:border-border/70">
@@ -130,7 +121,7 @@ export function InsightDataTable<T>({
                   key={column.id}
                   aria-sort={active ? (sort?.direction === "asc" ? "ascending" : "descending") : undefined}
                   className={cn(
-                    "h-8 px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+                    "h-8 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground",
                     column.align === "right" && "text-right",
                     column.headerClassName,
                   )}

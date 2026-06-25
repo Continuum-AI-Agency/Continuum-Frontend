@@ -147,10 +147,10 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
         className="mb-6 grid grid-cols-1 items-end gap-4 md:grid-cols-[1fr_auto]"
       >
         <div className="space-y-2 text-left">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Brand DNA
           </p>
-          <h2 className="text-balance text-[44px] font-bold leading-[0.95] tracking-tighter text-foreground md:text-[72px]">
+          <h2 className="text-balance text-5xl font-bold leading-[0.95] tracking-tighter text-foreground md:text-7xl">
             {thinResult ? (
               <>
                 <span className="text-muted-foreground">Let&apos;s get to know </span>
@@ -235,7 +235,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             {voice ? (
               <VoiceDetail voice={voice} />
             ) : (
-              <p className="m-0 whitespace-pre-wrap text-[13px] text-muted-foreground">{voiceDraft}</p>
+              <p className="m-0 whitespace-pre-wrap text-sm text-muted-foreground">{voiceDraft}</p>
             )}
           </CardSurface>
 

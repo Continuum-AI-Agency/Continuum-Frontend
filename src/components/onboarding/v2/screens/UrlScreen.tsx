@@ -17,11 +17,11 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-xl">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_22%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--cs-violet,#5a39ff)]">
+          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_22%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--cs-violet,#5a39ff)]">
             <Sparkle className="h-3 w-3" />
             Step 1 of 5
           </div>
-          <h1 className="text-balance text-[28px] font-bold leading-tight tracking-tight text-foreground md:text-[40px]">
+          <h1 className="text-balance text-3xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
             Your website
           </h1>
         </div>
@@ -37,11 +37,11 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="onboarding-url" className="text-[12px] font-medium text-muted-foreground">
+                <Label htmlFor="onboarding-url" className="text-sm font-medium text-muted-foreground">
                   Website URL
                 </Label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] text-muted-foreground">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     https://
                   </span>
                   <Input
@@ -50,7 +50,7 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
                     autoFocus
                     defaultValue={defaultUrl ?? ""}
                     placeholder="yourdomain.com"
-                    className="h-12 rounded-lg border-input bg-background pl-[68px] text-[14px] text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                    className="h-12 rounded-lg border-input bg-background pl-[68px] text-base text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                   />
                 </div>
               </div>
@@ -62,14 +62,14 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
                 >
                   <WarningCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-destructive">Couldn&apos;t scan that URL</p>
-                    <p className="mt-0.5 text-[12px] leading-snug text-destructive/80">{error}</p>
+                    <p className="text-sm font-medium text-destructive">Couldn&apos;t scan that URL</p>
+                    <p className="mt-0.5 text-sm leading-snug text-destructive/80">{error}</p>
                     {onRetry ? (
                       <button
                         type="button"
                         onClick={onRetry}
                         disabled={retrying}
-                        className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:underline disabled:cursor-wait disabled:opacity-60"
+                        className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline disabled:cursor-wait disabled:opacity-60"
                       >
                         {retrying ? <CircleNotch className="h-3 w-3 animate-spin" /> : null}
                         {retrying ? "Retrying…" : "Try again"}

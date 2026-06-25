@@ -60,7 +60,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
         >
           <ChevronLeftIcon className="h-3.5 w-3.5" />
         </button>
-        <span className="text-[11px] font-semibold text-muted-foreground">{weekLabel}</span>
+        <span className="text-xs font-semibold text-muted-foreground">{weekLabel}</span>
         <button
           type="button"
           className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -79,7 +79,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
             disabled={day.isPast}
             onClick={() => setSelectedDayId(day.id)}
             className={cn(
-              "flex flex-col items-center rounded px-1 py-1.5 text-[10px] transition-colors",
+              "flex flex-col items-center rounded px-1 py-1.5 text-2xs transition-colors",
               day.isPast && "cursor-not-allowed opacity-40",
               selectedDayId === day.id
                 ? "bg-primary text-primary-foreground"
@@ -97,7 +97,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           type="button"
           size="sm"
           variant="default"
-          className="flex-1 h-7 text-[11px]"
+          className="flex-1 h-7 text-xs"
           disabled={!selectedDayId}
           onClick={() => selectedDayId && onSelect(selectedDayId)}
         >
@@ -107,7 +107,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 text-[11px]"
+          className="h-7 text-xs"
           onClick={onCancel}
         >
           Cancel

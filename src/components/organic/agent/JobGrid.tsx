@@ -230,13 +230,13 @@ function JobCard({
               {hashtags.slice(0, 3).map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                  className="rounded-full bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground"
                 >
                   {tag.startsWith("#") ? tag : `#${tag}`}
                 </span>
               ))}
               {hashtags.length > 3 && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                   +{hashtags.length - 3}
                 </span>
               )}
@@ -272,21 +272,21 @@ function JobCard({
 
           {caption && (
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Caption</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Caption</p>
               <p className="max-h-24 overflow-y-auto text-xs leading-relaxed text-foreground">{caption}</p>
             </div>
           )}
 
           {qualitySummary && (
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quality Summary</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Quality Summary</p>
               <p className="text-xs leading-relaxed text-foreground">{qualitySummary}</p>
             </div>
           )}
 
           {requiredFixes.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Required Fixes</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Required Fixes</p>
               <ul className="list-disc space-y-1 pl-4 text-xs text-foreground">
                 {requiredFixes.slice(0, 4).map((fix: string, index: number) => (
                   <li key={`${job.jobId}-fix-${index}`}>{fix}</li>
@@ -297,7 +297,7 @@ function JobCard({
 
           {blockingIssues.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Blocking Issues</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Blocking Issues</p>
               <ul className="list-disc space-y-1 pl-4 text-xs text-destructive">
                 {blockingIssues.slice(0, 4).map((issue: string, index: number) => (
                   <li key={`${job.jobId}-block-${index}`}>{issue}</li>
@@ -308,7 +308,7 @@ function JobCard({
 
           {(creativeIdea || mediaPrompt || cta || trendId) && (
             <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Creative Context</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Creative Context</p>
               {creativeIdea && (
                 <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">Idea:</span> {creativeIdea}</p>
               )}
@@ -403,7 +403,7 @@ export function JobGrid({ jobs, onRetryAction, onCancelAction }: JobGridProps) {
         ))}
       </div>
       {overflow > 0 && (
-        <p className="px-0.5 text-[11px] text-muted-foreground">
+        <p className="px-0.5 text-xs text-muted-foreground">
           +{overflow} more in the Generations panel above
         </p>
       )}

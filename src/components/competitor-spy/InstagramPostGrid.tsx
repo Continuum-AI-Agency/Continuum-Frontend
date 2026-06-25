@@ -2,6 +2,7 @@
 
 import type { CompetitorOrganicPost } from "@continuum/contracts";
 import { useInstagramPosts } from "@/lib/api/competitorSpy";
+import { SaveToBoardButton } from "./SaveToBoardButton";
 
 function formatCount(value: number | null | undefined): string | null {
   if (value === null || value === undefined) return null;
@@ -15,7 +16,7 @@ function formatDate(value: string | null | undefined): string | null {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date);
 }
 
-function PostCard({ item }: { item: CompetitorOrganicPost }) {
+function PostCard({ item, brandId }: { item: CompetitorOrganicPost; brandId?: string }) {
   const { post } = item;
   const href = post.permalink;
   const likeCount = formatCount(post.likeCount);
@@ -23,7 +24,7 @@ function PostCard({ item }: { item: CompetitorOrganicPost }) {
   const postDate = formatDate(post.timestamp);
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
+    <article className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
       <a href={href} target="_blank" rel="noreferrer" className="relative aspect-square bg-muted">
         {post.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- remote Instagram CDN preview
@@ -31,11 +32,11 @@ function PostCard({ item }: { item: CompetitorOrganicPost }) {
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No preview</div>
         )}
-        <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium capitalize text-white">
+        <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-2xs font-medium capitalize text-white">
           {post.kind}
         </span>
         {post.mediaCount > 1 ? (
-          <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+          <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-2xs font-medium text-white">
             {post.mediaCount}
           </span>
         ) : null}
@@ -50,12 +51,24 @@ function PostCard({ item }: { item: CompetitorOrganicPost }) {
           {postDate ? <div className="shrink-0 text-xs text-muted-foreground">{postDate}</div> : null}
         </div>
         {post.caption ? <p className="line-clamp-2 text-xs text-muted-foreground">{post.caption}</p> : null}
-        {likeCount || commentsCount ? (
-          <div className="flex gap-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <div className="flex gap-2 text-xs text-muted-foreground">
             {likeCount ? <span>{likeCount} likes</span> : null}
             {commentsCount ? <span>{commentsCount} comments</span> : null}
           </div>
-        ) : null}
+          {brandId ? (
+            <SaveToBoardButton
+              brandId={brandId}
+              request={{
+                kind: "organic",
+                competitorId: item.competitorId,
+                competitorName: item.competitorName,
+                instagramUsername: item.instagramUsername,
+                post: item.post,
+              }}
+            />
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -102,7 +115,7 @@ export function InstagramPostGrid({
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
       {items.map((item) => (
-        <PostCard key={`${item.competitorId}:${item.post.id}`} item={item} />
+        <PostCard key={`${item.competitorId}:${item.post.id}`} item={item} brandId={brandId} />
       ))}
     </div>
   );

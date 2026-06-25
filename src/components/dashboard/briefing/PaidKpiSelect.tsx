@@ -20,7 +20,7 @@ export function PaidKpiSelect() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Rank by</span>
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">Rank by</span>
       <Select value={paidKpi} onValueChange={(value) => setPaidKpi(value as PaidEntityKpi)}>
         <SelectTrigger className="h-7 w-[150px] text-xs">
           <SelectValue />

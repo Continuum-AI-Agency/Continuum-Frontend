@@ -47,7 +47,7 @@ export function PayloadSheet({ action, open, onOpenChange }: Props) {
 function Section({ title, value }: { title: string; value: unknown }) {
   return (
     <div>
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="mb-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
         {title}
       </div>
       <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 font-data text-xs leading-relaxed">

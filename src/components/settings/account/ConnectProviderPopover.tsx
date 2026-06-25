@@ -209,7 +209,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                       {PROVIDER_GROUP_LABELS[providerId]}
                     </p>
                     {connected ? (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                      <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
                         Connected
                       </Badge>
                     ) : null}

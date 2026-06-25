@@ -82,7 +82,7 @@ export function CreativeRotationSheet({
       <SheetContent side="right" className="flex h-full w-full flex-col gap-0 sm:max-w-md">
         <SheetHeader className="border-b border-border/60 p-4">
           <SheetTitle className="text-sm">Creative rotation history</SheetTitle>
-          <SheetDescription className="text-[12px]">
+          <SheetDescription className="text-sm">
             DCO actions for this ad in the current time window.
           </SheetDescription>
           {adSummary ? (

@@ -25,11 +25,11 @@ export function FirstImpressionCard({ buckets }: Props) {
       }
     >
       {firstImpression?.headline ? (
-        <p className="text-balance text-[14px] italic leading-snug text-[#0b1220]">
+        <p className="text-balance text-base italic leading-snug text-[#0b1220]">
           {firstImpression.headline}
         </p>
       ) : (
-        <p className="text-[12px] text-[#94a3b8]">No headline produced for this run.</p>
+        <p className="text-sm text-[#94a3b8]">No headline produced for this run.</p>
       )}
     </CardSurface>
   );

@@ -41,32 +41,32 @@ export function JainaHeader({
   isStreaming,
 }: JainaHeaderProps) {
   return (
-    <header className="relative z-10 flex items-center justify-between gap-3 border-b border-border/60 bg-background/70 p-3 shadow-sm transition-all duration-300">
+    <header className="relative z-10 flex items-center justify-between gap-3 border-b border-border/70 bg-background/70 p-3 transition-all duration-300">
       <Flex align="center" gap="4" className="flex-1 min-w-0">
         <Flex align="center" gap="2" className="shrink-0 mr-2">
-          <Heading size="3" className="tracking-tight font-bold whitespace-nowrap">
+          <Heading size="2" className="tracking-tight whitespace-nowrap">
             Jaina
           </Heading>
           <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
         </Flex>
 
         <Flex align="center" gap="3" className="hidden sm:flex overflow-x-auto no-scrollbar py-1">
-          <Flex align="center" gap="1.5" className="shrink-0 text-[10px] uppercase tracking-wider font-semibold text-secondary">
-            <ArchiveIcon className="text-purple-400 size-3" />
-            <span className="text-primary truncate max-w-[100px]">{brandName}</span>
+          <Flex align="center" gap="1.5" className="shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
+            <ArchiveIcon className="size-3" />
+            <span className="truncate max-w-[100px]">{brandName}</span>
           </Flex>
 
           {adAccountId && (
-            <Flex align="center" gap="1.5" className="shrink-0 text-[10px] uppercase tracking-wider font-semibold text-secondary">
-              <LayersIcon className="text-blue-400 size-3" />
-              <span className="text-primary font-mono truncate max-w-[120px]">{adAccountId}</span>
+            <Flex align="center" gap="1.5" className="shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
+              <LayersIcon className="size-3" />
+              <span className="font-mono truncate max-w-[120px]">{adAccountId}</span>
             </Flex>
           )}
 
           {campaignId && (
-            <Flex align="center" gap="1.5" className="shrink-0 text-[10px] uppercase tracking-wider font-semibold text-secondary">
-              <TargetIcon className="text-emerald-400 size-3" />
-              <span className="text-primary truncate max-w-[120px]">{campaignId}</span>
+            <Flex align="center" gap="1.5" className="shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
+              <TargetIcon className="size-3" />
+              <span className="truncate max-w-[120px]">{campaignId}</span>
             </Flex>
           )}
         </Flex>

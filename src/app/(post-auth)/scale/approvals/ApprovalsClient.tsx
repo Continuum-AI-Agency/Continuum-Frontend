@@ -3,6 +3,7 @@
 import * as React from "react";
 import { List, Table as TableIcon } from "lucide-react";
 
+import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDryRunMode, usePendingActions } from "@/lib/approvals/queries";
@@ -81,20 +82,20 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-6 p-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Approvals
-            </h1>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            Approvals
             <LiveStatusDot isDryRun={isDryRun} isFetching={list.isFetching} />
-          </div>
-          <p className="font-data text-xs text-muted-foreground">
+          </span>
+        }
+        description={
+          <span className="font-data">
             {brandName} <span className="opacity-50">·</span> {total} {status.toLowerCase()}
-          </p>
-        </div>
-        <KeymapHint />
-      </header>
+          </span>
+        }
+        action={<KeymapHint />}
+      />
 
       <LaneStrip actions={actions} focusedId={focusedActionId} onFocus={setFocusedActionId} />
 
@@ -107,7 +108,7 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
 
       <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "focus" | "table")}>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-2xs uppercase tracking-wider text-muted-foreground">
             Queue ({actions.length})
           </span>
           <TooltipProvider delayDuration={200}>

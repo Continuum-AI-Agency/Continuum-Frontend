@@ -101,7 +101,7 @@ export function BrandTrendsPanel({
       <CardHeader className="gap-0 border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-2">
-            <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px] font-semibold tracking-wide uppercase">
+            <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wide uppercase">
               <LineChart className="h-3 w-3" />
               Brand Insights
             </p>
@@ -111,24 +111,24 @@ export function BrandTrendsPanel({
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {actionSlot}
             {country ? (
-              <Badge variant="outline" className="h-6 text-[11px]">
+              <Badge variant="outline" className="h-6 text-xs">
                 <Globe2 className="mr-1 h-3 w-3" />
                 {country}
               </Badge>
             ) : null}
             {weekLabel ? (
-              <Badge variant="outline" className="h-6 text-[11px]">
+              <Badge variant="outline" className="h-6 text-xs">
                 <Calendar className="mr-1 h-3 w-3" />
                 {weekLabel}
               </Badge>
             ) : null}
             {generatedLabel ? (
-              <Badge variant="outline" className="h-6 text-[11px]">
+              <Badge variant="outline" className="h-6 text-xs">
                 <Clock3 className="mr-1 h-3 w-3" />
                 {generatedLabel}
               </Badge>
             ) : null}
-            {status ? <Badge variant="secondary" className="h-6 text-[11px]">{status}</Badge> : null}
+            {status ? <Badge variant="secondary" className="h-6 text-xs">{status}</Badge> : null}
             {statusSlot}
           </div>
         </div>

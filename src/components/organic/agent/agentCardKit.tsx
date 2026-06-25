@@ -99,7 +99,7 @@ export function AgentActions({ className, ...props }: React.ComponentProps<'div'
 export function AgentCardEyebrow({ label, right }: { label: string; right?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-[11px] font-medium tracking-normal text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium tracking-normal text-muted-foreground">{label}</span>
       {right}
     </div>
   );
@@ -107,7 +107,7 @@ export function AgentCardEyebrow({ label, right }: { label: string; right?: Reac
 
 export function AgentCardTitle({ children }: { children: React.ReactNode }) {
   return (
-    <CardTitle className="mt-2 text-[14px] font-semibold leading-snug text-foreground text-pretty">
+    <CardTitle className="mt-2 text-base font-semibold leading-snug text-foreground text-pretty">
       {children}
     </CardTitle>
   );
@@ -115,7 +115,7 @@ export function AgentCardTitle({ children }: { children: React.ReactNode }) {
 
 export function AgentCardSummary({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground text-pretty">{children}</p>
+    <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">{children}</p>
   );
 }
 
@@ -146,7 +146,7 @@ export function StatusLabel({
     <Badge
       variant="outline"
       className={cn(
-        'h-auto shrink-0 gap-1.5 rounded-md border-transparent bg-transparent px-0 py-0 text-[11px] font-medium tabular-nums shadow-none hover:bg-transparent',
+        'h-auto shrink-0 gap-1.5 rounded-md border-transparent bg-transparent px-0 py-0 text-xs font-medium tabular-nums shadow-none hover:bg-transparent',
         STATUS_TEXT[tone],
       )}
     >
@@ -179,7 +179,7 @@ export function PlatformTag({ platform, className }: { platform: string; classNa
     <Badge
       variant="outline"
       className={cn(
-        'h-auto shrink-0 rounded-md border-transparent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shadow-none hover:bg-muted',
+        'h-auto shrink-0 rounded-md border-transparent px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide shadow-none hover:bg-muted',
         color,
         className,
       )}
@@ -206,7 +206,7 @@ export function MetaRow({
   return (
     <p
       className={cn(
-        'flex flex-wrap items-center text-[11.5px] leading-snug text-muted-foreground',
+        'flex flex-wrap items-center text-xs leading-snug text-muted-foreground',
         className,
       )}
     >
@@ -240,7 +240,7 @@ export function AgentButton({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        'min-h-9 gap-1.5 rounded-lg px-3.5 text-[12.5px]',
+        'min-h-9 gap-1.5 rounded-lg px-3.5 text-sm',
         'transition-[transform,opacity,background-color,color] duration-150 ease-out',
         'active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40',
         variant === 'ghost' && 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',

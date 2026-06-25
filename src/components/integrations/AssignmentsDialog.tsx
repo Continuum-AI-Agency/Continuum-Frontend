@@ -490,7 +490,7 @@ export function AssignmentsDialog({
                                                       color="gray"
                                                       variant="outline"
                                                       size="1"
-                                                      className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700"
+                                                      className="text-2xs uppercase opacity-70 text-slate-300 border-slate-700"
                                                     >
                                                       {asset.type.replace("meta_", "")}
                                                     </Badge>
@@ -640,7 +640,7 @@ export function AssignmentsDialog({
                                                       color="gray"
                                                       variant="outline"
                                                       size="1"
-                                                      className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700"
+                                                      className="text-2xs uppercase opacity-70 text-slate-300 border-slate-700"
                                                     >
                                                       {asset.type.replace("meta_", "")}
                                                     </Badge>
@@ -815,7 +815,7 @@ export function AssignmentsDialog({
                                                     color="gray"
                                                     variant="outline"
                                                     size="1"
-                                                    className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700"
+                                                    className="text-2xs uppercase opacity-70 text-slate-300 border-slate-700"
                                                   >
                                                     {asset.type
                                                       .replace(`${key}_`, "")
@@ -1004,7 +1004,7 @@ export function AssignmentsDialog({
                                                     color="gray"
                                                     variant="outline"
                                                     size="1"
-                                                    className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700"
+                                                    className="text-2xs uppercase opacity-70 text-slate-300 border-slate-700"
                                                   >
                                                     {asset.type
                                                       .replace(`${key}_`, "")

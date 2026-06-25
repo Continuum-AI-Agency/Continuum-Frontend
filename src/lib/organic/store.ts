@@ -144,6 +144,10 @@ interface CalendarState {
   // Cross-subtree signal: agent-side completion (bulk run done, single draft ready)
   // bumps this so the calendar workspace re-fetches persisted drafts from the backend.
   calendarRefetchNonce: number;
+  // Backend ids of drafts the user explicitly deleted, awaiting a server-side
+  // delete by the persistence layer. Without this an agent-/teammate-created draft
+  // would only vanish locally and reappear on the next refetch ("undeletable").
+  pendingServerDeletes: string[];
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -153,6 +157,9 @@ interface CalendarState {
   bulkMoveDrafts: (draftIds: string[], targetDayId: string) => void;
   addDraft: (dayId: string, draft: OrganicCalendarDraft) => void;
   bulkDeleteDrafts: (draftIds: string[]) => void;
+  // Drop ids from pendingServerDeletes once the persistence layer has deleted them
+  // server-side (or confirmed there was nothing to delete).
+  clearPendingServerDeletes: (backendIds: string[]) => void;
   setSelectedDraftId: (id: string | null) => void;
   setSelectedDraftIds: (ids: string[]) => void;
   toggleDraftSelection: (id: string) => void;
@@ -173,6 +180,11 @@ interface CalendarState {
   upsertGeneration: (entry: GenerationEntryInput) => void;
   removeGeneration: (jobId: string) => void;
   clearGenerations: () => void;
+  // Evict finished generations after a short grace window, and drop entries that
+  // are nominally "running" but have stopped reporting (a worker that died after a
+  // lease loss never emits a terminal frame). Keeps the "N generations / N running"
+  // counter from drifting upward forever and showing a phantom stuck run.
+  pruneGenerations: () => void;
   setPlacementProgress: (placementId: string, progress: {
     percent: number;
     stage?: string;
@@ -289,6 +301,7 @@ export const useCalendarStore = create<CalendarState>()(
       dateRange: null,
       showPlanned: true,
       calendarRefetchNonce: 0,
+      pendingServerDeletes: [],
       eventHistory: [],
       backlogDrafts: [],
 
@@ -388,11 +401,32 @@ export const useCalendarStore = create<CalendarState>()(
       bulkDeleteDrafts: (draftIds) =>
         set((state) => {
           const draftIdSet = new Set(draftIds);
+          // Collect the backend ids of the drafts being removed so the persistence
+          // layer can delete the server rows too (RLS allows any brand member).
+          const backendIdsToDelete: string[] = [];
+          for (const day of state.days) {
+            for (const slot of day.slots) {
+              if (draftIdSet.has(slot.id) && slot.backendDraftId) {
+                backendIdsToDelete.push(slot.backendDraftId);
+              }
+            }
+          }
           return {
             days: state.days.map((day) => ({
               ...day,
               slots: day.slots.filter((slot) => !draftIdSet.has(slot.id)),
             })),
+            pendingServerDeletes: backendIdsToDelete.length
+              ? [...state.pendingServerDeletes, ...backendIdsToDelete]
+              : state.pendingServerDeletes,
+          };
+        }),
+      clearPendingServerDeletes: (backendIds) =>
+        set((state) => {
+          if (backendIds.length === 0) return {} as Partial<CalendarState>;
+          const remove = new Set(backendIds);
+          return {
+            pendingServerDeletes: state.pendingServerDeletes.filter((id) => !remove.has(id)),
           };
         }),
 
@@ -457,6 +491,31 @@ export const useCalendarStore = create<CalendarState>()(
           return { generations: next };
         }),
       clearGenerations: () => set({ generations: {} }),
+      pruneGenerations: () =>
+        set((state) => {
+          const now = Date.now();
+          const TERMINAL_TTL_MS = 20_000; // keep a finished card ~20s for "View draft"
+          const STALE_ACTIVE_MS = 180_000; // a run silent for 3min is dead, not running
+          const next: Record<string, GenerationEntry> = {};
+          let changed = false;
+          for (const [key, entry] of Object.entries(state.generations)) {
+            const terminal =
+              entry.status === "completed" ||
+              entry.status === "failed" ||
+              entry.status === "cancelled";
+            const age = now - entry.updatedAt;
+            if (terminal && age > TERMINAL_TTL_MS) {
+              changed = true;
+              continue;
+            }
+            if (!terminal && age > STALE_ACTIVE_MS) {
+              changed = true;
+              continue;
+            }
+            next[key] = entry;
+          }
+          return changed ? { generations: next } : ({} as Partial<CalendarState>);
+        }),
       addEvent: (event) =>
         set((state) => ({
           eventHistory: [...state.eventHistory, event].slice(-20),

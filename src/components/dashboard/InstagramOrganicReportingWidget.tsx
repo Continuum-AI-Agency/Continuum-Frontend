@@ -272,7 +272,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
             </Select.Content>
           </Select.Root>
           <h3 className="truncate text-xs font-semibold capitalize sm:text-sm">{platform} reporting</h3>
-          <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline-block">
+          <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground sm:inline-block">
             {rangeLabel(DEFAULT_RANGE_PRESET)}
           </span>
         </div>
@@ -286,7 +286,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
                 setSelection(brandId, platform, value);
               }}
             >
-              <Select.Trigger variant="surface" radius="medium" className="h-7 text-[11px]">
+              <Select.Trigger variant="surface" radius="medium" className="h-7 text-xs">
                 {selectedAccount?.name ?? `Select ${platform} account`}
               </Select.Trigger>
               <Select.Content position="popper" variant="solid" highContrast>
@@ -435,7 +435,7 @@ function MetricsPanel({
                       : "border-border/70 bg-card",
                   )}
                 >
-                  <span className="truncate font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <span className="truncate font-mono text-2xs uppercase tracking-wide text-muted-foreground">
                     {item.label}
                   </span>
                   <div className="flex items-baseline gap-1.5">
@@ -443,7 +443,7 @@ function MetricsPanel({
                       {formatCompact(item.value)}
                     </span>
                     {formattedDelta ? (
-                      <span className={cn("font-mono text-[10px] tabular-nums", deltaClass)}>{formattedDelta}</span>
+                      <span className={cn("font-mono text-2xs tabular-nums", deltaClass)}>{formattedDelta}</span>
                     ) : null}
                   </div>
                   <MiniBars values={seriesValues} active={isActive} />

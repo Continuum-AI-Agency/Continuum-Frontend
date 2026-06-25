@@ -84,6 +84,13 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
             </Button>
           </div>
 
+          {data.status === "failed" && data.failureMessage && (
+            <div className="mt-2 flex items-start gap-1.5 text-xs text-red-400">
+              <ExclamationTriangleIcon className="mt-0.5 shrink-0" />
+              <span className="break-words">{data.failureMessage}</span>
+            </div>
+          )}
+
           <Handle 
             type="target" 
             id="prompt" 

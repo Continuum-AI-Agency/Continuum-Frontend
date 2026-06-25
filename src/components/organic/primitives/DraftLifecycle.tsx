@@ -62,7 +62,7 @@ export function MediaStagePill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+        "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider",
         meta.tone,
         className,
       )}

@@ -280,7 +280,7 @@ export function DCOActionAlertsBox({
   return (
     <div className={cn("grid h-[min(72vh,680px)] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2", className)}>
       <aside className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/10 p-2">
-        <span className="rounded border border-border/70 bg-background px-2 py-1 text-[11px] text-muted-foreground">
+        <span className="rounded border border-border/70 bg-background px-2 py-1 text-xs text-muted-foreground">
           {contextLabel}
         </span>
 
@@ -351,7 +351,7 @@ export function DCOActionAlertsBox({
           <div className="flex items-center justify-between gap-2">
             <div>
               <div className="text-sm font-semibold">DCO Actions</div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {pagination.totalCount} total events · {filteredLogs.length} visible
               </p>
             </div>
@@ -392,7 +392,7 @@ export function DCOActionAlertsBox({
                     >
                       <MagnifyingGlassIcon className="h-3.5 w-3.5" />
                       <span className="truncate">{log.actionType}</span>
-                      <span className="ml-auto text-[10px] text-muted-foreground">{log.status}</span>
+                      <span className="ml-auto text-2xs text-muted-foreground">{log.status}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -443,7 +443,7 @@ export function DCOActionAlertsBox({
                           onMouseEnter={() => setHoveredRowId(log.id)}
                           onMouseLeave={() => setHoveredRowId(null)}
                         >
-                          <TableCell className="text-[11px] text-muted-foreground">
+                          <TableCell className="text-xs text-muted-foreground">
                             <div>{formatTimestamp(log.occurredAt)}</div>
                             <div>{formatRelativeTime(log.occurredAt)}</div>
                           </TableCell>
@@ -459,7 +459,7 @@ export function DCOActionAlertsBox({
                           <TableCell className="max-w-[360px] whitespace-normal text-foreground">
                             <div>{summarizeAction(log)}</div>
                             {creativeSwapUrls ? (
-                              <div className="mt-1 text-[10px] text-muted-foreground">
+                              <div className="mt-1 text-2xs text-muted-foreground">
                                 Hover to view creative comparison
                               </div>
                             ) : null}

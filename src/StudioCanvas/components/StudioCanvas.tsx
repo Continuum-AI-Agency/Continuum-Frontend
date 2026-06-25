@@ -1225,17 +1225,17 @@ function Flow({
             </Panel>
 
             <Panel position="bottom-center" className="flex items-center gap-1.5 px-3 py-1.5 bg-background/80 backdrop-blur border-border/50">
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘C</kbd>
-              <span className="text-[10px] text-muted-foreground">copy</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">⌘C</kbd>
+              <span className="text-2xs text-muted-foreground">copy</span>
               <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘V</kbd>
-              <span className="text-[10px] text-muted-foreground">paste</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">⌘V</kbd>
+              <span className="text-2xs text-muted-foreground">paste</span>
               <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘X</kbd>
-              <span className="text-[10px] text-muted-foreground">cut</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">⌘X</kbd>
+              <span className="text-2xs text-muted-foreground">cut</span>
               <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">Del</kbd>
-              <span className="text-[10px] text-muted-foreground">delete</span>
+              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">Del</kbd>
+              <span className="text-2xs text-muted-foreground">delete</span>
             </Panel>
           </Canvas>
         </ContextMenuTrigger>
@@ -1711,10 +1711,10 @@ export function StudioCanvas({
                     <div className="hidden min-w-[18rem] items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2 lg:flex">
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex items-center justify-between gap-2">
-                          <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                          <Badge variant="outline" className="h-5 px-2 text-2xs">
                             {workflowSummaryLabel}
                           </Badge>
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {applyReadiness.label}
                           </span>
                         </div>
@@ -1722,7 +1722,7 @@ export function StudioCanvas({
                           value={(applyReadiness.completed / applyReadiness.total) * 100}
                           className="h-1.5"
                         />
-                        <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
                           {applyReadiness.detail}
                         </p>
                       </div>

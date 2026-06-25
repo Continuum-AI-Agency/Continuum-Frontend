@@ -169,7 +169,7 @@ export function DocumentManager({
       />
       <Card
         className={cn(
-          "w-full gap-4 rounded-2xl bg-card p-3 shadow-sm motion-safe:transition-colors",
+          "w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors",
           compact ? "max-w-[560px]" : "max-w-none",
           dragActive && "ring-2 ring-emerald-500/30",
         )}
@@ -297,7 +297,7 @@ function CategoryFilterSelect({
       <SelectTrigger
         size="sm"
         aria-label="Filter documents by category"
-        className="h-7 gap-1 rounded-full px-2.5 text-[11px] font-medium"
+        className="h-7 gap-1 rounded-full px-2.5 text-xs font-medium"
       >
         <SelectValue />
       </SelectTrigger>
@@ -403,7 +403,7 @@ function EmptyState({
         <Upload className="h-3.5 w-3.5" />
         Browse files
       </button>
-      <p className="text-[11px] text-muted-foreground">…or drop them anywhere on this card.</p>
+      <p className="text-xs text-muted-foreground">…or drop them anywhere on this card.</p>
     </div>
   );
 }

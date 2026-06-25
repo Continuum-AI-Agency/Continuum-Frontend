@@ -250,9 +250,22 @@ export function OrganicCalendarWorkspaceClient({
     if (initialView) setViewMode(initialView)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-seed the visible week when the URL-derived week prop changes (e.g. returning
+  // from AI Studio with ?weekStartId=...). `weekStart` is local state seeded once,
+  // so without this a back-nav would paint the wrong/default week. Keyed on the prop
+  // only, so manual week navigation (which changes state, not the prop) is untouched.
+  React.useEffect(() => {
+    if (!initialWeekStart) return
+    const parsed = new Date(initialWeekStart)
+    if (Number.isNaN(parsed.getTime())) return
+    setWeekStart(startOfWeek(parsed))
+    setMonthAnchorDate(startOfWeek(parsed))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialWeekStart])
   const weekStartId = formatDayId(weekStart)
 
-  const { refetch: refetchCalendarDrafts } = useCalendarDraftPersistence({
+  const { refetch: refetchCalendarDrafts, isHydrated: isCalendarHydrated } = useCalendarDraftPersistence({
     brandProfileId,
     calendarDays,
     setCalendarDays,
@@ -412,6 +425,11 @@ export function OrganicCalendarWorkspaceClient({
       : null
 
     if (selectedId && !allDraftIds.has(selectedId)) {
+      // Before the fetch-all finishes, allDraftIds is incomplete — a draft we are
+      // returning to from AI Studio (or about to restore) may simply not be loaded
+      // yet. Don't prune the selection until hydration is authoritative, or the
+      // back-nav transiently loses the draft being edited.
+      if (!isCalendarHydrated) return
       // Current selection is stale -- attempt to restore a preferred draft
       // instead of nulling out then re-selecting on the next render cycle.
       if (typeof window !== "undefined") {
@@ -440,6 +458,7 @@ export function OrganicCalendarWorkspaceClient({
     allDraftIds,
     brandProfileId,
     initialSelectedDraftId,
+    isCalendarHydrated,
     selectedId,
     selectedIds,
     setSelectedDraftId,
@@ -604,6 +623,7 @@ export function OrganicCalendarWorkspaceClient({
     selectedDraft,
     updateDraftById,
     setSelectedDraftId,
+    isCalendarHydrated,
   })
 
   const handleOpenDraftInStudio = React.useCallback(

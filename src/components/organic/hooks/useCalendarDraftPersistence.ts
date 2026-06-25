@@ -12,6 +12,7 @@ import {
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "@/components/organic/primitives/types"
 import { request } from "@/lib/api/http"
 import { getVisibleMonthRange } from "@/lib/organic/calendar-posts"
+import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import {
@@ -81,6 +82,10 @@ export function useCalendarDraftPersistence({
   platformAccountIds = {},
 }: UseCalendarDraftPersistenceOptions) {
   const hydratedKeyRef = React.useRef<string | null>(null)
+  // Re-render-visible mirror of hydratedKeyRef so consumers (e.g. the AI Studio
+  // apply-on-return effect, selection restore) can wait for the initial fetch-all
+  // to finish before acting, instead of racing it.
+  const [isHydrated, setIsHydrated] = React.useState(false)
   const knownBackendIdsRef = React.useRef<Set<string>>(new Set())
   // Rows THIS hook inserted in-session. The autosave may only delete drafts it
   // created itself — never agent-/server-created rows it merely fetched — so the
@@ -153,6 +158,7 @@ export function useCalendarDraftPersistence({
 
     const key = brandProfileId
     hydratedKeyRef.current = null
+    setIsHydrated(false)
     lastSyncedSignatureRef.current = ""
     knownBackendIdsRef.current = new Set()
 
@@ -163,6 +169,7 @@ export function useCalendarDraftPersistence({
         // Best-effort hydration; local cache remains usable.
       } finally {
         hydratedKeyRef.current = key
+        setIsHydrated(true)
       }
     }
 
@@ -309,5 +316,47 @@ export function useCalendarDraftPersistence({
     return () => clearTimeout(timer)
   }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById])
 
-  return { refetch }
+  // Drain user-initiated draft deletions to the server. The autosave path above
+  // only removes FE-created rows (to avoid clobbering agent drafts on a refetch
+  // race); explicit deletes must also remove agent-/teammate-created server rows,
+  // or they reappear on the next refetch. RLS scopes this to brand members.
+  const pendingServerDeletes = useCalendarStore((s) => s.pendingServerDeletes)
+  const clearPendingServerDeletes = useCalendarStore((s) => s.clearPendingServerDeletes)
+  React.useEffect(() => {
+    if (!brandProfileId) return
+    if (pendingServerDeletes.length === 0) return
+    const ids = pendingServerDeletes
+    let cancelled = false
+
+    const run = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const organicSchema = supabase.schema("organic" as never) as any
+      await Promise.all(
+        ids.map((id) =>
+          organicSchema
+            .from("organic_calendar_drafts")
+            .delete()
+            .eq("id", id)
+            .eq("brand_id", brandProfileId)
+            .then(({ error }: { error: unknown }) => {
+              if (!error) {
+                knownBackendIdsRef.current.delete(id)
+                feCreatedIdsRef.current.delete(id)
+              }
+            }),
+        ),
+      )
+      // Clear the snapshot we processed regardless of per-row outcome so a row that
+      // is already gone can't wedge the queue; newly-queued ids survive.
+      if (!cancelled) clearPendingServerDeletes(ids)
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [brandProfileId, pendingServerDeletes, clearPendingServerDeletes, supabase])
+
+  return { refetch, isHydrated }
 }

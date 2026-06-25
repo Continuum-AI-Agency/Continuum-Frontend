@@ -25,18 +25,10 @@ export function JainaEmptyState({
 
   if (!adAccountId) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="rounded-full bg-indigo-50/5 p-4 border border-indigo-500/20 backdrop-blur-sm shadow-[0_0_20px_rgba(79,70,229,0.1)]"
-          aria-hidden="true"
-        >
-          <RocketIcon className="h-8 w-8 text-indigo-400" />
-        </motion.div>
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+        <RocketIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
         <div className="space-y-1">
-          <Heading size="4" className="text-primary font-bold tracking-tight">Select an Ad Account</Heading>
+          <Heading size="3" className="tracking-tight">Select an Ad Account</Heading>
           <Text color="gray" size="2">
             Choose an ad account above to start analyzing with Jaina.
           </Text>
@@ -55,12 +47,12 @@ export function JainaEmptyState({
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.35 }}
-        className="mb-2 rounded-full border border-primary/20 bg-primary/8 p-4 shadow-lg shadow-primary/10"
+        className="mb-1"
         aria-hidden="true"
       >
-        <RocketIcon className="h-10 w-10 text-primary" />
+        <RocketIcon className="h-6 w-6 text-muted-foreground" />
       </motion.div>
-      
+
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -73,10 +65,10 @@ export function JainaEmptyState({
         >
           Paid Media Analyst
         </Text>
-        <Heading size="6" className="tracking-tight font-semibold text-foreground">
+        <Heading size="3" className="tracking-tight font-semibold text-foreground">
           Ask Jaina for a decision-ready performance brief.
         </Heading>
-        <Text size="3" className="mx-auto block max-w-2xl text-muted-foreground">
+        <Text size="2" color="gray" className="mx-auto block max-w-2xl">
           Get clear reads on spend efficiency, creative performance, and where to move budget next.
         </Text>
       </motion.div>

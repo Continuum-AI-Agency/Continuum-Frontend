@@ -17,7 +17,7 @@ export function TonePicker() {
       {tags.map((tag) => (
         <span
           key={tag}
-          className="group inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_20%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-2.5 py-1 text-[11px] font-medium text-[var(--cs-violet,#5a39ff)]"
+          className="group inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_20%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-2.5 py-1 text-xs font-medium text-[var(--cs-violet,#5a39ff)]"
         >
           {tag}
           <button
@@ -35,14 +35,14 @@ export function TonePicker() {
         trigger={
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             <Plus className="h-3 w-3" /> Add
           </button>
         }
         content={(close) => (
           <div className="space-y-1">
-            <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Tone of voice</p>
+            <p className="px-1 pb-1 text-2xs font-bold uppercase tracking-wide text-muted-foreground">Tone of voice</p>
             {BRAND_VOICE_TAGS.map((tag) => {
               const active = tags.includes(tag);
               return (

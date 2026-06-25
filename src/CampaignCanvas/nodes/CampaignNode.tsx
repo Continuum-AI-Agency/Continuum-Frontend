@@ -119,11 +119,11 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
                 {OBJECTIVES.find(o => o.value === data.objective)?.label || 'No Objective Set'}
               </NodeDescription>
               <div className="flex items-center gap-1.5 mt-1">
-                <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase opacity-70">
+                <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-70">
                   {data.buyingType || 'AUCTION'}
                 </Badge>
                 {data.specialAdCategories?.length ? (
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase text-blue-500 border-blue-500/30">
+                  <Badge variant="outline" className="text-3xs px-1 py-0 uppercase text-blue-500 border-blue-500/30">
                     Special Cat.
                   </Badge>
                 ) : null}
@@ -134,7 +134,7 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
               <>
                 <Separator className="my-2" />
                 <div className="pt-1">
-                  <span className="text-[10px] font-mono text-muted-foreground uppercase">Meta ID: {data.metaId}</span>
+                  <span className="text-2xs font-mono text-muted-foreground uppercase">Meta ID: {data.metaId}</span>
                 </div>
               </>
             )}

@@ -34,7 +34,7 @@ export function HorizontalRow({
 
   return (
     <section className={cn("flex flex-col gap-2", className)}>
-      <h3 className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94a3b8]">
+      <h3 className="px-1 text-2xs font-semibold uppercase tracking-[0.18em] text-[#94a3b8]">
         {label}
       </h3>
       {layout === "grid" ? (

@@ -6,8 +6,9 @@ import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { DashboardBriefing } from "@/components/dashboard/briefing/DashboardBriefing";
 import { OrganicCreativesTable } from "@/components/dashboard/briefing/OrganicCreativesTable";
 import { OrganicInsightsList } from "@/components/dashboard/briefing/OrganicInsightsList";
-import { OrganicStatCards } from "@/components/dashboard/briefing/OrganicStatCards";
+import { OrganicMetricStrip } from "@/components/dashboard/briefing/OrganicMetricStrip";
 import { CompetitorOrganicTable } from "@/components/dashboard/competitor/CompetitorOrganicTable";
+import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
 import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import type { BrandInsightsTrendsAndEvents, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
@@ -45,10 +46,16 @@ export function OrganicDashboardView({
   return (
     <div className="flex w-full min-w-0 flex-col gap-[var(--app-shell-gap)]">
       <DashboardWarmOnMount brandId={brandId} isCold={isCold} />
-      <OrganicStatCards brandId={brandId} accounts={instagramAccounts} youtubeAccounts={youtubeAccounts} />
       <DashboardBriefing
         brandId={brandId}
         lastGeneratedAt={generatedAt}
+        metricStripSlot={
+          <OrganicMetricStrip
+            brandId={brandId}
+            accounts={instagramAccounts}
+            youtubeAccounts={youtubeAccounts}
+          />
+        }
         insightsSlot={
           <OrganicInsightsList
             brandId={brandId}
@@ -65,6 +72,10 @@ export function OrganicDashboardView({
         }
       />
 
+      <section>
+        <CompetitorOrganicTable brandId={brandId} />
+      </section>
+
       <section className="min-h-[var(--dashboard-compact-panel-min-height)]">
         <BrandTrendsPanel
           trends={trendsAndEvents.trends}
@@ -74,6 +85,7 @@ export function OrganicDashboardView({
           country={trendsAndEvents.country}
           generatedAt={generatedAt}
           status={trendsAndEvents.status ?? insightsStatus}
+          actionSlot={<ModuleShortcutLink href="/organic?tab=metrics" label="Trends" />}
         />
       </section>
 
@@ -84,10 +96,6 @@ export function OrganicDashboardView({
           youtubeAccounts={youtubeAccounts}
           className="min-h-[var(--dashboard-min-panel-height)]"
         />
-      </section>
-
-      <section>
-        <CompetitorOrganicTable brandId={brandId} />
       </section>
     </div>
   );

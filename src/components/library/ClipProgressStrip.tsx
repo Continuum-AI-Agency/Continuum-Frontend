@@ -16,7 +16,7 @@ export function ClipProgressStrip({ progress }: { progress: ClipGenerationProgre
       className="flex flex-wrap items-center gap-1.5"
     >
       {progress.stageLabel ? (
-        <span className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2 py-1 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
           <Loader2 className="size-3 shrink-0 animate-spin" />
           {progress.stageLabel}
         </span>
@@ -25,7 +25,7 @@ export function ClipProgressStrip({ progress }: { progress: ClipGenerationProgre
         <span
           key={section.index}
           className={cn(
-            "flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px]",
+            "flex items-center gap-1 rounded-lg border px-2 py-1 text-xs",
             section.status === "pending" && "border-border/50 bg-muted/40 text-muted-foreground/70",
             section.status === "active" && "border-border/60 bg-muted/60 text-muted-foreground",
             section.status === "done" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",

@@ -140,7 +140,7 @@ export function ReportJobsBell({ brandProfileId }: Props) {
         >
           <BellIcon className="size-4" />
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold tabular-nums text-primary-foreground">
+            <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-3xs font-bold tabular-nums text-primary-foreground">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}

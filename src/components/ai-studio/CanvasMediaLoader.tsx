@@ -24,7 +24,7 @@ export function CanvasMediaLoader({ className }: CanvasMediaLoaderProps) {
         <div className="absolute -right-12 bottom-0 h-64 w-64 rounded-full bg-cyan-500/15 blur-3xl motion-reduce:animate-none" />
       </div>
 
-      <div className="relative z-10 w-full max-w-[520px] rounded-2xl border border-border/70 bg-background/95 p-5 shadow-xl backdrop-blur">
+      <div className="relative z-10 w-full max-w-[520px] rounded-lg border border-border/70 bg-background/95 p-[var(--card-pad)] shadow-md backdrop-blur">
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Continuum AI Studio</p>
           <h2 className="mt-1 text-lg font-semibold text-foreground">Preparing media canvas</h2>

@@ -159,7 +159,7 @@ export function HyperFramePlayer({
       )}
 
       {state === "error" && errorMessage ? (
-        <p className="absolute inset-x-0 bottom-0 bg-black/60 px-3 py-1.5 text-center text-[11px] text-white">
+        <p className="absolute inset-x-0 bottom-0 bg-black/60 px-3 py-1.5 text-center text-xs text-white">
           {errorMessage}
         </p>
       ) : null}

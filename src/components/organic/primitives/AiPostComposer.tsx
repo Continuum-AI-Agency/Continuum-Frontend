@@ -69,7 +69,7 @@ function ComposerAssetTile({
       )}
       {isSelected && (
         <div className="absolute inset-0 flex items-center justify-center bg-primary/30">
-          <div className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground">
+          <div className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
             {order}
           </div>
         </div>
@@ -179,7 +179,7 @@ export function AiPostComposer({
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="ai-post-direction" className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <label htmlFor="ai-post-direction" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Direction
             </label>
             <Textarea
@@ -193,7 +193,7 @@ export function AiPostComposer({
           </div>
 
           <details className="group/guidance">
-            <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
               Add more guidance (optional)
             </summary>
             <Textarea
@@ -206,10 +206,10 @@ export function AiPostComposer({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Images className="size-3.5" /> Creatives
               </p>
-              {isCarousel && <Badge variant="secondary" className="text-[10px]">Carousel · {selectedIds.length}</Badge>}
+              {isCarousel && <Badge variant="secondary" className="text-2xs">Carousel · {selectedIds.length}</Badge>}
             </div>
             <div className="max-h-40 overflow-y-auto rounded-lg border border-border/50 p-1.5">
               {assets.length === 0 && loading ? (
@@ -219,7 +219,7 @@ export function AiPostComposer({
                   ))}
                 </div>
               ) : assets.length === 0 ? (
-                <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">
+                <p className="px-2 py-4 text-center text-xs text-muted-foreground/60">
                   Nothing in your library yet — the agent will generate the creative.
                 </p>
               ) : (
@@ -238,7 +238,7 @@ export function AiPostComposer({
                     <button
                       type="button"
                       onClick={() => loadMore()}
-                      className="mt-1.5 w-full rounded-md py-1 text-[11px] text-muted-foreground hover:bg-muted/50"
+                      className="mt-1.5 w-full rounded-md py-1 text-xs text-muted-foreground hover:bg-muted/50"
                     >
                       Load more
                     </button>
@@ -250,7 +250,7 @@ export function AiPostComposer({
 
           {taggableTrends.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Trends</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trends</p>
               <div className="flex flex-wrap gap-1.5">
                 {taggableTrends.map((trend) => {
                   const active = selectedTrendIds.includes(trend.id)
@@ -261,7 +261,7 @@ export function AiPostComposer({
                       aria-pressed={active}
                       onClick={() => toggleTrend(trend.id)}
                       className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                        "rounded-full border px-2.5 py-1 text-xs transition-colors",
                         active
                           ? "border-primary/40 bg-primary/10 text-primary"
                           : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
@@ -275,7 +275,7 @@ export function AiPostComposer({
             </div>
           )}
 
-          {error && <p className="text-[12px] text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>

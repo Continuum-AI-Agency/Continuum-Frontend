@@ -32,7 +32,7 @@ export function EditableProse({ value, placeholder, onCommit, className, loading
           setDraft(value);
           setEditing(true);
         }}
-        className={`group/edit relative block w-full text-left text-[11px] leading-[1.75] text-muted-foreground hover:text-foreground ${className ?? ""}`}
+        className={`group/edit relative block w-full text-left text-xs leading-[1.75] text-muted-foreground hover:text-foreground ${className ?? ""}`}
       >
         <span className="pr-5">
           {value || <span className="text-muted-foreground/60">{placeholder ?? "Click to add"}</span>}
@@ -60,7 +60,7 @@ export function EditableProse({ value, placeholder, onCommit, className, loading
           setDraft(value);
         }
       }}
-      className="min-h-[88px] resize-none border-input bg-background text-[11px] leading-[1.75] text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+      className="min-h-[88px] resize-none border-input bg-background text-xs leading-[1.75] text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
     />
   );
 }

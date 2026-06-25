@@ -188,11 +188,11 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                         : ""}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300">
                         Organic ready
                       </span>
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${
                           competitorResult.paidStatus === "ready"
                             ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                             : competitorResult.paidStatus === "needs_review"
@@ -233,7 +233,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                 ) : null}
 
                 <div className="space-y-1">
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Meta ad Page ID
                   </div>
                   {competitorResult.metaPageResolution.candidates.length > 0 ? (
@@ -243,7 +243,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                           key={page.pageId}
                           type="button"
                           onClick={() => setSelectedPageId(page.pageId)}
-                          className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                          className={`rounded-full border px-2 py-0.5 text-xs ${
                             (selectedCandidate?.pageId ?? null) === page.pageId
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border text-muted-foreground hover:bg-muted"
@@ -261,7 +261,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                 </div>
 
                 {competitorResult.warnings.length > 0 ? (
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {competitorResult.warnings.includes("meta_page_search_failed")
                       ? "Ad Library Page lookup failed; Instagram lookup succeeded."
                       : competitorResult.warnings.includes("paid_page_needs_review")
@@ -301,17 +301,17 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs"
             >
               <span className="font-medium">{c.name}</span>
-              {c.instagramUsername ? <span className="text-[10px] text-muted-foreground">@{c.instagramUsername}</span> : null}
-              {c.metaPageId ? <span className="text-[10px] text-muted-foreground">Page {c.metaPageId}</span> : null}
-              {!c.metaPageId && c.paidStatus === "needs_review" ? <span className="text-[10px] text-amber-600">paid review</span> : null}
-              {!c.metaPageId && c.paidStatus === "unresolved" ? <span className="text-[10px] text-muted-foreground">organic only</span> : null}
-              {c.source === "auto" ? <span className="text-[10px] text-muted-foreground">auto</span> : null}
+              {c.instagramUsername ? <span className="text-2xs text-muted-foreground">@{c.instagramUsername}</span> : null}
+              {c.metaPageId ? <span className="text-2xs text-muted-foreground">Page {c.metaPageId}</span> : null}
+              {!c.metaPageId && c.paidStatus === "needs_review" ? <span className="text-2xs text-amber-600">paid review</span> : null}
+              {!c.metaPageId && c.paidStatus === "unresolved" ? <span className="text-2xs text-muted-foreground">organic only</span> : null}
+              {c.source === "auto" ? <span className="text-2xs text-muted-foreground">auto</span> : null}
               {!c.metaPageId ? (
                 <button
                   type="button"
                   onClick={() => resolvePaid.mutate(c.id)}
                   disabled={resolvePaid.isPending}
-                  className="text-[10px] font-medium text-primary hover:underline disabled:opacity-50"
+                  className="text-2xs font-medium text-primary hover:underline disabled:opacity-50"
                 >
                   Resolve paid
                 </button>

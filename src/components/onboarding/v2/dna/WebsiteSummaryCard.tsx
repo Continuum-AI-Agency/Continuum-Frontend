@@ -35,12 +35,12 @@ export function WebsiteSummaryCard({ buckets }: Props) {
       {website ? (
         <>
           {website.hero_statement ? (
-            <p className="text-[13px] font-medium leading-snug text-foreground">
+            <p className="text-sm font-medium leading-snug text-foreground">
               {website.hero_statement}
             </p>
           ) : null}
           {website.hero_subhead ? (
-            <p className="text-[12px] leading-snug text-muted-foreground">{website.hero_subhead}</p>
+            <p className="text-sm leading-snug text-muted-foreground">{website.hero_subhead}</p>
           ) : null}
           {website.palette
             ? (() => {
@@ -54,7 +54,7 @@ export function WebsiteSummaryCard({ buckets }: Props) {
                 if (swatches.length === 0) return null;
                 return (
                   <div>
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Palette
                     </p>
                     <div className="flex flex-wrap gap-1.5">
@@ -68,10 +68,10 @@ export function WebsiteSummaryCard({ buckets }: Props) {
             : null}
           {website.typography ? (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Typography
               </p>
-              <p className="text-[12px] text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {[website.typography.primary, website.typography.secondary].filter(Boolean).join(" · ") ||
                   "Not detected"}
               </p>
@@ -79,7 +79,7 @@ export function WebsiteSummaryCard({ buckets }: Props) {
           ) : null}
         </>
       ) : (
-        <p className="text-[12px] text-muted-foreground">Website analysis didn&apos;t produce data for this run.</p>
+        <p className="text-sm text-muted-foreground">Website analysis didn&apos;t produce data for this run.</p>
       )}
     </CardSurface>
   );

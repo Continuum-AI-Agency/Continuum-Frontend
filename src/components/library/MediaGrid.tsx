@@ -26,7 +26,8 @@ const cardVariants: Variants = {
   exit: { opacity: 0, transition: { duration: 0.1 } },
 };
 
-const GRID_CLASS = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+const GRID_CLASS =
+  "grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
 
 export function MediaGrid({
   assets,

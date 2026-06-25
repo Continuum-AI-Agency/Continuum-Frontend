@@ -25,12 +25,12 @@ function formatOccurredAt(iso: string): string {
 
 function ThumbTile({ url, label }: { url: string | null; label: string }) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-1 text-[11px] text-muted-foreground">
+    <div className="flex min-w-0 flex-col items-center gap-1 text-xs text-muted-foreground">
       <div className="relative h-20 w-20 overflow-hidden rounded bg-muted/40">
         {url ? (
           <img src={url} alt={label} className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <div className="flex h-full items-center justify-center text-[10px]">URL unavailable</div>
+          <div className="flex h-full items-center justify-center text-2xs">URL unavailable</div>
         )}
       </div>
       <span>{label}</span>
@@ -52,13 +52,13 @@ function RotationRow({ event, isFocused }: { event: RotationEvent; isFocused: bo
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {event.actionType.replace(/_/g, " ").toLowerCase()}
         </span>
-        <span className="text-[11px] text-muted-foreground">{formatOccurredAt(event.occurredAt)}</span>
+        <span className="text-xs text-muted-foreground">{formatOccurredAt(event.occurredAt)}</span>
       </div>
 
-      <p className="mt-2 text-[13px] leading-snug text-foreground">{reason}</p>
+      <p className="mt-2 text-sm leading-snug text-foreground">{reason}</p>
 
       <div className="mt-3 flex items-center gap-3">
         <ThumbTile url={event.beforeUrl} label="Before" />
@@ -68,13 +68,13 @@ function RotationRow({ event, isFocused }: { event: RotationEvent; isFocused: bo
         <ThumbTile url={event.afterUrl} label="After" />
         {product ? (
           <div className="min-w-0 flex-1 rounded border border-border/60 bg-muted/30 p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-2xs uppercase tracking-wide text-muted-foreground">
               {event.replacement ? "Replacement product" : "Outgoing product"}
             </div>
-            <div className="mt-0.5 truncate text-[12px] font-medium">{product.name}</div>
-            <div className="truncate text-[11px] text-muted-foreground">{product.brand}</div>
+            <div className="mt-0.5 truncate text-sm font-medium">{product.name}</div>
+            <div className="truncate text-xs text-muted-foreground">{product.brand}</div>
             {product.reason ? (
-              <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+              <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                 {product.reason}
               </div>
             ) : null}
@@ -96,7 +96,7 @@ export function CreativeRotationList({
       <div
         ref={scrollRef}
         className={cn(
-          "rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 text-center text-[12px] text-muted-foreground",
+          "rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 text-center text-sm text-muted-foreground",
           className
         )}
       >

@@ -34,9 +34,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
 
   return (
-    <HomeBaseDashboard
-      activeView={activeView}
-      activeViewSlot={activeViewSlot}
-    />
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full min-w-0 overflow-hidden">
+      <HomeBaseDashboard
+        activeView={activeView}
+        activeViewSlot={activeViewSlot}
+      />
+    </div>
   );
 }

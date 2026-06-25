@@ -186,9 +186,9 @@ function ProductSwapSection({
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-md border bg-red-50/40 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2">
-            <ShadcnBadge variant="destructive" className="text-[10px]">Outgoing</ShadcnBadge>
+            <ShadcnBadge variant="destructive" className="text-2xs">Outgoing</ShadcnBadge>
             {outgoing.reason && (
-              <span className="text-[10px] text-muted-foreground capitalize">{outgoing.reason.replace(/_/g, " ")}</span>
+              <span className="text-2xs text-muted-foreground capitalize">{outgoing.reason.replace(/_/g, " ")}</span>
             )}
           </div>
           <p className="font-medium leading-snug">{outgoing.name}</p>
@@ -196,18 +196,18 @@ function ProductSwapSection({
         </div>
         <div className="rounded-md border bg-green-50/40 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2">
-            <ShadcnBadge variant="default" className="text-[10px]">Replacement</ShadcnBadge>
+            <ShadcnBadge variant="default" className="text-2xs">Replacement</ShadcnBadge>
             {replacement.discount != null && (
-              <span className="text-[10px] font-semibold text-green-700">{replacement.discount}% off</span>
+              <span className="text-2xs font-semibold text-green-700">{replacement.discount}% off</span>
             )}
           </div>
           <p className="font-medium leading-snug">{replacement.name}</p>
           <p className="text-xs text-muted-foreground">{replacement.brand} · #{replacement.external_id}</p>
           {replacement.sizes && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Sizes: {replacement.sizes}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Sizes: {replacement.sizes}</p>
           )}
           {(replacement.similarity_score != null || replacement.quality_score != null) && (
-            <div className="mt-1.5 flex gap-3 text-[11px] text-muted-foreground">
+            <div className="mt-1.5 flex gap-3 text-xs text-muted-foreground">
               {replacement.similarity_score != null && <span>Similarity: {replacement.similarity_score.toFixed(1)}</span>}
               {replacement.quality_score != null && <span>Quality: {replacement.quality_score.toFixed(2)}</span>}
             </div>
@@ -624,7 +624,7 @@ export function DCOActionsWidget({
               <div className="flex min-w-0 items-center gap-1.5">
                 <ActivityLogIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <h3 className="truncate text-xs font-semibold sm:text-sm">DCO actions</h3>
-                <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+                <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground tabular-nums">
                   {pagination.totalCount} · {dateRangeDays}d
                 </span>
               </div>
@@ -633,7 +633,7 @@ export function DCOActionsWidget({
                   value={filters.status ?? "all"}
                   onValueChange={(value) => handleFilterChange("status", value === "all" ? undefined : value)}
                 >
-                  <SelectTrigger className="h-7 min-w-0 rounded-md px-2 text-[11px]">
+                  <SelectTrigger className="h-7 min-w-0 rounded-md px-2 text-xs">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -651,7 +651,7 @@ export function DCOActionsWidget({
                   value={dateRangeDays.toString()}
                   onValueChange={(value) => handleDateRangeChange(Number(value) as DateRangeDays)}
                 >
-                  <SelectTrigger className="h-7 w-[60px] rounded-md px-2 text-[11px]">
+                  <SelectTrigger className="h-7 w-[60px] rounded-md px-2 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -726,21 +726,21 @@ export function DCOActionsWidget({
                       <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-2.5 py-2">
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
-                            <ShadcnBadge variant={getStatusVariant(log.status)} className="h-5 px-1.5 text-[10px]">
+                            <ShadcnBadge variant={getStatusVariant(log.status)} className="h-5 px-1.5 text-2xs">
                               {log.status}
                             </ShadcnBadge>
-                            <span className="truncate text-[11px] text-muted-foreground">{log.scopeType}</span>
+                            <span className="truncate text-xs text-muted-foreground">{log.scopeType}</span>
                           </span>
                           <span className="mt-1 block truncate text-xs font-medium">
                             {log.actionType.replace(/_/g, " ")}
                           </span>
                           {log.decisionNote ? (
-                            <span className="mt-0.5 block line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                            <span className="mt-0.5 block line-clamp-2 text-xs leading-snug text-muted-foreground">
                               {log.decisionNote}
                             </span>
                           ) : null}
                         </span>
-                        <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                        <span className="whitespace-nowrap text-xs text-muted-foreground">
                           {formatTimestamp(log.occurredAt)}
                         </span>
                       </div>
@@ -769,7 +769,7 @@ export function DCOActionsWidget({
           </div>
 
           {pagination.totalPages > 1 ? (
-            <div className="flex items-center justify-between border-t px-3 py-2 text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
               <button
                 type="button"
                 onClick={() => goToPage(pagination.page - 1)}

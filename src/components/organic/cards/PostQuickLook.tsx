@@ -77,17 +77,17 @@ export function PostQuickLook({
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               {MEDIA_KIND_LABEL[kind]}
             </span>
             {post.isBoosted ? (
-              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
                 Boosted
               </span>
             ) : null}
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground">{formatDateTime(post.timestamp)}</span>
+            <span className="text-xs text-muted-foreground">{formatDateTime(post.timestamp)}</span>
             {post.permalink ? (
               <a
                 href={post.permalink}
@@ -149,8 +149,8 @@ export function PostQuickLook({
           {trendState === "post" ? (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-muted-foreground">7-day trend</span>
-                <span className="text-[10px] text-muted-foreground">{seriesKey}</span>
+                <span className="text-xs font-medium text-muted-foreground">7-day trend</span>
+                <span className="text-2xs text-muted-foreground">{seriesKey}</span>
               </div>
               <Sparkline
                 values={series.map((point) => point.value)}
@@ -161,14 +161,14 @@ export function PostQuickLook({
                 ariaLabel={`${seriesKey} 7-day trend`}
               />
               {trendDays < 7 ? (
-                <p className="text-[11px] leading-snug text-muted-foreground">
+                <p className="text-xs leading-snug text-muted-foreground">
                   Building per-post history ({trendDays}/7 days tracked).
                 </p>
               ) : null}
             </div>
           ) : trendState === "account" ? (
             <div className="space-y-1">
-              <p className="text-[11px] leading-snug text-muted-foreground">
+              <p className="text-xs leading-snug text-muted-foreground">
                 Per-post trend builds over time ({trendDays}/7 days). Showing the account trend meanwhile.
               </p>
               <Sparkline
@@ -181,14 +181,14 @@ export function PostQuickLook({
               />
             </div>
           ) : (
-            <p className="text-[11px] leading-snug text-muted-foreground">
+            <p className="text-xs leading-snug text-muted-foreground">
               Per-post trend builds over time. Re-open this post tomorrow for a day-over-day delta.
             </p>
           )}
         </div>
 
         {post.caption?.trim().length ? (
-          <p className="line-clamp-3 text-pretty text-[11px] leading-snug text-secondary">{post.caption}</p>
+          <p className="line-clamp-3 text-pretty text-xs leading-snug text-secondary">{post.caption}</p>
         ) : null}
       </div>
     </TooltipProvider>

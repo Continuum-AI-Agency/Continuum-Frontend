@@ -32,9 +32,9 @@ export function FindingCallout({ finding }: { finding: ReadinessFinding }) {
             </Tooltip>
           </TooltipProvider>
           <div className="space-y-1">
-            <p className="text-[12px] font-semibold text-[#0b1220]">{finding.headline}</p>
-            <p className="text-[12px] leading-snug text-[#374151]">{finding.detail}</p>
-            <p className="pt-1 text-[12px] leading-snug text-[#0b1220]">
+            <p className="text-sm font-semibold text-[#0b1220]">{finding.headline}</p>
+            <p className="text-sm leading-snug text-[#374151]">{finding.detail}</p>
+            <p className="pt-1 text-sm leading-snug text-[#0b1220]">
               <span className="font-semibold">Try this · </span>
               {finding.recommendation}
             </p>

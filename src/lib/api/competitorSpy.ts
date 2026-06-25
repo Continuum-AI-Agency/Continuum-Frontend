@@ -9,9 +9,13 @@ import type {
   MetaPageSearchResult,
   InstagramCompetitorSearchResult,
   CompetitorSearchResult,
+  CompetitorSmartSearchResult,
   MetaPageResolutionCandidate,
   MetaPageResolution,
   CompetitorOrganicPost,
+  SavedBoard,
+  SavedItem,
+  SaveItemRequest,
 } from "@continuum/contracts";
 
 const BASE = "/api/competitor-ad-spy";
@@ -88,6 +92,56 @@ export async function searchCompetitors(
 ): Promise<CompetitorSearchResult> {
   const qs = new URLSearchParams({ brandId, q });
   return request<CompetitorSearchResult>({ path: `${BASE}/competitors/search?${qs.toString()}` });
+}
+
+export async function smartSearch(brandId: string, q: string): Promise<CompetitorSmartSearchResult> {
+  const qs = new URLSearchParams({ brandId, q });
+  return request<CompetitorSmartSearchResult>({ path: `${BASE}/search?${qs.toString()}` });
+}
+
+export async function fetchAdCounts(brandId: string): Promise<Record<string, number>> {
+  const res = await request<{ counts: Record<string, number> }>({
+    path: `${BASE}/competitors/counts?brandId=${encodeURIComponent(brandId)}`,
+  });
+  return res.counts;
+}
+
+export async function listBoards(brandId: string): Promise<SavedBoard[]> {
+  const res = await request<{ boards: SavedBoard[] }>({
+    path: `${BASE}/boards?brandId=${encodeURIComponent(brandId)}`,
+  });
+  return res.boards;
+}
+
+export async function createBoard(input: {
+  brandId: string;
+  name: string;
+  description?: string;
+}): Promise<SavedBoard> {
+  const res = await request<{ board: SavedBoard }>({ path: `${BASE}/boards`, method: "POST", body: input });
+  return res.board;
+}
+
+export async function deleteBoard(id: string): Promise<void> {
+  await request({ path: `${BASE}/boards/${id}`, method: "DELETE" });
+}
+
+export async function listBoardItems(boardId: string): Promise<SavedItem[]> {
+  const res = await request<{ items: SavedItem[] }>({ path: `${BASE}/boards/${boardId}/items` });
+  return res.items;
+}
+
+export async function saveItemToBoard(boardId: string, body: SaveItemRequest): Promise<SavedItem> {
+  const res = await request<{ item: SavedItem }>({
+    path: `${BASE}/boards/${boardId}/items`,
+    method: "POST",
+    body,
+  });
+  return res.item;
+}
+
+export async function removeBoardItem(boardId: string, itemId: string): Promise<void> {
+  await request({ path: `${BASE}/boards/${boardId}/items/${itemId}`, method: "DELETE" });
 }
 
 export async function fetchAwareness(brandId: string): Promise<AwarenessReportPayload | null> {
@@ -172,6 +226,10 @@ const keys = {
   instagramSearch: (brandId: string, q: string) => ["competitor-spy", "instagram-search", brandId, q] as const,
   instagramPosts: (brandId: string, competitorId?: string, limit?: number) =>
     ["competitor-spy", "instagram-posts", brandId, competitorId ?? null, limit ?? null] as const,
+  smartSearch: (brandId: string, q: string) => ["competitor-spy", "smart-search", brandId, q] as const,
+  adCounts: (brandId: string) => ["competitor-spy", "ad-counts", brandId] as const,
+  boards: (brandId: string) => ["competitor-spy", "boards", brandId] as const,
+  boardItems: (boardId: string) => ["competitor-spy", "board-items", boardId] as const,
 };
 
 export function useCompetitors(brandId: string) {
@@ -304,6 +362,90 @@ export function useCompetitorSync(brandId: string) {
       void qc.invalidateQueries({ queryKey: ["competitor-spy", "timeline", brandId] });
       void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
       void qc.invalidateQueries({ queryKey: keys.awareness(brandId) });
+    },
+  });
+}
+
+// --- Discovery smart search + per-brand ad counts ---------------------------
+
+// Caller debounces `q`; the query only fires for terms of length >= 2.
+export function useCompetitorSmartSearch(brandId: string, q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: keys.smartSearch(brandId, term),
+    queryFn: () => smartSearch(brandId, term),
+    enabled: Boolean(brandId) && term.length >= 2,
+    staleTime: 60_000,
+  });
+}
+
+export function useAdCounts(brandId: string) {
+  return useQuery({
+    queryKey: keys.adCounts(brandId),
+    queryFn: () => fetchAdCounts(brandId),
+    enabled: Boolean(brandId),
+    staleTime: 5 * 60_000,
+  });
+}
+
+// --- Saved boards (swipe file) ---------------------------------------------
+
+export function useSavedBoards(brandId: string) {
+  return useQuery({
+    queryKey: keys.boards(brandId),
+    queryFn: () => listBoards(brandId),
+    enabled: Boolean(brandId),
+  });
+}
+
+export function useBoardItems(boardId: string | undefined) {
+  return useQuery({
+    queryKey: keys.boardItems(boardId ?? ""),
+    queryFn: () => listBoardItems(boardId as string),
+    enabled: Boolean(boardId),
+  });
+}
+
+export function useCreateBoard(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; description?: string }) => createBoard({ brandId, ...input }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
+    },
+  });
+}
+
+export function useDeleteBoard(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteBoard(id),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
+    },
+  });
+}
+
+export function useSaveItemToBoard(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { boardId: string; body: SaveItemRequest }) =>
+      saveItemToBoard(vars.boardId, vars.body),
+    onSettled: (_data, _err, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.boardItems(vars.boardId) });
+      void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
+    },
+  });
+}
+
+export function useRemoveBoardItem(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { boardId: string; itemId: string }) =>
+      removeBoardItem(vars.boardId, vars.itemId),
+    onSettled: (_data, _err, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.boardItems(vars.boardId) });
+      void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
     },
   });
 }

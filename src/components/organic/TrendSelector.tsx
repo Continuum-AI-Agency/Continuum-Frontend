@@ -63,7 +63,7 @@ export function TrendSelector({
                 type="button"
                 variant={hasTrends ? "ghost" : "default"}
                 size="sm"
-                className="h-7 px-2 text-[10px]"
+                className="h-7 px-2 text-2xs"
                 onClick={onFetch}
                 disabled={isFetching}
               >
@@ -91,7 +91,7 @@ export function TrendSelector({
             <AccordionTrigger className="hover:no-underline px-4 py-3 bg-surface/50 text-sm font-semibold tracking-wide">
               <div className="flex items-center gap-2">
                 {type.label}
-                <span className="text-[10px] bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full">
+                <span className="text-2xs bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full">
                   {type.groups.reduce((acc, g) => acc + g.trends.length, 0)}
                 </span>
               </div>
@@ -101,7 +101,7 @@ export function TrendSelector({
                 {type.groups.map((group) => (
                   <div key={group.id} className="space-y-2 mb-4 last:mb-0">
                     {type.groups.length > 1 && (
-                      <p className="text-[10px] uppercase tracking-widest text-secondary font-bold px-2 pt-2 pb-1">
+                      <p className="text-2xs uppercase tracking-widest text-secondary font-bold px-2 pt-2 pb-1">
                         {group.title}
                       </p>
                     )}

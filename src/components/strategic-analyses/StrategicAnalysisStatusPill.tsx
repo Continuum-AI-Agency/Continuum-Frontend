@@ -60,7 +60,7 @@ export function StrategicAnalysisStatusPill({ brandId }: Props) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -8, scale: 0.96 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="pointer-events-auto fixed right-4 top-4 z-40 flex items-center gap-2 rounded-full border border-violet-500/30 bg-white/95 px-3 py-1.5 text-[12px] font-medium text-violet-700 shadow-md backdrop-blur"
+          className="pointer-events-auto fixed right-4 top-4 z-40 flex items-center gap-2 rounded-full border border-violet-500/30 bg-white/95 px-3 py-1.5 text-sm font-medium text-violet-700 shadow-md backdrop-blur"
           role="status"
           aria-live="polite"
         >
@@ -70,7 +70,7 @@ export function StrategicAnalysisStatusPill({ brandId }: Props) {
           <button
             type="button"
             onClick={() => setHidden(true)}
-            className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-violet-500 hover:text-violet-700"
+            className="ml-1 text-2xs font-semibold uppercase tracking-wide text-violet-500 hover:text-violet-700"
             aria-label="Dismiss"
           >
             Hide

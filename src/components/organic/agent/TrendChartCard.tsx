@@ -96,13 +96,13 @@ export function TrendChartCard({ chart }: Props) {
           >
             <span className="flex min-w-0 flex-1 items-center gap-2">
               <SearchCheck className="h-3.5 w-3.5 shrink-0 text-foreground/45" />
-              <span className="min-w-0 truncate text-[12px] font-medium text-foreground/85">
+              <span className="min-w-0 truncate text-sm font-medium text-foreground/85">
                 {summary.title}
               </span>
-              <span className="hidden shrink-0 text-[11px] text-muted-foreground/70 sm:inline">
+              <span className="hidden shrink-0 text-xs text-muted-foreground/70 sm:inline">
                 · {summary.windowLabel}
               </span>
-              <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
                 · {summary.totalSignals} signal{summary.totalSignals === 1 ? '' : 's'}
               </span>
             </span>
@@ -110,7 +110,7 @@ export function TrendChartCard({ chart }: Props) {
               {summary.counts.slice(0, 3).map((count) => (
                 <span
                   key={count.label}
-                  className="hidden rounded-md bg-background/45 px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground/80 tabular-nums md:inline"
+                  className="hidden rounded-md bg-background/45 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground/80 tabular-nums md:inline"
                 >
                   {count.label} {count.value}
                 </span>
@@ -130,10 +130,10 @@ export function TrendChartCard({ chart }: Props) {
               key={signal.id}
               className="grid min-w-0 gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline sm:gap-3"
             >
-              <span className="min-w-0 truncate text-[12.5px] leading-snug text-foreground/90">
+              <span className="min-w-0 truncate text-sm leading-snug text-foreground/90">
                 {signal.title}
               </span>
-              <span className="flex min-w-0 flex-wrap items-center text-[10.5px] leading-snug text-muted-foreground/70">
+              <span className="flex min-w-0 flex-wrap items-center text-2xs leading-snug text-muted-foreground/70">
                 {[
                   SIGNAL_TYPE_LABELS[signal.type] ?? signal.type,
                   formatPlatform(signal.platform),

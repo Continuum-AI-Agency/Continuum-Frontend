@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { OnboardingDocument } from "@/lib/onboarding/state";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { DocumentView } from "./types";
@@ -55,10 +55,20 @@ function mergeRealtimeUpdate(existing: DocumentView, row: RealtimeRow): Document
   return { ...existing, ...next };
 }
 
+// A document that stops receiving realtime progress for this long while still
+// "processing" is treated as stuck (e.g. the edge function's isolate died before
+// writing a terminal row), so the UI fails it instead of hanging on "Extracting
+// text" forever. Reset every time the server reports progress for the doc.
+const STALE_PROCESSING_MS = 120_000;
+
 export function useDocuments(brandId: string, seed: DocumentView[]): DocumentView[] {
   const [documents, setDocuments] = useState<DocumentView[]>(seed);
+  // id -> last time the server reported anything about this document.
+  const lastSeenRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
+    const now = Date.now();
+    for (const doc of seed) lastSeenRef.current[doc.id] = now;
     setDocuments(seed);
   }, [seed]);
 
@@ -79,11 +89,13 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
         (payload) => {
           if (payload.eventType === "UPDATE") {
             const updated = payload.new as RealtimeRow;
+            lastSeenRef.current[updated.id] = Date.now();
             setDocuments((prev) =>
               prev.map((doc) => (doc.id === updated.id ? mergeRealtimeUpdate(doc, updated) : doc)),
             );
           } else if (payload.eventType === "INSERT") {
             const inserted = payload.new as RealtimeRow;
+            lastSeenRef.current[inserted.id] = Date.now();
             setDocuments((prev) => {
               if (prev.some((doc) => doc.id === inserted.id)) return prev;
               return [...prev, rowToView(inserted)];
@@ -101,6 +113,34 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
       supabase.removeChannel(channel);
     };
   }, [brandId]);
+
+  // Fail documents that have gone silent mid-processing so the row reaches a
+  // terminal state even when no realtime "error" update ever arrives.
+  const hasProcessing = documents.some((doc) => doc.status === "processing");
+  useEffect(() => {
+    if (!hasProcessing) return;
+    const id = setInterval(() => {
+      const now = Date.now();
+      setDocuments((prev) => {
+        let changed = false;
+        const next = prev.map((doc) => {
+          if (doc.status !== "processing") return doc;
+          const lastSeen = lastSeenRef.current[doc.id] ?? Date.parse(doc.createdAt);
+          if (Number.isNaN(lastSeen) || now - lastSeen < STALE_PROCESSING_MS) return doc;
+          changed = true;
+          return {
+            ...doc,
+            status: "error" as const,
+            progressStep: "error" as const,
+            errorMessage:
+              doc.errorMessage ?? "Processing timed out. Please try uploading the document again.",
+          };
+        });
+        return changed ? next : prev;
+      });
+    }, 20_000);
+    return () => clearInterval(id);
+  }, [hasProcessing]);
 
   return useMemo(() => documents, [documents]);
 }

@@ -68,7 +68,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
 
   if (rawNodes.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
         No nodes
       </div>
     );
@@ -85,7 +85,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
 
   if (!isFinite(minX)) {
     return (
-      <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
         No layout data
       </div>
     );
@@ -197,7 +197,7 @@ function WorkflowCard({
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm font-medium">{item.name}</p>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
+          <span className="shrink-0 text-xs text-muted-foreground">
             {nodeCount} {nodeCount === 1 ? "node" : "nodes"}
           </span>
         </div>
@@ -211,7 +211,7 @@ function WorkflowCard({
             {item.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="rounded border border-border/60 px-1.5 py-0.5 text-2xs text-muted-foreground"
               >
                 {tag}
               </span>
@@ -309,7 +309,7 @@ export function WorkflowLibrary() {
             <button
               type="button"
               onClick={() => setActiveTag(null)}
-              className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+              className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                 activeTag === null
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border text-muted-foreground hover:bg-muted"
@@ -322,7 +322,7 @@ export function WorkflowLibrary() {
                 key={tag}
                 type="button"
                 onClick={() => setActiveTag(tag)}
-                className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+                className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                   activeTag === tag
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:bg-muted"

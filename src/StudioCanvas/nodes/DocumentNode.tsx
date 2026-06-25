@@ -395,7 +395,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                       <FileTextIcon className="h-4 w-4" />
                     </div>
                     <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>
-                    <span className="shrink-0 text-[10px] uppercase text-muted-foreground">
+                    <span className="shrink-0 text-2xs uppercase text-muted-foreground">
                       {inferDocType(row.name, row.kind)}
                     </span>
                   </button>
@@ -465,7 +465,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="truncate text-xs font-medium text-foreground">{doc.name}</p>
-                            <p className="text-[9px] uppercase text-muted-foreground">
+                            <p className="text-3xs uppercase text-muted-foreground">
                               {status === 'processing'
                                 ? (step ?? 'processing…')
                                 : status === 'error'

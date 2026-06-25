@@ -29,11 +29,11 @@ function DashboardHeaderInner() {
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4">
+    <header className="flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1 md:hidden" />
         <Separator orientation="vertical" className="mr-2 h-4 md:hidden" />
-        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_76%,transparent)] px-3 py-1.5">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_76%,transparent)] px-3 py-1">
           <motion.span
             aria-hidden="true"
             className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--ring)]"
@@ -62,7 +62,7 @@ export function DashboardHeader() {
   return (
     <Suspense
       fallback={
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4" />
+        <header className="flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4" />
       }
     >
       <DashboardHeaderInner />

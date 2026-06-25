@@ -74,7 +74,7 @@ export type ParsedPlanStatus = {
 export type ParsedOrganicStreamEvent =
   | { kind: "delta"; delta: string }
   | { kind: "toolCall"; event: ToolCallEvent }
-  | { kind: "toolResult"; toolCallId: string; toolName: string; result: unknown }
+  | { kind: "toolResult"; toolCallId: string; toolName: string; result: unknown; ok: boolean; reason?: string }
   | { kind: "postList"; posts: UiFetchedPost[] }
   | { kind: "error"; message: string }
   | { kind: "complete" }
@@ -149,14 +149,21 @@ export function normalizeToolResultEvent(event: Record<string, unknown>) {
   const toolName = normalizeToolName(payload);
   const toolCallId = normalizeToolCallId(payload, toolName);
   const hasResult = Object.prototype.hasOwnProperty.call(payload, "result");
+  // `ok` is now derived from the tool envelope on the Backend; a returned
+  // `error` envelope arrives as ok:false with a `reason`, so the chip can show
+  // a real failure instead of a false success.
+  const ok = typeof payload.ok === "boolean" ? payload.ok : true;
+  const reason = readNonEmptyString(payload.reason);
   return {
     toolCallId,
     toolName,
+    ok,
+    reason,
     result: hasResult
       ? payload.result
       : {
-          ok: typeof payload.ok === "boolean" ? payload.ok : false,
-          error: isRecord(payload.error) ? payload.error : { message: "Tool failed" },
+          ok,
+          error: isRecord(payload.error) ? payload.error : { message: reason ?? "Tool failed" },
         },
   };
 }
@@ -667,8 +674,8 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "tool.call":
       return { kind: "toolCall", event: normalizeToolCallEvent(frame) };
     case "tool.result": {
-      const { toolCallId, toolName, result } = normalizeToolResultEvent(frame);
-      return { kind: "toolResult", toolCallId, toolName, result };
+      const { toolCallId, toolName, result, ok, reason } = normalizeToolResultEvent(frame);
+      return { kind: "toolResult", toolCallId, toolName, result, ok, reason: reason ?? undefined };
     }
     case "ui.trend_chart":
       return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(frame) } };

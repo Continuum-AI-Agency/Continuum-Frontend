@@ -75,7 +75,7 @@ export const CampaignChat = () => {
         </div>
         <div>
           <h2 className="text-sm font-semibold">Campaign Architect</h2>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">AI Assistant Powered by Gemini</p>
+          <p className="text-2xs text-muted-foreground uppercase tracking-wider">AI Assistant Powered by Gemini</p>
         </div>
       </div>
       
@@ -145,7 +145,7 @@ export const CampaignChat = () => {
             <Send className="h-4 w-4" />
           </Button>
         </form>
-        <p className="mt-2 text-[10px] text-center text-muted-foreground">
+        <p className="mt-2 text-2xs text-center text-muted-foreground">
           Architect can create nodes, suggest targeting, and validate your structure.
         </p>
       </div>

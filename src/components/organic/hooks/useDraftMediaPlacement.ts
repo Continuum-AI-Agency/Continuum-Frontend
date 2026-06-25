@@ -30,8 +30,11 @@ export type UseDraftMediaPlacementResult = {
   canUndo: boolean
   // Reorder carousel slides by swapping indices.
   reorderSlides: (fromIndex: number, toIndex: number) => void
-  // Remove a carousel slide (min 1 enforced; returns error if only one slide left).
-  removeSlide: (slideIndex: number) => PlacementError | null
+  // Remove a carousel slide by its 0-based array position (min 1 enforced).
+  removeSlide: (position: number) => PlacementError | null
+  // Replace the image at a 0-based array position with a library image, keeping
+  // its position in the carousel order.
+  replaceSlide: (position: number, asset: MediaAsset) => PlacementError | null
   // Append a library image as a new carousel slide.
   addSlide: (asset: MediaAsset) => PlacementError | null
   error: PlacementError | null
@@ -150,8 +153,11 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
     [draftId, updateDraft],
   )
 
+  // `position` is the 0-based index into the slideIndex-sorted slide list (the same
+  // order the strip renders), NOT the asset's raw slideIndex field — the two only
+  // coincide for a contiguous 0..n carousel, so the strip passes its render index.
   const removeSlide = React.useCallback(
-    (slideIndex: number): PlacementError | null => {
+    (position: number): PlacementError | null => {
       let slideErr: PlacementError | null = null
 
       updateDraft(draftId, (current) => {
@@ -164,12 +170,65 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           return current
         }
 
+        if (position < 0 || position >= slides.length) return current
+
         const remaining = slides
-          .filter((_, i) => i !== slideIndex)
+          .filter((_, i) => i !== position)
           .map((a, i) => ({ ...a, slideIndex: i }))
 
         const nonSlides = (current.publishingAssets ?? []).filter((a) => a.kind !== "image")
         return { ...current, publishingAssets: [...nonSlides, ...remaining] }
+      })
+
+      if (slideErr) setError(slideErr)
+      return slideErr
+    },
+    [draftId, updateDraft],
+  )
+
+  // Replace the image at `position` (same slideIndex-sorted order as removeSlide)
+  // with a library image, preserving its place in the carousel.
+  const replaceSlide = React.useCallback(
+    (position: number, asset: MediaAsset): PlacementError | null => {
+      if (asset.kind === "video") {
+        const err: PlacementError = {
+          type: "invalid_kind",
+          message: "Carousels are image-only in v1.",
+        }
+        setError(err)
+        return err
+      }
+
+      let slideErr: PlacementError | null = null
+      updateDraft(draftId, (current) => {
+        const slides = (current.publishingAssets ?? [])
+          .filter((a) => a.kind === "image")
+          .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999))
+
+        if (position < 0 || position >= slides.length) {
+          slideErr = { type: "empty_selection", message: "That slide no longer exists." }
+          return current
+        }
+
+        const replaced: PublishingAsset[] = slides.map((existing, i) =>
+          i === position
+            ? {
+                role: existing.role ?? "primary",
+                kind: "image",
+                slideIndex: i,
+                assetId: asset.id,
+                bucket: asset.bucket,
+                storagePath: asset.storagePath,
+                storageUrl: asset.signedUrl ?? "",
+                mimeType: asset.mimeType,
+                width: asset.width ?? undefined,
+                height: asset.height ?? undefined,
+              }
+            : { ...existing, slideIndex: i },
+        )
+
+        const nonSlides = (current.publishingAssets ?? []).filter((a) => a.kind !== "image")
+        return { ...current, publishingAssets: [...nonSlides, ...replaced] }
       })
 
       if (slideErr) setError(slideErr)
@@ -224,6 +283,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
     canUndo: undoSnapshot !== null,
     reorderSlides,
     removeSlide,
+    replaceSlide,
     addSlide,
     error,
     clearError,

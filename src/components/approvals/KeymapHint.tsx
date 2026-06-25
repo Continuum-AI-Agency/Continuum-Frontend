@@ -30,7 +30,7 @@ export function KeymapHint() {
         </Button>
       </PopoverTrigger>
       <PopoverContent side="bottom" align="end" className="w-72 p-3">
-        <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="mb-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           Keyboard
         </div>
         <ul className="space-y-1.5">
@@ -41,7 +41,7 @@ export function KeymapHint() {
                 {keys.map((key) => (
                   <kbd
                     key={key}
-                    className="rounded border border-border bg-muted px-1.5 py-0.5 font-data text-[10px] text-muted-foreground"
+                    className="rounded border border-border bg-muted px-1.5 py-0.5 font-data text-2xs text-muted-foreground"
                   >
                     {key}
                   </kbd>

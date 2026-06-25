@@ -133,7 +133,7 @@ export const DataTypeEdge = memo(({
               ...getDataTypeEdgeStyle(edgeData?.dataType),
             }}
           >
-            <div className="studio-handle-pill rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-tight shadow-sm">
+            <div className="studio-handle-pill rounded-md px-2 py-1 text-2xs font-medium uppercase tracking-tight shadow-sm">
               {edgeData.label}
             </div>
           </div>

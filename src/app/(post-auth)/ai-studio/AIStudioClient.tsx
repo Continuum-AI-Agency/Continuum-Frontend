@@ -77,8 +77,8 @@ export default function AIStudioClient({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-baseline gap-3">
-            <Heading size="7" className="text-white">AI Studio</Heading>
-            <Text color="gray">Build flows for {brandName}</Text>
+            <Heading size="3" className="font-semibold text-white">AI Studio</Heading>
+            <Text color="gray" size="2">Build flows for {brandName}</Text>
           </div>
           <div className="flex items-center gap-3">
             <ReplayWalkthroughButton
@@ -89,7 +89,7 @@ export default function AIStudioClient({
           </div>
         </div>
 
-        <div data-tour-id="studio-canvas" className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
+        <div data-tour-id="studio-canvas" className="flex-1 min-h-0 w-full overflow-hidden rounded-lg border border-white/10">
           <div className="h-full w-full">
             <StudioCanvas
               brandProfileId={brandProfileId}

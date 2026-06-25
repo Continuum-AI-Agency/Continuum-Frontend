@@ -102,10 +102,10 @@ export function OrganicSessionSidebar({
                     {getSessionTitle(session)}
                   </span>
                   <div className="flex w-full items-center justify-between gap-2">
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="text-2xs uppercase tracking-wide text-muted-foreground">
                       {session.lastMessageRole ?? "session"}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-2xs text-muted-foreground">
                       {formatSessionTime(session.lastMessageAt ?? session.createdAt)}
                     </span>
                   </div>

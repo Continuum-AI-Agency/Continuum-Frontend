@@ -10,6 +10,7 @@ import {
   type InsightListItem,
   type InsightSeverity,
 } from "@/components/dashboard/datatable/InsightsList";
+import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
 
 type State =
   | { status: "idle" | "loading" }
@@ -69,6 +70,7 @@ export function PaidInsightsList({ brandId, adAccountId }: { brandId: string; ad
     <InsightsList
       title="Insights"
       items={items}
+      headerAction={<ModuleShortcutLink href="/scale" label="Scale" />}
       isLoading={state.status === "idle" || state.status === "loading"}
       emptyState={
         state.status === "error" ? "Couldn't load insights right now." : "Insights appear as campaigns run."

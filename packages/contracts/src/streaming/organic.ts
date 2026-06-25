@@ -279,7 +279,13 @@ const toolResultSchema = z.object({
   data: z.object({
     toolCallId: z.string().min(1),
     toolName: z.string().min(1),
+    // `ok` is derived from the tool envelope status on the Backend (see
+    // organic agent.ts) — a tool that returns an `error` envelope without
+    // throwing now reports ok:false here instead of a hardcoded success.
     ok: z.boolean(),
+    status: z.enum(["success", "warning", "error"]).optional(),
+    code: z.string().optional(),
+    reason: z.string().optional(),
     result: z.unknown().optional(),
     error: z.unknown().optional(),
   }).loose(),

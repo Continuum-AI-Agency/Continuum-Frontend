@@ -570,7 +570,7 @@ function HistoryPanel({ history, onSelectHistory }: { history: ChatImageHistoryI
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-gray-400">No thumb</div>
                 )}
-                <span className="absolute left-1 top-1 rounded bg-slate-900/70 px-1 text-[10px] uppercase text-gray-200">
+                <span className="absolute left-1 top-1 rounded bg-slate-900/70 px-1 text-2xs uppercase text-gray-200">
                   {item.model === "nano-banana" || item.model === "gemini-3-pro-image-preview" ? "Image" : "Video"}
                 </span>
               </button>

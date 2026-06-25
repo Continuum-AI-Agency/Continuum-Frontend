@@ -138,9 +138,9 @@ export default function ImpersonatePage() {
           <p className="text-sm text-gray-600">{errorMsg}</p>
           
           <div className="w-full mt-4 p-3 bg-gray-50 rounded-lg text-left overflow-hidden">
-            <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-2">Debug Logs</p>
+            <p className="text-2xs font-mono text-gray-400 uppercase tracking-wider mb-2">Debug Logs</p>
             {debugLogs.map((log, i) => (
-              <p key={i} className="text-[10px] font-mono text-gray-500 truncate">{log}</p>
+              <p key={i} className="text-2xs font-mono text-gray-500 truncate">{log}</p>
             ))}
           </div>
 
@@ -169,7 +169,7 @@ export default function ImpersonatePage() {
         
         <div className="w-full mt-4 p-3 bg-gray-50 rounded-lg text-left overflow-hidden opacity-50">
           {debugLogs.slice(-3).map((log, i) => (
-            <p key={i} className="text-[10px] font-mono text-gray-400 truncate">{log}</p>
+            <p key={i} className="text-2xs font-mono text-gray-400 truncate">{log}</p>
           ))}
         </div>
       </div>

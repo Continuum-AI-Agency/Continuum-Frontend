@@ -299,7 +299,7 @@ export function BrandInsightsDataTable({
                                   .filter((detail) => Boolean(detail.value?.trim()))
                                   .map((detail) => (
                                     <div key={`${row.id}-${detail.label}`} className="rounded-md border bg-background p-3">
-                                      <dt className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+                                      <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                                         {detail.label}
                                       </dt>
                                       <dd className="mt-1 text-sm leading-6">{detail.value}</dd>

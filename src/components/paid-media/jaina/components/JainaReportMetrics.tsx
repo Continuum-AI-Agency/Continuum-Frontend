@@ -55,7 +55,7 @@ function MetricCard({ item }: { item: FrontendCheckpointReport["performance_snap
             {formatMetricValue(item)}
           </Text>
           {hasChange || hasStatus ? (
-            <Badge color={statusColor} variant="soft" className="text-[10px]">
+            <Badge color={statusColor} variant="soft" className="text-2xs">
               {hasChange ? (
                 <>
                   {numericChange > 0 ? "+" : ""}

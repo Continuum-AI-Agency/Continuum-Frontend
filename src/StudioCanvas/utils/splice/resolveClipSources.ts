@@ -1,5 +1,6 @@
 import type { Edge } from '@xyflow/react';
-import type { StudioNode, ClipSlot, TimelineItem } from '../../types';
+import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
+import type { StudioNode, ClipSlot, TimelineItem, TimelineInputSource } from '../../types';
 import type { NodeOutput } from '../../types/execution';
 import type { TimelineRenderItem } from './composeTimeline';
 import { parseDataUrl } from '../dataUrl';

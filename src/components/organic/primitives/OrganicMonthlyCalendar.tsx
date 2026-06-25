@@ -94,7 +94,7 @@ function DraftChip({
                 onClick()
               }}
               className={cn(
-                "flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight transition-opacity hover:opacity-80",
+                "flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight transition-opacity hover:opacity-80",
                 statusFrameClasses(platform, draft.status, "chip"),
                 isSelected && "ring-1 ring-brand-primary ring-offset-1"
               )}
@@ -166,10 +166,10 @@ function PostedContentHover({ post }: { post: OrganicCalendarPostedContent }) {
       ) : null}
       <div className="space-y-2 p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
             Posted
           </span>
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
             {post.platform} {post.timeLabel}
           </span>
         </div>
@@ -205,12 +205,12 @@ function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
         <button
           type="button"
           className={cn(
-            "flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100",
+            "flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100",
             colorClass
           )}
           title={post.title}
         >
-          <span className="shrink-0 text-[9px] font-bold uppercase">{post.timeLabel}</span>
+          <span className="shrink-0 text-3xs font-bold uppercase">{post.timeLabel}</span>
           <span className="truncate">{post.title}</span>
         </button>
       </HoverCardTrigger>
@@ -287,7 +287,7 @@ export function OrganicMonthlyCalendar({
         {DAY_LABELS.map((label) => (
           <div
             key={label}
-            className="py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+            className="py-1 text-center text-2xs font-semibold uppercase tracking-wide text-muted-foreground"
           >
             {label}
           </div>
@@ -317,11 +317,11 @@ export function OrganicMonthlyCalendar({
               >
                 <div className="mb-1 flex items-center justify-between">
                   {isToday ? (
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-2xs font-semibold text-primary-foreground">
                       {date.getDate()}
                     </span>
                   ) : (
-                    <span className="text-[11px] font-medium text-muted-foreground">
+                    <span className="text-xs font-medium text-muted-foreground">
                       {date.getDate()}
                     </span>
                   )}
@@ -351,7 +351,7 @@ export function OrganicMonthlyCalendar({
                     <PostedContentChip key={post.id} post={post} />
                   ))}
                   {overflowCount > 0 && (
-                    <span className="pl-1 text-[9px] text-muted-foreground/70">
+                    <span className="pl-1 text-3xs text-muted-foreground/70">
                       +{overflowCount} more
                     </span>
                   )}

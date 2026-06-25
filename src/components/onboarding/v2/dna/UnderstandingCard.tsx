@@ -36,26 +36,26 @@ export function UnderstandingCard({ buckets }: Props) {
         <>
           {understanding.positioning_thesis ? (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Positioning thesis
               </p>
-              <p className="text-[13px] leading-snug text-foreground">{understanding.positioning_thesis}</p>
+              <p className="text-sm leading-snug text-foreground">{understanding.positioning_thesis}</p>
             </div>
           ) : null}
           {understanding.hypothesis_icp ? (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Hypothesis (ICP)
               </p>
-              <p className="text-[12px] leading-snug text-muted-foreground">{understanding.hypothesis_icp}</p>
+              <p className="text-sm leading-snug text-muted-foreground">{understanding.hypothesis_icp}</p>
             </div>
           ) : null}
           {understanding.tonal_signal ? (
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Tonal signal
               </p>
-              <p className="text-[12px] leading-snug text-muted-foreground">{understanding.tonal_signal}</p>
+              <p className="text-sm leading-snug text-muted-foreground">{understanding.tonal_signal}</p>
             </div>
           ) : null}
           {understanding.brand_pillars && understanding.brand_pillars.length > 0 ? (

@@ -81,19 +81,19 @@ export function ToolApprovalCard({
                 <div className="flex flex-wrap items-center gap-1.5">
                   {platform && <PlatformTag platform={platform} />}
                   {format && (
-                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {format}
                     </span>
                   )}
                 </div>
-                {scheduledAt && <MetaRow items={[scheduledAt]} className="text-[11px]" />}
+                {scheduledAt && <MetaRow items={[scheduledAt]} className="text-xs" />}
                 {angle && (
-                  <p className="line-clamp-3 text-[12px] leading-relaxed text-foreground/80">
+                  <p className="line-clamp-3 text-sm leading-relaxed text-foreground/80">
                     {angle}
                   </p>
                 )}
                 {!platform && !angle && (
-                  <p className="text-[11.5px] text-muted-foreground">{approval.toolName}</p>
+                  <p className="text-xs text-muted-foreground">{approval.toolName}</p>
                 )}
               </CardContent>
               <CardFooter className="flex items-center justify-end gap-1 border-t border-border/50 px-3 py-2">
@@ -101,7 +101,7 @@ export function ToolApprovalCard({
                   variant="ghost"
                   disabled={disabled}
                   onClick={onDenyAction}
-                  className="h-7 min-h-0 gap-1 px-2.5 text-[11.5px]"
+                  className="h-7 min-h-0 gap-1 px-2.5 text-xs"
                 >
                   <X className="h-3 w-3" />
                   Deny
@@ -110,7 +110,7 @@ export function ToolApprovalCard({
                   variant="primary"
                   disabled={disabled}
                   onClick={onApproveAction}
-                  className="h-7 min-h-0 gap-1 px-2.5 text-[11.5px]"
+                  className="h-7 min-h-0 gap-1 px-2.5 text-xs"
                 >
                   <Check className="h-3 w-3" />
                   Approve
@@ -120,10 +120,10 @@ export function ToolApprovalCard({
           </HoverCardTrigger>
           <HoverCardContent side="top" align="start" className="w-72 p-0">
             <div className="space-y-2 p-3.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {approval.toolName}
               </p>
-              <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/60 p-2.5 text-[10.5px] leading-relaxed text-muted-foreground">
+              <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/60 p-2.5 text-2xs leading-relaxed text-muted-foreground">
                 {inputSummary(approval.input)}
               </pre>
             </div>
@@ -131,7 +131,7 @@ export function ToolApprovalCard({
         </HoverCard>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44">
-        <ContextMenuLabel className="text-[11px] text-muted-foreground">
+        <ContextMenuLabel className="text-xs text-muted-foreground">
           {approval.toolName}
         </ContextMenuLabel>
         <ContextMenuSeparator />

@@ -66,14 +66,14 @@ export function StatTile({
       >
         <div className="flex items-center gap-1 text-muted-foreground">
           {Icon ? <Icon className="size-3.5 shrink-0" aria-hidden /> : null}
-          <span className="text-[11px] font-medium leading-none">{label}</span>
+          <span className="text-xs font-medium leading-none">{label}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-lg font-semibold leading-none tabular-nums tracking-tight">{formatted}</span>
           {tierChip ? (
             <span
               className={cn(
-                "rounded px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide",
+                "rounded px-1 py-0.5 text-3xs font-semibold uppercase leading-none tracking-wide",
                 tierChip.className
               )}
             >
@@ -85,7 +85,7 @@ export function StatTile({
       </div>
     ) : (
       <div className={cn("flex items-center justify-between gap-2 rounded-md px-1.5 py-1", className)}>
-        <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
           {Icon ? <Icon className="size-3 shrink-0" aria-hidden /> : null}
           <span className="truncate">{label}</span>
         </span>
@@ -104,7 +104,7 @@ export function StatTile({
       <TooltipContent side="top" className="max-w-[220px]">
         <p className="text-xs leading-snug">{tooltip}</p>
         {pct !== undefined && !Number.isNaN(pct) ? (
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1 text-xs leading-snug text-muted-foreground">
             {`${pct >= 0 ? "+" : "-"}${Math.abs(pct).toFixed(1)}% vs 24h ago`}
           </p>
         ) : null}

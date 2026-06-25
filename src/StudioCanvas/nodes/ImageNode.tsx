@@ -427,7 +427,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 </Button>
               )}
               <Select value={refType} onValueChange={handleRefTypeChange}>
-                  <SelectTrigger className="h-6 w-[94px] text-[10px] px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
+                  <SelectTrigger className="h-6 w-[94px] text-2xs px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
                   <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -455,7 +455,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   />
                 )}
                 {data.hasMarkup && (
-                  <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
+                  <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
                     <Pencil2Icon className="h-2.5 w-2.5" />
                     <span>Marked up</span>
                   </div>
@@ -463,7 +463,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 {refBadge && refBadge.tone !== "error" && (
                   <div
                     className={cn(
-                      "absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm",
+                      "absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm",
                       refBadge.tone === "processing" && "bg-blue-500/90",
                       refBadge.tone === "ready" && "bg-emerald-500/90",
                     )}
@@ -476,7 +476,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 {refBadge && refBadge.tone === "error" && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
+                      <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
                         <XCircle className="h-2.5 w-2.5" />
                         <span>{refBadge.label}</span>
                       </div>
@@ -486,7 +486,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       <Button
                         size="sm"
                         variant="secondary"
-                        className="h-6 px-2 text-[11px]"
+                        className="h-6 px-2 text-xs"
                         onMouseDown={(event) => event.stopPropagation()}
                         onClick={handleRetryUpload}
                       >
@@ -525,7 +525,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             />
         
             {data.fileName && (
-                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-[9px] text-secondary truncate">
+                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
                     {data.fileName}
                 </div>
             )}

@@ -29,7 +29,7 @@ export function BrandEventsPanel({ events, country, weekStartDate, generatedAt, 
   const generatedLabel = formatDate(generatedAt);
 
   return (
-    <GlassPanel className="p-6 space-y-4">
+    <GlassPanel className="p-[var(--card-pad)] space-y-4">
       <Flex justify="between" align="start" wrap="wrap" gap="3">
         <Box className="space-y-1">
           <Flex align="center" gap="2">

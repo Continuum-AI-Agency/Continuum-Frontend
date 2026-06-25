@@ -69,7 +69,7 @@ export function JainaReportNav({
   return (
     <Box className="sticky top-0 w-full">
       <Flex direction="column" gap="1">
-        <Text size="1" weight="bold" className="mb-3 text-gray-500 uppercase tracking-widest text-[10px]">
+        <Text size="1" weight="bold" className="mb-3 text-gray-500 uppercase tracking-widest text-2xs">
           Table of Contents
         </Text>
         <Flex direction="column" gap="1">
@@ -85,7 +85,7 @@ export function JainaReportNav({
             <button
               key={item.key}
               onClick={() => scrollToSection(getSectionId(item.key))}
-              className={`text-left text-[13px] py-1.5 px-3 rounded-md transition-all duration-200 cursor-pointer border-l-2 ${
+              className={`text-left text-sm py-1.5 px-3 rounded-md transition-all duration-200 cursor-pointer border-l-2 ${
                 activeId === getSectionId(item.key)
                   ? "bg-white/5 text-primary border-primary font-medium"
                   : "text-gray-400 hover:text-white hover:bg-white/5 border-transparent hover:border-white/20"

@@ -89,7 +89,7 @@ export function DashboardWarmOnMount({ brandId, isCold }: { brandId: string; isC
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/70 bg-card px-3 py-2">
       <span className="size-1.5 shrink-0 rounded-full bg-primary live-pulse" aria-hidden="true" />
-      <span className="text-[11px] font-medium text-muted-foreground">
+      <span className="text-xs font-medium text-muted-foreground">
         Syncing brand context…
       </span>
     </div>

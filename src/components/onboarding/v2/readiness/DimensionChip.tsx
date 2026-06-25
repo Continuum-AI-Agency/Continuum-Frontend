@@ -22,12 +22,12 @@ export function DimensionChip({ dim, readiness, loading }: Props) {
     <HoverCard openDelay={150} closeDelay={100}>
       <HoverCardTrigger>{badge}</HoverCardTrigger>
       <HoverCardContent className="w-64 p-3" side="top">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
           {DIMENSION_LABELS[dim]}
         </p>
-        <p className="mt-1 text-[12px] leading-snug text-[#374151]">{rationale}</p>
+        <p className="mt-1 text-sm leading-snug text-[#374151]">{rationale}</p>
         {score !== null ? (
-          <p className="mt-1.5 text-[11px] tabular-nums text-[#64748b]">Score: {Math.round(score)}</p>
+          <p className="mt-1.5 text-xs tabular-nums text-[#64748b]">Score: {Math.round(score)}</p>
         ) : null}
       </HoverCardContent>
     </HoverCard>

@@ -96,7 +96,7 @@ export function CampaignPerformanceMatrix({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/15 px-3 py-2">
         <div>
           <h3 className="text-sm font-semibold tracking-tight">Detail</h3>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Sortable matrix with cell-level percentile tint and trend.
           </p>
         </div>
@@ -107,7 +107,7 @@ export function CampaignPerformanceMatrix({
               type="button"
               onClick={() => onMetricChange(candidate.key)}
               className={cn(
-                "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                "rounded-md border px-2 py-1 text-xs font-medium transition-colors",
                 metric === candidate.key
                   ? "border-primary/40 bg-primary/10 text-primary"
                   : "border-border/70 bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -128,7 +128,7 @@ export function CampaignPerformanceMatrix({
               </TableHead>
               <TableHead className="w-[88px] px-2">Status</TableHead>
               <TableHead className="w-[100px] px-2 text-right">
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="inline-flex items-center gap-1 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                   Trend
                   {selectedMetricMeta ? (
                     <span className="font-mono normal-case tracking-normal text-muted-foreground/70">
@@ -142,7 +142,7 @@ export function CampaignPerformanceMatrix({
                   <button
                     type="button"
                     className={cn(
-                      "inline-flex items-center justify-end gap-1 rounded px-1 py-0.5 text-[10px] uppercase tracking-[0.08em] transition-colors hover:bg-muted",
+                      "inline-flex items-center justify-end gap-1 rounded px-1 py-0.5 text-2xs uppercase tracking-[0.08em] transition-colors hover:bg-muted",
                       metric === candidate.key ? "text-primary" : "text-muted-foreground"
                     )}
                     onClick={() => onMetricChange(candidate.key)}
@@ -159,7 +159,7 @@ export function CampaignPerformanceMatrix({
                 </TableHead>
               ))}
               <TableHead className="min-w-[96px] px-3 text-right">
-                <span className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                   Signal
                 </span>
               </TableHead>
@@ -208,8 +208,8 @@ export function CampaignPerformanceMatrix({
                         )}
                       />
                       <div className="min-w-0">
-                        <div className="truncate text-[12px] font-medium">{campaign.name}</div>
-                        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-muted-foreground">
+                        <div className="truncate text-sm font-medium">{campaign.name}</div>
+                        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-2xs text-muted-foreground">
                           <span className="truncate font-mono">{campaign.id}</span>
                           {campaign.objective ? (
                             <span className="truncate uppercase tracking-[0.08em]">
@@ -225,7 +225,7 @@ export function CampaignPerformanceMatrix({
                       variant={
                         campaign.status.toUpperCase() === "ACTIVE" ? "default" : "secondary"
                       }
-                      className="text-[10px] uppercase tracking-[0.08em]"
+                      className="text-2xs uppercase tracking-[0.08em]"
                     >
                       {statusLabel(campaign.status)}
                     </Badge>
@@ -258,7 +258,7 @@ export function CampaignPerformanceMatrix({
                           }}
                           data-active={isActiveColumn || undefined}
                           className={cn(
-                            "w-full rounded-md px-2 py-1 text-right font-mono text-[12px] font-medium tabular-nums transition-[box-shadow] duration-150",
+                            "w-full rounded-md px-2 py-1 text-right font-mono text-sm font-medium tabular-nums transition-[box-shadow] duration-150",
                             "bg-[var(--hm-bg-light)] dark:bg-[var(--hm-bg-dark)]",
                             "hover:ring-1 hover:ring-inset hover:ring-foreground/15",
                             "data-[active]:shadow-[inset_0_0_0_2px_oklch(60%_0.20_280_/_0.35)]",
@@ -305,7 +305,7 @@ function SignalChip({ status, deltaPct, tone }: SignalChipProps) {
     <span
       title={statusLabelText ?? undefined}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px] tabular-nums",
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs tabular-nums",
         tone === "positive" &&
           "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
         tone === "negative" &&

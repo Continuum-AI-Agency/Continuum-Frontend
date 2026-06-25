@@ -50,7 +50,7 @@ function NavGroup({ label, pill, children }: NavGroupProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
           {label}
         </span>
         {pill}

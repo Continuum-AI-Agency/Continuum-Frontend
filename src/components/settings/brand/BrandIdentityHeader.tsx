@@ -33,7 +33,7 @@ export function BrandIdentityHeader({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-        <p className="truncate font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground">
           {brandId}
         </p>
       </div>

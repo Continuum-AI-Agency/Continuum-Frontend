@@ -47,7 +47,7 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
     <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
       <header className="border-b border-border/70 bg-muted/15 px-3 py-2">
         <h3 className="text-sm font-semibold tracking-tight">Insights</h3>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Generated from normalized matrix and pacing data.
         </p>
       </header>
@@ -75,7 +75,7 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
                     <div className="flex items-center gap-2">
                       <span
                         className={cn(
-                          "font-mono text-[9px] uppercase tracking-[0.1em]",
+                          "font-mono text-3xs uppercase tracking-[0.1em]",
                           SEVERITY_TEXT[insight.severity]
                         )}
                       >
@@ -83,10 +83,10 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
                       </span>
                       <span className="h-px flex-1 bg-border/60" aria-hidden />
                     </div>
-                    <div className="mt-1 text-[12px] font-semibold leading-tight">
+                    <div className="mt-1 text-sm font-semibold leading-tight">
                       {insight.title}
                     </div>
-                    <p className="mt-1 text-[11px] leading-[1.45] text-muted-foreground">
+                    <p className="mt-1 text-xs leading-[1.45] text-muted-foreground">
                       {insight.summary}
                     </p>
                   </div>
@@ -111,10 +111,10 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
                           key={`${insight.id}:${point.metric}:${point.campaignId}`}
                           className="flex items-center justify-between gap-3 px-2 py-1.5"
                         >
-                          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <span className="font-mono text-3xs uppercase tracking-[0.1em] text-muted-foreground">
                             {point.metric}
                           </span>
-                          <span className="flex items-baseline gap-1.5 font-mono text-[11px] tabular-nums">
+                          <span className="flex items-baseline gap-1.5 font-mono text-xs tabular-nums">
                             <span className="font-medium text-foreground">{displayValue}</span>
                             <span className="text-muted-foreground">
                               · {Math.round(point.percentileRank * 100)}th

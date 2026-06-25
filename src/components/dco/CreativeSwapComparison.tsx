@@ -20,7 +20,7 @@ export function CreativeSwapComparison({
 }) {
   return (
     <div>
-      <p className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      <p className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
         Creative Comparison
       </p>
       <div className="grid gap-4 md:grid-cols-2">

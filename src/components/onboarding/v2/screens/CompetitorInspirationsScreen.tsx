@@ -231,7 +231,7 @@ function InspirationRow({ label, children }: { label: string; children: React.Re
 
 function InspirationTag() {
   return (
-    <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+    <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white">
       Inspiration
     </span>
   );
@@ -270,7 +270,7 @@ function PostCard({
           No image
         </div>
       )}
-      <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
         {typeof post.metrics?.likes === "number" ? <span>♥ {post.metrics.likes}</span> : null}
         {typeof post.metrics?.comments === "number" ? <span>💬 {post.metrics.comments}</span> : null}
       </div>
@@ -304,14 +304,14 @@ function AdCard({
     >
       <InspirationTag />
       <p className="mt-5 line-clamp-3 text-xs font-medium text-foreground">{ad.headline ?? "Untitled ad"}</p>
-      <p className="line-clamp-4 text-[11px] text-muted-foreground">{ad.bodyText ?? ""}</p>
+      <p className="line-clamp-4 text-xs text-muted-foreground">{ad.bodyText ?? ""}</p>
       {ad.permalink ? (
         <a
           href={ad.permalink}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="text-[10px] font-semibold uppercase tracking-wide text-primary hover:underline"
+          className="text-2xs font-semibold uppercase tracking-wide text-primary hover:underline"
         >
           View ad ↗
         </a>

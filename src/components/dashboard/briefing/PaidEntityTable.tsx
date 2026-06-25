@@ -11,6 +11,7 @@ import { buildPaidLeaderboardRows, formatKpiValue } from "@/lib/paid-media/paid-
 import { kpiLabel, kpiUnit, metricForKpi, sortEntitiesByKpi } from "@/lib/paid-media/paid-kpi";
 import { useDashboardPrefsStore } from "@/stores/dashboardPrefs";
 import { InsightDataTable, type InsightColumn } from "@/components/dashboard/datatable/InsightDataTable";
+import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
 import { InsightActionsDropdown, InsightContextActions } from "./insightActions";
 
 const RANGE = { preset: "last_7d" } as const;
@@ -109,9 +110,11 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
         header: scope === "top_adsets" ? "Ad set" : "Campaign",
         cell: (row) => (
           <div className="min-w-0">
-            <p className="truncate text-sm text-foreground">{row.name.trim() || "Untitled"}</p>
+            <p className="text-sm leading-snug text-foreground line-clamp-2 break-words">
+              {row.name.trim() || "Untitled"}
+            </p>
             {scope === "top_adsets" && row.labels?.campaign ? (
-              <p className="truncate text-[11px] text-muted-foreground">{row.labels.campaign}</p>
+              <p className="truncate text-xs text-muted-foreground">{row.labels.campaign}</p>
             ) : null}
           </div>
         ),
@@ -138,6 +141,7 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
     <InsightDataTable
       title={title}
       metricLabel={kpiLabel(paidKpi)}
+      headerAction={<ModuleShortcutLink href="/scale" label="Scale" />}
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
@@ -146,7 +150,7 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
       contextMenu={() => <InsightContextActions />}
       rowActions={() => <InsightActionsDropdown />}
       expandedContent={(row) => (
-        <div className="flex flex-col gap-2 text-[11px] leading-relaxed">
+        <div className="flex flex-col gap-2 text-xs leading-relaxed">
           {insightLineById.get(row.id) ? (
             <p className="text-foreground">{insightLineById.get(row.id)}</p>
           ) : null}
@@ -165,7 +169,7 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
-      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{label}</dt>
+      <dt className="text-2xs uppercase tracking-wide text-muted-foreground/70">{label}</dt>
       <dd className="text-foreground">{value}</dd>
     </div>
   );

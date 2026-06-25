@@ -79,7 +79,7 @@ function GlassCardButton({
         <span className="sr-only">{config.title} card</span>
       )}
       {config.status === "coming-soon" && (
-        <div className="pointer-events-none absolute -right-7 -top-1 rotate-6 bg-red-500 text-white text-[11px] font-semibold px-12 py-1.5 shadow-lg">
+        <div className="pointer-events-none absolute -right-7 -top-1 rotate-6 bg-red-500 text-white text-xs font-semibold px-12 py-1.5 shadow-lg">
           Coming soon
         </div>
       )}
@@ -182,7 +182,7 @@ export function PrimitivesHub({ brandId, initialGuidelines, questionsByNiche, qu
   const activeCard = primitiveCards.find((card) => card.id === active);
 
   return (
-    <Card className="glass-panel p-6 shadow-brand-glow w-full">
+    <Card className="glass-panel p-[var(--card-pad)] shadow-brand-glow w-full">
       {active ? (
         <Flex direction="column" gap="4">
           <Flex align="center" justify="between">

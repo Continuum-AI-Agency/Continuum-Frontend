@@ -10,7 +10,8 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useDebouncedSave } from '../hooks/useDebouncedSave';
-import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { useNodeTitler } from '../hooks/useNodeTitler';
+import { Node as CanvasNode, NodeContent, NodeHeader, NodeTitle } from '@/components/ai-elements/node';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,7 +21,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Copy, Trash2 } from 'lucide-react';
+import { Copy, Sparkles, Trash2 } from 'lucide-react';
 
 export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
@@ -33,7 +34,8 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
   const executionControls = useWorkflowExecution();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const debouncedSave = useDebouncedSave();
-  
+  const { isTitling } = useNodeTitler({ id, value: data.value, isExecuting: !!data.isExecuting });
+
   const connectedEdge = edges.find(e => e.source === id);
   const incomingEdges = edges.filter(e => e.target === id);
   const hasInputs = incomingEdges.length > 0;
@@ -107,6 +109,13 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
           hasInputs && "ring-1 ring-brand-primary/30"
         )}
       >
+          <NodeHeader className="flex items-center gap-1.5 border-b border-border/60 bg-muted/30 px-2.5! py-1.5!">
+              <Sparkles className={cn("h-3 w-3 shrink-0 text-brand-primary/70", isTitling && "animate-pulse")} />
+              <NodeTitle className="min-w-0 flex-1 truncate text-2xs font-medium text-muted-foreground">
+                {data.label || (isTitling ? "Naming…" : "Untitled prompt")}
+              </NodeTitle>
+          </NodeHeader>
+
           <NodeContent className="relative flex-1 flex flex-col min-h-0 overflow-hidden p-0 bg-muted/20">
               <Textarea 
                 value={data.value} 
@@ -120,7 +129,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                   <Button 
                     size="sm" 
                     variant="default" 
-                    className="h-6 px-3 text-[10px] shadow-sm nodrag cursor-pointer"
+                    className="h-6 px-3 text-2xs shadow-sm nodrag cursor-pointer"
                     onClick={handleEnrich}
                     disabled={data.isExecuting}
                   >

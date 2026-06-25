@@ -59,14 +59,14 @@ export function IdentityPanel({
               {resolvedLogo ? (
                 <AvatarImage src={resolvedLogo} alt={`${resolved.name || "brand"} logo`} className="object-cover" />
               ) : null}
-              <AvatarFallback className="rounded-lg bg-muted text-[12px] font-bold text-foreground">
+              <AvatarFallback className="rounded-lg bg-muted text-sm font-bold text-foreground">
                 {(resolved.name || "B").slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
               <EditableHeading value={resolved.name} placeholder="Untitled brand" onCommit={onRename} />
               {host ? (
-                <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
                   <ArrowSquareOut className="h-3 w-3" />
                   {host}
                 </div>
@@ -74,7 +74,7 @@ export function IdentityPanel({
             </div>
           </div>
           {resolved.heroStatement ? (
-            <p className="mt-2 text-[12px] italic leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-sm italic leading-relaxed text-muted-foreground">
               &ldquo;{resolved.heroStatement}&rdquo;
             </p>
           ) : null}
@@ -84,12 +84,12 @@ export function IdentityPanel({
           <Subsection>
             <SubsectionHeader title="First impression" />
             {firstImpression ? (
-              <p className="flex items-start gap-1.5 text-[13px] italic leading-snug text-foreground">
+              <p className="flex items-start gap-1.5 text-sm italic leading-snug text-foreground">
                 <Sparkle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--cs-violet,#5a39ff)]" />
                 <span className="min-w-0">{firstImpression}</span>
               </p>
             ) : (
-              <p className="text-[12px] italic text-muted-foreground">Listening for the hook…</p>
+              <p className="text-sm italic text-muted-foreground">Listening for the hook…</p>
             )}
           </Subsection>
         )}
@@ -103,7 +103,7 @@ export function IdentityPanel({
               ))}
             </div>
           ) : (
-            <p className="text-[12px] italic text-muted-foreground">No palette detected.</p>
+            <p className="text-sm italic text-muted-foreground">No palette detected.</p>
           )}
         </Subsection>
 
@@ -115,7 +115,7 @@ export function IdentityPanel({
               <FontSample family={resolved.typography.secondary} role="Secondary" weight={400} />
             </div>
           ) : (
-            <p className="text-[12px] italic text-muted-foreground">No fonts detected.</p>
+            <p className="text-sm italic text-muted-foreground">No fonts detected.</p>
           )}
         </Subsection>
       </div>
@@ -140,7 +140,7 @@ function Subsection({ children, className }: { children: ReactNode; className?: 
 function SubsectionHeader({ title, chip }: { title: string; chip?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       {chip}
     </div>
   );

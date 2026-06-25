@@ -42,16 +42,16 @@ export function QueueList({ actions, focusedId, onFocus }: Props) {
               )}
               aria-current={isFocused ? "true" : undefined}
             >
-              <span className="font-data text-[11px] tabular-nums text-muted-foreground">
+              <span className="font-data text-xs tabular-nums text-muted-foreground">
                 {formatRelativeTime(action.created_at)}
               </span>
-              <span className="flex items-center gap-1.5 truncate text-[11px] font-medium uppercase tracking-wide">
+              <span className="flex items-center gap-1.5 truncate text-xs font-medium uppercase tracking-wide">
                 <Icon className="h-3 w-3 shrink-0 text-muted-foreground" strokeWidth={1.5} />
                 <span className="truncate">{actionTypeLabel(action.action_type)}</span>
               </span>
               <span className="truncate font-data text-xs text-foreground">{scopeLabel(action)}</span>
               <span className="truncate text-xs text-muted-foreground">{whyText(action)}</span>
-              <span className="text-right text-[11px] text-muted-foreground">
+              <span className="text-right text-xs text-muted-foreground">
                 {optimistic ? optimistic : isFocused ? "Focused" : ""}
               </span>
             </button>

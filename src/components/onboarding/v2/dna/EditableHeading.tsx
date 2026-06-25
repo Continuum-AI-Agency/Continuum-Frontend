@@ -19,7 +19,7 @@ export function EditableHeading({ value, placeholder, onCommit }: EditableHeadin
           setDraft(value);
           setEditing(true);
         }}
-        className="text-left text-[18px] font-bold text-[#0b1220] transition-colors hover:text-[#5a39ff]"
+        className="text-left text-xl font-bold text-[#0b1220] transition-colors hover:text-[#5a39ff]"
       >
         {value || <span className="text-[#94a3b8]">{placeholder ?? "Untitled"}</span>}
       </button>
@@ -43,7 +43,7 @@ export function EditableHeading({ value, placeholder, onCommit }: EditableHeadin
           event.currentTarget.blur();
         }
       }}
-      className="h-9 max-w-[260px] border-[#5a39ff]/30 text-[18px] font-bold text-[#0b1220] focus-visible:border-[#5a39ff] focus-visible:ring-[#5a39ff]/20"
+      className="h-9 max-w-[260px] border-[#5a39ff]/30 text-xl font-bold text-[#0b1220] focus-visible:border-[#5a39ff] focus-visible:ring-[#5a39ff]/20"
     />
   );
 }

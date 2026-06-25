@@ -115,14 +115,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const { users, permissions, pagination, loadError } = await fetchAdminUsers({ page, pageSize, query });
 
   return (
-    <div className="w-full max-w-none px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
-      <div className="space-y-[var(--page-section-gap)]">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold text-primary">Admin</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage users, brand access, global workflow library promotion, and brand canvas workflow transfers.
-          </p>
-        </div>
+    <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
+      <div className="shrink-0 space-y-1 pb-[var(--page-section-gap)]">
+        <h1 className="text-xl font-semibold text-primary">Admin</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage users, brand access, global workflow library promotion, and brand canvas workflow transfers.
+        </p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <Card className="glass-panel border-subtle shadow-brand-glow py-0">
           <CardContent className="p-[var(--card-pad)]">
             {loadError ? (

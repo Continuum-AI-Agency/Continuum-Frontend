@@ -92,7 +92,7 @@ export function CustomHandle({
         className={`${className || ''} ${indicatorClassName}`}
       />
       {maxConnections !== undefined && (
-        <span className="absolute -top-3 -right-3 text-[8px] font-mono text-muted-foreground bg-background px-0.5 rounded">
+        <span className="absolute -top-3 -right-3 text-3xs font-mono text-muted-foreground bg-background px-0.5 rounded">
           {connections.length}/{maxConnections}
         </span>
       )}

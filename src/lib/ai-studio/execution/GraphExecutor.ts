@@ -141,11 +141,15 @@ export class GraphExecutor {
       this.updateStatus(nodeId, "completed");
       
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       this.results.set(nodeId, {
         nodeId,
         status: "failed",
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: message
       });
+      // Thread the reason onto the node data (not just the status) so the node
+      // can show WHY it failed instead of a bare "Failed" badge.
+      this.updateNodeData(nodeId, { status: "failed", failureMessage: message });
       this.updateStatus(nodeId, "failed");
     }
   }

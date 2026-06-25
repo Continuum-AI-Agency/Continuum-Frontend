@@ -183,7 +183,7 @@ function catalogLinkToUpsertInput(
 function SectionDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-white/30">{label}</span>
+      <span className="shrink-0 text-2xs font-semibold uppercase tracking-widest text-white/30">{label}</span>
       <div className="h-px flex-1 bg-white/[0.06]" />
     </div>
   );
@@ -1043,13 +1043,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                         <div className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium leading-snug text-white">{catalog.name}</div>
-                          <div className="mt-0.5 truncate font-mono text-[11px] leading-tight text-white/40">
+                          <div className="mt-0.5 truncate font-mono text-xs leading-tight text-white/40">
                             {catalog.externalCatalogId || "—"}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
                           <div className="text-xs font-semibold text-white/80">{catalog.productCount.toLocaleString()}</div>
-                          <div className="text-[10px] text-white/30">{catalog.linkedAdObjectIds.length} linked</div>
+                          <div className="text-2xs text-white/30">{catalog.linkedAdObjectIds.length} linked</div>
                         </div>
                       </div>
                     </motion.button>
@@ -1121,7 +1121,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-background/60 px-3 py-2.5">
-                    <div className="text-[10px] font-semibold uppercase tracking-widest text-white/30">{label}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-white/30">{label}</div>
                     <div className="mt-0.5 truncate text-xs text-white/75">{value}</div>
                   </div>
                 ))}
@@ -1191,7 +1191,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       <button
                         type="button"
                         onClick={() => form.setValue("businessId", "", { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
-                        className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-white"
+                        className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-white"
                       >
                         Clear selection
                       </button>
@@ -1485,7 +1485,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                         <TableRow key={product.externalProductId}>
                           <TableCell>
                             <div className="font-mono text-xs font-medium text-white">{product.externalProductId}</div>
-                            <div className="text-[11px] text-muted-foreground">
+                            <div className="text-xs text-muted-foreground">
                               {product.title?.trim() || "Untitled"}{product.lastSeenAt ? ` · ${new Date(product.lastSeenAt).toLocaleDateString()}` : ""}
                             </div>
                           </TableCell>
@@ -1672,11 +1672,11 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       <TableRow key={link.activity.id}>
                         <TableCell>
                           <div className="font-mono text-xs font-medium text-white">{link.product.externalProductId}</div>
-                          <div className="text-[11px] text-muted-foreground">{link.product.title ?? "Untitled"} · {link.product.availability}</div>
+                          <div className="text-xs text-muted-foreground">{link.product.title ?? "Untitled"} · {link.product.availability}</div>
                         </TableCell>
                         <TableCell>
                           <div className="text-xs text-white">{link.adObject.objectType.toUpperCase()} · {link.adObject.externalObjectId}</div>
-                          <div className="text-[11px] text-muted-foreground">{link.adObject.name ?? "Unnamed"}{link.adObject.status ? ` (${link.adObject.status})` : ""}</div>
+                          <div className="text-xs text-muted-foreground">{link.adObject.name ?? "Unnamed"}{link.adObject.status ? ` (${link.adObject.status})` : ""}</div>
                         </TableCell>
                         <TableCell>
                           <Badge color={link.activity.isActive ? "green" : "gray"} radius="full" variant="soft">

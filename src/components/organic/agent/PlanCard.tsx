@@ -53,10 +53,10 @@ function PlanItemRow({ item, status }: { item: PlanItem; status: PlanItemStatus 
         )}
       </div>
       {item.angle && (
-        <p className="text-[13px] leading-snug text-foreground/90 text-pretty">{item.angle}</p>
+        <p className="text-sm leading-snug text-foreground/90 text-pretty">{item.angle}</p>
       )}
       {item.trendTitle && (
-        <p className="text-[11.5px] text-muted-foreground">Trend · {item.trendTitle}</p>
+        <p className="text-xs text-muted-foreground">Trend · {item.trendTitle}</p>
       )}
     </div>
   );
@@ -64,7 +64,7 @@ function PlanItemRow({ item, status }: { item: PlanItem; status: PlanItemStatus 
 
 function EvidenceRow({ evidence }: { evidence: PlanEvidence }) {
   return (
-    <p className="text-[11.5px] leading-snug text-muted-foreground">
+    <p className="text-xs leading-snug text-muted-foreground">
       <span className="font-medium capitalize text-foreground/70">
         {evidence.kind.replace('_', ' ')}
       </span>

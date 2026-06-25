@@ -281,7 +281,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                 </div>
 
                 {support && !support.ok ? (
-                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
                     {support.reason}
                   </div>
                 ) : null}
@@ -303,7 +303,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                         dragSlotId === slot.id && 'opacity-50',
                       )}
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded bg-background text-[10px] font-semibold">
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-background text-2xs font-semibold">
                         {index + 1}
                       </span>
                       <input
@@ -313,7 +313,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                         placeholder="Start"
                         value={slot.trimStartSec ?? ''}
                         onChange={(event) => handleTrimChange(slot.id, 'trimStartSec', event.target.value)}
-                        className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                         aria-label={`Clip ${index + 1} trim start seconds`}
                       />
                       <input
@@ -323,7 +323,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                         placeholder="End"
                         value={slot.trimEndSec ?? ''}
                         onChange={(event) => handleTrimChange(slot.id, 'trimEndSec', event.target.value)}
-                        className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                         aria-label={`Clip ${index + 1} trim end seconds`}
                       />
                       <div className="ml-auto flex items-center gap-0.5">
@@ -378,7 +378,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-full justify-center text-[11px]"
+                  className="h-7 w-full justify-center text-xs"
                   onClick={handleAddSlot}
                   disabled={slots.length >= MAX_SLOTS}
                 >
@@ -391,7 +391,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted p-4">
                       <GenerationPulseLoader />
                       <Progress value={progress * 100} className="h-1.5 w-3/4" />
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         {Math.round(progress * 100)}% splicing in browser
                       </span>
                     </div>
@@ -420,7 +420,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
                       <VideoIcon className="h-6 w-6 opacity-30" />
-                      <span className="text-[10px]">Connect clips and run</span>
+                      <span className="text-2xs">Connect clips and run</span>
                     </div>
                   )}
                 </div>

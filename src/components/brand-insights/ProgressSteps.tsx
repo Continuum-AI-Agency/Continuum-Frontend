@@ -87,7 +87,7 @@ export function ProgressSteps({ data, progressPercent }: ProgressStepsProps) {
       </div>
       <div className="space-y-1">
         <Progress value={derivedPercent} className="h-2" />
-        <p className="text-muted-foreground text-[11px] font-medium tabular-nums">{Math.round(derivedPercent)}%</p>
+        <p className="text-muted-foreground text-xs font-medium tabular-nums">{Math.round(derivedPercent)}%</p>
       </div>
     </div>
   );

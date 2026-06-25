@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Clock, Loader2, X, XCircle } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -129,10 +129,10 @@ function GenerationRow({
         <HoverCardTrigger asChild>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="h-4 px-1 text-[10px] capitalize">
+              <Badge variant="secondary" className="h-4 px-1 text-2xs capitalize">
                 {entry.platform ?? "post"}
               </Badge>
-              <span className="truncate text-[11px] capitalize text-muted-foreground">{label}</span>
+              <span className="truncate text-xs capitalize text-muted-foreground">{label}</span>
               {entry.checkpoint && (
                 <CompactCheckpointDots checkpoint={entry.checkpoint} />
               )}
@@ -145,14 +145,14 @@ function GenerationRow({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={entry.previewUrl} alt="Preview" className="aspect-square w-full rounded object-cover" />
             {typeof entry.quality === "number" && (
-              <p className="px-1 pt-1 text-[10px] text-muted-foreground">Quality {Math.round(entry.quality)}%</p>
+              <p className="px-1 pt-1 text-2xs text-muted-foreground">Quality {Math.round(entry.quality)}%</p>
             )}
           </HoverCardContent>
         )}
       </HoverCard>
 
       {entry.status === "completed" && typeof entry.quality === "number" && (
-        <Badge variant="outline" className="h-4 px-1 text-[10px]">{Math.round(entry.quality)}%</Badge>
+        <Badge variant="outline" className="h-4 px-1 text-2xs">{Math.round(entry.quality)}%</Badge>
       )}
 
       {active && brandId && (
@@ -177,7 +177,7 @@ function GenerationRow({
         <Button
           size="sm"
           variant="ghost"
-          className="h-5 shrink-0 px-1.5 text-[10px] text-muted-foreground"
+          className="h-5 shrink-0 px-1.5 text-2xs text-muted-foreground"
           onClick={() => onViewDraftAction(entry.draftId as string)}
         >
           Open
@@ -190,6 +190,15 @@ function GenerationRow({
 export function GenerationsPopover({ brandId, onViewDraftAction }: Props) {
   const [open, setOpen] = useState(false);
   const generations = useCalendarStore(useShallow((s) => s.generations));
+  const pruneGenerations = useCalendarStore((s) => s.pruneGenerations);
+
+  // Sweep finished/stale generations so the counter returns to zero instead of
+  // accumulating forever (terminal cards linger ~20s; a silent "running" entry from
+  // a dead worker is dropped after the staleness window).
+  useEffect(() => {
+    const id = setInterval(() => pruneGenerations(), 5_000);
+    return () => clearInterval(id);
+  }, [pruneGenerations]);
 
   const entries = useMemo(
     () =>
@@ -218,7 +227,7 @@ export function GenerationsPopover({ brandId, onViewDraftAction }: Props) {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="border-b border-border/60 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Generations
           </p>
         </div>

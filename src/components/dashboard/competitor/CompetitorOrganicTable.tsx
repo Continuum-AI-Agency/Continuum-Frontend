@@ -29,7 +29,7 @@ export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
         cell: (row) => (
           <div className="min-w-0">
             <p className="truncate text-sm text-foreground">{row.competitorName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">@{row.instagramUsername}</p>
+            <p className="truncate text-xs text-muted-foreground">@{row.instagramUsername}</p>
           </div>
         ),
       },
@@ -45,7 +45,7 @@ export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
                 fallbackSeed={row.competitorName}
               />
             ) : null}
-            <p className="min-w-0 truncate text-[13px] text-muted-foreground">
+            <p className="min-w-0 truncate text-sm text-muted-foreground">
               {row.post.caption?.trim() || "—"}
             </p>
           </div>
@@ -72,7 +72,7 @@ export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
   return (
     <InsightDataTable
       title="Competitor organic"
-      headerAction={<CompetitorSpyLink />}
+      headerAction={<CompetitorSpyLink href="/competitor-spy?tab=organic" />}
       rows={rows}
       columns={columns}
       getRowId={(row) => `${row.competitorId}:${row.post.id}`}
@@ -86,7 +86,7 @@ export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
       contextMenu={(row) => <InsightContextActions permalink={row.post.permalink} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.post.permalink} />}
       expandedContent={(row) => (
-        <div className="flex flex-col gap-2 text-[11px] leading-relaxed">
+        <div className="flex flex-col gap-2 text-xs leading-relaxed">
           {row.post.caption ? <p className="text-foreground">{row.post.caption}</p> : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono tabular-nums text-muted-foreground">
             {typeof row.post.commentsCount === "number" ? <span>{row.post.commentsCount} comments</span> : null}

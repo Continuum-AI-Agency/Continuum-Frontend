@@ -10,7 +10,7 @@ export function PaletteCard({ colors, chip }: Props) {
   return (
     <Card className="border-[#e5e7eb] shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-[12px] font-semibold uppercase tracking-wide text-[#64748b]">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide text-[#64748b]">
           Palette
         </CardTitle>
         {chip}
@@ -23,7 +23,7 @@ export function PaletteCard({ colors, chip }: Props) {
             ))}
           </div>
         ) : (
-          <p className="text-[12px] italic text-[#94a3b8]">No palette detected.</p>
+          <p className="text-sm italic text-[#94a3b8]">No palette detected.</p>
         )}
       </CardContent>
     </Card>

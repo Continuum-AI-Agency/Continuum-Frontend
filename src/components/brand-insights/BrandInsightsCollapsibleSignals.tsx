@@ -80,7 +80,7 @@ export function BrandInsightsCollapsibleSignals({
           <AccordionTrigger className="hover:no-underline px-4 py-3 bg-surface/50 text-sm font-semibold tracking-wide">
             <div className="flex items-center gap-2">
               {section.label}
-              <span className="text-[10px] bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full">
+              <span className="text-2xs bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full">
                 {section.data.length}
               </span>
             </div>

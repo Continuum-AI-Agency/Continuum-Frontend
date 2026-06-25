@@ -86,7 +86,7 @@ export function PendingRow({
         </span>
         <span className="min-w-0 flex-1 truncate">
           <span className="block truncate text-sm font-medium text-primary">{entry.file.name}</span>
-          <span className="block truncate text-[11px] text-muted-foreground">
+          <span className="block truncate text-xs text-muted-foreground">
             {isError ? entry.error ?? "Failed" : "Uploading…"}
           </span>
         </span>
@@ -182,7 +182,7 @@ export function DocumentRow({
             <span className="block truncate text-sm font-medium text-primary">{doc.name}</span>
             <span
               className={cn(
-                "block truncate text-[11px]",
+                "block truncate text-xs",
                 label.tone === "error" ? "text-rose-600" : "text-muted-foreground",
               )}
             >

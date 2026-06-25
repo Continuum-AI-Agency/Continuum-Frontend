@@ -398,7 +398,7 @@ export function ImageMarkupDialog({
                 style={{ width: displayDims.width, height: displayDims.height }}
               />
               {isCanvasHover && !isDrawing ? (
-                <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-[11px] text-white">
+                <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
                   Click + drag to draw
                 </div>
               ) : null}

@@ -13,7 +13,8 @@ import {
 } from "@/lib/organic/organic-creative-rows";
 import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
 import { InsightDataTable, type InsightColumn } from "@/components/dashboard/datatable/InsightDataTable";
-import { DeltaBadge } from "@/components/dashboard/datatable/DeltaBadge";
+import { DeltaBadge } from "@/components/shared/DeltaBadge";
+import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
 import { LeaderboardThumbnail } from "./LeaderboardThumbnail";
 import { InsightActionsDropdown, InsightContextActions } from "./insightActions";
 
@@ -116,7 +117,7 @@ export function OrganicCreativesTable({
             <div className="min-w-0">
               <p className="truncate text-sm text-foreground">{row.name}</p>
               {row.mediaType ? (
-                <p className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
+                <p className="truncate text-xs uppercase tracking-wide text-muted-foreground">
                   {row.mediaType}
                 </p>
               ) : null}
@@ -155,6 +156,7 @@ export function OrganicCreativesTable({
     <InsightDataTable
       title="Top creatives"
       metricLabel={metricLabel}
+      headerAction={<ModuleShortcutLink href="/ai-studio" label="Creative Studio" />}
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
@@ -168,7 +170,7 @@ export function OrganicCreativesTable({
       contextMenu={(row) => <InsightContextActions permalink={row.permalink} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.permalink} />}
       expandedContent={(row) => (
-        <div className="flex flex-col gap-2 text-[11px] leading-relaxed">
+        <div className="flex flex-col gap-2 text-xs leading-relaxed">
           {row.insightLine ? <p className="text-foreground">{row.insightLine}</p> : null}
           {row.permalink ? (
             <a

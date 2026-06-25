@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SectionHeader } from "@/components/shared/SectionHeader";
 
 export type InsightSeverity = "positive" | "negative" | "neutral";
 
@@ -32,10 +33,7 @@ type InsightsListProps = {
 export function InsightsList({ title, items, isLoading = false, emptyState, headerAction }: InsightsListProps) {
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
-      <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-        {headerAction}
-      </div>
+      <SectionHeader title={title} action={headerAction} />
 
       {isLoading ? (
         <div className="flex flex-col gap-3 p-3">
@@ -57,11 +55,11 @@ export function InsightsList({ title, items, isLoading = false, emptyState, head
               />
               <div className="min-w-0">
                 {item.label ? (
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                  <p className="text-2xs uppercase tracking-wide text-muted-foreground">{item.label}</p>
                 ) : null}
-                <p className="text-[13px] leading-snug text-foreground">{item.text}</p>
+                <p className="text-sm leading-snug text-foreground">{item.text}</p>
                 {item.detail ? (
-                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{item.detail}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{item.detail}</p>
                 ) : null}
               </div>
             </li>

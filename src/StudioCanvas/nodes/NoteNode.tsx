@@ -122,7 +122,7 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
                 data-placeholder="Write a note…"
               />
               <div className="shrink-0 border-t border-amber-300/40 bg-amber-100/60 dark:bg-amber-900/20 px-3 py-1">
-                <span className="text-[10px] text-amber-700/70 dark:text-amber-400/70 select-none">
+                <span className="text-2xs text-amber-700/70 dark:text-amber-400/70 select-none">
                   ⌘B bold
                 </span>
               </div>

@@ -115,13 +115,13 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
                   : 'Global targeting'}
               </NodeDescription>
               <div className="flex flex-wrap items-center gap-1 mt-1">
-                <Badge variant="secondary" className="text-[8px] px-1 py-0 opacity-80 h-4">
+                <Badge variant="secondary" className="text-3xs px-1 py-0 opacity-80 h-4">
                   {data.genders?.length === 1 
                     ? (data.genders[0] === 1 ? 'MEN' : 'WOMEN') 
                     : 'ALL GENDERS'}
                 </Badge>
                 {data.ageMin && (
-                  <Badge variant="outline" className="text-[8px] px-1 py-0 opacity-80 h-4">
+                  <Badge variant="outline" className="text-3xs px-1 py-0 opacity-80 h-4">
                     AGE: {data.ageMin}-{data.ageMax === 100 ? '65+' : data.ageMax}
                   </Badge>
                 )}

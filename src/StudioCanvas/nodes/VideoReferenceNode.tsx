@@ -230,7 +230,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
             {refBadge && refBadge.tone !== 'error' && (
               <div
                 className={cn(
-                  "absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm",
+                  "absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium shadow-sm",
                   refBadge.tone === 'processing' && "bg-blue-500/90 text-white",
                   refBadge.tone === 'ready' && "bg-emerald-500/90 text-white",
                 )}
@@ -243,7 +243,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
             {refBadge && refBadge.tone === 'error' && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="absolute left-2 top-2 z-20 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm">
+                  <div className="absolute left-2 top-2 z-20 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-2xs font-medium text-white shadow-sm">
                     <XCircle className="h-3 w-3" />
                     {refBadge.label}
                   </div>
@@ -253,7 +253,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="h-6 px-2 text-[11px]"
+                    className="h-6 px-2 text-xs"
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={handleRetryUpload}
                   >
@@ -310,7 +310,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
             />
 
             {data.fileName && (
-                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-[9px] text-secondary truncate">
+                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-3xs text-secondary truncate">
                     {data.fileName}
                 </div>
             )}

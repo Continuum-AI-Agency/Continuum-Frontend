@@ -25,7 +25,7 @@ export function OverallReadinessChip({ readiness, loading }: Props) {
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafaff] px-3 py-1.5 text-[12px] font-medium text-[#0b1220] shadow-sm transition-colors hover:border-[#cbd5e1]"
+          className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#fafaff] px-3 py-1.5 text-sm font-medium text-[#0b1220] shadow-sm transition-colors hover:border-[#cbd5e1]"
         >
           <ScorePip score={score} size={14} color={pipColor} />
           Brand readiness
@@ -33,7 +33,7 @@ export function OverallReadinessChip({ readiness, loading }: Props) {
         </button>
       </HoverCardTrigger>
       <HoverCardContent className="w-80 p-4">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
           What we scored
         </p>
         <ul className="space-y-2">
@@ -41,7 +41,7 @@ export function OverallReadinessChip({ readiness, loading }: Props) {
             const d = readiness.dimensions[dim];
             if (!d) return null;
             return (
-              <li key={dim} className="flex items-start justify-between gap-3 text-[12px]">
+              <li key={dim} className="flex items-start justify-between gap-3 text-sm">
                 <div className="min-w-0">
                   <p className="font-medium text-[#0b1220]">{DIMENSION_LABELS[dim]}</p>
                   <p className="leading-snug text-[#64748b]">{d.rationale}</p>

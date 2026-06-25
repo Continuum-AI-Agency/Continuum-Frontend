@@ -70,13 +70,13 @@ export function DraftHoverCardContent({
           {visibleHashtags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+              className="rounded-full bg-muted/60 px-2 py-0.5 text-2xs text-muted-foreground"
             >
               {tag.startsWith("#") ? tag : `#${tag}`}
             </span>
           ))}
           {extraCount > 0 && (
-            <span className="rounded-full bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground/60">
+            <span className="rounded-full bg-muted/40 px-2 py-0.5 text-2xs text-muted-foreground/60">
               +{extraCount} more
             </span>
           )}
@@ -86,7 +86,7 @@ export function DraftHoverCardContent({
       {/* Generation progress */}
       {typeof displayProgress === "number" && (
         <div className="space-y-1 px-3 pb-2">
-          <div className="flex justify-between text-[9px] font-bold text-muted-foreground">
+          <div className="flex justify-between text-3xs font-bold text-muted-foreground">
             <span className="animate-pulse text-amber-500">GENERATING</span>
             <span>{displayProgress}%</span>
           </div>
@@ -103,7 +103,7 @@ export function DraftHoverCardContent({
               e.stopPropagation()
               onEdit(draft.id)
             }}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <Pencil1Icon className="h-3 w-3" />
             Edit
@@ -116,7 +116,7 @@ export function DraftHoverCardContent({
               e.stopPropagation()
               onRegenerate(draft.id)
             }}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <LightningBoltIcon className="h-3 w-3" />
             Regen
@@ -131,7 +131,7 @@ export function DraftHoverCardContent({
               publish(draft)
             }}
             className={cn(
-              "ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+              "ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
               "bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
             )}
           >

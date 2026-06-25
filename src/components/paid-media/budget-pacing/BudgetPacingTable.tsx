@@ -185,7 +185,7 @@ function PacingRow({
           {row.paceMethod === "trend" ? "~" : ""}{row.pacePct.toFixed(1)}%
         </span>
         {row.paceMethod === "trend" && (
-          <span className="text-[10px] text-muted-foreground">vs 7d avg</span>
+          <span className="text-2xs text-muted-foreground">vs 7d avg</span>
         )}
         <Progress value={Math.min(100, row.pacePct)} className="h-1 w-16" />
       </div>

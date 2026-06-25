@@ -71,11 +71,11 @@ export function ConceptPlan({
   return (
     <div className="mt-2 space-y-2.5">
       <div className="mb-2 border-b border-border/40 pb-2 px-0.5">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Weekly plan · {items.length} {items.length === 1 ? "concept" : "concepts"}
         </p>
         {summary && (
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground text-pretty">{summary}</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground text-pretty">{summary}</p>
         )}
       </div>
 

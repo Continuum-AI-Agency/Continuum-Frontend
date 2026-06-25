@@ -117,13 +117,13 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
     >
       <div className="border-b border-primary/15 bg-primary/8 px-3 py-2">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary/80">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary/80">
             Content Plan
           </p>
           <Badge
             variant="outline"
             className={cn(
-              "text-[9px] uppercase tracking-wide",
+              "text-3xs uppercase tracking-wide",
               plan.status === "proposed" && "border-amber-500/30 bg-amber-500/10 text-amber-600",
               plan.status === "approved" && "border-primary/30 bg-primary/10 text-primary",
               plan.status === "generating" && "border-blue-500/30 bg-blue-500/10 text-blue-600",
@@ -145,7 +145,7 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
           {platformCounts.map(([platform, count]) => (
             <span
               key={platform}
-              className="inline-flex items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground ring-1 ring-border/50"
+              className="inline-flex items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-2xs font-medium capitalize text-muted-foreground ring-1 ring-border/50"
             >
               {platform}
               <span className="font-semibold text-foreground">{count}</span>
@@ -153,7 +153,7 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
           ))}
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {plan.placements.length} draft{plan.placements.length !== 1 ? "s" : ""} across week of{" "}
           <span className="font-medium text-foreground">{plan.week_start}</span>
         </p>
@@ -191,21 +191,21 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
               <XCircle className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground/50">Nothing posts until you publish.</p>
+          <p className="text-2xs text-muted-foreground/50">Nothing posts until you publish.</p>
         </div>
       ) : null}
 
       {plan.status === "generating" ? (
         <div className="flex items-center gap-2 border-t border-primary/10 px-3 py-2">
           <Loader2 className="h-3 w-3 animate-spin text-primary" />
-          <p className="text-[11px] text-primary/70">Creating your drafts…</p>
+          <p className="text-xs text-primary/70">Creating your drafts…</p>
         </div>
       ) : null}
 
       {plan.status === "completed" ? (
         <div className="flex items-center gap-2 border-t border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
           <CheckIcon className="h-3 w-3 text-emerald-600" />
-          <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+          <p className="text-xs text-emerald-700 dark:text-emerald-400">
             Drafts ready — review them on the calendar
           </p>
         </div>
@@ -224,7 +224,7 @@ function EmptyState() {
       </div>
       <div className="space-y-1">
         <p className="text-xs font-semibold text-foreground">Plan your week with AI</p>
-        <p className="max-w-[18rem] text-[11px] leading-5 text-muted-foreground">
+        <p className="max-w-[18rem] text-xs leading-5 text-muted-foreground">
           Describe what you want to post and I&apos;ll propose a content plan for your calendar.
         </p>
       </div>
@@ -236,7 +236,7 @@ function EmptyState() {
         ].map((suggestion) => (
           <p
             key={suggestion}
-            className="rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-[10px] text-muted-foreground/80 leading-4"
+            className="rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-2xs text-muted-foreground/80 leading-4"
           >
             &ldquo;{suggestion}&rdquo;
           </p>
@@ -298,12 +298,12 @@ export function OrganicChatSurface({
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Planning Assistant
           </p>
         </div>
         {messages.length > 0 ? (
-          <Badge variant="outline" className="text-[9px] uppercase tracking-wide">
+          <Badge variant="outline" className="text-3xs uppercase tracking-wide">
             {messages.length} msg{messages.length !== 1 ? "s" : ""}
           </Badge>
         ) : null}
@@ -370,7 +370,7 @@ export function OrganicChatSurface({
             <span className="sr-only">Send</span>
           </Button>
         </div>
-        <p className="mt-1 px-1 text-[10px] text-muted-foreground/50">
+        <p className="mt-1 px-1 text-2xs text-muted-foreground/50">
           Enter to send · Shift+Enter for new line
         </p>
       </div>

@@ -425,7 +425,7 @@ function AppSidebarInner() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="flex items-center gap-2">
                   Search
-                  <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-[10px] font-medium opacity-100">
+                  <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">
                     ⌘K
                   </kbd>
                 </TooltipContent>
@@ -446,7 +446,7 @@ function AppSidebarInner() {
             className={cn("p-1", index > 0 && "mt-3 pt-3")}
           >
             {group.label ? (
-              <SidebarGroupLabel className="px-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden">
+              <SidebarGroupLabel className="px-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden">
                 {group.label}
               </SidebarGroupLabel>
             ) : null}

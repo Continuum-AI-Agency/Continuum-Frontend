@@ -44,7 +44,7 @@ export function Cursor({ x, y, color, name, className, isLocal = false }: Cursor
         />
       </svg>
       <div
-        className="mt-1 ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white shadow-md ring-1 ring-white/20 whitespace-nowrap"
+        className="mt-1 ml-2 rounded-full px-1.5 py-0.5 text-2xs font-medium text-white shadow-md ring-1 ring-white/20 whitespace-nowrap"
         style={{ backgroundColor: color }}
       >
         {name}

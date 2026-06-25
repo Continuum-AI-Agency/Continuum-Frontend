@@ -75,7 +75,7 @@ export function CaptionCharCount({ caption, platform }: { caption: string; platf
     <div className="mt-1 flex justify-end">
       <span
         className={cn(
-          "text-[10px] tabular-nums",
+          "text-2xs tabular-nums",
           len > limit
             ? "text-destructive"
             : len > limit * 0.9

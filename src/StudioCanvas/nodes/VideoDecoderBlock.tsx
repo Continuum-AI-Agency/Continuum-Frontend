@@ -85,7 +85,7 @@ export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNod
               hasVideoInput && "ring-1 ring-brand-primary/30"
             )}
           >
-            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/60 bg-muted/40 text-[11px] font-semibold tracking-wide text-muted-foreground shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/60 bg-muted/40 text-xs font-semibold tracking-wide text-muted-foreground shrink-0">
               <Clapperboard className="h-3.5 w-3.5" />
               <span>Video Decoder</span>
             </div>
@@ -100,7 +100,7 @@ export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNod
               />
 
               {data.error ? (
-                <div className="px-3 py-1.5 text-[10px] text-destructive border-t border-destructive/30 bg-destructive/5 shrink-0">
+                <div className="px-3 py-1.5 text-2xs text-destructive border-t border-destructive/30 bg-destructive/5 shrink-0">
                   {data.error}
                 </div>
               ) : null}
@@ -109,7 +109,7 @@ export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNod
                 <Button
                   size="sm"
                   variant="default"
-                  className="h-6 px-3 text-[10px] shadow-sm nodrag cursor-pointer"
+                  className="h-6 px-3 text-2xs shadow-sm nodrag cursor-pointer"
                   onClick={handleDecode}
                   disabled={data.isExecuting}
                 >

@@ -209,7 +209,7 @@ export function AdAccountSelector({
                     )}
                   />
                   <span className="truncate text-xs">{account.name}</span>
-                  <span className="ml-auto truncate text-[10px] text-muted-foreground">{account.id}</span>
+                  <span className="ml-auto truncate text-2xs text-muted-foreground">{account.id}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

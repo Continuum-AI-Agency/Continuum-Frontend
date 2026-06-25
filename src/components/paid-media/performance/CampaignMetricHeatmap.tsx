@@ -102,7 +102,7 @@ export function CampaignMetricHeatmap({
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/15 px-3 py-2">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold tracking-tight">Heatmap</h3>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Campaigns ranked by{" "}
               <span className="font-medium text-foreground">
                 {MATRIX_METRICS.find((m) => m.key === selectedMetric)?.label ?? selectedMetric}
@@ -113,7 +113,7 @@ export function CampaignMetricHeatmap({
           <button
             type="button"
             onClick={toggleDensity}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             aria-label={`Switch to ${density === "comfortable" ? "compact" : "comfortable"} density`}
           >
             {density === "comfortable" ? (
@@ -136,7 +136,7 @@ export function CampaignMetricHeatmap({
           >
             <div
               className={cn(
-                "sticky left-0 z-10 flex items-center bg-card px-3 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground",
+                "sticky left-0 z-10 flex items-center bg-card px-3 text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground",
                 "border-b border-r border-border/60",
                 rowHeight
               )}
@@ -151,7 +151,7 @@ export function CampaignMetricHeatmap({
                   type="button"
                   onClick={() => onMetricChange(metric.key)}
                   className={cn(
-                    "flex items-center justify-end gap-1 border-b border-border/60 px-2.5 text-right text-[10px] font-medium uppercase tracking-[0.08em] transition-colors",
+                    "flex items-center justify-end gap-1 border-b border-border/60 px-2.5 text-right text-2xs font-medium uppercase tracking-[0.08em] transition-colors",
                     isActive
                       ? "bg-primary/[0.07] text-primary"
                       : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
@@ -178,7 +178,7 @@ export function CampaignMetricHeatmap({
                     type="button"
                     onClick={() => onCampaignSelect?.(campaign.id)}
                     className={cn(
-                      "sticky left-0 z-10 flex items-center gap-2 truncate bg-card px-3 text-left text-[12px] font-medium transition-colors",
+                      "sticky left-0 z-10 flex items-center gap-2 truncate bg-card px-3 text-left text-sm font-medium transition-colors",
                       "border-r border-border/60",
                       !isLast && "border-b",
                       isSelected
@@ -228,7 +228,7 @@ export function CampaignMetricHeatmap({
                           >
                             <span
                               className={cn(
-                                "text-[10px] uppercase tracking-tight transition-colors",
+                                "text-2xs uppercase tracking-tight transition-colors",
                                 tone === "positive" && "text-emerald-700 dark:text-emerald-300",
                                 tone === "negative" && "text-rose-700 dark:text-rose-300",
                                 tone === "flat" && "text-muted-foreground/70"
@@ -239,23 +239,23 @@ export function CampaignMetricHeatmap({
                                 size={density === "compact" ? 9 : 10}
                               />
                             </span>
-                            <span className="truncate font-mono text-[12px] font-medium tabular-nums text-foreground">
+                            <span className="truncate font-mono text-sm font-medium tabular-nums text-foreground">
                               {formatMetric(metric.key, value)}
                             </span>
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="top" align="end" className="px-2 py-1.5">
                           <div className="space-y-0.5">
-                            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                            <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
                               {campaign.name}
                             </div>
-                            <div className="flex items-center gap-2 font-mono text-[12px] tabular-nums">
+                            <div className="flex items-center gap-2 font-mono text-sm tabular-nums">
                               <span className="font-medium">
                                 {MATRIX_METRICS.find((m) => m.key === metric.key)?.label}
                               </span>
                               <span>{formatMetric(metric.key, value)}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-[11px]">
+                            <div className="flex items-center gap-2 text-xs">
                               <span className="text-muted-foreground">vs prior</span>
                               <span
                                 className={cn(

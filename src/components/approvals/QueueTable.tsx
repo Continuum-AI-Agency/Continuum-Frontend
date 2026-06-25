@@ -46,7 +46,7 @@ export function QueueTable({ actions, onSelect }: Props) {
         cell: ({ row }) => {
           const Icon = getActionIcon(row.original.action_type);
           return (
-            <Badge variant="secondary" className="gap-1.5 font-data text-[10px] uppercase tracking-wide">
+            <Badge variant="secondary" className="gap-1.5 font-data text-2xs uppercase tracking-wide">
               <Icon className="h-3 w-3" strokeWidth={1.5} />
               {actionTypeLabel(row.original.action_type)}
             </Badge>
@@ -89,7 +89,7 @@ export function QueueTable({ actions, onSelect }: Props) {
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id}>
               {group.headers.map((header) => (
-                <TableHead key={header.id} className="text-[10px] uppercase tracking-wider">
+                <TableHead key={header.id} className="text-2xs uppercase tracking-wider">
                   {header.isPlaceholder
                     ? null
                     : flexRender(header.column.columnDef.header, header.getContext())}
@@ -138,7 +138,7 @@ function SortHeader({
       type="button"
       variant="ghost"
       size="sm"
-      className="-ml-2 h-7 px-2 text-[10px] uppercase tracking-wider text-muted-foreground"
+      className="-ml-2 h-7 px-2 text-2xs uppercase tracking-wider text-muted-foreground"
       onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
     >
       {label}

@@ -39,18 +39,18 @@ export function PendingActivityTabs({ brandId, variant = "rail", activityContent
         )}
       >
         <TabsList className="h-7 p-0.5">
-          <TabsTrigger value="pending" className="h-6 gap-1.5 px-2 text-[11px]">
+          <TabsTrigger value="pending" className="h-6 gap-1.5 px-2 text-xs">
             Pending
             {pendingCount > 0 ? (
               <Badge
                 variant="secondary"
-                className="h-4 min-w-[1rem] justify-center px-1 font-data text-[9px] tabular-nums leading-none"
+                className="h-4 min-w-[1rem] justify-center px-1 font-data text-3xs tabular-nums leading-none"
               >
                 {pendingCount}
               </Badge>
             ) : null}
           </TabsTrigger>
-          <TabsTrigger value="activity" className="h-6 px-2 text-[11px]">
+          <TabsTrigger value="activity" className="h-6 px-2 text-xs">
             Activity
           </TabsTrigger>
         </TabsList>

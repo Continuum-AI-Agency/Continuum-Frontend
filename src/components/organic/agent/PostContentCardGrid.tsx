@@ -17,7 +17,7 @@ export function PostContentCardGrid({ posts, label }: Props) {
       <AgentCardEyebrow
         label={label ?? 'Posts Retrieved'}
         right={
-          <span className="text-[11px] tabular-nums text-muted-foreground">{posts.length}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{posts.length}</span>
         }
       />
       <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1.5 -mx-1 px-1 [&::-webkit-scrollbar]:hidden">

@@ -260,4 +260,81 @@ describe("useDraftMediaPlacement", () => {
     const draft = storedDraft as { publishingAssets: unknown[] }
     expect(draft.publishingAssets).toHaveLength(1)
   })
+
+  // removeSlide — by array position (the carousel strip passes its render index)
+  it("removeSlide(position) removes the slide at that array position and reindexes", async () => {
+    storedDraft = {
+      id: "draft-1",
+      mediaSuggestion: { mediaStatus: "user_supplied", kind: "carousel" },
+      publishingAssets: [
+        { kind: "image", slideIndex: 0, storagePath: "a.jpg", storageUrl: "a" },
+        { kind: "image", slideIndex: 1, storagePath: "b.jpg", storageUrl: "b" },
+        { kind: "image", slideIndex: 2, storagePath: "c.jpg", storageUrl: "c" },
+      ],
+    }
+
+    const { result } = renderHook(() => useDraftMediaPlacement("draft-1"))
+
+    await act(async () => {
+      result.current.removeSlide(1) // middle slide (b.jpg)
+    })
+
+    const draft = storedDraft as {
+      publishingAssets: Array<{ slideIndex: number; storagePath: string }>
+    }
+    const sorted = [...draft.publishingAssets].sort((a, b) => a.slideIndex - b.slideIndex)
+    expect(sorted).toHaveLength(2)
+    expect(sorted[0].storagePath).toBe("a.jpg")
+    expect(sorted[1].storagePath).toBe("c.jpg")
+    expect(sorted[0].slideIndex).toBe(0)
+    expect(sorted[1].slideIndex).toBe(1)
+  })
+
+  // replaceSlide — swaps one slide in place, preserving order
+  it("replaceSlide(position, asset) swaps one slide and preserves the rest", async () => {
+    storedDraft = {
+      id: "draft-1",
+      mediaSuggestion: { mediaStatus: "user_supplied", kind: "carousel" },
+      publishingAssets: [
+        { kind: "image", slideIndex: 0, storagePath: "a.jpg", storageUrl: "a", role: "primary" },
+        { kind: "image", slideIndex: 1, storagePath: "b.jpg", storageUrl: "b", role: "primary" },
+      ],
+    }
+
+    const { result } = renderHook(() => useDraftMediaPlacement("draft-1"))
+    const replacement = makeImageAsset({ id: "new", storagePath: "new.jpg", signedUrl: "https://cdn/new.jpg" })
+
+    await act(async () => {
+      result.current.replaceSlide(1, replacement)
+    })
+
+    const draft = storedDraft as {
+      publishingAssets: Array<{ slideIndex: number; storagePath: string }>
+    }
+    const sorted = [...draft.publishingAssets].sort((a, b) => a.slideIndex - b.slideIndex)
+    expect(sorted).toHaveLength(2)
+    expect(sorted[0].storagePath).toBe("a.jpg") // untouched
+    expect(sorted[1].storagePath).toBe("new.jpg") // replaced in place
+    expect(sorted[1].slideIndex).toBe(1)
+  })
+
+  // replaceSlide — rejects video (carousels are image-only)
+  it("replaceSlide() rejects a video asset", async () => {
+    storedDraft = {
+      id: "draft-1",
+      mediaSuggestion: { mediaStatus: "user_supplied" },
+      publishingAssets: [
+        { kind: "image", slideIndex: 0, storagePath: "a.jpg", storageUrl: "a" },
+      ],
+    }
+
+    const { result } = renderHook(() => useDraftMediaPlacement("draft-1"))
+
+    let err: ReturnType<typeof result.current.replaceSlide> = null
+    await act(async () => {
+      err = result.current.replaceSlide(0, makeVideoAsset())
+    })
+
+    expect(err?.type).toBe("invalid_kind")
+  })
 })

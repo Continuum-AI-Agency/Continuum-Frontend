@@ -25,7 +25,7 @@ export function JainaReportInsights({ insights }: JainaReportInsightsProps) {
                 <div className="mt-2 size-1.5 rounded-full bg-indigo-400 shrink-0" />
                 <SafeMarkdown
                   content={insight}
-                  className="text-[15px] leading-relaxed text-secondary/90"
+                  className="text-base leading-relaxed text-secondary/90"
                   mode="static"
                 />
               </div>

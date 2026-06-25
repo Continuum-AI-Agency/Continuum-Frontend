@@ -110,10 +110,19 @@ async function ensureBrandProfileRecord(
         completed_at: completedAt,
       });
 
-    if (insertError && insertError.code !== "23505") {
+    if (insertError) {
+      // 23505 = the brand already exists; our SELECT just didn't see it (e.g.
+      // RLS visibility). It already has an owner permission row from its initial
+      // creation, so do NOT re-seed permissions here. That redundant upsert can
+      // trip a self-referential RLS check (Postgres 54001) and 500 routine writes
+      // such as a logo update. Treat the row as present and stop.
+      if (insertError.code === "23505") {
+        return;
+      }
       throw insertError;
     }
-    
+
+    // Genuine first-time creation — seed the owner permission once.
     await supabase
       .schema("brand_profiles")
       .from("permissions")

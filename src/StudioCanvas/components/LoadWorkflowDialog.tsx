@@ -188,13 +188,13 @@ function WorkflowRow({
       >
         <p className="truncate text-sm font-medium text-primary">{workflow.name}</p>
         {workflow.description && <p className="truncate text-xs text-secondary">{workflow.description}</p>}
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Updated {formatTimestamp(workflow.updatedAt ?? workflow.createdAt)}
         </p>
       </button>
 
       <div className="mt-1 flex shrink-0 items-center gap-1">
-        <span className="rounded border border-border/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="rounded border border-border/70 px-2 py-0.5 text-2xs font-medium text-muted-foreground">
           Load
         </span>
         <DropdownMenu>
@@ -265,6 +265,7 @@ function WorkflowPanel({
             onClick={onRefresh}
             disabled={!brandProfileId || isLoading}
             aria-label="Refresh workflows"
+            title={!brandProfileId ? 'Select a brand profile to load workflows.' : 'Refresh workflows'}
           >
             <ReloadIcon className="h-4 w-4" />
           </Button>

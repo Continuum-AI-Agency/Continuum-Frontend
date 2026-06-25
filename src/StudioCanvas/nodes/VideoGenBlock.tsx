@@ -324,7 +324,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                       maxConnections={1}
                       className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                     />
-                    <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                    <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                       Prompt
                     </span>
                   </div>
@@ -347,7 +347,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                       maxConnections={1}
                       className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                     />
-                    <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                    <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                       Negative Prompt
                     </span>
                   </div>
@@ -372,7 +372,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                           maxConnections={1}
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
-                        <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                        <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                           First Frame
                         </span>
                       </div>
@@ -395,7 +395,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                           maxConnections={1}
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
-                        <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                        <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                           Last Frame
                         </span>
                       </div>
@@ -421,11 +421,11 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                         maxConnections={imageLimit}
                         className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                       />
-                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                         Ref Images{imageLimit ? ` (Max ${imageLimit})` : ''}
                       </span>
                       {refImageCount > 0 && (
-                        <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-[9px] px-1 rounded-full font-bold shadow-sm pointer-events-none">
+                        <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-3xs px-1 rounded-full font-bold shadow-sm pointer-events-none">
                           {refImageCount}
                         </div>
                       )}
@@ -451,7 +451,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                         maxConnections={1}
                         className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                       />
-                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                      <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                         Ref Video (Max 1)
                       </span>
                     </div>
@@ -464,7 +464,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
             </div>
 
             <div className={cn(
-              "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
+              "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
               (selected || isHovered) ? "opacity-100" : "opacity-0"
             )}>
               {generatorDescription}

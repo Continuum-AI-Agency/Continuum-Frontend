@@ -31,6 +31,7 @@ describe("useCalendarStore", () => {
       ghosts: {},
       selectedDraftId: null,
       selectedDraftIds: [],
+      pendingServerDeletes: [],
     });
   });
 
@@ -66,6 +67,20 @@ describe("useCalendarStore", () => {
     const state = useCalendarStore.getState();
     expect(state.days[0]?.slots).toHaveLength(0);
     expect(state.days[1]?.slots).toHaveLength(0);
+  });
+
+  it("queues backend ids for server deletion and clears them", () => {
+    const d1: OrganicCalendarDraft = { ...createDraft("d1"), backendDraftId: "srv-1" };
+    const d2 = createDraft("d2"); // no backendDraftId — local only, nothing to delete server-side
+    useCalendarStore.getState().addDraft("day-1", d1);
+    useCalendarStore.getState().addDraft("day-2", d2);
+
+    useCalendarStore.getState().bulkDeleteDrafts(["d1", "d2"]);
+
+    expect(useCalendarStore.getState().pendingServerDeletes).toEqual(["srv-1"]);
+
+    useCalendarStore.getState().clearPendingServerDeletes(["srv-1"]);
+    expect(useCalendarStore.getState().pendingServerDeletes).toEqual([]);
   });
 
   it("supports complete_with_errors grid status", () => {

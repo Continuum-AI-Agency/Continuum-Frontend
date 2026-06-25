@@ -26,10 +26,10 @@ function InsightSection({
   if (!items.length) return null;
   return (
     <div className="flex flex-col gap-1">
-      <p className={`text-[10px] font-medium uppercase tracking-wide ${labelClass}`}>{label}</p>
+      <p className={`text-2xs font-medium uppercase tracking-wide ${labelClass}`}>{label}</p>
       <ul className="flex flex-col gap-0.5">
         {items.map((item, i) => (
-          <li key={i} className="flex gap-1.5 text-[11px] text-foreground/75">
+          <li key={i} className="flex gap-1.5 text-xs text-foreground/75">
             <span className={`shrink-0 ${bulletClass}`}>·</span>
             <span>{item}</span>
           </li>
@@ -76,7 +76,7 @@ export function WorkerInsightsPanel({ results }: WorkerInsightsPanelProps) {
         return (
           <div key={i} className="flex flex-col gap-2">
             {worker.agent_id && (
-              <p className="text-[10px] text-muted-foreground/50 font-mono">
+              <p className="text-2xs text-muted-foreground/50 font-mono">
                 {worker.agent_id}
                 {worker.task_id ? ` · ${worker.task_id}` : ""}
               </p>

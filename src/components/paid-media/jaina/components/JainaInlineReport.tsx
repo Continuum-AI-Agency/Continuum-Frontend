@@ -97,7 +97,7 @@ export function JainaInlineReport({
           {report.report_title || "Checkpoint Analysis"}
         </Heading>
         <div className="flex items-center gap-2">
-          <Badge variant="soft" color="indigo" className="uppercase text-[10px] tracking-wide">
+          <Badge variant="soft" color="indigo" className="uppercase text-2xs tracking-wide">
             {report.language || "EN"}
           </Badge>
           <Button
@@ -122,7 +122,7 @@ export function JainaInlineReport({
           </Text>
           <SafeMarkdown
             content={report.executive_summary}
-            className="text-[14px] leading-6 text-muted-foreground"
+            className="text-base leading-6 text-muted-foreground"
             mode={isStreaming ? "streaming" : "static"}
           />
         </div>
@@ -140,10 +140,10 @@ export function JainaInlineReport({
                 className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
               >
                 <div className="mb-1 flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                  <Badge variant="outline" className="text-2xs uppercase tracking-wide">
                     {blockLabel(block.category)}
                   </Badge>
-                  <Badge variant="soft" color="gray" className="text-[10px]">
+                  <Badge variant="soft" color="gray" className="text-2xs">
                     {block.scope}
                   </Badge>
                 </div>

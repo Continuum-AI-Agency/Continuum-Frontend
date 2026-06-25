@@ -89,7 +89,7 @@ export function SkillWizardForm({ brandId, initial, onCancelAction, onSavedActio
             onClick={() => setKind(k.value)}
             aria-pressed={kind === k.value}
             className={cn(
-              'flex-1 rounded-md border px-2 py-1 text-[12px] font-medium transition-colors',
+              'flex-1 rounded-md border px-2 py-1 text-sm font-medium transition-colors',
               kind === k.value
                 ? 'border-transparent bg-primary/10 text-foreground'
                 : 'border-border text-muted-foreground hover:bg-muted/60',
@@ -106,7 +106,7 @@ export function SkillWizardForm({ brandId, initial, onCancelAction, onSavedActio
         placeholder="Short description (when to use it)"
         maxLength={500}
         aria-label="Skill description"
-        className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[12.5px]"
+        className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
       <textarea
@@ -115,7 +115,7 @@ export function SkillWizardForm({ brandId, initial, onCancelAction, onSavedActio
         rows={6}
         placeholder="Directives — the guidance injected into the agent when this skill is applied."
         aria-label="Skill directives"
-        className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-[12.5px] leading-relaxed"
+        className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-relaxed"
       />
 
       <input
@@ -123,10 +123,10 @@ export function SkillWizardForm({ brandId, initial, onCancelAction, onSavedActio
         onChange={(e) => setTags(e.target.value)}
         placeholder="Tags (comma separated)"
         aria-label="Skill tags"
-        className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[12px]"
+        className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
-      {error && <p className="text-[12px] text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="mt-0.5 flex items-center justify-end gap-2">
         <AgentButton variant="ghost" onClick={onCancelAction}>

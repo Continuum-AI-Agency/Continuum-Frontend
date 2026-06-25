@@ -281,3 +281,6 @@ export type AwarenessReport = z.infer<typeof awarenessReportSchema>;
 // type-only imports of the shapes above resolve without a runtime cycle.
 export * from "./adsQuery";
 export * from "./organicQuery";
+// Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
+export * from "./smartSearch";
+export * from "./savedBoards";

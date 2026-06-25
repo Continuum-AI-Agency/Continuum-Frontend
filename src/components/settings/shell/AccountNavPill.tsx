@@ -13,10 +13,10 @@ export function AccountNavPill({ email }: AccountNavPillProps) {
 
   return (
     <span
-      className="inline-flex max-w-[140px] items-center gap-1.5 rounded-full border border-border/60 bg-card/40 py-0.5 pl-0.5 pr-2 text-[11px] font-medium text-foreground/90"
+      className="inline-flex max-w-[140px] items-center gap-1.5 rounded-full border border-border/60 bg-card/40 py-0.5 pl-0.5 pr-2 text-xs font-medium text-foreground/90"
       title={email}
     >
-      <span className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-muted text-[9px] font-semibold uppercase text-muted-foreground">
+      <span className="flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-muted text-3xs font-semibold uppercase text-muted-foreground">
         {avatarUrl ? (
           <Image
             src={avatarUrl}

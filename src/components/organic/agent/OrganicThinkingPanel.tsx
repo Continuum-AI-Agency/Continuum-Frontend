@@ -50,7 +50,7 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
           <span className="flex-1 font-medium">
             {isStreaming ? "Thinking..." : "Actions taken"}
           </span>
-          <Badge variant="secondary" className="px-1.5 text-[10px]">
+          <Badge variant="secondary" className="px-1.5 text-2xs">
             {toolCalls.length} tool{toolCalls.length !== 1 ? "s" : ""}
           </Badge>
           <ChevronDownIcon
@@ -70,7 +70,7 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="line-clamp-1 px-3 pb-2 text-[11px] leading-relaxed text-muted-foreground/60"
+            className="line-clamp-1 px-3 pb-2 text-xs leading-relaxed text-muted-foreground/60"
           >
             {activeToolName}
           </motion.p>

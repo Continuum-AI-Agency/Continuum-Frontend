@@ -13,6 +13,7 @@ import type {
 } from "@continuum/contracts";
 import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { LibrarySidebar } from "./LibrarySidebar";
 import { LibraryFilterBar } from "./LibraryFilterBar";
 import { MediaGrid } from "./MediaGrid";
@@ -177,49 +178,50 @@ export function LibraryViewer({
 
       {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
       <div
-        className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4"
+        className="relative flex min-w-0 flex-1 flex-col gap-[var(--app-shell-gap)] overflow-y-auto p-[var(--card-pad)]"
         onDragEnter={handleDragEnter}
         onDragOver={(e) => e.preventDefault()}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <h1 className="text-base font-semibold text-balance">
-            {activeCollection?.name ?? "All Media"}
-          </h1>
-          <div className="min-w-0 flex-1">
-            <MediaSearchBar
-              brandId={brandId}
-              source={selectedSource}
-              kind={selectedKind}
-              onResults={setSearchResults}
-              onClear={() => setSearchResults(null)}
-            />
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              type="button"
-              variant={showBoundingBoxes ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowBoundingBoxes((v) => !v)}
-              title="Toggle detected-object overlays"
-              className="active:scale-[0.96] [transition-property:scale]"
-            >
-              <ScanSearch className="size-4" />
-              <span className="hidden sm:inline">Objects</span>
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              className="active:scale-[0.96] [transition-property:scale]"
-            >
-              <Upload className="size-4" />
-              Upload
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title={activeCollection?.name ?? "All Media"}
+          action={
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="min-w-0 flex-1 sm:w-64">
+                <MediaSearchBar
+                  brandId={brandId}
+                  source={selectedSource}
+                  kind={selectedKind}
+                  onResults={setSearchResults}
+                  onClear={() => setSearchResults(null)}
+                />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant={showBoundingBoxes ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setShowBoundingBoxes((v) => !v)}
+                  title="Toggle detected-object overlays"
+                  className="active:scale-[0.96] [transition-property:scale]"
+                >
+                  <ScanSearch className="size-4" />
+                  <span className="hidden sm:inline">Objects</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="active:scale-[0.96] [transition-property:scale]"
+                >
+                  <Upload className="size-4" />
+                  Upload
+                </Button>
+              </div>
+            </div>
+          }
+        />
 
         <LibraryFilterBar
           source={optimisticSource}

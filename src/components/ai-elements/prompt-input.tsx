@@ -221,7 +221,7 @@ function ReferencePreviewChips({
           />
           <span className="min-w-0">
             <span className="block truncate text-xs font-medium text-foreground">{reference.label}</span>
-            <span className="block text-[10px] uppercase text-muted-foreground">{reference.type}</span>
+            <span className="block text-2xs uppercase text-muted-foreground">{reference.type}</span>
           </span>
           <button
             type="button"
@@ -585,11 +585,11 @@ export function PromptInput({
                     <div className="truncate text-xs font-medium">
                       {mentionParentStack.map((p) => p.label).join(" › ")}
                     </div>
-                    <div className="text-[11px] text-muted-foreground">{mentionParent.childrenLabel}</div>
+                    <div className="text-xs text-muted-foreground">{mentionParent.childrenLabel}</div>
                   </div>
                   <button
                     type="button"
-                    className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                     onClick={() => setMentionParentStack((stack) => stack.slice(0, -1))}
                   >
                     Back
@@ -650,7 +650,7 @@ export function PromptInput({
                           </span>
                           </span>
                         </span>
-                        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
                           {suggestion.badge ?? suggestion.childrenLabel ?? suggestion.type}
                         </span>
                       </button>
@@ -675,7 +675,7 @@ export function PromptInput({
                       exit={{ opacity: 0, y: prefersReducedMotion ? 0 : 4 }}
                       transition={{ duration: prefersReducedMotion ? 0 : 0.18 }}
                     >
-                      <InputGroupText className="text-[11px] uppercase tracking-[0.12em] text-rose-500">
+                      <InputGroupText className="text-xs uppercase tracking-[0.12em] text-rose-500">
                         Recording
                       </InputGroupText>
                     </motion.div>

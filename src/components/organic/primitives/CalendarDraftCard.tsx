@@ -264,7 +264,7 @@ export function CalendarDraftCard({
                 {/* Header row: time | multi-select | regen | status dot */}
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
+                    <span className="text-2xs uppercase tracking-wider text-muted-foreground/70 font-bold">
                       {draft.timeLabel}
                     </span>
                     {draft.titleTopic && (
@@ -280,7 +280,7 @@ export function CalendarDraftCard({
                           </TooltipTrigger>
                           <TooltipContent
                             side="top"
-                            className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-[11px]"
+                            className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-xs"
                           >
                             <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
                             {draft.titleTopic}
@@ -331,18 +331,18 @@ export function CalendarDraftCard({
 
                 {/* Inline streaming status */}
                 {isStreaming && (
-                  <p className="mt-0.5 text-[10px] text-brand-primary/80 font-medium">
+                  <p className="mt-0.5 text-2xs text-brand-primary/80 font-medium">
                     {draft.generationStage ? `Generating · ${draft.generationStage}` : "Generating..."}
                   </p>
                 )}
 
                 {/* Caption */}
-                <p className="mt-1 text-[11px] text-muted-foreground leading-snug font-medium line-clamp-2">
+                <p className="mt-1 text-xs text-muted-foreground leading-snug font-medium line-clamp-2">
                   {draft.captionPreview}
                 </p>
 
                 {draft.status === "placeholder" && (
-                  <p className="mt-1.5 text-[10px] italic text-muted-foreground/60">
+                  <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
                     Awaiting generation
                   </p>
                 )}
@@ -350,7 +350,7 @@ export function CalendarDraftCard({
                 {/* Generation progress */}
                 {typeof displayProgress === "number" ? (
                   <div className="mt-3 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
+                    <div className="flex items-center justify-between text-2xs font-bold uppercase tracking-tighter text-muted-foreground">
                       <span className="text-primary animate-pulse">GENERATING</span>
                       <span>{displayProgress}%</span>
                     </div>
@@ -361,10 +361,10 @@ export function CalendarDraftCard({
                 {/* Error state */}
                 {isFailed && draft.generationError ? (
                   <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
                       Generation failed
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive/90">
+                    <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
                       {draft.generationError}
                     </p>
                     <div className="mt-2 flex items-center gap-2">
@@ -372,7 +372,7 @@ export function CalendarDraftCard({
                         <span
                           role="button"
                           tabIndex={0}
-                          className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
+                          className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-2xs text-destructive hover:bg-destructive/20"
                           onClick={(event) => {
                             event.stopPropagation();
                             onRegenerate(draft.id);
@@ -392,7 +392,7 @@ export function CalendarDraftCard({
                       <span
                         role="button"
                         tabIndex={0}
-                        className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
+                        className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-2xs text-destructive hover:bg-destructive/20"
                         onClick={(event) => {
                           event.stopPropagation();
                           clearFailure();
@@ -417,7 +417,7 @@ export function CalendarDraftCard({
                     shows its storyboard (when ready) or an explicit text-only
                     state, never a fake "has media" affordance. */}
                 {isMediaGenerating ? (
-                  <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary/80">
+                  <p className="mt-1.5 flex items-center gap-1 text-2xs font-medium text-primary/80">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
                     {draft.generationStage ?? "Generating media…"}
                   </p>
@@ -442,7 +442,7 @@ export function CalendarDraftCard({
                           </div>
                         ))}
                         {storyboardFrames.length > 3 && (
-                          <span className="text-[10px] font-medium text-muted-foreground/60">
+                          <span className="text-2xs font-medium text-muted-foreground/60">
                             +{storyboardFrames.length - 3}
                           </span>
                         )}
@@ -454,7 +454,7 @@ export function CalendarDraftCard({
                     <MediaStagePill mediaStage="failed" />
                   </p>
                 ) : isTextOnlyDraft ? (
-                  <p className="mt-1.5 text-[10px] italic text-muted-foreground/60">
+                  <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
                     Text only — no media yet
                   </p>
                 ) : null}
@@ -466,13 +466,13 @@ export function CalendarDraftCard({
                       <PlatformBadge key={p} platform={p} />
                     ))}
                     {hasRealizedMedia && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 ml-0.5">
+                      <span className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/60 ml-0.5">
                         <ImageIcon className="h-2.5 w-2.5" />
                         {realizedMediaCount > 1 ? realizedMediaCount : null}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest">
+                  <span className="text-2xs text-muted-foreground/70 font-bold uppercase tracking-widest">
                     {draft.format}
                   </span>
                 </div>
@@ -599,7 +599,7 @@ export function CalendarDraftCard({
 
         {/* Time picker popover */}
         <PopoverContent side="top" align="start" className="w-56 p-3">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Set posting time
           </p>
           <Input
@@ -617,20 +617,20 @@ export function CalendarDraftCard({
             autoFocus
           />
           {timeError && (
-            <p className="mt-1 text-[10px] text-destructive">{timeError}</p>
+            <p className="mt-1 text-2xs text-destructive">{timeError}</p>
           )}
           <div className="mt-2 flex gap-1.5">
             <button
               type="button"
               onClick={applyCustomTime}
-              className="flex-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Set
             </button>
             <button
               type="button"
               onClick={() => { setTimePickerOpen(false); setTimeError(null); }}
-              className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+              className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
             >
               Cancel
             </button>
@@ -663,7 +663,7 @@ export function CalendarDraftCard({
         {cardWithHover}
       </PopoverAnchor>
       <PopoverContent side="right" align="start" className="w-auto p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Duplicate to...
         </p>
         <DuplicateDayPicker

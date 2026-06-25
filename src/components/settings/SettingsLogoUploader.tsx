@@ -14,9 +14,10 @@ type SettingsLogoUploaderProps = {
   brandName: string;
   initialLogoPath?: string | null;
   disabled?: boolean;
+  disabledReason?: string;
 };
 
-export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disabled }: SettingsLogoUploaderProps) {
+export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disabled, disabledReason }: SettingsLogoUploaderProps) {
   const { show } = useToast();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +64,9 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
       router.refresh();
     } catch (error) {
       console.error(error);
-      show({ title: "Upload failed", description: "Could not upload logo.", variant: "error" });
+      const description =
+        error instanceof Error && error.message ? error.message : "Could not upload logo.";
+      show({ title: "Upload failed", description, variant: "error" });
     } finally {
       setIsUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -83,14 +86,20 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
       router.refresh();
     } catch (error) {
       console.error(error);
-      show({ title: "Remove failed", description: "Could not remove logo.", variant: "error" });
+      const description =
+        error instanceof Error && error.message ? error.message : "Could not remove logo.";
+      show({ title: "Remove failed", description, variant: "error" });
     } finally {
       setIsUploading(false);
     }
   };
 
+  const disabledTitle = disabled
+    ? disabledReason ?? "Only brand owners or admins can change the logo."
+    : undefined;
+
   return (
-    <div className="relative group w-24 h-24">
+    <div className="relative group w-24 h-24" title={disabledTitle}>
       <input
         type="file"
         ref={inputRef}

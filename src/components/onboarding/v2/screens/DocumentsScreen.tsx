@@ -13,7 +13,7 @@ export function DocumentsScreen({ totalSteps }: DocumentsScreenProps) {
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-2xl">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_22%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--cs-violet,#5a39ff)]">
+          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_22%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--cs-violet,#5a39ff)]">
             <FileText className="h-3 w-3" />
             Step 2 of {totalSteps}
           </div>

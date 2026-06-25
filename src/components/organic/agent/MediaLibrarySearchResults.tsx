@@ -65,7 +65,7 @@ function MediaResultRow({
         </div>
 
         {item.asset.description && (
-          <p className="mb-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mb-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {item.asset.description}
           </p>
         )}

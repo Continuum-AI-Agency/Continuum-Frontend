@@ -99,7 +99,7 @@ function sourceLabel(source: DocumentView["source"]): string {
 
 function KindBadge({ doc }: { doc: DocumentView }) {
   return (
-    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-2xs font-medium uppercase tracking-wide text-muted-foreground">
       {kindLabel(doc)}
     </span>
   );
@@ -111,7 +111,7 @@ function StatusChip({ label }: { label: ProgressLabel }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 text-[11px]",
+        "inline-flex items-center gap-1 text-xs",
         label.tone === "success" && "text-emerald-600 dark:text-emerald-400",
         label.tone === "error" && "text-rose-600",
         (label.tone === "progress" || label.tone === "neutral") && "text-muted-foreground",
@@ -131,7 +131,7 @@ function PeekBody({ doc }: { doc: DocumentView }) {
         <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{doc.name}</p>
         <KindBadge doc={doc} />
       </div>
-      <p className="font-mono text-[11px] text-muted-foreground">{metaLine(doc)}</p>
+      <p className="font-mono text-xs text-muted-foreground">{metaLine(doc)}</p>
       <StatusChip label={label} />
       {doc.textExcerpt ? (
         <p className="line-clamp-4 border-t border-border/60 pt-2 text-xs leading-relaxed text-muted-foreground">
@@ -241,7 +241,7 @@ function ExcerptBlock({ doc }: { doc: DocumentView }) {
   if (doc.textExcerpt) {
     return (
       <div className="space-y-1.5 border-t border-border/60 pt-3">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Text preview
         </p>
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">

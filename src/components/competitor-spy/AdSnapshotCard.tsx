@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { TimelineEntry } from "@continuum/contracts";
+import { SaveToBoardButton } from "./SaveToBoardButton";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -27,15 +28,17 @@ function daysActive(firstSeenAt: string, lastSeenAt: string): number {
 }
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <Badge variant="secondary" className="text-[10px] capitalize text-foreground/80">{children}</Badge>;
+  return <Badge variant="secondary" className="text-2xs capitalize text-foreground/80">{children}</Badge>;
 }
 
 export function AdSnapshotCard({
   entry,
   inspiration = false,
+  brandId,
 }: {
   entry: TimelineEntry;
   inspiration?: boolean;
+  brandId?: string;
 }) {
   const hasMedia = entry.hasCreativeMedia ?? false;
   const { data: creativeUrl } = useCreativeUrl(entry.snapshotId, hasMedia);
@@ -57,12 +60,12 @@ export function AdSnapshotCard({
         )}
         <Badge
           variant={entry.status === "active" ? "success" : "secondary"}
-          className="absolute left-2 top-2 text-[10px] capitalize shadow-sm"
+          className="absolute left-2 top-2 text-2xs capitalize shadow-sm"
         >
           {entry.status}
         </Badge>
         {inspiration ? (
-          <Badge className="absolute right-2 top-2 bg-black/55 text-[10px] text-white backdrop-blur-sm">
+          <Badge className="absolute right-2 top-2 bg-black/55 text-2xs text-white backdrop-blur-sm">
             Inspiration
           </Badge>
         ) : null}
@@ -71,14 +74,14 @@ export function AdSnapshotCard({
       <CardContent className="flex flex-1 flex-col gap-2 p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-medium">{entry.competitorName}</span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
+          <span className="shrink-0 text-xs text-muted-foreground">
             {daysActive(entry.firstSeenAt, entry.lastSeenAt)}d
           </span>
         </div>
 
         {entry.body ? <p className="line-clamp-3 text-xs text-muted-foreground">{entry.body}</p> : null}
 
-        <div className="grid gap-1 rounded-md bg-muted/35 p-2 text-[10px] text-muted-foreground">
+        <div className="grid gap-1 border-t border-border/70 pt-2 text-2xs text-muted-foreground">
           {metadata?.creationTime ? <span>Created {formatDate(metadata.creationTime)}</span> : null}
           <span>First seen {formatDate(entry.firstSeenAt)}</span>
           {metadata?.deliveryStart ? (
@@ -98,18 +101,23 @@ export function AdSnapshotCard({
             {analysis.primaryTheme ? <Pill>{analysis.primaryTheme}</Pill> : null}
           </div>
         ) : entry.analysisStatus && entry.analysisStatus !== "done" ? (
-          <span className="text-[10px] text-muted-foreground">analysis {entry.analysisStatus}</span>
+          <span className="text-2xs text-muted-foreground">analysis {entry.analysisStatus}</span>
         ) : null}
 
-        <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
-          <span>{metadata?.pageName ?? entry.competitorName}</span>
-          {entry.snapshotUrl ? (
-            <Button asChild variant="link" size="xs" className="h-auto p-0 text-[11px]">
-              <a href={entry.snapshotUrl} target="_blank" rel="noreferrer">
-                View on Meta
-              </a>
-            </Button>
-          ) : null}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
+          <span className="truncate">{metadata?.pageName ?? entry.competitorName}</span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {brandId ? (
+              <SaveToBoardButton brandId={brandId} request={{ kind: "paid", snapshotId: entry.snapshotId }} />
+            ) : null}
+            {entry.snapshotUrl ? (
+              <Button asChild variant="link" size="xs" className="h-auto p-0 text-xs">
+                <a href={entry.snapshotUrl} target="_blank" rel="noreferrer">
+                  View on Meta
+                </a>
+              </Button>
+            ) : null}
+          </div>
         </div>
       </CardContent>
     </Card>

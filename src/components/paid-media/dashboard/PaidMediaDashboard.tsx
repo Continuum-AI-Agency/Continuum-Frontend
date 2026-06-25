@@ -317,7 +317,7 @@ export function PaidMediaDashboard({
   const dashboardToolbar = (
     <>
       {loadState.status === "loading-campaigns" ? (
-        <span className="rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span className="rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground">
           Loading
         </span>
       ) : null}

@@ -28,7 +28,7 @@ export function ClipCaptionToggle({
         onChange(!value)
       }}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50",
+        "inline-flex items-center gap-1 rounded-md border border-border/60 px-1.5 py-0.5 text-2xs font-medium transition-colors disabled:opacity-50",
         value ? "bg-muted text-foreground" : "text-muted-foreground/70 hover:text-foreground",
       )}
       title={value ? "Captions on" : "Captions off"}

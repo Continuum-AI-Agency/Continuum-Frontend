@@ -46,7 +46,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
               <li key={objective.id} className="flex items-start gap-2 text-xs">
                 <span
                   className={cn(
-                    "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium capitalize",
+                    "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium capitalize",
                     OBJECTIVE_STATUS_STYLE[objective.status],
                   )}
                 >
@@ -75,7 +75,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
       ) : null}
 
       {sources.length > 0 ? (
-        <div className="text-[11px] text-muted-foreground/70">
+        <div className="text-xs text-muted-foreground/70">
           <span className="font-medium">Sources:</span> {sources.join(", ")}
         </div>
       ) : null}

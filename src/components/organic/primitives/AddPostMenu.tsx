@@ -44,14 +44,14 @@ export const AddPostMenu = React.memo(function AddPostMenu({
           <PencilLine className="size-4" />
           <div className="flex flex-col">
             <span className="text-sm font-medium">Create manually</span>
-            <span className="text-[11px] text-muted-foreground">Write it from scratch</span>
+            <span className="text-xs text-muted-foreground">Write it from scratch</span>
           </div>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleGenerateWithAi}>
           <Sparkles className="size-4" />
           <div className="flex flex-col">
             <span className="text-sm font-medium">Generate with AI</span>
-            <span className="text-[11px] text-muted-foreground">Let the agent draft it</span>
+            <span className="text-xs text-muted-foreground">Let the agent draft it</span>
           </div>
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -8,7 +8,7 @@ export function ColorSwatch({ hex }: ColorSwatchProps) {
         className="h-[30px] w-[30px] rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.12)]"
         style={{ background: hex, border: isLight ? "1px solid #e5e7eb" : undefined }}
       />
-      <span className="font-mono text-[9px] font-semibold text-[#94a3b8]">{hex}</span>
+      <span className="font-mono text-3xs font-semibold text-[#94a3b8]">{hex}</span>
     </div>
   );
 }

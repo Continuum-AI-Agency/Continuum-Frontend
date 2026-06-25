@@ -31,7 +31,7 @@ const PLATFORM_DOT: Record<string, string> = {
 }
 
 const chipClass =
-  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
 
 function Sep() {
   return <span className="select-none text-muted-foreground/40">·</span>
@@ -71,7 +71,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
         </button>
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-56 p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Posting time
         </p>
         <div className="mb-2 flex flex-wrap gap-1">
@@ -81,7 +81,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
               type="button"
               onClick={() => commit(time)}
               className={cn(
-                "rounded-md border px-2 py-1 text-[11px] transition-colors duration-150",
+                "rounded-md border px-2 py-1 text-xs transition-colors duration-150",
                 time === value
                   ? "border-primary/40 bg-primary/10 text-primary"
                   : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
@@ -105,7 +105,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
           className="h-8 text-xs"
           autoFocus
         />
-        {error && <p className="mt-1 text-[10px] text-destructive">{error}</p>}
+        {error && <p className="mt-1 text-2xs text-destructive">{error}</p>}
       </PopoverContent>
     </Popover>
   )

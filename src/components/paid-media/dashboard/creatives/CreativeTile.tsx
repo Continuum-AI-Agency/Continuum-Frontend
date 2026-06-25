@@ -83,20 +83,20 @@ export function CreativeTile({
               onLoad={handleImageLoad}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
               No preview
             </div>
           )}
 
           <div className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1">
             {isVideo ? (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-black/55 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
                 <PlayIcon className="h-2.5 w-2.5 fill-current" aria-hidden />
                 Video
               </span>
             ) : null}
             {ratio ? (
-              <span className="rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+              <span className="rounded-full bg-black/45 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
                 {ratio}
               </span>
             ) : null}
@@ -106,10 +106,10 @@ export function CreativeTile({
         <div className="flex flex-col gap-1 p-2">
           <span className="line-clamp-1 text-xs font-medium">{title}</span>
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[11px] text-muted-foreground">
+            <span className="truncate text-xs text-muted-foreground">
               {metricLabel} · {metricValue}
             </span>
-            <Badge variant={isSelected ? "default" : "secondary"} className="shrink-0 text-[10px]">
+            <Badge variant={isSelected ? "default" : "secondary"} className="shrink-0 text-2xs">
               {isSelected ? "Selected" : "Select"}
             </Badge>
           </div>

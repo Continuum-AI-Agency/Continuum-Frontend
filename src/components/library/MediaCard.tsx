@@ -32,7 +32,7 @@ function formatBytes(bytes: number): string {
 }
 
 const BADGE_BASE =
-  "absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]";
+  "absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs";
 
 // Matches MediaGrid column breakpoints: 2-col mobile → 3-col sm → 4-col lg → 5-col xl
 const IMAGE_SIZES =
@@ -209,21 +209,21 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
         ) : null}
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {SOURCE_LABEL[asset.source]}
           </span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {asset.kind}
           </span>
           {dimensions ? (
-            <span className="text-[10px] tabular-nums text-muted-foreground/80">{dimensions}</span>
+            <span className="text-2xs tabular-nums text-muted-foreground/80">{dimensions}</span>
           ) : null}
         </div>
 
         {tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 8).map((tag) => (
-              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground">
                 {tag}
               </span>
             ))}
@@ -235,7 +235,7 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
             {objects.slice(0, 6).map((obj, i) => (
               <span
                 key={`${obj.label}-${i}`}
-                className="rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="rounded-md border border-border/60 px-1.5 py-0.5 text-2xs text-muted-foreground"
               >
                 {obj.label}
                 {typeof obj.confidence === "number" ? ` ${Math.round(obj.confidence * 100)}%` : ""}
@@ -244,7 +244,7 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
           </div>
         ) : null}
 
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs text-muted-foreground">
           <div>
             <dt className="inline text-muted-foreground/60">Size </dt>
             <dd className="inline tabular-nums">{formatBytes(asset.sizeBytes ?? 0)}</dd>
@@ -272,7 +272,7 @@ function GenerateClipsButton({ onGenerate, disabled }: { onGenerate: () => void;
         onGenerate();
       }}
       disabled={disabled}
-      className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
+      className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
       title="Generate clips from this video"
     >
       <Scissors className="size-3" />
@@ -300,9 +300,8 @@ export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyl
       <HoverCardTrigger asChild>
         <motion.div
           className={cn(
-            "group flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card",
-            "shadow-sm transition-[box-shadow,border-color] hover:border-border",
-            "hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-12px_rgba(0,0,0,0.18)]",
+            "group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card",
+            "transition-[border-color] hover:border-foreground/20",
           )}
           whileHover={reduceMotion ? undefined : { y: -2 }}
           transition={{ type: "spring", duration: 0.3, bounce: 0 }}
@@ -327,7 +326,7 @@ export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyl
             )}
 
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] tabular-nums text-muted-foreground/60">{formattedDate}</p>
+              <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
               {canGenerateClips && !activeProgress && (
                 <div className="flex items-center gap-1.5">
                   <ClipCaptionToggle value={captionsEnabled} onChange={setCaptionsEnabled} disabled={isGenerating} />

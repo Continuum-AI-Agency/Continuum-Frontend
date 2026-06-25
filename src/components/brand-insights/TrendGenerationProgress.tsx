@@ -101,20 +101,20 @@ export function TrendGenerationProgress({
           </motion.span>
         </AnimatePresence>
         {isError && errorMessage && (
-          <span className="ml-2 truncate text-[11px] text-muted-foreground">
+          <span className="ml-2 truncate text-xs text-muted-foreground">
             {errorMessage}
           </span>
         )}
       </div>
 
       {showEta && (
-        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/80">
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground/80">
           {formatEta(etaSeconds as number)}
         </span>
       )}
 
       {!isError && (
-        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {Math.round(pct)}%
         </span>
       )}

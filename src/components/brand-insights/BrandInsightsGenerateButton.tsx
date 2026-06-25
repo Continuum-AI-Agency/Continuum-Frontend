@@ -221,7 +221,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
     <div className={cn("flex flex-col items-end gap-1.5", showProgress ? "w-full" : "w-auto")}>
       <div className="flex items-center gap-2">
         {ageLabel && !subtle ? (
-          <span className="text-[11px] tabular-nums text-muted-foreground">{ageLabel}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{ageLabel}</span>
         ) : null}
         <Button
           onClick={handleRun}

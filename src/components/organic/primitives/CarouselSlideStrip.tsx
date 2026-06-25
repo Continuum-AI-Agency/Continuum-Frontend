@@ -24,7 +24,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Cross2Icon } from "@radix-ui/react-icons"
-import { Plus } from "lucide-react"
+import { Plus, Replace } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import type { UseDraftMediaPlacementResult } from "@/components/organic/hooks/useDraftMediaPlacement"
@@ -45,6 +45,10 @@ type CarouselSlideStripProps = {
   placement: UseDraftMediaPlacementResult
   // Called when user clicks the + add slot — typically opens the library rail.
   onAddRequest: () => void
+  // Called when the user asks to replace a slide; receives the slide's 0-based
+  // array position. Opens the picker in "replace" mode. Optional — when absent,
+  // the per-slide replace control is hidden.
+  onReplaceRequest?: (position: number) => void
   className?: string
 }
 
@@ -54,12 +58,14 @@ function SortableThumb({
   totalCount,
   onSelect,
   onRemove,
+  onReplace,
 }: {
   slide: Slide
   activeIndex: number
   totalCount: number
   onSelect: () => void
   onRemove: () => void
+  onReplace?: () => void
 }) {
   const {
     attributes,
@@ -108,10 +114,25 @@ function SortableThumb({
           sizes="56px"
           className="object-cover"
         />
-        <div className="absolute bottom-0.5 right-0.5 rounded-full bg-black/60 px-1 py-px text-[8px] font-semibold text-white tabular-nums">
+        <div className="absolute bottom-0.5 right-0.5 rounded-full bg-black/60 px-1 py-px text-3xs font-semibold text-white tabular-nums">
           {slide.slideIndex + 1}
         </div>
       </button>
+
+      {/* Replace, shown on hover at top-left */}
+      {onReplace && (
+        <button
+          type="button"
+          aria-label={`Replace slide ${slide.slideIndex + 1}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onReplace()
+          }}
+          className="absolute -left-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-background border border-border/70 shadow-sm text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:flex"
+        >
+          <Replace className="h-2.5 w-2.5" />
+        </button>
+      )}
 
       {/* Remove ×, shown on hover, hidden when only one slide */}
       {canRemove && (
@@ -137,6 +158,7 @@ export function CarouselSlideStrip({
   onSelectSlide,
   placement,
   onAddRequest,
+  onReplaceRequest,
   className,
 }: CarouselSlideStripProps) {
   const sensors = useSensors(
@@ -186,14 +208,15 @@ export function CarouselSlideStrip({
             className,
           )}
         >
-          {sortedSlides.map((slide) => (
+          {sortedSlides.map((slide, position) => (
             <SortableThumb
               key={slide.slideIndex}
               slide={slide}
               activeIndex={activeIndex}
               totalCount={sortedSlides.length}
               onSelect={() => onSelectSlide(slide.slideIndex)}
-              onRemove={() => placement.removeSlide(slide.slideIndex)}
+              onRemove={() => placement.removeSlide(position)}
+              onReplace={onReplaceRequest ? () => onReplaceRequest(position) : undefined}
             />
           ))}
 

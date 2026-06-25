@@ -94,7 +94,7 @@ export function ConceptCard({
           <div className="flex h-full flex-col justify-between bg-gradient-to-br from-muted/80 via-muted/50 to-muted/20 p-3">
             <PlatformTag platform={concept.platform} />
             {concept.angle && (
-              <p className="line-clamp-5 text-[12px] font-semibold leading-snug text-foreground/90 text-pretty">
+              <p className="line-clamp-5 text-sm font-semibold leading-snug text-foreground/90 text-pretty">
                 {concept.angle}
               </p>
             )}
@@ -123,20 +123,20 @@ export function ConceptCard({
         <div className="flex items-center justify-between gap-1">
           <MetaRow
             items={[concept.format ?? undefined, formatScheduledAt(concept.scheduledAt)]}
-            className="text-[10.5px]"
+            className="text-2xs"
           />
           <StatusLabel tone={statusTone}>{statusLabel}</StatusLabel>
         </div>
         {concept.trendTitle && (
-          <p className="text-[10px] text-muted-foreground/60">↑ {concept.trendTitle}</p>
+          <p className="text-2xs text-muted-foreground/60">↑ {concept.trendTitle}</p>
         )}
         {(caption ?? concept.rationale) && (
-          <p className="text-[11px] leading-relaxed text-muted-foreground text-pretty">
+          <p className="text-xs leading-relaxed text-muted-foreground text-pretty">
             {caption ?? concept.rationale}
           </p>
         )}
         {isFailed && pipeline?.error?.message && (
-          <p className="text-[10.5px] text-destructive/80">{pipeline.error.message}</p>
+          <p className="text-2xs text-destructive/80">{pipeline.error.message}</p>
         )}
       </div>
 
@@ -147,7 +147,7 @@ export function ConceptCard({
             <button
               type="button"
               onClick={() => onViewDraft(draftId, 'calendar')}
-              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-[10.5px] text-muted-foreground transition-colors hover:text-foreground"
+              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <CalendarDays className="h-3 w-3" />
               Calendar
@@ -156,14 +156,14 @@ export function ConceptCard({
             <button
               type="button"
               onClick={() => onViewDraft(draftId, 'list')}
-              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-[10.5px] text-muted-foreground transition-colors hover:text-foreground"
+              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <List className="h-3 w-3" />
               List
             </button>
           </>
         ) : isGenerating || (dispatched && !isFailed) ? (
-          <div className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[10.5px] text-muted-foreground/50">
+          <div className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-2xs text-muted-foreground/50">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {isGenerating ? 'Writing copy…' : 'Queued for copy…'}
           </div>

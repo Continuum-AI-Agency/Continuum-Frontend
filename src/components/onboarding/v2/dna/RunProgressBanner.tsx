@@ -19,7 +19,7 @@ export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBann
   const thin = settled && counts.done < 3;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
       {running ? (
         <span className="inline-flex items-center gap-1.5 text-foreground">
           <CircleNotch className="h-3 w-3 animate-spin text-[var(--cs-violet,#5a39ff)]" />
@@ -47,7 +47,7 @@ export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBann
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm transition-colors hover:border-muted-foreground/30"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm transition-colors hover:border-muted-foreground/30"
         >
           <ArrowsCounterClockwise className="h-3 w-3" />
           Re-run analysis

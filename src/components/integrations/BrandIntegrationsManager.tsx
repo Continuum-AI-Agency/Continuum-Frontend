@@ -319,7 +319,7 @@ export function BrandIntegrationsManager({
                       <Badge
                         color={statusColor}
                         variant="soft"
-                        className="font-bold text-[10px]"
+                        className="font-bold text-2xs"
                       >
                         {group.connected ? "ACTIVE" : "NONE"}
                       </Badge>
@@ -347,7 +347,7 @@ export function BrandIntegrationsManager({
                         variant={group.connected ? "ghost" : "surface"}
                         onClick={() => handleConnect(group.key)}
                         disabled={isSyncing || isLoading}
-                        className="h-6 text-[10px] font-bold uppercase tracking-wider px-2"
+                        className="h-6 text-2xs font-bold uppercase tracking-wider px-2"
                       >
                         {isSyncing ? "Syncing..." : group.connected ? "Re-sync" : "Sync"}
                       </Button>
@@ -383,7 +383,7 @@ export function BrandIntegrationsManager({
                                         {PlatformIcon({ platform: account._platformKey }) || (
                                           <Badge
                                             variant="outline"
-                                            className="text-[9px] uppercase opacity-50 px-1 py-0 h-4"
+                                            className="text-3xs uppercase opacity-50 px-1 py-0 h-4"
                                           >
                                             {platformName}
                                           </Badge>
@@ -403,7 +403,7 @@ export function BrandIntegrationsManager({
                                     color={sColor}
                                     variant="soft"
                                     size="1"
-                                    className="text-[9px] uppercase tracking-wider opacity-80"
+                                    className="text-3xs uppercase tracking-wider opacity-80"
                                   >
                                     {account.status || "Active"}
                                   </Badge>

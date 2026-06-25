@@ -32,7 +32,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
         renderHeader={({ assignedCount, clearAll, clearing }) => (
           <header className="text-center">
             <div className="flex items-center justify-center gap-2">
-              <h2 className="text-balance text-[28px] font-bold tracking-tight text-foreground md:text-[32px]">
+              <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                 Tag accounts to this brand
               </h2>
               <HelpPopover label="What does Continuum read from these accounts?">
@@ -57,7 +57,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
                 </p>
               </HelpPopover>
             </div>
-            <p className="mt-1.5 text-[13px] text-muted-foreground">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Pick the specific accounts this brand should use. You can change this any time in
               Settings.
             </p>
@@ -66,7 +66,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
                 type="button"
                 onClick={clearAll}
                 disabled={clearing}
-                className="mt-2 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-2 text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {clearing ? "Clearing…" : "Clear all"}
               </button>

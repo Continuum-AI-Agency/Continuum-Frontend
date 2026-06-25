@@ -24,16 +24,21 @@ import {
   mediaSourceSchema,
 } from './asset';
 import { type MediaSearchResultItem, mediaSearchResultItemSchema } from './search';
+import {
+  TEXT_EMBEDDING_DIM,
+  TEXT_EMBEDDING_MODEL,
+  TEXT_EMBEDDING_QUERY_TASK_TYPE,
+} from '../embedding/textEmbedding';
 
 // --- Correctness constants (must match analyze_media's write side) -----------
 
 // The text/description embedding is written by the analyze_media edge function
-// with gemini-embedding-001 at outputDimensionality 1536 (RETRIEVAL_DOCUMENT).
-// A query embedding MUST use the same model + dimension or pgvector's `<=>`
-// errors on a dimension mismatch (it only differs by taskType).
-export const MEDIA_TEXT_EMBEDDING_MODEL = 'gemini-embedding-001';
-export const MEDIA_TEXT_EMBEDDING_DIM = 1536;
-export const MEDIA_TEXT_EMBEDDING_QUERY_TASK_TYPE = 'RETRIEVAL_QUERY';
+// and queried here; both use the canonical text-embedding model. A query
+// embedding MUST use the same model + dimension as the write side or pgvector's
+// `<=>` compares different vector spaces (it only differs by taskType).
+export const MEDIA_TEXT_EMBEDDING_MODEL = TEXT_EMBEDDING_MODEL;
+export const MEDIA_TEXT_EMBEDDING_DIM = TEXT_EMBEDDING_DIM;
+export const MEDIA_TEXT_EMBEDDING_QUERY_TASK_TYPE = TEXT_EMBEDDING_QUERY_TASK_TYPE;
 
 export const MEDIA_SIGNED_URL_TTL_SECONDS = 60 * 60;
 

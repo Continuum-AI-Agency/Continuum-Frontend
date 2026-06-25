@@ -37,12 +37,12 @@ type CreativeHoverCardProps = {
 
 function ThumbTile({ url, label }: { url: string | null; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 text-[10px] text-muted-foreground">
+    <div className="flex flex-col items-center gap-1 text-2xs text-muted-foreground">
       <div className="relative h-12 w-12 overflow-hidden rounded bg-muted/50">
         {url ? (
           <img src={url} alt={label} className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <div className="flex h-full items-center justify-center text-[9px]">N/A</div>
+          <div className="flex h-full items-center justify-center text-3xs">N/A</div>
         )}
       </div>
       <span>{label}</span>
@@ -78,7 +78,7 @@ function HoverCardBody({ ad, logs, onOpenDetail }: Omit<CreativeHoverCardProps, 
         type="button"
         onClick={() => onOpenDetail(latestSwap?.id)}
         className={cn(
-          "inline-flex w-full items-center justify-center rounded-md border border-border/70 bg-background px-2 py-1.5 text-[11px] font-medium text-foreground transition-colors",
+          "inline-flex w-full items-center justify-center rounded-md border border-border/70 bg-background px-2 py-1.5 text-xs font-medium text-foreground transition-colors",
           "hover:bg-muted/40"
         )}
       >
@@ -92,10 +92,10 @@ function SwapReason({ swap }: { swap: RotationEvent }) {
   const reason = swap.decisionNote ?? swap.error ?? "No reason recorded.";
   return (
     <div className="rounded-md border border-border/70 bg-muted/30 p-2">
-      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         Why it changed
       </div>
-      <p className="mt-1 line-clamp-3 text-[12px] leading-snug text-foreground">{reason}</p>
+      <p className="mt-1 line-clamp-3 text-sm leading-snug text-foreground">{reason}</p>
       <div className="mt-2 flex items-center justify-between gap-2">
         <ThumbTile url={swap.beforeUrl} label="Before" />
         <span className="text-muted-foreground" aria-hidden>
@@ -109,7 +109,7 @@ function SwapReason({ swap }: { swap: RotationEvent }) {
 
 function NoSwapState() {
   return (
-    <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-2 text-[11px] text-muted-foreground">
+    <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-2 text-xs text-muted-foreground">
       No DCO actions in this window.
     </div>
   );

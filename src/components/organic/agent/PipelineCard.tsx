@@ -119,7 +119,7 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
       <div className="flex h-3 items-center justify-center">{dot}</div>
       <span
         className={cn(
-          'text-[10px] leading-none',
+          'text-2xs leading-none',
           node.status === 'pending' ? 'text-muted-foreground/50' : 'text-muted-foreground',
         )}
       >
@@ -197,14 +197,14 @@ function CheckpointStepNode({
       <div className="flex h-4 items-center justify-center">{dot}</div>
       <span
         className={cn(
-          'text-center text-[10px] leading-none',
+          'text-center text-2xs leading-none',
           status === 'pending' ? 'text-muted-foreground/40' : 'text-muted-foreground',
         )}
       >
         {label}
       </span>
       {sublabel && (
-        <span className="text-center text-[9px] leading-none text-muted-foreground/70">
+        <span className="text-center text-3xs leading-none text-muted-foreground/70">
           {sublabel}
         </span>
       )}
@@ -295,13 +295,13 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
       <PreviewImages images={previewImages} />
 
       {card.preview?.caption && (
-        <p className="line-clamp-2 text-[13px] leading-relaxed text-foreground text-pretty">
+        <p className="line-clamp-2 text-sm leading-relaxed text-foreground text-pretty">
           {card.preview.caption}
         </p>
       )}
 
       {card.status === 'failed' && card.error?.message && (
-        <p className="line-clamp-2 text-[12px] text-destructive/80">{card.error.message}</p>
+        <p className="line-clamp-2 text-sm text-destructive/80">{card.error.message}</p>
       )}
     </AgentArtifactCard>
   );

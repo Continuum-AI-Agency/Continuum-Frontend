@@ -141,7 +141,7 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
 
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       {allScalar ? (
         <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
           {entries.map(([key, val]) => (
@@ -154,7 +154,7 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
       ) : isScalar(value) ? (
         <p className="break-words text-xs text-foreground">{scalarText(value)}</p>
       ) : (
-        <pre className="max-h-56 overflow-auto rounded-md border border-border bg-background/60 p-2 text-[11px] leading-relaxed text-foreground">
+        <pre className="max-h-56 overflow-auto rounded-md border border-border bg-background/60 p-2 text-xs leading-relaxed text-foreground">
           {JSON.stringify(value, null, 2)}
         </pre>
       )}

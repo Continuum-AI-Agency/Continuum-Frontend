@@ -5,6 +5,7 @@ import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrg
 import { useOrganicInsights } from "@/hooks/useOrganicInsights";
 import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
 import { InsightsList, type InsightListItem } from "@/components/dashboard/datatable/InsightsList";
+import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
 
 const RANGE_PRESET = "last_7d" as const;
 
@@ -48,6 +49,7 @@ export function OrganicInsightsList({
     <InsightsList
       title="Insights"
       items={items}
+      headerAction={<ModuleShortcutLink href="/organic?tab=metrics" label="Metrics" />}
       isLoading={isLoading && items.length === 0}
       emptyState={
         integrationAccountId

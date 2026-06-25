@@ -52,7 +52,7 @@ export function AdSnapshotGrid({
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {items.map((entry) => (
-        <AdSnapshotCard key={entry.snapshotId} entry={entry} inspiration={inspiration} />
+        <AdSnapshotCard key={entry.snapshotId} entry={entry} inspiration={inspiration} brandId={brandId} />
       ))}
     </div>
   );

@@ -11,7 +11,8 @@ import {
   WalletIcon,
 } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { SectionHeader } from "@/components/shared/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccountInsights } from "@/hooks/useAccountInsights";
@@ -110,17 +111,21 @@ export function AccountInsightsPanel({
 
   return (
     <Card className="overflow-hidden border-border/70">
-      <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/20 px-3 py-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <BarChart3Icon className="size-4 text-muted-foreground" />
-          Account Insights
-        </CardTitle>
-        <div className="flex items-center gap-2">
-          {stalenessLabel && (
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+      <SectionHeader
+        title={
+          <span className="flex items-center gap-2">
+            <BarChart3Icon className="size-4 text-muted-foreground" />
+            Account Insights
+          </span>
+        }
+        meta={
+          stalenessLabel ? (
+            <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">
               {stalenessLabel}
             </span>
-          )}
+          ) : null
+        }
+        action={
           <Button
             variant="ghost"
             size="sm"
@@ -132,8 +137,8 @@ export function AccountInsightsPanel({
               className={isLoading ? "size-3.5 animate-spin" : "size-3.5"}
             />
           </Button>
-        </div>
-      </CardHeader>
+        }
+      />
 
       <CardContent className="p-2">
         <div className="max-h-[clamp(220px,34svh,420px)] overflow-y-auto">

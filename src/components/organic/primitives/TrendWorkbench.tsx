@@ -172,7 +172,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
 
   if (query.isLoading) {
     return (
-      <div className="flex items-center gap-2 px-1 py-2 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" /> Loading source signals\u2026
       </div>
     )
@@ -180,7 +180,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
 
   if (query.isError) {
     return (
-      <p className="px-1 py-2 text-[11px] text-muted-foreground">
+      <p className="px-1 py-2 text-xs text-muted-foreground">
         Could not load source signals.
       </p>
     )
@@ -189,7 +189,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
   const citations = query.data ?? []
   if (citations.length === 0) {
     return (
-      <p className="px-1 py-2 text-[11px] text-muted-foreground">
+      <p className="px-1 py-2 text-xs text-muted-foreground">
         No source signals — likely a synthesis-only insight.
       </p>
     )
@@ -203,7 +203,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
         return (
           <li key={citation.id} className="flex flex-col gap-1 px-1 py-1.5">
             <div className="flex items-start justify-between gap-2">
-              <p className="line-clamp-2 text-[11px] text-foreground">
+              <p className="line-clamp-2 text-xs text-foreground">
                 {citation.signalTitle ?? citation.rationale ?? host ?? "Untitled signal"}
               </p>
               {citation.sourceUrl ? (
@@ -218,7 +218,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
                 </a>
               ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-muted-foreground">
               {citation.platform ? <span className="uppercase tracking-wide">{citation.platform}</span> : null}
               {host ? <span>{host}</span> : null}
               {relative ? <span>{relative}</span> : null}
@@ -315,11 +315,11 @@ const TrendTableRow = React.memo(function TrendTableRow({
         </TableCell>
         <TableCell className="align-top">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-2xs uppercase tracking-wide text-muted-foreground">
               {trendType}
             </span>
             {confidenceLabel ? (
-              <span className="text-[10px] tabular-nums text-muted-foreground">
+              <span className="text-2xs tabular-nums text-muted-foreground">
                 conf <span className="font-medium text-foreground">{confidenceLabel}</span>
               </span>
             ) : null}
@@ -335,7 +335,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
                 side="right"
                 align="start"
                 sideOffset={12}
-                className="w-80 space-y-2 text-[11px] leading-relaxed"
+                className="w-80 space-y-2 text-xs leading-relaxed"
               >
                 {meta?.relevanceToBrand ? (
                   <p className="text-foreground">{meta.relevanceToBrand}</p>
@@ -344,7 +344,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
                   <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
                     {recommended.slice(0, 3).map((rec) => (
                       <React.Fragment key={`${trend.id}-${rec.platform}`}>
-                        <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <dt className="text-2xs uppercase tracking-wide text-muted-foreground">
                           {rec.platform}
                         </dt>
                         <dd className="text-foreground">{rec.reason}</dd>
@@ -375,18 +375,18 @@ const TrendTableRow = React.memo(function TrendTableRow({
           ) : (
             title
           )}
-          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
             {trend.summary}
           </p>
         </TableCell>
         <TableCell className="align-top">
-          <span className="inline-flex items-center gap-1.5 text-[11px] capitalize text-foreground">
+          <span className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground">
             <span className={cn("h-1.5 w-1.5 rounded-full", MOMENTUM_DOT_TONE[trend.momentum])} />
             {trend.momentum}
           </span>
         </TableCell>
         <TableCell className="align-top whitespace-normal">
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium tracking-wide text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-2xs font-medium tracking-wide text-muted-foreground">
             {trend.platforms.map((platform) => (
               <span key={`${trend.id}:${platform}`} className="uppercase">
                 {PLATFORM_INITIAL[platform] ?? PLATFORM_DISPLAY_NAME[platform] ?? platform}
@@ -400,7 +400,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
             ) : null}
           </div>
         </TableCell>
-        <TableCell className="align-top whitespace-normal text-[11px] text-muted-foreground">
+        <TableCell className="align-top whitespace-normal text-xs text-muted-foreground">
           {tagsDisplay.length > 0 ? (
             <span>
               {tagsDisplay.map((tag, index) => (
@@ -442,19 +442,19 @@ const TrendTableRow = React.memo(function TrendTableRow({
           <TableCell colSpan={7} className="px-3 py-2">
             <Tabs defaultValue="why" className="w-full">
                   <TabsList className="h-7 gap-1 bg-transparent p-0">
-                    <TabsTrigger value="why" className="h-7 px-2 text-[10px]">
+                    <TabsTrigger value="why" className="h-7 px-2 text-2xs">
                       Why
                     </TabsTrigger>
-                    <TabsTrigger value="signals" className="h-7 px-2 text-[10px]">
+                    <TabsTrigger value="signals" className="h-7 px-2 text-2xs">
                       Signals
                     </TabsTrigger>
-                    <TabsTrigger value="distribution" className="h-7 px-2 text-[10px]">
+                    <TabsTrigger value="distribution" className="h-7 px-2 text-2xs">
                       Distribution
                     </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="why" className="mt-2 space-y-1.5 text-[11px] leading-relaxed">
+                  <TabsContent value="why" className="mt-2 space-y-1.5 text-xs leading-relaxed">
                     {meta?.niche ? (
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <p className="text-2xs uppercase tracking-wide text-muted-foreground">
                         {meta.niche}
                       </p>
                     ) : null}
@@ -473,7 +473,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
                       </p>
                     ) : null}
                     {signalWindow ? (
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <p className="text-2xs uppercase tracking-wide text-muted-foreground">
                         Signal window: {signalWindow}
                       </p>
                     ) : null}
@@ -493,17 +493,17 @@ const TrendTableRow = React.memo(function TrendTableRow({
                         enabled={expanded}
                       />
                     ) : (
-                      <p className="px-1 py-2 text-[11px] text-muted-foreground">
+                      <p className="px-1 py-2 text-xs text-muted-foreground">
                         Source signals are unavailable without an active brand.
                       </p>
                     )}
                   </TabsContent>
                   <TabsContent value="distribution" className="mt-2">
                     {recommended.length > 0 ? (
-                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px] leading-relaxed">
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs leading-relaxed">
                         {recommended.map((rec) => (
                           <React.Fragment key={`${trend.id}-dist-${rec.platform}`}>
-                            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <dt className="text-2xs uppercase tracking-wide text-muted-foreground">
                               {rec.platform}
                             </dt>
                             <dd className="text-foreground">{rec.reason}</dd>
@@ -511,11 +511,11 @@ const TrendTableRow = React.memo(function TrendTableRow({
                         ))}
                       </dl>
                     ) : meta?.recommendedPlatforms && meta.recommendedPlatforms.length > 0 ? (
-                      <p className="text-[11px] text-foreground">
+                      <p className="text-xs text-foreground">
                         Recommended: {meta.recommendedPlatforms.join(", ")}
                       </p>
                     ) : (
-                      <p className="px-1 py-2 text-[11px] text-muted-foreground">
+                      <p className="px-1 py-2 text-xs text-muted-foreground">
                         No platform recommendations were captured.
                       </p>
                     )}
@@ -752,7 +752,7 @@ export function TrendWorkbench({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Trends Workbench
           </p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Context: {activePlatformLabel} • type `{typeFilter}` • signal `{momentumFilter}` • type `/` for presets
           </p>
         </div>
@@ -763,7 +763,7 @@ export function TrendWorkbench({
               type="button"
               variant={trends.length === 0 ? "default" : "ghost"}
               size="sm"
-              className="h-7 px-2 text-[10px]"
+              className="h-7 px-2 text-2xs"
               onClick={onFetch}
               disabled={isFetching}
             >
@@ -777,7 +777,7 @@ export function TrendWorkbench({
               {isFetching ? "Generating…" : trends.length === 0 ? "Generate Trends" : "Refresh"}
             </Button>
           ) : null}
-          <Badge variant="outline" className="shrink-0 text-[10px] uppercase tracking-wide">
+          <Badge variant="outline" className="shrink-0 text-2xs uppercase tracking-wide">
             {selectedLabel}
           </Badge>
         </div>

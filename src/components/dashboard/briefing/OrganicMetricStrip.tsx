@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
 import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
-import { StatCard, StatCardSkeleton } from "@/components/dashboard/datatable/StatCard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MetricStrip, type MetricStripItem } from "@/components/shared/MetricStrip";
 
 const RANGE_PRESET = "last_7d" as const;
 
@@ -15,7 +16,7 @@ type AnalyticsState =
   | { status: "error" }
   | { status: "success"; data: Awaited<ReturnType<typeof fetchOrganicAnalytics>> };
 
-type OrganicStatCardsProps = {
+type OrganicMetricStripProps = {
   brandId: string;
   accounts: InstagramAccountOption[];
   youtubeAccounts?: InstagramAccountOption[];
@@ -25,10 +26,10 @@ function formatCompact(value: number): string {
   return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
-// The KPI header for the organic dashboard: reach, accounts engaged, and hook
-// rate over the last 7 days, each with its period-over-period delta and a real
-// daily bar series. One lightweight account-scope analytics call.
-export function OrganicStatCards({ brandId, accounts, youtubeAccounts = [] }: OrganicStatCardsProps) {
+// The headline KPIs for the organic dashboard — reach, accounts engaged, and hook
+// rate over the last 7 days, each with its period-over-period delta — rendered as
+// a quiet inline strip under the Overview header. One account-scope analytics call.
+export function OrganicMetricStrip({ brandId, accounts, youtubeAccounts = [] }: OrganicMetricStripProps) {
   const resolved = resolveOrganicAccount(brandId, accounts, youtubeAccounts);
   const integrationAccountId = resolved?.account.integrationAccountId ?? null;
   const platform: Platform = resolved?.platform ?? "instagram";
@@ -60,49 +61,27 @@ export function OrganicStatCards({ brandId, accounts, youtubeAccounts = [] }: Or
     };
   }, [brandId, integrationAccountId, platform]);
 
-  const cards = useMemo(() => {
-    if (state.status !== "success") return null;
-    const { metrics, comparison, trends } = state.data;
+  const items = useMemo<MetricStripItem[]>(() => {
+    if (state.status !== "success") return [];
+    const { metrics, comparison } = state.data;
     const cmp = comparison ?? {};
-    const series = trends ?? [];
     return [
-      {
-        label: "Reach",
-        value: formatCompact(metrics.reach ?? 0),
-        deltaPct: cmp.reach?.percentageChange,
-        series: series.map((point) => point.reach ?? 0),
-      },
+      { label: "Reach", value: formatCompact(metrics.reach ?? 0), deltaPct: cmp.reach?.percentageChange },
       {
         label: "Accounts engaged",
         value: formatCompact(metrics.accountsEngaged ?? 0),
         deltaPct: cmp.accountsEngaged?.percentageChange,
-        series: series.map((point) => point.accountsEngaged ?? 0),
       },
       {
         label: "Hook rate",
         value: typeof metrics.hookRate === "number" ? `${Math.round(metrics.hookRate)}%` : "—",
         deltaPct: cmp.hookRate?.percentageChange,
-        series: undefined,
       },
     ];
   }, [state]);
 
   if (state.status === "idle" || state.status === "error") return null;
+  if (state.status === "loading") return <Skeleton className="h-4 w-72" />;
 
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {cards
-        ? cards.map((card) => (
-            <StatCard
-              key={card.label}
-              label={card.label}
-              value={card.value}
-              deltaPct={card.deltaPct}
-              series={card.series}
-              live
-            />
-          ))
-        : Array.from({ length: 3 }).map((_, index) => <StatCardSkeleton key={index} />)}
-    </div>
-  );
+  return <MetricStrip items={items} live />;
 }

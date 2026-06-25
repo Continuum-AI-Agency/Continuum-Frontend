@@ -16,8 +16,8 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
+import { SectionHeader } from "@/components/shared/SectionHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -157,21 +157,15 @@ export function WorkspacePanel({
             isGenerationSidebar && "flex min-h-0 flex-1 flex-col"
           )}
         >
-        <CardHeader className="border-b border-border/50 px-3 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <CardDescription className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Generation Control
-              </CardDescription>
-              <CardTitle className="text-sm font-semibold text-foreground">
-                Weekly Content Initiation
-              </CardTitle>
-            </div>
-            <div className="rounded border border-primary/25 bg-primary/10 px-2 py-1 font-mono text-[10px] text-primary">
+        <SectionHeader
+          eyebrow="Generation Control"
+          title="Weekly Content Initiation"
+          meta={
+            <div className="rounded border border-primary/25 bg-primary/10 px-2 py-1 font-mono text-2xs text-primary">
               {selectedTrendIds.length}/{maxTrendSelections ?? 5} trends
             </div>
-          </div>
-        </CardHeader>
+          }
+        />
 
         <CardContent
           className={cn(
@@ -181,7 +175,7 @@ export function WorkspacePanel({
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Language</Label>
+              <Label className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">Language</Label>
               <Input
                 value={language}
                 onChange={(event) => setLanguage(event.target.value)}
@@ -190,15 +184,15 @@ export function WorkspacePanel({
               />
             </div>
             <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Platforms</Label>
-              <div className="flex h-8 items-center rounded-md border border-input bg-background px-2 font-mono text-[10px] text-foreground">
+              <Label className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">Platforms</Label>
+              <div className="flex h-8 items-center rounded-md border border-input bg-background px-2 font-mono text-2xs text-foreground">
                 Instagram, LinkedIn
               </div>
             </div>
           </div>
 
           <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">User Prompt</Label>
+            <Label className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">User Prompt</Label>
             <Textarea
               value={userPrompt}
               onChange={(event) => setUserPrompt(event.target.value)}
@@ -208,7 +202,7 @@ export function WorkspacePanel({
           </div>
 
           <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Additional Guidance</Label>
+            <Label className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">Additional Guidance</Label>
             <Textarea
               value={generationPrompt}
               onChange={(event) => setGenerationPrompt(event.target.value)}
@@ -284,7 +278,7 @@ export function WorkspacePanel({
             </Button>
           </div>
 
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
             {seedCount > 0 ? `${seedCount} placeholders in queue` : "No placeholders yet"}
           </p>
         </CardContent>
@@ -293,16 +287,14 @@ export function WorkspacePanel({
 
       {showPreview ? (
         <Card className="relative z-10 min-h-0 flex-1 gap-0 border border-border/60 bg-card/85 py-0 shadow-none">
-        <CardHeader className="border-b border-border/50 px-3 py-2">
-          <div className="flex items-center justify-between">
-            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">
-              Selected Post
-            </CardDescription>
-            {selectedDraft ? (
-              <p className="font-mono text-[10px] text-foreground">{selectedDraft.timeLabel}</p>
-            ) : null}
-          </div>
-        </CardHeader>
+        <SectionHeader
+          eyebrow="Selected Post"
+          meta={
+            selectedDraft ? (
+              <p className="font-mono text-2xs text-foreground">{selectedDraft.timeLabel}</p>
+            ) : null
+          }
+        />
         <CardContent className="flex-1 min-h-0 px-2 py-2">
           <div className="h-full min-h-[240px] overflow-hidden rounded-lg border border-border/60 bg-muted/20">
             {selectedDraft ? (
@@ -339,8 +331,8 @@ export function WorkspacePanel({
                   key={day.id}
                   className="rounded-md border border-border/60 bg-muted/30 px-2 py-2"
                 >
-                  <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">{day.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{day.dateLabel}</p>
+                  <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">{day.label}</p>
+                  <p className="text-xs text-muted-foreground">{day.dateLabel}</p>
                   <p className="mt-1 text-xs font-semibold text-foreground">{day.draftCount} posts</p>
                 </div>
               ))}
@@ -357,17 +349,17 @@ export function WorkspacePanel({
               Unscheduled Pool
             </CardDescription>
             <div className="flex items-center gap-2">
-              <p className="font-mono text-[10px] text-muted-foreground">{unscheduledDrafts.length} drafts</p>
+              <p className="font-mono text-2xs text-muted-foreground">{unscheduledDrafts.length} drafts</p>
               <RelativeTime
                 className="gap-0"
                 defaultTime={new Date()}
                 timeFormatOptions={{ hour: "2-digit", minute: "2-digit" }}
               >
                 <RelativeTimeZone className="justify-start gap-1" zone={localTimeZone}>
-                  <RelativeTimeZoneLabel className="h-4 rounded-sm bg-muted px-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+                  <RelativeTimeZoneLabel className="h-4 rounded-sm bg-muted px-1 text-3xs uppercase tracking-wide text-muted-foreground">
                     Local
                   </RelativeTimeZoneLabel>
-                  <RelativeTimeZoneDisplay className="pl-0 text-[10px] text-foreground" />
+                  <RelativeTimeZoneDisplay className="pl-0 text-2xs text-foreground" />
                 </RelativeTimeZone>
               </RelativeTime>
             </div>

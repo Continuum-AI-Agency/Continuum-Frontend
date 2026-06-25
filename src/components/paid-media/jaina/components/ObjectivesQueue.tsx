@@ -54,7 +54,7 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
                   {objective.title}
                 </p>
                 {objective.description ? (
-                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/60">
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground/60">
                     {objective.description}
                   </p>
                 ) : null}

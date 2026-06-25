@@ -32,7 +32,7 @@ export function OnboardingShell({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <ContinuumWordmark />
           <div className="flex items-center gap-3">
-            <p className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
+            <p className="hidden text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
               Get set up
             </p>
             {headerRight}
@@ -47,7 +47,7 @@ export function OnboardingShell({
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {onStartOver ? <StartOverButton onConfirm={onStartOver} disabled={startOverDisabled} /> : null}
-            <span className="truncate text-[12px] leading-snug text-muted-foreground">{bottomHint}</span>
+            <span className="truncate text-sm leading-snug text-muted-foreground">{bottomHint}</span>
           </div>
           <div className="flex items-center gap-2.5">{bottomActions}</div>
         </div>

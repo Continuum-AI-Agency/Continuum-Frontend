@@ -214,11 +214,15 @@ const isTextProducingSource = (node: GraphNodeLike): boolean => node.type === "s
 export const isClipSlotHandle = (handleId?: string | null): boolean =>
   typeof handleId === "string" && handleId.startsWith("clip-");
 
-// Timeline Editor (timelineEditor) visual-track handle: `media-<itemId>`. Each
-// handle accepts one video-producing source or one image (still). Distinct from
-// the Video Splicer's `clip-<slotId>` vocabulary so both nodes coexist.
+// Timeline Editor (timelineEditor) input pool: a single multi-connection target
+// handle `media-in` that accepts many video-producing sources and/or images.
+// Connected inputs form a pool the editor's timeline places clips from — each
+// placement references its source node. Distinct from the Video Splicer's
+// per-slot `clip-<slotId>` vocabulary so both nodes coexist.
+export const TIMELINE_MEDIA_INPUT_HANDLE = "media-in";
+export const TIMELINE_MEDIA_POOL_LIMIT = 20;
 export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
-  typeof handleId === "string" && handleId.startsWith("media-");
+  handleId === TIMELINE_MEDIA_INPUT_HANDLE;
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === "string" && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
@@ -273,12 +277,8 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
         .map((slot) => (typeof slot?.id === "string" ? `clip-${slot.id}` : null))
         .filter((handle): handle is string => Boolean(handle));
     }
-    case "timelineEditor": {
-      const items = (node.data as { items?: Array<{ id?: string }> } | undefined)?.items ?? [];
-      return items
-        .map((item) => (typeof item?.id === "string" ? `media-${item.id}` : null))
-        .filter((handle): handle is string => Boolean(handle));
-    }
+    case "timelineEditor":
+      return [TIMELINE_MEDIA_INPUT_HANDLE];
     case "string":
       return ["image", "audio", "document", "video"];
     case "videoDecode":
@@ -308,7 +308,7 @@ export function getTargetHandleConnectionLimit(
   if (node.type === "extendVideo" && targetHandle === "video") return 1;
   if (node.type === "videoDecode" && targetHandle === "video") return 1;
   if (node.type === "videoEditor" && isClipSlotHandle(targetHandle)) return 1;
-  if (node.type === "timelineEditor" && isTimelineMediaHandle(targetHandle)) return 1;
+  if (node.type === "timelineEditor" && isTimelineMediaHandle(targetHandle)) return TIMELINE_MEDIA_POOL_LIMIT;
 
   if (!isVideoGeneratorNode(node)) return undefined;
 
@@ -504,16 +504,13 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
     case "timelineEditor":
       return {
         data: {
-          items: [
-            { id: newSlotId(1), order: 0 },
-            { id: newSlotId(2), order: 1 },
-          ],
+          items: [],
           outputFormat: "mp4",
           videoCodec: "avc",
           audioCodec: "aac",
           committed: false,
         },
-        style: { width: 440, height: 520 },
+        style: { width: 320, height: 260 },
       };
     case "string":
       return { data: { value: "" } };

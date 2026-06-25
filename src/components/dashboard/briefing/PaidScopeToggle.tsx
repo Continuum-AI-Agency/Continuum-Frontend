@@ -31,7 +31,7 @@ export function PaidScopeToggle() {
             aria-selected={active}
             onClick={() => setPaidScope(option.value)}
             className={cn(
-              "h-7 rounded px-2.5 text-[11px] font-medium transition-colors",
+              "h-7 rounded px-2.5 text-xs font-medium transition-colors",
               active ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >

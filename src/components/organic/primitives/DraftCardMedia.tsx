@@ -159,7 +159,7 @@ export function DraftCardMedia({
           className="absolute inset-0 flex items-end p-3"
           style={{ background: `linear-gradient(135deg, ${gradientStart}, ${gradientEnd})` }}
         >
-          <p className="line-clamp-3 text-[11px] font-bold leading-tight text-white/90 drop-shadow-sm">
+          <p className="line-clamp-3 text-xs font-bold leading-tight text-white/90 drop-shadow-sm">
             {draft.creativeIdea || draft.title}
           </p>
         </div>

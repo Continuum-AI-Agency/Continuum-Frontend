@@ -185,7 +185,7 @@ export function LibraryPlacementRail({
         onClick={toggleCollapsed}
         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded-xl"
       >
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Your library
         </span>
         {collapsed ? (
@@ -222,7 +222,7 @@ export function LibraryPlacementRail({
               {assets.length === 0 && loading ? (
                 <RailSkeleton />
               ) : assets.length === 0 ? (
-                <p className="py-3 text-[11px] text-muted-foreground/60">
+                <p className="py-3 text-xs text-muted-foreground/60">
                   {query.trim() ? "No matches." : "Library is empty."}
                 </p>
               ) : (
@@ -258,7 +258,7 @@ export function LibraryPlacementRail({
             <button
               type="button"
               onClick={() => setBrowseAllOpen((v) => !v)}
-              className="text-[11px] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
+              className="text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
             >
               {browseAllOpen ? "Collapse" : "Browse all"}
             </button>

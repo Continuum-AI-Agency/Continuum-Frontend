@@ -59,7 +59,7 @@ type OrganicListViewProps = {
 function PlatformBadge({ platform }: { platform: string }) {
   const colorClass = PLATFORM_BADGE_COLORS[platform] ?? "bg-muted text-muted-foreground"
   return (
-    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", colorClass)}>
+    <span className={cn("rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide", colorClass)}>
       {platform.slice(0, 2).toUpperCase()}
     </span>
   )
@@ -76,7 +76,7 @@ function StatusBadge({ status }: { status: OrganicDraftStatus }) {
   }
   const { label, class: cls } = config[status] ?? config.draft
   return (
-    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cls)}>
+    <span className={cn("rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide", cls)}>
       {label}
     </span>
   )
@@ -85,7 +85,7 @@ function StatusBadge({ status }: { status: OrganicDraftStatus }) {
 /** Provenance tag for drafts that belong to a bulk content plan. */
 function PlannedBadge() {
   return (
-    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-blue-500/15 text-blue-600 dark:text-blue-400">
+    <span className="rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-blue-500/15 text-blue-600 dark:text-blue-400">
       Planned
     </span>
   )
@@ -246,7 +246,7 @@ const BacklogRow = React.memo(function BacklogRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Backlog</span>
+        <span className="text-2xs uppercase tracking-wide text-muted-foreground/60">Backlog</span>
         <button
           type="button"
           aria-label="Remove"
@@ -556,7 +556,7 @@ export function OrganicListView({
                 <span className={cn("text-xs font-semibold uppercase tracking-wide", colorClass)}>
                   {label}
                 </span>
-                <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                <Badge variant="outline" className="h-4 px-1.5 text-2xs">
                   {count}
                 </Badge>
               </div>

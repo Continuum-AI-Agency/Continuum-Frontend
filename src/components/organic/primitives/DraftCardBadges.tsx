@@ -24,7 +24,7 @@ const PLATFORM_ABBR: Record<string, string> = {
 export function PlatformBadge({ platform }: { platform: OrganicPlatformTag }) {
   const platformKey = platform as "instagram" | "linkedin" | "facebook" | "tiktok" | "youtube";
   return (
-    <span className={cn(platformBadgeVariants({ platform: platformKey }), "px-1.5 py-0 text-[9px]")}>
+    <span className={cn(platformBadgeVariants({ platform: platformKey }), "px-1.5 py-0 text-3xs")}>
       {PLATFORM_ABBR[platform] ?? platform.slice(0, 2).toUpperCase()}
     </span>
   );
@@ -41,7 +41,7 @@ export function StatusBadge({
 }) {
   if (format === "Newsletter") {
     return (
-      <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+      <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-2xs font-bold uppercase tracking-wider text-destructive">
         Newsletter
       </span>
     );
@@ -97,7 +97,7 @@ export function StatusDot({
           <TooltipTrigger asChild>
             <span className="h-2 w-2 flex-shrink-0 rounded-full bg-destructive" />
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-[10px]">
+          <TooltipContent side="top" className="text-2xs">
             Newsletter
           </TooltipContent>
         </Tooltip>
@@ -120,7 +120,7 @@ export function StatusDot({
             aria-label={config.label}
           />
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-[10px]">
+        <TooltipContent side="top" className="text-2xs">
           {config.label}
         </TooltipContent>
       </Tooltip>

@@ -10,7 +10,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
-import { PaidStatCards } from "@/components/dashboard/briefing/PaidStatCards";
+import { PaidMetricStrip } from "@/components/dashboard/briefing/PaidMetricStrip";
 import { PaidKpiSelect } from "@/components/dashboard/briefing/PaidKpiSelect";
 import { PaidScopeToggle } from "@/components/dashboard/briefing/PaidScopeToggle";
 import { PaidInsightsList } from "@/components/dashboard/briefing/PaidInsightsList";
@@ -20,7 +20,6 @@ import { useDashboardPrefsStore } from "@/stores/dashboardPrefs";
 
 const PAID_SELECTION_KEY = "paid";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
-import { NorthStarActions } from "@/components/dashboard/briefing/NorthStarActions";
 import { PaidEntityTable } from "@/components/dashboard/briefing/PaidEntityTable";
 import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
 import {
@@ -276,14 +275,16 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   return (
     <div className="flex min-w-0 flex-col gap-[var(--app-shell-gap)]">
       <DashboardWarmOnMount brandId={brandId} isCold={false} />
-      <PaidStatCards brandId={brandId} adAccountId={selectedAccountId} />
       <section className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
           <p className="text-xs text-muted-foreground">Your paid performance at a glance. Pick your next move.</p>
         </div>
-        <NorthStarActions />
-        <div data-tour-id="dashboard-top-ads" className="grid grid-cols-1 gap-[var(--dashboard-section-gap)] lg:grid-cols-2">
+        <PaidMetricStrip brandId={brandId} adAccountId={selectedAccountId} />
+        <div
+          data-tour-id="dashboard-top-ads"
+          className="grid grid-cols-1 gap-[var(--dashboard-section-gap)] lg:grid-cols-2 lg:[&>*]:min-h-[var(--dashboard-min-panel-height)]"
+        >
           <div className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
             <div className="flex items-center justify-between gap-2">
               <PaidScopeToggle />

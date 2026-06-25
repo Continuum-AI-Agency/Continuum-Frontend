@@ -41,7 +41,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
       <AgentCardEyebrow
         label="Bulk plan"
         right={
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
             {placements.length} pieces · {schedule.horizonWeeks} wks
           </span>
         }
@@ -53,7 +53,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
         <MetaRow items={strategyBrief.pillars.map((p) => p.name)} />
         <MetaRow items={formatMix(plan)} />
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11.5px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             ~{schedule.postsPerDayPerPlatform}/day/platform
           </span>
           {strategyBrief.platformSplit.map((s) => (
@@ -65,7 +65,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="mt-3 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="mt-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         {expanded ? 'Hide' : 'Show'} {placements.length} scheduled pieces
       </button>
@@ -78,7 +78,7 @@ export function BulkPlanCard({ plan, onApproveAction, onRejectAction }: Props) {
                 <PlatformTag platform={spec.platform} />
                 <MetaRow items={[spec.format, spec.dayId ?? 'unscheduled']} />
               </div>
-              <p className="truncate text-[12px] text-foreground/80">{spec.angle}</p>
+              <p className="truncate text-sm text-foreground/80">{spec.angle}</p>
             </div>
           ))}
         </div>

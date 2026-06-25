@@ -23,7 +23,7 @@ export function Message({ role, children }: MessageProps) {
     >
       <div
         className={cn(
-          "mt-1 size-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-medium select-none",
+          "mt-1 size-7 shrink-0 rounded-full flex items-center justify-center text-xs font-medium select-none",
           isUser ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
         )}
         aria-hidden="true"
@@ -32,7 +32,7 @@ export function Message({ role, children }: MessageProps) {
       </div>
       <div
         className={cn(
-          "px-4 py-2.5 text-[15px] leading-relaxed shadow-sm",
+          "px-4 py-2.5 text-base leading-relaxed shadow-sm",
           isUser
             ? "max-w-[85%] rounded-2xl rounded-tr-sm bg-muted text-foreground font-medium"
             : "min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-border/50 bg-card/80 text-foreground"

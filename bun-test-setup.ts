@@ -15,6 +15,11 @@ const window = new Window({
 global.window = window as any;
 global.document = window.document as any;
 global.navigator = window.navigator as any;
+// Base Element/SVGElement globals: motion-dom does `instanceof Element` during
+// animation measurement, so without these a `ReferenceError: Element is not
+// defined` leaks out of the frameloop and fails unrelated specs.
+global.Element = window.Element as any;
+global.SVGElement = window.SVGElement as any;
 global.HTMLElement = window.HTMLElement as any;
 global.HTMLInputElement = window.HTMLInputElement as any;
 global.HTMLTextAreaElement = window.HTMLTextAreaElement as any;

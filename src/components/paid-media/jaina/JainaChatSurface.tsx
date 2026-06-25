@@ -2971,7 +2971,7 @@ export function JainaChatSurface({
                                     ) : (
                                       <QueueItemContent>{queuedMessage.content}</QueueItemContent>
                                     )}
-                                    <div className="text-[11px] text-muted-foreground/90">
+                                    <div className="text-xs text-muted-foreground/90">
                                       #{index + 1} in queue
                                       {queuedMessage.canvas ? " • plan mode" : ""}
                                       {queuedMessage.forceReportArtifact ? " • Jaina Pro" : ""}

@@ -164,7 +164,7 @@ function resolveStoryboardFrames(draft: OrganicCalendarDraft): StoryboardFrame[]
 function StoryboardPreview({ frames, alt }: { frames: StoryboardFrame[]; alt: string }) {
   return (
     <div className="flex w-full flex-col items-center gap-2 px-4 py-5 text-center">
-      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider text-primary">
         Blueprint ready
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
@@ -184,7 +184,7 @@ function StoryboardPreview({ frames, alt }: { frames: StoryboardFrame[]; alt: st
           </div>
         ))}
       </div>
-      <p className="text-[11px] font-medium text-muted-foreground">
+      <p className="text-xs font-medium text-muted-foreground">
         Generate final media or use your own creative
       </p>
     </div>
@@ -229,6 +229,7 @@ function InteractiveCarouselMediaArea({
   onSelectSlide,
   placement,
   onAddSlideRequest,
+  onReplaceSlideRequest,
 }: {
   draft: OrganicCalendarDraft
   alt: string
@@ -244,6 +245,7 @@ function InteractiveCarouselMediaArea({
   onSelectSlide: (i: number) => void
   placement?: ReturnType<typeof useDraftMediaPlacement>
   onAddSlideRequest?: () => void
+  onReplaceSlideRequest?: (position: number) => void
 }) {
   const slides = resolveCarouselSlides(draft)
   const total = slides.length
@@ -310,7 +312,7 @@ function InteractiveCarouselMediaArea({
             />
 
             {total > 1 && (
-              <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white tabular-nums">
+              <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white tabular-nums">
                 {(activeSlide.slideIndex ?? 0) + 1}/{total}
               </div>
             )}
@@ -376,6 +378,7 @@ function InteractiveCarouselMediaArea({
           onSelectSlide={onSelectSlide}
           placement={placement}
           onAddRequest={onAddSlideRequest ?? onActivate}
+          onReplaceRequest={onReplaceSlideRequest}
           className="border-b border-border/60 px-2"
         />
       )}
@@ -404,7 +407,7 @@ function LifecyclePill({ status }: { status: OrganicCalendarDraft["status"] }) {
             {i > 0 && <div className="h-px flex-1 bg-border/50" />}
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                "rounded-full px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider",
                 isActive && status === "failed"
                   ? "border border-destructive/40 bg-destructive/10 text-destructive"
                   : isActive
@@ -454,13 +457,13 @@ function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
           if (e.key === "Enter") { e.preventDefault(); handleSubmit() }
         }}
         placeholder="Add hashtag..."
-        className="h-6 flex-1 rounded border border-border/50 bg-transparent px-2 text-[10px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-6 flex-1 rounded border border-border/50 bg-transparent px-2 text-2xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
       />
       <button
         type="button"
         onClick={handleSubmit}
         disabled={!value.trim()}
-        className="rounded bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
+        className="rounded bg-muted/60 px-2 py-0.5 text-2xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
       >
         Add
       </button>
@@ -601,7 +604,7 @@ function ContextualPanel({
   return (
     <div className="rounded-xl border border-border/70 bg-background/90 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </p>
         <button
@@ -632,14 +635,14 @@ function HashtagTiers({
         if (!tags?.length) return null
         return (
           <div key={tier} className="space-y-1">
-            <p className="text-[10px] font-medium text-muted-foreground/70">
+            <p className="text-2xs font-medium text-muted-foreground/70">
               {tier === "high" ? "High Competition" : tier === "medium" ? "Medium Competition" : "Low Competition"}
             </p>
             <div className="flex flex-wrap gap-1">
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                  className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-2xs text-muted-foreground"
                 >
                   #{tag.replace(/^#/, "")}
                   <button
@@ -686,7 +689,7 @@ function PreviewHoverActions({
 }) {
   if (!onEditCreativeDirection && !onEditHashtags) return null
   const buttonClass =
-    "flex items-center gap-1 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    "flex items-center gap-1 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
   return (
     <div className="pointer-events-none absolute right-2 top-2 z-30 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/preview:pointer-events-auto group-hover/preview:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
       {onEditCreativeDirection && (
@@ -741,6 +744,11 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
   // Contextual surfaces — nothing is always-on; each reveals on demand.
   const [mediaSelectOpen, setMediaSelectOpen] = React.useState(false)
+  // When the user clicks a slide's "replace" control we stash its position here,
+  // open the shared media picker, and route the next selection through
+  // replaceSlide instead of addSlide. A ref (not state) so the captured position
+  // survives the picker round-trip without re-rendering the strip mid-flow.
+  const replaceTargetRef = React.useRef<number | null>(null)
   const [creativeOpen, setCreativeOpen] = React.useState(false)
   const [hashtagsOpen, setHashtagsOpen] = React.useState(false)
 
@@ -789,6 +797,14 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
     (assets: MediaAsset[]) => {
       if (assets.length === 0) return
       if (isCarouselFormat) {
+        // Replace mode: a slide's replace control set a target position — swap that
+        // one slide and consume the target (extra picks are ignored for replace).
+        const replaceTarget = replaceTargetRef.current
+        if (replaceTarget != null) {
+          replaceTargetRef.current = null
+          placement.replaceSlide(replaceTarget, assets[0])
+          return
+        }
         assets.forEach((asset) => placement.addSlide(asset))
         return
       }
@@ -843,7 +859,12 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
       <MediaSelectPopover
         brandProfileId={brandProfileId}
         open={mediaSelectOpen}
-        onOpenChange={setMediaSelectOpen}
+        onOpenChange={(open) => {
+          // Drop a pending replace target if the picker closes without a pick, so a
+          // cancelled replace can't hijack the next add.
+          if (!open) replaceTargetRef.current = null
+          setMediaSelectOpen(open)
+        }}
         onAttachAssets={handleAttachAssets}
         onGenerate={handleGenerateMedia}
         canGenerate={canGenerate}
@@ -861,7 +882,14 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             activeSlideIndex={activeSlideIndex}
             onSelectSlide={setActiveSlideIndex}
             placement={placement}
-            onAddSlideRequest={() => setMediaSelectOpen(true)}
+            onAddSlideRequest={() => {
+              replaceTargetRef.current = null
+              setMediaSelectOpen(true)
+            }}
+            onReplaceSlideRequest={(position) => {
+              replaceTargetRef.current = position
+              setMediaSelectOpen(true)
+            }}
           />
         }
       />
@@ -905,7 +933,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
         <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2">
           <LifecyclePill status={draft.status} />
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground/50">
               Media
             </span>
             <MediaStagePill mediaStage={resolveDraftMediaStage(draft)} />
@@ -914,7 +942,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             <button
               type="button"
               onClick={placement.undo}
-              className="self-start rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="self-start rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               Undo last media change
             </button>
@@ -923,7 +951,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             <div
               role="alert"
               aria-live="assertive"
-              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-300"
+              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300"
             >
               {placement.error.message}
               <button
@@ -970,7 +998,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               <div className="flex flex-col gap-3">
                 <HyperFramePlayer draft={draft} brandId={brandProfileId ?? ""} />
                 <div className="rounded-xl border border-border/70 bg-background/90 p-3">
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Caption
                   </p>
                   <EditableCaption
@@ -983,7 +1011,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             ) : selectedPlatform === "instagram" ? (
               <div className="overflow-hidden rounded-[2.5rem] border-[5px] border-foreground/10 shadow-2xl">
                 <div className="relative flex items-center justify-center bg-background px-4 pt-3 pb-2">
-                  <span className="absolute left-5 text-[9px] font-bold tabular-nums text-foreground/70">9:41</span>
+                  <span className="absolute left-5 text-3xs font-bold tabular-nums text-foreground/70">9:41</span>
                   <div className="h-5 w-[88px] rounded-full bg-foreground/90" />
                   <div className="absolute right-5 flex items-center gap-1 text-foreground/70">
                     <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
@@ -1045,7 +1073,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
         {showFooter ? (
           <div className="shrink-0 border-t border-border/70 bg-background/90 p-3 flex flex-col gap-2">
             {tokenExpired && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                 Instagram access token expired.{" "}
                 <a
                   href="/settings?section=integrations"
@@ -1058,12 +1086,12 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
             {!isPublished && !readiness.ready && (
               <div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Needed to schedule
                 </p>
                 <ul className="flex flex-col gap-1">
                   {readiness.checks.map((check) => (
-                    <li key={check.id} className="flex items-center gap-2 text-[12px]">
+                    <li key={check.id} className="flex items-center gap-2 text-sm">
                       {check.met ? (
                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                       ) : (
@@ -1128,13 +1156,13 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
             {isPublished && (
               <div className="flex items-center justify-center gap-2 px-4 py-1.5">
-                <span className="text-[12px] text-muted-foreground">Published</span>
+                <span className="text-sm text-muted-foreground">Published</span>
                 {draft.instagram_post_id && (
                   <a
                     href={`https://www.instagram.com/p/${draft.instagram_post_id}/`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[12px] text-primary underline underline-offset-2"
+                    className="text-sm text-primary underline underline-offset-2"
                   >
                     View on Instagram
                   </a>
@@ -1157,9 +1185,9 @@ function InstagramMobilePreview({ draft, onCaptionChange, brandName, platform, m
       <PreviewHoverActions onEditCreativeDirection={onEditCreativeDirection} onEditHashtags={onEditHashtags} />
       <div className="flex items-center p-3 border-b border-border/70">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary/70 via-accent/70 to-secondary/70 p-[2px] flex items-center justify-center text-[10px] font-bold text-foreground">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary/70 via-accent/70 to-secondary/70 p-[2px] flex items-center justify-center text-2xs font-bold text-foreground">
             <div className="flex h-full w-full items-center justify-center rounded-full bg-background">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[8px] text-muted-foreground">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-3xs text-muted-foreground">
                 {initials}
               </div>
             </div>
@@ -1168,7 +1196,7 @@ function InstagramMobilePreview({ draft, onCaptionChange, brandName, platform, m
             <span className="text-sm font-semibold leading-none tracking-tight">
               {displayName}
             </span>
-            <span className="mt-1 text-[10px] text-muted-foreground">Sponsored</span>
+            <span className="mt-1 text-2xs text-muted-foreground">Sponsored</span>
           </div>
         </div>
       </div>
@@ -1215,7 +1243,7 @@ function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, medi
           </div>
           <div>
             <p className="text-sm font-bold tracking-tight">{displayName}</p>
-            <p className="text-[11px] text-muted-foreground">Sponsored · 1h</p>
+            <p className="text-xs text-muted-foreground">Sponsored · 1h</p>
           </div>
         </div>
       </div>
@@ -1234,7 +1262,7 @@ function FacebookFeedPreview({ draft, onCaptionChange, brandName, platform, medi
       {mediaNode}
 
       {/* Engagement bar */}
-      <div className="flex items-center gap-4 border-t border-border/40 px-4 py-2 text-[12px] font-medium text-muted-foreground/40 cursor-default">
+      <div className="flex items-center gap-4 border-t border-border/40 px-4 py-2 text-sm font-medium text-muted-foreground/40 cursor-default">
         <span className="flex items-center gap-1">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" /></svg>
           Like
@@ -1265,7 +1293,7 @@ function LinkedInDesktopPreview({ draft, onCaptionChange, brandName, platform, m
           </div>
           <div>
             <p className="text-sm font-bold tracking-tight">{displayName}</p>
-            <p className="text-[11px] text-muted-foreground">12,450 followers</p>
+            <p className="text-xs text-muted-foreground">12,450 followers</p>
           </div>
         </div>
       </div>
@@ -1284,7 +1312,7 @@ function LinkedInDesktopPreview({ draft, onCaptionChange, brandName, platform, m
       {mediaNode}
 
       {/* Engagement bar */}
-      <div className="flex items-center gap-4 border-t border-border/40 px-4 py-2 text-[12px] font-medium text-muted-foreground/40 cursor-default">
+      <div className="flex items-center gap-4 border-t border-border/40 px-4 py-2 text-sm font-medium text-muted-foreground/40 cursor-default">
         <span className="flex items-center gap-1">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" /></svg>
           Like

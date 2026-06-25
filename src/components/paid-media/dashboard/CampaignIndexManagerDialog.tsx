@@ -124,7 +124,7 @@ export function CampaignIndexManagerDialog({
                       {selected ? <CheckIcon className="h-3 w-3" /> : null}
                     </span>
                     <span className="truncate text-xs">{campaign.name}</span>
-                    <span className="ml-auto text-[10px] uppercase text-muted-foreground">
+                    <span className="ml-auto text-2xs uppercase text-muted-foreground">
                       {campaign.status}
                     </span>
                   </CommandItem>

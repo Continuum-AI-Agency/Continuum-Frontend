@@ -123,7 +123,7 @@ export function CanvasRoomsTabs({
                 <PlusIcon className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" className="border-none bg-violet-900 text-[10px] text-white">
+            <TooltipContent side="bottom" align="center" className="border-none bg-violet-900 text-2xs text-white">
               New Workspace
             </TooltipContent>
           </Tooltip>

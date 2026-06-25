@@ -11,7 +11,7 @@ export function ClarificationBanner({ question, onFocusInput }: ClarificationBan
   return (
     <div className="rounded-xl border-l-2 border-amber-400/60 border border-amber-300/30 bg-amber-50/8 px-4 py-3 space-y-2.5">
       <div className="flex items-center gap-2">
-        <Badge color="amber" variant="soft" className="uppercase text-[10px] tracking-wide shrink-0">
+        <Badge color="amber" variant="soft" className="uppercase text-2xs tracking-wide shrink-0">
           Clarification needed
         </Badge>
       </div>

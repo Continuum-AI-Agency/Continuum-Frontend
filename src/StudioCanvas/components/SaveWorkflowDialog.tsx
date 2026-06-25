@@ -132,9 +132,19 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
             Ready to save {nodes.length} nodes and {edges.length} connections.
           </p>
           {error && <p className="text-xs text-danger">{error}</p>}
+          {!brandProfileId && (
+            <p className="text-xs text-muted-foreground">
+              Select a brand before saving a workflow.
+            </p>
+          )}
 
           <div className="flex justify-end">
-            <Button type="submit" size="sm" disabled={!brandProfileId || isSaving}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!brandProfileId || isSaving}
+              title={!brandProfileId ? 'Select a brand before saving a workflow.' : undefined}
+            >
               {isSaving ? 'Saving...' : 'Save workflow'}
             </Button>
           </div>

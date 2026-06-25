@@ -140,15 +140,15 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             </h3>
             <Separator className="my-1.5 opacity-50" />
             <div className="flex flex-col gap-1">
-              <NodeDescription className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <NodeDescription className="text-2xs font-bold text-muted-foreground uppercase tracking-wider">
                 {OPTIMIZATION_GOALS.find(g => g.value === data.optimizationGoal)?.label || 'CONVERSIONS'}
               </NodeDescription>
               <div className="flex flex-wrap items-center gap-1 mt-1">
-                <Badge variant="secondary" className="text-[8px] px-1 py-0 opacity-80 h-4">
+                <Badge variant="secondary" className="text-3xs px-1 py-0 opacity-80 h-4">
                   {data.billingEvent || 'IMPRESSIONS'}
                 </Badge>
                 {data.bidStrategy && (
-                  <Badge variant="outline" className="text-[8px] px-1 py-0 opacity-80 h-4 border-primary/20">
+                  <Badge variant="outline" className="text-3xs px-1 py-0 opacity-80 h-4 border-primary/20">
                     {BID_STRATEGIES.find(s => s.value === data.bidStrategy)?.label || 'Highest Vol'}
                   </Badge>
                 )}
@@ -161,7 +161,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                     onSave={handleBudgetAmountSave}
                     className="text-xs font-semibold tracking-tight text-foreground/90 cursor-text"
                   />
-                  <span className="text-[8px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-3xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Budget Type
                   </span>
                 </div>
@@ -179,7 +179,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                           handleBudgetTypeChange(type.value);
                         }}
                         className={cn(
-                          "flex-1 rounded-sm px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
+                          "flex-1 rounded-sm px-1.5 py-1 text-3xs font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
                           isActive
                             ? "bg-primary/15 text-foreground"
                             : "text-muted-foreground hover:bg-primary/10"

@@ -102,7 +102,7 @@ export function PostContentCard({ post }: Props) {
               <div className={cn("absolute inset-0 bg-gradient-to-br", gradient)} />
             )}
             {post.rank != null && (
-              <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm leading-none">
+              <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-bold text-amber-300 backdrop-blur-sm leading-none">
                 #{post.rank}
               </span>
             )}
@@ -112,22 +112,22 @@ export function PostContentCard({ post }: Props) {
             <div className="flex items-center justify-between gap-1 min-w-0">
               <PlatformTag platform={platformLabel} />
               {post.format && (
-                <span className="text-[10px] text-muted-foreground capitalize shrink-0">
+                <span className="text-2xs text-muted-foreground capitalize shrink-0">
                   {post.format}
                 </span>
               )}
             </div>
             {post.caption ? (
-              <p className="line-clamp-2 text-[11px] leading-snug text-foreground/80">
+              <p className="line-clamp-2 text-xs leading-snug text-foreground/80">
                 {post.caption}
               </p>
             ) : post.topic ? (
-              <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground italic">
+              <p className="line-clamp-2 text-xs leading-snug text-muted-foreground italic">
                 {post.topic}
               </p>
             ) : null}
             {topMetric && (
-              <p className="text-[11px] text-muted-foreground tabular-nums">
+              <p className="text-xs text-muted-foreground tabular-nums">
                 <span className="font-medium text-foreground/90">
                   {formatMetricValue(topMetric[1])}
                 </span>
@@ -157,7 +157,7 @@ export function PostContentCard({ post }: Props) {
           <div className="flex items-center gap-1.5 flex-wrap">
             <PlatformTag platform={platformLabel} />
             {post.format && (
-              <span className="text-[11px] text-muted-foreground capitalize">
+              <span className="text-xs text-muted-foreground capitalize">
                 {post.format}
               </span>
             )}
@@ -183,7 +183,7 @@ export function PostContentCard({ post }: Props) {
             <div>
               <p
                 className={cn(
-                  "text-[13px] leading-relaxed text-foreground whitespace-pre-line",
+                  "text-sm leading-relaxed text-foreground whitespace-pre-line",
                   !showFullCaption && "line-clamp-4",
                 )}
               >
@@ -193,7 +193,7 @@ export function PostContentCard({ post }: Props) {
                 <button
                   type="button"
                   onClick={() => setShowFullCaption((v) => !v)}
-                  className="mt-1 text-[12px] text-primary hover:underline"
+                  className="mt-1 text-sm text-primary hover:underline"
                 >
                   {showFullCaption ? "Show less" : "Show more"}
                 </button>
@@ -205,10 +205,10 @@ export function PostContentCard({ post }: Props) {
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2 border-t border-border/50">
               {metricEntries.map(([key, value]) => (
                 <div key={key}>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {formatMetricName(key)}
                   </p>
-                  <p className="text-[14px] font-semibold tabular-nums">
+                  <p className="text-base font-semibold tabular-nums">
                     {formatMetricValue(value)}
                   </p>
                 </div>
@@ -221,7 +221,7 @@ export function PostContentCard({ post }: Props) {
               href={post.permalink}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-[12px] text-primary hover:underline pt-1 border-t border-border/50"
+              className="flex items-center gap-1.5 text-sm text-primary hover:underline pt-1 border-t border-border/50"
             >
               <ExternalLink className="h-3 w-3 shrink-0" />
               View on {post.platform ?? "platform"}

@@ -194,7 +194,7 @@ export function CreateSkillFromSelectionDialog({ open, onOpenChange, brandId, no
               />
             </div>
 
-            {error && <p className="text-[12px] text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
         )}
 

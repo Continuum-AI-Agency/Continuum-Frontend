@@ -138,7 +138,7 @@ export const PlannerCell = React.memo(function PlannerCell({
           <div
             className={cn(
               "flex w-full items-center justify-center rounded-lg border border-dashed border-border/80 bg-muted/40 font-semibold uppercase tracking-wide text-muted-foreground",
-              compact ? "h-8 text-[9px]" : "h-16 text-[11px]"
+              compact ? "h-8 text-3xs" : "h-16 text-xs"
             )}
           >
             Soon

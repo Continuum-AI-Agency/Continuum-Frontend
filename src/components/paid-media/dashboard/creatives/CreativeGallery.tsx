@@ -111,11 +111,11 @@ export function CreativeGallery({
           <h3 className="truncate text-sm font-semibold">
             Creatives{focusedAdSetName ? ` · ${focusedAdSetName}` : ""}
           </h3>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Select up to {selectionLimit} ads to overlay ad-level KPI trends.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {loadState === "success" ? (
             <span>
               {visible.length} of {ads.length}

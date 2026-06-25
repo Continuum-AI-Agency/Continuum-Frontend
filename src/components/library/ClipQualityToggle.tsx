@@ -35,7 +35,7 @@ export function ClipQualityToggle({
               onChange(quality)
             }}
             className={cn(
-              "rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums transition-colors disabled:opacity-50",
+              "rounded px-1.5 py-0.5 text-2xs font-medium tabular-nums transition-colors disabled:opacity-50",
               active ? "bg-muted text-foreground" : "text-muted-foreground/70 hover:text-foreground",
             )}
           >

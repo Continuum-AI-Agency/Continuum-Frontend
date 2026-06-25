@@ -25,7 +25,7 @@ export function StartOverButton({ onConfirm, disabled }: StartOverButtonProps) {
           variant="ghost"
           size="sm"
           disabled={disabled}
-          className="gap-1.5 text-[12px] text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          className="gap-1.5 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash className="h-3.5 w-3.5" />
           Start over

@@ -48,14 +48,14 @@ export function CardSurface({
   let body: ReactNode;
   if (isError) {
     body = (
-      <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
+      <div className="flex items-start gap-2 text-sm text-muted-foreground">
         <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
         <span>{errorMessage ?? "Couldn't load this section. We'll keep trying in the background."}</span>
       </div>
     );
   } else if (isSkipped) {
     body = (
-      <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
+      <div className="flex items-start gap-2 text-sm text-muted-foreground">
         <MinusCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
         <span>Section unavailable for this brand.</span>
       </div>
@@ -76,7 +76,7 @@ export function CardSurface({
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
         <div className="flex items-center gap-2">
           {isLoading ? <BreathingDot tone={isError ? "rose" : "emerald"} /> : null}
-          <CardTitle className="text-[14px]">{title}</CardTitle>
+          <CardTitle className="text-base">{title}</CardTitle>
         </div>
         {(chips || badge) ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -84,7 +84,7 @@ export function CardSurface({
             {badge ? (
               <Badge
                 variant="outline"
-                className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 {badge}
               </Badge>
@@ -94,7 +94,7 @@ export function CardSurface({
       </CardHeader>
       <CardContent
         className={cn(
-          "space-y-3 text-[13px] leading-relaxed text-muted-foreground",
+          "space-y-3 text-sm leading-relaxed text-muted-foreground",
           maxBodyHeight ? "overflow-y-auto" : undefined,
         )}
         style={{

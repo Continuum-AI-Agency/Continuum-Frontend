@@ -1821,7 +1821,7 @@ export function CampaignAdSetWorkspace({
 
             <div className="flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-2.5">
               <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
-              <span className="text-[11px] font-medium">Active only</span>
+              <span className="text-xs font-medium">Active only</span>
             </div>
 
             <Button
@@ -1852,7 +1852,7 @@ export function CampaignAdSetWorkspace({
             <ResizablePanel defaultSize={75} minSize={55} className="min-w-0">
             <div className="flex h-full min-h-0 flex-col rounded-md border border-border/70 bg-card p-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
+                <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
                   {selectedCompareSummary ?? "No selection"} · {labelForMetric(campaignMetric)}
                 </span>
               </div>
@@ -1872,13 +1872,13 @@ export function CampaignAdSetWorkspace({
                       )}
                     >
                       <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-[11px] font-medium text-muted-foreground">{card.label}</span>
+                        <span className="text-xs font-medium text-muted-foreground">{card.label}</span>
                         <span className="text-xs font-semibold">{formatMetric(card.metric, card.value)}</span>
                       </div>
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            "text-[10px] font-medium",
+                            "text-2xs font-medium",
                             card.changePct == null
                               ? "text-muted-foreground"
                               : card.changePct >= 0
@@ -1915,7 +1915,7 @@ export function CampaignAdSetWorkspace({
                 {compareChartSeries.map((line) => (
                   <span
                     key={`legend-${line.id}`}
-                    className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px]"
+                    className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-0.5 text-xs"
                   >
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: line.color }} />
                     <span className="truncate">{line.label}</span>
@@ -2117,12 +2117,12 @@ export function CampaignAdSetWorkspace({
                                   onSelectedCampaignChange?.(undefined);
                                 }}
                                 className={cn(
-                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-[11px]",
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-xs",
                                   isAdded ? "bg-sidebar-accent/70" : ""
                                 )}
                               >
                                 <span className="inline-flex min-w-0 items-center gap-1.5">
-                                  <span className="rounded border border-sidebar-border/80 px-1 py-0 text-[9px] uppercase text-sidebar-foreground/70">
+                                  <span className="rounded border border-sidebar-border/80 px-1 py-0 text-3xs uppercase text-sidebar-foreground/70">
                                     IDX
                                   </span>
                                   <span className="truncate font-medium">{entry.index.name}</span>
@@ -2154,7 +2154,7 @@ export function CampaignAdSetWorkspace({
                                   onSelectedCampaignChange?.(campaign.id);
                                 }}
                                 className={cn(
-                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-[11px]",
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-xs",
                                   isAdded ? "bg-sidebar-accent/70" : ""
                                 )}
                               >
@@ -2183,17 +2183,17 @@ export function CampaignAdSetWorkspace({
                   <ResizablePanelGroup orientation="vertical" className={RAIL_HEIGHT_CLASS}>
                     <ResizablePanel defaultSize={indexPanelDefaultSize} minSize={14} maxSize={65}>
                       <SidebarGroup className="pt-1">
-                        <SidebarGroupLabel className="mb-1 flex h-auto items-center justify-between px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                        <SidebarGroupLabel className="mb-1 flex h-auto items-center justify-between px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
                           <span>Indexes</span>
                           <span className="flex items-center gap-1.5 normal-case tracking-normal">
-                            <span className="text-[10px] text-sidebar-foreground/60">Decompose</span>
+                            <span className="text-2xs text-sidebar-foreground/60">Decompose</span>
                             <Switch checked={decomposeIndexes} onCheckedChange={setDecomposeIndexes} />
                           </span>
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                           <ScrollArea className="h-full max-h-[220px] px-1 pb-1">
                             {filteredIndexCards.length === 0 ? (
-                              <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                              <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
                                 No indexes match.
                               </div>
                             ) : (
@@ -2213,7 +2213,7 @@ export function CampaignAdSetWorkspace({
                                               onSelectedCampaignChange?.(undefined);
                                             }}
                                             className={cn(
-                                              "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                              "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-xs",
                                               isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
                                             )}
                                           >
@@ -2265,7 +2265,7 @@ export function CampaignAdSetWorkspace({
                                                   onSelectedCampaignChange?.(campaign.id);
                                                 }}
                                                 className={cn(
-                                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1 text-left text-[11px]",
+                                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1 text-left text-xs",
                                                   campaignAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
                                                 )}
                                               >
@@ -2312,13 +2312,13 @@ export function CampaignAdSetWorkspace({
                     <ResizableHandle className="bg-sidebar-border/70" />
                     <ResizablePanel defaultSize={100 - indexPanelDefaultSize} minSize={30}>
                       <SidebarGroup className="pt-1">
-                        <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                        <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
                           Campaigns
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                           <ScrollArea className="h-full px-1 pb-1">
                             {filteredCampaigns.length === 0 ? (
-                              <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                              <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
                                 No campaigns match.
                               </div>
                             ) : (
@@ -2337,7 +2337,7 @@ export function CampaignAdSetWorkspace({
                                           onSelectedCampaignChange?.(campaign.id);
                                         }}
                                         className={cn(
-                                          "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                          "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-xs",
                                           isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
                                         )}
                                       >
@@ -2380,7 +2380,7 @@ export function CampaignAdSetWorkspace({
                   </ResizablePanelGroup>
                 ) : hasIndexRail ? (
                   <SidebarGroup className="flex-1 min-h-0 pt-1">
-                    <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                    <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
                       Indexes
                     </SidebarGroupLabel>
                     <SidebarGroupContent className="flex flex-1 flex-col min-h-0">
@@ -2398,7 +2398,7 @@ export function CampaignAdSetWorkspace({
                                   onSelectedCampaignChange?.(undefined);
                                 }}
                                 className={cn(
-                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-xs",
                                   isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
                                 )}
                               >
@@ -2415,7 +2415,7 @@ export function CampaignAdSetWorkspace({
                   </SidebarGroup>
                 ) : (
                   <SidebarGroup className="flex-1 min-h-0 pt-1">
-                    <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                    <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
                       Campaigns
                     </SidebarGroupLabel>
                     <SidebarGroupContent className="flex flex-1 flex-col min-h-0">
@@ -2434,7 +2434,7 @@ export function CampaignAdSetWorkspace({
                                   onSelectedCampaignChange?.(campaign.id);
                                 }}
                                 className={cn(
-                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-xs",
                                   isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
                                 )}
                               >
@@ -2505,7 +2505,7 @@ export function CampaignAdSetWorkspace({
                       {isAdViewActive ? `ad level (${selectedAdIds.length}/3)` : "adset level"}
                     </div>
                   </div>
-                  <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
+                  <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
                     {labelForMetric(adSetMetric)}
                   </span>
                 </div>
@@ -2525,13 +2525,13 @@ export function CampaignAdSetWorkspace({
                         )}
                       >
                         <div className="flex items-center justify-between gap-1.5">
-                          <span className="text-[11px] font-medium text-muted-foreground">{card.label}</span>
+                          <span className="text-xs font-medium text-muted-foreground">{card.label}</span>
                           <span className="text-xs font-semibold">{formatMetric(card.metric, card.value)}</span>
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <span
                             className={cn(
-                              "text-[10px] font-medium",
+                              "text-2xs font-medium",
                               card.changePct == null
                                 ? "text-muted-foreground"
                                 : card.changePct >= 0
@@ -2568,7 +2568,7 @@ export function CampaignAdSetWorkspace({
                   {adSetChartSeries.map((line) => (
                     <span
                       key={`adset-legend-${line.id}`}
-                      className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px]"
+                      className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-0.5 text-xs"
                     >
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: line.color }} />
                       <span className="truncate">{line.label}</span>
@@ -2698,17 +2698,17 @@ export function CampaignAdSetWorkspace({
                   className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
                 />
                 <Breadcrumb>
-                  <BreadcrumbList className="text-[11px]">
+                  <BreadcrumbList className="text-xs">
                     <BreadcrumbItem>
-                      <BreadcrumbPage className="text-[11px] text-sidebar-foreground/70">Campaigns</BreadcrumbPage>
+                      <BreadcrumbPage className="text-xs text-sidebar-foreground/70">Campaigns</BreadcrumbPage>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
-                      <BreadcrumbPage className="text-[11px] text-sidebar-foreground/70">{activeScopeLabel}</BreadcrumbPage>
+                      <BreadcrumbPage className="text-xs text-sidebar-foreground/70">{activeScopeLabel}</BreadcrumbPage>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
-                      <BreadcrumbPage className="text-[11px]">Ad Sets</BreadcrumbPage>
+                      <BreadcrumbPage className="text-xs">Ad Sets</BreadcrumbPage>
                     </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
@@ -2718,13 +2718,13 @@ export function CampaignAdSetWorkspace({
 
               <SidebarContent className="gap-0 overflow-hidden pb-2">
                 <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
                     Scope
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <ScrollArea className="h-[min(11rem,24dvh)] px-1 pb-1">
                       {scopeRailItems.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">No available scope.</div>
+                        <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">No available scope.</div>
                       ) : (
                         <SidebarMenu>
                           {scopeRailItems.map((item) => {
@@ -2761,11 +2761,11 @@ export function CampaignAdSetWorkspace({
                                         }
                                       />
                                     ) : null}
-                                    <span className="truncate text-[12px]">
+                                    <span className="truncate text-sm">
                                       {item.type === "index" ? `Index · ${item.label}` : item.label}
                                     </span>
                                   </span>
-                                  <span className="text-[11px] text-sidebar-foreground/65">
+                                  <span className="text-xs text-sidebar-foreground/65">
                                     {formatMetric(adSetMetric, item.value)}
                                   </span>
                                 </button>
@@ -2781,7 +2781,7 @@ export function CampaignAdSetWorkspace({
                 <SidebarSeparator />
 
                 <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
                     Ad Sets ({selectedScopedAdSets.length} selected)
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
@@ -2796,7 +2796,7 @@ export function CampaignAdSetWorkspace({
                           ))}
                         </div>
                       ) : filteredScopedAdSets.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                        <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
                           No ad sets for this scope.
                         </div>
                       ) : (
@@ -2821,7 +2821,7 @@ export function CampaignAdSetWorkspace({
                                   )}
                                 >
                                   <span className="min-w-0">
-                                    <span className="inline-flex items-center gap-1.5 truncate text-[12px]">
+                                    <span className="inline-flex items-center gap-1.5 truncate text-sm">
                                       <span
                                         className={cn(
                                           "h-2.5 w-2.5 shrink-0 rounded-full border border-sidebar-border/80",
@@ -2835,11 +2835,11 @@ export function CampaignAdSetWorkspace({
                                       />
                                       {adSet.name}
                                     </span>
-                                    <span className="block truncate text-[10px] text-sidebar-foreground/60">
+                                    <span className="block truncate text-2xs text-sidebar-foreground/60">
                                       {adSet.campaignName}
                                     </span>
                                   </span>
-                                  <span className="text-[11px] text-sidebar-foreground/65">
+                                  <span className="text-xs text-sidebar-foreground/65">
                                     {formatMetric(adSetMetric, adSet.metrics?.[adSetMetric] ?? 0)}
                                   </span>
                                 </button>

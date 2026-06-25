@@ -420,5 +420,6 @@ export function useWorkflowExecution() {
     reset,
     registerController,
     releaseController,
+    show,
   };
 }

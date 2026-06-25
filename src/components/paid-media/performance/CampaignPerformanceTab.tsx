@@ -144,7 +144,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
             <GaugeCircleIcon className="h-5 w-5" />
           </div>
           <h2 className="mt-3 text-sm font-semibold tracking-tight">Pick an ad account</h2>
-          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Performance loads campaign-level metrics, percentile heatmaps, and budget pacing for the
             selected account. Choose one from the selector above to begin.
           </p>
@@ -161,7 +161,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/10 px-3 py-2">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold tracking-tight">Performance</h2>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Heatmap · matrix · insights · pacing.
           </p>
         </div>
@@ -173,7 +173,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
                 size="sm"
                 variant={rangePreset === option.value ? "secondary" : "ghost"}
                 className={cn(
-                  "h-7 px-2.5 font-mono text-[11px] tracking-tight",
+                  "h-7 px-2.5 font-mono text-xs tracking-tight",
                   rangePreset === option.value && "shadow-sm"
                 )}
                 onClick={() => setRangePreset(option.value)}
@@ -241,7 +241,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
         )}
 
         {selectedCampaign ? (
-          <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/15 px-3 py-1.5 text-[11px]">
+          <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/15 px-3 py-1.5 text-xs">
             <span className="font-mono uppercase tracking-[0.08em] text-muted-foreground">
               Selected
             </span>

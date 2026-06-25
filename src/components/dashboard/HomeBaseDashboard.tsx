@@ -42,7 +42,6 @@ export function HomeBaseDashboard({
   const router = useRouter();
   const [, startTransition] = React.useTransition();
   const shouldReduceMotion = useReducedMotion();
-  const isPaidView = activeView === "paid";
   const activeConfig = DASHBOARD_VIEWS[activeView];
 
   const handleViewChange = React.useCallback(
@@ -83,14 +82,14 @@ export function HomeBaseDashboard({
   const tourReady = useReadyAfterPaint(activeView === "organic");
 
   return (
-    <div className="flex min-h-full w-full min-w-0 flex-col">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
       <SurfaceTourTrigger tourName={TOUR_DASHBOARD} ready={tourReady} />
       <section
         data-tour-id="dashboard-overview"
-        className="flex min-h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
+        className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
       >
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-          <h1 className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {activeConfig.title}
           </h1>
 
@@ -109,7 +108,7 @@ export function HomeBaseDashboard({
                   data-tour-id={view === "paid" ? "dashboard-paid-toggle" : undefined}
                   onClick={() => handleViewChange(view)}
                   className={cn(
-                    "h-6 rounded px-2.5 text-[11px] font-medium transition-colors active:scale-[0.96]",
+                    "h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]",
                     isActive ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                   style={{ transitionProperty: "background-color, color, scale" }}
@@ -122,15 +121,11 @@ export function HomeBaseDashboard({
           </nav>
         </div>
 
-        <div className="min-h-0 flex-1 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <motion.div
             key={activeView}
             data-dashboard-panel={activeView}
-            className={cn(
-              isPaidView
-                ? "min-h-[var(--dashboard-home-paid-min-height)]"
-                : "min-h-[var(--dashboard-home-organic-min-height)]"
-            )}
+            className="min-h-full"
             initial={shouldReduceMotion ? false : { opacity: 0.96 }}
             animate={shouldReduceMotion ? undefined : { opacity: 1 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}

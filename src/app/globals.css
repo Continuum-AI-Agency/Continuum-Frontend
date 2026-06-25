@@ -126,9 +126,9 @@
   --particle-layer-opacity: 0.1;
 
   /* App chrome heights — single source of truth for viewport scroll math.
-     The header is DashboardHeader (h-16 = 4rem). Pages that fill the viewport
-     use --app-content-h instead of re-deriving a magic offset per page. */
-  --app-header-h: 4rem;
+     The header is DashboardHeader (consumes --app-header-h). Pages that fill
+     the viewport use --app-content-h instead of a magic per-page offset. */
+  --app-header-h: 3rem;
   --app-content-h: calc(100dvh - var(--app-header-h));
 
   /* Shell scale — fixed rem (no viewport-width fluidity). */
@@ -154,7 +154,8 @@
   --page-pad-inline: var(--shell-gutter);
   --page-pad-block: 1rem;
   --page-section-gap: 1rem;
-  --card-pad: 1rem;
+  --card-pad: 0.875rem;
+  --card-gap: 0.625rem;
 
   --ai-chat-shell-offset: 1.5rem;
   --ai-chat-shell-min-height: 40rem;
@@ -191,7 +192,8 @@ html {
     --app-shell-pad-inline: 1rem;
     --page-pad-block: 0.875rem;
     --page-section-gap: 0.875rem;
-    --card-pad: 0.875rem;
+    --card-pad: 0.8125rem;
+    --card-gap: 0.5625rem;
     --workspace-min-height: 30rem;
     --dashboard-min-panel-height: 22rem;
     --dashboard-home-organic-min-height: clamp(25rem, 66dvh, 54rem);
@@ -224,6 +226,8 @@ html {
     --layout-density: 0.92;
     --page-pad-block: 0.75rem;
     --page-section-gap: 0.75rem;
+    --card-pad: 0.75rem;
+    --card-gap: 0.5rem;
     --shell-stack-gap: 0.875rem;
     --shell-gutter: 0.875rem;
     --app-shell-pad-inline: 0.875rem;
@@ -801,6 +805,14 @@ body {
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Sub-xs micro-type for dense UI labels/meta. All rem so they ride the
+     --font-size-root ladder — never hardcode text-[Npx], use these. */
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 0.875rem;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 0.9375rem;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

@@ -13,8 +13,8 @@ const SIZE_CONFIG: Record<
   BrandAvatarSize,
   { box: string; text: string; pixels: number }
 > = {
-  xs: { box: "h-4 w-4", text: "text-[9px]", pixels: 16 },
-  sm: { box: "h-6 w-6", text: "text-[10px]", pixels: 24 },
+  xs: { box: "h-4 w-4", text: "text-3xs", pixels: 16 },
+  sm: { box: "h-6 w-6", text: "text-2xs", pixels: 24 },
   md: { box: "h-8 w-8", text: "text-xs", pixels: 32 },
   lg: { box: "h-9 w-9", text: "text-sm", pixels: 36 },
 };

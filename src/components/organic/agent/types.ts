@@ -25,6 +25,11 @@ export type ToolCallEvent = {
   toolName: string
   args: unknown
   result?: unknown
+  // Derived from the tool envelope status on the Backend. ok:false marks a tool
+  // that failed without throwing (returned an `error` envelope); `reason` is the
+  // failure root cause so the tool chip can show why instead of a false success.
+  ok?: boolean
+  reason?: string
 }
 
 // Render shapes are owned by the contract (organicTrendChartDataSchema /

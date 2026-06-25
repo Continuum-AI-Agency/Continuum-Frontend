@@ -15,6 +15,7 @@ export type GeneratorNodeData = {
   imageSize?: "1k" | "2k" | "4k";
   responseModality?: "image" | "image+text";
   status?: string;
+  failureMessage?: string;
   jobId?: string;
   artifactPreview?: string;
   artifactName?: string;

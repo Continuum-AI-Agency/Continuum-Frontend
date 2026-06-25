@@ -818,7 +818,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                   suggestion={s}
                   disabled={inputDisabled}
                   onClick={(text) => handleSubmit(text)}
-                  className="h-auto px-3 py-1 text-[12px] font-normal text-muted-foreground"
+                  className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
                 />
               ))}
             </div>
@@ -833,7 +833,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                   msg.content ? (
                     <SafeMarkdown
                       content={msg.content}
-                      className="text-[15px] leading-7 text-foreground text-pretty"
+                      className="text-base leading-7 text-foreground text-pretty"
                       mode={msg.id === state.streamingMessageId ? "streaming" : "static"}
                       isAnimating={msg.id === state.streamingMessageId}
                     />
@@ -843,7 +843,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                     <AgentWorkingIndicator />
                   ) : null
                 ) : (
-                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed"><MentionifiedText text={msg.content} references={msg.metadata?.references} /></p>
+                  <p className="whitespace-pre-wrap text-base leading-relaxed"><MentionifiedText text={msg.content} references={msg.metadata?.references} /></p>
                 )}
                 <OrganicThinkingPanel
                   toolCalls={msg.toolCalls ?? []}
@@ -957,7 +957,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                 )}
                 {msg.role === "assistant" && msg.error ? (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-                    <span className="min-w-0 text-[13px] text-destructive">{msg.error}</span>
+                    <span className="min-w-0 text-sm text-destructive">{msg.error}</span>
                     <AgentButton variant="ghost" disabled={isStreaming} onClick={() => handleRetryTurn(msg.id)}>
                       <RefreshCw className="size-3.5" />
                       Retry

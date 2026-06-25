@@ -36,7 +36,7 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
           )}>
             {style.label.charAt(0)}
           </div>
-          <span className="text-[10px] text-center font-medium leading-tight truncate w-full">
+          <span className="text-2xs text-center font-medium leading-tight truncate w-full">
             {style.label}
           </span>
         </Card>

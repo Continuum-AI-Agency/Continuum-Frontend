@@ -197,7 +197,7 @@ export function JainaMessageItem({
               <div className="relative">
                 <SafeMarkdown
                   content={normalizeJainaMarkdownTables(message.content)}
-                  className="text-[15px] leading-7 text-foreground"
+                  className="text-base leading-7 text-foreground"
                   mode={isStreaming ? "streaming" : "static"}
                   isAnimating={isStreaming}
                 />
@@ -234,7 +234,7 @@ export function JainaMessageItem({
             {structuredFallbackContent ? (
               <SafeMarkdown
                 content={normalizeJainaMarkdownTables(structuredFallbackContent)}
-                className="text-[15px] leading-7 text-foreground"
+                className="text-base leading-7 text-foreground"
                 mode="static"
                 isAnimating={false}
               />

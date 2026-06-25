@@ -60,12 +60,16 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
           const existing = toolCallsById.get(parsed.toolCallId);
           if (existing) {
             existing.result = parsed.result;
+            existing.ok = parsed.ok;
+            existing.reason = parsed.reason;
           } else {
             toolCallsById.set(parsed.toolCallId, {
               toolCallId: parsed.toolCallId,
               toolName: parsed.toolName,
               args: undefined,
               result: parsed.result,
+              ok: parsed.ok,
+              reason: parsed.reason,
             });
           }
           const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);

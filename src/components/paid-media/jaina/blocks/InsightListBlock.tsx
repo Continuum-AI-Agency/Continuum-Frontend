@@ -54,7 +54,7 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
                   {item.title}
                 </span>
                 {item.priority && (
-                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide">
                     {item.priority}
                   </span>
                 )}

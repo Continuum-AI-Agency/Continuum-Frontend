@@ -306,7 +306,7 @@ export function JainaReportView({
                   <Badge
                     color="blue"
                     variant="soft"
-                    className="uppercase tracking-tighter text-[10px]"
+                    className="uppercase tracking-tighter text-2xs"
                   >
                     {report.language || "EN"}
                   </Badge>
@@ -315,7 +315,7 @@ export function JainaReportView({
                 <div className="prose prose-invert max-w-none">
                   <SafeMarkdown
                     content={report.executive_summary || "No summary provided."}
-                    className="text-[15px] leading-relaxed text-secondary"
+                    className="text-base leading-relaxed text-secondary"
                     mode={status === "streaming" ? "streaming" : "static"}
                   />
                 </div>

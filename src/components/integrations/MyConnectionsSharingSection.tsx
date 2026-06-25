@@ -50,7 +50,7 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
   }
 
   return (
-    <GlassPanel className="p-6">
+    <GlassPanel className="p-[var(--card-pad)]">
       <div className="mb-4">
         <h3 className="text-base font-semibold text-foreground">Share with brands</h3>
         <p className="text-sm text-muted-foreground">

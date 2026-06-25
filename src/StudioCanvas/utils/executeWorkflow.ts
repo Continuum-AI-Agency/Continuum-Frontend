@@ -604,6 +604,11 @@ export async function executeWorkflow(
     const scopeNodeIds = resolveExecutableNodes(snapshot.nodes, snapshot.edges, options.targetNodeId).map((node) => node.id);
     if (scopeNodeIds.length === 0) {
       console.log("No executable nodes found");
+      controls.show?.({
+        title: "Nothing to run",
+        description: "This flow has no runnable nodes. Add a generation node (or connect one), then run again.",
+        variant: "error",
+      });
       return;
     }
     await ensureReferenceMediaHydrated(snapshot.nodes, snapshot.edges, new Set(scopeNodeIds));
@@ -623,6 +628,11 @@ export async function executeWorkflow(
 
   if (executableNodeIds.length === 0) {
     console.log("No executable nodes found");
+    controls.show?.({
+      title: "Nothing to run",
+      description: "This flow has no runnable nodes. Add a generation node (or connect one), then run again.",
+      variant: "error",
+    });
     return;
   }
   console.info("[studio] executeWorkflow scope", {

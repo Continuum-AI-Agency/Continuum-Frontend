@@ -215,7 +215,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
 
                           <div className="min-w-0 flex-1 text-left">
                             <p className="truncate text-xs font-medium text-foreground">{data.fileName || "Audio File"}</p>
-                            <p className="text-[10px] text-muted-foreground">{isPlaying ? 'Playing…' : 'Click to play'}</p>
+                            <p className="text-2xs text-muted-foreground">{isPlaying ? 'Playing…' : 'Click to play'}</p>
                           </div>
 
                           <div className="rounded-sm bg-emerald-500/10 p-1.5 text-emerald-600">

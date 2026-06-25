@@ -25,10 +25,10 @@ export function AudienceDetail({ audience }: Props) {
         <div className="grid grid-cols-1 gap-3 pr-3 sm:grid-cols-2">
           {sections.map((section) => (
             <div key={section.label}>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+              <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-[#94a3b8]">
                 {section.label}
               </p>
-              <ul className="space-y-1 text-[12px] text-[#374151]">
+              <ul className="space-y-1 text-sm text-[#374151]">
                 {(section.items ?? []).slice(0, 4).map((item, idx) => (
                   <li key={idx} className="leading-snug">
                     • {item}

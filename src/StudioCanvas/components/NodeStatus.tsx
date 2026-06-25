@@ -18,19 +18,19 @@ export function NodeStatus({ status = 'idle', errorMessage, className }: NodeSta
       {status === 'running' && (
         <Badge variant="secondary" className="flex gap-1 items-center bg-blue-100 text-blue-700 border-blue-200 h-6">
           <Loader2 className="w-3 h-3 animate-spin" />
-          <span className="text-[10px]">Running</span>
+          <span className="text-2xs">Running</span>
         </Badge>
       )}
       {status === 'success' && (
         <Badge variant="secondary" className="flex gap-1 items-center bg-green-100 text-green-700 border-green-200 h-6">
           <CheckCircle2 className="w-3 h-3" />
-          <span className="text-[10px]">Done</span>
+          <span className="text-2xs">Done</span>
         </Badge>
       )}
       {status === 'error' && (
         <Badge variant="destructive" className="flex gap-1 items-center h-6" title={errorMessage}>
           <XCircle className="w-3 h-3" />
-          <span className="text-[10px]">Error</span>
+          <span className="text-2xs">Error</span>
         </Badge>
       )}
     </div>

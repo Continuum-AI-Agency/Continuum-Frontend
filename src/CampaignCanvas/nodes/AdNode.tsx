@@ -139,11 +139,11 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
               />
             </div>
             <div className="flex items-center gap-1.5">
-              <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase opacity-70">
+              <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-70">
                 {AD_FORMATS.find((format) => format.value === selectedAdFormat)?.label || 'Single Image'}
               </Badge>
               {data.callToAction && (
-                <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                <Badge variant="secondary" className="text-3xs px-1 py-0 uppercase h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
                   {CALL_TO_ACTIONS.find(c => c.value === data.callToAction)?.label || 'LEARN MORE'}
                 </Badge>
               )}

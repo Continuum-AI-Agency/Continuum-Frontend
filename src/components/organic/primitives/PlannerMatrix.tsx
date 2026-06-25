@@ -144,21 +144,21 @@ export function PlannerMatrix({
             className="sticky top-0 z-30 border-b border-primary/20 bg-background/95 px-4 py-2 backdrop-blur"
           >
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[11px] font-semibold text-primary/80 uppercase tracking-wide">
+              <p className="text-xs font-semibold text-primary/80 uppercase tracking-wide">
                 {gridProgress.stage ?? "Generating content"}
               </p>
-              <span className="text-[11px] text-muted-foreground">{gridProgress.percent}%</span>
+              <span className="text-xs text-muted-foreground">{gridProgress.percent}%</span>
             </div>
             <Progress value={gridProgress.percent} className="h-1" />
             {gridProgress.message ? (
-              <p className="mt-1 text-[10px] text-muted-foreground">{gridProgress.message}</p>
+              <p className="mt-1 text-2xs text-muted-foreground">{gridProgress.message}</p>
             ) : null}
           </motion.div>
         ) : null}
       </AnimatePresence>
       <div className="min-w-[880px]">
         <div className="grid grid-cols-[96px_repeat(7,minmax(110px,1fr))]">
-          <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
+          <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
             Platform
           </div>
 
@@ -192,7 +192,7 @@ export function PlannerMatrix({
                 <span
                   className={cn(
                     "font-semibold uppercase tracking-wide text-muted-foreground",
-                    platform.comingSoon ? "text-[9px]" : "text-[11px]"
+                    platform.comingSoon ? "text-3xs" : "text-xs"
                   )}
                 >
                   {platform.label}
@@ -200,7 +200,7 @@ export function PlannerMatrix({
                 {platform.comingSoon ? (
                   <Badge
                     variant="outline"
-                    className="h-4 border-muted-foreground/30 bg-muted px-1 text-[8px] text-muted-foreground"
+                    className="h-4 border-muted-foreground/30 bg-muted px-1 text-3xs text-muted-foreground"
                   >
                     soon
                   </Badge>

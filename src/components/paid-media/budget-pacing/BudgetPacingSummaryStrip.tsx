@@ -37,9 +37,9 @@ function KpiCard({ label, value, subLabel, progressValue, valueClassName, active
         active && "ring-1 ring-primary bg-accent/10"
       )}
     >
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("text-lg font-semibold tabular-nums leading-none", valueClassName)}>{value}</p>
-      {subLabel && <p className="text-[11px] text-muted-foreground">{subLabel}</p>}
+      {subLabel && <p className="text-xs text-muted-foreground">{subLabel}</p>}
       <Progress value={Math.min(100, progressValue)} className="h-1" />
     </div>
   );

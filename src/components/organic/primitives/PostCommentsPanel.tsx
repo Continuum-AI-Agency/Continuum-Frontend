@@ -28,34 +28,34 @@ function CommentRow({ comment }: { comment: OrganicComment }) {
   return (
     <div className="flex gap-2 px-2 py-1.5">
       <Avatar className="h-5 w-5 shrink-0 mt-0.5">
-        <AvatarFallback className="bg-muted text-[9px] font-semibold">
+        <AvatarFallback className="bg-muted text-3xs font-semibold">
           {userInitial(comment.username)}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[10px] font-semibold truncate leading-none">
+          <span className="text-2xs font-semibold truncate leading-none">
             {comment.username ?? "unknown"}
           </span>
           <div className="flex items-center gap-1 shrink-0">
             {(comment.likeCount ?? 0) > 0 && (
-              <Badge variant="secondary" className="h-4 gap-0.5 px-1 py-0 text-[9px] font-medium">
+              <Badge variant="secondary" className="h-4 gap-0.5 px-1 py-0 text-3xs font-medium">
                 <Heart className="h-2 w-2" />
                 {comment.likeCount}
               </Badge>
             )}
             {(comment.replies?.length ?? 0) > 0 && (
-              <Badge variant="outline" className="h-4 gap-0.5 px-1 py-0 text-[9px] font-medium">
+              <Badge variant="outline" className="h-4 gap-0.5 px-1 py-0 text-3xs font-medium">
                 <MessageCircle className="h-2 w-2" />
                 {comment.replies!.length}
               </Badge>
             )}
-            <span className="text-[9px] text-muted-foreground tabular-nums">
+            <span className="text-3xs text-muted-foreground tabular-nums">
               {formatCommentDate(comment.timestamp)}
             </span>
           </div>
         </div>
-        <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+        <p className="mt-0.5 line-clamp-2 text-2xs leading-snug text-muted-foreground">
           {comment.text ?? ""}
         </p>
       </div>
@@ -87,7 +87,7 @@ export function PostCommentsPanel({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
           Comments ({comments.length})
         </span>
         <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
@@ -96,7 +96,7 @@ export function PostCommentsPanel({
               key={mode}
               type="button"
               className={cn(
-                "rounded px-2 py-0.5 text-[10px] font-medium capitalize transition-colors",
+                "rounded px-2 py-0.5 text-2xs font-medium capitalize transition-colors",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/60",
                 sortBy === mode
                   ? "bg-accent/20 text-foreground"

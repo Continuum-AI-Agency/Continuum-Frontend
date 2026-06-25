@@ -7,7 +7,6 @@ import {
   Callout,
   Card,
   Flex,
-  Heading,
   IconButton,
   Select,
   Separator,
@@ -91,7 +90,6 @@ import {
   calculateHookRate,
   filterPostsByYoutubeType,
   formatWatchTime,
-  hookRateTier,
   isYouTubeShort,
   post24hComparisons,
   postWindowRange,
@@ -100,7 +98,6 @@ import {
   summarizePost7dMetrics,
   summarizeYoutubeTypeMetrics,
   type DrilldownWindow,
-  type HookRateTier,
   type PostMetricKey,
   type PostSortKey,
   type YoutubePostTypeFilter,
@@ -113,6 +110,8 @@ import {
   trendDirection,
 } from "@/components/organic/organic-format";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { SectionHeader } from "@/components/shared/SectionHeader";
+import { MetricStrip, type MetricStripItem } from "@/components/shared/MetricStrip";
 import { PostQuickLook } from "@/components/organic/cards/PostQuickLook";
 import {
   buildOrganicReportCsv,
@@ -626,6 +625,55 @@ function TikTokEmbed({ videoId, permalink }: { videoId: string; permalink: strin
   );
 }
 
+// Folds the post-snapshot stat cards (reach/views/engagement/comments plus any
+// watch-time and hook-rate metrics) into the quiet one-line MetricStrip. Values
+// are preformatted to strings; day-over-day percentage change maps to deltaPct.
+function buildPostSnapshotStripItems(
+  post: OrganicPost,
+  recent7dMetrics: Partial<Record<PostMetricKey, number>>,
+  metricComparisons: Partial<Record<string, MetricComparison>>,
+): MetricStripItem[] {
+  const items: MetricStripItem[] = [
+    {
+      label: "Reach (7d)",
+      value: formatNumber(recent7dMetrics.reach ?? post.metrics?.reach),
+      deltaPct: metricComparisons.reach?.percentageChange,
+    },
+    {
+      label: "Views (7d)",
+      value: formatNumber(recent7dMetrics.views ?? post.metrics?.views),
+      deltaPct: metricComparisons.views?.percentageChange,
+    },
+    {
+      label: "Engagement (7d)",
+      value: formatNumber(recent7dMetrics.engagement ?? post.metrics?.totalInteractions),
+      deltaPct: metricComparisons.engagement?.percentageChange,
+    },
+    {
+      label: "Comments (7d)",
+      value: formatNumber(recent7dMetrics.comments ?? post.metrics?.comments),
+      deltaPct: metricComparisons.comments?.percentageChange,
+    },
+  ];
+
+  if (
+    post.metrics?.reelsAvgWatchTime !== undefined ||
+    post.metrics?.reelsVideoViewTotalTime !== undefined
+  ) {
+    items.push(
+      { label: "Avg Watch Time", value: formatWatchTime(post.metrics?.reelsAvgWatchTime) },
+      { label: "Total Watch Time", value: formatWatchTime(post.metrics?.reelsVideoViewTotalTime) },
+    );
+  }
+
+  const hookRate = calculateHookRate(post);
+  if (hookRate !== undefined) {
+    items.push({ label: "Hook Rate", value: `${hookRate.toFixed(1)}%` });
+  }
+
+  return items;
+}
+
 function PostSnapshotPanel({
   post,
   selectedMetric,
@@ -667,19 +715,18 @@ function PostSnapshotPanel({
       className="min-h-0"
     >
       <Card variant="surface" className="h-full border border-subtle bg-surface">
-        <Box p="3" className="h-full">
-          <Flex align="start" justify="between" mb="2" gap="2">
-            <Box>
-              <Heading size="3">Post Snapshot</Heading>
-              <Text size="1" color="gray">{formatDateTime(post.timestamp)}</Text>
-            </Box>
+        <SectionHeader
+          title="Post Snapshot"
+          meta={<Text size="1" color="gray">{formatDateTime(post.timestamp)}</Text>}
+          action={
             <Flex align="center" gap="1">
               {post.isBoosted ? <Badge color="orange" variant="soft">Boosted</Badge> : null}
               {loading ? <Badge color="blue" variant="soft">Refreshing</Badge> : null}
             </Flex>
-          </Flex>
-
-          <Box className="mb-3 overflow-hidden rounded-lg border border-subtle bg-black/90">
+          }
+        />
+        <Box p="3" className="h-full">
+          <Box className="mb-3 overflow-hidden rounded-lg bg-black/90">
             {isThumbnailOnlyVideo && post.permalink ? (
               <TikTokEmbed videoId={post.id} permalink={post.permalink} />
             ) : preview ? (
@@ -725,56 +772,15 @@ function PostSnapshotPanel({
             )}
           </Box>
 
-          <div className="mb-3 grid grid-cols-2 gap-1.5">
+          <div className="mb-3">
             {metricsPending ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-[48px] rounded-lg" />
-              ))
+              <div className="grid grid-cols-2 gap-1.5">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[48px] rounded-lg" />
+                ))}
+              </div>
             ) : (
-              <>
-                <MetricCard
-                  label="Reach (7d)"
-                  value={recent7dMetrics.reach ?? post.metrics?.reach}
-                  comparison={metricComparisons.reach}
-                  compact
-                />
-                <MetricCard
-                  label="Views (7d)"
-                  value={recent7dMetrics.views ?? post.metrics?.views}
-                  comparison={metricComparisons.views}
-                  compact
-                />
-                <MetricCard
-                  label="Engagement (7d)"
-                  value={recent7dMetrics.engagement ?? post.metrics?.totalInteractions}
-                  comparison={metricComparisons.engagement}
-                  compact
-                />
-                <MetricCard
-                  label="Comments (7d)"
-                  value={recent7dMetrics.comments ?? post.metrics?.comments}
-                  comparison={metricComparisons.comments}
-                  compact
-                />
-                {post.metrics?.reelsAvgWatchTime !== undefined ||
-                post.metrics?.reelsVideoViewTotalTime !== undefined ? (
-                  <>
-                    <WatchTimeCard label="Avg Watch Time" ms={post.metrics?.reelsAvgWatchTime} />
-                    <WatchTimeCard label="Total Watch Time" ms={post.metrics?.reelsVideoViewTotalTime} />
-                  </>
-                ) : null}
-                {(() => {
-                  const hookRate = calculateHookRate(post);
-                  if (hookRate === undefined) return null;
-                  return (
-                    <HookRateCard
-                      hookRate={hookRate}
-                      tier={hookRateTier(hookRate)}
-                      skipRate={post.metrics?.reelsSkipRate}
-                    />
-                  );
-                })()}
-              </>
+              <MetricStrip items={buildPostSnapshotStripItems(post, recent7dMetrics, metricComparisons)} />
             )}
           </div>
 
@@ -863,64 +869,6 @@ function PostSnapshotPanel({
   );
 }
 
-const HOOK_RATE_TIER_CONFIG: Record<HookRateTier, { label: string; className: string }> = {
-  elite:   { label: "Elite",   className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  good:    { label: "Good",    className: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
-  average: { label: "Average", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  poor:    { label: "Poor",    className: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
-};
-
-function HookRateCard({
-  hookRate,
-  tier,
-  skipRate,
-}: {
-  hookRate: number;
-  tier: HookRateTier;
-  skipRate?: number;
-}) {
-  const { label, className } = HOOK_RATE_TIER_CONFIG[tier];
-  return (
-    <Card
-      variant="surface"
-      className="col-span-2 border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm"
-    >
-      <Box px="2" py="1">
-        <Flex align="center" justify="between" mb="1">
-          <Text size="1" color="gray" className="leading-none">Hook Rate</Text>
-          <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", className)}>
-            {label}
-          </span>
-        </Flex>
-        <Text size="4" weight="bold" className="leading-tight tabular-nums tracking-tight">
-          {hookRate.toFixed(1)}%
-        </Text>
-        <Text size="1" color="gray" className="mt-0.5 leading-none">
-          {skipRate !== undefined
-            ? `100 − ${skipRate.toFixed(1)}% skipped in first 3s`
-            : "share who watched past the first 3s"}
-        </Text>
-      </Box>
-    </Card>
-  );
-}
-
-function WatchTimeCard({ label, ms }: { label: string; ms: number | undefined }) {
-  return (
-    <Card
-      variant="surface"
-      className="border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm min-h-[48px]"
-    >
-      <Box px="2" py="1">
-        <Text size="1" color="gray" className="leading-none">{label}</Text>
-        <Text size="3" weight="bold" className="leading-tight tabular-nums tracking-tight">
-          {formatWatchTime(ms)}
-        </Text>
-      </Box>
-    </Card>
-  );
-}
-
 function MetricCard({
   label,
   value,
@@ -978,7 +926,7 @@ function MetricCard({
           {!compact && (
             <span
               className={cn(
-                "rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide",
+                "rounded px-2 py-0.5 text-xs font-medium uppercase tracking-wide",
                 direction === "up" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "",
                 direction === "down" ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "",
                 direction === "flat" ? "bg-slate-500/15 text-slate-700 dark:text-slate-300" : ""
@@ -1336,17 +1284,15 @@ function Dashboard({
       {isAccountView ? (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.75fr)]">
           <Card variant="surface" className="border border-subtle bg-surface xl:row-span-2">
-            <Box p="3">
-              <Flex align="center" justify="between" mb="2" wrap="wrap" gap="2">
-                <Box>
-                  <Heading size="3">Metric Drilldown</Heading>
-                  <Text size="2" color="gray">{selectedAccountMetricLabel} ({drilldownWindow})</Text>
-                </Box>
+            <SectionHeader
+              title="Metric Drilldown"
+              meta={<Text size="1" color="gray">{selectedAccountMetricLabel} ({drilldownWindow})</Text>}
+              action={
                 <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
                   <button
                     type="button"
                     className={cn(
-                      "h-8 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                      "h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                       drilldownWindow === "7d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                     )}
                     onClick={() => setDrilldownWindow("7d")}
@@ -1358,7 +1304,7 @@ function Dashboard({
                   <button
                     type="button"
                     className={cn(
-                      "h-8 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                      "h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                       drilldownWindow === "30d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                     )}
                     onClick={() => setDrilldownWindow("30d")}
@@ -1368,8 +1314,9 @@ function Dashboard({
                     30d
                   </button>
                 </div>
-              </Flex>
-
+              }
+            />
+            <Box p="3">
               {accountSeries.length === 0 ? (
                 <Text size="2" color="gray">No metric history is available for this metric in the selected window.</Text>
               ) : (
@@ -1396,8 +1343,8 @@ function Dashboard({
           </Card>
 
           <Card variant="surface" className={cn("border border-subtle bg-surface", (platform === "tiktok" || platform === "youtube") && "!hidden")}>
+            <SectionHeader title="Followers Breakdown" />
             <Box p="3">
-              <Heading size="3" mb="2">Followers Breakdown</Heading>
               <ChartContainer config={audienceChartConfig} className="h-52 w-full">
                 <RadialBarChart
                   data={audienceRadialData}
@@ -1463,9 +1410,8 @@ function Dashboard({
           </Card>
 
           <Card variant="surface" className={cn("border border-subtle bg-surface", (platform === "tiktok" || platform === "youtube") && "!hidden")}>
+            <SectionHeader title="Audience Demographics" />
             <Box p="3">
-              <Heading size="3" mb="2">Audience Demographics</Heading>
-
               <Text size="1" color="gray" mb="1">Gender</Text>
               {demographicsLoading ? (
                 <div className="h-28 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />

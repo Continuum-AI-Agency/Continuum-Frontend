@@ -59,10 +59,10 @@ export function ReadinessArc({ score, size = 96, strokeWidth = 8, className }: R
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={cn("text-[24px] font-bold font-mono tabular-nums leading-none", tone.text)}>
+        <span className={cn("text-2xl font-bold font-mono tabular-nums leading-none", tone.text)}>
           {safeScore == null ? "—" : Math.round(safeScore)}
         </span>
-        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="mt-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
           / 100
         </span>
       </div>

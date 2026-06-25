@@ -520,19 +520,19 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </TabsList>
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4 xl:min-w-[560px]">
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-[11px] uppercase tracking-[0.16em]">Users</span>
+            <span className="block text-xs uppercase tracking-[0.16em]">Users</span>
             <strong className="text-base text-primary">{users.length}</strong> / {totalCountLabel}
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-[11px] uppercase tracking-[0.16em]">Admins</span>
+            <span className="block text-xs uppercase tracking-[0.16em]">Admins</span>
             <strong className="text-base text-primary">{adminCount}</strong> page
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-[11px] uppercase tracking-[0.16em]">Brands</span>
+            <span className="block text-xs uppercase tracking-[0.16em]">Brands</span>
             <strong className="text-base text-primary">{uniqueBrandCount}</strong> in view
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-[11px] uppercase tracking-[0.16em]">Owners</span>
+            <span className="block text-xs uppercase tracking-[0.16em]">Owners</span>
             <strong className="text-base text-primary">{ownerMemberships}</strong> locked
           </div>
         </div>

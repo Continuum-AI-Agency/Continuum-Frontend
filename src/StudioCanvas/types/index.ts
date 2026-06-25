@@ -163,18 +163,31 @@ export interface VideoDecodeNodeData extends BaseNodeData {
   value: string;
 }
 
-// One entry on the Video Editor (timelineEditor) visual track. A `video` item
-// trims a connected clip; an `image` item holds for `durationSec` as a still.
-// Reorder/split are pure data: split duplicates the item into two trim ranges.
+// One placement on the Video Editor (timelineEditor) timeline. `sourceNodeId`
+// references a member of the input pool (an image/video node wired into the
+// node's `media-in` handle); a `video` placement trims that clip, an `image`
+// placement holds it for `durationSec` as a still. Reorder/split are pure data:
+// split duplicates the placement into two complementary trim ranges over the
+// same source.
 export interface TimelineItem {
   id: string;
   order: number;
+  sourceNodeId: string;
   kind?: 'video' | 'image';
   trimStartSec?: number;
   trimEndSec?: number;
   // For image stills: how long the frame holds in the output (seconds).
   durationSec?: number;
   muteAudio?: boolean;
+}
+
+// A placeable member of the Video Editor input pool, derived from a connected
+// upstream image/video source node. Drives the editor's media bin.
+export interface TimelineInputSource {
+  nodeId: string;
+  kind: 'video' | 'image';
+  label: string;
+  previewUrl?: string;
 }
 
 export interface TimelineEditorNodeData extends BaseNodeData {

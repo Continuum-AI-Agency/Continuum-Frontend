@@ -30,7 +30,7 @@ export function MediaBoundingBoxes({ objects, className }: Props) {
               height: `${box.height * 100}%`,
             }}
           >
-            <span className="absolute left-0.5 top-0.5 truncate rounded bg-emerald-900/80 px-1 py-0.5 text-[10px] leading-none text-emerald-200">
+            <span className="absolute left-0.5 top-0.5 truncate rounded bg-emerald-900/80 px-1 py-0.5 text-2xs leading-none text-emerald-200">
               {obj.label}
             </span>
           </div>

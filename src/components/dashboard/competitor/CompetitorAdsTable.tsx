@@ -49,8 +49,8 @@ function formatObservedLive(row: TimelineEntry): string {
 function MetadataItem({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="truncate text-[11px] text-foreground">{value ?? "-"}</p>
+      <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="truncate text-xs text-foreground">{value ?? "-"}</p>
     </div>
   );
 }
@@ -58,7 +58,7 @@ function MetadataItem({ label, value }: { label: string; value: string | number 
 function StatusPill({ badge }: { badge: ReturnType<typeof adStatusBadge> }) {
   const variant = badge.tone === "new" ? "success" : badge.tone === "paused" ? "destructive" : "secondary";
   return (
-    <Badge variant={variant} className="text-[10px]">
+    <Badge variant={variant} className="text-2xs">
       {badge.label}
     </Badge>
   );
@@ -82,7 +82,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
         cell: (row) => (
           <div className="min-w-0">
             <p className="truncate text-sm text-foreground">{row.competitorName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{row.sourceAdId}</p>
+            <p className="truncate text-xs text-muted-foreground">{row.sourceAdId}</p>
           </div>
         ),
       },
@@ -91,9 +91,9 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
         header: "Ad copy",
         cell: (row) => (
           <div className="min-w-0">
-            <p className="truncate text-[13px] text-muted-foreground">{row.body?.trim() || "No primary text"}</p>
+            <p className="truncate text-sm text-muted-foreground">{row.body?.trim() || "No primary text"}</p>
             {row.analysis?.primaryTheme ? (
-              <p className="truncate text-[11px] text-muted-foreground">{row.analysis.primaryTheme}</p>
+              <p className="truncate text-xs text-muted-foreground">{row.analysis.primaryTheme}</p>
             ) : null}
           </div>
         ),
@@ -109,16 +109,16 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
                 <Badge
                   key={`${row.snapshotId}-${platform}`}
                   variant="outline"
-                  className="border-border/70 px-2 py-0 text-[10px] font-normal text-muted-foreground"
+                  className="border-border/70 px-2 py-0 text-2xs font-normal text-muted-foreground"
                 >
                   {platform}
                 </Badge>
               ))
             ) : (
-              <span className="text-[11px] text-muted-foreground">-</span>
+              <span className="text-xs text-muted-foreground">-</span>
             )}
             {row.platforms.length > 2 ? (
-              <Badge variant="secondary" className="px-2 py-0 text-[10px] font-normal">
+              <Badge variant="secondary" className="px-2 py-0 text-2xs font-normal">
                 +{row.platforms.length - 2}
               </Badge>
             ) : null}
@@ -156,7 +156,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
   return (
     <InsightDataTable
       title="Competitor ads"
-      headerAction={<CompetitorSpyLink />}
+      headerAction={<CompetitorSpyLink href="/competitor-spy?tab=paid" />}
       rows={rows}
       columns={columns}
       getRowId={(row) => row.snapshotId}
@@ -170,7 +170,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
       contextMenu={(row) => <InsightContextActions permalink={row.snapshotUrl ?? undefined} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.snapshotUrl ?? undefined} />}
       expandedContent={(row) => (
-        <div className="flex flex-col gap-2 text-[11px] leading-relaxed">
+        <div className="flex flex-col gap-2 text-xs leading-relaxed">
           {row.body ? <p className="text-foreground">{row.body}</p> : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono tabular-nums text-muted-foreground">
             {row.cta ? <span>CTA {row.cta}</span> : null}

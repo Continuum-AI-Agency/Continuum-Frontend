@@ -88,6 +88,10 @@ type UseAiStudioHandoffOptions = {
     updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft
   ) => void
   setSelectedDraftId: (id: string | null) => void
+  // True once the calendar's initial fetch-all has completed. The apply-on-return
+  // patch must wait for this, or the hydration refetch clobbers it (and the
+  // pending-apply blob is already consumed, so it can't recover).
+  isCalendarHydrated: boolean
 }
 
 export function useAiStudioHandoff({
@@ -96,9 +100,13 @@ export function useAiStudioHandoff({
   selectedDraft,
   updateDraftById,
   setSelectedDraftId,
+  isCalendarHydrated,
 }: UseAiStudioHandoffOptions) {
   const router = useRouter()
   const { show } = useToast()
+  // Guards the one-shot apply-on-return so it consumes the pending-apply blob
+  // exactly once, after hydration, rather than on every render.
+  const appliedRef = React.useRef(false)
 
   const deriveAiStudioPrompts = React.useCallback(
     (draft: OrganicCalendarDraft) => {
@@ -206,9 +214,14 @@ export function useAiStudioHandoff({
     return () => clearTimeout(timer)
   }, [buildAiStudioContext, persistAiStudioContext, selectedDraft])
 
-  // Sync pending apply response from AI Studio on return
+  // Sync pending apply response from AI Studio on return. Gated on hydration so it
+  // runs AFTER the calendar's fetch-all populates the store — applying onto the
+  // hydrated draft (which then autosaves) instead of racing the refetch that would
+  // otherwise clobber the patch.
   React.useEffect(() => {
     if (typeof window === "undefined") return
+    if (!isCalendarHydrated) return
+    if (appliedRef.current) return
 
     const params = new URLSearchParams(window.location.search)
     const draftId = params.get("draftId")
@@ -217,6 +230,10 @@ export function useAiStudioHandoff({
     const key = buildPendingApplyStorageKey(draftId)
     const raw = getLocalStorageJSON<unknown>(key, null)
     if (raw === null) return
+
+    // We have a payload to consume — claim it now so a later hydration re-render
+    // can't reprocess it.
+    appliedRef.current = true
 
     const parsed = plannerAiStudioApplyResponseSchema.safeParse(raw)
     if (!parsed.success) {
@@ -330,7 +347,7 @@ export function useAiStudioHandoff({
       )
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isCalendarHydrated])
 
   const openDraft = React.useCallback(
     (draft: OrganicCalendarDraft) => {

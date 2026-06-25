@@ -8,7 +8,7 @@ import { motion } from "motion/react";
 export function AgentWorkingIndicator() {
   return (
     <div
-      className="flex items-center gap-2 py-0.5 text-[13px] text-muted-foreground/70"
+      className="flex items-center gap-2 py-0.5 text-sm text-muted-foreground/70"
       role="status"
       aria-label="Agent is working"
     >

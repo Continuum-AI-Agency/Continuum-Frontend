@@ -67,9 +67,9 @@ function CountRow({ label, counts }: { label: string; counts: Record<string, num
   if (entries.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-2xs uppercase tracking-wide text-muted-foreground">{label}</span>
       {entries.map(([key, n]) => (
-        <span key={key} className="rounded bg-muted/60 px-1 py-0.5 text-[10px] text-foreground/80">
+        <span key={key} className="rounded bg-muted/60 px-1 py-0.5 text-2xs text-foreground/80">
           {key} {n}
         </span>
       ))}
@@ -95,12 +95,12 @@ export function BulkRunPanel({ runId, total }: { runId: string; total: number })
   return (
     <div className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
           Bulk Generation Run
         </p>
         <span
           className={cn(
-            "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            "shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide",
             run.status === "completed"
               ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
               : run.status === "failed"
@@ -116,7 +116,7 @@ export function BulkRunPanel({ runId, total }: { runId: string; total: number })
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted/40">
           <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
         </div>
-        <span className="text-[11px] tabular-nums text-muted-foreground">
+        <span className="text-xs tabular-nums text-muted-foreground">
           {done}/{run.total}
           {run.failed > 0 ? ` · ${run.failed} failed` : ""}
         </span>

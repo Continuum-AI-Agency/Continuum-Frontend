@@ -43,7 +43,7 @@ export function BrandQuestionsPanel({
   const totalQuestions = questionsByNiche.summary?.totalQuestions ?? countQuestions(questionsByNiche);
 
   return (
-    <GlassPanel className="p-6 space-y-4">
+    <GlassPanel className="p-[var(--card-pad)] space-y-4">
       <Flex justify="between" align="start" wrap="wrap" gap="3">
         <Box className="space-y-1">
           <Flex align="center" gap="2">

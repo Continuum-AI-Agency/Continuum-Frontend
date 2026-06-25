@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   logoutAction,
   signInWithGoogleAction,
@@ -11,12 +11,15 @@ import type { MagicLinkInput } from "@/lib/auth/schemas";
 import { openCenteredPopup, waitForPopupMessage } from "@/lib/popup";
 import { buildOAuthStartUrl } from "@/lib/oauth";
 
-export function useAuth() {
+type UseAuthOptions = {
+  initialError?: string;
+};
+
+export function useAuth(options?: UseAuthOptions) {
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(options?.initialError ?? null);
   const [isGooglePending, setIsGooglePending] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const logout = async (): Promise<boolean> => {
     setError(null);
@@ -105,7 +108,7 @@ export function useAuth() {
       } catch {}
 
       router.refresh();
-      const nextRedirect = redirectTo ?? searchParams.get("redirectTo") ?? "/dashboard";
+      const nextRedirect = redirectTo ?? "/dashboard";
       router.replace(nextRedirect);
     } catch {
       setError("Authentication failed. Please try again");

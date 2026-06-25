@@ -34,7 +34,7 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                 layout
                 transition={{ type: "spring", stiffness: 380, damping: 28 }}
                 className={cn(
-                  "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold",
+                  "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
                   step.state === "done" && "bg-primary text-primary-foreground",
                   step.state === "active" &&
                     "bg-[var(--cs-violet,#5a39ff)] text-white ring-4 ring-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_18%,transparent)]",
@@ -63,7 +63,7 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
               <div className="min-w-0 flex-1">
                 <p
                   className={cn(
-                    "truncate text-[13px] font-semibold leading-tight transition-colors",
+                    "truncate text-sm font-semibold leading-tight transition-colors",
                     step.state === "active" && "text-foreground",
                     step.state === "done" && "text-foreground",
                     step.state === "pending" && "text-muted-foreground"
@@ -71,7 +71,7 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                 >
                   {step.label}
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{step.description}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{step.description}</p>
               </div>
             </button>
             {isLast ? null : (

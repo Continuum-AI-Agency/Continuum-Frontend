@@ -103,17 +103,29 @@ export async function POST(request: Request) {
   await ensureOnboardingState(brandId);
 
   type EmbedInvokeResult = { jobId?: string };
-  const { data: invokeData } = await supabase.functions.invoke<EmbedInvokeResult>("embed_document", {
-    body: {
-      brandId,
-      documentId,
-      source,
-      category,
-      storagePath,
-      fileName,
-      mimeType,
+  const { data: invokeData, error: invokeError } = await supabase.functions.invoke<EmbedInvokeResult>(
+    "embed_document",
+    {
+      body: {
+        brandId,
+        documentId,
+        source,
+        category,
+        storagePath,
+        fileName,
+        mimeType,
+      },
     },
-  });
+  );
+
+  // If processing never even started, record the document as failed instead of
+  // leaving it "processing" forever — the row only ever advances to a terminal
+  // state via the edge function's progress writes, so a failed kickoff would
+  // otherwise hang the UI on "Extracting text" with no end state.
+  const invokeFailed = Boolean(invokeError);
+  if (invokeFailed) {
+    console.error("embed_document invoke failed", invokeError);
+  }
 
   const document: OnboardingDocument = {
     id: documentId,
@@ -121,13 +133,19 @@ export async function POST(request: Request) {
     source,
     category,
     createdAt: new Date().toISOString(),
-    status: "processing",
-    progressStep: "uploading",
+    status: invokeFailed ? "error" : "processing",
+    progressStep: invokeFailed ? "error" : "uploading",
     progressPercent: 100,
     size,
     mimeType,
     storagePath,
     jobId: typeof invokeData?.jobId === "string" ? invokeData.jobId : undefined,
+    ...(invokeFailed
+      ? {
+          errorCode: "INTERNAL_ERROR" as const,
+          errorMessage: invokeError?.message ?? "Could not start document processing.",
+        }
+      : {}),
   };
 
   const state = await appendDocument(brandId, document);

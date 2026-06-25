@@ -48,7 +48,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
     <AgentDecisionCard className="p-4">
       <AgentCardEyebrow
         label="New skill"
-        right={<span className="shrink-0 text-[11px] text-muted-foreground">{kindLabel}</span>}
+        right={<span className="shrink-0 text-xs text-muted-foreground">{kindLabel}</span>}
       />
       {editing ? (
         <input
@@ -61,7 +61,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
         <AgentCardTitle>{name}</AgentCardTitle>
       )}
       {proposal.description && !editing && (
-        <p className="mt-0.5 text-[12.5px] text-muted-foreground">{proposal.description}</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{proposal.description}</p>
       )}
 
       {editing ? (
@@ -69,20 +69,20 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
           value={directives}
           onChange={(e) => setDirectives(e.target.value)}
           rows={6}
-          className="mt-2 w-full rounded-md border border-border bg-background px-2.5 py-2 text-[12.5px] leading-relaxed"
+          className="mt-2 w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-relaxed"
           aria-label="Skill directives"
         />
       ) : (
-        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 text-[12.5px] leading-relaxed text-foreground">
+        <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 text-sm leading-relaxed text-foreground">
           {directives}
         </pre>
       )}
 
-      {error && <p className="mt-2 text-[12px] text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
       <div className="mt-3 flex items-center gap-2">
         {saved ? (
-          <span className="text-[12.5px] font-medium text-emerald-600">
+          <span className="text-sm font-medium text-emerald-600">
             Saved to your brand skills
           </span>
         ) : (

@@ -129,7 +129,7 @@ export function McpActivityTable() {
         cell: ({ row }) => {
           const style = STATUS_STYLE[row.original.status];
           return (
-            <Badge variant="outline" className={`gap-1 border-transparent text-[10px] ${style.className}`}>
+            <Badge variant="outline" className={`gap-1 border-transparent text-2xs ${style.className}`}>
               {style.label}
             </Badge>
           );
@@ -196,7 +196,7 @@ export function McpActivityTable() {
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id}>
                 {group.headers.map((header) => (
-                  <TableHead key={header.id} className="text-[10px] uppercase tracking-wider">
+                  <TableHead key={header.id} className="text-2xs uppercase tracking-wider">
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -282,7 +282,7 @@ function SortHeader({
       type="button"
       variant="ghost"
       size="sm"
-      className="-ml-2 h-7 px-2 text-[10px] uppercase tracking-wider text-muted-foreground"
+      className="-ml-2 h-7 px-2 text-2xs uppercase tracking-wider text-muted-foreground"
       onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
     >
       {label}

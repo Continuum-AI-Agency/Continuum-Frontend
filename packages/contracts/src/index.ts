@@ -1,3 +1,4 @@
+export * from "./embedding/index";
 export * from "./streaming/index";
 export * from "./onboarding/index";
 export * from "./media/index";

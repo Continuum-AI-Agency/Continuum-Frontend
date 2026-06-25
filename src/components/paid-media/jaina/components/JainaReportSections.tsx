@@ -80,7 +80,7 @@ function SectionCard({
         <div className="prose prose-invert max-w-none">
           <SafeMarkdown
             content={section.summary}
-            className="text-[15px] leading-relaxed text-white/70"
+            className="text-base leading-relaxed text-white/70"
             mode={isStreaming ? "streaming" : "static"}
           />
         </div>

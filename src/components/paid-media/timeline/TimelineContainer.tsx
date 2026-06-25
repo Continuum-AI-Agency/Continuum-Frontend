@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import {
   Select,
   SelectContent,
@@ -70,11 +71,6 @@ function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
-function formatDelta(value: number, isPercent = true): string {
-  const sign = value > 0 ? '+' : '';
-  return isPercent ? `${sign}${value.toFixed(2)}%` : `${sign}${value}`;
-}
-
 function formatTimestampLabel(timestamp: string, resolution: 'daily' | 'hourly'): string {
   const date = new Date(timestamp);
   if (resolution === 'hourly') {
@@ -90,41 +86,6 @@ function formatTimestampLabel(timestamp: string, resolution: 'daily' | 'hourly')
     month: 'short',
     day: 'numeric',
   });
-}
-
-function DeltaBadge({ value, isPercent = true }: { value: number; isPercent?: boolean }) {
-  const toneClass = value > 0 ? 'text-emerald-500' : value < 0 ? 'text-red-500' : 'text-muted-foreground';
-
-  return <span className={cn('text-xs font-medium', toneClass)}>{formatDelta(value, isPercent)}</span>;
-}
-
-function MetricCard({
-  label,
-  value,
-  delta,
-  valueType,
-  deltaIsPercent = true,
-}: {
-  label: string;
-  value: number;
-  delta?: number;
-  valueType: 'currency' | 'percent' | 'number';
-  deltaIsPercent?: boolean;
-}) {
-  const formattedValue =
-    valueType === 'currency' ? formatCurrency(value) : valueType === 'percent' ? formatPercent(value) : formatNumber(value);
-
-  return (
-    <Card className="border-border/70 bg-card/80">
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <div className="mt-2 flex items-end justify-between gap-2">
-          <p className="text-2xl font-semibold">{formattedValue}</p>
-          {typeof delta === 'number' ? <DeltaBadge value={delta} isPercent={deltaIsPercent} /> : null}
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 function SteppedMetricChart({
@@ -258,6 +219,16 @@ export function TimelineContainer({
     });
   }, [blocks]);
 
+  const metricStripItems = useMemo<MetricStripItem[]>(() => {
+    return [
+      { label: 'Spend', value: formatCurrency(toNumber(summary.total_spend)), deltaPct: toNumber(deltas.spend_delta_pct) },
+      { label: 'ROAS', value: formatNumber(toNumber(summary.avg_roas)), deltaPct: toNumber(deltas.roas_delta_pct) },
+      { label: 'CTR', value: formatPercent(toNumber(summary.avg_ctr_pct)), deltaPct: toNumber(deltas.ctr_delta_pct) },
+      { label: 'Conversions', value: formatNumber(toNumber(summary.total_conversions)) },
+      { label: 'Active Campaigns', value: formatNumber(toNumber(summary.active_campaigns)) },
+    ];
+  }, [summary, deltas]);
+
   const handleEventClick = (event: TimelineEvent) => {
     setSelectedEventId(event.id);
     setShowSidebar(true);
@@ -338,24 +309,7 @@ export function TimelineContainer({
       </div>
 
       <div className="border-b border-border px-3 py-3">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <MetricCard
-            label="Spend"
-            value={toNumber(summary.total_spend)}
-            delta={toNumber(deltas.spend_delta_pct)}
-            valueType="currency"
-          />
-          <MetricCard label="ROAS" value={toNumber(summary.avg_roas)} delta={toNumber(deltas.roas_delta_pct)} valueType="number" />
-          <MetricCard label="CTR" value={toNumber(summary.avg_ctr_pct)} delta={toNumber(deltas.ctr_delta_pct)} valueType="percent" />
-          <MetricCard
-            label="Conversions"
-            value={toNumber(summary.total_conversions)}
-            delta={toNumber(deltas.conversions_delta)}
-            valueType="number"
-            deltaIsPercent={false}
-          />
-          <MetricCard label="Active Campaigns" value={toNumber(summary.active_campaigns)} valueType="number" />
-        </div>
+        <MetricStrip items={metricStripItems} />
 
         {chartData.length > 1 ? (
           <div className="mt-3 grid gap-3 xl:grid-cols-3">

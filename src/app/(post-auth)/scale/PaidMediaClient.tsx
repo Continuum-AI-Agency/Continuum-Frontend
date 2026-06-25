@@ -394,7 +394,7 @@ export default function PaidMediaClientPage({
           <div
             ref={canvasShellRef}
             className={cn(
-              "relative flex flex-1 min-h-0 overflow-hidden rounded-xl border bg-background/70 shadow-2xl",
+              "relative flex flex-1 min-h-0 overflow-hidden rounded-lg border bg-background/70",
               isJainaFullscreen && "fixed inset-0 z-50 rounded-none border-none"
             )}
           >

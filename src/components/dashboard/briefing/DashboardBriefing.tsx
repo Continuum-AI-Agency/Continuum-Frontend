@@ -1,21 +1,24 @@
 import type { ReactNode } from "react";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
-import { NorthStarActions } from "./NorthStarActions";
 
 type DashboardBriefingProps = {
   brandId: string;
   lastGeneratedAt?: string;
-  // Left column: the account insights list. Right column: the top creatives.
+  // A quiet KPI strip under the header. Left column: the account insights list.
+  // Right column: the top creatives.
+  metricStripSlot?: ReactNode;
   insightsSlot?: ReactNode;
   creativesSlot?: ReactNode;
 };
 
 // The lead value moment for the home board: an "Overview" header + manual
-// refresh, the three North Star actions, then the account insights beside the
-// top creatives. Trends live in the Brand Trends data table below.
+// refresh, the headline KPI strip, then the account insights beside the top
+// creatives. Each module carries its own jump-to-workspace shortcut; trends live
+// in the Brand Trends data table below.
 export function DashboardBriefing({
   brandId,
   lastGeneratedAt,
+  metricStripSlot,
   insightsSlot,
   creativesSlot,
 }: DashboardBriefingProps) {
@@ -29,7 +32,7 @@ export function DashboardBriefing({
         <BrandInsightsGenerateButton brandId={brandId} lastGeneratedAt={lastGeneratedAt} subtle force />
       </div>
 
-      <NorthStarActions />
+      {metricStripSlot}
 
       <div data-tour-id="dashboard-top-content" className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {insightsSlot}

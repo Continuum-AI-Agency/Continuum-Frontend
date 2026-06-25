@@ -373,13 +373,13 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                 </div>
 
                 {support && !support.ok ? (
-                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
                     {support.reason}
                   </div>
                 ) : null}
 
                 {isAwaiting ? (
-                  <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                  <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
                     Paused — edit the timeline and click Render &amp; Continue to resume the workflow.
                   </div>
                 ) : null}
@@ -404,7 +404,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                           dragItemId === item.id && 'opacity-50',
                         )}
                       >
-                        <span className="flex h-5 w-5 items-center justify-center rounded bg-background text-[10px] font-semibold">
+                        <span className="flex h-5 w-5 items-center justify-center rounded bg-background text-2xs font-semibold">
                           {index + 1}
                         </span>
                         {isImage ? (
@@ -423,10 +423,10 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                               placeholder={String(DEFAULT_STILL_DURATION)}
                               value={item.durationSec ?? ''}
                               onChange={(event) => handleNumberChange(item.id, 'durationSec', event.target.value)}
-                              className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                              className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               aria-label={`Item ${index + 1} still duration seconds`}
                             />
-                            <span className="text-[10px] text-muted-foreground">s</span>
+                            <span className="text-2xs text-muted-foreground">s</span>
                           </div>
                         ) : (
                           <>
@@ -437,7 +437,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                               placeholder="Start"
                               value={item.trimStartSec ?? ''}
                               onChange={(event) => handleNumberChange(item.id, 'trimStartSec', event.target.value)}
-                              className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                              className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               aria-label={`Item ${index + 1} trim start seconds`}
                             />
                             <input
@@ -447,7 +447,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                               placeholder="End"
                               value={item.trimEndSec ?? ''}
                               onChange={(event) => handleNumberChange(item.id, 'trimEndSec', event.target.value)}
-                              className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                              className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                               aria-label={`Item ${index + 1} trim end seconds`}
                             />
                           </>
@@ -506,7 +506,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-full justify-center text-[11px]"
+                  className="h-7 w-full justify-center text-xs"
                   onClick={handleAddItem}
                   disabled={items.length >= MAX_ITEMS}
                 >
@@ -517,7 +517,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                 <Button
                   variant="default"
                   size="sm"
-                  className="h-8 w-full justify-center text-[11px]"
+                  className="h-8 w-full justify-center text-xs"
                   onClick={handleRenderAndContinue}
                   disabled={renderDisabled}
                 >
@@ -530,7 +530,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted p-4">
                       <GenerationPulseLoader />
                       <Progress value={progress * 100} className="h-1.5 w-3/4" />
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         {Math.round(progress * 100)}% rendering in browser
                       </span>
                     </div>
@@ -555,7 +555,7 @@ export function TimelineEditorBlock({ id, data, selected }: NodeProps<ReactFlowN
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
                       <VideoIcon className="h-6 w-6 opacity-30" />
-                      <span className="text-[10px]">Connect clips &amp; images, then render</span>
+                      <span className="text-2xs">Connect clips &amp; images, then render</span>
                     </div>
                   )}
                 </div>

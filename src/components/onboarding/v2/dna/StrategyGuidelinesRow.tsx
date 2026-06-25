@@ -20,7 +20,7 @@ function auditScore(audit: unknown): number | null {
 function ScoreChip({ score }: { score: number | null }) {
   if (score === null) return null;
   return (
-    <Badge variant="secondary" className="text-[11px]">
+    <Badge variant="secondary" className="text-xs">
       Score {score}
     </Badge>
   );
@@ -29,7 +29,7 @@ function ScoreChip({ score }: { score: number | null }) {
 function ChipList({ label, items }: { label: string; items?: string[] | null }) {
   if (!items || items.length === 0) return null;
   return (
-    <p className="m-0 text-[12px] text-muted-foreground">
+    <p className="m-0 text-sm text-muted-foreground">
       <span className="font-medium text-foreground">{label}:</span> {items.join(", ")}
     </p>
   );
@@ -37,7 +37,7 @@ function ChipList({ label, items }: { label: string; items?: string[] | null }) 
 
 function StrategyBody({ strategy }: { strategy: BrandStrategy }) {
   return (
-    <div className="flex flex-col gap-2 text-[13px]">
+    <div className="flex flex-col gap-2 text-sm">
       {strategy.promise?.headline ? (
         <p className="m-0 font-medium text-foreground">{strategy.promise.headline}</p>
       ) : null}
@@ -47,7 +47,7 @@ function StrategyBody({ strategy }: { strategy: BrandStrategy }) {
       <ChipList label="Pillars" items={strategy.message_pillars?.map((pillar) => pillar.pillar)} />
       <ChipList label="Traits" items={strategy.personality?.traits} />
       {strategy.taglines?.primary ? (
-        <p className="m-0 text-[12px] text-muted-foreground">
+        <p className="m-0 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Tagline:</span> {strategy.taglines.primary}
         </p>
       ) : null}
@@ -57,7 +57,7 @@ function StrategyBody({ strategy }: { strategy: BrandStrategy }) {
 
 function GuidelinesBody({ guidelines }: { guidelines: BrandGuidelines }) {
   return (
-    <div className="flex flex-col gap-2 text-[13px]">
+    <div className="flex flex-col gap-2 text-sm">
       <ChipList label="Do" items={guidelines.voice_rules?.dos} />
       <ChipList label="Don't" items={guidelines.voice_rules?.donts} />
       <ChipList label="Avoid" items={guidelines.messaging_guardrails?.banned_words} />

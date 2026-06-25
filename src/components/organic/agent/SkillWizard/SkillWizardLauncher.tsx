@@ -54,7 +54,7 @@ export function SkillWizardLauncher({ brandId, skills, templates, onChangedActio
         aria-label="Skill wizard"
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
-        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-background/80 px-2.5 text-[12.5px] font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/60 hover:text-foreground"
+        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-background/80 px-2.5 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         <Wand2 className="h-3.5 w-3.5" />
         Manage skills
@@ -82,7 +82,7 @@ export function SkillWizardLauncher({ brandId, skills, templates, onChangedActio
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                 )}
-                <span className="truncate text-[13px] font-semibold">{title}</span>
+                <span className="truncate text-sm font-semibold">{title}</span>
               </div>
               <button
                 type="button"
@@ -122,15 +122,15 @@ export function SkillWizardLauncher({ brandId, skills, templates, onChangedActio
 
               {screen.kind === 'template' && (
                 <div className="flex flex-col gap-2">
-                  <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Lock className="h-3 w-3" />
                     First-party library skill — read-only. Tag it in chat to apply it.
                   </p>
-                  <span className="text-[13px] font-medium">{screen.skill.name}</span>
+                  <span className="text-sm font-medium">{screen.skill.name}</span>
                   {screen.skill.description && (
-                    <p className="text-[12px] text-muted-foreground">{screen.skill.description}</p>
+                    <p className="text-sm text-muted-foreground">{screen.skill.description}</p>
                   )}
-                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 text-[12px] leading-relaxed text-foreground">
+                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 text-sm leading-relaxed text-foreground">
                     {screen.skill.directives}
                   </pre>
                 </div>

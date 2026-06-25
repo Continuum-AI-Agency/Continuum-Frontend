@@ -125,7 +125,7 @@ export function AIStudioChat({ brandProfileId, roomId = "main", className }: AIS
                   className="max-w-full"
                 >
                   {!isMe && (
-                    <Text size="1" color="gray" className="ml-1 text-[10px]">
+                    <Text size="1" color="gray" className="ml-1 text-2xs">
                       {msg.user_name || "Unknown"}
                     </Text>
                   )}
@@ -139,7 +139,7 @@ export function AIStudioChat({ brandProfileId, roomId = "main", className }: AIS
                   >
                     {msg.content}
                   </div>
-                  <Text size="1" color="gray" className={cn("text-[9px] opacity-40", isMe ? "mr-1" : "ml-1")}>
+                  <Text size="1" color="gray" className={cn("text-3xs opacity-40", isMe ? "mr-1" : "ml-1")}>
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </Flex>

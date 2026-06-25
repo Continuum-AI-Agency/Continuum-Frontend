@@ -78,7 +78,7 @@ export function InsightCategoryCard({
               <div className="min-w-0 space-y-1">
                 <div className="flex items-baseline gap-1.5">
                   {insight.metric && (
-                    <span className="shrink-0 rounded bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className="shrink-0 rounded bg-muted px-1 py-px text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                       {METRIC_LABELS[insight.metric] ?? insight.metric}
                     </span>
                   )}
@@ -90,7 +90,7 @@ export function InsightCategoryCard({
                   </span>
                 </div>
                 {insight.recommendation && (
-                  <p className="text-[11px] leading-snug text-muted-foreground/70">
+                  <p className="text-xs leading-snug text-muted-foreground/70">
                     {insight.recommendation}
                     {insight.estimated_impact && (
                       <span className="ml-1 font-medium text-foreground/60">

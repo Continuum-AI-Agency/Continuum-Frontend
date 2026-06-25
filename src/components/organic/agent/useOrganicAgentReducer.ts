@@ -38,7 +38,7 @@ export type PanelAction =
   | { type: "BEGIN_STREAMING" }
   | { type: "STREAM_DELTA"; delta: string }
   | { type: "STREAM_TOOL_CALL"; event: ToolCallEvent }
-  | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown }
+  | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown; ok?: boolean; reason?: string }
   | { type: "STREAM_COMPLETE" }
   | { type: "STREAM_ERROR"; error: string }
   | { type: "RETRY_FROM_ASSISTANT"; assistantMessageId: string }
@@ -243,7 +243,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                 ...m,
                 toolCalls: (m.toolCalls ?? []).map((tc) =>
                   tc.toolCallId === action.toolCallId
-                    ? { ...tc, result: action.result }
+                    ? { ...tc, result: action.result, ok: action.ok, reason: action.reason }
                     : tc
                 ),
               }

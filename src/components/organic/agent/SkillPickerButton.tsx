@@ -38,7 +38,7 @@ export function SkillPickerButton({
         <button
           type="button"
           aria-label="Apply a brand skill"
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <Sparkles className="h-3.5 w-3.5" />
           Skills
@@ -64,9 +64,9 @@ export function SkillPickerButton({
                   }}
                 >
                   <div className="flex flex-col">
-                    <span className="text-[13px] font-medium">{skill.name}</span>
+                    <span className="text-sm font-medium">{skill.name}</span>
                     {skill.description && (
-                      <span className="text-[11px] text-muted-foreground">{skill.description}</span>
+                      <span className="text-xs text-muted-foreground">{skill.description}</span>
                     )}
                   </div>
                 </CommandItem>
@@ -84,9 +84,9 @@ export function SkillPickerButton({
                     }}
                   >
                     <div className="flex flex-col">
-                      <span className="text-[13px] font-medium">{skill.name}</span>
+                      <span className="text-sm font-medium">{skill.name}</span>
                       {skill.description && (
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {skill.description}
                         </span>
                       )}

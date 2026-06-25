@@ -46,7 +46,7 @@ export function CreativeSheetSummary({
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+          <div className="flex h-full items-center justify-center text-2xs text-muted-foreground">
             No preview
           </div>
         )}
@@ -54,9 +54,9 @@ export function CreativeSheetSummary({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold">{ad.name}</div>
         {ad.adSetName ? (
-          <div className="truncate text-[11px] text-muted-foreground">{ad.adSetName}</div>
+          <div className="truncate text-xs text-muted-foreground">{ad.adSetName}</div>
         ) : null}
-        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
           <span>
             {rotationCount} rotation{rotationCount === 1 ? "" : "s"}
           </span>

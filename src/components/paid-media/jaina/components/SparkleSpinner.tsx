@@ -30,7 +30,7 @@ export function SparkleSpinner({ isActive, className }: SparkleSpinnerProps) {
         initial={{ opacity: 0, scale: 0.85 }}
         animate={{ opacity: isActive ? 1 : 0.4, scale: 1 }}
         transition={{ duration: 0.08 }}
-        className="text-[14px] leading-none"
+        className="text-base leading-none"
       >
         {FRAMES[frame]}
       </motion.span>

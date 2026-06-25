@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge, Callout } from '@radix-ui/themes';
 import { Loader2, Search, RefreshCw, Instagram, Clock, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
 import { useToast } from "@/components/ui/ToastProvider";
+import { MetricStrip } from "@/components/shared/MetricStrip";
 import { CompetitorService } from '@/services/competitorService';
 import { DashboardResponse } from '@/types/competitor-types';
 import { CompetitorPostCard } from './CompetitorPostCard';
@@ -337,59 +338,35 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{dashboard.posts.length}</div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Avg Likes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboard.posts.length > 0
+          <MetricStrip
+            items={[
+              { label: 'Total Posts', value: String(dashboard.posts.length) },
+              {
+                label: 'Avg Likes',
+                value:
+                  dashboard.posts.length > 0
                     ? CompetitorService.formatNumber(
                         Math.round(dashboard.posts.reduce((sum, p) => sum + p.likesCount, 0) / dashboard.posts.length)
                       )
-                    : '0'}
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Avg Comments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboard.posts.length > 0
+                    : '0',
+              },
+              {
+                label: 'Avg Comments',
+                value:
+                  dashboard.posts.length > 0
                     ? CompetitorService.formatNumber(
                         Math.round(dashboard.posts.reduce((sum, p) => sum + p.commentsCount, 0) / dashboard.posts.length)
                       )
-                    : '0'}
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Post Types</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm">
-                  {dashboard.posts.filter(p => p.type === 'Sidecar').length} 📸{' '}
-                  {dashboard.posts.filter(p => p.type === 'Video').length} ▶️{' '}
-                  {dashboard.posts.filter(p => p.type === 'Image').length} 🖼️
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    : '0',
+              },
+              {
+                label: 'Post Types',
+                value: `${dashboard.posts.filter((p) => p.type === 'Sidecar').length} 📸 ${
+                  dashboard.posts.filter((p) => p.type === 'Video').length
+                } ▶️ ${dashboard.posts.filter((p) => p.type === 'Image').length} 🖼️`,
+              },
+            ]}
+          />
 
           <Card>
             <CardHeader>

@@ -123,7 +123,7 @@ function StudioAssetTile({ asset }: { asset: MediaAsset }) {
           )}
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-            <p className="truncate text-[11px] font-medium text-white">{label}</p>
+            <p className="truncate text-xs font-medium text-white">{label}</p>
           </div>
         </div>
       </HoverCardTrigger>
@@ -168,21 +168,21 @@ function StudioAssetHoverDetail({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {SOURCE_LABEL[asset.source]}
           </span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {asset.kind}
           </span>
           {dimensions ? (
-            <span className="text-[10px] tabular-nums text-muted-foreground/80">{dimensions}</span>
+            <span className="text-2xs tabular-nums text-muted-foreground/80">{dimensions}</span>
           ) : null}
         </div>
 
         {tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
-              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground">
                 {tag}
               </span>
             ))}

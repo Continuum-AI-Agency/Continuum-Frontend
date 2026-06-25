@@ -116,7 +116,7 @@ export function BrandSwitcher() {
                         {typeof brand.logo === "string" ? (
                           <Avatar className="size-6 rounded-sm">
                             <AvatarImage src={brand.logo} alt={brand.name} className="object-cover" />
-                            <AvatarFallback className="text-[10px]">{brand.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            <AvatarFallback className="text-2xs">{brand.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
                         ) : (
                           <brand.logo className="size-4 shrink-0" />
@@ -127,7 +127,7 @@ export function BrandSwitcher() {
                         <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="Onboarding incomplete" />
                       )}
                       {brand.isPending && (
-                        <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                        <span className="text-2xs bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
                           Pending
                         </span>
                       )}

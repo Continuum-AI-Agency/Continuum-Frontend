@@ -39,7 +39,7 @@ export function DocumentCategorySelect({
       <SelectTrigger
         size="sm"
         aria-label={ariaLabel}
-        className={cn("h-7 gap-1 rounded-full px-2.5 text-[11px] font-medium", className)}
+        className={cn("h-7 gap-1 rounded-full px-2.5 text-xs font-medium", className)}
       >
         <SelectValue />
       </SelectTrigger>

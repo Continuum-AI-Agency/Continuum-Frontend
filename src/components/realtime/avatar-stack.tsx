@@ -30,7 +30,7 @@ export function AvatarStack({ avatars, max = 5, className }: AvatarStackProps) {
             <TooltipTrigger asChild>
               <Avatar className="border-2 border-background ring-1 ring-white/10 h-8 w-8">
                 {avatar.image && <AvatarImage src={avatar.image} alt={avatar.name} />}
-                <AvatarFallback className="text-[10px] font-bold">
+                <AvatarFallback className="text-2xs font-bold">
                   {avatar.fallback || avatar.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -44,7 +44,7 @@ export function AvatarStack({ avatars, max = 5, className }: AvatarStackProps) {
           </Tooltip>
         ))}
         {remainingCount > 0 && (
-          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted border-2 border-background text-[10px] font-bold text-muted-foreground ring-1 ring-white/10 z-10">
+          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted border-2 border-background text-2xs font-bold text-muted-foreground ring-1 ring-white/10 z-10">
             +{remainingCount}
           </div>
         )}

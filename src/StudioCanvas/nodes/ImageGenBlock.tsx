@@ -331,7 +331,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               maxConnections={1}
               className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
-            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
               Prompt
             </span>
           </div>
@@ -349,14 +349,14 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               maxConnections={refImageLimit}
               className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
-            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
               Ref Image
             </span>
           </div>
        </div>
 
       <div className={cn(
-        "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
+        "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
         (selected || isHovered) ? "opacity-100" : "opacity-0"
       )}>
         {generatorDescription}

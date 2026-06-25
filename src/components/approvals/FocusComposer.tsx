@@ -90,19 +90,19 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGloba
                 <div className="flex items-center gap-2">
                   <Badge
                     variant="secondary"
-                    className="gap-1.5 font-data text-[11px] uppercase tracking-wide"
+                    className="gap-1.5 font-data text-xs uppercase tracking-wide"
                   >
                     <TypeIcon icon={Icon} unsupported={unsupported} typeLabel={actionTypeLabel(action.action_type)} />
                     {actionTypeLabel(action.action_type)}
                   </Badge>
-                  <Badge variant="outline" className="font-data text-[11px]">
+                  <Badge variant="outline" className="font-data text-xs">
                     {scopeLabel(action)}
                   </Badge>
                 </div>
                 <h2 className="text-xl font-medium leading-snug text-foreground">
                   {whyText(action)}
                 </h2>
-                <div className="font-data text-[11px] text-muted-foreground">
+                <div className="font-data text-xs text-muted-foreground">
                   Queued {formatRelativeTime(action.created_at)}
                 </div>
               </div>

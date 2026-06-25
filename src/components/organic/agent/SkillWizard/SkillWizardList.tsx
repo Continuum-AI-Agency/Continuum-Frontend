@@ -15,7 +15,7 @@ type Props = {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <p className="px-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {children}
     </p>
   );
@@ -51,7 +51,7 @@ export function SkillWizardList({
       <div className="flex flex-col gap-1.5">
         <SectionLabel>Your skills</SectionLabel>
         {skills.length === 0 ? (
-          <p className="px-0.5 text-[12px] text-muted-foreground">
+          <p className="px-0.5 text-sm text-muted-foreground">
             No skills yet — create one or ask the agent to save one.
           </p>
         ) : (
@@ -65,9 +65,9 @@ export function SkillWizardList({
                 onClick={() => onEditAction(skill)}
                 className="min-w-0 flex-1 text-left"
               >
-                <span className="block truncate text-[13px] font-medium">{skill.name}</span>
+                <span className="block truncate text-sm font-medium">{skill.name}</span>
                 {skill.description && (
-                  <span className="block truncate text-[11px] text-muted-foreground">
+                  <span className="block truncate text-xs text-muted-foreground">
                     {skill.description}
                   </span>
                 )}
@@ -107,9 +107,9 @@ export function SkillWizardList({
               className="flex items-start justify-between gap-2 rounded-md border border-dashed border-border/60 px-2.5 py-1.5 text-left"
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium">{skill.name}</span>
+                <span className="block truncate text-sm font-medium">{skill.name}</span>
                 {skill.description && (
-                  <span className="block truncate text-[11px] text-muted-foreground">
+                  <span className="block truncate text-xs text-muted-foreground">
                     {skill.description}
                   </span>
                 )}

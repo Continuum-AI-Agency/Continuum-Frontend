@@ -127,15 +127,15 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
                     aria-label={`${actionTypeLabel(action.action_type)} · ${scopeLabel(action)}`}
                   >
                     <div className="flex w-full items-center justify-between gap-1">
-                      <span className="flex items-center gap-1.5 truncate text-[11px] font-medium uppercase tracking-wide text-foreground">
+                      <span className="flex items-center gap-1.5 truncate text-xs font-medium uppercase tracking-wide text-foreground">
                         <Icon className="h-3 w-3 shrink-0" strokeWidth={1.5} />
                         <span className="truncate">{actionTypeLabel(action.action_type)}</span>
                       </span>
-                      <span className="font-data text-[10px] tabular-nums text-muted-foreground">
+                      <span className="font-data text-2xs tabular-nums text-muted-foreground">
                         {formatRelativeTime(action.created_at)}
                       </span>
                     </div>
-                    <div className="w-full truncate font-data text-[11px] text-muted-foreground">
+                    <div className="w-full truncate font-data text-xs text-muted-foreground">
                       {scopeLabel(action)}
                     </div>
                   </button>

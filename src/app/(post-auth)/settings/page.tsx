@@ -295,8 +295,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   }
 
   return (
-    <div className="w-full max-w-none px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
-      <header className="mb-4 space-y-1">
+    <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
+      <header className="mb-3 shrink-0 space-y-1">
         <Heading size="5" className="text-white">
           Settings
         </Heading>
@@ -305,14 +305,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </Text>
       </header>
 
-      <Suspense fallback={null}>
-        <SettingsShell
-          activeSection={initialSection}
-          brandPill={<BrandNavPill name={defaultBrandName} logoUrl={brandLogoUrl} />}
-          accountPill={<AccountNavPill email={userEmail} />}
-          activeSectionSlot={activeSectionSlot}
-        />
-      </Suspense>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <Suspense fallback={null}>
+          <SettingsShell
+            activeSection={initialSection}
+            brandPill={<BrandNavPill name={defaultBrandName} logoUrl={brandLogoUrl} />}
+            accountPill={<AccountNavPill email={userEmail} />}
+            activeSectionSlot={activeSectionSlot}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }

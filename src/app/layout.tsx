@@ -6,11 +6,8 @@ import "@radix-ui/themes/styles.css";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "../components/theme-provider";
-import { ToastProvider } from "@/components/ui/ToastProvider";
-import { ReactQueryProvider } from "../lib/react-query/provider";
 import { VersionBanner } from "@/components/version-banner";
 import type { ThemeAppearance } from "@/lib/theme/themeDom";
-import { GalaxyBackgroundLazy } from "@/components/ui/GalaxyBackgroundLazy";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -63,6 +60,7 @@ function NoFlashScript() {
       } catch (_) {}
     })();
   `;
+  // biome-ignore lint/security/noDangerouslySetInnerHtml: Inline theme bootstrapping prevents auth-page theme flash before React hydrates.
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
@@ -90,15 +88,10 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider initialAppearance={initialAppearance}>
-          <ReactQueryProvider>
-            <ToastProvider>
-              <GalaxyBackgroundLazy intensity={1} speed="glacial" />
-              <VersionBanner />
-              <div className="relative z-10">
-                {children}
-              </div>
-            </ToastProvider>
-          </ReactQueryProvider>
+          <VersionBanner />
+          <div className="relative z-10">
+            {children}
+          </div>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />

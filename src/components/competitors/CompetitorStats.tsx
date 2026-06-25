@@ -1,6 +1,7 @@
 import { Badge, Card, Flex, Heading, Text } from "@radix-ui/themes";
 import { BarChart3, Calendar, Eye, Heart, MessageCircle, TrendingUp } from "lucide-react";
 
+import { MetricStrip } from "@/components/shared/MetricStrip";
 import { CompetitorService } from "@/services/competitorService";
 import type { CompetitorPost } from "@/types/competitor-types";
 
@@ -129,26 +130,7 @@ export const CompetitorStats = ({ posts }: CompetitorStatsProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="border border-white/10 bg-white/5 p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-              <Text size="2" color="gray">
-                {stat.title}
-              </Text>
-            </div>
-            <div className="mt-2">
-              <Text as="div" size="6" weight="bold">
-                {stat.value}
-              </Text>
-              <Text size="1" color="gray">
-                {stat.description}
-              </Text>
-            </div>
-          </Card>
-        ))}
-      </div>
+      <MetricStrip items={stats.map((stat) => ({ label: stat.title, value: stat.value }))} />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="border border-white/10 bg-white/5 p-4 shadow-sm">

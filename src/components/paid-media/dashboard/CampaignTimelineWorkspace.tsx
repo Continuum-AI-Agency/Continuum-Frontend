@@ -706,11 +706,11 @@ function ContextMetricCard({ metric, value, delta, selected, onClick }: ContextM
           : "border-border/80 bg-card hover:border-primary/35 hover:bg-muted/40"
       )}
     >
-      <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{labelForMetric(metric)}</div>
+      <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">{labelForMetric(metric)}</div>
       <div className="mt-1 text-base font-semibold">{formatMetricValue(metric, value)}</div>
       <div
         className={cn(
-          "mt-1 inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-medium",
+          "mt-1 inline-flex items-center rounded-sm px-1.5 py-0.5 text-2xs font-medium",
           isPositive ? "bg-emerald-500/12 text-emerald-600" : "bg-rose-500/12 text-rose-600"
         )}
       >
@@ -765,7 +765,7 @@ function EntityRadarTooltip({ label, comparison, isDcoEnabled, dcoDeltas }: Enti
           ))}
         </div>
       </div>
-      <div className="mt-2 text-[10px] text-muted-foreground">Center = no delta, outward = positive, inward = negative.</div>
+      <div className="mt-2 text-2xs text-muted-foreground">Center = no delta, outward = positive, inward = negative.</div>
     </TooltipContent>
   );
 }
@@ -831,8 +831,8 @@ function MetricSparkCell({ metric, series, isSelected, showTarget, onClick }: Me
       )}
     >
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{labelForMetric(metric)}</span>
-        <span className="text-[11px] font-semibold">{formatMetricValue(metric, currentValue)}</span>
+        <span className="text-2xs uppercase tracking-wide text-muted-foreground">{labelForMetric(metric)}</span>
+        <span className="text-xs font-semibold">{formatMetricValue(metric, currentValue)}</span>
       </div>
       <div className="h-10">
         {series.length > 0 ? (
@@ -880,7 +880,7 @@ function MetricSparkCell({ metric, series, isSelected, showTarget, onClick }: Me
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center text-[10px] text-muted-foreground">No data</div>
+          <div className="flex h-full items-center text-2xs text-muted-foreground">No data</div>
         )}
       </div>
     </button>
@@ -910,7 +910,7 @@ function AdPreviewCard({
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="truncate text-xs font-semibold text-foreground">{adTitle}</div>
-        <Badge variant={ad.effectiveStatus?.toUpperCase() === "ACTIVE" ? "default" : "secondary"} className="text-[10px]">
+        <Badge variant={ad.effectiveStatus?.toUpperCase() === "ACTIVE" ? "default" : "secondary"} className="text-2xs">
           {ad.effectiveStatus ?? ad.status ?? "UNKNOWN"}
         </Badge>
       </div>
@@ -921,26 +921,26 @@ function AdPreviewCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumbnail} alt={ad.name} className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">No preview image</div>
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No preview image</div>
         )}
       </div>
 
       <div className="mb-2 grid grid-cols-2 gap-1.5">
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Spend</div>
-          <div className="text-[11px] font-semibold">{formatAdMetricValue("spend", ad.metrics?.spend ?? null)}</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">Spend</div>
+          <div className="text-xs font-semibold">{formatAdMetricValue("spend", ad.metrics?.spend ?? null)}</div>
         </div>
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">ROAS</div>
-          <div className="text-[11px] font-semibold">{formatAdMetricValue("roas", ad.metrics?.roas ?? null)}</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">ROAS</div>
+          <div className="text-xs font-semibold">{formatAdMetricValue("roas", ad.metrics?.roas ?? null)}</div>
         </div>
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">CTR</div>
-          <div className="text-[11px] font-semibold">{formatAdMetricValue("ctr", ad.metrics?.ctr ?? null)}</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">CTR</div>
+          <div className="text-xs font-semibold">{formatAdMetricValue("ctr", ad.metrics?.ctr ?? null)}</div>
         </div>
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Clicks</div>
-          <div className="text-[11px] font-semibold">{formatAdMetricValue("clicks", ad.metrics?.clicks ?? null)}</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">Clicks</div>
+          <div className="text-xs font-semibold">{formatAdMetricValue("clicks", ad.metrics?.clicks ?? null)}</div>
         </div>
       </div>
 
@@ -949,14 +949,14 @@ function AdPreviewCard({
           href={ad.previewShareableLink}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           onClick={(event) => event.stopPropagation()}
         >
           Preview
           <OpenInNewWindowIcon className="h-3 w-3" />
         </a>
       ) : (
-        <span className="text-[11px] text-muted-foreground">Preview unavailable</span>
+        <span className="text-xs text-muted-foreground">Preview unavailable</span>
       )}
     </button>
   );
@@ -2178,7 +2178,7 @@ export function CampaignTimelineWorkspace({
               </div>
 
               <div className="rounded-md border border-border/70 bg-background/60 p-2">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {(["CAMPAIGN", "ADSET", "AD"] as const).map((scope) => {
                       const style = SCOPE_SIGNPOST_STYLES[scope];
@@ -2201,7 +2201,7 @@ export function CampaignTimelineWorkspace({
                   <span className="text-muted-foreground">Tooltips include next-bucket KPI shift after each action.</span>
                 </div>
 
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
                     <span className="rounded border border-border/70 px-2 py-0.5">
                       Window points: {visibleTopChartData.length}/{topChartModel.data.length}
@@ -2219,7 +2219,7 @@ export function CampaignTimelineWorkspace({
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {topChartZoomRange ? (
-                      <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={clearTopChartZoom}>
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={clearTopChartZoom}>
                         Reset zoom
                       </Button>
                     ) : null}
@@ -2227,7 +2227,7 @@ export function CampaignTimelineWorkspace({
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 border-amber-500/35 bg-amber-500/10 px-2 text-[11px] text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+                        className="h-7 border-amber-500/35 bg-amber-500/10 px-2 text-xs text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
                         onClick={() => onResolutionChange("hourly")}
                       >
                         Switch to hourly
@@ -2350,7 +2350,7 @@ export function CampaignTimelineWorkspace({
           </div>
 
           <div className="flex-1 overflow-auto rounded-md border">
-            <div className="grid grid-cols-[minmax(220px,1.12fr)_repeat(6,minmax(112px,1fr))] gap-2 border-b bg-muted/20 px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <div className="grid grid-cols-[minmax(220px,1.12fr)_repeat(6,minmax(112px,1fr))] gap-2 border-b bg-muted/20 px-2.5 py-1.5 text-2xs uppercase tracking-wide text-muted-foreground">
               <div>Campaign / Ad Set</div>
               {KPI_COLUMNS.map((metric) => (
                 <div key={metric}>{labelForMetric(metric)}</div>
@@ -2499,7 +2499,7 @@ export function CampaignTimelineWorkspace({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-6 px-2 text-[10px]"
+                                className="h-6 px-2 text-2xs"
                                 onClick={() => {
                                   setAdSetState((prev) => ({
                                     ...prev,
@@ -2804,7 +2804,7 @@ export function CampaignTimelineWorkspace({
                                           </div>
 
                                           <div className="mt-2 rounded border border-border/70 bg-background/70 p-2">
-                                            <div className="mb-2 flex items-center justify-between text-[11px]">
+                                            <div className="mb-2 flex items-center justify-between text-xs">
                                               <span className="text-muted-foreground">Ads in {adSet.name}</span>
                                               <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">
                                                 {adSetAdsState.ads.length} loaded
@@ -2824,7 +2824,7 @@ export function CampaignTimelineWorkspace({
                                                 <Button
                                                   variant="outline"
                                                   size="sm"
-                                                  className="h-6 px-2 text-[10px]"
+                                                  className="h-6 px-2 text-2xs"
                                                   onClick={() => {
                                                     setAdsByAdSet((prev) => ({
                                                       ...prev,
@@ -2880,9 +2880,9 @@ export function CampaignTimelineWorkspace({
             <div className="grid grid-cols-2 gap-1.5">
               {briefingMetrics.map((item) => (
                 <div key={`brief-${item.metric}`} className="rounded border border-border/70 bg-background/70 px-2 py-1.5">
-                  <div className="text-[9px] uppercase tracking-wide text-muted-foreground">{item.label}</div>
+                  <div className="text-3xs uppercase tracking-wide text-muted-foreground">{item.label}</div>
                   <div className="mt-0.5 text-xs font-semibold">{formatMetricValue(item.metric, item.value)}</div>
-                  <div className={cn("text-[10px]", item.delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                  <div className={cn("text-2xs", item.delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
                     {item.delta >= 0 ? "+" : ""}
                     {item.delta.toFixed(2)}%
                   </div>
@@ -2891,7 +2891,7 @@ export function CampaignTimelineWorkspace({
             </div>
 
             <div className="rounded border border-border/70 bg-background/70 p-2">
-              <div className="mb-1 text-[11px] text-muted-foreground">Aggregated {labelForMetric(selectedMetric)} trend</div>
+              <div className="mb-1 text-xs text-muted-foreground">Aggregated {labelForMetric(selectedMetric)} trend</div>
               <div className="h-24">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={briefingLineData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
@@ -2928,10 +2928,10 @@ export function CampaignTimelineWorkspace({
                 value={campaignQuery}
                 onChange={(event) => setCampaignQuery(event.target.value)}
                 placeholder="Search campaigns"
-                className="h-6 w-full bg-transparent text-[11px] outline-none placeholder:text-muted-foreground/80"
+                className="h-6 w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground/80"
                 aria-label="Search campaigns"
               />
-              <span className="rounded border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
+              <span className="rounded border border-border/70 px-1 py-0.5 text-2xs text-muted-foreground">
                 {watchlistCampaigns.length}
               </span>
             </div>
@@ -2940,7 +2940,7 @@ export function CampaignTimelineWorkspace({
               <Button
                 size="sm"
                 variant={watchlistGroupMode === "index" ? "secondary" : "ghost"}
-                className="h-6 px-2 text-[10px]"
+                className="h-6 px-2 text-2xs"
                 onClick={() => setWatchlistGroupMode("index")}
               >
                 Indexes
@@ -2948,7 +2948,7 @@ export function CampaignTimelineWorkspace({
               <Button
                 size="sm"
                 variant={watchlistGroupMode === "objective" ? "secondary" : "ghost"}
-                className="h-6 px-2 text-[10px]"
+                className="h-6 px-2 text-2xs"
                 onClick={() => setWatchlistGroupMode("objective")}
               >
                 Types
@@ -2957,13 +2957,13 @@ export function CampaignTimelineWorkspace({
 
             <div className="mt-1.5 flex-1 space-y-1.5 overflow-auto pr-0.5">
               {watchlistCampaigns.length === 0 ? (
-                <div className="rounded border border-border/70 bg-background/70 px-2 py-1.5 text-[11px] text-muted-foreground">
+                <div className="rounded border border-border/70 bg-background/70 px-2 py-1.5 text-xs text-muted-foreground">
                   No campaigns match the current filter.
                 </div>
               ) : (
                 watchlistGroups.map((group) => (
                   <div key={`watchlist-group-${group.id}`} className="rounded border border-border/70 bg-background/70 p-1">
-                    <div className="mb-1 flex items-center justify-between px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <div className="mb-1 flex items-center justify-between px-1 text-2xs uppercase tracking-wide text-muted-foreground">
                       <span className="truncate">{group.label}</span>
                       <span className={cn(group.isSelectedIndex ? "text-primary" : undefined)}>{group.count}</span>
                     </div>
@@ -2990,11 +2990,11 @@ export function CampaignTimelineWorkspace({
                               void loadAdSets(campaign.id);
                             }}
                           >
-                            <span className="truncate text-[11px] font-medium">{campaign.name}</span>
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="truncate text-xs font-medium">{campaign.name}</span>
+                            <span className="text-2xs text-muted-foreground">
                               {formatMetricValue(sortMetric, getCampaignMetricValue(campaign, sortMetric))}
                             </span>
-                            <span className={cn("text-[10px] font-medium", delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                            <span className={cn("text-2xs font-medium", delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
                               {delta >= 0 ? "+" : ""}
                               {delta.toFixed(2)}%
                             </span>
@@ -3008,18 +3008,18 @@ export function CampaignTimelineWorkspace({
             </div>
 
             <div className="mt-1.5 rounded border border-border/70 bg-background/70 p-1.5">
-              <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 flex items-center justify-between text-2xs uppercase tracking-wide text-muted-foreground">
                 <span>DCO 24h</span>
                 <span>{recentActionMessages.length}</span>
               </div>
               <div className="max-h-32 space-y-1 overflow-auto">
                 {recentActionMessages.length === 0 ? (
-                  <div className="text-[11px] text-muted-foreground">No events in the last 24h.</div>
+                  <div className="text-xs text-muted-foreground">No events in the last 24h.</div>
                 ) : (
                   recentActionMessages.map((item) => (
                     <div key={`event-msg-rail-${item.id}`} className="rounded border border-border/60 bg-card px-1.5 py-1">
-                      <div className="truncate text-[10px] text-foreground">{item.text}</div>
-                      <div className="text-[10px] text-muted-foreground">{formatRelativeTime(item.at)}</div>
+                      <div className="truncate text-2xs text-foreground">{item.text}</div>
+                      <div className="text-2xs text-muted-foreground">{formatRelativeTime(item.at)}</div>
                     </div>
                   ))
                 )}

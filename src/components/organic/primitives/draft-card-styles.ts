@@ -126,7 +126,7 @@ export function statusFrameClasses(
 }
 
 export const platformBadgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+  "inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-bold uppercase tracking-wider",
   {
     variants: {
       platform: {
@@ -151,7 +151,7 @@ export const platformBadgeVariants = cva(
 );
 
 export const statusBadgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+  "inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-bold uppercase tracking-wider",
   {
     variants: {
       status: {

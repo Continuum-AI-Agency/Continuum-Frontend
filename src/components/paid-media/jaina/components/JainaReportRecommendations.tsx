@@ -31,18 +31,18 @@ export function JainaReportRecommendations({ recommendations, isStreaming }: Jai
                 <div className="prose prose-invert max-w-none">
                   <SafeMarkdown
                     content={item.rationale}
-                    className="text-[14px] leading-relaxed text-secondary"
+                    className="text-base leading-relaxed text-secondary"
                     mode={isStreaming ? "streaming" : "static"}
                   />
                 </div>
                 <Flex align="center" gap="3" wrap="wrap">
                   {item.expected_impact && (
-                    <Badge color="indigo" variant="soft" className="text-[10px] uppercase">
+                    <Badge color="indigo" variant="soft" className="text-2xs uppercase">
                       Impact: {item.expected_impact}
                     </Badge>
                   )}
                   {item.priority && (
-                    <Badge color="blue" variant="soft" className="text-[10px] uppercase">
+                    <Badge color="blue" variant="soft" className="text-2xs uppercase">
                       Priority: {item.priority}
                     </Badge>
                   )}

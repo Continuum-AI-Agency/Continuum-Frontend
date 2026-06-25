@@ -185,13 +185,13 @@ function BrandRow({
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium text-foreground">{brand.name}</p>
           {isActive ? (
-            <Badge variant="secondary" className="gap-1 text-[10px]">
+            <Badge variant="secondary" className="gap-1 text-2xs">
               <Check className="h-3 w-3" />
               Active
             </Badge>
           ) : null}
           {isPending ? (
-            <Badge variant="outline" className="text-[10px]">Invite pending</Badge>
+            <Badge variant="outline" className="text-2xs">Invite pending</Badge>
           ) : null}
         </div>
         {role ? (

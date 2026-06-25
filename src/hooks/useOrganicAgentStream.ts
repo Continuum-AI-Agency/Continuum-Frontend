@@ -9,9 +9,21 @@ import {
   parseOrganicStreamEvent,
   postListCardFromToolResult,
 } from "@/components/organic/agent/streamEventParser";
+import { useCalendarStore } from "@/lib/organic/store";
 
 const RECONNECT_BACKOFF_MS = 750;
 const MAX_RECONNECT_ATTEMPTS = 5;
+
+// Tools that mutate a draft's lifecycle state in a way the planner/calendar must
+// reflect immediately (status, scheduling, deletion). A successful call should
+// refetch the calendar so the Scheduled/Draft counts match what the agent did,
+// instead of drifting until the next realtime event.
+const CALENDAR_MUTATING_TOOLS = new Set([
+  "approveDraft",
+  "updateDraft",
+  "publishDraft",
+  "createDraft",
+]);
 
 type OrganicAgentStreamOptions = {
   onRunStarted?: (runId: string) => void;
@@ -97,7 +109,15 @@ export function useOrganicAgentStream(
               type: "STREAM_TOOL_RESULT",
               toolCallId: parsed.toolCallId,
               result: parsed.result,
+              ok: parsed.ok,
+              reason: parsed.reason,
             });
+            // Reconcile the calendar with a lifecycle mutation that actually
+            // succeeded, so the Scheduled/Draft counts reflect the write the
+            // agent just reported (e.g. approve = schedule).
+            if (parsed.ok !== false && CALENDAR_MUTATING_TOOLS.has(parsed.toolName)) {
+              useCalendarStore.getState().requestCalendarRefetch();
+            }
             const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);
             if (postCard) dispatch({ type: "STREAM_UI_CARD", card: postCard });
             break;

@@ -68,7 +68,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
             <span className="flex flex-col gap-0.5">
               <span>{String(value ?? categoryValue ?? "")}</span>
               {detail ? (
-                <span className="text-[10px] font-normal text-muted-foreground">{detail}</span>
+                <span className="text-2xs font-normal text-muted-foreground">{detail}</span>
               ) : null}
             </span>
           );
