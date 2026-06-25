@@ -51,6 +51,31 @@ describe("useGenerateDraftMedia — contract schema coverage", () => {
       expect(result.success).toBe(true)
     })
 
+    it("parses realize_ready carrying render-ready publishingAssets + assetUrl", () => {
+      const result = mediaRealizeFrameSchema.safeParse({
+        type: "realize_ready",
+        draftId: "d1",
+        kind: "carousel",
+        assetUrl: "https://signed.example/primary.png",
+        publishingAssets: [
+          {
+            role: "slide_1",
+            kind: "image",
+            slideIndex: 1,
+            bucket: "brand-profile-assets",
+            storagePath: "organic/d1/slide1.png",
+            storageUrl: "https://signed.example/slide1.png",
+            mimeType: "image/png",
+          },
+        ],
+      })
+      expect(result.success).toBe(true)
+      if (result.success && result.data.type === "realize_ready") {
+        expect(result.data.publishingAssets?.[0]?.storageUrl).toBe("https://signed.example/slide1.png")
+        expect(result.data.assetUrl).toBe("https://signed.example/primary.png")
+      }
+    })
+
     it("parses realize_failed", () => {
       const result = mediaRealizeFrameSchema.safeParse({
         type: "realize_failed",
@@ -188,5 +213,79 @@ describe("useGenerateDraftMedia — attach-wins guard (patchUnlessUserSupplied)"
     const result = applyTo(draftWith("user_supplied", { assetUrl: "mine.jpg" }))
     expect(result.mediaSuggestion?.mediaStatus).toBe("user_supplied")
     expect(result.mediaSuggestion?.assetUrl).toBe("mine.jpg")
+  })
+})
+
+// realize_ready now carries the persisted render-ready assets so the card shows
+// the generated creative immediately. This mirrors the exact updater the hook
+// applies on that frame (publishingAssets + mediaSuggestion.assetUrl/signedUrl),
+// guarded by attach-wins.
+describe("useGenerateDraftMedia — realize_ready mounts generated media", () => {
+  const PUBLISHING_ASSETS = [
+    {
+      role: "primary",
+      kind: "image" as const,
+      bucket: "brand-profile-assets",
+      storagePath: "organic/d1/creative.png",
+      storageUrl: "https://signed.example/creative.png",
+      mimeType: "image/png",
+    },
+  ]
+  const ASSET_URL = "https://signed.example/creative.png"
+
+  function draftWith(
+    mediaStatus: NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["mediaStatus"],
+    extra: Record<string, unknown> = {},
+  ): OrganicCalendarDraft {
+    return {
+      id: "d1",
+      title: "t",
+      summary: "",
+      timeLabel: "",
+      dateLabel: "",
+      status: "placeholder",
+      platforms: ["instagram"],
+      format: "Post",
+      objective: "",
+      captionPreview: "",
+      tags: [],
+      mediaCount: 0,
+      mediaSuggestion: { mediaStatus, ...extra },
+    } as OrganicCalendarDraft
+  }
+
+  function applyRealizeReady(draft: OrganicCalendarDraft): OrganicCalendarDraft {
+    let captured = draft
+    const updateDraft = (_id: string, fn: (d: OrganicCalendarDraft) => OrganicCalendarDraft) => {
+      captured = fn(draft)
+    }
+    patchUnlessUserSupplied(updateDraft, "d1", (d) => ({
+      ...d,
+      generationStage: undefined,
+      generationError: undefined,
+      publishingAssets: PUBLISHING_ASSETS,
+      mediaSuggestion: {
+        ...d.mediaSuggestion,
+        mediaStatus: "ready",
+        assetUrl: ASSET_URL,
+        signedUrl: ASSET_URL,
+      },
+    }))
+    return captured
+  }
+
+  it("mounts publishingAssets + assetUrl so the card renders without a refetch", () => {
+    const result = applyRealizeReady(draftWith("generating"))
+    expect(result.mediaSuggestion?.mediaStatus).toBe("ready")
+    expect(result.mediaSuggestion?.assetUrl).toBe(ASSET_URL)
+    expect(result.mediaSuggestion?.signedUrl).toBe(ASSET_URL)
+    expect(result.publishingAssets?.[0]?.storageUrl).toBe(ASSET_URL)
+  })
+
+  it("does not clobber a user creative attached mid-realize", () => {
+    const result = applyRealizeReady(draftWith("user_supplied", { assetUrl: "mine.jpg" }))
+    expect(result.mediaSuggestion?.mediaStatus).toBe("user_supplied")
+    expect(result.mediaSuggestion?.assetUrl).toBe("mine.jpg")
+    expect(result.publishingAssets).toBeUndefined()
   })
 })

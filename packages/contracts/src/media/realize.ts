@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { organicPublishingAssetSchema } from "../streaming/organic-pipeline";
 
 export const DEFAULT_MEDIA_REALIZE_BATCH_MAX = 10;
 
@@ -51,6 +52,13 @@ export const mediaRealizeFrameSchema = z.discriminatedUnion("type", [
       type: z.literal("realize_ready"),
       draftId: z.string().min(1),
       kind: z.enum(["image", "carousel"]),
+      // Durable, render-ready assets persisted on the draft so the FE mounts the
+      // generated creative immediately (no refetch/reload). publishingAssets is the
+      // shape every card resolver reads (incl. the carousel-only detail preview);
+      // assetUrl mirrors the primary signed URL for the single-image fast path.
+      // Optional so an emit that fails to read them back still validates.
+      publishingAssets: z.array(organicPublishingAssetSchema).optional(),
+      assetUrl: z.string().optional(),
     })
     .strict(),
   z
