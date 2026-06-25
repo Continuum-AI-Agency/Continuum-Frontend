@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { deriveOrganicMediaStage } from "@continuum/contracts";
 
 import { getCreativeAssetsBucket, resolveStoragePath } from "@/lib/creative-assets/config";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@/lib/organic/ai-studio-bridge";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { buildUserSuppliedContentJson } from "./userSuppliedContentJson";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
 export const runtime = "nodejs";
@@ -261,6 +263,44 @@ export async function POST(request: Request) {
       }).catch((err) => {
         console.warn("[apply] registerAiCreativeAsMediaAsset failed", { storagePath, error: String(err) });
       });
+    }
+
+    // Durably write the applied creative onto the draft as USER-SUPPLIED media.
+    // This is the load-bearing step: it stamps `mediaStatus: 'user_supplied'` +
+    // re-signable `publishingAssets` into `content_json` so the Stage-2
+    // expand_draft attach-wins guard preserves it AND a calendar refetch re-reads
+    // the user creative instead of reverting to the agent one. Service-role write
+    // is safe here — brand access was verified above.
+    const organic = (createSupabaseAdminClient() as unknown as SupabaseClient).schema("organic");
+    const { data: draftRow, error: draftError } = await organic
+      .from("organic_calendar_drafts")
+      .select("content_json")
+      .eq("id", payload.draftId)
+      .eq("brand_id", payload.brandProfileId)
+      .single();
+
+    if (draftError || !draftRow) {
+      throw new Error(`Draft not found for apply: ${draftError?.message ?? "no row"}`);
+    }
+
+    const nextContentJson = buildUserSuppliedContentJson({
+      existingContentJson: (draftRow as { content_json: Record<string, unknown> | null }).content_json,
+      assets: persistedAssets,
+      bucket,
+    });
+
+    const { error: draftUpdateError } = await organic
+      .from("organic_calendar_drafts")
+      .update({
+        content_json: nextContentJson,
+        media_stage: deriveOrganicMediaStage(nextContentJson),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", payload.draftId)
+      .eq("brand_id", payload.brandProfileId);
+
+    if (draftUpdateError) {
+      throw new Error(`Failed to persist applied media to draft: ${draftUpdateError.message}`);
     }
 
     const responsePayload = plannerAiStudioApplyResponseSchema.parse({
