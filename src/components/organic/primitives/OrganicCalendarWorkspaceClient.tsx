@@ -38,7 +38,6 @@ import { useCalendarRealtimeSync } from "../hooks/useCalendarRealtimeSync"
 import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
-import { useGenerateReelVideos } from "@/components/organic/hooks/useGenerateReelVideos"
 import { useGenerateDraftMedia } from "@/components/organic/hooks/useGenerateDraftMedia"
 import { OrganicCreativesPicker } from "./OrganicCreativesPicker"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
@@ -660,7 +659,10 @@ export function OrganicCalendarWorkspaceClient({
     clearAll()
   }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll])
 
-  const { generate: generateReelVideos, isGenerating: isGeneratingReels } = useGenerateReelVideos()
+  // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel
+  // drafts. Reel and image batches both flow through this single hook so the
+  // GenerationsPopover ticker registers a backendJobId and server-side cancel works.
+  const { generateDraftMedia, isGenerating: isGeneratingMedia } = useGenerateDraftMedia()
 
   // Selected reel drafts that carry a persisted storyboard and have not yet been
   // rendered to video — the eligible set for the gated "Generate videos" batch.
@@ -699,11 +701,11 @@ export function OrganicCalendarWorkspaceClient({
       )
       if (!confirmed) return
     }
-    void generateReelVideos(brandProfileId, capped)
-  }, [brandProfileId, reelTargets, generateReelVideos])
-
-  // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel drafts.
-  const { generateDraftMedia, isGenerating: isGeneratingMedia } = useGenerateDraftMedia()
+    void generateDraftMedia(
+      brandProfileId,
+      capped.map((t) => ({ feId: t.id, backendDraftId: t.backendDraftId, format: "reel" })),
+    )
+  }, [brandProfileId, reelTargets, generateDraftMedia])
 
   const mediaGenerationTargets = React.useMemo(() => {
     const selected = new Set(selectedIds)
@@ -1078,7 +1080,7 @@ export function OrganicCalendarWorkspaceClient({
         onApprove={handleBulkApprove}
         reelCount={reelTargets.length}
         onGenerateReels={brandProfileId ? handleGenerateReels : undefined}
-        isGeneratingReels={isGeneratingReels}
+        isGeneratingReels={isGeneratingMedia}
         onAttachCreative={brandProfileId && attachTargetDraftIds.length > 0 ? handleBulkAttachCreative : undefined}
         onGenerateMedia={brandProfileId && mediaGenerationTargets.length > 0 ? handleBulkGenerateMedia : undefined}
         isGeneratingMedia={isGeneratingMedia}

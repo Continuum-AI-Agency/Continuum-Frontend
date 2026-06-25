@@ -18,7 +18,7 @@ import {
 } from "@continuum/contracts"
 import { stitchAndFinalizeReel } from "@/lib/organic/reelClientStitch"
 import { checkSpliceSupport } from "@/StudioCanvas/utils/splice/webcodecsSupport"
-import { parseNdjson } from "./useGenerateReelVideos"
+import { parseNdjson } from "@/lib/streaming/parseNdjson"
 import { patchUnlessUserSupplied } from "./attachWinsGuard"
 
 export type MediaGenerationDraftTarget = {

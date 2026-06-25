@@ -176,7 +176,7 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
       {
         type: 'timelineEditor',
         label: 'Video Editor',
-        desc: 'Trim & sequence clips + stills — manual break-point',
+        desc: 'Full editor — trim, split & sequence clips + stills',
         tag: 'Editing',
       },
       {
@@ -292,16 +292,13 @@ const createNodeConfig = (
   if (type === 'timelineEditor') {
     return {
       data: {
-        items: [
-          { id: crypto.randomUUID?.() ?? `item-${Date.now()}-1`, order: 0 },
-          { id: crypto.randomUUID?.() ?? `item-${Date.now()}-2`, order: 1 },
-        ],
+        items: [],
         outputFormat: 'mp4',
         videoCodec: 'avc',
         audioCodec: 'aac',
         committed: false,
       },
-      style: { width: 440, height: 520 },
+      style: { width: 320, height: 260 },
     };
   }
 

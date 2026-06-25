@@ -900,11 +900,11 @@ describe('executeWorkflow', () => {
     // is "awaiting", and the downstream extend never runs and is not marked failed.
     const nodes: StudioNode[] = [
       { id: 'vid', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,vvv' }, type: 'video' },
-      { id: 'edit', position: { x: 0, y: 0 }, data: { items: [{ id: 'i1', order: 0 }] }, type: 'timelineEditor' },
+      { id: 'edit', position: { x: 0, y: 0 }, data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }] }, type: 'timelineEditor' },
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
     ];
     const edges: Edge[] = [
-      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-i1' },
+      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-in' },
       { id: 'e2', source: 'edit', sourceHandle: 'video', target: 'ext', targetHandle: 'video' },
     ];
 
@@ -936,13 +936,13 @@ describe('executeWorkflow', () => {
       {
         id: 'edit',
         position: { x: 0, y: 0 },
-        data: { items: [{ id: 'i1', order: 0 }], committed: true, generatedVideoUrl: editedUrl },
+        data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }], committed: true, generatedVideoUrl: editedUrl },
         type: 'timelineEditor',
       },
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
     ];
     const edges: Edge[] = [
-      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-i1' },
+      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-in' },
       { id: 'e2', source: 'edit', sourceHandle: 'video', target: 'ext', targetHandle: 'video' },
     ];
 

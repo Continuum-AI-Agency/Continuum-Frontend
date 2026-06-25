@@ -128,10 +128,69 @@ function readImageFromSourceNode(node: StudioNode | undefined): string | undefin
   return undefined;
 }
 
-// Resolve each Video Editor (timelineEditor) item to its source bytes + kind.
-// The visual kind is authoritative from the connected source node/output (an
-// image node → still; any video producer → clip), independent of any UI hint on
-// the item. Mirrors resolveClipSources but spans both media kinds.
+function deriveSourceLabel(node: StudioNode): string {
+  const data = node.data as { label?: unknown; fileName?: unknown };
+  if (typeof data.label === 'string' && data.label.trim()) return data.label.trim();
+  if (typeof data.fileName === 'string' && data.fileName.trim()) return data.fileName.trim();
+  switch (node.type) {
+    case 'image':
+      return 'Image';
+    case 'nanoGen':
+      return 'Generated image';
+    case 'video':
+      return 'Video';
+    case 'extendVideo':
+      return 'Extended video';
+    case 'videoEditor':
+    case 'timelineEditor':
+      return 'Edited video';
+    default:
+      return 'Clip';
+  }
+}
+
+function readSourceKindAndUrl(node: StudioNode | undefined): { kind: 'video' | 'image'; url?: string } {
+  if (node?.type === 'image' || node?.type === 'nanoGen') {
+    return { kind: 'image', url: readImageFromSourceNode(node) };
+  }
+  return { kind: 'video', url: readVideoFromSourceNode(node) };
+}
+
+// Enumerate the Video Editor (timelineEditor) input pool: the image/video source
+// nodes connected to the node's single `media-in` handle. Each becomes a
+// placeable tile in the editor's media bin. De-duplicated by source node id.
+export function resolveTimelineInputPool(
+  targetNodeId: string,
+  edges: Edge[],
+  nodes: StudioNode[],
+): TimelineInputSource[] {
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const seen = new Set<string>();
+  const pool: TimelineInputSource[] = [];
+
+  for (const edge of edges) {
+    if (edge.target !== targetNodeId || (edge.targetHandle ?? '') !== TIMELINE_MEDIA_INPUT_HANDLE) continue;
+    if (seen.has(edge.source)) continue;
+    const node = nodeById.get(edge.source);
+    if (!node) continue;
+    seen.add(edge.source);
+    const { kind, url } = readSourceKindAndUrl(node);
+    pool.push({
+      nodeId: edge.source,
+      kind,
+      label: deriveSourceLabel(node),
+      previewUrl: isUsableUrl(url) ? url : undefined,
+    });
+  }
+
+  return pool;
+}
+
+// Resolve each Video Editor (timelineEditor) placement to its source bytes +
+// kind. Placements reference a pool member by `sourceNodeId`; the kind is
+// authoritative from the connected source node/output (an image node → still,
+// any video producer → clip). A source placed more than once (e.g. via split)
+// is fetched once and shared.
 export async function resolveTimelineSources(
   items: TimelineItem[],
   edges: Edge[],
@@ -140,17 +199,20 @@ export async function resolveTimelineSources(
   targetNodeId: string,
 ): Promise<TimelineRenderItem[]> {
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const poolSourceIds = new Set(
+    edges
+      .filter((e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE)
+      .map((e) => e.source),
+  );
   const ordered = [...items].sort((a, b) => a.order - b.order);
+  const resolvedCache = new Map<string, Promise<{ kind: 'video' | 'image'; blob: Blob }>>();
 
-  return Promise.all(
-    ordered.map(async (item) => {
-      const handleId = `media-${item.id}`;
-      const edge = edges.find((e) => e.target === targetNodeId && e.targetHandle === handleId);
-      if (!edge) {
-        throw new Error(`Timeline item ${item.order + 1}: no connected source`);
-      }
+  const resolveSourceNode = (sourceId: string): Promise<{ kind: 'video' | 'image'; blob: Blob }> => {
+    const cached = resolvedCache.get(sourceId);
+    if (cached) return cached;
 
-      const upstream = resolvedOutputs.get(edge.source);
+    const promise = (async () => {
+      const upstream = resolvedOutputs.get(sourceId);
       let kind: 'video' | 'image';
       let source: string | undefined;
 
@@ -163,21 +225,28 @@ export async function resolveTimelineSources(
           ? upstream.url
           : `data:${upstream.mimeType || 'image/png'};base64,${upstream.base64}`;
       } else {
-        const sourceNode = nodeById.get(edge.source);
-        if (sourceNode?.type === 'image' || sourceNode?.type === 'nanoGen') {
-          kind = 'image';
-          source = readImageFromSourceNode(sourceNode);
-        } else {
-          kind = 'video';
-          source = readVideoFromSourceNode(sourceNode);
-        }
+        const resolved = readSourceKindAndUrl(nodeById.get(sourceId));
+        kind = resolved.kind;
+        source = resolved.url;
       }
 
       if (!source) {
-        throw new Error(`Timeline item ${item.order + 1}: upstream produced no media`);
+        throw new Error(`Timeline source ${sourceId}: upstream produced no media`);
       }
-
       const blob = await resolveSource(source);
+      return { kind, blob };
+    })();
+
+    resolvedCache.set(sourceId, promise);
+    return promise;
+  };
+
+  return Promise.all(
+    ordered.map(async (item) => {
+      if (!item.sourceNodeId || !poolSourceIds.has(item.sourceNodeId)) {
+        throw new Error(`Timeline item ${item.order + 1}: no connected source`);
+      }
+      const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
       return {
         itemId: item.id,
         kind,

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Edge } from '@xyflow/react';
+import { TIMELINE_MEDIA_INPUT_HANDLE } from "@continuum/contracts";
 import { StudioNode, ImageNodeData } from "../types";
 import { NodeOutput } from "../types/execution";
 import { useStudioStore } from "../stores/useStudioStore";
@@ -394,19 +395,20 @@ const getNodeReadiness = (
   if (node.type === 'timelineEditor') {
     const data = node.data as TimelineEditorNodeData;
     const items = (data.items ?? []) as TimelineItem[];
-    if (items.length < 1) {
-      return { ready: false, reason: 'Add at least one timeline item' };
+    const poolEdges = incomingEdges.filter((edge) => (edge.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE);
+    if (poolEdges.length === 0) {
+      return { ready: false, reason: 'Connect at least one clip or image to the Video Editor' };
     }
+    // Every placed clip must reference a connected, resolvable pool source.
     for (const item of items) {
-      const handleId = `media-${item.id}`;
-      const edge = incomingEdges.find((candidate) => candidate.targetHandle === handleId);
+      const edge = poolEdges.find((candidate) => candidate.source === item.sourceNodeId);
       if (!edge) {
-        return { ready: false, reason: `Timeline item ${item.order + 1} is not connected` };
+        return { ready: false, reason: 'A timeline clip references a disconnected source' };
       }
       const hasVideo = Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }));
       const hasImage = Boolean(resolveImageInput(edge, resolvedOutputs, nodeById));
       if (!hasVideo && !hasImage) {
-        return { ready: false, reason: `Timeline item ${item.order + 1} has no resolvable media` };
+        return { ready: false, reason: 'A timeline clip has no resolvable media yet' };
       }
     }
     // Hard manual break-point: only "ready" (resumable) once a human has rendered

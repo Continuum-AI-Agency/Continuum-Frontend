@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 
 import { reelVideoBatchFrameSchema } from "@continuum/contracts"
 
-import { parseNdjson } from "./useGenerateReelVideos"
+import { parseNdjson } from "./parseNdjson"
 
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
