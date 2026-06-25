@@ -622,6 +622,10 @@ type ExecuteWorkflowOptions = {
   clearDownstream?: boolean;
   brandId?: string;
   roomId?: string;
+  // "Rerun all": regenerate every runnable node from scratch, ignoring existing
+  // content and signatures. The explicit "start over" path, since a normal run
+  // now reuses nodes that already have content.
+  forceRegenerateAll?: boolean;
 };
 
 export async function executeWorkflow(
@@ -684,6 +688,7 @@ export async function executeWorkflow(
   // upstream closure) and the global Run-all (scope = all media nodes).
   const regenerationRoots = executableNodes
     .filter((node) => {
+      if (options.forceRegenerateAll) return true;
       if (options.targetNodeId === node.id) return true;
       if (!nodeHasUsableOutput(node)) return true;
       return nodeIsStale(node, edges, nodeById);

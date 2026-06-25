@@ -1,10 +1,11 @@
+import { PlayIcon, ReloadIcon, StopIcon } from '@radix-ui/react-icons';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { PlayIcon, StopIcon } from '@radix-ui/react-icons';
-import { executeWorkflow } from '../utils/executeWorkflow';
+import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
-import { Progress } from '@/components/ui/progress';
+import { executeWorkflow } from '../utils/executeWorkflow';
 
 export function Toolbar() {
   const [isRunning, setIsRunning] = useState(false);
@@ -12,14 +13,17 @@ export function Toolbar() {
   const executionControls = useWorkflowExecution();
   const { streamState, cancel } = executionControls;
 
-  const handleRun = async () => {
-      setIsRunning(true);
-      try {
-        await executeWorkflow(executionControls, { brandId });
-      } finally {
-        setIsRunning(false);
-      }
+  const run = async (options: { forceRegenerateAll?: boolean } = {}) => {
+    setIsRunning(true);
+    try {
+      await executeWorkflow(executionControls, { brandId, ...options });
+    } finally {
+      setIsRunning(false);
+    }
   };
+
+  const handleRun = () => run();
+  const handleRerunAll = () => run({ forceRegenerateAll: true });
 
   const handleAbort = () => {
     cancel();
@@ -28,12 +32,29 @@ export function Toolbar() {
 
   return (
     <div className="flex gap-2 items-center">
-
       {!isRunning ? (
-        <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>
-          <PlayIcon className="w-4 h-4 mr-2" />
-          Run Flow
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>
+            <PlayIcon className="w-4 h-4 mr-2" />
+            Run Flow
+          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  aria-label="Rerun all"
+                  variant="destructive"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleRerunAll}
+                >
+                  <ReloadIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Rerun all — regenerate every node from scratch</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       ) : (
         <div className="flex items-center gap-2">
           <Button variant="destructive" size="sm" onClick={handleAbort}>
