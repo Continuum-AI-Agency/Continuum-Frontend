@@ -31,6 +31,51 @@ describe("mediaRealizeFrameSchema", () => {
     );
   });
 
+  it("carries optional render-ready assets on realize_ready (and still accepts the minimal form)", () => {
+    // Enriched form: the FE mounts these to render the creative immediately.
+    expect(
+      mediaRealizeFrameSchema.safeParse({
+        type: "realize_ready",
+        draftId: "d1",
+        kind: "carousel",
+        assetUrl: "https://signed.example/primary.png",
+        publishingAssets: [
+          {
+            role: "slide_1",
+            kind: "image",
+            slideIndex: 1,
+            bucket: "brand-profile-assets",
+            storagePath: "organic/d1/slide1.png",
+            storageUrl: "https://signed.example/slide1.png",
+            mimeType: "image/png",
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    // Minimal form stays valid (additive/optional fields).
+    expect(mediaRealizeFrameSchema.safeParse({ type: "realize_ready", draftId: "d1", kind: "image" }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a base64 data: URL as a publishing asset storageUrl", () => {
+    expect(
+      mediaRealizeFrameSchema.safeParse({
+        type: "realize_ready",
+        draftId: "d1",
+        kind: "image",
+        publishingAssets: [
+          {
+            role: "primary",
+            kind: "image",
+            storagePath: "organic/d1/primary.png",
+            storageUrl: "data:image/png;base64,AAAA",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects an unknown stage and unknown frame type", () => {
     expect(
       mediaRealizeFrameSchema.safeParse({ type: "realize_progress", draftId: "d1", stage: "uploading" })
