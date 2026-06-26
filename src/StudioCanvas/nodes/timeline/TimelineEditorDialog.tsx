@@ -174,7 +174,8 @@ export function TimelineEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[92vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0"
+        overlayClassName="md:left-[var(--app-sidebar-width,3.5rem)]"
+        className="left-4 right-4 top-4 bottom-4 z-50 flex h-auto max-h-none w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-2xl sm:max-w-none md:left-[calc(var(--app-sidebar-width,3.5rem)+1rem)]"
       >
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
           <div className="flex flex-col gap-0.5">
@@ -208,40 +209,42 @@ export function TimelineEditorDialog({
         {isRendering ? <Progress value={progress * 100} className="h-1 rounded-none" /> : null}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-3 p-3">
-            <div className="min-h-0 overflow-hidden rounded-lg border border-border/60 p-2">
-              <MediaBin pool={pool} onPlace={handlePlace} />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr] grid-rows-1 gap-3 p-3">
+              <div className="min-h-0 overflow-hidden rounded-lg border border-border/60 p-2">
+                <MediaBin pool={pool} onPlace={handlePlace} />
+              </div>
+              <div className="min-h-0">
+                <TimelinePreview
+                  videoRef={playback.videoRef}
+                  showVideo={activeKind === 'video'}
+                  activeImageUrl={activeImageUrl}
+                  isEmpty={items.length === 0}
+                  isPlaying={playback.isPlaying}
+                  onTogglePlay={playback.toggle}
+                  playheadSec={playback.playheadSec}
+                  totalSec={model.layout.totalSec}
+                />
+              </div>
             </div>
-            <div className="min-h-0">
-              <TimelinePreview
-                videoRef={playback.videoRef}
-                showVideo={activeKind === 'video'}
-                activeImageUrl={activeImageUrl}
-                isEmpty={items.length === 0}
-                isPlaying={playback.isPlaying}
-                onTogglePlay={playback.toggle}
+
+            <div className="flex h-[35%] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border/60 p-3">
+              <TimelineTrack
+                layout={model.layout}
+                pxPerSec={PX_PER_SEC}
                 playheadSec={playback.playheadSec}
-                totalSec={model.layout.totalSec}
+                onSeek={playback.seek}
+                selectedItemId={selectedItemId}
+                onSelectItem={setSelectedItemId}
+                labelFor={labelFor}
+                onTrim={model.trim}
+                onRemove={(itemId) => {
+                  model.remove(itemId);
+                  if (selectedItemId === itemId) setSelectedItemId(undefined);
+                }}
+                onSplit={model.split}
               />
             </div>
-          </div>
-
-          <div className="border-t border-border/60 p-3">
-            <TimelineTrack
-              layout={model.layout}
-              pxPerSec={PX_PER_SEC}
-              playheadSec={playback.playheadSec}
-              onSeek={playback.seek}
-              selectedItemId={selectedItemId}
-              onSelectItem={setSelectedItemId}
-              labelFor={labelFor}
-              onTrim={model.trim}
-              onRemove={(itemId) => {
-                model.remove(itemId);
-                if (selectedItemId === itemId) setSelectedItemId(undefined);
-              }}
-              onSplit={model.split}
-            />
           </div>
         </DndContext>
       </DialogContent>

@@ -92,7 +92,7 @@ export function TimelineTrack({
   const playheadLeft = playheadSec * pxPerSec;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex h-full flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-muted-foreground">Timeline</span>
         <Button
@@ -107,8 +107,8 @@ export function TimelineTrack({
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border/60 bg-muted/20">
-        <div ref={laneRef} className="relative" style={{ width: contentWidth }}>
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/60 bg-muted/20">
+        <div ref={laneRef} className="relative min-h-full" style={{ width: contentWidth }}>
           {/* Ruler */}
           <div
             className="relative h-5 border-b border-border/50"
