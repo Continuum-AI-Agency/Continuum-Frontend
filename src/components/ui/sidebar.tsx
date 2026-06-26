@@ -203,13 +203,43 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const { isMobile, state, openMobile, setOpenMobile, setOpen } = useSidebar()
     const reduce = useReducedMotion()
     const isIconCollapsible = collapsible === "icon"
     // Hover-expand rail: a fixed icon-width footprint with an overlay panel
     // whose width is animated by Motion. Only for the standard icon variant.
     const useHoverWidth =
       isIconCollapsible && variant !== "floating" && variant !== "inset"
+
+    // Hover intent is bound to the panel element itself (below) rather than to
+    // document-level pointer geometry: the collapsed rail is always present at
+    // left-0, so mouseenter/leave fire reliably. Leave starts a short grace
+    // timer so a quick re-entry cancels the collapse without flicker.
+    const collapseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+      null
+    )
+    const cancelCollapse = React.useCallback(() => {
+      if (collapseTimerRef.current) {
+        clearTimeout(collapseTimerRef.current)
+        collapseTimerRef.current = null
+      }
+    }, [])
+    const handleHoverEnter = React.useCallback(() => {
+      cancelCollapse()
+      setOpen(true)
+    }, [cancelCollapse, setOpen])
+    const handleHoverLeave = React.useCallback(() => {
+      cancelCollapse()
+      collapseTimerRef.current = setTimeout(() => {
+        collapseTimerRef.current = null
+        setOpen(false)
+      }, 180)
+    }, [cancelCollapse, setOpen])
+    React.useEffect(() => cancelCollapse, [cancelCollapse])
+    const hoverHandlers =
+      useHoverWidth && !isMobile
+        ? { onMouseEnter: handleHoverEnter, onMouseLeave: handleHoverLeave }
+        : undefined
 
     if (collapsible === "none") {
       return (
@@ -286,7 +316,7 @@ const Sidebar = React.forwardRef<
             reduce ? { duration: 0 } : { type: "spring", bounce: 0, duration: 0.3 }
           }
           className={cn(
-            "fixed inset-y-0 z-30 hidden h-svh md:flex",
+            "fixed inset-y-0 z-[45] hidden h-svh md:flex",
             useHoverWidth
               ? "w-(--sidebar-width-icon) group-data-[state=expanded]:shadow-2xl group-data-[state=expanded]:shadow-black/40"
               : "w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear",
@@ -301,6 +331,7 @@ const Sidebar = React.forwardRef<
             className
           )}
           {...(props as unknown as React.ComponentProps<typeof motion.div>)}
+          {...hoverHandlers}
         >
           <div
             data-sidebar="sidebar"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useRef, useEffect, ElementType } from "react";
+import { Suspense, useState, ElementType } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@radix-ui/themes";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
@@ -101,7 +101,7 @@ function AppSidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isMobile, state, open, setOpen } = useSidebar();
+  const { isMobile, state } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
@@ -114,54 +114,6 @@ function AppSidebarInner() {
     readString(user?.email?.split("@")[0]) ??
     "User";
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
-  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const openRef = useRef(open);
-  openRef.current = open;
-
-  useEffect(() => {
-    if (isMobile) return;
-
-    const root = document.documentElement;
-    const remPx = parseFloat(getComputedStyle(root).fontSize) || 16;
-    const iconPx = 3 * remPx;  // --sidebar-width-icon: 3rem
-    const fullPx = 16 * remPx; // --sidebar-width: 16rem
-
-    const cancelCollapse = () => {
-      if (collapseTimerRef.current) {
-        clearTimeout(collapseTimerRef.current);
-        collapseTimerRef.current = null;
-      }
-    };
-
-    const startCollapse = () => {
-      if (collapseTimerRef.current) return;
-      collapseTimerRef.current = setTimeout(() => {
-        collapseTimerRef.current = null;
-        setOpen(false);
-      }, 400);
-    };
-
-    const onMove = (e: PointerEvent) => {
-      if (e.clientX < iconPx) {
-        cancelCollapse();
-        if (!openRef.current) setOpen(true);
-      } else if (e.clientX <= fullPx) {
-        cancelCollapse();
-      } else {
-        startCollapse();
-      }
-    };
-
-    const onDocLeave = () => startCollapse();
-
-    document.addEventListener("pointermove", onMove, { passive: true });
-    document.addEventListener("mouseleave", onDocLeave);
-    return () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("mouseleave", onDocLeave);
-      cancelCollapse();
-    };
-  }, [isMobile, setOpen]);
 
   function renderNavItem(item: AppNavigationItem) {
     if (item.disabled) {
