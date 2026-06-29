@@ -21,6 +21,7 @@ import {
   startGoogleSync,
   startMetaSync,
   startTikTokSync,
+  startXSync,
   unassignBrandIntegrationAccount,
   useUserIntegrationAssets,
   type UserIntegrationAssetRow,
@@ -51,7 +52,7 @@ export type AssignerHeaderState = {
   clearing: boolean;
 };
 
-type ProviderGroup = "meta" | "google" | "tiktok";
+type ProviderGroup = "meta" | "google" | "tiktok" | "x";
 
 const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
   meta: "meta",
@@ -63,12 +64,14 @@ const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
   dv360: "google",
   google: "google",
   tiktok: "tiktok",
+  x: "x",
 };
 
 const SYNC_LABEL_BY_GROUP: Record<ProviderGroup, string> = {
   meta: "Meta",
   google: "Google",
   tiktok: "TikTok",
+  x: "X",
 };
 
 const META_PLATFORMS: ReadonlySet<PlatformKey> = new Set(["facebook", "instagram", "threads"]);
@@ -322,7 +325,13 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
       try {
         const callbackUrl = buildOAuthCallbackUrl(group, brandId);
         const startFn =
-          group === "meta" ? startMetaSync : group === "tiktok" ? startTikTokSync : startGoogleSync;
+          group === "meta"
+            ? startMetaSync
+            : group === "tiktok"
+              ? startTikTokSync
+              : group === "x"
+                ? startXSync
+                : startGoogleSync;
         const { url } = await startFn(callbackUrl);
 
         onTrack?.("oauth_started", { provider: group });
@@ -419,7 +428,7 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
               Connect a provider to start tagging its accounts to this brand.
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              {(["meta", "google", "tiktok"] as ProviderGroup[]).map((group) => (
+              {(["meta", "google", "tiktok", "x"] as ProviderGroup[]).map((group) => (
                 <Button
                   key={group}
                   type="button"

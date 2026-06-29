@@ -54,12 +54,23 @@ const connectionStateSchema = z.object({
 
 const connectionPatchSchema = connectionStateSchema.partial();
 
+// Older persisted onboarding state predates newer platform keys (e.g. "x"). A
+// missing per-platform connection must backfill the default rather than fail
+// validation, so each entry defaults to a fresh disconnected state.
+const connectionEntrySchema = connectionStateSchema.default(() => ({
+  connected: false,
+  accountId: null,
+  accounts: [],
+  integrationIds: [],
+  lastSyncedAt: null,
+}));
+
 const connectionShape = PLATFORM_KEYS.reduce(
   (shape, key) => {
-    shape[key] = connectionStateSchema;
+    shape[key] = connectionEntrySchema;
     return shape;
   },
-  {} as Record<PlatformKey, typeof connectionStateSchema>
+  {} as Record<PlatformKey, typeof connectionEntrySchema>
 );
 
 const connectionPatchShape = PLATFORM_KEYS.reduce(

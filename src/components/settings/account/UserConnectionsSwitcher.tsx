@@ -55,7 +55,7 @@ export function UserConnectionsSwitcher({ integrations }: UserConnectionsSwitche
         <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
         <p className="text-sm font-medium text-foreground">No connections yet</p>
         <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-          Connect Meta, Google, or TikTok to surface accounts you can later assign to brands.
+          Connect Meta, Google, TikTok, or X to surface accounts you can later assign to brands.
         </p>
         <div className="mt-4 inline-block">
           <ConnectProviderPopover integrations={integrations}>

@@ -23,6 +23,9 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   tiktok_user: "tiktok",
   tiktok_business: "tiktok",
   tiktok_account: "tiktok",
+  x_user: "x",
+  x_account: "x",
+  twitter_user: "x",
 };
 
 export function mapIntegrationTypeToPlatformKey(type?: string | null): PlatformKey | null {
