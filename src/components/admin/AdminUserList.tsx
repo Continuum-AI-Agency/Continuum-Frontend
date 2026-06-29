@@ -108,6 +108,17 @@ type FirstValueReportSmokeResponse = {
   error?: string;
 };
 
+// Billing products an admin can grant/revoke per brand (source='admin' override
+// via the admin-set-entitlements edge function). Mirrors the contracts Product enum.
+const PRODUCT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "studio", label: "Studio" },
+  { value: "organic_agent", label: "Organic" },
+  { value: "paid_media", label: "Paid Media" },
+  { value: "trends", label: "Trends" },
+  { value: "mcp", label: "MCP" },
+  { value: "paid_optimizer", label: "Optimizer" },
+];
+
 function getUserInitials(user: AdminUser) {
   return (user.name ?? user.email).slice(0, 2).toUpperCase();
 }
@@ -139,7 +150,6 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [query, setQuery] = useState(searchQuery);
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? null);
   const [pendingActions, setPendingActions] = useState<PendingActions>({});
-  const [tierOverrides, setTierOverrides] = useState<Record<string, string>>({});
   const [impersonationDialog, setImpersonationDialog] = useState<ImpersonationDialogState | null>(null);
 
   const [brands, setBrands] = useState<AdminBrandOption[]>([]);
@@ -164,10 +174,6 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   useEffect(() => {
     setSelectedUserId(users[0]?.id ?? null);
   }, [pagination.page, searchQuery, users]);
-
-  useEffect(() => {
-    setTierOverrides({});
-  }, [permissions]);
 
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
@@ -289,25 +295,24 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     }
   }
 
-  async function handleTierChange(input: { membership: PermissionRow; nextTier: string; previousTier: string }) {
-    const actionId = `tier:${input.membership.user_id}:${input.membership.brand_profile_id}`;
-    setTierOverrides((prev) => ({ ...prev, [actionId]: input.nextTier }));
+  async function handleProductToggle(input: { membership: PermissionRow; product: string; nextActive: boolean }) {
+    const actionId = `product:${input.membership.user_id}:${input.membership.brand_profile_id}:${input.product}`;
     setActionPending(actionId, true);
     try {
-      const nextTierValue = Number(input.nextTier);
-      if (!Number.isFinite(nextTierValue)) return;
-      const { error } = await supabase.functions.invoke("admin-update-tier", {
+      const { error } = await supabase.functions.invoke("admin-set-entitlements", {
         method: "POST",
-        body: { brandProfileId: input.membership.brand_profile_id, tier: nextTierValue },
+        body: {
+          brandProfileId: input.membership.brand_profile_id,
+          products: [{ product: input.product, active: input.nextActive }],
+        },
       });
       if (error) throw new Error(error.message);
-      show({ title: "Brand tier updated", variant: "success" });
+      show({ title: input.nextActive ? "Product enabled" : "Product disabled", variant: "success" });
       router.refresh();
     } catch (error) {
-      setTierOverrides((prev) => ({ ...prev, [actionId]: input.previousTier }));
       show({
-        title: "Failed to update brand tier",
-        description: error instanceof Error ? error.message : "Unable to save brand tier.",
+        title: "Failed to update entitlement",
+        description: error instanceof Error ? error.message : "Unable to save brand entitlement.",
         variant: "error",
       });
     } finally {
@@ -782,11 +787,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     <p className="text-sm text-muted-foreground">No memberships for this user.</p>
                   ) : (
                     selectedMemberships.map((membership) => {
-                      const tierValue = String(membership.brand_tier);
-                      const tierActionId = `tier:${membership.user_id}:${membership.brand_profile_id}`;
-                      const currentTier = tierOverrides[tierActionId] ?? tierValue;
                       const removeActionId = `remove:${membership.user_id}:${membership.brand_profile_id}`;
                       const isOwner = membership.role === "owner";
+                      const activeProducts = new Set(membership.products);
 
                       return (
                         <div key={`${membership.user_id}-${membership.brand_profile_id}`} className="rounded-md border border-subtle bg-default/40 p-3">
@@ -797,7 +800,6 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                               </p>
                               <div className="mt-1 flex flex-wrap gap-1.5">
                                 <Badge variant={roleVariant(membership.role)}>{membership.role ?? "unknown"}</Badge>
-                                <Badge variant="outline">Tier {currentTier}</Badge>
                                 {isOwner ? (
                                   <Badge variant="outline" className="gap-1">
                                     <Lock className="size-3" />
@@ -806,24 +808,38 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 ) : null}
                               </div>
                             </div>
-                            <Select
-                              value={currentTier}
-                              onValueChange={(value) => {
-                                if (value === currentTier) return;
-                                void handleTierChange({ membership, nextTier: value, previousTier: currentTier });
-                              }}
-                              disabled={Boolean(pendingActions[tierActionId])}
-                            >
-                              <SelectTrigger size="sm" className="w-[130px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="0">Tier 0</SelectItem>
-                                <SelectItem value="1">Tier 1</SelectItem>
-                                <SelectItem value="2">Tier 2</SelectItem>
-                                <SelectItem value="3">Tier 3</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          </div>
+                          <div className="mt-3">
+                            <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Products (admin override)
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {PRODUCT_OPTIONS.map((option) => {
+                                const isActive = activeProducts.has(option.value);
+                                const productActionId = `product:${membership.user_id}:${membership.brand_profile_id}:${option.value}`;
+                                const isPending = Boolean(pendingActions[productActionId]);
+                                return (
+                                  <Button
+                                    key={option.value}
+                                    type="button"
+                                    size="sm"
+                                    variant={isActive ? "default" : "outline"}
+                                    disabled={isPending}
+                                    className="gap-1.5"
+                                    onClick={() =>
+                                      void handleProductToggle({
+                                        membership,
+                                        product: option.value,
+                                        nextActive: !isActive,
+                                      })
+                                    }
+                                  >
+                                    {isPending ? <Loader2 className="size-3 animate-spin" /> : null}
+                                    {option.label}
+                                  </Button>
+                                );
+                              })}
+                            </div>
                           </div>
                           <div className="mt-3 flex justify-end">
                             {isOwner ? (

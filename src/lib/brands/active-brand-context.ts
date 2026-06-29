@@ -39,9 +39,6 @@ export type ActiveBrandContext = {
     brand_profile_id: string;
     role: string | null;
   }>;
-  // activeBrandTier is the legacy monetization gate; superseded by `entitlements`.
-  // Kept readable through the tier→entitlements transition; removed in M4.
-  activeBrandTier: number;
   entitlements: Entitlements | null;
   user: AuthIdentity | null;
 };
@@ -171,7 +168,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     (id): id is string => Boolean(id)
   );
 
-  let brandMap = new Map<string, { name: string; logoPath: string | null; tier: number; completedAt: string | null }>();
+  let brandMap = new Map<string, { name: string; logoPath: string | null; completedAt: string | null }>();
 
   // Run brand_profiles lookup and get_active_brand_id RPC in parallel — both only need
   // allBrandIds / permittedIds from the previous step, with no dependency on each other.
@@ -180,13 +177,13 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       ? supabase
           .schema("brand_profiles")
           .from("brand_profiles")
-          .select("id, brand_name, logo_path, tier, completed_at")
+          .select("id, brand_name, logo_path, completed_at")
           .in("id", allBrandIds)
           // Exclude soft-deleted brands (delete_brand_profile sets active=false).
           // Without this, a deleted brand reappears because its permissions row
           // is retained. `active` is non-nullable, so eq(true) is safe.
           .eq("active", true)
-      : Promise.resolve({ data: [] as Array<{ id: string; brand_name: string | null; logo_path: string | null; tier: number; completed_at: string | null }>, error: null }),
+      : Promise.resolve({ data: [] as Array<{ id: string; brand_name: string | null; logo_path: string | null; completed_at: string | null }>, error: null }),
     permittedIds.length > 0
       ? supabase.schema("brand_profiles").rpc("get_active_brand_id")
       : Promise.resolve({ data: null, error: null }),
@@ -201,7 +198,6 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
         {
           name: brand.brand_name ?? "Untitled brand",
           logoPath: brand.logo_path ?? null,
-          tier: brand.tier,
           completedAt: brand.completed_at ?? null,
         },
       ])
@@ -257,7 +253,6 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       activeBrandId: null,
       brandSummaries,
       permissions: perms ?? [],
-      activeBrandTier: 0,
       entitlements: null,
       user
     };
@@ -282,9 +277,8 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     }
   }
 
-  const activeBrandTier = activeBrandId ? brandMap.get(activeBrandId)?.tier ?? 0 : 0;
   const entitlements = activeBrandId
     ? await fetchActiveBrandEntitlements(supabase, activeBrandId)
     : null;
-  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier, entitlements, user };
+  return { activeBrandId, brandSummaries, permissions: perms ?? [], entitlements, user };
 });

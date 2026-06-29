@@ -10,14 +10,14 @@ export type PermissionRow = {
   user_id: string;
   brand_profile_id: string;
   role: string | null;
-  brand_tier: number;
+  /** Active billing products for the brand (source of truth for entitlements). */
+  products: string[];
   brand_name: string | null;
 };
 
 export type AdminBrandOption = {
   id: string;
   brand_name: string;
-  tier: number;
   active: boolean;
 };
 
