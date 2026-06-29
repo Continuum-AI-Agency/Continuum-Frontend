@@ -17,9 +17,11 @@ import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import {
   fetchUserTikTokAccountIds,
+  fetchUserXAccountIds,
   useStartGoogleSync,
   useStartMetaSync,
   useStartTikTokSync,
+  useStartXSync,
 } from "@/lib/api/integrations";
 import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -69,7 +71,9 @@ function buildCallbackUrl(group: string, context: string): string {
     ? "meta"
     : group === "tiktok"
       ? "tiktok"
-      : "google";
+      : group === "x"
+        ? "x"
+        : "google";
   url.searchParams.set("provider", provider);
   url.searchParams.set("context", context);
   return url.toString();
@@ -105,6 +109,7 @@ export function BrandIntegrationsManager({
   const startMetaSync = useStartMetaSync();
   const startGoogleSync = useStartGoogleSync();
   const startTikTokSync = useStartTikTokSync();
+  const startXSync = useStartXSync();
 
   const handleConnect = async (platformKey: string) => {
     setIsSyncing(true);
@@ -116,6 +121,8 @@ export function BrandIntegrationsManager({
         group = "meta";
       } else if (platformKey === "tiktok") {
         group = "tiktok";
+      } else if (platformKey === "x") {
+        group = "x";
       }
 
       const callbackUrl = buildCallbackUrl(group, context);
@@ -126,6 +133,9 @@ export function BrandIntegrationsManager({
         popupUrl = res.url;
       } else if (group === "tiktok") {
         const res = await startTikTokSync.mutateAsync(callbackUrl);
+        popupUrl = res.url;
+      } else if (group === "x") {
+        const res = await startXSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
       } else {
         const res = await startGoogleSync.mutateAsync(callbackUrl);
@@ -140,7 +150,12 @@ export function BrandIntegrationsManager({
             try {
               const tiktokIds = await fetchUserTikTokAccountIds();
               if (tiktokIds.length > 0) {
-                await applyBrandIntegrationAssignmentsAction(brandProfileId, tiktokIds);
+                // Merge with existing assignments; the action replaces the full
+                // set, so passing only these ids would unassign other providers.
+                await applyBrandIntegrationAssignmentsAction(
+                  brandProfileId,
+                  Array.from(new Set([...assignedIds, ...tiktokIds])),
+                );
                 show({
                   title: "TikTok connected",
                   description: "Account assigned to this brand.",
@@ -149,6 +164,26 @@ export function BrandIntegrationsManager({
               }
             } catch (err) {
               console.error("[BrandIntegrationsManager] TikTok auto-assign failed", err);
+            }
+          }
+          if (group === "x" && brandProfileId) {
+            try {
+              const xIds = await fetchUserXAccountIds();
+              if (xIds.length > 0) {
+                // Merge with existing assignments; the action replaces the full
+                // set, so passing only these ids would unassign other providers.
+                await applyBrandIntegrationAssignmentsAction(
+                  brandProfileId,
+                  Array.from(new Set([...assignedIds, ...xIds])),
+                );
+                show({
+                  title: "X connected",
+                  description: "Account assigned to this brand.",
+                  variant: "success",
+                });
+              }
+            } catch (err) {
+              console.error("[BrandIntegrationsManager] X auto-assign failed", err);
             }
           }
           if (refresh) await refresh();
@@ -175,8 +210,13 @@ export function BrandIntegrationsManager({
     const metaKeys: PlatformKey[] = ["facebook", "instagram", "threads"];
     const googleKeys: PlatformKey[] = ["googleAds", "youtube", "dv360"];
     const tiktokKeys: PlatformKey[] = ["tiktok"];
+    const xKeys: PlatformKey[] = ["x"];
     const otherKeys = PLATFORMS.filter(
-      (p) => !metaKeys.includes(p.key) && !googleKeys.includes(p.key) && !tiktokKeys.includes(p.key)
+      (p) =>
+        !metaKeys.includes(p.key) &&
+        !googleKeys.includes(p.key) &&
+        !tiktokKeys.includes(p.key) &&
+        !xKeys.includes(p.key)
     ).map((p) => p.key);
 
     const getGroupStats = (
@@ -211,6 +251,7 @@ export function BrandIntegrationsManager({
       getGroupStats(metaKeys, "Meta Portfolio", "meta"),
       getGroupStats(googleKeys, "Google & YouTube", "google"),
       getGroupStats(tiktokKeys, "TikTok", "tiktok"),
+      getGroupStats(xKeys, "X", "x"),
       ...(otherKeys.length > 0 ? [getGroupStats(otherKeys, "Other Integrations", "other")] : []),
     ];
   }, [resolvedSummary]);

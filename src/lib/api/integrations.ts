@@ -8,6 +8,8 @@ import {
   googleDrivePickerResponseSchema,
   tiktokSyncResponseSchema,
   tiktokResyncResponseSchema,
+  xSyncResponseSchema,
+  xResyncResponseSchema,
   selectableAssetsResponseSchema,
   integrationAssetsResponseSchema,
   applyBrandProfileIntegrationAccountsRequestSchema,
@@ -20,6 +22,8 @@ import {
   type GoogleDrivePickerResponse,
   type TikTokSyncResponse,
   type TikTokResyncResponse,
+  type XSyncResponse,
+  type XResyncResponse,
 } from "@/lib/schemas/integrations";
 
 function buildSyncPath(basePath: string, params: Record<string, string>): string {
@@ -101,6 +105,34 @@ export async function deauthorizeTikTok(platformUserId: string): Promise<void> {
   });
 }
 
+export async function startXSync(callbackUrl: string): Promise<XSyncResponse> {
+  return http.request({
+    path: buildSyncPath("/integrations/x/sync", { callback_url: callbackUrl }),
+    method: "GET",
+    schema: xSyncResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export async function resyncX(platformUserId?: string): Promise<XResyncResponse> {
+  return http.request({
+    path: "/integrations/x/resync",
+    method: "POST",
+    body: platformUserId ? { platform_user_id: platformUserId } : {},
+    schema: xResyncResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export async function deauthorizeX(platformUserId: string): Promise<void> {
+  await http.request({
+    path: "/integrations/x/deauthorize",
+    method: "POST",
+    body: { platform_user_id: platformUserId },
+    cache: "no-store",
+  });
+}
+
 type StartGoogleDrivePickerParams = {
   brandId: string;
   callbackUrl: string;
@@ -162,6 +194,24 @@ export function useResyncTikTok() {
 export function useDeauthorizeTikTok() {
   return useMutation({
     mutationFn: (platformUserId: string) => deauthorizeTikTok(platformUserId),
+  });
+}
+
+export function useStartXSync() {
+  return useMutation({
+    mutationFn: (callbackUrl: string) => startXSync(callbackUrl),
+  });
+}
+
+export function useResyncX() {
+  return useMutation({
+    mutationFn: (platformUserId?: string) => resyncX(platformUserId),
+  });
+}
+
+export function useDeauthorizeX() {
+  return useMutation({
+    mutationFn: (platformUserId: string) => deauthorizeX(platformUserId),
   });
 }
 
@@ -371,6 +421,26 @@ export async function fetchUserTikTokAccountIds(): Promise<string[]> {
 
   if (error) {
     console.error("[fetchUserTikTokAccountIds] query failed", error);
+    return [];
+  }
+  return (data ?? []).map((row: { id: string }) => row.id);
+}
+
+export async function fetchUserXAccountIds(): Promise<string[]> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .schema("brand_profiles")
+    .from("integration_accounts_assets")
+    .select("id, user_integrations!inner(user_id, provider)")
+    .eq("user_integrations.user_id", user.id)
+    .eq("user_integrations.provider", "x");
+
+  if (error) {
+    console.error("[fetchUserXAccountIds] query failed", error);
     return [];
   }
   return (data ?? []).map((row: { id: string }) => row.id);

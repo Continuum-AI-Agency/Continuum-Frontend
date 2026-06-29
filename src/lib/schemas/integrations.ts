@@ -31,11 +31,22 @@ export const tiktokResyncResponseSchema = z.object({
   failed: z.array(z.string()),
 });
 
+export const xSyncResponseSchema = integrationSyncResponseBase.extend({
+  state: z.string().min(1),
+});
+
+export const xResyncResponseSchema = z.object({
+  updated: z.array(z.string()),
+  failed: z.array(z.string()),
+});
+
 export type MetaSyncResponse = z.infer<typeof metaSyncResponseSchema>;
 export type GoogleSyncResponse = z.infer<typeof googleSyncResponseSchema>;
 export type GoogleDrivePickerResponse = z.infer<typeof googleDrivePickerResponseSchema>;
 export type TikTokSyncResponse = z.infer<typeof tiktokSyncResponseSchema>;
 export type TikTokResyncResponse = z.infer<typeof tiktokResyncResponseSchema>;
+export type XSyncResponse = z.infer<typeof xSyncResponseSchema>;
+export type XResyncResponse = z.infer<typeof xResyncResponseSchema>;
 
 const selectableAssetSchema = z.object({
   asset_pk: z.string().uuid(),

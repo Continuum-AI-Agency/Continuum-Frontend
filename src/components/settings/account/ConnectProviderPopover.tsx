@@ -14,9 +14,11 @@ import {
   useDeauthorizeGoogle,
   useDeauthorizeMeta,
   useDeauthorizeTikTok,
+  useDeauthorizeX,
   useStartGoogleSync,
   useStartMetaSync,
   useStartTikTokSync,
+  useStartXSync,
 } from "@/lib/api/integrations";
 import { hasProviderConnections } from "@/lib/integrations/providerConnections";
 import {
@@ -33,7 +35,7 @@ import {
 } from "../shell/platformIcons";
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 
-const PROVIDERS: ProviderGroup[] = ["facebook", "google", "tiktok"];
+const PROVIDERS: ProviderGroup[] = ["facebook", "google", "tiktok", "x"];
 
 type ConnectProviderPopoverProps = {
   integrations: UserIntegrationSummary;
@@ -47,9 +49,11 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
   const metaSync = useStartMetaSync();
   const googleSync = useStartGoogleSync();
   const tiktokSync = useStartTikTokSync();
+  const xSync = useStartXSync();
   const metaDeauthorize = useDeauthorizeMeta();
   const googleDeauthorize = useDeauthorizeGoogle();
   const tiktokDeauthorize = useDeauthorizeTikTok();
+  const xDeauthorize = useDeauthorizeX();
 
   const buildCallbackUrl = (provider: ProviderGroup) => {
     const origin =
@@ -68,7 +72,13 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
       try {
         const callbackUrl = buildCallbackUrl(provider);
         const sync =
-          provider === "google" ? googleSync : provider === "tiktok" ? tiktokSync : metaSync;
+          provider === "google"
+            ? googleSync
+            : provider === "tiktok"
+              ? tiktokSync
+              : provider === "x"
+                ? xSync
+                : metaSync;
         const syncResponse = await sync.mutateAsync(callbackUrl);
         const expectedState = "state" in syncResponse ? syncResponse.state : null;
 
@@ -152,6 +162,10 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
           const account = integrations.tiktok?.accounts[0];
           if (!account?.externalAccountId) throw new Error("No TikTok account found.");
           await tiktokDeauthorize.mutateAsync(account.externalAccountId);
+        } else if (provider === "x") {
+          const account = integrations.x?.accounts[0];
+          if (!account?.externalAccountId) throw new Error("No X account found.");
+          await xDeauthorize.mutateAsync(account.externalAccountId);
         } else {
           await metaDeauthorize.mutateAsync();
         }
