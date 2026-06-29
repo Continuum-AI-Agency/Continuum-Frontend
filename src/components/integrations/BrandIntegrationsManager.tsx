@@ -150,7 +150,12 @@ export function BrandIntegrationsManager({
             try {
               const tiktokIds = await fetchUserTikTokAccountIds();
               if (tiktokIds.length > 0) {
-                await applyBrandIntegrationAssignmentsAction(brandProfileId, tiktokIds);
+                // Merge with existing assignments; the action replaces the full
+                // set, so passing only these ids would unassign other providers.
+                await applyBrandIntegrationAssignmentsAction(
+                  brandProfileId,
+                  Array.from(new Set([...assignedIds, ...tiktokIds])),
+                );
                 show({
                   title: "TikTok connected",
                   description: "Account assigned to this brand.",
@@ -165,7 +170,12 @@ export function BrandIntegrationsManager({
             try {
               const xIds = await fetchUserXAccountIds();
               if (xIds.length > 0) {
-                await applyBrandIntegrationAssignmentsAction(brandProfileId, xIds);
+                // Merge with existing assignments; the action replaces the full
+                // set, so passing only these ids would unassign other providers.
+                await applyBrandIntegrationAssignmentsAction(
+                  brandProfileId,
+                  Array.from(new Set([...assignedIds, ...xIds])),
+                );
                 show({
                   title: "X connected",
                   description: "Account assigned to this brand.",

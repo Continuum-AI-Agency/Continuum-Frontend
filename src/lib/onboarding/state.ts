@@ -57,13 +57,7 @@ const connectionPatchSchema = connectionStateSchema.partial();
 // Older persisted onboarding state predates newer platform keys (e.g. "x"). A
 // missing per-platform connection must backfill the default rather than fail
 // validation, so each entry defaults to a fresh disconnected state.
-const connectionEntrySchema = connectionStateSchema.default(() => ({
-  connected: false,
-  accountId: null,
-  accounts: [],
-  integrationIds: [],
-  lastSyncedAt: null,
-}));
+const connectionEntrySchema = connectionStateSchema.default(makeDefaultConnectionState);
 
 const connectionShape = PLATFORM_KEYS.reduce(
   (shape, key) => {
@@ -244,15 +238,19 @@ export function normalizeOnboardingState(raw: unknown): OnboardingState {
   return onboardingStateSchema.parse(raw);
 }
 
+function makeDefaultConnectionState(): OnboardingConnectionState {
+  return {
+    connected: false,
+    accountId: null,
+    accounts: [],
+    integrationIds: [],
+    lastSyncedAt: null,
+  };
+}
+
 function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState> {
   return PLATFORM_KEYS.reduce((acc, key) => {
-    acc[key] = {
-      connected: false,
-      accountId: null,
-      accounts: [],
-      integrationIds: [],
-      lastSyncedAt: null,
-    };
+    acc[key] = makeDefaultConnectionState();
     return acc;
   }, {} as Record<PlatformKey, OnboardingConnectionState>);
 }
