@@ -32,10 +32,10 @@ describe("formatRate", () => {
 });
 
 describe("formatPercentChange", () => {
-  it("signs the change and suffixes the window", () => {
-    expect(formatPercentChange(12.34)).toBe("+12.3% 24h");
-    expect(formatPercentChange(-4)).toBe("-4.0% 24h");
-    expect(formatPercentChange(undefined)).toBe("24h --");
+  it("signs the change without a hardcoded window suffix", () => {
+    expect(formatPercentChange(12.34)).toBe("+12.3%");
+    expect(formatPercentChange(-4)).toBe("-4.0%");
+    expect(formatPercentChange(undefined)).toBe("--");
   });
 });
 

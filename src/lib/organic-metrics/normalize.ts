@@ -60,6 +60,8 @@ const snakeInstagramOrganicMetricsSchema = z.object({
   shares: z.number().optional(),
   saved: z.number().optional(),
   total_interactions: z.number().optional(),
+  avg_retention_rate: z.number().optional(),
+  avg_skip_rate: z.number().optional(),
 });
 
 const snakeInstagramOrganicMetricsResponseSchema = z.object({
@@ -119,6 +121,10 @@ const looseInstagramMetricsSchema = z
     saved: z.number().optional(),
     totalInteractions: z.number().optional(),
     total_interactions: z.number().optional(),
+    avgRetentionRate: z.number().optional(),
+    avg_retention_rate: z.number().optional(),
+    avgSkipRate: z.number().optional(),
+    avg_skip_rate: z.number().optional(),
   })
   .passthrough();
 
@@ -256,6 +262,8 @@ function normalizeMetrics(metrics: unknown) {
     shares: parsed.shares ?? 0,
     saved: parsed.saved ?? 0,
     totalInteractions: parsed.totalInteractions ?? parsed.total_interactions ?? 0,
+    avgRetentionRate: parsed.avgRetentionRate ?? parsed.avg_retention_rate,
+    avgSkipRate: parsed.avgSkipRate ?? parsed.avg_skip_rate,
   });
 }
 
@@ -350,6 +358,8 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
         shares: snakeParsed.data.metrics.shares,
         saved: snakeParsed.data.metrics.saved,
         totalInteractions: snakeParsed.data.metrics.total_interactions,
+        avgRetentionRate: snakeParsed.data.metrics.avg_retention_rate,
+        avgSkipRate: snakeParsed.data.metrics.avg_skip_rate,
       },
       comparison: comparison,
       posts: snakeParsed.data.posts,

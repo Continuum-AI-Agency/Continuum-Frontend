@@ -76,6 +76,8 @@ export const instagramOrganicMetricsSchema = z.object({
   shares: z.number().optional(),
   saved: z.number().optional(),
   totalInteractions: z.number().optional(),
+  avgRetentionRate: z.number().optional(),
+  avgSkipRate: z.number().optional(),
 });
 
 export type InstagramOrganicMetrics = z.infer<typeof instagramOrganicMetricsSchema>;
@@ -227,7 +229,12 @@ const organicMetricsResponseBaseSchema = z.object({
   warnings: z.array(z.string()).optional(),
   metrics: organicMetricsSchema,
   interactionBreakdowns: interactionBreakdownsSchema.optional(),
+  // Period-over-period: this window vs the equal-length prior window (`current`
+  // equals the headline metric value).
   comparison: z.record(z.string(), metricComparisonSchema).nullable().optional(),
+  // Day-over-day: most recent day vs the day before. Instagram only; null or
+  // absent for platforms with no daily breakdown. Same shape as `comparison`.
+  comparisonDaily: z.record(z.string(), metricComparisonSchema).nullable().optional(),
   insights: z.array(insightsResponseSchema).optional(),
   trends: z.array(organicTrendPointSchema).optional(),
   boostedEvents: z.array(boostedEventSchema).optional(),

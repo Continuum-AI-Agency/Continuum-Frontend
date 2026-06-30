@@ -177,7 +177,7 @@ const RANGE_LABEL_OVERRIDES: Partial<Record<OrganicDateRangePreset, string>> = {
   today: "Today (24h)",
 };
 
-type KpiMetric = { key: keyof OrganicMetrics; label: string };
+type KpiMetric = { key: keyof OrganicMetrics; label: string; format?: "count" | "percent" };
 
 const META_KPI_CONFIG: KpiMetric[] = [
   { key: "accountsEngaged", label: "Engaged" },
@@ -190,6 +190,8 @@ const META_KPI_CONFIG: KpiMetric[] = [
   { key: "nonFollowerReach", label: "Non-Follow Reach" },
   { key: "followerReach", label: "Follower Reach" },
   { key: "comments", label: "Comments" },
+  { key: "avgRetentionRate", label: "Avg Retention", format: "percent" },
+  { key: "avgSkipRate", label: "Typical Skip", format: "percent" },
 ];
 
 const TIKTOK_KPI_CONFIG: KpiMetric[] = [
@@ -671,6 +673,10 @@ function buildPostSnapshotStripItems(
     items.push({ label: "Hook Rate", value: `${hookRate.toFixed(1)}%` });
   }
 
+  if (typeof post.metrics?.retentionRate === "number") {
+    items.push({ label: "Retention", value: `${post.metrics.retentionRate.toFixed(1)}%` });
+  }
+
   return items;
 }
 
@@ -878,6 +884,7 @@ function MetricCard({
   onClick,
   ariaLabel,
   insights,
+  format = "count",
 }: {
   label: string;
   value: number | undefined;
@@ -887,6 +894,7 @@ function MetricCard({
   onClick?: () => void;
   ariaLabel?: string;
   insights?: OrganicComputedInsight[];
+  format?: "count" | "percent";
 }) {
   const pctChange = comparison?.percentageChange;
   const direction = trendDirection(pctChange);
@@ -936,7 +944,9 @@ function MetricCard({
             </span>
           )}
         </Flex>
-        <Text size={compact ? "3" : "4"} weight="bold" className="leading-tight tabular-nums tracking-tight">{formatNumber(value)}</Text>
+        <Text size={compact ? "3" : "4"} weight="bold" className="leading-tight tabular-nums tracking-tight">
+          {format === "percent" ? (typeof value === "number" ? `${value.toFixed(1)}%` : "—") : formatNumber(value)}
+        </Text>
         {compact ? (
           <Text
             size="1"
@@ -966,7 +976,7 @@ function MetricCard({
             >
               {formatPercentChange(pctChange)}
             </Text>
-            <Text size="1" color="gray" className="leading-none">vs previous day</Text>
+            <Text size="1" color="gray" className="leading-none">vs previous period</Text>
           </Flex>
         )}
       </button>
@@ -1268,6 +1278,7 @@ function Dashboard({
               <MetricCard
                 label={metric.label}
                 value={metric.key === "profileVisits24h" ? profileVisits24h : metrics[metric.key]}
+                format={metric.format}
                 comparison={metricComparisonFor(data, metric.key)}
                 active={selectedAccountMetric === metric.key}
                 ariaLabel={`Account metric ${metric.label}`}

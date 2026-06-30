@@ -35,4 +35,32 @@ describe("normalizeInstagramOrganicMetricsResponse", () => {
       { date: "2026-06-06", views: 880, reach: 190 },
     ]);
   });
+
+  it("carries account retention baselines and per-post retention through the loose path", () => {
+    const normalized = normalizeInstagramOrganicMetricsResponse({
+      platform: "instagram",
+      accountId: "ig-1",
+      // `from`/`to` range shape forces the loose normalizer path (not canonical/snake).
+      range: { preset: "last_30d", from: "2026-06-01", to: "2026-06-30" },
+      metrics: {
+        reach: 1000,
+        views: 2000,
+        accountsEngaged: 50,
+        newFollowers: 5,
+        reelsViews: 800,
+        postViews: 1200,
+        storiesViews: 0,
+        profileVisitsYesterday: 3,
+        nonFollowerReach: 400,
+        followerReach: 600,
+        avgRetentionRate: 18.4,
+        avgSkipRate: 71.2,
+      },
+      posts: [{ id: "p1", mediaProductType: "REELS", metrics: { reach: 500, retentionRate: 13.9 } }],
+    });
+
+    expect(normalized.metrics.avgRetentionRate).toBeCloseTo(18.4);
+    expect(normalized.metrics.avgSkipRate).toBeCloseTo(71.2);
+    expect(normalized.posts?.[0]?.metrics?.retentionRate).toBeCloseTo(13.9);
+  });
 });

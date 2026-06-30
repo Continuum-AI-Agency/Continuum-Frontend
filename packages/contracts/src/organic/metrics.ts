@@ -7,16 +7,37 @@
 // (hookRate = 100 - reels_skip_rate); reelsSkipRate is surfaced raw alongside it
 // so the UI can show the underlying signal. Both are absent for non-reels and
 // when Meta omits the (in-development) skip-rate metric.
+//
+// retentionRate is our first-party summary of the IG Reels "Retention" curve,
+// which the Graph API does not expose directly: avg watch time / video duration,
+// scaled to a 0-100 percent. It shares hookRate's 0-100 percent convention
+// (unlike the engagementRate/saveRate ratio fields, which are 0-1) so the curve
+// summary and the hook/skip baselines read on the same scale. avgRetentionRate
+// and avgSkipRate are the account-level means across the window's reels — the
+// "typical" baselines the IG insights screen pairs with a single reel.
 
 import { z } from "zod";
 
-// Period-over-period (or day-over-day) comparison for a single metric.
+// Comparison for a single metric: `current` and `previous` window values plus
+// the percent delta between them. The window the pair describes depends on which
+// map it lives in — see metricComparisonMapSchema.
 export const metricComparisonSchema = z.object({
   current: z.number(),
   previous: z.number(),
   percentageChange: z.number(),
 });
 export type MetricComparison = z.infer<typeof metricComparisonSchema>;
+
+// A bag of per-metric comparisons keyed by metric name. The analytics edge emits
+// two of these alongside the headline metrics:
+//   - `comparison`      — period-over-period: this window vs the equal-length
+//                         prior window. `current` equals the headline metric, so
+//                         consumers never see a window total next to a 1-day delta.
+//   - `comparisonDaily` — day-over-day: the most recent day vs the day before.
+// Keep these distinct; conflating them is what made a 7-day headline read as
+// contradictory next to a single-day comparison.
+export const metricComparisonMapSchema = z.record(z.string(), metricComparisonSchema);
+export type MetricComparisonMap = z.infer<typeof metricComparisonMapSchema>;
 
 // All-optional metric bag covering account-level and per-post (media) metrics.
 // Partial so any scope/platform payload validates.
@@ -48,8 +69,33 @@ export const organicMetricsSchema = z.object({
   // Reels watch time in milliseconds (Meta ig_reels_avg_watch_time / ig_reels_video_view_total_time).
   reelsAvgWatchTime: z.number().optional(),
   reelsVideoViewTotalTime: z.number().optional(),
+  // Per-post reels retention (avg watch time / duration), 0-100 percent.
+  retentionRate: z.number().optional(),
+  // Account-level "typical" baselines: mean retention and mean skip rate across
+  // the window's reels, 0-100 percent.
+  avgRetentionRate: z.number().optional(),
+  avgSkipRate: z.number().optional(),
 });
 export type OrganicMetrics = z.infer<typeof organicMetricsSchema>;
+
+// Canonical retention computation: average watch time divided by video duration,
+// expressed as a 0-100 percent and clamped to that range. Returns undefined when
+// either input is missing or non-positive (non-video media, or Meta omitting the
+// watch-time metric). This is the single source of truth for the math; the Deno
+// analytics edge mirrors it (it cannot import this package). hookRate stays as
+// 100 - skip rate; this summarizes the retention curve instead.
+export function computeRetentionRate(input: {
+  avgWatchTimeMs: number | null | undefined;
+  durationSeconds: number | null | undefined;
+}): number | undefined {
+  const { avgWatchTimeMs, durationSeconds } = input;
+  if (avgWatchTimeMs == null || durationSeconds == null) return undefined;
+  if (!Number.isFinite(avgWatchTimeMs) || !Number.isFinite(durationSeconds)) return undefined;
+  if (avgWatchTimeMs <= 0 || durationSeconds <= 0) return undefined;
+  const avgWatchSeconds = avgWatchTimeMs / 1000;
+  const percent = (avgWatchSeconds / durationSeconds) * 100;
+  return Math.max(0, Math.min(100, percent));
+}
 
 // Per-post metrics share the account metric bag; aliased so call sites name intent.
 export const organicPostMetricsSchema = organicMetricsSchema;

@@ -4,6 +4,7 @@ import {
   organicMetricsSchema,
   organicPostBreakdownPointSchema,
   metricComparisonSchema,
+  computeRetentionRate,
   organicComputedInsightSchema,
   organicInsightsResponseSchema,
   organicAwarenessBlockSchema,
@@ -26,12 +27,45 @@ describe("organicMetricsSchema", () => {
     expect(parsed.reelsSkipRate).toBe(27.5);
   });
 
+  it("accepts the retention fields (per-post and account baselines)", () => {
+    const parsed = organicMetricsSchema.parse({
+      retentionRate: 13.9,
+      avgRetentionRate: 18.4,
+      avgSkipRate: 71.2,
+    });
+    expect(parsed.retentionRate).toBe(13.9);
+    expect(parsed.avgRetentionRate).toBe(18.4);
+    expect(parsed.avgSkipRate).toBe(71.2);
+  });
+
   it("accepts an empty bag (all fields optional)", () => {
     expect(() => organicMetricsSchema.parse({})).not.toThrow();
   });
 
   it("rejects a non-numeric metric", () => {
     expect(() => organicMetricsSchema.parse({ reach: "lots" })).toThrow();
+  });
+});
+
+describe("computeRetentionRate", () => {
+  it("returns avg watch / duration as a 0-100 percent", () => {
+    // IG screenshot: 11s avg watch on a 1:19 (79s) reel ≈ 13.9%.
+    const value = computeRetentionRate({ avgWatchTimeMs: 11_000, durationSeconds: 79 });
+    expect(value).toBeCloseTo(13.924, 2);
+  });
+
+  it("clamps to 100 when avg watch exceeds duration", () => {
+    expect(computeRetentionRate({ avgWatchTimeMs: 90_000, durationSeconds: 79 })).toBe(100);
+  });
+
+  it("returns undefined when duration is missing or non-positive", () => {
+    expect(computeRetentionRate({ avgWatchTimeMs: 11_000, durationSeconds: null })).toBeUndefined();
+    expect(computeRetentionRate({ avgWatchTimeMs: 11_000, durationSeconds: 0 })).toBeUndefined();
+  });
+
+  it("returns undefined when avg watch time is missing or non-positive", () => {
+    expect(computeRetentionRate({ avgWatchTimeMs: null, durationSeconds: 79 })).toBeUndefined();
+    expect(computeRetentionRate({ avgWatchTimeMs: 0, durationSeconds: 79 })).toBeUndefined();
   });
 });
 

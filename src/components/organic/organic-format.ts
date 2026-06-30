@@ -26,11 +26,13 @@ export function formatRate(value: number | undefined): string {
   return formatValue(value, "percent");
 }
 
-// Signed day-over-day change with a window suffix (e.g. "+12.3% 24h").
+// Signed percentage change (e.g. "+12.3%). The window it describes is supplied
+// by the adjacent label; the account KPI cards pair this with "vs previous
+// period" since the headline comparison is period-over-period.
 export function formatPercentChange(value: number | undefined): string {
-  if (value === undefined || Number.isNaN(value)) return "24h --";
+  if (value === undefined || Number.isNaN(value)) return "--";
   const magnitude = `${Math.abs(value).toFixed(1)}%`;
-  return `${value >= 0 ? "+" : "-"}${magnitude} 24h`;
+  return `${value >= 0 ? "+" : "-"}${magnitude}`;
 }
 
 export function trendDirection(value: number | undefined): TrendDirection {
