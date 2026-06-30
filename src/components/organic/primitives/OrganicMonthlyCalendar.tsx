@@ -295,15 +295,15 @@ export function OrganicMonthlyCalendar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <div className="grid grid-cols-7" style={{ gridAutoRows: "minmax(72px, auto)" }}>
+        <div className="grid grid-cols-7" style={{ gridAutoRows: "minmax(108px, 1fr)" }}>
           {gridCells.map((date) => {
             const dayId = formatDayId(date)
             const isCurrentMonth = date.getMonth() === currentMonth
             const isToday = dayId === todayId
             const drafts = draftsByDayId.get(dayId) ?? []
             const posts = postedByDayId.get(dayId) ?? []
-            const visibleDrafts = drafts.slice(0, Math.max(0, 3 - Math.min(posts.length, 2)))
-            const visiblePosts = posts.slice(0, Math.max(1, 3 - visibleDrafts.length))
+            const visibleDrafts = drafts.slice(0, Math.max(0, 5 - Math.min(posts.length, 3)))
+            const visiblePosts = posts.slice(0, Math.max(1, 5 - visibleDrafts.length))
             const overflowCount = drafts.length + posts.length - visibleDrafts.length - visiblePosts.length
 
             return (

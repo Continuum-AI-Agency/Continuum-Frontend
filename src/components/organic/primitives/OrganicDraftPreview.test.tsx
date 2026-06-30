@@ -225,10 +225,10 @@ describe("OrganicDraftPreview — media state", () => {
   })
 })
 
-describe("OrganicDraftPreview — footer readiness", () => {
+describe("OrganicDraftPreview — schedule readiness", () => {
   beforeEach(() => cleanup())
 
-  it("gates Approve & Schedule behind the readiness checklist", () => {
+  it("surfaces the schedule-requirements hint and gates Approve & Schedule when not ready", () => {
     render(
       <OrganicDraftPreview
         draft={baseDraft({ captionPreview: "" })}
@@ -236,8 +236,31 @@ describe("OrganicDraftPreview — footer readiness", () => {
         onApprove={mock()}
       />,
     )
-    expect(screen.getByText("Needed to schedule")).toBeTruthy()
+    // The checklist moved out of the footer into a hover popover on this chip;
+    // the chip itself is what proves the unready state is surfaced.
+    expect(screen.getByLabelText("Why this draft can't be scheduled yet")).toBeTruthy()
     const approve = screen.getByText("Approve & Schedule").closest("button") as HTMLButtonElement
     expect(approve.disabled).toBe(true)
+  })
+
+  it("hides the schedule-requirements hint once the draft is ready", () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          captionPreview: "Ready caption",
+          publishingAssets: [
+            { role: "primary", kind: "image", slideIndex: 0, storagePath: "p0.jpg", storageUrl: "https://cdn/p0.jpg" },
+          ],
+        })}
+        brandProfileId="brand-1"
+        onApprove={mock()}
+      />,
+    )
+    expect(screen.queryByLabelText("Why this draft can't be scheduled yet")).toBeNull()
+  })
+
+  it("renders the media-enrichment inventory label in the header", () => {
+    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />)
+    expect(screen.getByText("No media yet")).toBeTruthy()
   })
 })

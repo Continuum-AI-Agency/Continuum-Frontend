@@ -157,7 +157,7 @@ export function PlannerMatrix({
         ) : null}
       </AnimatePresence>
       <div className="min-w-[880px]">
-        <div className="grid grid-cols-[96px_repeat(7,minmax(110px,1fr))]">
+        <div className="grid grid-cols-[96px_repeat(7,minmax(124px,1fr))]">
           <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
             Platform
           </div>

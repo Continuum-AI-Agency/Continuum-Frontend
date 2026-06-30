@@ -4,7 +4,7 @@ import * as React from "react"
 import Image from "next/image"
 import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon } from "@radix-ui/react-icons"
 
-import { CheckCircle2, Circle, Hash, Loader2, Send, Sparkles } from "lucide-react"
+import { Hash, Loader2, Send, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDraft } from "./types"
@@ -43,7 +43,7 @@ import { EditableCaption, InlinePreviewTextarea } from "./EditableCaption"
 import { flattenHashtags } from "@/lib/organic/hashtags"
 import { PostMetaChips } from "./PostMetaChips"
 import { PostCommandMenu } from "./PostCommandMenu"
-import { MediaStagePill, resolveDraftMediaStage } from "./DraftLifecycle"
+import { MediaEnrichmentSummary, SchedulingRequirementsHint } from "./DraftLifecycle"
 import { MediaSelectPopover } from "./MediaSelectPopover"
 
 interface OrganicDraftPreviewProps {
@@ -929,15 +929,23 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
           actions={commandMenu}
         />
 
-        {/* Two lifecycle axes: publish status (stepper) + media enrichment stage. */}
+        {/* Two lifecycle axes: publish status (stepper) + media enrichment stage.
+            The schedule-requirements hint replaces the old footer checklist. */}
         <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-2">
-          <LifecyclePill status={draft.status} />
-          <div className="flex items-center gap-1.5">
-            <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground/50">
-              Media
-            </span>
-            <MediaStagePill mediaStage={resolveDraftMediaStage(draft)} />
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <LifecyclePill status={draft.status} />
+            </div>
+            {!isPublished && !readiness.ready && (
+              <SchedulingRequirementsHint checks={readiness.checks} />
+            )}
           </div>
+          <MediaEnrichmentSummary
+            draft={draft}
+            onReuseLibrary={() => setMediaSelectOpen(true)}
+            onRealize={handleGenerateMedia}
+            canRealize={canGenerate}
+          />
           {placement.canUndo && (
             <button
               type="button"
@@ -966,8 +974,11 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
         </div>
 
         {/* Single scroll — media-first frame. Contextual editors (creative
-            direction, hashtags) reveal inline on demand from the ⋯ menu. */}
-        <ScrollArea className="flex-1 bg-muted/10 p-3">
+            direction, hashtags) reveal inline on demand from the ⋯ menu.
+            min-h-0 is required: without it this flex-1 child grows to its content's
+            intrinsic height and the panel's overflow-hidden clips it, so the Radix
+            viewport never overflows and no scrollbar appears. */}
+        <ScrollArea className="min-h-0 flex-1 bg-muted/10 p-3">
           <div
             className="mx-auto flex w-full flex-col gap-3"
             style={{ maxWidth: `${previewMaxWidth}px` }}
@@ -1081,28 +1092,6 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
                 >
                   Reconnect your account
                 </a>
-              </div>
-            )}
-
-            {!isPublished && !readiness.ready && (
-              <div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Needed to schedule
-                </p>
-                <ul className="flex flex-col gap-1">
-                  {readiness.checks.map((check) => (
-                    <li key={check.id} className="flex items-center gap-2 text-sm">
-                      {check.met ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-                      )}
-                      <span className={check.met ? "text-muted-foreground line-through" : "text-foreground"}>
-                        {check.label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
 

@@ -48,17 +48,11 @@ import {
   type PlannerPlatformKey,
 } from "./planner-platforms"
 import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { TrendWorkbench } from "./TrendWorkbench"
 import { AiPostComposer } from "./AiPostComposer"
 import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
 import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge"
@@ -868,52 +862,35 @@ export function OrganicCalendarWorkspaceClient({
                     transition={{ duration: 0.15 }}
                     className="h-full"
                   >
-                    <ResizablePanelGroup orientation="vertical" className="gap-0">
-                      <ResizablePanel defaultSize={74} minSize={48}>
-                        <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
-                          <TimeGridCanvas
-                            days={visibleWeekDays}
-                            platforms={plannerPlatforms}
-                            selectedDraftId={selectedId}
-                            selectedDraftIds={selectedIds}
-                            rangeTitle={weekTitle}
-                            rangeSubtitle={weekSubtitle}
-                            viewMode={localGridViewMode}
-                            onViewModeChange={setLocalGridViewMode}
-                            onPreviousWeek={handlePreviousWeek}
-                            onNextWeek={handleNextWeek}
-                            onCreatePost={(context) =>
-                              handleGoDraft({
-                                dayId: context?.dayId,
-                                platform: context?.platform,
-                                status: context?.status,
-                                mode: context?.mode,
-                              })
-                            }
-                            onSelectDraft={(id) => handleSelect(id, false)}
-                            onToggleSelection={(id) => handleSelect(id, true)}
-                            onRegenerate={handleRegenerate}
-                            onClearFailure={handleClearFailure}
-                            onNativeDrop={handleNativeDrop}
-                          />
-                        </div>
-                      </ResizablePanel>
-
-                      <ResizableHandle withHandle className="my-1 h-1 cursor-row-resize rounded-md" />
-
-                      <ResizablePanel defaultSize={26} minSize={18}>
-                        <div className="h-full min-h-0 overflow-hidden">
-                          <TrendWorkbench
-                            trends={resolvedTrends}
-                            selectedTrendIds={selectedTrendIds}
-                            activePlatforms={activePlatforms}
-                            maxSelections={maxTrendSelections}
-                            onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-                            brandProfileId={brandProfileId}
-                          />
-                        </div>
-                      </ResizablePanel>
-                    </ResizablePanelGroup>
+                    {/* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
+                        week grid takes the full vertical space instead of a 74/26 split. */}
+                    <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
+                      <TimeGridCanvas
+                        days={visibleWeekDays}
+                        platforms={plannerPlatforms}
+                        selectedDraftId={selectedId}
+                        selectedDraftIds={selectedIds}
+                        rangeTitle={weekTitle}
+                        rangeSubtitle={weekSubtitle}
+                        viewMode={localGridViewMode}
+                        onViewModeChange={setLocalGridViewMode}
+                        onPreviousWeek={handlePreviousWeek}
+                        onNextWeek={handleNextWeek}
+                        onCreatePost={(context) =>
+                          handleGoDraft({
+                            dayId: context?.dayId,
+                            platform: context?.platform,
+                            status: context?.status,
+                            mode: context?.mode,
+                          })
+                        }
+                        onSelectDraft={(id) => handleSelect(id, false)}
+                        onToggleSelection={(id) => handleSelect(id, true)}
+                        onRegenerate={handleRegenerate}
+                        onClearFailure={handleClearFailure}
+                        onNativeDrop={handleNativeDrop}
+                      />
+                    </div>
                   </motion.div>
                 )}
 
@@ -1016,7 +993,7 @@ export function OrganicCalendarWorkspaceClient({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}
                 transition={previewTransition}
-                className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 @[64rem]/organic:h-full @[64rem]/organic:w-[clamp(28rem,34cqi,46rem)] @[64rem]/organic:shrink-0"
+                className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 @[64rem]/organic:h-full @[64rem]/organic:w-[clamp(26rem,28cqi,38rem)] @[64rem]/organic:shrink-0"
               >
                 <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

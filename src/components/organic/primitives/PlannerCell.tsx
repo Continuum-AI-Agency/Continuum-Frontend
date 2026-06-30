@@ -93,7 +93,7 @@ export const PlannerCell = React.memo(function PlannerCell({
         "group relative align-top",
         compact
           ? "min-h-[clamp(40px,5dvh,80px)] px-[var(--app-shell-pad-inline-tight)] py-[var(--app-shell-pad-block)]"
-          : "min-h-[clamp(80px,11dvh,140px)] px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]",
+          : "min-h-[clamp(96px,15dvh,220px)] px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]",
         "border-r border-b border-border/50",
         !isLastColumn && "border-r",
         isLastColumn && "border-r-0",
@@ -111,7 +111,7 @@ export const PlannerCell = React.memo(function PlannerCell({
       <div
         className={cn(
           "relative z-10 flex flex-col gap-2",
-          !compact && !isComingSoon && "max-h-[228px] overflow-y-auto pr-1"
+          !compact && !isComingSoon && "max-h-[clamp(180px,32dvh,460px)] overflow-y-auto pr-1"
         )}
       >
         {visibleDrafts.map((draft) => (
