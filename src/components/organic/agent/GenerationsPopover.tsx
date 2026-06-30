@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, CheckCircle2, ChevronDown, Clock, Loader2, X, XCircle } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
+import { useCallback, useMemo, useState } from "react";
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, X, XCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  type OrganicGenerationStatus,
+  type OrganicGenerationSummary,
+  type OrganicGenerationTone,
+  resolveOrganicGenerationDisplay,
+} from "@continuum/contracts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { useCalendarStore, type GenerationCheckpoint, type GenerationEntry, type GenerationStatus } from "@/lib/organic/store";
+import {
+  type GenerationSummariesResponse,
+  generationSummariesQueryKey,
+  useGenerationSummaries,
+} from "@/lib/organic/generationSummaries";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -20,7 +28,8 @@ type Props = {
   onViewDraftAction?: (draftId: string) => void;
 };
 
-const STATUS_RANK: Record<GenerationStatus, number> = {
+// Active = still on the server's work queue. Ranks active rows to the top.
+const STATUS_RANK: Record<OrganicGenerationStatus, number> = {
   running: 0,
   queued: 1,
   completed: 2,
@@ -28,21 +37,42 @@ const STATUS_RANK: Record<GenerationStatus, number> = {
   cancelled: 4,
 };
 
-const isActive = (status: GenerationStatus): boolean => status === "running" || status === "queued";
+const isActive = (status: OrganicGenerationStatus): boolean =>
+  status === "running" || status === "queued";
 
-function formatStage(stage: string | null | undefined): string {
-  if (!stage) return "";
-  return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// Canonical generation tone -> label text color. Mirrors the card-kit palette so
+// the same label reads the same everywhere it appears.
+const TONE_TEXT: Record<OrganicGenerationTone, string> = {
+  pending: "text-muted-foreground",
+  active: "text-amber-600 dark:text-amber-400",
+  success: "text-emerald-600 dark:text-emerald-400",
+  error: "text-destructive",
+  neutral: "text-muted-foreground",
+};
+
+function capitalize(value: string): string {
+  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
 }
 
-// Cancel a real durable job by its backend uuid. NEVER pass the synthetic
-// registry key (`realize:<feId>`) here — that is not a job id and the cancel route
-// rejects it (uuid-only). Entries with no backendJobId have no server job to
-// cancel; the caller just marks them cancelled locally.
-async function cancelGeneration(backendJobId: string, brandId: string): Promise<void> {
+// dayId is a YYYY-MM-DD slot (parsed as local midnight for a stable label).
+function formatDay(dayId: string | null | undefined): string | null {
+  if (!dayId) return null;
+  const parsed = new Date(`${dayId}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dayId;
+  return parsed.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function recencyTs(summary: OrganicGenerationSummary): number {
+  const iso = summary.completedAt ?? summary.enqueuedAt;
+  const parsed = iso ? Date.parse(iso) : Number.NaN;
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+// Cancel a real durable job by its post_generation_jobs uuid (= summary.jobId).
+async function cancelGeneration(jobId: string, brandId: string): Promise<void> {
   try {
     const token = await getBrowserAccessToken();
-    await fetch(`${getApiBaseUrl()}/api/organic/agent/jobs/${backendJobId}/cancel`, {
+    await fetch(`${getApiBaseUrl()}/api/organic/agent/jobs/${jobId}/cancel`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -55,130 +85,72 @@ async function cancelGeneration(backendJobId: string, brandId: string): Promise<
   }
 }
 
-function StatusIcon({ status }: { status: GenerationStatus }) {
+function StatusIcon({ status }: { status: OrganicGenerationStatus }) {
   if (isActive(status)) return <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />;
   if (status === "completed") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
   if (status === "failed") return <AlertCircle className="h-3.5 w-3.5 text-destructive" />;
   return <XCircle className="h-3.5 w-3.5 text-muted-foreground" />;
 }
 
-// Compact 3-dot checkpoint indicator for the popover row (no labels, just dots +
-// icons). Shown when a checkpoint exists so the user can see which step is active
-// without expanding the full pipeline card.
-function CompactCheckpointDots({ checkpoint }: { checkpoint: GenerationCheckpoint }) {
-  const steps: Array<{ key: string; done: boolean; active: boolean; awaiting: boolean; supplied: boolean }> = [
-    {
-      key: "caption",
-      done: checkpoint.textReady === true,
-      active: checkpoint.textReady !== true,
-      awaiting: false,
-      supplied: false,
-    },
-    {
-      key: "creative",
-      done: checkpoint.blueprintReady === true,
-      active: checkpoint.textReady === true && checkpoint.blueprintReady !== true,
-      awaiting: false,
-      supplied: false,
-    },
-    {
-      key: "media",
-      done: checkpoint.mediaStatus === "ready" || checkpoint.mediaStatus === "user_supplied",
-      active: checkpoint.mediaStatus === "generating",
-      awaiting: checkpoint.awaitingMediaChoice === true,
-      supplied: checkpoint.mediaStatus === "user_supplied",
-    },
-  ];
-
-  return (
-    <div className="flex items-center gap-0.5">
-      {steps.map((step) =>
-        step.done ? (
-          <Check key={step.key} className="h-2.5 w-2.5 text-emerald-500" />
-        ) : step.active ? (
-          <Loader2 key={step.key} className="h-2.5 w-2.5 animate-spin text-amber-500" />
-        ) : step.awaiting ? (
-          <Clock key={step.key} className="h-2.5 w-2.5 text-muted-foreground" />
-        ) : (
-          <span key={step.key} className="h-1.5 w-1.5 rounded-full bg-muted-foreground/25" />
-        ),
-      )}
-    </div>
-  );
-}
-
 function GenerationRow({
-  entry,
+  summary,
   brandId,
   onViewDraftAction,
+  onCancel,
 }: {
-  entry: GenerationEntry;
+  summary: OrganicGenerationSummary;
   brandId: string | null;
   onViewDraftAction?: (draftId: string) => void;
+  onCancel: (jobId: string) => void;
 }) {
-  const upsertGeneration = useCalendarStore((s) => s.upsertGeneration);
-  const active = isActive(entry.status);
-  const pct = Math.max(5, Math.min(100, entry.pct ?? (entry.status === "queued" ? 5 : 10)));
-  const label = active ? formatStage(entry.stage) || "Working" : entry.status;
+  const display = resolveOrganicGenerationDisplay({
+    status: summary.status,
+    stage: summary.stage,
+    mediaStage: summary.mediaStage,
+  });
+  const active = isActive(summary.status);
+  // Identity first: the concept title, falling back to the platform name so a row
+  // never reads as a bare "Instagram · Working" with no concept.
+  const title = summary.title?.trim() || (summary.platform ? capitalize(summary.platform) : "Post");
+  const day = formatDay(summary.dayId);
 
   return (
     <div className="flex items-center gap-2 border-b border-border/40 px-2 py-1.5 last:border-b-0">
-      <StatusIcon status={entry.status} />
+      <StatusIcon status={summary.status} />
 
-      <HoverCard openDelay={120}>
-        <HoverCardTrigger asChild>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="h-4 px-1 text-2xs capitalize">
-                {entry.platform ?? "post"}
-              </Badge>
-              <span className="truncate text-xs capitalize text-muted-foreground">{label}</span>
-              {entry.checkpoint && (
-                <CompactCheckpointDots checkpoint={entry.checkpoint} />
-              )}
-            </div>
-            {active && <Progress value={pct} className="h-1" />}
-          </div>
-        </HoverCardTrigger>
-        {entry.previewUrl && (
-          <HoverCardContent align="start" className="w-48 p-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={entry.previewUrl} alt="Preview" className="aspect-square w-full rounded object-cover" />
-            {typeof entry.quality === "number" && (
-              <p className="px-1 pt-1 text-2xs text-muted-foreground">Quality {Math.round(entry.quality)}%</p>
-            )}
-          </HoverCardContent>
-        )}
-      </HoverCard>
-
-      {entry.status === "completed" && typeof entry.quality === "number" && (
-        <Badge variant="outline" className="h-4 px-1 text-2xs">{Math.round(entry.quality)}%</Badge>
-      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-xs font-medium text-foreground">{title}</span>
+        <div className="flex items-center gap-1.5">
+          {summary.platform && (
+            <Badge variant="secondary" className="h-4 px-1 text-2xs capitalize">
+              {summary.platform}
+            </Badge>
+          )}
+          {day && <span className="text-2xs text-muted-foreground/70">{day}</span>}
+          <span className={cn("truncate text-2xs font-medium", TONE_TEXT[display.tone])}>
+            {display.label}
+          </span>
+        </div>
+      </div>
 
       {active && brandId && (
         <Button
           size="sm"
           variant="ghost"
           className="h-5 w-5 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-          onClick={() => {
-            // Optimistically mark cancelled (the backend suppresses the failure
-            // frame on cancel, so the UI must reflect it immediately), then cancel
-            // the real durable job if one backs this entry.
-            upsertGeneration({ jobId: entry.jobId, status: "cancelled" });
-            if (entry.backendJobId) void cancelGeneration(entry.backendJobId, brandId);
-          }}
+          onClick={() => onCancel(summary.jobId)}
           aria-label="Abort generation"
         >
           <X className="h-3 w-3" />
         </Button>
       )}
 
-      {entry.status === "completed" && entry.draftId && onViewDraftAction && (
+      {summary.status === "completed" && summary.draftId && onViewDraftAction && (
         <Button
           size="sm"
           variant="ghost"
           className="h-5 shrink-0 px-1.5 text-2xs text-muted-foreground"
-          onClick={() => onViewDraftAction(entry.draftId as string)}
+          onClick={() => onViewDraftAction(summary.draftId as string)}
         >
           Open
         </Button>
@@ -189,40 +161,58 @@ function GenerationRow({
 
 export function GenerationsPopover({ brandId, onViewDraftAction }: Props) {
   const [open, setOpen] = useState(false);
-  const generations = useCalendarStore(useShallow((s) => s.generations));
-  const pruneGenerations = useCalendarStore((s) => s.pruneGenerations);
+  const queryClient = useQueryClient();
+  const { summaries, windowStats } = useGenerationSummaries(brandId);
 
-  // Sweep finished/stale generations so the counter returns to zero instead of
-  // accumulating forever (terminal cards linger ~20s; a silent "running" entry from
-  // a dead worker is dropped after the staleness window).
-  useEffect(() => {
-    const id = setInterval(() => pruneGenerations(), 5_000);
-    return () => clearInterval(id);
-  }, [pruneGenerations]);
-
-  const entries = useMemo(
-    () =>
-      Object.values(generations).sort(
-        (a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.updatedAt - a.updatedAt,
-      ),
-    [generations],
+  const handleCancel = useCallback(
+    (jobId: string) => {
+      if (!brandId) return;
+      // Optimistically mark cancelled (the backend suppresses the failure frame on
+      // cancel) and drop the running count; Realtime + refetch reconcile the rest.
+      queryClient.setQueryData<GenerationSummariesResponse>(
+        generationSummariesQueryKey(brandId),
+        (prev) =>
+          prev
+            ? {
+                summaries: prev.summaries.map((s) =>
+                  s.jobId === jobId ? { ...s, status: "cancelled" as const } : s,
+                ),
+                window: { ...prev.window, running: Math.max(0, prev.window.running - 1) },
+              }
+            : prev,
+      );
+      void cancelGeneration(jobId, brandId).finally(() => {
+        void queryClient.invalidateQueries({ queryKey: generationSummariesQueryKey(brandId) });
+      });
+    },
+    [brandId, queryClient],
   );
 
-  if (entries.length === 0) return null;
+  const rows = useMemo(
+    () =>
+      [...summaries].sort(
+        (a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || recencyTs(b) - recencyTs(a),
+      ),
+    [summaries],
+  );
 
-  const runningCount = entries.filter((e) => isActive(e.status)).length;
+  const running = windowStats?.running ?? rows.filter((s) => isActive(s.status)).length;
+  const hasActivity =
+    rows.length > 0 || (windowStats != null && (windowStats.made > 0 || windowStats.running > 0));
+
+  if (!hasActivity) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-          {runningCount > 0 ? (
+          {running > 0 ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />
           ) : (
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
           )}
-          {entries.length} {entries.length === 1 ? "generation" : "generations"}
-          {runningCount > 0 && <span className="text-muted-foreground">· {runningCount} running</span>}
+          {rows.length} {rows.length === 1 ? "generation" : "generations"}
+          {running > 0 && <span className="text-muted-foreground">· {running} running</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
@@ -230,16 +220,30 @@ export function GenerationsPopover({ brandId, onViewDraftAction }: Props) {
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Generations
           </p>
+          {windowStats && (
+            <p className="mt-0.5 text-2xs tabular-nums text-muted-foreground/80">
+              {windowStats.made} made · {windowStats.completed} completed
+              {windowStats.failed > 0 ? ` · ${windowStats.failed} failed` : ""} · last{" "}
+              {windowStats.windowMinutes}m
+            </p>
+          )}
         </div>
         <ScrollArea className="max-h-80">
-          {entries.map((entry) => (
-            <GenerationRow
-              key={entry.jobId}
-              entry={entry}
-              brandId={brandId}
-              onViewDraftAction={onViewDraftAction}
-            />
-          ))}
+          {rows.length > 0 ? (
+            rows.map((summary) => (
+              <GenerationRow
+                key={summary.jobId}
+                summary={summary}
+                brandId={brandId}
+                onViewDraftAction={onViewDraftAction}
+                onCancel={handleCancel}
+              />
+            ))
+          ) : (
+            <p className="px-3 py-4 text-center text-2xs text-muted-foreground/70">
+              Nothing in flight right now.
+            </p>
+          )}
         </ScrollArea>
       </PopoverContent>
     </Popover>

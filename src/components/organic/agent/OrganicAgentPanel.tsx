@@ -406,11 +406,16 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       const currentSessionId = state.sessionId ?? activeSessionId;
       if (!currentSessionId) return;
 
-      if (decision.decision === "approve" && decision.itemId) {
-        dispatch({
-          type: "PLAN_STATUS",
-          event: { planId: decision.planId, itemId: decision.itemId, status: "executing" },
-        });
+      if (decision.decision === "approve") {
+        // Optimistically flip every approved card to executing — the group approve
+        // (itemIds) and the per-card approve (itemId) both land here.
+        const executingIds = decision.itemIds ?? (decision.itemId ? [decision.itemId] : []);
+        for (const itemId of executingIds) {
+          dispatch({
+            type: "PLAN_STATUS",
+            event: { planId: decision.planId, itemId, status: "executing" },
+          });
+        }
       }
 
       const decisionContent =
@@ -893,11 +898,11 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                               plan={card.data}
                               planItemStatus={state.planItemStatus}
                               pipeline={pipelineCards}
-                              onGenerateItemAction={(itemId) =>
-                                handlePlanDecision({ decision: "approve", planId, itemId })
+                              onGenerateItemAction={(itemId, clientKey) =>
+                                handlePlanDecision({ decision: "approve", planId, itemId, clientKey })
                               }
-                              onGenerateAllAction={() =>
-                                handlePlanDecision({ decision: "approve", planId })
+                              onGenerateAllAction={(itemIds) =>
+                                handlePlanDecision({ decision: "approve", planId, itemIds })
                               }
                               onRejectAction={() =>
                                 handlePlanDecision({ decision: "reject", planId })
@@ -927,7 +932,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                               }}
                               onRejectAction={() => handlePlanDecision({ decision: "reject", planId })}
                             />
-                            {run && <BulkRunPanel runId={run.runId} total={run.total} />}
+                            {run && <BulkRunPanel runId={run.runId} total={run.total} brandId={brandId} />}
                           </motion.div>
                         );
                       }

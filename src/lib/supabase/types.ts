@@ -125,6 +125,75 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_ad_accounts: {
+        Row: {
+          account_id: string
+          brand_integration_id: string
+          created_at: string
+          currency_code: string | null
+          id: string
+          name: string | null
+          raw_profile: Json
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_integration_id: string
+          created_at?: string
+          currency_code?: string | null
+          id?: string
+          name?: string | null
+          raw_profile?: Json
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_integration_id?: string
+          created_at?: string
+          currency_code?: string | null
+          id?: string
+          name?: string | null
+          raw_profile?: Json
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      linkedin_organizations: {
+        Row: {
+          brand_integration_id: string
+          created_at: string
+          id: string
+          localized_name: string | null
+          organization_id: string
+          raw_profile: Json
+          updated_at: string
+          vanity_name: string | null
+        }
+        Insert: {
+          brand_integration_id: string
+          created_at?: string
+          id?: string
+          localized_name?: string | null
+          organization_id: string
+          raw_profile?: Json
+          updated_at?: string
+          vanity_name?: string | null
+        }
+        Update: {
+          brand_integration_id?: string
+          created_at?: string
+          id?: string
+          localized_name?: string | null
+          organization_id?: string
+          raw_profile?: Json
+          updated_at?: string
+          vanity_name?: string | null
+        }
+        Relationships: []
+      }
       meta_ad_accounts: {
         Row: {
           ad_account_id: string
@@ -278,6 +347,81 @@ export type Database = {
         }
         Relationships: []
       }
+      tiktok_users: {
+        Row: {
+          avatar_url: string | null
+          brand_integration_id: string
+          created_at: string
+          display_name: string | null
+          id: string
+          open_id: string
+          profile_deep_link: string | null
+          raw_profile: Json
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          brand_integration_id: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          open_id: string
+          profile_deep_link?: string | null
+          raw_profile?: Json
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          brand_integration_id?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          open_id?: string
+          profile_deep_link?: string | null
+          raw_profile?: Json
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      x_users: {
+        Row: {
+          brand_integration_id: string
+          created_at: string
+          id: string
+          name: string | null
+          profile_image_url: string | null
+          raw_profile: Json
+          updated_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          brand_integration_id: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          profile_image_url?: string | null
+          raw_profile?: Json
+          updated_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          brand_integration_id?: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          profile_image_url?: string | null
+          raw_profile?: Json
+          updated_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -426,8 +570,15 @@ export type Database = {
           is_verified: boolean | null
           last_resolved_at: string | null
           meta_page_id: string | null
+          meta_page_name: string | null
+          meta_page_resolution_candidates: Json
+          meta_page_resolution_confidence: number | null
+          meta_page_resolution_error: string | null
+          meta_page_resolution_status: string
+          meta_page_resolved_at: string | null
           metadata: Json | null
           name: string
+          recommendation_dismissed_at: string | null
           tagged_at: string | null
           updated_at: string | null
           website_url: string | null
@@ -445,8 +596,15 @@ export type Database = {
           is_verified?: boolean | null
           last_resolved_at?: string | null
           meta_page_id?: string | null
+          meta_page_name?: string | null
+          meta_page_resolution_candidates?: Json
+          meta_page_resolution_confidence?: number | null
+          meta_page_resolution_error?: string | null
+          meta_page_resolution_status?: string
+          meta_page_resolved_at?: string | null
           metadata?: Json | null
           name: string
+          recommendation_dismissed_at?: string | null
           tagged_at?: string | null
           updated_at?: string | null
           website_url?: string | null
@@ -464,8 +622,15 @@ export type Database = {
           is_verified?: boolean | null
           last_resolved_at?: string | null
           meta_page_id?: string | null
+          meta_page_name?: string | null
+          meta_page_resolution_candidates?: Json
+          meta_page_resolution_confidence?: number | null
+          meta_page_resolution_error?: string | null
+          meta_page_resolution_status?: string
+          meta_page_resolved_at?: string | null
           metadata?: Json | null
           name?: string
+          recommendation_dismissed_at?: string | null
           tagged_at?: string | null
           updated_at?: string | null
           website_url?: string | null
@@ -480,8 +645,63 @@ export type Database = {
           },
         ]
       }
+      brand_deep_jobs: {
+        Row: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          payload: Json
+          status: Database["brand_profiles"]["Enums"]["brand_deep_job_status"]
+          trigger: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          brand_id: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          job_id?: string
+          payload?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_deep_job_status"]
+          trigger?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          brand_id?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          job_id?: string
+          payload?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_deep_job_status"]
+          trigger?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_deep_jobs_brand_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_document_chunks: {
         Row: {
+          brand_id: string
+          category: string
           chunk_index: number
           content: string
           created_at: string
@@ -491,6 +711,8 @@ export type Database = {
           tokens: number | null
         }
         Insert: {
+          brand_id: string
+          category?: string
           chunk_index: number
           content: string
           created_at?: string
@@ -500,6 +722,8 @@ export type Database = {
           tokens?: number | null
         }
         Update: {
+          brand_id?: string
+          category?: string
           chunk_index?: number
           content?: string
           created_at?: string
@@ -509,6 +733,13 @@ export type Database = {
           tokens?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "brand_document_chunks_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "brand_document_chunks_document_id_fkey"
             columns: ["document_id"]
@@ -1021,8 +1252,11 @@ export type Database = {
       }
       brand_report_composites: {
         Row: {
+          brand_md: string | null
+          brand_md_edited: string | null
           brand_profile_id: string
           brand_report_id: string | null
+          brand_tokens: Json | null
           composite: Json
           composite_version: string | null
           created_at: string
@@ -1036,8 +1270,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brand_md?: string | null
+          brand_md_edited?: string | null
           brand_profile_id: string
           brand_report_id?: string | null
+          brand_tokens?: Json | null
           composite: Json
           composite_version?: string | null
           created_at?: string
@@ -1051,8 +1288,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brand_md?: string | null
+          brand_md_edited?: string | null
           brand_profile_id?: string
           brand_report_id?: string | null
+          brand_tokens?: Json | null
           composite?: Json
           composite_version?: string | null
           created_at?: string
@@ -3457,6 +3697,29 @@ export type Database = {
           embedding_text: string
         }[]
       }
+      claim_next_brand_deep_job: {
+        Args: { p_lease_ttl_sec: number; p_worker_id: string }
+        Returns: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          payload: Json
+          status: Database["brand_profiles"]["Enums"]["brand_deep_job_status"]
+          trigger: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "brand_deep_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_next_brand_guideline_job: {
         Args: { p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -3505,6 +3768,15 @@ export type Database = {
       }
       cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
       cleanup_old_chat_messages: { Args: never; Returns: undefined }
+      complete_brand_deep_job_owned: {
+        Args: {
+          p_error?: Json
+          p_job_id: string
+          p_status: Database["brand_profiles"]["Enums"]["brand_deep_job_status"]
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       complete_brand_guideline_job_owned: {
         Args: {
           p_error?: Json
@@ -3524,13 +3796,22 @@ export type Database = {
         Returns: boolean
       }
       decrypt_token: { Args: { ct: string }; Returns: string }
+      decrypt_tokens: { Args: { p_cts: string[] }; Returns: string[] }
       encrypt_token: { Args: { token: string }; Returns: string }
+      enqueue_brand_deep_job: {
+        Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
+        Returns: string
+      }
       enqueue_brand_guideline_job: {
         Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
         Returns: string
       }
       enqueue_brand_report_job: {
         Args: { p_brand_id: string; p_payload: Json; p_preview_run_id: string }
+        Returns: string
+      }
+      ensure_default_canvas_room: {
+        Args: { p_brand_profile_id: string; p_created_by?: string }
         Returns: string
       }
       fetch_latest_brand_embedding: {
@@ -3676,6 +3957,10 @@ export type Database = {
       has_brand_access:
         | { Args: { brand_id: string }; Returns: boolean }
         | { Args: { p_brand_id: string; p_user_id: string }; Returns: boolean }
+      heartbeat_brand_deep_job: {
+        Args: { p_job_id: string; p_worker_id: string }
+        Returns: boolean
+      }
       heartbeat_brand_guideline_job: {
         Args: { p_job_id: string; p_worker_id: string }
         Returns: boolean
@@ -3774,6 +4059,26 @@ export type Database = {
           refresh_token: string
         }[]
       }
+      resolve_integration_token_context: {
+        Args: {
+          p_asset_type?: string
+          p_brand_profile_id: string
+          p_external_account_id?: string
+          p_provider: string
+        }
+        Returns: {
+          access_token: string
+          expires_at: string
+          integration_id: string
+          matched_asset_type: string
+          matched_external_account_id: string
+          metadata: Json
+          platform_email: string
+          platform_user_id: string
+          provider: string
+          refresh_token: string
+        }[]
+      }
       revoke_integration_from_brand: {
         Args: { p_grant_id: string }
         Returns: undefined
@@ -3825,6 +4130,7 @@ export type Database = {
       }
     }
     Enums: {
+      brand_deep_job_status: "queued" | "running" | "completed" | "failed"
       brand_guideline_job_status: "queued" | "running" | "completed" | "failed"
       brand_report_job_status: "queued" | "running" | "completed" | "failed"
     }
@@ -5598,6 +5904,60 @@ export type Database = {
         }
         Relationships: []
       }
+      organic_agent_turn_metrics: {
+        Row: {
+          aborted: boolean
+          brand_id: string
+          created_at: string
+          finish_reason: string | null
+          id: string
+          input_tokens: number | null
+          outcome: string
+          output_tokens: number | null
+          run_id: string | null
+          session_id: string
+          steps: number
+          tool_calls: number
+          tool_errors: number
+          total_tokens: number | null
+          user_id: string
+        }
+        Insert: {
+          aborted?: boolean
+          brand_id: string
+          created_at?: string
+          finish_reason?: string | null
+          id?: string
+          input_tokens?: number | null
+          outcome: string
+          output_tokens?: number | null
+          run_id?: string | null
+          session_id: string
+          steps?: number
+          tool_calls?: number
+          tool_errors?: number
+          total_tokens?: number | null
+          user_id: string
+        }
+        Update: {
+          aborted?: boolean
+          brand_id?: string
+          created_at?: string
+          finish_reason?: string | null
+          id?: string
+          input_tokens?: number | null
+          outcome?: string
+          output_tokens?: number | null
+          run_id?: string | null
+          session_id?: string
+          steps?: number
+          tool_calls?: number
+          tool_errors?: number
+          total_tokens?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       organic_calendar_drafts: {
         Row: {
           approved_at: string | null
@@ -6150,7 +6510,15 @@ export type Database = {
           user_id?: string
           worker_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "post_generation_jobs_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       post_metric_snapshots: {
         Row: {
@@ -9064,6 +9432,23 @@ export type Database = {
               source: string
             }[]
           }
+      match_brand_document_chunks: {
+        Args: {
+          filter_brand_id: string
+          filter_categories?: string[]
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          chunk_index: number
+          content: string
+          document_id: string
+          document_name: string
+          similarity: number
+        }[]
+      }
       match_brand_documents: {
         Args: {
           filter_brand_id: string
@@ -9376,6 +9761,7 @@ export const Constants = {
   },
   brand_profiles: {
     Enums: {
+      brand_deep_job_status: ["queued", "running", "completed", "failed"],
       brand_guideline_job_status: ["queued", "running", "completed", "failed"],
       brand_report_job_status: ["queued", "running", "completed", "failed"],
     },

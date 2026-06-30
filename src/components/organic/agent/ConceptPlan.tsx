@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AgentButton } from "./agentCardKit";
 import { ConceptCard } from "./ConceptCard";
@@ -10,11 +10,17 @@ type Props = {
   plan: UiPlanCard;
   planItemStatus?: Record<string, PlanItemStatus>;
   pipeline: PipelineCardState[];
-  onGenerateItemAction: (itemId: string) => void;
-  onGenerateAllAction: () => void;
+  onGenerateItemAction: (itemId: string, clientKey: string) => void;
+  // Group approve: the kept (pending, visible) cards in ONE action. The Backend
+  // enqueues them in parallel — this replaces fanning out N per-card approvals.
+  onGenerateAllAction: (itemIds: string[]) => void;
   onRejectAction: () => void;
   onViewDraftAction: (draftId: string, target: "calendar" | "list") => void;
 };
+
+// Stable per-card identity so a re-click (a per-card button or the footer)
+// collapses to the SAME job on the Backend instead of over-dispatching.
+const makeClientKey = (planId: string, itemId: string): string => `${planId}:${itemId}`;
 
 /**
  * Renders a proposed plan as a compact, auto-filling grid of square concept
@@ -35,6 +41,9 @@ export function ConceptPlan({
   const [dismissed, setDismissed] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  // Synchronous in-flight latch: the async `generatingAll` state updates too late
+  // to stop a fast double-click, so this ref blocks the second dispatch at once.
+  const generateAllInFlight = useRef(false);
 
   const items = Array.isArray(plan?.items) ? plan.items : [];
   const summary = typeof plan?.summary === "string" ? plan.summary : "";
@@ -53,13 +62,14 @@ export function ConceptPlan({
   const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
   function handleGenerateAll() {
-    if (footerLocked) return;
+    if (footerLocked || generateAllInFlight.current) return;
+    generateAllInFlight.current = true;
     setGeneratingAll(true);
-    if (dismissedIds.size === 0 && !anyActioned) {
-      onGenerateAllAction();
-      return;
-    }
-    pendingVisibleItems.forEach((item) => onGenerateItemAction(item.itemId));
+    // ONE group approve of the kept (pending, visible) cards. The Backend enqueues
+    // them in parallel and the count always equals the number of jobs created — this
+    // replaces the old per-card fan-out (N separate approval messages). Dismissed
+    // concepts are excluded because only pendingVisibleItems are sent.
+    onGenerateAllAction(pendingVisibleItems.map((item) => item.itemId));
   }
 
   function handleDismissAll() {
@@ -94,7 +104,7 @@ export function ConceptPlan({
                 status={resolveStatus(item)}
                 pipeline={pipelineFor(item.itemId)}
                 locked={dismissed}
-                onGenerate={() => onGenerateItemAction(item.itemId)}
+                onGenerate={() => onGenerateItemAction(item.itemId, makeClientKey(plan.planId, item.itemId))}
                 onDismiss={() => setDismissedIds((prev) => new Set([...prev, item.itemId]))}
                 onViewDraft={onViewDraftAction}
               />

@@ -7,6 +7,7 @@ export * from "./competitor-spy/index";
 export * from "./organic/index";
 export * from "./paid/index";
 export * from "./insights/index";
+export * from "./analytics/index";
 export * from "./trends/index";
 export * from "./brands/index";
 export * from "./mcp/index";

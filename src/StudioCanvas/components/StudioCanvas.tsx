@@ -69,6 +69,7 @@ import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
 import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
 import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
+import { useCanvasRunRequests } from '@/components/ai-studio/hooks/useCanvasRunRequests';
 import { CanvasMediaLoader } from '@/components/ai-studio/CanvasMediaLoader';
 import { StudioNode } from '../types';
 import { Button } from '@/components/ui/button';
@@ -713,6 +714,11 @@ function Flow({
   } = useStudioStore();
 
   const { remoteCursors, updateCursor, isLoading } = realtime;
+
+  // Pick up MCP-issued run requests for this room and execute them on the open
+  // canvas (results persist + broadcast through the normal autosave path).
+  useCanvasRunRequests(brandProfileId || '', activeRoomId);
+
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const lastMousePositionRef = useRef({ x: 240, y: 180 });
   const contextMenuAnchorRef = useRef<{ x: number; y: number } | null>(null);
@@ -1364,19 +1370,21 @@ function Flow({
 interface StudioCanvasProps {
   embedded?: boolean;
   brandProfileId?: string;
+  initialRoomId?: string;
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }
 
 export function StudioCanvas({
   embedded = false,
   brandProfileId,
+  initialRoomId,
   organicPlannerSeed,
 }: StudioCanvasProps) {
   const router = useRouter();
   const { show } = useToast();
   const nodes = useStudioStore((state) => state.nodes);
-  const { rooms } = useCanvasRooms(brandProfileId || '');
-  const [activeRoomId, setActiveRoomId] = useState<string | undefined>(undefined);
+  const { rooms, isLoading: roomsLoading } = useCanvasRooms(brandProfileId || '');
+  const [activeRoomId, setActiveRoomId] = useState<string | undefined>(initialRoomId);
   const [isApplyingBack, setIsApplyingBack] = useState(false);
   const [selectedLinkedinNodeId, setSelectedLinkedinNodeId] = useState<string | null>(null);
   const workflowSpec = useMemo<WorkflowConceptSpec | null>(
@@ -1474,6 +1482,18 @@ export function StudioCanvas({
     }
     setSelectedLinkedinNodeId(linkedinImageCandidates[0]?.nodeId ?? null);
   }, [linkedinImageCandidates, requiresExplicitSelection, selectedLinkedinNodeId]);
+
+  // On an in-app brand switch (no full navigation, so the server-resolved
+  // initialRoomId is stale) drop the previous brand's room so the fallback below
+  // re-resolves against the new brand's rooms. Skips the initial mount via the ref
+  // so initialRoomId survives first paint.
+  const previousBrandRef = useRef(brandProfileId);
+  useEffect(() => {
+    if (previousBrandRef.current !== brandProfileId) {
+      previousBrandRef.current = brandProfileId;
+      setActiveRoomId(undefined);
+    }
+  }, [brandProfileId]);
 
   useEffect(() => {
     if (!activeRoomId && rooms.length > 0) {
@@ -1688,7 +1708,7 @@ export function StudioCanvas({
               <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
               <div data-tour-id="studio-multiplayer" className="flex items-center gap-4">
                 <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
-                  <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} isCollaborative={realtime.isCollaborative} />
+                  <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} isCollaborative={realtime.isCollaborative} roomsLoading={roomsLoading} hasRoom={Boolean(activeRoomId)} />
                   <div className="mx-1 h-4 w-px bg-primary/20" />
                   <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as never} />
                 </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { mcpStudioWorkflowSchema } from "./workflow";
+import { canvasRunResultSchema, mcpStudioWorkflowSchema } from "./workflow";
 
 const base = {
   name: "Sneaker hero",
@@ -37,5 +37,42 @@ describe("mcpStudioWorkflowSchema", () => {
       attachments: [{ node_id: "ref", handle: "ref-image", media_kind: "image", storage_path: "b/p.png" }],
     };
     expect(mcpStudioWorkflowSchema.safeParse(attachmentWithUrl).success).toBe(false);
+  });
+});
+
+describe("canvasRunResultSchema", () => {
+  it("parses a run summary with outputs and failures", () => {
+    const parsed = canvasRunResultSchema.parse({
+      executed_node_ids: ["img", "vid"],
+      outputs: [
+        { node_id: "img", kind: "image" },
+        { node_id: "vid", kind: "video" },
+      ],
+      failed: [{ node_id: "vid2", error: "generation timed out" }],
+    });
+    expect(parsed.executed_node_ids).toEqual(["img", "vid"]);
+    expect(parsed.outputs[0].kind).toBe("image");
+    expect(parsed.failed?.[0].error).toContain("timed out");
+  });
+
+  it("allows a run with no failures", () => {
+    const parsed = canvasRunResultSchema.parse({
+      executed_node_ids: ["text"],
+      outputs: [{ node_id: "text", kind: "text" }],
+    });
+    expect(parsed.failed).toBeUndefined();
+  });
+
+  it("rejects base64 / signed url leakage (media-free boundary)", () => {
+    const withBlob = {
+      executed_node_ids: ["img"],
+      outputs: [{ node_id: "img", kind: "image", base64: "data:image/png;base64,AAAA" }],
+    };
+    expect(canvasRunResultSchema.safeParse(withBlob).success).toBe(false);
+    const unknownKind = {
+      executed_node_ids: ["x"],
+      outputs: [{ node_id: "x", kind: "audio" }],
+    };
+    expect(canvasRunResultSchema.safeParse(unknownKind).success).toBe(false);
   });
 });

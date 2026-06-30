@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { prefetchMetricsDashboard } from "@/lib/prefetch/organic-metrics-cache";
 import { cn } from "@/lib/utils";
 import { GenerationsPopover } from "@/components/organic/agent/GenerationsPopover";
+import { useGenerationJobsRealtime } from "@/components/organic/hooks/useGenerationJobsRealtime";
 import { useCalendarStore } from "@/lib/organic/store";
 
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
@@ -102,6 +103,12 @@ export function OrganicWorkspaceTabs({
     [searchParams]
   );
 
+  // Active brand for the shell-wide ticker. Realtime on organic.post_generation_jobs
+  // keeps the live generation summaries fresh on every tab (the ticker lives here,
+  // outside the tab panels, so its counts survive tab switches).
+  const tickerBrandId = brandId ?? metricsPrefetchParams?.brandId ?? null;
+  useGenerationJobsRealtime(tickerBrandId);
+
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
       <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
@@ -110,7 +117,7 @@ export function OrganicWorkspaceTabs({
         <div className="flex shrink-0 items-center gap-2">
           {/* Shell-wide live generations: visible on every tab once any post is generating. */}
           <GenerationsPopover
-            brandId={brandId ?? metricsPrefetchParams?.brandId ?? null}
+            brandId={tickerBrandId}
             onViewDraftAction={(draftId) => {
               setSelectedDraftId(draftId);
               handleValueChange("planner");

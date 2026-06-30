@@ -11,7 +11,18 @@ type PopupSuccessPayload = {
   accountId: string | null;
   state?: string | null;
   returnTo?: string | null;
+  warning?: string | null;
 };
+
+// A successful OAuth connect can still carry a non-fatal warning (e.g. the token
+// was stored but no Google Ads accounts could be enumerated). Surface that rather
+// than reporting a clean "connected".
+function successMessage(reason?: string | null): string {
+  if (reason === "no_ads_accounts" || reason === "ads_enrichment_failed") {
+    return "Connected, but no Google Ads accounts were found.";
+  }
+  return "Integration connected.";
+}
 
 type PopupErrorPayload = {
   type: "oauth:error";
@@ -54,8 +65,9 @@ export default function IntegrationCallbackPage() {
         accountId: null,
         state,
         returnTo,
+        warning: reason,
       };
-      return { payload: successPayload, status: true, reason: null };
+      return { payload: successPayload, status: true, reason };
     }
 
     const errorPayload: PopupErrorPayload = {
@@ -74,7 +86,7 @@ export default function IntegrationCallbackPage() {
     const context = (payload.payload as { context?: string }).context ?? null;
 
     if (payload.status) {
-      posthog.capture("integration_connected", { provider, context });
+      posthog.capture("integration_connected", { provider, context, warning: payload.reason ?? null });
     } else {
       posthog.capture("integration_connection_failed", {
         provider,
@@ -101,10 +113,11 @@ export default function IntegrationCallbackPage() {
   }, [payload, router]);
 
   const isSuccess = payload.status;
+  const message = isSuccess ? successMessage(payload.reason) : "Integration failed.";
   return (
     <div style={{ display: "grid", minHeight: "100vh", placeItems: "center", fontFamily: "sans-serif" }}>
       <div style={{ textAlign: "center" }}>
-        <p>{isSuccess ? "Integration connected." : "Integration failed."}</p>
+        <p>{message}</p>
         <p>You can close this window.</p>
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCalendarStore } from "@/lib/organic/store";
+import { useGenerationSummaries } from "@/lib/organic/generationSummaries";
 import type { BulkRunState, BulkRunStatus } from "./types";
 import { useRunEventStream, type ParsedRunEvent } from "@/hooks/useRunEventStream";
 
@@ -77,20 +78,56 @@ function CountRow({ label, counts }: { label: string; counts: Record<string, num
   );
 }
 
-export function BulkRunPanel({ runId, total }: { runId: string; total: number }) {
+export function BulkRunPanel({
+  runId,
+  total,
+  brandId,
+}: {
+  runId: string;
+  total: number;
+  brandId?: string | null;
+}) {
+  // The run-event stream still drives the by-platform / by-format breakdowns (the
+  // summaries carry platform but not format), but the completion TALLY is derived
+  // from the real post_generation_jobs rows for this plan.
   const run = useBulkRunProgress(runId, total);
-  const done = run.completed + run.failed;
-  const pct = run.total > 0 ? Math.round((done / run.total) * 100) : 0;
+  const { summaries } = useGenerationSummaries(brandId);
+
+  const planId = run.planId;
+  const planSummaries = useMemo(
+    () => summaries.filter((s) => s.planId === planId),
+    [summaries, planId],
+  );
+  const completed = planSummaries.filter((s) => s.status === "completed").length;
+  const failed = planSummaries.filter((s) => s.status === "failed").length;
+  const activeCount = planSummaries.filter(
+    (s) => s.status === "running" || s.status === "queued",
+  ).length;
+  // Total = the real number of jobs created (so a partial dispatch or a deduped
+  // re-click reports honestly), not run_started.totalPlacements. Before any job
+  // row exists, fall back to the intended count so the bar isn't a transient 0/0.
+  const summaryTotal = planSummaries.length;
+  const displayTotal = summaryTotal > 0 ? summaryTotal : run.total;
+  const done = completed + failed;
+  const pct = displayTotal > 0 ? Math.round((done / displayTotal) * 100) : 0;
+
+  // Terminal status from the jobs when they exist; otherwise trust the stream.
+  const status: BulkRunStatus =
+    summaryTotal > 0 && activeCount === 0
+      ? failed > 0 && completed === 0
+        ? "failed"
+        : "completed"
+      : run.status;
 
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
-    if (run.status === "completed" || run.status === "failed") {
+    if (status === "completed" || status === "failed") {
       reconciledRef.current = true;
       requestCalendarRefetch();
     }
-  }, [run.status, requestCalendarRefetch]);
+  }, [status, requestCalendarRefetch]);
 
   return (
     <div className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3">
@@ -101,14 +138,14 @@ export function BulkRunPanel({ runId, total }: { runId: string; total: number })
         <span
           className={cn(
             "shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide",
-            run.status === "completed"
+            status === "completed"
               ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-              : run.status === "failed"
+              : status === "failed"
                 ? "bg-red-500/15 text-red-500"
                 : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
           )}
         >
-          {run.status}
+          {status}
         </span>
       </div>
 
@@ -117,8 +154,8 @@ export function BulkRunPanel({ runId, total }: { runId: string; total: number })
           <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">
-          {done}/{run.total}
-          {run.failed > 0 ? ` · ${run.failed} failed` : ""}
+          {done}/{displayTotal}
+          {failed > 0 ? ` · ${failed} failed` : ""}
         </span>
       </div>
 

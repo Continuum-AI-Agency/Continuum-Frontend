@@ -49,6 +49,13 @@ export const quickCreatePostRequestSchema = z
     // HyperFrame is not selectable — see organicPostFormatEnum.
     format: organicPostFormatEnum.nullable().optional(),
     objective: quickCreateObjectiveEnum.optional(),
+    // Caller-supplied idempotency key. When present, two POSTs that carry the same
+    // (brandId, idempotencyKey) collapse to ONE durable job — the deterministic
+    // chokepoint's "one click = one job" guarantee extended to any external source
+    // (UI double-fire, retried request, agent re-issue). Omit it and every call
+    // mints a fresh job. The server namespaces it before it becomes the job's
+    // brand-scoped client_key, so it can be any stable opaque string.
+    idempotencyKey: z.string().min(1).optional(),
     // Scheduling context (parity with the chat/runs routes). Server defaults apply
     // when absent: weekStart → next Monday, timezone → UTC, accounts → {}.
     weekStart: z.string().optional(),
@@ -68,6 +75,9 @@ export const quickCreatePostResponseSchema = z
     scheduledAt: z.string().min(1),
     // Unknown at enqueue; the draft surfaces later via realtime / job polling.
     draftId: z.string().nullable().optional(),
+    // True when an idempotencyKey matched an existing job and this response reuses
+    // it instead of enqueuing a new one. Absent/false on a fresh enqueue.
+    idempotentReuse: z.boolean().optional(),
   })
   .strict();
 export type QuickCreatePostResponse = z.infer<typeof quickCreatePostResponseSchema>;

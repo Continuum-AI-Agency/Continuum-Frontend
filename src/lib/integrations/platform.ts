@@ -7,6 +7,7 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   google_ads_account: "googleAds",
   googleads_account: "googleAds",
   google_ads_customer: "googleAds",
+  ads_customer: "googleAds",
   dv360_advertiser: "dv360",
   display_video_360_advertiser: "dv360",
   displayvideo360_advertiser: "dv360",

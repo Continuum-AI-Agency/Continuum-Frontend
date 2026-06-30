@@ -60,3 +60,24 @@ export const mcpStudioWorkflowSchema = z
   .strict();
 
 export type McpStudioWorkflow = z.infer<typeof mcpStudioWorkflowSchema>;
+
+// Result of a collaborative `studio_workflow run`: the open canvas executes the
+// requested nodes and writes this compact summary back to canvas_run_requests.result,
+// which the agent reads via run_status. Deliberately media-free — node ids and output
+// kinds only, never base64 or signed URLs (those stay on the canvas / display card).
+export const canvasRunOutputKindSchema = z.enum(["image", "video", "text"]);
+export type CanvasRunOutputKind = z.infer<typeof canvasRunOutputKindSchema>;
+
+export const canvasRunResultSchema = z
+  .object({
+    executed_node_ids: z.array(z.string()),
+    outputs: z.array(
+      z.object({ node_id: z.string(), kind: canvasRunOutputKindSchema }).strict(),
+    ),
+    failed: z
+      .array(z.object({ node_id: z.string(), error: z.string() }).strict())
+      .optional(),
+  })
+  .strict();
+
+export type CanvasRunResult = z.infer<typeof canvasRunResultSchema>;

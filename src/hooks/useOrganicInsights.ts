@@ -38,7 +38,13 @@ export function useOrganicInsights(
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   const requestIdRef = React.useRef(0);
+  // Carries forceRefresh:true into the next fetch; reset at effect start so only
+  // explicit refresh() calls and the one-shot stale trigger send it.
+  const forceRefreshRef = React.useRef(false);
+  // Prevents the stale-detection auto-trigger from looping after the first regen.
+  const hasAutoRefreshedRef = React.useRef(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTick is an intentional trigger dep, not a data dep
   React.useEffect(() => {
     if (!enabled || !integrationAccountId) {
       setData(null);
@@ -48,6 +54,9 @@ export function useOrganicInsights(
     }
 
     const requestId = ++requestIdRef.current;
+    const isForceRefresh = forceRefreshRef.current;
+    forceRefreshRef.current = false;
+
     setIsLoading(true);
     setError(null);
 
@@ -61,6 +70,7 @@ export function useOrganicInsights(
         integrationAccountId,
         platform,
         range: { preset: rangePreset },
+        ...(isForceRefresh ? { forceRefresh: true } : {}),
       }),
       signal: controller.signal,
     })
@@ -78,6 +88,17 @@ export function useOrganicInsights(
         if (requestId !== requestIdRef.current) return;
         setData(resp);
         setError(null);
+        // Auto-regen once if the data we received is already stale (Upstash may
+        // have served it past its Postgres TTL without triggering a fresh gen).
+        if (
+          resp.expires_at &&
+          new Date(resp.expires_at) < new Date() &&
+          !hasAutoRefreshedRef.current
+        ) {
+          hasAutoRefreshedRef.current = true;
+          forceRefreshRef.current = true;
+          setRefreshTick((t) => t + 1);
+        }
       })
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
@@ -99,6 +120,7 @@ export function useOrganicInsights(
   }, [brandId, integrationAccountId, platform, rangePreset, enabled, refreshTick]);
 
   const refresh = React.useCallback(() => {
+    forceRefreshRef.current = true;
     setRefreshTick((t) => t + 1);
   }, []);
 

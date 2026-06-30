@@ -44,7 +44,11 @@ export type UiPostCard = OrganicPostCardData
 export type UiPlanCard = ProposedPlan
 
 export type PlanApprovalDecision =
-  | { decision: "approve"; planId: string; itemId?: string }
+  // clientKey collapses re-clicks to ONE job: it is the stable per-card identity
+  // `${planId}:${itemId}`, threaded into the POST body so the Backend dedups a
+  // double-dispatched item instead of over-creating jobs. `itemIds` is the group
+  // approve: the kept cards in one action, enqueued in parallel on the Backend.
+  | { decision: "approve"; planId: string; itemId?: string; itemIds?: string[]; clientKey?: string }
   | { decision: "edit"; planId: string; edits: PlanItem[] }
   | { decision: "reject"; planId: string; reason?: string }
 

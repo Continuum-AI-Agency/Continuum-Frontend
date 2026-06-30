@@ -284,3 +284,5 @@ export * from "./organicQuery";
 // Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
 export * from "./smartSearch";
 export * from "./savedBoards";
+// Onboarding-derived competitor recommendations (Competitors tab).
+export * from "./recommended";

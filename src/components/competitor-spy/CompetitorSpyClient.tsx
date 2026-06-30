@@ -12,7 +12,7 @@ import { CompetitorRail } from "./CompetitorRail";
 import { CompetitorSearchPalette } from "./CompetitorSearchPalette";
 import { BoardsPanel } from "./BoardsPanel";
 import { AwarenessReportView } from "./AwarenessReportView";
-import { CompetitorManager } from "./CompetitorManager";
+import { CompetitorsTab } from "./CompetitorsTab";
 
 type TabId = "overview" | "organic" | "paid" | "boards" | "competitors";
 
@@ -119,13 +119,20 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
         }
       />
 
-      <nav role="tablist" aria-label="Competitor spy sections" className="flex gap-1 border-b border-border">
+      <div role="tablist" aria-label="Competitor spy sections" className="flex gap-1 border-b border-border">
         {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={tabClass(tab === t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={tabClass(tab === t.id)}
+          >
             {t.label}
           </button>
         ))}
-      </nav>
+      </div>
 
       <div className="flex-1 overflow-auto">
         {tab === "overview" ? <AwarenessReportView report={awareness ?? null} /> : null}
@@ -165,7 +172,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
 
         {tab === "boards" ? <BoardsPanel brandId={brandId} /> : null}
 
-        {tab === "competitors" ? <CompetitorManager brandId={brandId} /> : null}
+        {tab === "competitors" ? <CompetitorsTab brandId={brandId} /> : null}
       </div>
 
       <CompetitorSearchPalette

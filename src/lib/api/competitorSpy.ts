@@ -16,6 +16,10 @@ import type {
   SavedBoard,
   SavedItem,
   SaveItemRequest,
+  RecommendedCompetitor,
+  RecommendedCompetitorsResponse,
+  DismissRecommendationRequest,
+  DismissRecommendationResponse,
 } from "@continuum/contracts";
 
 const BASE = "/api/competitor-ad-spy";
@@ -185,6 +189,23 @@ export async function deleteCompetitor(id: string): Promise<void> {
   await request({ path: `${BASE}/competitors/${id}`, method: "DELETE" });
 }
 
+export async function listRecommendedCompetitors(brandId: string): Promise<RecommendedCompetitor[]> {
+  const res = await request<RecommendedCompetitorsResponse>({
+    path: `${BASE}/competitors/recommended?brandId=${encodeURIComponent(brandId)}`,
+  });
+  return res.recommended;
+}
+
+export async function dismissRecommendation(
+  input: DismissRecommendationRequest,
+): Promise<DismissRecommendationResponse> {
+  return request<DismissRecommendationResponse>({
+    path: `${BASE}/competitors/recommended/dismiss`,
+    method: "POST",
+    body: input,
+  });
+}
+
 export async function triggerSync(brandId: string, competitorIds?: string[]): Promise<SyncResult> {
   return request<SyncResult>({
     path: `${BASE}/sync`,
@@ -228,6 +249,7 @@ const keys = {
     ["competitor-spy", "instagram-posts", brandId, competitorId ?? null, limit ?? null] as const,
   smartSearch: (brandId: string, q: string) => ["competitor-spy", "smart-search", brandId, q] as const,
   adCounts: (brandId: string) => ["competitor-spy", "ad-counts", brandId] as const,
+  recommended: (brandId: string) => ["competitor-spy", "recommended", brandId] as const,
   boards: (brandId: string) => ["competitor-spy", "boards", brandId] as const,
   boardItems: (boardId: string) => ["competitor-spy", "board-items", boardId] as const,
 };
@@ -327,6 +349,8 @@ export function useCreateCompetitor(brandId: string) {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
       void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+      // Accepting a recommendation tracks it — refresh recs so it flips to alreadyTracked.
+      void qc.invalidateQueries({ queryKey: keys.recommended(brandId) });
     },
   });
 }
@@ -338,6 +362,8 @@ export function useDeleteCompetitor(brandId: string) {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
       void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+      // Un-tracking should clear the alreadyTracked badge on the matching rec.
+      void qc.invalidateQueries({ queryKey: keys.recommended(brandId) });
     },
   });
 }
@@ -385,6 +411,28 @@ export function useAdCounts(brandId: string) {
     queryFn: () => fetchAdCounts(brandId),
     enabled: Boolean(brandId),
     staleTime: 5 * 60_000,
+  });
+}
+
+// --- Onboarding-derived recommendations (Competitors tab) -------------------
+
+export function useRecommendedCompetitors(brandId: string) {
+  return useQuery({
+    queryKey: keys.recommended(brandId),
+    queryFn: () => listRecommendedCompetitors(brandId),
+    enabled: Boolean(brandId),
+    staleTime: 60_000,
+  });
+}
+
+export function useDismissRecommendation(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { name: string; restore?: boolean }) =>
+      dismissRecommendation({ brandId, ...vars }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.recommended(brandId) });
+    },
   });
 }
 

@@ -20,6 +20,7 @@ const StudioCanvas = dynamic(
 type AIStudioClientProps = {
   brandProfileId: string;
   brandName: string;
+  initialRoomId: string;
 };
 
 function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff | null {
@@ -39,6 +40,7 @@ function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff 
 export default function AIStudioClient({
   brandProfileId,
   brandName,
+  initialRoomId,
 }: AIStudioClientProps) {
   const searchParams = useSearchParams();
   const source = searchParams.get("source");
@@ -79,6 +81,7 @@ export default function AIStudioClient({
           <div className="h-full w-full">
             <StudioCanvas
               brandProfileId={brandProfileId}
+              initialRoomId={initialRoomId}
               organicPlannerSeed={organicPlannerSeed}
             />
           </div>

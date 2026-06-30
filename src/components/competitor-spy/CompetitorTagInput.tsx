@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, X, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import type { CompetitorSpyStreamFrame } from "@continuum/contracts";
 import {
   useCompetitors,
   useCreateCompetitor,
-  useDeleteCompetitor,
   useCompetitorSearch,
-  useResolvePaidPage,
 } from "@/lib/api/competitorSpy";
 import { streamCompetitorSync } from "@/lib/api/competitorSpyStream";
 
@@ -46,8 +44,6 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
   const qc = useQueryClient();
   const { data: competitors } = useCompetitors(brandId);
   const create = useCreateCompetitor(brandId);
-  const remove = useDeleteCompetitor(brandId);
-  const resolvePaid = useResolvePaidPage(brandId);
 
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -292,45 +288,6 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
       {limitError ? (
         <p className="text-xs text-destructive">You can tag at most {TAG_LIMIT} competitors. Remove one first.</p>
       ) : null}
-
-      {tracked.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {tracked.map((c) => (
-            <span
-              key={c.id}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs"
-            >
-              <span className="font-medium">{c.name}</span>
-              {c.instagramUsername ? <span className="text-2xs text-muted-foreground">@{c.instagramUsername}</span> : null}
-              {c.metaPageId ? <span className="text-2xs text-muted-foreground">Page {c.metaPageId}</span> : null}
-              {!c.metaPageId && c.paidStatus === "needs_review" ? <span className="text-2xs text-amber-600">paid review</span> : null}
-              {!c.metaPageId && c.paidStatus === "unresolved" ? <span className="text-2xs text-muted-foreground">organic only</span> : null}
-              {c.source === "auto" ? <span className="text-2xs text-muted-foreground">auto</span> : null}
-              {!c.metaPageId ? (
-                <button
-                  type="button"
-                  onClick={() => resolvePaid.mutate(c.id)}
-                  disabled={resolvePaid.isPending}
-                  className="text-2xs font-medium text-primary hover:underline disabled:opacity-50"
-                >
-                  Resolve paid
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => remove.mutate(c.id)}
-                disabled={remove.isPending}
-                className="text-muted-foreground hover:text-destructive"
-                aria-label={`Remove ${c.name}`}
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">No competitors tagged yet.</p>
-      )}
 
       <div className="flex items-center gap-3 pt-1">
         <button

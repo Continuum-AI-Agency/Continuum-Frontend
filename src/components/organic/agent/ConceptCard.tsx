@@ -1,14 +1,22 @@
 'use client';
 
 import { CalendarDays, List, Loader2, RefreshCw, Sparkles, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  type OrganicGenerationStatus,
+  type OrganicGenerationTone,
+  type OrganicMediaStage,
+  resolveOrganicGenerationDisplay,
+} from '@continuum/contracts';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
 import { resolveConceptPreviewUrl } from './conceptPreview';
-import type { PipelineCardState, PlanItem, PlanItemStatus } from './types';
+import type { CheckpointState, PipelineCardState, PlanItem, PlanItemStatus } from './types';
 
-const STATUS_TONE: Record<PlanItemStatus, 'neutral' | 'running' | 'done' | 'failed'> = {
+type CardTone = 'neutral' | 'running' | 'done' | 'failed';
+
+const STATUS_TONE: Record<PlanItemStatus, CardTone> = {
   pending: 'neutral',
   executing: 'running',
   completed: 'done',
@@ -16,6 +24,9 @@ const STATUS_TONE: Record<PlanItemStatus, 'neutral' | 'running' | 'done' | 'fail
   cancelled: 'neutral',
 };
 
+// Pre-dispatch / non-generation fallback labels. The in-flight + terminal labels
+// come from the canonical resolveOrganicGenerationDisplay so the concept card
+// never describes a job differently from the ticker or the calendar.
 const STATUS_LABEL: Record<PlanItemStatus, string> = {
   pending: 'Concept',
   executing: 'Copy in progress',
@@ -23,6 +34,26 @@ const STATUS_LABEL: Record<PlanItemStatus, string> = {
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
+
+// Bridge the canonical generation tone onto the card-kit StatusLabel vocabulary.
+const TONE_TO_CARD_TONE: Record<OrganicGenerationTone, CardTone> = {
+  pending: 'neutral',
+  active: 'running',
+  success: 'done',
+  error: 'failed',
+  neutral: 'neutral',
+};
+
+// Collapse the three-step checkpoint into the canonical media stage the resolver
+// understands — the running-label fallback when no pipeline stage is set yet.
+function deriveCardMediaStage(checkpoint: CheckpointState | undefined): OrganicMediaStage | null {
+  if (!checkpoint) return null;
+  if (checkpoint.mediaStatus === 'ready' || checkpoint.mediaStatus === 'user_supplied') return 'realized';
+  if (checkpoint.mediaStatus === 'generating') return 'realizing';
+  if (checkpoint.blueprintReady) return 'storyboard_ready';
+  if (checkpoint.textReady) return 'text_only';
+  return null;
+}
 
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
@@ -56,6 +87,9 @@ export function ConceptCard({
   onViewDraft,
 }: Props) {
   const [dispatched, setDispatched] = useState(false);
+  // Synchronous latch: setDispatched is async and updates too late to stop a fast
+  // double-click, so this ref blocks the second onGenerate immediately.
+  const dispatchInFlightRef = useRef(false);
 
   const image = resolveConceptPreviewUrl(pipeline?.preview);
   const caption = pipeline?.preview?.caption ?? null;
@@ -67,6 +101,37 @@ export function ConceptCard({
   const hasTextDraft = Boolean(draftId && (pipeline?.checkpoint?.textReady || isDone));
   const mediaStatus = pipeline?.checkpoint?.mediaStatus;
   const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
+
+  // Clear the latch when a job fails so the retry button can dispatch again; a
+  // successful run swaps the card away from the generate button entirely.
+  useEffect(() => {
+    if (isFailed) dispatchInFlightRef.current = false;
+  }, [isFailed]);
+
+  const handleGenerateClick = () => {
+    if (dispatchInFlightRef.current) return;
+    dispatchInFlightRef.current = true;
+    setDispatched(true);
+    onGenerate();
+  };
+
+  // One canonical (status, stage) -> label/tone so the in-flight + terminal copy
+  // matches the ticker and calendar. Pre-dispatch the card is still a "Concept",
+  // not a generation, so the resolver only drives the dispatched/running states.
+  const isInFlight = isGenerating || (dispatched && !isFailed);
+  const genStatus: OrganicGenerationStatus = isFailed
+    ? 'failed'
+    : isDone
+      ? 'completed'
+      : isGenerating
+        ? 'running'
+        : 'queued';
+  const genDisplay = resolveOrganicGenerationDisplay({
+    status: genStatus,
+    stage: pipeline?.currentStage ?? null,
+    mediaStage: deriveCardMediaStage(pipeline?.checkpoint),
+  });
+
   const statusLabel =
     mediaStatus === 'ready' || mediaStatus === 'user_supplied'
       ? 'Fully fleshed out'
@@ -76,8 +141,14 @@ export function ConceptCard({
           ? 'Preview ready'
           : hasTextDraft
             ? 'Copy ready'
-            : STATUS_LABEL[status];
-  const statusTone = hasTextDraft ? 'done' : STATUS_TONE[status];
+            : isInFlight
+              ? genDisplay.label
+              : STATUS_LABEL[status];
+  const statusTone: CardTone = hasTextDraft
+    ? 'done'
+    : isInFlight
+      ? TONE_TO_CARD_TONE[genDisplay.tone]
+      : STATUS_TONE[status];
 
   return (
     <AgentArtifactCard className="mt-0 flex flex-col p-0">
@@ -162,10 +233,10 @@ export function ConceptCard({
               List
             </button>
           </>
-        ) : isGenerating || (dispatched && !isFailed) ? (
+        ) : isInFlight ? (
           <div className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-2xs text-muted-foreground/50">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {isGenerating ? 'Writing copy…' : 'Queued for copy…'}
+            {genDisplay.label}…
           </div>
         ) : (
           <>
@@ -188,10 +259,7 @@ export function ConceptCard({
               aria-label={isFailed ? 'Retry copy draft' : 'Create copy draft'}
               title={isFailed ? 'Retry copy draft' : 'Create copy draft'}
               disabled={locked || isGenerating}
-              onClick={() => {
-                setDispatched(true);
-                onGenerate();
-              }}
+              onClick={handleGenerateClick}
               className={cn(
                 'flex flex-1 items-center justify-center py-2.5',
                 'text-muted-foreground/30 transition-[color,transform] duration-150',

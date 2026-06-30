@@ -6,6 +6,23 @@ import {
   uiBrandBookProposalFrameSchema,
   uiBrandBookAppliedFrameSchema,
 } from "./brand-report-craft";
+import { organicMediaStageSchema, type OrganicMediaStage } from "./organic-pipeline";
+
+/**
+ * Canonical lifecycle status of a single content generation job
+ * (organic.post_generation_jobs.status). This is THE status every surface reads —
+ * agent inline card, generations ticker, calendar — so one job is never described
+ * with three vocabularies ("Queued" vs "Working" vs "Copy in progress"). Pair with
+ * resolveOrganicGenerationDisplay for the human label + tone.
+ */
+export const organicGenerationStatusEnum = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export type OrganicGenerationStatus = z.infer<typeof organicGenerationStatusEnum>;
 
 const jobEventDataSchema = z.object({
   jobId: z.string().min(1),
@@ -20,6 +37,15 @@ const jobEventDataSchema = z.object({
   dayId: z.string().optional(),
   scheduledAt: z.string().optional(),
   platform: z.string().optional(),
+  // Concept identity so a ticker/calendar row reads as the concept title (e.g.
+  // "World Cup kickoff…") instead of a bare "Instagram · Working". Sourced from the
+  // plan item title / draft topic.
+  title: z.string().optional(),
+  planItemId: z.string().optional(),
+  // Canonical job status + media-enrichment stage so the FE derives one label via
+  // resolveOrganicGenerationDisplay rather than inferring it from the frame type.
+  status: organicGenerationStatusEnum.optional(),
+  mediaStage: organicMediaStageSchema.optional(),
 }).loose();
 
 const uiCardDataSchema = z.record(z.string(), z.unknown());
@@ -58,6 +84,108 @@ export const pipelineStageEnum = z.enum([
 ]);
 
 export type PipelineStage = z.infer<typeof pipelineStageEnum>;
+
+// --- Canonical generation display + summary --------------------------------
+// One resolver maps (status, stage, mediaStage) -> a human label + tone for EVERY
+// surface, so the agent inline card, the generations ticker, and the calendar card
+// stop describing the same job three different ways.
+
+export type OrganicGenerationTone = "pending" | "active" | "success" | "error" | "neutral";
+
+export type OrganicGenerationDisplay = {
+  label: string;
+  tone: OrganicGenerationTone;
+};
+
+const RUNNING_STAGE_LABELS: Record<PipelineStage, string> = {
+  strategist: "Planning",
+  concept: "Conceptualizing",
+  draft: "Writing copy",
+  blueprint: "Designing",
+  assets: "Generating media",
+  quality: "Reviewing",
+  merge: "Finalizing",
+};
+
+const RUNNING_MEDIA_STAGE_LABELS: Record<OrganicMediaStage, string> = {
+  text_only: "Writing copy",
+  storyboard_ready: "Designing",
+  realizing: "Generating media",
+  realized: "Finalizing",
+  failed: "Working",
+};
+
+/**
+ * SINGLE source of truth for a generation's human label + tone. Status decides the
+ * terminal/neutral labels; for a running job the pipeline `stage` (preferred) then
+ * `mediaStage` refine what it is doing right now. Every surface calls this — never
+ * hand-roll a status string.
+ */
+export function resolveOrganicGenerationDisplay(input: {
+  status: OrganicGenerationStatus;
+  stage?: PipelineStage | null;
+  mediaStage?: OrganicMediaStage | null;
+}): OrganicGenerationDisplay {
+  switch (input.status) {
+    case "queued":
+      return { label: "Queued", tone: "pending" };
+    case "completed":
+      return { label: "Ready", tone: "success" };
+    case "failed":
+      return { label: "Failed", tone: "error" };
+    case "cancelled":
+      return { label: "Cancelled", tone: "neutral" };
+    case "running": {
+      if (input.stage && RUNNING_STAGE_LABELS[input.stage]) {
+        return { label: RUNNING_STAGE_LABELS[input.stage], tone: "active" };
+      }
+      if (input.mediaStage && RUNNING_MEDIA_STAGE_LABELS[input.mediaStage]) {
+        return { label: RUNNING_MEDIA_STAGE_LABELS[input.mediaStage], tone: "active" };
+      }
+      return { label: "Working", tone: "active" };
+    }
+    default:
+      return { label: "Working", tone: "active" };
+  }
+}
+
+/**
+ * Identity + state of one generation for the ticker / cross-surface reads — built
+ * by the Backend from a post_generation_jobs row joined to its draft. Loose: the
+ * Backend assembles it from unknown DB JSON, so the FE narrows on read.
+ */
+export const organicGenerationSummarySchema = z.object({
+  jobId: z.string().min(1),
+  brandId: z.string().min(1),
+  draftId: z.string().nullable().optional(),
+  status: organicGenerationStatusEnum,
+  stage: pipelineStageEnum.nullable().optional(),
+  mediaStage: organicMediaStageSchema.nullable().optional(),
+  platform: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  dayId: z.string().nullable().optional(),
+  scheduledAt: z.string().nullable().optional(),
+  planId: z.string().nullable().optional(),
+  planItemId: z.string().nullable().optional(),
+  enqueuedAt: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
+  error: z.object({ code: z.string().optional(), message: z.string() }).nullable().optional(),
+}).loose();
+export type OrganicGenerationSummary = z.infer<typeof organicGenerationSummarySchema>;
+
+/**
+ * Rolling-window counts for the ticker header. `made` = enqueued within the window,
+ * `completed` = completed within the window, `running` = currently in flight (point
+ * in time). Drives the "N generations · M running" + last-hour context.
+ */
+export const organicGenerationWindowStatsSchema = z.object({
+  windowMinutes: z.number().int().positive(),
+  made: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  running: z.number().int().nonnegative(),
+}).loose();
+export type OrganicGenerationWindowStats = z.infer<typeof organicGenerationWindowStatsSchema>;
 
 /**
  * Per-plan-item creative brief the planner attaches so a content job can skip
@@ -125,6 +253,87 @@ export const planEvidenceSchema = z.object({
   summary: z.string(),
 });
 export type PlanEvidence = z.infer<typeof planEvidenceSchema>;
+
+// --- Data-awareness: angle evidence + numeric-claim provenance --------------
+// The content machine is "data-aware": angles are grounded in REAL analytics
+// (measured lift, hook rate, top-post metrics) and every numeric/proof claim in
+// copy must trace back to one of those evidence items. `refId` is a single
+// shared namespace across planEvidence, angleEvidenceItem, and numericClaim so
+// provenance is traceable end-to-end: plan card -> placement -> copy claim.
+
+export const angleEvidenceSourceEnum = z.enum([
+  "correlateTrendsToPosts",
+  "analyzeHookRate",
+  "getTopPosts",
+  "listTrends",
+  "competitorSpy",
+]);
+export type AngleEvidenceSource = z.infer<typeof angleEvidenceSourceEnum>;
+
+export const angleEvidenceMetricUnitEnum = z.enum(["pct", "count", "rate", "ratio"]);
+export type AngleEvidenceMetricUnit = z.infer<typeof angleEvidenceMetricUnitEnum>;
+
+export const angleEvidenceItemSchema = z.object({
+  kind: z.enum(["trend_lift", "hook_rate", "top_post", "trend", "competitor"]),
+  refId: z.string().nullable().describe("trendId / mediaId / competitor handle"),
+  label: z.string().describe('Human-readable, e.g. "Trend: cold brew hacks"'),
+  metric: z
+    .object({
+      name: z.string(),
+      value: z.number(),
+      unit: angleEvidenceMetricUnitEnum,
+    })
+    .nullable()
+    .default(null),
+  source: angleEvidenceSourceEnum,
+  capturedAt: z.string().describe("ISO; provenance freshness"),
+});
+export type AngleEvidenceItem = z.infer<typeof angleEvidenceItemSchema>;
+
+export const angleEvidencePackSchema = z.object({
+  brandId: z.string(),
+  windowDays: z.number().int().positive(),
+  accountMedianEngagementRate: z.number().nullable().default(null),
+  items: z.array(angleEvidenceItemSchema).default([]),
+});
+export type AngleEvidencePack = z.infer<typeof angleEvidencePackSchema>;
+
+export const numericClaimTypeEnum = z.enum([
+  "numeric",
+  "statistic",
+  "proof",
+  "comparative",
+  "social_proof",
+]);
+export type NumericClaimType = z.infer<typeof numericClaimTypeEnum>;
+
+export const claimEvidenceKindEnum = z.enum([
+  "trend_lift",
+  "hook_rate",
+  "top_post",
+  "metric",
+  "competitor",
+  "external",
+]);
+export type ClaimEvidenceKind = z.infer<typeof claimEvidenceKindEnum>;
+
+export const numericClaimSchema = z.object({
+  text: z.string().describe("The exact claim as it appears in caption/cta"),
+  claimType: numericClaimTypeEnum,
+  status: z.enum(["grounded", "data_needed"]),
+  source: z
+    .object({
+      evidenceKind: claimEvidenceKindEnum,
+      refId: z.string().nullable().describe("Resolves to an angleEvidenceItem.refId"),
+      metricName: z.string().nullable().default(null),
+      metricValue: z.number().nullable().default(null),
+      capturedAt: z.string().nullable().default(null),
+    })
+    .nullable()
+    .default(null)
+    .describe("null iff status === 'data_needed'"),
+});
+export type NumericClaim = z.infer<typeof numericClaimSchema>;
 
 export const planStatusSchema = z.enum([
   "proposed",
