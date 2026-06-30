@@ -22,6 +22,7 @@ import {
   parseOnboardingMetadata,
 } from "./state";
 import { findReusableBrandId } from "./reusableBrand";
+import { canPersistBrandRecord } from "./brandRecordGuard";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 import type { Database, Json } from "@/lib/supabase/types";
 
@@ -84,14 +85,28 @@ async function ensureBrandProfileRecord(
   const { data: rawData, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
-    .select("id, brand_name, logo_path, completed_at")
+    .select("id, brand_name, logo_path, completed_at, created_by")
     .eq("id", brandId)
     .maybeSingle();
 
-  const data = rawData as { id: string; brand_name: string | null; logo_path: string | null; completed_at: string | null } | null;
+  const data = rawData as {
+    id: string;
+    brand_name: string | null;
+    logo_path: string | null;
+    completed_at: string | null;
+    created_by: string | null;
+  } | null;
 
   if (error && error.code !== "PGRST116") {
     throw error;
+  }
+
+  // Only the brand's creator may persist global fields from their onboarding
+  // state. An invited member's state name is defaulted to "<their-name>'s Brand";
+  // letting them write it overwrote the canonical brand_name for everyone (the
+  // shell, the switcher). Invited members are read-only on the brand row.
+  if (!canPersistBrandRecord(data, owner.id)) {
+    return;
   }
 
   const brandName = resolveBrandProfileName(state);
