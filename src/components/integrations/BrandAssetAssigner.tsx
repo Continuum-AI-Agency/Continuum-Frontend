@@ -35,7 +35,9 @@ import {
   PLATFORM_ICONS,
   PLATFORM_LABELS,
   PROVIDER_GROUP_ICONS,
+  isProviderComingSoon,
 } from "@/components/settings/shell/platformIcons";
+import { cn } from "@/lib/utils";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 
 export type AssignerTrackEvent =
@@ -319,6 +321,15 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
         return;
       }
 
+      if (isProviderComingSoon(group)) {
+        show({
+          title: `${SYNC_LABEL_BY_GROUP[group]} is coming soon`,
+          description: "This integration isn't available yet.",
+          variant: "info",
+        });
+        return;
+      }
+
       const beforeCount = countAssetsForGroup(userAssets, group);
 
       markSyncing(tabId, true);
@@ -428,20 +439,26 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
               Connect a provider to start tagging its accounts to this brand.
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              {(["meta", "google", "tiktok", "x"] as ProviderGroup[]).map((group) => (
-                <Button
-                  key={group}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSync(group)}
-                  disabled={syncingTabIds.has(group)}
-                >
-                  {syncingTabIds.has(group)
-                    ? `Connecting ${SYNC_LABEL_BY_GROUP[group]}…`
-                    : `Connect ${SYNC_LABEL_BY_GROUP[group]}`}
-                </Button>
-              ))}
+              {(["meta", "google", "tiktok", "x"] as ProviderGroup[]).map((group) => {
+                const comingSoon = isProviderComingSoon(group);
+                return (
+                  <Button
+                    key={group}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={comingSoon ? undefined : () => handleSync(group)}
+                    disabled={comingSoon || syncingTabIds.has(group)}
+                    className={cn(comingSoon && "opacity-60")}
+                  >
+                    {comingSoon
+                      ? `${SYNC_LABEL_BY_GROUP[group]} — Coming soon`
+                      : syncingTabIds.has(group)
+                        ? `Connecting ${SYNC_LABEL_BY_GROUP[group]}…`
+                        : `Connect ${SYNC_LABEL_BY_GROUP[group]}`}
+                  </Button>
+                );
+              })}
             </div>
           </div>
         ) : (

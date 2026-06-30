@@ -26,6 +26,7 @@ function makeSvgIcon(iconData: IconData): IconComponent {
       <span
         className={cn("h-4 w-4 inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block", className)}
         title={iconData.title}
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted inline brand-icon SVG from local @/lib/brand-icons constants, never user input
         dangerouslySetInnerHTML={{ __html: iconData.svg }}
       />
     );
@@ -93,3 +94,10 @@ export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
   tiktok: TikTokIcon,
   x: XIcon,
 };
+
+// Provider groups that are surfaced but not yet open to users. Rendered
+// greyed-out / disabled across connect surfaces. Re-enable by removing the key.
+export const COMING_SOON_PROVIDER_GROUPS: ReadonlySet<ProviderGroup> = new Set(["x"]);
+
+export const isProviderComingSoon = (group: string): boolean =>
+  COMING_SOON_PROVIDER_GROUPS.has(group as ProviderGroup);

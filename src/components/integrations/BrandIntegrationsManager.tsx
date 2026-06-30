@@ -14,6 +14,7 @@ import {
 import { ChevronDownIcon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
 import { RefreshCw } from "lucide-react";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
+import { isProviderComingSoon } from "@/components/settings/shell/platformIcons";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import {
   fetchUserTikTokAccountIds,
@@ -112,6 +113,7 @@ export function BrandIntegrationsManager({
   const startXSync = useStartXSync();
 
   const handleConnect = async (platformKey: string) => {
+    if (isProviderComingSoon(platformKey)) return;
     setIsSyncing(true);
     try {
       const context = brandProfileId ?? "settings";
@@ -330,13 +332,14 @@ export function BrandIntegrationsManager({
           <ShadcnTableBody>
             {providerStats.map((group) => {
               const isExpanded = expandedViewPlatforms.has(group.key);
-              const statusColor = group.connected ? "green" : "gray";
+              const comingSoon = isProviderComingSoon(group.key);
+              const statusColor = comingSoon ? "gray" : group.connected ? "green" : "gray";
 
               return (
                 <React.Fragment key={group.key}>
                   <ShadcnTableRow
                     className={`cursor-pointer border-white/5 transition-colors ${
-                      group.count > 0 ? "hover:bg-white/5" : "opacity-60"
+                      group.count > 0 && !comingSoon ? "hover:bg-white/5" : "opacity-60"
                     }`}
                     onClick={() => group.count > 0 && toggleViewPlatform(group.key)}
                   >
@@ -362,7 +365,7 @@ export function BrandIntegrationsManager({
                         variant="soft"
                         className="font-bold text-2xs"
                       >
-                        {group.connected ? "ACTIVE" : "NONE"}
+                        {comingSoon ? "COMING SOON" : group.connected ? "ACTIVE" : "NONE"}
                       </Badge>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="py-4 text-right">
@@ -387,10 +390,16 @@ export function BrandIntegrationsManager({
                         size="1"
                         variant={group.connected ? "ghost" : "surface"}
                         onClick={() => handleConnect(group.key)}
-                        disabled={isSyncing || isLoading}
+                        disabled={isSyncing || isLoading || comingSoon}
                         className="h-6 text-2xs font-bold uppercase tracking-wider px-2"
                       >
-                        {isSyncing ? "Syncing..." : group.connected ? "Re-sync" : "Sync"}
+                        {comingSoon
+                          ? "Coming soon"
+                          : isSyncing
+                            ? "Syncing..."
+                            : group.connected
+                              ? "Re-sync"
+                              : "Sync"}
                       </Button>
                     </ShadcnTableCell>
                   </ShadcnTableRow>

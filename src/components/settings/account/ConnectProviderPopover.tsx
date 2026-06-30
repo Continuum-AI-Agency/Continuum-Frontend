@@ -31,8 +31,10 @@ import {
   PROVIDER_GROUP_DESCRIPTIONS,
   PROVIDER_GROUP_ICONS,
   PROVIDER_GROUP_LABELS,
+  isProviderComingSoon,
   type ProviderGroup,
 } from "../shell/platformIcons";
+import { cn } from "@/lib/utils";
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 
 const PROVIDERS: ProviderGroup[] = ["facebook", "google", "tiktok", "x"];
@@ -67,6 +69,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
   };
 
   const handleConnect = (provider: ProviderGroup) => {
+    if (isProviderComingSoon(provider)) return;
     startTransition(async () => {
       let cleanup: (() => void) | undefined;
       try {
@@ -207,12 +210,16 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
         </div>
         <div className="mt-1 space-y-1">
           {PROVIDERS.map((providerId) => {
-            const connected = hasProviderConnections(integrations, providerId);
+            const comingSoon = isProviderComingSoon(providerId);
+            const connected = !comingSoon && hasProviderConnections(integrations, providerId);
             const Icon = PROVIDER_GROUP_ICONS[providerId];
             return (
               <div
                 key={providerId}
-                className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-2 py-2",
+                  comingSoon ? "opacity-60" : "hover:bg-muted/40"
+                )}
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   <Icon className="h-4 w-4" />
@@ -222,7 +229,11 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                     <p className="truncate text-sm font-medium text-foreground">
                       {PROVIDER_GROUP_LABELS[providerId]}
                     </p>
-                    {connected ? (
+                    {comingSoon ? (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
+                        Coming soon
+                      </Badge>
+                    ) : connected ? (
                       <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
                         Connected
                       </Badge>
@@ -232,7 +243,16 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                     {PROVIDER_GROUP_DESCRIPTIONS[providerId]}
                   </p>
                 </div>
-                {connected ? (
+                {comingSoon ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled
+                  >
+                    Coming soon
+                  </Button>
+                ) : connected ? (
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
