@@ -12,11 +12,6 @@ mock.module("@/components/providers/ActiveBrandProvider", () => ({
   useActiveBrandContext: () => ({ activeBrandId: "brand-1" }),
 }));
 
-mock.module("@/components/onboarding/v2/tour/SurfaceTourTrigger", () => ({
-  SurfaceTourTrigger: () => null,
-  useReadyAfterPaint: () => false,
-}));
-
 import { HomeBaseDashboard } from "./HomeBaseDashboard";
 
 afterEach(() => cleanup());

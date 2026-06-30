@@ -14,12 +14,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { PanelRightOpen, PanelRightClose, Maximize2, Minimize2 } from "lucide-react";
 import { prefetchPaidMediaDashboard } from "@/lib/prefetch/paid-media-cache";
-import {
-  SurfaceTourTrigger,
-  useReadyAfterPaint,
-} from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
-import { TOUR_PAID_MEDIA } from "@/components/onboarding/v2/tour/config";
-import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore";
 
 const PAID_MEDIA_TABS = ["dashboard", "performance", "jaina"] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
@@ -162,15 +156,6 @@ export default function PaidMediaClientPage({
     });
   };
 
-  const requestedTourTab = useTourTabStore((state) => state.paidMediaTab);
-  const tourTabRequestId = useTourTabStore((state) => state.requestId);
-
-  React.useEffect(() => {
-    if (!requestedTourTab || requestedTourTab === activeTab) return;
-    handleTabChange(requestedTourTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedTourTab, tourTabRequestId]);
-
   // Prefetch dashboard data while user is on Jaina tab so data is warm on switch-back
   React.useEffect(() => {
     if (activeTab !== "jaina" || !selectedAdAccount) return;
@@ -283,8 +268,6 @@ export default function PaidMediaClientPage({
     return () => observer.disconnect();
   }, [clampCanvasWidth, activeTab]);
 
-  const tourReady = useReadyAfterPaint(mounted && activeTab === "dashboard");
-
   if (!mounted) {
     return (
       <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
@@ -303,7 +286,6 @@ export default function PaidMediaClientPage({
 
   return (
     <div className="@container/paid box-border h-full min-h-0 w-full max-w-none overflow-hidden px-0 py-1">
-      <SurfaceTourTrigger tourName={TOUR_PAID_MEDIA} ready={tourReady} />
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}

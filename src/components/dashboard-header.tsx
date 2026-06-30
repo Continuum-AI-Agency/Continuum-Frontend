@@ -12,7 +12,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./navigation/routes";
 import { motion, useReducedMotion } from "motion/react";
-import { HeaderReplayWalkthroughButton } from "@/components/onboarding/v2/tour/HeaderReplayWalkthroughButton";
 
 function DashboardHeaderInner() {
   useDashboardWelcomeToast();
@@ -49,7 +48,6 @@ function DashboardHeaderInner() {
             {breadcrumbLabel}
           </span>
         </div>
-        <HeaderReplayWalkthroughButton />
       </div>
 
       <div className="ml-auto flex items-center gap-3">

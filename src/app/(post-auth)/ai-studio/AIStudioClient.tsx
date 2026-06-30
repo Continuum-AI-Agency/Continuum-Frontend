@@ -11,13 +11,6 @@ import {
   plannerAiStudioHandoffSchema,
   type PlannerAiStudioHandoff,
 } from "@/lib/organic/ai-studio-bridge";
-import {
-  SurfaceTourTrigger,
-  useReadyAfterPaint,
-} from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
-import { TOUR_AI_CANVAS } from "@/components/onboarding/v2/tour/config";
-import { ReplayWalkthroughButton } from "@/components/onboarding/v2/tour/ReplayWalkthroughButton";
-import { useSeedTourNodes } from "./useSeedTourNodes";
 
 const StudioCanvas = dynamic(
   () => import("@/StudioCanvas/components/StudioCanvas").then((mod) => mod.StudioCanvas),
@@ -52,9 +45,6 @@ export default function AIStudioClient({
   const draftId = searchParams.get("draftId");
   const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(null);
 
-  const seedingSettled = useSeedTourNodes();
-  const tourReady = useReadyAfterPaint(seedingSettled);
-
   React.useEffect(() => {
     if (source !== "organic-planner" || !draftId) {
       setOrganicPlannerSeed(null);
@@ -81,10 +71,6 @@ export default function AIStudioClient({
             <Text color="gray" size="2">Build flows for {brandName}</Text>
           </div>
           <div className="flex items-center gap-3">
-            <ReplayWalkthroughButton
-              tourName={TOUR_AI_CANVAS}
-              className="text-white/60 hover:bg-white/10 hover:text-white"
-            />
             <BrandSwitcherMenu />
           </div>
         </div>
@@ -100,7 +86,6 @@ export default function AIStudioClient({
       </main>
 
       <CreativeLibrarySidebar brandProfileId={brandProfileId} />
-      <SurfaceTourTrigger tourName={TOUR_AI_CANVAS} ready={tourReady} />
     </div>
   );
 }

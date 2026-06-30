@@ -59,8 +59,6 @@ import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge
 import { getLocalStorageJSON } from "@/lib/storage"
 import { CalendarToolbar } from "./CalendarToolbar"
 import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
-import { ORGANIC_PLANNER_TOUR_VIEWPORT_ID } from "@/components/onboarding/v2/tour/config"
-import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore"
 import {
   Tooltip,
   TooltipContent,
@@ -175,17 +173,6 @@ export function OrganicCalendarWorkspaceClient({
       setDateRange: state.setDateRange,
     }))
   )
-
-  // The tour provider requests a calendar viewMode via the shared store on
-  // step change (e.g. step 2 needs the list view). Depend on requestId so a
-  // repeated request for the same view still fires.
-  const requestedTourCalendarView = useTourTabStore((state) => state.organicCalendarView)
-  const tourRequestId = useTourTabStore((state) => state.requestId)
-  React.useEffect(() => {
-    if (!requestedTourCalendarView || requestedTourCalendarView === viewMode) return
-    setViewMode(requestedTourCalendarView)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedTourCalendarView, tourRequestId])
 
   React.useEffect(() => {
     const igAccountId = instagramAccountId ?? platformAccountIds.instagram ?? null
@@ -818,7 +805,6 @@ export function OrganicCalendarWorkspaceClient({
           <motion.section
             layout
             transition={layoutTransition}
-            id={ORGANIC_PLANNER_TOUR_VIEWPORT_ID}
             className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
           >
             <motion.div layout transition={layoutTransition}>

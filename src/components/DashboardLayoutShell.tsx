@@ -16,10 +16,6 @@ const CommandPalette = dynamic(
   { ssr: false },
 );
 
-const TourProvider = dynamic(
-  () => import("./onboarding/v2/tour/TourProvider").then((m) => ({ default: m.TourProvider })),
-);
-
 import type { AuthIdentity } from "@/lib/auth/identity";
 
 export type BrandSummary = {
@@ -63,13 +59,11 @@ export default function DashboardLayoutShell({
           <SidebarProvider defaultOpen={false}>
             <AppSidebar />
             <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
-              <TourProvider>
-                <DashboardHeader />
-                <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
-                  <BrandWelcomeBanner />
-                  <div className="min-h-full w-full min-w-0">{children}</div>
-                </main>
-              </TourProvider>
+              <DashboardHeader />
+              <main className="@container/app-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
+                <BrandWelcomeBanner />
+                <div className="min-h-full w-full min-w-0">{children}</div>
+              </main>
             </SidebarInset>
           </SidebarProvider>
         </div>

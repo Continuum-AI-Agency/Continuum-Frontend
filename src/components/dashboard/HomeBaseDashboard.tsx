@@ -4,12 +4,6 @@ import React from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import {
-  SurfaceTourTrigger,
-  useReadyAfterPaint,
-} from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
-import { TOUR_DASHBOARD } from "@/components/onboarding/v2/tour/config";
-import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore";
 
 type Props = {
   activeView: DashboardView;
@@ -65,25 +59,8 @@ export function HomeBaseDashboard({
     router.prefetch(activeView === "paid" ? "/dashboard" : "/dashboard?view=paid");
   }, [activeView, router]);
 
-  // The dashboard tour switches between the Organic and Paid views by
-  // requesting a view through the shared tour store. Depend on requestId so a
-  // repeated request for the same view still re-runs.
-  const requestedTourView = useTourTabStore((state) => state.dashboardView);
-  const tourRequestId = useTourTabStore((state) => state.requestId);
-  React.useEffect(() => {
-    if (requestedTourView && requestedTourView !== activeView) {
-      handleViewChange(requestedTourView);
-    }
-  }, [requestedTourView, tourRequestId, activeView, handleViewChange]);
-
-  // Step 1 targets the always-present dashboard shell; the tour itself walks
-  // the user onto the Paid view, so gating first-run on the organic view keeps
-  // the opening steps anchored.
-  const tourReady = useReadyAfterPaint(activeView === "organic");
-
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-      <SurfaceTourTrigger tourName={TOUR_DASHBOARD} ready={tourReady} />
       <section
         data-tour-id="dashboard-overview"
         className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
