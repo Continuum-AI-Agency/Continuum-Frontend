@@ -96,17 +96,10 @@ function collectReel(draft: OrganicCalendarDraft): ReusableMediaItem | null {
 
 // Stage-2 blueprint storyboard frames — reusable as the basis for realizing.
 function collectBlueprint(draft: OrganicCalendarDraft): ReusableMediaItem[] {
-  return (draft.mediaSuggestion?.storyboard ?? [])
-    .map((frame, index) => {
-      if (!isUsableUrl(frame.storageUrl)) return null;
-      return {
-        id: `blueprint-${index}`,
-        kind: 'image' as const,
-        url: frame.storageUrl,
-        source: 'blueprint' as const,
-      };
-    })
-    .filter((item): item is ReusableMediaItem => item !== null);
+  return (draft.mediaSuggestion?.storyboard ?? []).flatMap((frame, index): ReusableMediaItem[] => {
+    if (!isUsableUrl(frame.storageUrl)) return [];
+    return [{ id: `blueprint-${index}`, kind: 'image', url: frame.storageUrl, source: 'blueprint' }];
+  });
 }
 
 function buildLabel(summary: Omit<DraftMediaSummary, 'label'>): string {
