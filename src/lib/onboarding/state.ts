@@ -194,6 +194,7 @@ const onboardingStateSchema = z.object({
   members: z.array(brandMemberSchema),
   invites: z.array(brandInviteSchema),
   completedAt: z.union([isoDateString, z.null()]).nullable(),
+  emailReportOptIn: z.boolean().default(true),
   preview: z
     .object({
       completedAt: isoDateString,
@@ -211,6 +212,7 @@ const onboardingPatchSchema = z.object({
   members: z.array(brandMemberSchema).optional(),
   invites: z.array(brandInviteSchema).optional(),
   completedAt: z.union([isoDateString, z.null()]).nullable().optional(),
+  emailReportOptIn: z.boolean().optional(),
   preview: z
     .object({
       completedAt: isoDateString,
@@ -284,6 +286,7 @@ export function createDefaultOnboardingState(owner?: BrandMember): OnboardingSta
     members: owner ? [owner] : [],
     invites: [],
     completedAt: null,
+    emailReportOptIn: true,
     preview: null,
   };
 }
@@ -359,6 +362,7 @@ export function mergeOnboardingState(
     members: [...current.members],
     invites: [...current.invites],
     completedAt: current.completedAt ?? null,
+    emailReportOptIn: current.emailReportOptIn ?? true,
     preview: current.preview ?? null,
   };
 
@@ -434,6 +438,10 @@ export function mergeOnboardingState(
 
   if (patch.completedAt !== undefined) {
     next.completedAt = patch.completedAt ?? null;
+  }
+
+  if (patch.emailReportOptIn !== undefined) {
+    next.emailReportOptIn = patch.emailReportOptIn;
   }
 
   if (patch.preview !== undefined) {

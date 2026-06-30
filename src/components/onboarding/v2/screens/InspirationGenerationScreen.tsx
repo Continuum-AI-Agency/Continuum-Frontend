@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { streamGeneration } from "@/lib/onboarding/inspirationsClient";
 import type {
@@ -24,6 +25,8 @@ type Props = {
   onFinish: () => void;
   finishing: boolean;
   onBack: () => void;
+  emailReportOptIn: boolean;
+  onEmailReportOptInChange: (value: boolean) => void;
 };
 
 // Creatives are generated up-front by the `creativePrewarm` background job (kicked
@@ -31,7 +34,14 @@ type Props = {
 // This screen displays those results; it only generates locally as a fallback when
 // the prewarm didn't run or produced nothing. Brand-guidelines only — no competitor
 // reference.
-export function InspirationGenerationScreen({ brandId, onFinish, finishing, onBack }: Props) {
+export function InspirationGenerationScreen({
+  brandId,
+  onFinish,
+  finishing,
+  onBack,
+  emailReportOptIn,
+  onEmailReportOptInChange,
+}: Props) {
   const { jobs } = useBackgroundJobs();
   const prewarm = jobs.creativePrewarm;
   const prewarmImages = (prewarm.data as { images?: OnboardingGeneratedImage[] } | null)?.images ?? [];
@@ -159,6 +169,20 @@ export function InspirationGenerationScreen({ brandId, onFinish, finishing, onBa
               Still creating — they&apos;ll keep saving to your library.
             </span>
           ) : null}
+          <div className="flex items-center gap-2">
+            <Switch
+              id="onboarding-email-report"
+              checked={emailReportOptIn}
+              onCheckedChange={onEmailReportOptInChange}
+              disabled={finishing}
+            />
+            <label
+              htmlFor="onboarding-email-report"
+              className="cursor-pointer select-none text-xs text-muted-foreground"
+            >
+              Email me my brand readiness report
+            </label>
+          </div>
           {/* Never block the finale: creatives persist to the library server-side,
               so the user can head to the dashboard even while generation runs. */}
           <Button variant="success" size="sm" onClick={onFinish} disabled={finishing}>

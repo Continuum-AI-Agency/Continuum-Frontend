@@ -85,7 +85,7 @@ async function ensureBrandProfileRecord(
   const { data: rawData, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
-    .select("id, brand_name, logo_path, completed_at, created_by")
+    .select("id, brand_name, logo_path, completed_at, created_by, email_report_opt_in")
     .eq("id", brandId)
     .maybeSingle();
 
@@ -95,6 +95,7 @@ async function ensureBrandProfileRecord(
     logo_path: string | null;
     completed_at: string | null;
     created_by: string | null;
+    email_report_opt_in: boolean | null;
   } | null;
 
   if (error && error.code !== "PGRST116") {
@@ -112,6 +113,10 @@ async function ensureBrandProfileRecord(
   const brandName = resolveBrandProfileName(state);
   const logoPath = state?.brand?.logoPath ?? null;
   const completedAt = state?.completedAt ?? null;
+  // The end-of-onboarding toggle. Persisted on the same row whose completed_at
+  // fires the first-value report enqueue trigger, so the trigger reads the
+  // user's choice at completion. Defaults to opt-in.
+  const emailReportOptIn = state?.emailReportOptIn ?? true;
 
   if (!data) {
     const { error: insertError } = await supabase
@@ -123,6 +128,7 @@ async function ensureBrandProfileRecord(
         logo_path: logoPath,
         created_by: owner.id,
         completed_at: completedAt,
+        email_report_opt_in: emailReportOptIn,
       });
 
     if (insertError) {
@@ -151,7 +157,12 @@ async function ensureBrandProfileRecord(
     return;
   }
 
-  if (data.brand_name !== brandName || data.logo_path !== logoPath || data.completed_at !== completedAt) {
+  if (
+    data.brand_name !== brandName ||
+    data.logo_path !== logoPath ||
+    data.completed_at !== completedAt ||
+    (data.email_report_opt_in ?? true) !== emailReportOptIn
+  ) {
     const { error: updateError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
@@ -159,6 +170,7 @@ async function ensureBrandProfileRecord(
         brand_name: brandName,
         logo_path: logoPath,
         completed_at: completedAt,
+        email_report_opt_in: emailReportOptIn,
         updated_at: new Date().toISOString(),
       })
       .eq("id", brandId);

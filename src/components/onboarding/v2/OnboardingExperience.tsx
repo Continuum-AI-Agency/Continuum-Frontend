@@ -600,6 +600,8 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               onFinish={handleFinishToDashboard}
               finishing={launching}
               onBack={() => navigate(hasConnectedInstagram(state) ? 5 : 4)}
+              emailReportOptIn={state.emailReportOptIn ?? true}
+              onEmailReportOptInChange={(value) => void updateState({ emailReportOptIn: value })}
             />
           )}
         </motion.div>

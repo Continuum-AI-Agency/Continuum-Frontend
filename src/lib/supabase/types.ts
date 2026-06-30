@@ -1206,6 +1206,7 @@ export type Database = {
           created_at: string
           created_by: string
           description: string | null
+          email_report_opt_in: boolean
           id: string
           logo_path: string | null
           target_audience: Json | null
@@ -1224,6 +1225,7 @@ export type Database = {
           created_at?: string
           created_by: string
           description?: string | null
+          email_report_opt_in?: boolean
           id?: string
           logo_path?: string | null
           target_audience?: Json | null
@@ -1242,6 +1244,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           description?: string | null
+          email_report_opt_in?: boolean
           id?: string
           logo_path?: string | null
           target_audience?: Json | null
@@ -1817,6 +1820,71 @@ export type Database = {
           {
             foreignKeyName: "chat_messages_brand_profile_id_fkey"
             columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      first_value_report_jobs: {
+        Row: {
+          attempts: number
+          brand_id: string
+          created_at: string
+          deadline_at: string
+          id: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          payload_snapshot: Json | null
+          report_type: string
+          resend_message_id: string | null
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          brand_id: string
+          created_at?: string
+          deadline_at: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload_snapshot?: Json | null
+          report_type?: string
+          resend_message_id?: string | null
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          brand_id?: string
+          created_at?: string
+          deadline_at?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload_snapshot?: Json | null
+          report_type?: string
+          resend_message_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "first_value_report_jobs_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
@@ -3697,6 +3765,17 @@ export type Database = {
           embedding_text: string
         }[]
       }
+      claim_first_value_report_jobs: {
+        Args: { p_limit?: number; p_lock_owner?: string }
+        Returns: {
+          attempts: number
+          brand_id: string
+          deadline_at: string
+          id: string
+          scheduled_at: string
+          user_id: string
+        }[]
+      }
       claim_next_brand_deep_job: {
         Args: { p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -3808,6 +3887,10 @@ export type Database = {
       }
       enqueue_brand_report_job: {
         Args: { p_brand_id: string; p_payload: Json; p_preview_run_id: string }
+        Returns: string
+      }
+      enqueue_first_value_report_job: {
+        Args: { p_brand_id: string; p_completed_at?: string; p_user_id: string }
         Returns: string
       }
       ensure_default_canvas_room: {
@@ -3969,6 +4052,7 @@ export type Database = {
         Args: { p_job_id: string; p_worker_id: string }
         Returns: boolean
       }
+      invoke_first_value_report_worker: { Args: never; Returns: number }
       is_brand_admin: { Args: { brand_id: string }; Returns: boolean }
       list_brand_integrations: {
         Args: { p_brand_profile_id: string }
@@ -6411,6 +6495,7 @@ export type Database = {
           brand_id: string
           cancel_requested: boolean
           claimed_at: string | null
+          client_key: string | null
           completed_at: string | null
           creative_brief: Json | null
           dead_lettered_at: string | null
@@ -6446,6 +6531,7 @@ export type Database = {
           brand_id: string
           cancel_requested?: boolean
           claimed_at?: string | null
+          client_key?: string | null
           completed_at?: string | null
           creative_brief?: Json | null
           dead_lettered_at?: string | null
@@ -6481,6 +6567,7 @@ export type Database = {
           brand_id?: string
           cancel_requested?: boolean
           claimed_at?: string | null
+          client_key?: string | null
           completed_at?: string | null
           creative_brief?: Json | null
           dead_lettered_at?: string | null
@@ -6767,6 +6854,7 @@ export type Database = {
           brand_id: string
           cancel_requested: boolean
           claimed_at: string | null
+          client_key: string | null
           completed_at: string | null
           creative_brief: Json | null
           dead_lettered_at: string | null
@@ -6811,6 +6899,7 @@ export type Database = {
           brand_id: string
           cancel_requested: boolean
           claimed_at: string | null
+          client_key: string | null
           completed_at: string | null
           creative_brief: Json | null
           dead_lettered_at: string | null
@@ -6870,6 +6959,7 @@ export type Database = {
         Args: {
           p_account_id: string
           p_brand_id: string
+          p_client_key?: string
           p_creative_brief?: Json
           p_guidance_prompt: string
           p_job_type?: string
@@ -6901,6 +6991,7 @@ export type Database = {
           brand_id: string
           cancel_requested: boolean
           claimed_at: string | null
+          client_key: string | null
           completed_at: string | null
           creative_brief: Json | null
           dead_lettered_at: string | null
@@ -6950,6 +7041,7 @@ export type Database = {
               brand_id: string
               cancel_requested: boolean
               claimed_at: string | null
+              client_key: string | null
               completed_at: string | null
               creative_brief: Json | null
               dead_lettered_at: string | null
@@ -6999,6 +7091,7 @@ export type Database = {
               brand_id: string
               cancel_requested: boolean
               claimed_at: string | null
+              client_key: string | null
               completed_at: string | null
               creative_brief: Json | null
               dead_lettered_at: string | null
@@ -7072,6 +7165,57 @@ export type Database = {
   }
   paid_media: {
     Tables: {
+      paid_daily_spend: {
+        Row: {
+          account_id: string
+          brand_id: string
+          budget: number | null
+          campaign_id: string | null
+          clicks: number | null
+          currency: string | null
+          date: string
+          id: string
+          impressions: number | null
+          ingested_at: string
+          metadata: Json
+          platform: string
+          spend: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          budget?: number | null
+          campaign_id?: string | null
+          clicks?: number | null
+          currency?: string | null
+          date: string
+          id?: string
+          impressions?: number | null
+          ingested_at?: string
+          metadata?: Json
+          platform: string
+          spend?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          budget?: number | null
+          campaign_id?: string | null
+          clicks?: number | null
+          currency?: string | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          ingested_at?: string
+          metadata?: Json
+          platform?: string
+          spend?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       paid_media_ad_objects: {
         Row: {
           brand_id: string
