@@ -18,6 +18,7 @@ const FALLBACK_TYPE_BY_PLATFORM: Record<PlatformKey, string> = {
   instagram: "meta_instagram_account",
   facebook: "meta_page",
   tiktok: "tiktok_account",
+  x: "x_user",
   linkedin: "linkedin_account",
   googleAds: "google_ad_account",
   amazonAds: "amazon_ad_account",
@@ -32,6 +33,7 @@ const PROVIDER_BY_PLATFORM: Partial<Record<PlatformKey, string>> = {
   googleAds: "google",
   dv360: "google",
   threads: "meta",
+  x: "x",
 };
 
 function inferProviderFromType(type: string): string | undefined {

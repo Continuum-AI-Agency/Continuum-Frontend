@@ -47,3 +47,8 @@ export const youtube: BrandIconData = {
   title: "YouTube",
   svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="2" y="5.5" width="20" height="13" rx="3.2" fill="#FF0033"/><path d="m10 9 6 3-6 3V9Z" fill="#fff"/></svg>`,
 };
+
+export const x: BrandIconData = {
+  title: "X",
+  svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="#000"/><path d="M13.5 10.6 18.2 5h-1.6l-3.9 4.6L9.5 5H5.2l4.9 7.2L5.2 19h1.6l4.2-5 3.4 5h4.3l-5.2-7.6Zm-1.5 1.8-.5-.7-3.9-5.6h1.7l3.1 4.5.5.7 4 5.8h-1.7l-3.3-4.7Z" fill="#fff"/></svg>`,
+};

@@ -9,6 +9,7 @@ import {
   meta,
   threads,
   tiktok,
+  x,
   youtube,
 } from "@/lib/brand-icons";
 
@@ -42,12 +43,14 @@ const ThreadsIcon = makeSvgIcon(threads);
 const MetaIcon = makeSvgIcon(meta);
 const LinkedInIcon = makeSvgIcon(linkedin);
 const AmazonIcon = makeSvgIcon(amazon);
+const XIcon = makeSvgIcon(x);
 
 export const PLATFORM_LABELS: Record<PlatformKey, string> = {
   youtube: "YouTube",
   instagram: "Instagram",
   facebook: "Facebook",
   tiktok: "TikTok",
+  x: "X",
   linkedin: "LinkedIn",
   googleAds: "Google Ads",
   amazonAds: "Amazon Ads",
@@ -60,6 +63,7 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   instagram: InstagramIcon,
   facebook: FacebookIcon,
   tiktok: TikTokIcon,
+  x: XIcon,
   linkedin: LinkedInIcon,
   googleAds: GoogleIcon,
   amazonAds: AmazonIcon,
@@ -67,22 +71,25 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   threads: ThreadsIcon,
 };
 
-export type ProviderGroup = "facebook" | "google" | "tiktok";
+export type ProviderGroup = "facebook" | "google" | "tiktok" | "x";
 
 export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
   facebook: "Meta",
   google: "Google",
   tiktok: "TikTok",
+  x: "X",
 };
 
 export const PROVIDER_GROUP_DESCRIPTIONS: Record<ProviderGroup, string> = {
   facebook: "Facebook & Instagram",
   google: "Google Ads & YouTube",
   tiktok: "TikTok Marketing",
+  x: "X (Twitter)",
 };
 
 export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
   facebook: MetaIcon,
   google: GoogleIcon,
   tiktok: TikTokIcon,
+  x: XIcon,
 };
