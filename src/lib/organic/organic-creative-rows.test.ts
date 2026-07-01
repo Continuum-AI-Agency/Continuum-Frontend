@@ -11,6 +11,9 @@ function post(params: {
   caption?: string;
   mediaUrl?: string;
   thumbnailUrl?: string;
+  impressions?: number;
+  views?: number;
+  comments?: number;
 }): OrganicPost {
   return {
     id: params.id,
@@ -18,7 +21,13 @@ function post(params: {
     mediaProductType: "REELS",
     mediaUrl: params.mediaUrl,
     thumbnailUrl: params.thumbnailUrl,
-    metrics: { reach: params.reach, hookRate: params.hookRate },
+    metrics: {
+      reach: params.reach,
+      hookRate: params.hookRate,
+      impressions: params.impressions,
+      views: params.views,
+      comments: params.comments,
+    },
   };
 }
 
@@ -81,6 +90,26 @@ describe("buildOrganicCreativeRows", () => {
     });
     expect(rows[0]?.hookRate).toBeUndefined();
     expect(rows[0]?.insightLine).toBeUndefined();
+  });
+
+  it("carries impressions, views, and comments through from post metrics", () => {
+    const rows = buildOrganicCreativeRows({
+      metric: "reach",
+      posts: [post({ id: "a", reach: 5000, impressions: 7000, views: 6200, comments: 18 })],
+    });
+    expect(rows[0]?.impressions).toBe(7000);
+    expect(rows[0]?.views).toBe(6200);
+    expect(rows[0]?.comments).toBe(18);
+  });
+
+  it("leaves impressions, views, and comments undefined when metrics omit them", () => {
+    const rows = buildOrganicCreativeRows({
+      metric: "reach",
+      posts: [post({ id: "a", reach: 5000 })],
+    });
+    expect(rows[0]?.impressions).toBeUndefined();
+    expect(rows[0]?.views).toBeUndefined();
+    expect(rows[0]?.comments).toBeUndefined();
   });
 });
 

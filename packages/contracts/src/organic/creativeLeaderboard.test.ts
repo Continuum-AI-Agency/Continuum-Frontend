@@ -12,12 +12,18 @@ describe("organicCreativeRowSchema", () => {
       thumbnailUrl: "https://cdn.example.com/x.jpg",
       metricLabel: "reach",
       metricValue: 48000,
+      impressions: 61000,
+      views: 52000,
+      comments: 41,
       hookRate: 32,
       vsAveragePct: 110,
       insightLine: "32% hook rate · 2.1× your average",
     });
     expect(parsed.metricLabel).toBe("reach");
     expect(parsed.metricValue).toBe(48000);
+    expect(parsed.impressions).toBe(61000);
+    expect(parsed.views).toBe(52000);
+    expect(parsed.comments).toBe(41);
   });
 
   it("parses a minimal row with metric only", () => {

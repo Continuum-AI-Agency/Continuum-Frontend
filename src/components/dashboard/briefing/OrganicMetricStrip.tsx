@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
+import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
 import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MetricStrip, type MetricStripItem } from "@/components/shared/MetricStrip";
@@ -76,6 +77,7 @@ export function OrganicMetricStrip({ brandId, accounts, youtubeAccounts = [] }: 
         label: "Hook rate",
         value: typeof metrics.hookRate === "number" ? `${Math.round(metrics.hookRate)}%` : "—",
         deltaPct: cmp.hookRate?.percentageChange,
+        valueColor: typeof metrics.hookRate === "number" ? hookRateTextColor(metrics.hookRate) : undefined,
       },
     ];
   }, [state]);

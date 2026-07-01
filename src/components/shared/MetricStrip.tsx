@@ -1,7 +1,14 @@
 import { Fragment } from "react";
 import { DeltaBadge } from "@/components/shared/DeltaBadge";
 
-export type MetricStripItem = { label: string; value: string; deltaPct?: number };
+export type MetricStripItem = {
+  label: string;
+  value: string;
+  deltaPct?: number;
+  // Overrides the value's text color (e.g. a hook-rate health gradient) while
+  // keeping the shared label/value/delta layout.
+  valueColor?: string;
+};
 
 // A quiet one-line KPI strip — headline metrics rendered as a dense inline row
 // (label, value, delta) instead of a stack of stat cards. The app-wide
@@ -23,7 +30,12 @@ export function MetricStrip({ items, live = false }: { items: MetricStripItem[];
           ) : null}
           <span className="inline-flex items-baseline gap-1.5">
             <span className="text-2xs uppercase tracking-wide text-muted-foreground">{item.label}</span>
-            <span className="font-mono text-sm font-semibold tabular-nums text-foreground">{item.value}</span>
+            <span
+              className="font-mono text-sm font-semibold tabular-nums text-foreground"
+              style={item.valueColor ? { color: item.valueColor } : undefined}
+            >
+              {item.value}
+            </span>
             {typeof item.deltaPct === "number" ? <DeltaBadge value={item.deltaPct} /> : null}
           </span>
         </Fragment>

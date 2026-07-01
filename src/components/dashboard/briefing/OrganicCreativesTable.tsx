@@ -11,6 +11,7 @@ import {
   buildOrganicCreativeRows,
   extractAwarenessHookRates,
 } from "@/lib/organic/organic-creative-rows";
+import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
 import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
 import { InsightDataTable, type InsightColumn } from "@/components/dashboard/datatable/InsightDataTable";
 import { DeltaBadge } from "@/components/shared/DeltaBadge";
@@ -40,9 +41,9 @@ function formatCompact(value: number): string {
 }
 
 // Top organic creatives ranked by reach (views for YouTube) as a dense, sortable
-// data table: each row carries its Engine B hook-rate insight, a right-click
-// action menu, and a click-to-expand insight surface. Replaces the ranked-list
-// leaderboard while reusing the same data pipeline.
+// data table: each row carries its Engine B hook-rate insight inline and a
+// right-click action menu. Replaces the ranked-list leaderboard while reusing
+// the same data pipeline.
 export function OrganicCreativesTable({
   brandId,
   accounts,
@@ -98,8 +99,8 @@ export function OrganicCreativesTable({
     );
   }, [postsState, awareness, metric]);
 
-  const columns = useMemo<InsightColumn<DisplayRow>[]>(
-    () => [
+  const columns = useMemo<InsightColumn<DisplayRow>[]>(() => {
+    const cols: InsightColumn<DisplayRow>[] = [
       {
         id: "rank",
         header: "#",
@@ -109,17 +110,37 @@ export function OrganicCreativesTable({
       {
         id: "creative",
         header: "Creative",
+        cellClassName: "min-w-64",
         cell: (row) => (
           <div className="flex min-w-0 items-center gap-3">
             {row.thumbnailUrl ? (
               <LeaderboardThumbnail src={row.thumbnailUrl} alt={row.name} fallbackSeed={row.name} />
             ) : null}
-            <div className="min-w-0">
-              <p className="truncate text-sm text-foreground">{row.name}</p>
-              {row.mediaType ? (
-                <p className="truncate text-xs uppercase tracking-wide text-muted-foreground">
-                  {row.mediaType}
-                </p>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <p className="truncate text-sm text-foreground">{row.name}</p>
+                {row.mediaType ? (
+                  <span className="shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
+                    {row.mediaType}
+                  </span>
+                ) : null}
+              </div>
+              {row.insightLine || row.permalink ? (
+                <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  {row.insightLine ? <span className="truncate">{row.insightLine}</span> : null}
+                  {row.permalink ? (
+                    <a
+                      href={row.permalink}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(event) => event.stopPropagation()}
+                      className="inline-flex shrink-0 items-center gap-1 hover:text-foreground"
+                    >
+                      <ExternalLink className="size-3" />
+                      Open original
+                    </a>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -133,12 +154,45 @@ export function OrganicCreativesTable({
         cell: (row) => formatCompact(row.metricValue),
       },
       {
+        id: "impressions",
+        header: "Impressions",
+        align: "right",
+        sortValue: (row) => row.impressions ?? -1,
+        cell: (row) => (typeof row.impressions === "number" ? formatCompact(row.impressions) : "—"),
+      },
+    ];
+
+    // The primary metric column already covers Views for YouTube (metric === "views");
+    // only add a distinct Views column when it wouldn't duplicate that.
+    if (metric !== "views") {
+      cols.push({
+        id: "views",
+        header: "Views",
+        align: "right",
+        sortValue: (row) => row.views ?? -1,
+        cell: (row) => (typeof row.views === "number" ? formatCompact(row.views) : "—"),
+      });
+    }
+
+    cols.push(
+      {
+        id: "comments",
+        header: "Comments",
+        align: "right",
+        sortValue: (row) => row.comments ?? -1,
+        cell: (row) => (typeof row.comments === "number" ? formatCompact(row.comments) : "—"),
+      },
+      {
         id: "hook",
         header: "Hook",
         align: "right",
         sortValue: (row) => row.hookRate ?? -1,
         cell: (row) =>
-          typeof row.hookRate === "number" ? `${Math.round(row.hookRate)}%` : "—",
+          typeof row.hookRate === "number" ? (
+            <span style={{ color: hookRateTextColor(row.hookRate) }}>{Math.round(row.hookRate)}%</span>
+          ) : (
+            "—"
+          ),
       },
       {
         id: "delta",
@@ -148,9 +202,10 @@ export function OrganicCreativesTable({
         cell: (row) =>
           typeof row.vsAveragePct === "number" ? <DeltaBadge value={row.vsAveragePct} /> : "—",
       },
-    ],
-    [metricLabel],
-  );
+    );
+
+    return cols;
+  }, [metric, metricLabel]);
 
   return (
     <InsightDataTable
@@ -169,22 +224,6 @@ export function OrganicCreativesTable({
       }
       contextMenu={(row) => <InsightContextActions permalink={row.permalink} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.permalink} />}
-      expandedContent={(row) => (
-        <div className="flex flex-col gap-2 text-xs leading-relaxed">
-          {row.insightLine ? <p className="text-foreground">{row.insightLine}</p> : null}
-          {row.permalink ? (
-            <a
-              href={row.permalink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink className="size-3" />
-              Open original
-            </a>
-          ) : null}
-        </div>
-      )}
     />
   );
 }

@@ -44,6 +44,7 @@ const OrganicAudienceLocationMapCard = dynamic(
 );
 import { useOrganicInsights } from "@/hooks/useOrganicInsights";
 import { OrganicAwarenessReportView } from "@/components/organic/OrganicAwarenessReportView";
+import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
 import type { OrganicComputedInsight } from "@/lib/organic/organic-insights.types";
 import {
   Popover,
@@ -670,7 +671,7 @@ function buildPostSnapshotStripItems(
 
   const hookRate = calculateHookRate(post);
   if (hookRate !== undefined) {
-    items.push({ label: "Hook Rate", value: `${hookRate.toFixed(1)}%` });
+    items.push({ label: "Hook Rate", value: `${hookRate.toFixed(1)}%`, valueColor: hookRateTextColor(hookRate) });
   }
 
   if (typeof post.metrics?.retentionRate === "number") {

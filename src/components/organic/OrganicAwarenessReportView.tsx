@@ -7,6 +7,7 @@ import type {
   OrganicAwarenessReportPayload,
 } from "@continuum/contracts";
 
+import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
 import { cn } from "@/lib/utils";
 
 type TopPost = {
@@ -50,14 +51,6 @@ function SummaryBlock({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-function hookToneClass(hookRate: number | null): string {
-  if (hookRate === null) return "text-muted-foreground";
-  if (hookRate >= 40) return "text-emerald-600 dark:text-emerald-400";
-  if (hookRate >= 25) return "text-blue-600 dark:text-blue-400";
-  if (hookRate >= 15) return "text-amber-600 dark:text-amber-400";
-  return "text-rose-600 dark:text-rose-400";
-}
-
 function TopPostsBlock({ posts }: { posts: TopPost[] }) {
   if (posts.length === 0) {
     return <Text size="1" color="gray">No reel hook rates available for this window yet.</Text>;
@@ -78,7 +71,10 @@ function TopPostsBlock({ posts }: { posts: TopPost[] }) {
             <Text size="1" color="gray" className="tabular-nums">
               {post.views !== null ? `${nf.format(post.views)} views` : "—"}
             </Text>
-            <span className={cn("text-xs font-semibold tabular-nums", hookToneClass(post.hookRate))}>
+            <span
+              className={cn("text-xs font-semibold tabular-nums", post.hookRate === null && "text-muted-foreground")}
+              style={post.hookRate !== null ? { color: hookRateTextColor(post.hookRate) } : undefined}
+            >
               {post.hookRate !== null ? `${post.hookRate.toFixed(1)}% hook` : "no hook data"}
             </span>
           </Flex>
