@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { OnboardingExperience } from "@/components/onboarding/v2/OnboardingExperience";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
@@ -6,10 +5,6 @@ import { isOnboardingComplete } from "@/lib/onboarding/state";
 import { ActiveBrandProvider } from "@/components/providers/ActiveBrandProvider";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-
-export const metadata: Metadata = {
-  title: "Onboarding | Continuum AI",
-};
 
 type OnboardingPageProps = {
   searchParams?: Promise<{ brand?: string }>;
