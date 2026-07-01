@@ -98,7 +98,7 @@ export function InsightDataTable<T>({
   const totalColumns = columns.length + (rowActions ? 1 : 0) + (expandedContent ? 1 : 0);
 
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-border/70 bg-card", className)}>
+    <div className={cn("min-w-0 overflow-hidden rounded-lg border border-border/70 bg-card", className)}>
       <SectionHeader
         title={title}
         meta={

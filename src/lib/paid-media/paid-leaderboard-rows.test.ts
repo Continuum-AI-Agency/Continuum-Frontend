@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { PaidRankedEntity } from "@continuum/contracts";
+import { ENTITY_PATH_SEPARATOR, type PaidRankedEntity } from "@continuum/contracts";
 
 import { buildPaidLeaderboardRows, formatKpiValue } from "./paid-leaderboard-rows";
 
@@ -67,5 +67,54 @@ describe("buildPaidLeaderboardRows", () => {
       insights: [],
     });
     expect(rows[0]?.insightLine).toBeUndefined();
+  });
+
+  it("surfaces the aggregation level and the explicit path label", () => {
+    const pathLabel = ["Spring Sale", "LAL 1%", "High Hook"].join(ENTITY_PATH_SEPARATOR);
+    const rows = buildPaidLeaderboardRows({
+      scope: "top_ads",
+      entities: [
+        {
+          id: "ad1",
+          name: "High Hook",
+          level: "ad",
+          path_label: pathLabel,
+          metrics: { roas: 5 },
+          rank: 1,
+          kpi: "roas",
+          kpi_value: 5,
+          kpi_unit: "multiplier",
+        },
+      ],
+      insights: [],
+    });
+    expect(rows[0]?.level).toBe("ad");
+    expect(rows[0]?.pathLabel).toBe(pathLabel);
+  });
+
+  it("composes the path label from the hierarchy when path_label is absent", () => {
+    const expected = ["Spring Sale", "LAL 1%", "High Hook"].join(ENTITY_PATH_SEPARATOR);
+    const rows = buildPaidLeaderboardRows({
+      scope: "top_ads",
+      entities: [
+        {
+          id: "ad2",
+          name: "High Hook",
+          level: "ad",
+          hierarchy: {
+            campaign: { id: "c1", name: "Spring Sale" },
+            adset: { id: "s1", name: "LAL 1%" },
+            ad: { id: "ad2", name: "High Hook" },
+          },
+          metrics: { roas: 5 },
+          rank: 1,
+          kpi: "roas",
+          kpi_value: 5,
+          kpi_unit: "multiplier",
+        },
+      ],
+      insights: [],
+    });
+    expect(rows[0]?.pathLabel).toBe(expected);
   });
 });

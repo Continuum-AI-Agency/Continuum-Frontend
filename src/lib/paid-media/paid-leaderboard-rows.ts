@@ -1,5 +1,7 @@
+import { buildEntityPathLabel } from "@continuum/contracts";
 import type {
   PaidEntityKpiUnit,
+  PaidEntityLevel,
   PaidRankedEntity,
   PaidRankingScope,
 } from "@continuum/contracts";
@@ -11,6 +13,8 @@ export type PaidLeaderboardRow = {
   subLabel?: string;
   insightLine?: string;
   metricValue: string;
+  level?: PaidEntityLevel;
+  pathLabel?: string;
 };
 
 // Only the fields the leaderboard join needs from a persisted paid insight, so
@@ -65,6 +69,19 @@ function resolveInsight(
   return byCampaignId.get(entity.id);
 }
 
+// Prefer the producer's composite path_label; otherwise compose it from the
+// structured hierarchy names; otherwise fall back to the legacy campaign label.
+function resolvePathLabel(entity: PaidRankedEntity): string | undefined {
+  const explicit = entity.path_label?.trim();
+  if (explicit) return explicit;
+  if (entity.hierarchy) {
+    const composed = buildEntityPathLabel(entity.hierarchy).trim();
+    if (composed) return composed;
+  }
+  const campaign = entity.labels?.campaign?.trim();
+  return campaign ? campaign : undefined;
+}
+
 export function buildPaidLeaderboardRows(params: {
   entities: PaidRankedEntity[];
   insights: LeaderboardInsight[];
@@ -85,6 +102,8 @@ export function buildPaidLeaderboardRows(params: {
       subLabel: buildSubLabel(entity, params.scope),
       insightLine: insight?.title,
       metricValue: formatKpiValue(entity.kpi_value, entity.kpi_unit),
+      level: entity.level,
+      pathLabel: resolvePathLabel(entity),
     };
   });
 }

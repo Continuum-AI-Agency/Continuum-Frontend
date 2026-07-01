@@ -7,6 +7,9 @@
 
 import { z } from "zod";
 
+import { parsedAdNameSchema } from "./adNaming";
+import { entityHierarchySchema, paidEntityLevelSchema } from "./hierarchy";
+
 export const paidEntityKpiSchema = z.enum([
   "spend",
   "impressions",
@@ -54,7 +57,17 @@ export type PaidEntityMetrics = z.infer<typeof paidEntityMetricsSchema>;
 export const paidRankedEntitySchema = z.object({
   id: z.string(),
   name: z.string(),
-  // adset rows carry { campaign }; ad rows carry { campaign, adset }.
+  // Explicit aggregation level of this row (campaign | adset | ad). Consumers
+  // no longer infer it from the parent `scope`.
+  level: paidEntityLevelSchema.optional(),
+  // Full identity chain: id + name of every level at or above this row.
+  hierarchy: entityHierarchySchema.optional(),
+  // Composite "Campaign › Ad set › Ad" label built from the hierarchy names.
+  path_label: z.string().optional(),
+  // Structured decomposition of the ad name when the brand has a naming schema.
+  parsed_name: parsedAdNameSchema.optional(),
+  // adset rows carry { campaign }; ad rows carry { campaign, adset }. Retained
+  // for back-compat alongside the structured `hierarchy`.
   labels: z.record(z.string(), z.string()).optional(),
   metrics: paidEntityMetricsSchema,
   rank: z.number(),

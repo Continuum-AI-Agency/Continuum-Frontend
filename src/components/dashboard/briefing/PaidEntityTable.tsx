@@ -1,18 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { PaidEntityKpi, PaidRankedEntity, PaidRankingScope } from "@continuum/contracts";
+import type { PaidEntityKpi, PaidEntityLevel, PaidRankedEntity, PaidRankingScope } from "@continuum/contracts";
 import { fetchPaidRanking } from "@/lib/paid-media/paid-ranking.client";
 import {
   getLatestInsights,
   type PersistedCampaignInsight,
 } from "@/lib/paid-media/insight-history-client";
-import { buildPaidLeaderboardRows, formatKpiValue } from "@/lib/paid-media/paid-leaderboard-rows";
+import {
+  buildPaidLeaderboardRows,
+  formatKpiValue,
+  type PaidLeaderboardRow,
+} from "@/lib/paid-media/paid-leaderboard-rows";
 import { kpiLabel, kpiUnit, metricForKpi, sortEntitiesByKpi } from "@/lib/paid-media/paid-kpi";
 import { useDashboardPrefsStore } from "@/stores/dashboardPrefs";
 import { InsightDataTable, type InsightColumn } from "@/components/dashboard/datatable/InsightDataTable";
 import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
+import { Badge } from "@/components/ui/badge";
 import { InsightActionsDropdown, InsightContextActions } from "./insightActions";
+
+// Human labels for the aggregation-level pill on each leaderboard row.
+const LEVEL_LABELS: Record<PaidEntityLevel, string> = {
+  ad: "Ad",
+  adset: "Ad set",
+  campaign: "Campaign",
+  account: "Account",
+};
 
 const RANGE = { preset: "last_7d" } as const;
 // Fetched once, ranked server-side by ROAS; re-sorting by other KPIs happens in
@@ -81,10 +94,13 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
     };
   }, [brandId, adAccountId, scope]);
 
-  const insightLineById = useMemo(() => {
-    if (state.status !== "success") return new Map<string, string | undefined>();
-    const rows = buildPaidLeaderboardRows({ entities: state.entities, insights: state.insights, scope });
-    return new Map(rows.map((row) => [row.id, row.insightLine]));
+  // One derived leaderboard row per entity, keyed by id. The name column reads
+  // level + pathLabel from here and the expanded panel reads insightLine — both
+  // by id lookup, keeping the table itself thin.
+  const leaderboardById = useMemo(() => {
+    if (state.status !== "success") return new Map<string, PaidLeaderboardRow>();
+    const built = buildPaidLeaderboardRows({ entities: state.entities, insights: state.insights, scope });
+    return new Map(built.map((row) => [row.id, row]));
   }, [state, scope]);
 
   // Re-rank the already-fetched pool by the selected KPI, in place.
@@ -108,16 +124,28 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
       {
         id: "name",
         header: scope === "top_adsets" ? "Ad set" : "Campaign",
-        cell: (row) => (
-          <div className="min-w-0">
-            <p className="text-sm leading-snug text-foreground line-clamp-2 break-words">
-              {row.name.trim() || "Untitled"}
-            </p>
-            {scope === "top_adsets" && row.labels?.campaign ? (
-              <p className="truncate text-xs text-muted-foreground">{row.labels.campaign}</p>
-            ) : null}
-          </div>
-        ),
+        cell: (row) => {
+          const meta = leaderboardById.get(row.id);
+          const level = meta?.level;
+          const pathLabel = meta?.pathLabel;
+          return (
+            <div className="min-w-0">
+              <div className="flex items-start gap-1.5">
+                {level ? (
+                  <Badge variant="secondary" className="mt-0.5 shrink-0 px-1.5 py-0 text-2xs font-medium">
+                    {LEVEL_LABELS[level]}
+                  </Badge>
+                ) : null}
+                <p className="text-sm leading-snug text-foreground line-clamp-2 break-words">
+                  {row.name.trim() || "Untitled"}
+                </p>
+              </div>
+              {pathLabel ? (
+                <p className="truncate text-xs text-muted-foreground">{pathLabel}</p>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: paidKpi,
@@ -135,7 +163,7 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
         cell: (row) => kpiCell(row, kpi),
       })),
     ];
-  }, [scope, paidKpi]);
+  }, [scope, paidKpi, leaderboardById]);
 
   return (
     <InsightDataTable
@@ -151,8 +179,8 @@ export function PaidEntityTable({ brandId, adAccountId, scope, title, emptyMessa
       rowActions={() => <InsightActionsDropdown />}
       expandedContent={(row) => (
         <div className="flex flex-col gap-2 text-xs leading-relaxed">
-          {insightLineById.get(row.id) ? (
-            <p className="text-foreground">{insightLineById.get(row.id)}</p>
+          {leaderboardById.get(row.id)?.insightLine ? (
+            <p className="text-foreground">{leaderboardById.get(row.id)?.insightLine}</p>
           ) : null}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono tabular-nums text-muted-foreground sm:grid-cols-4">
             <Stat label="Conv" value={kpiCell(row, "conversions")} />

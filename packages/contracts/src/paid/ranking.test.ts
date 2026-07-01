@@ -42,6 +42,34 @@ describe("paidRankedEntitySchema", () => {
     const row = { ...sampleRow, metrics: { ...sampleRow.metrics, frequency: 1.4 } };
     expect(paidRankedEntitySchema.safeParse(row).success).toBe(true);
   });
+
+  it("accepts an explicit level, hierarchy, path_label and parsed_name", () => {
+    const parsed = paidRankedEntitySchema.parse({
+      ...sampleRow,
+      level: "ad",
+      hierarchy: {
+        campaign: { id: "7", name: "Spring Sale" },
+        adset: { id: "45", name: "LAL 1%" },
+        ad: { id: "123", name: "PROSP|Video|LAL1%" },
+      },
+      path_label: "Spring Sale › LAL 1% › PROSP|Video|LAL1%",
+      parsed_name: {
+        schema_id: "11111111-1111-4111-8111-111111111111",
+        schema_version: 1,
+        delimiter: "|",
+        matched: true,
+        segments: ["PROSP", "Video", "LAL1%"],
+        fields: { funnel: "PROSP", format: "Video", audience: "LAL1%" },
+      },
+    });
+    expect(parsed.level).toBe("ad");
+    expect(parsed.hierarchy?.adset?.name).toBe("LAL 1%");
+    expect(parsed.parsed_name?.fields.funnel).toBe("PROSP");
+  });
+
+  it("still parses a legacy row without the new identity fields", () => {
+    expect(paidRankedEntitySchema.safeParse(sampleRow).success).toBe(true);
+  });
 });
 
 describe("paidRankingResponseSchema", () => {
