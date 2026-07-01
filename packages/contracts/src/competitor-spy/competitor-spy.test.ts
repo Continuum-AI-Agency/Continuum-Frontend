@@ -10,6 +10,12 @@ import {
   adLifecycleEventSchema,
 } from "./index";
 import { competitorSpyStreamFrameSchema } from "../streaming/competitor-spy";
+import { runCompetitorAdsQuery, type CompetitorAdsQueryDeps, type CompetitorAdsQueryInput } from "./adsQuery";
+import {
+  runCompetitorOrganicQuery,
+  type CompetitorOrganicQueryDeps,
+  type CompetitorOrganicQueryInput,
+} from "./organicQuery";
 
 describe("competitorAdAnalysisSchema", () => {
   it("parses a full analysis object and applies defaults", () => {
@@ -285,5 +291,61 @@ describe("competitorOrganicPostSchema", () => {
 
     expect(parsed.post.caption).toBe("Think different.");
     expect(parsed.post.likeCount).toBe(1200);
+  });
+});
+
+// Bug #160: intel_competitor_ads/intel_competitor_organic previously returned a
+// bare `{count:0, ads:[]}` for a brand with zero TRACKED competitors —
+// indistinguishable from "tracked, but nothing synced yet". These cores now
+// surface `trackedCompetitorCount` as that distinguishing signal.
+describe("runCompetitorAdsQuery trackedCompetitorCount signal", () => {
+  const baseInput: CompetitorAdsQueryInput = {
+    brandId: "22222222-2222-4222-8222-222222222222",
+    sort: "last_seen_at",
+    dir: "desc",
+    limit: 20,
+  };
+
+  it("reports zero tracked competitors distinctly from zero synced ads", async () => {
+    const deps: CompetitorAdsQueryDeps = {
+      queryTimeline: async () => [],
+      countTrackedCompetitors: async () => 0,
+    };
+    const result = await runCompetitorAdsQuery(deps, baseInput);
+    expect(result).toEqual({ count: 0, ads: [], trackedCompetitorCount: 0 });
+  });
+
+  it("reports tracked competitors even when no ad snapshots have synced yet", async () => {
+    const deps: CompetitorAdsQueryDeps = {
+      queryTimeline: async () => [],
+      countTrackedCompetitors: async () => 3,
+    };
+    const result = await runCompetitorAdsQuery(deps, baseInput);
+    expect(result).toEqual({ count: 0, ads: [], trackedCompetitorCount: 3 });
+  });
+});
+
+describe("runCompetitorOrganicQuery trackedCompetitorCount signal", () => {
+  const baseInput: CompetitorOrganicQueryInput = {
+    brandId: "22222222-2222-4222-8222-222222222222",
+    limit: 12,
+  };
+
+  it("reports zero tracked competitors distinctly from zero synced posts", async () => {
+    const deps: CompetitorOrganicQueryDeps = {
+      listTrackedInstagramPosts: async () => [],
+      countTrackedCompetitors: async () => 0,
+    };
+    const result = await runCompetitorOrganicQuery(deps, baseInput);
+    expect(result).toEqual({ count: 0, posts: [], trackedCompetitorCount: 0 });
+  });
+
+  it("reports tracked competitors even when no organic posts have synced yet", async () => {
+    const deps: CompetitorOrganicQueryDeps = {
+      listTrackedInstagramPosts: async () => [],
+      countTrackedCompetitors: async () => 2,
+    };
+    const result = await runCompetitorOrganicQuery(deps, baseInput);
+    expect(result).toEqual({ count: 0, posts: [], trackedCompetitorCount: 2 });
   });
 });

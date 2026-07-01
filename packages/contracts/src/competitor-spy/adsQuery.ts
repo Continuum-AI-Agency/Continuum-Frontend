@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import type { TimelineEntry } from "./index";
+import { recommendedCompetitorSchema } from "./recommended";
 
 // --- Request shape ----------------------------------------------------------
 
@@ -84,6 +85,21 @@ export type CompetitorAdSummary = z.infer<typeof competitorAdSummarySchema>;
 export const competitorAdsQueryResultSchema = z.object({
   count: z.number().int().nonnegative(),
   ads: z.array(competitorAdSummarySchema),
+  // Distinguishes "zero TRACKED competitors" (the real data/workflow gap — no
+  // brand_id rows in competitor_ad_spy.competitors at all) from "zero synced
+  // ads" (competitors are tracked, but no snapshot has synced yet). A caller
+  // seeing count===0 needs this to answer accurately instead of reporting a
+  // flat "no competitors" for a brand that has tracked competitors with no
+  // ads yet.
+  trackedCompetitorCount: z.number().int().nonnegative(),
+  // Onboarding-discovered competitor candidates (brand_profiles.brand_competitors),
+  // surfaced ONLY when trackedCompetitorCount is 0 — i.e. the brand has never
+  // promoted a recommendation into the tracked store. Present so a caller can
+  // answer "here are competitors we found, not yet tracked/synced" instead of a
+  // bare empty array. Never populated by the pure query core itself; set by the
+  // MCP tool layer (see intel.competitor_ads.ts) after reading the recommended
+  // store.
+  recommendedCompetitors: z.array(recommendedCompetitorSchema).optional(),
 });
 export type CompetitorAdsQueryResult = z.infer<typeof competitorAdsQueryResultSchema>;
 
@@ -113,6 +129,9 @@ export interface CompetitorAdsQueryDeps {
     brandId: string,
     ref: { competitorId?: string; competitorRef?: string },
   ) => Promise<string | null>;
+  // Counts the brand's tracked competitors (competitor_ad_spy.competitors),
+  // regardless of ad-snapshot activity — the "zero TRACKED competitors" signal.
+  countTrackedCompetitors: (brandId: string) => Promise<number>;
 }
 
 function toAnalysisSummary(analysis: TimelineEntry["analysis"]): CompetitorAdAnalysisSummary | null {
@@ -157,18 +176,21 @@ export async function runCompetitorAdsQuery(
       })
     : (input.competitorId ?? null);
 
-  const entries = await deps.queryTimeline({
-    brandId: input.brandId,
-    competitorId: competitorId ?? undefined,
-    status: input.status,
-    q: input.q,
-    since: input.since,
-    until: input.until,
-    sort: input.sort,
-    dir: input.dir,
-    limit: input.limit,
-  });
+  const [entries, trackedCompetitorCount] = await Promise.all([
+    deps.queryTimeline({
+      brandId: input.brandId,
+      competitorId: competitorId ?? undefined,
+      status: input.status,
+      q: input.q,
+      since: input.since,
+      until: input.until,
+      sort: input.sort,
+      dir: input.dir,
+      limit: input.limit,
+    }),
+    deps.countTrackedCompetitors(input.brandId),
+  ]);
 
   const ads = entries.map(toAdSummary);
-  return { count: ads.length, ads };
+  return { count: ads.length, ads, trackedCompetitorCount };
 }

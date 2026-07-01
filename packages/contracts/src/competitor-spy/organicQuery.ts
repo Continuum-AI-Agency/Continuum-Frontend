@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import type { CompetitorOrganicPost } from "./index";
+import { recommendedCompetitorSchema } from "./recommended";
 
 export const COMPETITOR_ORGANIC_QUERY_DEFAULT_LIMIT = 12;
 export const COMPETITOR_ORGANIC_QUERY_MAX_LIMIT = 50;
@@ -56,6 +57,13 @@ export type CompetitorOrganicPostSummary = z.infer<typeof competitorOrganicPostS
 export const competitorOrganicQueryResultSchema = z.object({
   count: z.number().int().nonnegative(),
   posts: z.array(competitorOrganicPostSummarySchema),
+  // Same "zero TRACKED competitors" vs "zero synced posts" signal as
+  // adsQuery.ts's competitorAdsQueryResultSchema — see that file for the full
+  // rationale.
+  trackedCompetitorCount: z.number().int().nonnegative(),
+  // Onboarding-discovered competitor candidates, surfaced only when
+  // trackedCompetitorCount is 0. Set by the MCP tool layer, never by this core.
+  recommendedCompetitors: z.array(recommendedCompetitorSchema).optional(),
 });
 export type CompetitorOrganicQueryResult = z.infer<typeof competitorOrganicQueryResultSchema>;
 
@@ -73,6 +81,8 @@ export interface CompetitorOrganicQueryDeps {
     brandId: string,
     ref: { competitorId?: string; competitorRef?: string },
   ) => Promise<string | null>;
+  // Same "zero TRACKED competitors" counter dependency as the ads core.
+  countTrackedCompetitors: (brandId: string) => Promise<number>;
 }
 
 function deriveEngagement(likeCount: number | null, commentsCount: number | null): number | null {
@@ -112,12 +122,15 @@ export async function runCompetitorOrganicQuery(
       })
     : (input.competitorId ?? null);
 
-  const rows = await deps.listTrackedInstagramPosts({
-    brandId: input.brandId,
-    competitorId: competitorId ?? undefined,
-    limit: input.limit,
-  });
+  const [rows, trackedCompetitorCount] = await Promise.all([
+    deps.listTrackedInstagramPosts({
+      brandId: input.brandId,
+      competitorId: competitorId ?? undefined,
+      limit: input.limit,
+    }),
+    deps.countTrackedCompetitors(input.brandId),
+  ]);
 
   const posts = rows.map(toPostSummary);
-  return { count: posts.length, posts };
+  return { count: posts.length, posts, trackedCompetitorCount };
 }

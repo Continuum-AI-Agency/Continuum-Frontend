@@ -10,8 +10,24 @@ import {
   useCompetitorSearch,
 } from "@/lib/api/competitorSpy";
 import { streamCompetitorSync } from "@/lib/api/competitorSpyStream";
+import { instagramLookupErrorKind } from "@/lib/api/errors";
 
 const TAG_LIMIT = 5;
+
+// The competitor search runs Instagram business_discovery. Distinguish "the brand
+// has no connected Instagram" (409) and "reconnect Instagram" (503) from a genuine
+// "handle isn't a public business account" so the user fixes the right thing. The
+// "Track by name" fallback below stays available in every case.
+function competitorSearchErrorCopy(error: unknown): string {
+  switch (instagramLookupErrorKind(error)) {
+    case "account_required":
+      return "Instagram account required — connect your Instagram business account to research competitors. You can still track by name below.";
+    case "lookup_unavailable":
+      return "Instagram lookup is temporarily unavailable — reconnect your Instagram business account or try again shortly. You can still track by name below.";
+    default:
+      return "Could not find a public Instagram business or creator account.";
+  }
+}
 
 function describeFrame(frame: CompetitorSpyStreamFrame): string {
   switch (frame.type) {
@@ -270,7 +286,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
 
             {!isFetching && searchError ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">
-                Could not find a public Instagram business or creator account.
+                {competitorSearchErrorCopy(searchError)}
               </div>
             ) : null}
 
