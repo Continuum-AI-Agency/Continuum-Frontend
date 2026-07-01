@@ -107,6 +107,10 @@ export function AiPostComposer({
   const [selectedTrendIds, setSelectedTrendIds] = React.useState<string[]>([])
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  // Synchronous re-entrancy latch (blocks a double-click before `submitting` state
+  // commits) + a stable per-composition idempotency key so a retry dedupes to one job.
+  const dispatchInFlightRef = React.useRef(false)
+  const idempotencyKeyRef = React.useRef<string | null>(null)
 
   const { assets, loading, hasMore, loadMore } = useStudioLibraryBrowser(brandProfileId)
 
@@ -119,6 +123,8 @@ export function AiPostComposer({
       setSelectedTrendIds([])
       setError(null)
       setSubmitting(false)
+      dispatchInFlightRef.current = false
+      idempotencyKeyRef.current = null
     }
   }, [open])
 
@@ -134,7 +140,9 @@ export function AiPostComposer({
 
   const handleSubmit = async () => {
     const trimmed = angle.trim()
-    if (!trimmed || submitting) return
+    if (!trimmed || dispatchInFlightRef.current) return
+    dispatchInFlightRef.current = true
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID()
     setSubmitting(true)
     setError(null)
     try {
@@ -153,12 +161,17 @@ export function AiPostComposer({
         platform,
         scheduledAt,
         format: isCarousel ? "carousel" : null,
+        idempotencyKey: idempotencyKeyRef.current,
       })
+      // Success: clear the key so the next composition mints a fresh job; a failure
+      // keeps it so a retry collapses onto the same job via the backend client_key.
+      idempotencyKeyRef.current = null
       onQueued?.(response)
       onOpenChange(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not queue the post. Try again.")
     } finally {
+      dispatchInFlightRef.current = false
       setSubmitting(false)
     }
   }

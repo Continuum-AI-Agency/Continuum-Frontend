@@ -7,6 +7,7 @@ import {
   type OrganicGenerationStatus,
   type OrganicGenerationSummary,
   type OrganicGenerationTone,
+  resolveOrganicAgentLabel,
   resolveOrganicGenerationDisplay,
 } from "@continuum/contracts";
 
@@ -113,6 +114,13 @@ function GenerationRow({
   // never reads as a bare "Instagram · Working" with no concept.
   const title = summary.title?.trim() || (summary.platform ? capitalize(summary.platform) : "Post");
   const day = formatDay(summary.dayId);
+  // While running, lead the state line with the live agent + percent so the widget
+  // mirrors the in-chat card ("Copywriter · Writing copy · 45%"). Terminal rows show
+  // just the status label.
+  const agentLabel = active ? resolveOrganicAgentLabel(summary.agentName) : null;
+  const pctText =
+    active && typeof summary.pct === "number" ? `${Math.round(summary.pct)}%` : null;
+  const stateLine = [agentLabel, display.label, pctText].filter(Boolean).join(" · ");
 
   return (
     <div className="flex items-center gap-2 border-b border-border/40 px-2 py-1.5 last:border-b-0">
@@ -128,7 +136,7 @@ function GenerationRow({
           )}
           {day && <span className="text-2xs text-muted-foreground/70">{day}</span>}
           <span className={cn("truncate text-2xs font-medium", TONE_TEXT[display.tone])}>
-            {display.label}
+            {stateLine}
           </span>
         </div>
       </div>

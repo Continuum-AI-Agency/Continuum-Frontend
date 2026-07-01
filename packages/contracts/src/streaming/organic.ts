@@ -149,6 +149,42 @@ export function resolveOrganicGenerationDisplay(input: {
   }
 }
 
+// Clean, front-end-readable role label for the agent currently working a stage.
+// The Backend emits internal agent names (snake_case roles like `copywriting_technical`,
+// or the merged `technical_agents` blueprint pass); this is the SINGLE place they become
+// human labels, so the inline pipeline card and the generations widget render the same
+// "who is working" text. Unknown names humanize gracefully (snake_case -> Title Case).
+const AGENT_LABELS: Record<string, string> = {
+  platform_strategist: "Strategist",
+  angle_hook_architect: "Strategist",
+  strategist: "Strategist",
+  creative_orchestrator: "Creative",
+  creative: "Creative",
+  copywriting_technical: "Copywriter",
+  hashtag_technical: "Hashtags",
+  audio_technical: "Audio",
+  visual_technical: "Visual",
+  technical_agents: "Visual",
+  asset_producer: "Designer",
+  quality_reviewer: "Editor",
+  placement_reviser: "Reviser",
+  reviser: "Reviser",
+  editorial_proposer: "Editor",
+  editorial_synthesizer: "Editor",
+  editorial_board: "Editor",
+  merge: "Finalizing",
+};
+
+export function resolveOrganicAgentLabel(agentName: string | null | undefined): string | null {
+  if (!agentName) return null;
+  const known = AGENT_LABELS[agentName];
+  if (known) return known;
+  return agentName
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /**
  * Identity + state of one generation for the ticker / cross-surface reads — built
  * by the Backend from a post_generation_jobs row joined to its draft. Loose: the
@@ -160,6 +196,10 @@ export const organicGenerationSummarySchema = z.object({
   draftId: z.string().nullable().optional(),
   status: organicGenerationStatusEnum,
   stage: pipelineStageEnum.nullable().optional(),
+  // Live pipeline position for a running job, surfaced from the durable job row's
+  // `progress` jsonb so the widget shows the same stage/agent/percent as the chat card.
+  agentName: z.string().nullable().optional(),
+  pct: z.number().nullable().optional(),
   mediaStage: organicMediaStageSchema.nullable().optional(),
   platform: z.string().nullable().optional(),
   title: z.string().nullable().optional(),

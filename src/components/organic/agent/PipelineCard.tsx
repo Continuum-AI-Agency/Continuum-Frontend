@@ -3,6 +3,7 @@
 import { AlertCircle, Check, Clock, ImageOff, Loader2, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
+import { resolveOrganicAgentLabel, resolveOrganicGenerationDisplay } from '@continuum/contracts';
 import {
   Carousel,
   CarouselContent,
@@ -23,15 +24,10 @@ import type {
   PipelineStageNode,
 } from './types';
 
-const STAGE_LABELS: Record<PipelineStage, string> = {
-  strategist: 'Concept',
-  concept: 'Concept',
-  draft: 'Copy',
-  blueprint: 'Preview',
-  assets: 'Preview',
-  quality: 'Fully fleshed out',
-  merge: 'Fully fleshed out',
-};
+// One vocabulary across surfaces: the stepper labels each stage with the SAME canonical
+// resolver the generations widget uses, instead of a divergent local map.
+const stageLabel = (stage: PipelineStage): string =>
+  resolveOrganicGenerationDisplay({ status: 'running', stage }).label;
 
 const STATUS: Record<
   PipelineCardState['status'],
@@ -123,7 +119,7 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
           node.status === 'pending' ? 'text-muted-foreground/50' : 'text-muted-foreground',
         )}
       >
-        {STAGE_LABELS[node.stage]}
+        {stageLabel(node.stage)}
       </span>
     </motion.div>
   );
@@ -244,6 +240,16 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
   const quality = qualityPercent(card.quality?.overallScore);
   const isRunning = card.status === 'running';
 
+  // While running, surface WHO is working + WHAT stage ("Copywriter · Writing copy"),
+  // matching the generations widget; terminal states keep the outcome label.
+  const activeNode = card.stages.find((node) => node.status === 'active');
+  const liveLabel =
+    isRunning && activeNode
+      ? [resolveOrganicAgentLabel(activeNode.agentName), stageLabel(activeNode.stage)]
+          .filter(Boolean)
+          .join(' · ')
+      : null;
+
   // A finished single-post pipeline persists a calendar draft; signal the calendar
   // to reconcile so it appears without a manual reload (debounced workspace-side).
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
@@ -270,7 +276,7 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
           <MetaRow items={[card.preview?.format ?? undefined]} />
         </div>
         <StatusLabel tone={status.tone}>
-          {status.label}
+          {liveLabel ?? status.label}
           {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
       </div>
