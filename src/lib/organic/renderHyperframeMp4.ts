@@ -120,19 +120,17 @@ async function loadCompositionIframe(
 }
 
 function loadSvgImage(svg: string): Promise<HTMLImageElement> {
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
+  // Must be a data: URI, NOT a blob: URL. Chromium (and WebKit) taint the canvas
+  // when a foreignObject SVG is drawn from a blob: URL, which makes mediabunny's
+  // VideoFrame read throw "tainted sources". All browsers agree NOT to taint a
+  // foreignObject SVG referenced as a data: URI — so this is the encode-safe path.
+  const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      resolve(img)
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
+    img.onload = () => resolve(img)
+    img.onerror = () =>
       reject(new HyperframeCaptureError("Composition frame could not be rasterized"))
-    }
-    img.src = url
+    img.src = dataUri
   })
 }
 

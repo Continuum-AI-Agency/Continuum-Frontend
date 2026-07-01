@@ -22,7 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { AtSign, FolderOpen, Plus, ScanLine, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AtSign, FolderOpen, Plus, ScanLine, Sparkles, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -50,6 +50,7 @@ import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { CreateSkillFromSelectionDialog } from './CreateSkillFromSelectionDialog';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
+import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
@@ -748,6 +749,7 @@ function Flow({
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
+  const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
   const [isCreateSkillOpen, setIsCreateSkillOpen] = useState(false);
   const [skillSelectionNodes, setSkillSelectionNodes] = useState<StudioNode[]>([]);
   const hydratedPlannerSeedRef = useRef<string | null>(null);
@@ -1200,6 +1202,16 @@ function Flow({
                 type="button"
                 variant="outline"
                 size="sm"
+                onClick={() => setIsLibraryBrowserOpen((open) => !open)}
+                aria-label="Browse media library"
+              >
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Library
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setIsInstagramBrowserOpen((open) => !open)}
                 aria-label="Import media from Instagram"
               >
@@ -1207,6 +1219,27 @@ function Flow({
                 Import from Instagram
               </Button>
             </Panel>
+
+            {isLibraryBrowserOpen && (
+              <Panel position="top-left" className="ml-1 mt-14 nodrag nowheel">
+                <div className="flex h-[560px] w-[360px] flex-col overflow-hidden rounded-lg border border-border/60 bg-background/95 shadow-lg backdrop-blur">
+                  <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+                    <span className="text-sm font-medium">Media Library</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsLibraryBrowserOpen(false)}
+                      aria-label="Close media library"
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <StudioMediaLibraryPanel brandProfileId={brandProfileId || ''} />
+                  </div>
+                </div>
+              </Panel>
+            )}
 
             {isInstagramBrowserOpen && (
               <InstagramMediaBrowser

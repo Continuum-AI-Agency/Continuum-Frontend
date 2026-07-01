@@ -16,9 +16,10 @@ export type MediaKind = z.infer<typeof mediaKindSchema>;
 //   backfill:     migrated rows (no live writer).
 //   canvas:       created in the AI Studio canvas (auto-registered in place).
 //   inspiration:  re-hosted competitor ad creatives (competitor-ad-spy).
-//   hyperframe:   HyperFrames composition covers / rendered reels.
+//   hyperframe:   HyperFrames composition cover images + client-rendered MP4s.
 //   chat_upload:  files users dropped into a chat surface (chat-uploads bucket).
 //   clip:         a section cut from a long-form video (OpusClip-style pipeline).
+//   reel:         a client-stitched reel MP4 (Veo scenes → single publishable video).
 export const mediaSourceSchema = z.enum([
   "upload",
   "ai_generated",
@@ -28,6 +29,7 @@ export const mediaSourceSchema = z.enum([
   "hyperframe",
   "chat_upload",
   "clip",
+  "reel",
 ]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 

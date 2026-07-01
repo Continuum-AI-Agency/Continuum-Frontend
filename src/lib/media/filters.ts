@@ -23,6 +23,7 @@ export const MEDIA_SOURCES: FilterOption<MediaSource>[] = [
   { value: "hyperframe", label: "HyperFrames" },
   { value: "chat_upload", label: "Chat Uploads" },
   { value: "clip", label: "Clips" },
+  { value: "reel", label: "Reels" },
   { value: "backfill", label: "Imported" },
 ];
 

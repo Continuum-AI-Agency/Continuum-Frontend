@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FolderPlus,
@@ -14,6 +14,7 @@ import {
   PenTool,
   Telescope,
   Film,
+  Clapperboard,
   MessageSquare,
   Scissors,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const SOURCE_ICONS: Record<MediaSource, typeof Folder> = {
   hyperframe: Film,
   chat_upload: MessageSquare,
   clip: Scissors,
+  reel: Clapperboard,
   backfill: Folder,
 };
 
@@ -159,6 +161,10 @@ export function LibrarySidebar({
     }
   }
 
+  // Focus the rename field the moment it opens (a11y-clean alternative to
+  // autoFocus): a stable callback ref fires once on mount, never on re-render.
+  const focusRenameInput = useCallback((el: HTMLInputElement | null) => el?.focus(), []);
+
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border/50 bg-muted/30">
       <ScrollArea className="min-h-0 flex-1 px-1.5 pt-2">
@@ -194,7 +200,7 @@ export function LibrarySidebar({
         {creating && (
           <div className="px-1 pb-2">
             <input
-              autoFocus
+              ref={focusRenameInput}
               value={name}
               disabled={submitting}
               onChange={(e) => setName(e.target.value)}
