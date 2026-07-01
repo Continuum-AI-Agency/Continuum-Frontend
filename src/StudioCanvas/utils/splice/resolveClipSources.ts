@@ -42,7 +42,16 @@ function readVideoFromSourceNode(node: StudioNode | undefined): string | undefin
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
   }
 
-  if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo' || node.type === 'videoEditor') {
+  // Mirror the contracts' isVideoProducingSource (workflow-graph.ts): both editor
+  // node types emit generatedVideo/generatedVideoUrl. Omitting timelineEditor here
+  // let the canvas connect + place a Video Editor's output but then fail the render
+  // with "upstream produced no media".
+  if (
+    isVideoGeneratorNodeType(node.type) ||
+    node.type === 'extendVideo' ||
+    node.type === 'videoEditor' ||
+    node.type === 'timelineEditor'
+  ) {
     const data = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
     const generated = typeof data.generatedVideo === 'string' && data.generatedVideo.trim() ? data.generatedVideo.trim() : undefined;
     if (generated) return generated;

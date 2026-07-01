@@ -25,6 +25,24 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
+function greatestCommonDivisor(a: number, b: number): number {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y !== 0) {
+    const temp = y;
+    y = x % y;
+    x = temp;
+  }
+  return x || 1;
+}
+
+export function simplifyAspectRatio(width: number, height: number): string {
+  const safeWidth = Math.max(1, Math.round(width));
+  const safeHeight = Math.max(1, Math.round(height));
+  const divisor = greatestCommonDivisor(safeWidth, safeHeight);
+  return `${safeWidth / divisor}:${safeHeight / divisor}`;
+}
+
 export function getAspectRatioValue(aspectRatio?: string): number {
   if (!aspectRatio) return 1;
   const match = aspectRatio.match(/^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/);

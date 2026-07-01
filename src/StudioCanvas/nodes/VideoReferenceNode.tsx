@@ -1,8 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, useEdges } from '@xyflow/react';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
-import { BaseNodeData } from '../types';
+import { VideoNodeData } from '../types';
 import { LinkBreak2Icon, ReloadIcon, VideoIcon, UploadIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { cn } from '@/lib/utils';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
+import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -26,16 +26,6 @@ import {
 import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from 'lucide-react';
 import { referenceStatusBadge } from './referenceStatusBadge';
 import { isUploadOnDropEnabled, uploadReferenceFile } from '../utils/uploadReferenceFile';
-
-export interface VideoNodeData extends BaseNodeData {
-  video?: string;
-  fileName?: string;
-  sourcePath?: string;
-  bucket?: string;
-  sourceUrl?: string;
-  referenceStatus?: 'processing' | 'ready' | 'error';
-  referenceError?: string;
-}
 
 import {
   Empty,
@@ -51,6 +41,7 @@ const TEXT_MIME = 'text/plain';
 
 export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNode<VideoNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -65,6 +56,70 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
 
   // Calculate connection counts for tooltips
   const videoConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'video').length;
+
+  const snapNodeToAspectRatio = useCallback((value: string) => {
+    updateNode(id, (node) => {
+      const nextDimensions = snapNodeDimensionsToAspectRatio({
+        aspectRatio: value,
+        currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
+        currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
+        minWidth: 160,
+        minHeight: 160,
+        fallbackWidth: 192,
+      });
+
+      return {
+        ...node,
+        data: {
+          ...(node.data as VideoNodeData),
+          aspectRatio: value,
+        },
+        style: {
+          ...(node.style ?? {}),
+          width: nextDimensions.width,
+          height: nextDimensions.height,
+        },
+      };
+    });
+  }, [id, updateNode]);
+
+  const detectAspectRatioFromVideo = useCallback((src: string) => new Promise<string | null>((resolve) => {
+    if (typeof document === 'undefined') {
+      resolve(null);
+      return;
+    }
+
+    const videoElement = document.createElement('video');
+    videoElement.preload = 'metadata';
+    videoElement.muted = true;
+    videoElement.onloadedmetadata = () => {
+      const { videoWidth, videoHeight } = videoElement;
+      if (videoWidth > 0 && videoHeight > 0) {
+        resolve(simplifyAspectRatio(videoWidth, videoHeight));
+        return;
+      }
+      resolve(null);
+    };
+    videoElement.onerror = () => resolve(null);
+    videoElement.src = src;
+  }), []);
+
+  useEffect(() => {
+    if (!preview) return;
+
+    let cancelled = false;
+    void detectAspectRatioFromVideo(preview).then((detectedAspectRatio) => {
+      if (!detectedAspectRatio || cancelled || data.aspectRatio === detectedAspectRatio) {
+        return;
+      }
+      snapNodeToAspectRatio(detectedAspectRatio);
+      triggerSave();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data.aspectRatio, detectAspectRatioFromVideo, preview, snapNodeToAspectRatio, triggerSave]);
 
   // Upload the local file to durable storage and swap to its signed URL. The
   // base64 preview remains the emergency fallback if the upload fails.
@@ -277,17 +332,15 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
               onDrop={handleDrop}
             >
                 {preview ? (
-                    <div className="h-full w-full bg-black/80">
-                      <AspectRatio ratio={16 / 9} className="h-full w-full">
-                        <video
-                          src={preview}
-                          className="h-full w-full object-contain"
-                          muted
-                          loop
-                          onMouseEnter={(e) => e.currentTarget.play()}
-                          onMouseLeave={(e) => e.currentTarget.pause()}
-                        />
-                      </AspectRatio>
+                    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black/80">
+                      <video
+                        src={preview}
+                        className="h-full w-full object-contain"
+                        muted
+                        loop
+                        onMouseEnter={(e) => e.currentTarget.play()}
+                        onMouseLeave={(e) => e.currentTarget.pause()}
+                      />
                     </div>
                 ) : (
                     <Empty>

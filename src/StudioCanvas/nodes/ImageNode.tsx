@@ -43,7 +43,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from 'lucide-react';
-import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { ImageMarkupDialog, ImageMarkupSaveResult } from '@/components/ai-studio/markup/ImageMarkupDialog';
 import { parseDataUrl } from '../utils/dataUrl';
 import { referenceStatusBadge } from './referenceStatusBadge';
@@ -51,24 +51,6 @@ import { isUploadOnDropEnabled, uploadReferenceFile } from '../utils/uploadRefer
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
-
-function greatestCommonDivisor(a: number, b: number): number {
-  let x = Math.abs(a);
-  let y = Math.abs(b);
-  while (y !== 0) {
-    const temp = y;
-    y = x % y;
-    x = temp;
-  }
-  return x || 1;
-}
-
-function simplifyAspectRatio(width: number, height: number): string {
-  const safeWidth = Math.max(1, Math.round(width));
-  const safeHeight = Math.max(1, Math.round(height));
-  const divisor = greatestCommonDivisor(safeWidth, safeHeight);
-  return `${safeWidth / divisor}:${safeHeight / divisor}`;
-}
 
 export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);

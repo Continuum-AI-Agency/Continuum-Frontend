@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
 import type { Edge } from '@xyflow/react';
-import { resolveClipSources } from './resolveClipSources';
-import type { ClipSlot, StudioNode } from '../../types';
+import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
+import { resolveClipSources, resolveTimelineSources } from './resolveClipSources';
+import type { ClipSlot, StudioNode, TimelineItem } from '../../types';
 import type { NodeOutput } from '../../types/execution';
 
 const TINY_PNG_BASE64 =
@@ -102,6 +103,34 @@ describe('resolveClipSources', () => {
     expect(resolved[0].trimEndSec).toBe(5);
     expect(resolved[1].trimStartSec).toBe(0.5);
     expect(resolved[1].trimEndSec).toBeUndefined();
+  });
+});
+
+describe('resolveTimelineSources — Video Editor (timelineEditor) as a source', () => {
+  const targetId = 'timeline-1';
+  const clip = `data:video/mp4;base64,${TINY_PNG_BASE64}`;
+  const mediaInEdge = (source: string): Edge => ({
+    id: `e-${source}`,
+    source,
+    target: targetId,
+    targetHandle: TIMELINE_MEDIA_INPUT_HANDLE,
+  });
+
+  // Regression: readVideoFromSourceNode listed videoEditor but not timelineEditor,
+  // so a Video Editor output could be connected + placed but failed the render with
+  // "upstream produced no media". Both editor node types emit generatedVideo.
+  it('resolves a timelineEditor output as a placeable video clip', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'src', type: 'timelineEditor', position: { x: 0, y: 0 }, data: { generatedVideo: clip } } as StudioNode,
+      { id: targetId, type: 'timelineEditor', position: { x: 0, y: 0 }, data: {} } as StudioNode,
+    ];
+    const items = [{ id: 'i1', order: 0, sourceNodeId: 'src' }] as unknown as TimelineItem[];
+
+    const resolved = await resolveTimelineSources(items, [mediaInEdge('src')], nodes, new Map<string, NodeOutput>(), targetId);
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].kind).toBe('video');
+    expect(resolved[0].blob).toBeInstanceOf(Blob);
+    expect(resolved[0].blob.type).toBe('video/mp4');
   });
 });
 

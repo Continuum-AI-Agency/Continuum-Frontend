@@ -32,6 +32,7 @@ export function determineBestNodeType(context: SmartNodeContext): NodeType {
       if (sourceHandle === 'document') return 'document';
       if (sourceHandle === 'ref-image' || sourceHandle === 'ref-images') return 'image';
       if (sourceHandle === 'first-frame' || sourceHandle === 'last-frame') return 'image';
+      if (sourceHandle === 'prompt' || sourceHandle === 'prompt-in' || sourceHandle === 'negative') return 'string';
       return 'string'; // Default fallback
   }
 

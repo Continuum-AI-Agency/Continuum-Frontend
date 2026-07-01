@@ -86,6 +86,7 @@ export interface VideoNodeData extends BaseNodeData {
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
+  aspectRatio?: string;
   referenceStatus?: 'processing' | 'ready' | 'error';
   referenceError?: string;
 }

@@ -7,27 +7,35 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 
 const updateNodeData = mock();
+const updateNode = mock();
 const triggerSave = mock();
 let originalUpdateNodeData: any;
+let originalUpdateNode: any;
 let originalTriggerSave: any;
 
 describe('VideoReferenceNode', () => {
   beforeEach(() => {
     originalUpdateNodeData = useStudioStore.getState().updateNodeData;
+    originalUpdateNode = useStudioStore.getState().updateNode;
     originalTriggerSave = useStudioStore.getState().triggerSave;
     useStudioStore.setState({
       nodes: [],
       edges: [],
       updateNodeData,
+      updateNode,
       triggerSave,
     });
     updateNodeData.mockClear();
+    updateNode.mockClear();
     triggerSave.mockClear();
   });
 
   afterEach(() => {
     if (originalUpdateNodeData) {
       useStudioStore.setState({ updateNodeData: originalUpdateNodeData });
+    }
+    if (originalUpdateNode) {
+      useStudioStore.setState({ updateNode: originalUpdateNode });
     }
     if (originalTriggerSave) {
       useStudioStore.setState({ triggerSave: originalTriggerSave });
@@ -103,5 +111,57 @@ describe('VideoReferenceNode', () => {
       });
       expect(triggerSave).toHaveBeenCalled();
     });
+  });
+
+  it('detects the real video aspect ratio and resizes the node to match', async () => {
+    const originalCreateElement = document.createElement.bind(document);
+    const createdVideoElements: HTMLVideoElement[] = [];
+    document.createElement = ((tagName: string, options?: ElementCreationOptions) => {
+      const element = originalCreateElement(tagName, options);
+      if (tagName === 'video') {
+        createdVideoElements.push(element as HTMLVideoElement);
+      }
+      return element;
+    }) as typeof document.createElement;
+
+    try {
+      let renderResult: ReturnType<typeof render> | undefined;
+      await act(async () => {
+        renderResult = render(
+          <ToastProvider>
+            <ReactFlowProvider>
+              <VideoReferenceNode
+                {...defaultProps}
+                data={{ video: 'https://example.com/portrait-reel.mp4', fileName: 'reel.mp4' }}
+              />
+            </ReactFlowProvider>
+          </ToastProvider>
+        );
+      });
+      if (!renderResult) throw new Error('Render failed');
+      const { container } = renderResult;
+
+      const renderedVideo = container.querySelector('video');
+      const detectionVideo = createdVideoElements.find((video) => video !== renderedVideo);
+      if (!detectionVideo) throw new Error('Detached detection video element was not created');
+
+      Object.defineProperty(detectionVideo, 'videoWidth', { configurable: true, value: 1080 });
+      Object.defineProperty(detectionVideo, 'videoHeight', { configurable: true, value: 1920 });
+
+      await act(async () => {
+        fireEvent.loadedMetadata(detectionVideo);
+      });
+
+      await waitFor(() => {
+        expect(updateNode).toHaveBeenCalledWith('1', expect.any(Function));
+      });
+
+      const updater = updateNode.mock.calls[updateNode.mock.calls.length - 1][1];
+      const nextNode = updater({ id: '1', data: {}, style: { width: 192, height: 192 } });
+      expect(nextNode.data.aspectRatio).toBe('9:16');
+      expect(nextNode.style.width / nextNode.style.height).toBeCloseTo(9 / 16, 1);
+    } finally {
+      document.createElement = originalCreateElement;
+    }
   });
 });

@@ -318,7 +318,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       </div>
 
       {/* Handles Container - Outside of Card to prevent clipping */}
-      <div className="absolute -left-2 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
+      <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
           
           <div
             className="relative pointer-events-auto group/handle"

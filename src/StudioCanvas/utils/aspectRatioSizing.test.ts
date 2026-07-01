@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { getAspectRatioValue, snapNodeDimensionsToAspectRatio } from './aspectRatioSizing';
+import { getAspectRatioValue, simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from './aspectRatioSizing';
 
 describe('aspectRatioSizing', () => {
   it('parses string aspect ratios into numeric values', () => {
@@ -28,5 +28,15 @@ describe('aspectRatioSizing', () => {
     expect(next.width).toBeGreaterThanOrEqual(200);
     expect(next.height).toBeGreaterThanOrEqual(200);
     expect(next.width / next.height).toBeCloseTo(16 / 9, 1);
+  });
+
+  it('simplifies pixel dimensions into a reduced ratio string', () => {
+    expect(simplifyAspectRatio(1920, 1080)).toBe('16:9');
+    expect(simplifyAspectRatio(1080, 1920)).toBe('9:16');
+    expect(simplifyAspectRatio(500, 500)).toBe('1:1');
+  });
+
+  it('rounds fractional pixel dimensions before reducing', () => {
+    expect(simplifyAspectRatio(1919.6, 1079.6)).toBe('16:9');
   });
 });

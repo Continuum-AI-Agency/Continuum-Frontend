@@ -56,9 +56,12 @@ const renderBrowser = (onPlace = mock((_items: UnfurlMediaItem[]) => {})) => {
 };
 
 const search = async (handle: string) => {
+  // Wait for the mount auto-load to settle so the submit button shows "Search"
+  // (not the loading spinner) and the form is interactive before we type + click.
+  const searchButton = await screen.findByRole("button", { name: /search/i });
   fireEvent.change(screen.getByLabelText(/instagram username/i), { target: { value: handle } });
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    fireEvent.click(searchButton);
   });
 };
 
@@ -97,13 +100,23 @@ describe("InstagramMediaBrowser", () => {
     expect(onPlace.mock.calls[0][0]).toEqual([{ kind: "image", url: "https://cdn/1.jpg" }]);
   });
 
-  it("shows the connect-Instagram notice when no viewer is available", async () => {
+  it("shows the account-required notice when the brand has no connected Instagram (409)", async () => {
     fetchMock.mockRejectedValue(new ApiError("nope", 409, "IG_VIEWER_UNAVAILABLE"));
     renderBrowser();
     await search("nasa");
 
     await waitFor(() => {
-      expect(screen.getByText(/connect an instagram account/i)).toBeDefined();
+      expect(screen.getByText(/connect an instagram business account/i)).toBeDefined();
+    });
+  });
+
+  it("shows a reconnect notice when the lookup is temporarily unavailable (503)", async () => {
+    fetchMock.mockRejectedValue(new ApiError("nope", 503, "IG_LOOKUP_UNAVAILABLE"));
+    renderBrowser();
+    await search("nasa");
+
+    await waitFor(() => {
+      expect(screen.getByText(/temporarily unavailable/i)).toBeDefined();
     });
   });
 

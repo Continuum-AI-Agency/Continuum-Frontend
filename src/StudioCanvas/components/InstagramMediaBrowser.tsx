@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchInstagramTopMedia } from "@/lib/api/aiStudioInstagram.client";
-import { ApiError } from "@/lib/api/errors";
+import { instagramLookupErrorKind, type InstagramLookupErrorKind } from "@/lib/api/errors";
 import type { InstagramPost, InstagramTopMediaResponse, UnfurlMediaItem } from "@continuum/contracts";
 
 import { InstagramPostGrid } from "./InstagramPostGrid";
@@ -23,7 +23,6 @@ import { InstagramSlidePicker } from "./InstagramSlidePicker";
 const PAGE_SIZE = 10;
 
 type Status = "idle" | "loading" | "loaded" | "error";
-type ErrorKind = "viewer" | "not_found" | "generic";
 
 interface InstagramMediaBrowserProps {
   brandProfileId?: string;
@@ -31,9 +30,10 @@ interface InstagramMediaBrowserProps {
   onClose: () => void;
 }
 
-const ERROR_COPY: Record<ErrorKind, string> = {
-  viewer:
-    "Instagram lookup is unavailable for this brand. Connect an Instagram account (or ask an admin to set the global token).",
+const ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
+  account_required: "Connect an Instagram business account to this brand to import from Instagram.",
+  lookup_unavailable:
+    "Instagram lookup is temporarily unavailable — reconnect the Instagram business account or try again shortly.",
   not_found: "No public business or creator account was found for that username.",
   generic: "Couldn't load Instagram media. Please try again.",
 };
@@ -47,19 +47,11 @@ const formatCount = (value: number | null): string | null => {
 
 const normalizeHandle = (value: string): string => value.trim().replace(/^@+/, "");
 
-const errorKindFor = (error: unknown): ErrorKind => {
-  if (error instanceof ApiError) {
-    if (error.code === "IG_VIEWER_UNAVAILABLE" || error.status === 409) return "viewer";
-    if (error.code === "IG_ACCOUNT_NOT_FOUND" || error.status === 404) return "not_found";
-  }
-  return "generic";
-};
-
 export function InstagramMediaBrowser({ brandProfileId, onPlace, onClose }: InstagramMediaBrowserProps) {
   const [username, setUsername] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<InstagramTopMediaResponse | null>(null);
-  const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
+  const [errorKind, setErrorKind] = useState<InstagramLookupErrorKind | null>(null);
   const [page, setPage] = useState(0);
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
   const [selectedSlides, setSelectedSlides] = useState<Set<number>>(new Set());
@@ -70,7 +62,7 @@ export function InstagramMediaBrowser({ brandProfileId, onPlace, onClose }: Inst
   // undefined (auto-resolve). Shared by the auto-load on open and manual search.
   const runLoad = useCallback(async (handle: string | undefined) => {
     if (!brandProfileId) {
-      setErrorKind("viewer");
+      setErrorKind("account_required");
       setStatus("error");
       return;
     }
@@ -90,7 +82,7 @@ export function InstagramMediaBrowser({ brandProfileId, onPlace, onClose }: Inst
       setStatus("loaded");
     } catch (error) {
       if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
-      setErrorKind(errorKindFor(error));
+      setErrorKind(instagramLookupErrorKind(error));
       setStatus("error");
     }
   }, [brandProfileId]);
