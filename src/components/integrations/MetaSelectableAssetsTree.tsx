@@ -5,6 +5,7 @@ import * as Accordion from "@radix-ui/react-accordion";
 import { Badge, Box, Checkbox, Flex, Text } from "@radix-ui/themes";
 import type { MetaSelectableHierarchy, SelectableAsset } from "@/lib/schemas/integrations";
 import { getSelectableAssetLabel } from "@/lib/integrations/selectableAssets";
+import { isReadOnlyMetaRole } from "@/lib/integrations/metaRole";
 
 type SelectedByIntegrationAccountId = Record<string, boolean>;
 
@@ -212,6 +213,11 @@ export function MetaSelectableAssetsTree({
                                             <Badge variant="soft" color="gray">
                                               ad account
                                             </Badge>
+                                            {isReadOnlyMetaRole(adAccount.ad_account?.role) ? (
+                                              <Badge variant="soft" color="amber">
+                                                Read-only
+                                              </Badge>
+                                            ) : null}
                                           </Flex>
                                           <Text size="1" color="gray" className="truncate">
                                             Ad Account ID {adAccount.ad_account_id}

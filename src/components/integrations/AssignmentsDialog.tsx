@@ -32,6 +32,8 @@ import {
   mergeSelectableAssetsWithBrandSummary,
 } from "@/lib/integrations/selectableAssets";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useMetaAutoResync } from "@/hooks/useMetaAutoResync";
+import { isReadOnlyMetaRole } from "@/lib/integrations/metaRole";
 import {
   Table as ShadcnTable,
   TableBody as ShadcnTableBody,
@@ -93,6 +95,8 @@ export function AssignmentsDialog({
         name: row.name,
         business_id: null,
         ad_account_id: row.ad_account_id ?? null,
+        role: row.role,
+        also_accessible_via: null,
       })
     );
 
@@ -133,10 +137,9 @@ export function AssignmentsDialog({
     return `Tagged by ${getMemberDisplayName(members, ownerByAccountId.get(id) ?? null)}`;
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isLockedForCaller is a stable closure over ownerByAccountId + currentUserId, which are the listed deps; adding the function itself would re-run every render.
   const teammateAssignedIds = useMemo(
     () => assignedIds.filter((id) => isLockedForCaller(id)),
-    // isLockedForCaller depends on ownerByAccountId + currentUserId
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [assignedIds, ownerByAccountId, currentUserId]
   );
 
@@ -145,8 +148,31 @@ export function AssignmentsDialog({
     [selectableAssetsData]
   );
 
+  // #154 fingerprint: Meta connected (some Meta asset synced) but no ad account.
+  const metaConnectedButNoAdAccounts = useMemo(() => {
+    const rows = userAssetsQuery.data ?? [];
+    let hasMetaAsset = false;
+    let hasMetaAdAccount = false;
+    for (const row of rows) {
+      if ((row.type ?? "").startsWith("meta_")) {
+        hasMetaAsset = true;
+        if ((row.type ?? "").includes("ad_account")) hasMetaAdAccount = true;
+      }
+    }
+    return hasMetaAsset && !hasMetaAdAccount;
+  }, [userAssetsQuery.data]);
+
+  const { isResyncing, resyncError, triggerResync } = useMetaAutoResync({
+    enabled: open && !userAssetsQuery.isLoading,
+    isMetaEmpty: metaConnectedButNoAdAccounts,
+    onResynced: async () => {
+      await userAssetsQuery.refetch();
+    },
+  });
+
   const [selectedById, setSelectedById] = useState<Record<string, boolean>>({});
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isLockedForCaller is stable per dialog open via its memo deps; re-seeding defaults only when open/assignedIds/selectableAssets change is intended.
   useEffect(() => {
     if (!open) return;
     const assignedSet = new Set(assignedIds);
@@ -160,8 +186,6 @@ export function AssignmentsDialog({
       }
     });
     setSelectedById(defaults);
-    // isLockedForCaller is stable per dialog open thanks to its memo deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, assignedIds, selectableAssets]);
 
   const [mounted, setMounted] = useState(false);
@@ -290,6 +314,36 @@ export function AssignmentsDialog({
           </Text>
         ) : null}
 
+        {isResyncing ? (
+          <Callout.Root color="gray" className="mt-3">
+            <Callout.Text>Refreshing your Meta accounts…</Callout.Text>
+          </Callout.Root>
+        ) : resyncError ? (
+          <Callout.Root color="red" className="mt-3">
+            <Callout.Icon>
+              <ExclamationTriangleIcon />
+            </Callout.Icon>
+            <Callout.Text>
+              Couldn&apos;t refresh Meta accounts. {resyncError}{" "}
+              <button type="button" className="underline" onClick={triggerResync}>
+                Retry
+              </button>
+            </Callout.Text>
+          </Callout.Root>
+        ) : metaConnectedButNoAdAccounts ? (
+          <Callout.Root color="amber" className="mt-3">
+            <Callout.Icon>
+              <ExclamationTriangleIcon />
+            </Callout.Icon>
+            <Callout.Text>
+              Meta is connected but no ad accounts were found.{" "}
+              <button type="button" className="underline" onClick={triggerResync}>
+                Refresh Meta accounts
+              </button>
+            </Callout.Text>
+          </Callout.Root>
+        ) : null}
+
         <div className="mt-4 flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-1">
           {isLoading ? (
             <Flex align="center" justify="center" p="8">
@@ -374,13 +428,20 @@ export function AssignmentsDialog({
                                           }}
                                         />
                                         <Box className="min-w-0">
-                                          <Text
-                                            size="2"
-                                            weight="bold"
-                                            className="text-black truncate block"
-                                          >
-                                            {adAccountLabel}
-                                          </Text>
+                                          <Flex align="center" gap="2">
+                                            <Text
+                                              size="2"
+                                              weight="bold"
+                                              className="text-black truncate block"
+                                            >
+                                              {adAccountLabel}
+                                            </Text>
+                                            {isReadOnlyMetaRole(bundle.ad_account?.role) ? (
+                                              <Badge color="amber" variant="soft" size="1">
+                                                Read-only
+                                              </Badge>
+                                            ) : null}
+                                          </Flex>
                                           <Text
                                             size="1"
                                             color="gray"
@@ -434,6 +495,7 @@ export function AssignmentsDialog({
                                                           viewBox="0 0 16 16"
                                                           fill="none"
                                                           xmlns="http://www.w3.org/2000/svg"
+                                                          aria-hidden="true"
                                                         >
                                                           <path
                                                             d="M4 0V8C4 10.2091 5.79086 12 8 12H16"

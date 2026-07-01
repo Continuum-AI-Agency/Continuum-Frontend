@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { http } from "@/lib/api/http";
 import {
   metaSyncResponseSchema,
+  metaResyncResponseSchema,
   googleSyncResponseSchema,
   googleDrivePickerResponseSchema,
   tiktokSyncResponseSchema,
@@ -18,6 +19,8 @@ import {
   type IntegrationAssetsResponse,
   type LinkIntegrationAccountsResponse,
   type MetaSyncResponse,
+  type MetaResyncResponse,
+  type MetaAccountRole,
   type GoogleSyncResponse,
   type GoogleDrivePickerResponse,
   type TikTokSyncResponse,
@@ -25,6 +28,7 @@ import {
   type XSyncResponse,
   type XResyncResponse,
 } from "@/lib/schemas/integrations";
+import { deriveMetaAccountRole } from "@/lib/integrations/metaRole";
 
 function buildSyncPath(basePath: string, params: Record<string, string>): string {
   const search = new URLSearchParams(params);
@@ -52,9 +56,27 @@ export async function startMetaSync(callbackUrl: string): Promise<MetaSyncRespon
   });
 }
 
-export async function startGoogleSync(callbackUrl: string): Promise<GoogleSyncResponse> {
+type StartGoogleSyncOptions = {
+  /**
+   * Forces Google's account chooser (`prompt=select_account consent`)
+   * instead of the default `prompt=consent`. Used when a user wants to link
+   * Google Ads under a different Google identity than the one already
+   * connected (#151) — Google otherwise silently re-authenticates the same
+   * signed-in account without ever showing a chooser.
+   */
+  forceAccountChooser?: boolean;
+};
+
+export async function startGoogleSync(
+  callbackUrl: string,
+  options?: StartGoogleSyncOptions
+): Promise<GoogleSyncResponse> {
+  const params: Record<string, string> = { callback_url: callbackUrl };
+  if (options?.forceAccountChooser) {
+    params.force_account_chooser = "true";
+  }
   return http.request({
-    path: buildSyncPath("/integrations/google/sync", { callback_url: callbackUrl }),
+    path: buildSyncPath("/integrations/google/sync", params),
     method: "GET",
     schema: googleSyncResponseSchema,
     cache: "no-store",
@@ -65,6 +87,21 @@ export async function deauthorizeMeta(): Promise<void> {
   await http.request({
     path: "/integrations/meta/deauthorize",
     method: "POST",
+    cache: "no-store",
+  });
+}
+
+// Re-pull the latest Meta accounts/assets using stored tokens. Mirrors
+// resyncTikTok/resyncX. This is the FE entry point to the already-tested
+// POST /meta/resync that was never wired up (#154) — the picker calls it in the
+// background when the Meta integration looks empty/stale so a connect that
+// enumerated zero ad accounts can self-heal without a full re-OAuth.
+export async function resyncMeta(platformEmail?: string): Promise<MetaResyncResponse> {
+  return http.request({
+    path: "/integrations/meta/resync",
+    method: "POST",
+    body: platformEmail ? { platform_email: platformEmail } : {},
+    schema: metaResyncResponseSchema,
     cache: "no-store",
   });
 }
@@ -167,9 +204,24 @@ export function useStartGoogleSync() {
   });
 }
 
+// #151: identical mutateAsync(callbackUrl) shape to useStartGoogleSync so
+// call sites that branch on provider (e.g. ConnectProviderPopover) can swap
+// between the two without touching the rest of the popup flow.
+export function useStartGoogleAccountChooserSync() {
+  return useMutation({
+    mutationFn: (callbackUrl: string) => startGoogleSync(callbackUrl, { forceAccountChooser: true }),
+  });
+}
+
 export function useDeauthorizeMeta() {
   return useMutation({
     mutationFn: () => deauthorizeMeta(),
+  });
+}
+
+export function useResyncMeta() {
+  return useMutation({
+    mutationFn: (platformEmail?: string) => resyncMeta(platformEmail),
   });
 }
 
@@ -324,7 +376,27 @@ export type UserIntegrationAssetRow = {
   status: string | null;
   external_account_id: string | null;
   ad_account_id: string | null;
+  // Computed client-side from the account's stored Graph permissions/tasks; only
+  // meaningful for Meta ad accounts. Drives the "Read-only" badge (#155).
+  role: MetaAccountRole | null;
 };
+
+type RawUserIntegrationAssetRow = Omit<UserIntegrationAssetRow, "role"> & {
+  raw_payload: unknown;
+};
+
+// The Graph `permissions`/tasks array lives inside the account's stored
+// raw_payload; it can appear either directly or under a nested profile.
+function extractPermissions(rawPayload: unknown): unknown {
+  if (!rawPayload || typeof rawPayload !== "object") return null;
+  const payload = rawPayload as Record<string, unknown>;
+  if (Array.isArray(payload.permissions)) return payload.permissions;
+  const nested = payload.raw_profile;
+  if (nested && typeof nested === "object" && Array.isArray((nested as Record<string, unknown>).permissions)) {
+    return (nested as Record<string, unknown>).permissions;
+  }
+  return null;
+}
 
 export async function fetchUserIntegrationAssets(): Promise<UserIntegrationAssetRow[]> {
   const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
@@ -343,12 +415,17 @@ export async function fetchUserIntegrationAssets(): Promise<UserIntegrationAsset
       status,
       external_account_id,
       ad_account_id,
+      raw_payload,
       user_integrations!inner(user_id)
     `)
     .eq("user_integrations.user_id", user.id);
 
   if (error) throw error;
-  return (data ?? []) as unknown as UserIntegrationAssetRow[];
+  const rows = (data ?? []) as unknown as RawUserIntegrationAssetRow[];
+  return rows.map(({ raw_payload, ...row }) => ({
+    ...row,
+    role: row.type === "meta_ad_account" ? deriveMetaAccountRole(extractPermissions(raw_payload)) : null,
+  }));
 }
 
 export function useUserIntegrationAssets() {

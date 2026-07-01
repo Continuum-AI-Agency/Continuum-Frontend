@@ -37,8 +37,18 @@ mock.module("@/lib/supabase/client", () => ({
   createSupabaseBrowserClient: () => supabaseStub,
 }));
 
+type HttpRequestArgs = { path: string };
+const httpRequestMock = mock<(args: HttpRequestArgs) => Promise<{ url: string; state: string }>>(() =>
+  Promise.resolve({ url: "https://accounts.google.com/o/oauth2/auth", state: "state-1" })
+);
+
+mock.module("@/lib/api/http", () => ({
+  http: { request: httpRequestMock },
+}));
+
 import {
   assignBrandIntegrationAccount,
+  startGoogleSync,
   unassignBrandIntegrationAccount,
 } from "@/lib/api/integrations";
 
@@ -80,5 +90,26 @@ describe("brand integration assignment helpers", () => {
     expect(deleteResolved).toHaveBeenCalledTimes(1);
     expect(schemaMock).toHaveBeenCalledWith("brand_profiles");
     expect(fromMock).toHaveBeenCalledWith("brand_profile_integration_accounts");
+  });
+});
+
+describe("startGoogleSync", () => {
+  beforeEach(() => {
+    httpRequestMock.mockClear();
+  });
+
+  it("does not include force_account_chooser by default", async () => {
+    await startGoogleSync("https://app.test/integrations/callback");
+
+    const [{ path }] = httpRequestMock.mock.calls[0] as [HttpRequestArgs];
+    expect(path).toContain("callback_url=");
+    expect(path).not.toContain("force_account_chooser");
+  });
+
+  it("threads force_account_chooser=true through to the sync request (#151)", async () => {
+    await startGoogleSync("https://app.test/integrations/callback", { forceAccountChooser: true });
+
+    const [{ path }] = httpRequestMock.mock.calls[0] as [HttpRequestArgs];
+    expect(path).toContain("force_account_chooser=true");
   });
 });

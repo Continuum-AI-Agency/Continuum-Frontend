@@ -31,6 +31,11 @@ export const tiktokResyncResponseSchema = z.object({
   failed: z.array(z.string()),
 });
 
+export const metaResyncResponseSchema = z.object({
+  updated: z.array(z.string()),
+  failed: z.array(z.string()),
+});
+
 export const xSyncResponseSchema = integrationSyncResponseBase.extend({
   state: z.string().min(1),
 });
@@ -47,6 +52,23 @@ export type TikTokSyncResponse = z.infer<typeof tiktokSyncResponseSchema>;
 export type TikTokResyncResponse = z.infer<typeof tiktokResyncResponseSchema>;
 export type XSyncResponse = z.infer<typeof xSyncResponseSchema>;
 export type XResyncResponse = z.infer<typeof xResyncResponseSchema>;
+export type MetaResyncResponse = z.infer<typeof metaResyncResponseSchema>;
+
+// Computed Meta ad-account privilege level derived from Graph permissions/tasks
+// (ADVERTISE vs ANALYZE-only). Mirrors the backend union in
+// Continuum-Backend/App/integrations-ts/src/metaRole.ts. `analyst` renders the
+// "Read-only" badge (#155).
+export const metaAccountRoleSchema = z.enum(["admin", "advertiser", "analyst", "unknown"]);
+export type MetaAccountRole = z.infer<typeof metaAccountRoleSchema>;
+
+// One alternate login through which the same underlying account is reachable —
+// preserved when the picker collapses cross-integration duplicates into one row.
+const alternateAccessSchema = z.object({
+  integration_id: z.string(),
+  integration_account_id: z.string().nullable(),
+  role: metaAccountRoleSchema.nullable(),
+});
+export type AlternateAccess = z.infer<typeof alternateAccessSchema>;
 
 const selectableAssetSchema = z.object({
   asset_pk: z.string().uuid(),
@@ -56,6 +78,11 @@ const selectableAssetSchema = z.object({
   name: z.string().min(1).nullable(),
   business_id: z.string().nullable(),
   ad_account_id: z.string().nullable(),
+  // Optional/nullable so older BE payloads, non-Meta assets, and client-built
+  // assets (onboarding "Path A") validate/construct unchanged; only Meta ad
+  // accounts carry a computed role.
+  role: metaAccountRoleSchema.nullish(),
+  also_accessible_via: z.array(alternateAccessSchema).nullish(),
 });
 
 const metaSelectableHierarchyAdAccountSchema = z.object({

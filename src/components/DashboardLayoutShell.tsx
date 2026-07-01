@@ -25,6 +25,11 @@ export type BrandSummary = {
   logoPath?: string | null;
   logoUrl?: string | null;
   isPending?: boolean;
+  // Ticket #162: per-brand active-integration indicator, bulk-fetched via
+  // plugin_mcp.list_brands_integration_status (see useInfiniteUserBrands).
+  // Undefined means "not yet fetched" — render nothing until known.
+  hasActiveIntegration?: boolean;
+  integrationAccountCount?: number;
 };
 
 export type BrandPermission = {

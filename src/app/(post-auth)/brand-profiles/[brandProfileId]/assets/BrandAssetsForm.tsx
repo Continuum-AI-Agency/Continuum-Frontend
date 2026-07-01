@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,6 +14,7 @@ import {
 	getSelectableAssetsFlatListForProvider,
 } from "@/lib/integrations/selectableAssets";
 import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
+import { useMetaAutoResync } from "@/hooks/useMetaAutoResync";
 import { useToast } from "@/components/ui/ToastProvider";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
@@ -171,6 +173,7 @@ export function BrandAssetsForm({
 	selectableAssetsResponse,
 	assignedIntegrationAccountIds,
 }: Props) {
+	const router = useRouter();
 	const [mounted, setMounted] = useState(false);
 	useEffect(() => {
 		setMounted(true);
@@ -183,6 +186,27 @@ export function BrandAssetsForm({
 	const selectableAssets = useMemo(() => {
 		return getSelectableAssetsFlatList(selectableAssetsResponse);
 	}, [selectableAssetsResponse]);
+
+	// #154 fingerprint: Meta connected (some Meta asset present) but no ad account.
+	const metaConnectedButNoAdAccounts = useMemo(() => {
+		let hasMetaAsset = false;
+		let hasMetaAdAccount = false;
+		for (const asset of selectableAssets) {
+			if (asset.type.startsWith("meta_")) {
+				hasMetaAsset = true;
+				if (asset.type === "meta_ad_account") hasMetaAdAccount = true;
+			}
+		}
+		return hasMetaAsset && !hasMetaAdAccount;
+	}, [selectableAssets]);
+
+	const { isResyncing, resyncError, triggerResync } = useMetaAutoResync({
+		enabled: mounted,
+		isMetaEmpty: metaConnectedButNoAdAccounts,
+		onResynced: () => {
+			router.refresh();
+		},
+	});
 	const assignedSet = useMemo(() => new Set(assignedIntegrationAccountIds), [assignedIntegrationAccountIds]);
 
 	const defaultSelected: Record<string, boolean> = useMemo(() => {
@@ -281,6 +305,23 @@ export function BrandAssetsForm({
 				{selectableAssetsResponse.stale ? (
 					<p className="text-amber-700">
 						Your integrations are marked stale. Sync your providers if accounts look out of date.
+					</p>
+				) : null}
+				{isResyncing ? (
+					<p className="text-slate-500">Refreshing your Meta accounts…</p>
+				) : resyncError ? (
+					<p className="text-red-700">
+						Couldn&apos;t refresh Meta accounts. {resyncError}{" "}
+						<button type="button" className="underline" onClick={triggerResync}>
+							Retry
+						</button>
+					</p>
+				) : metaConnectedButNoAdAccounts ? (
+					<p className="text-amber-700">
+						Meta is connected but no ad accounts were found.{" "}
+						<button type="button" className="underline" onClick={triggerResync}>
+							Refresh Meta accounts
+						</button>
 					</p>
 				) : null}
 				{unassignableCount > 0 ? (

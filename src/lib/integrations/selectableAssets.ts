@@ -1,6 +1,15 @@
 import { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { isHigherPrivilegeRole } from "@/lib/integrations/metaRole";
+
+// #155: the same Meta ad account reached through two logins arrives as two rows
+// with the same `ad_account_id` but different `asset_pk`/`integration_account_id`.
+// When collapsing to one visible row, keep the higher-privilege login's row so
+// the account stays fully actionable rather than pinned to a read-only login.
+function pickHigherPrivilegeAsset(existing: SelectableAsset, incoming: SelectableAsset): SelectableAsset {
+  return isHigherPrivilegeRole(incoming.role ?? "unknown", existing.role ?? "unknown") ? incoming : existing;
+}
 
 export type MetaSelectableAdAccountBundle = {
   ad_account_id: string;
@@ -371,6 +380,11 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
 
   if (assets.length === 0) return null;
 
+  // Dedup children/standalones by their real external id so a page/IG shared
+  // across two logins isn't listed twice. Ad accounts are keyed by ad_account_id
+  // (below) rather than external id, so this only guards the sub-assets.
+  const seenChildExternalIds = new Set<string>();
+
   assets.forEach(asset => {
     if (asset.ad_account_id) {
       let bundle = adAccountMap.get(asset.ad_account_id);
@@ -380,12 +394,22 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
         bundles.push(bundle);
       }
       if (asset.type === "meta_ad_account") {
-        bundle.ad_account = asset;
+        // Collapse duplicate ad-account rows (#155): keep the highest-privilege
+        // login's row instead of letting the last one arbitrarily win.
+        bundle.ad_account = bundle.ad_account ? pickHigherPrivilegeAsset(bundle.ad_account, asset) : asset;
       } else {
-        bundle.assets.push(asset);
+        const childKey = `${asset.type}:${asset.external_id}`;
+        if (!seenChildExternalIds.has(childKey)) {
+          seenChildExternalIds.add(childKey);
+          bundle.assets.push(asset);
+        }
       }
     } else {
-      others.push(asset);
+      const standaloneKey = `${asset.type}:${asset.external_id}`;
+      if (!seenChildExternalIds.has(standaloneKey)) {
+        seenChildExternalIds.add(standaloneKey);
+        others.push(asset);
+      }
     }
   });
 

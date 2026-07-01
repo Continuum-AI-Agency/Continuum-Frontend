@@ -27,6 +27,12 @@ mock.module("@/lib/api/integrations", () => ({
   useUserIntegrationAssets: () => ({
     data: userAssets,
     isLoading: false,
+    refetch: mock(async () => ({ data: userAssets })),
+  }),
+  // The dialog now background-resyncs Meta when it looks connected-but-empty
+  // (#154); the mock module must expose the mutation hook it consumes.
+  useResyncMeta: () => ({
+    mutateAsync: mock(async () => ({ updated: [], failed: [] })),
   }),
 }));
 
@@ -65,6 +71,7 @@ describe("AssignmentsDialog", () => {
         status: "active",
         external_account_id: "17841400000000000",
         ad_account_id: null,
+        role: null,
       },
     ];
   });
@@ -109,6 +116,7 @@ describe("AssignmentsDialog", () => {
         status: "active",
         external_account_id: "17841400000000111",
         ad_account_id: null,
+        role: null,
       },
     ];
 

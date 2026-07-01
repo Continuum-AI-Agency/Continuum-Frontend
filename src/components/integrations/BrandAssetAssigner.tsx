@@ -29,7 +29,9 @@ import {
 import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
 import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
 import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
+import { useMetaAutoResync } from "@/hooks/useMetaAutoResync";
 import { useToast } from "@/components/ui/ToastProvider";
+import { isHigherPrivilegeRole, isReadOnlyMetaRole } from "@/lib/integrations/metaRole";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import {
   PLATFORM_ICONS,
@@ -143,11 +145,18 @@ function classifyAssets(userAssets: UserIntegrationAssetRow[]): ClassifiedAssets
   return { metaAssets, otherByPlatform };
 }
 
+function adAccountKeyFor(asset: UserIntegrationAssetRow): string {
+  return asset.ad_account_id ?? asset.external_account_id?.replace(/^act_/, "") ?? asset.id;
+}
+
 function buildMetaItems(
   metaAssets: UserIntegrationAssetRow[],
   assignedSet: Set<string>
 ): { items: IntegrationSwitcherItem[]; childrenByParent: Map<string, string[]> } {
-  const adAccounts: UserIntegrationAssetRow[] = [];
+  // #155: the same ad account reachable via two logins arrives as two rows
+  // sharing an ad_account_id. Collapse by real ad-account id, keeping the
+  // highest-privilege login's row so the account stays fully actionable.
+  const adAccountByKey = new Map<string, UserIntegrationAssetRow>();
   const childrenByAdAccountKey = new Map<string, UserIntegrationAssetRow[]>();
   const orphans: UserIntegrationAssetRow[] = [];
 
@@ -155,7 +164,11 @@ function buildMetaItems(
     const isAdAccount = mapIntegrationTypeToPlatformKey(asset.type) === "facebook" &&
       (asset.type ?? "").toLowerCase().includes("ad_account");
     if (isAdAccount) {
-      adAccounts.push(asset);
+      const key = adAccountKeyFor(asset);
+      const existing = adAccountByKey.get(key);
+      if (!existing || isHigherPrivilegeRole(asset.role ?? "unknown", existing.role ?? "unknown")) {
+        adAccountByKey.set(key, asset);
+      }
       continue;
     }
     if (asset.ad_account_id) {
@@ -167,14 +180,14 @@ function buildMetaItems(
     }
   }
 
-  adAccounts.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  const adAccounts = Array.from(adAccountByKey.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   orphans.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 
   const items: IntegrationSwitcherItem[] = [];
   const childrenByParent = new Map<string, string[]>();
 
   for (const adAccount of adAccounts) {
-    const childKey = adAccount.ad_account_id ?? adAccount.external_account_id?.replace(/^act_/, "") ?? "";
+    const childKey = adAccountKeyFor(adAccount);
     const childRows = (childrenByAdAccountKey.get(childKey) ?? []).slice();
     childRows.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     const childItems = childRows.map((child) =>
@@ -182,6 +195,7 @@ function buildMetaItems(
     );
     items.push({
       ...buildAssetItem(adAccount, "facebook", assignedSet),
+      subtitle: isReadOnlyMetaRole(adAccount.role) ? "Read-only" : undefined,
       children: childItems.length > 0 ? childItems : undefined,
     });
     if (childItems.length > 0) {
@@ -257,6 +271,29 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
 
     return { tabs, data, childrenByParent };
   }, [userAssets, assignedIds]);
+
+  // #154 fingerprint: Meta is connected (pages/IG synced) but no ad account came
+  // through. Precise so a never-connected user never triggers a no-op resync.
+  const metaConnectedButNoAdAccounts = useMemo(() => {
+    let hasMetaAsset = false;
+    let hasMetaAdAccount = false;
+    for (const asset of userAssets) {
+      const platform = mapIntegrationTypeToPlatformKey(asset.type);
+      if (platform && META_PLATFORMS.has(platform)) {
+        hasMetaAsset = true;
+        if ((asset.type ?? "").toLowerCase().includes("ad_account")) hasMetaAdAccount = true;
+      }
+    }
+    return hasMetaAsset && !hasMetaAdAccount;
+  }, [userAssets]);
+
+  const { isResyncing, resyncError, triggerResync } = useMetaAutoResync({
+    enabled: !assetsLoading,
+    isMetaEmpty: metaConnectedButNoAdAccounts,
+    onResynced: async () => {
+      await refetchUserAssets();
+    },
+  });
 
   const markPending = useCallback((ids: string[], pending: boolean) => {
     setPendingIds((prev) => {
@@ -431,6 +468,35 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
       ) : null}
 
       <motion.div variants={item} className="mx-auto w-full max-w-[880px]">
+        {isResyncing ? (
+          <div
+            role="status"
+            className="mb-3 flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+          >
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
+            Refreshing your Meta accounts…
+          </div>
+        ) : resyncError ? (
+          <div
+            role="alert"
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
+            <span>Couldn&apos;t refresh Meta accounts. {resyncError}</span>
+            <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={triggerResync}>
+              Retry
+            </Button>
+          </div>
+        ) : metaConnectedButNoAdAccounts ? (
+          <div
+            role="status"
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+          >
+            <span>Meta is connected but no ad accounts were found.</span>
+            <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={triggerResync}>
+              Refresh Meta accounts
+            </Button>
+          </div>
+        ) : null}
         {isEmpty ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center">
             <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />

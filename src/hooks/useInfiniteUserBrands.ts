@@ -66,6 +66,52 @@ async function signLogoUrls(
   );
 }
 
+type BrandIntegrationStatusRow = {
+  brand_id: string;
+  has_active_integration: boolean;
+  account_count: number;
+};
+
+type IntegrationStatus = {
+  hasActiveIntegration: boolean;
+  accountCount: number;
+};
+
+// Ticket #162: bulk-fetch the active-integration badge for every brand on
+// this page via plugin_mcp.list_brands_integration_status (one RPC call per
+// page, not one per brand). The `plugin_mcp` schema/RPC are not yet in the
+// generated Database types (the migration is created but intentionally not
+// applied yet), so the call is cast loosely at this one boundary and the
+// response is narrowed immediately below via BrandIntegrationStatusRow.
+// Fail-open: any error just means the badge doesn't render this page.
+async function fetchIntegrationStatusByBrandId(
+  supabase: ReturnType<typeof import("@/lib/supabase/client").createSupabaseBrowserClient>,
+  userId: string,
+  brandIds: string[]
+): Promise<Map<string, IntegrationStatus>> {
+  if (brandIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await (supabase as any)
+    .schema("plugin_mcp")
+    .rpc("list_brands_integration_status", {
+      p_user_id: userId,
+      p_brand_ids: brandIds,
+    });
+
+  if (error) {
+    return new Map();
+  }
+
+  return new Map(
+    ((data ?? []) as BrandIntegrationStatusRow[]).map((row) => [
+      row.brand_id,
+      { hasActiveIntegration: row.has_active_integration, accountCount: row.account_count },
+    ])
+  );
+}
+
 async function fetchUserBrandPage({
   userId,
   userEmail,
@@ -137,12 +183,16 @@ async function fetchUserBrandPage({
   const profiles = new Map(
     ((brandRows ?? []) as UserBrandProfileRow[]).map((brand) => [brand.id, brand])
   );
-  const signedUrls = await signLogoUrls(
-    supabase,
-    ((brandRows ?? []) as UserBrandProfileRow[])
-      .map((brand) => brand.logo_path)
-      .filter((path): path is string => Boolean(path))
-  );
+  const activeBrandIds = ((brandRows ?? []) as UserBrandProfileRow[]).map((brand) => brand.id);
+  const [signedUrls, integrationStatusByBrandId] = await Promise.all([
+    signLogoUrls(
+      supabase,
+      ((brandRows ?? []) as UserBrandProfileRow[])
+        .map((brand) => brand.logo_path)
+        .filter((path): path is string => Boolean(path))
+    ),
+    fetchIntegrationStatusByBrandId(supabase, userId, activeBrandIds),
+  ]);
 
   const brands = accessRows.flatMap<UserBrandListItem>((permission) => {
     const profile = profiles.get(permission.brand_profile_id);
@@ -151,6 +201,7 @@ async function fetchUserBrandPage({
     }
 
     const logoPath = profile.logo_path ?? null;
+    const integrationStatus = integrationStatusByBrandId.get(profile.id);
     return [
       {
         id: profile.id,
@@ -160,6 +211,8 @@ async function fetchUserBrandPage({
         logoUrl: logoPath ? signedUrls.get(logoPath) ?? null : null,
         isPending: permission.isPending,
         role: permission.role,
+        hasActiveIntegration: integrationStatus?.hasActiveIntegration ?? false,
+        integrationAccountCount: integrationStatus?.accountCount ?? 0,
       },
     ];
   });
