@@ -174,6 +174,44 @@ describe("creativeInsightsResultSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts an enriched row with level, hierarchy, path_label and parsed_name", () => {
+    const result = creativeInsightsResultSchema.safeParse({
+      data: {
+        creatives: [
+          {
+            ad_id: "a1",
+            ad_name: "PROSP|Video|LAL1%",
+            campaign_id: "c1",
+            level: "ad",
+            hierarchy: {
+              campaign: { id: "c1", name: "Spring Sale" },
+              adset: { id: "s1", name: "LAL 1%" },
+              ad: { id: "a1", name: "PROSP|Video|LAL1%" },
+            },
+            path_label: "Spring Sale › LAL 1% › PROSP|Video|LAL1%",
+            parsed_name: {
+              schema_id: "11111111-1111-4111-8111-111111111111",
+              schema_version: 1,
+              delimiter: "|",
+              matched: true,
+              segments: ["PROSP", "Video", "LAL1%"],
+              fields: { funnel: "PROSP", format: "Video", audience: "LAL1%" },
+            },
+            impressions: 1000,
+            spend: 50,
+            three_second_views: 300,
+            video_p25: 200,
+            video_p50: 120,
+            hook_rate: 0.3,
+            hold_rate: 0.4,
+          },
+        ],
+      },
+      meta,
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("accepts null ad_name / campaign_id / rates", () => {
     const result = creativeInsightsResultSchema.safeParse({
       data: {

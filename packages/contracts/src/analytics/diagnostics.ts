@@ -10,6 +10,9 @@
 
 import { z } from "zod";
 
+import { parsedAdNameSchema } from "../paid/adNaming";
+import { entityHierarchySchema, paidEntityLevelSchema } from "../paid/hierarchy";
+
 // Paid platforms the diagnostics tier accepts on the wire. Only meta_ads is
 // implemented end-to-end today; google_ads/tiktok_ads appear as `unsupported`
 // rows (cross_platform_spend) and are rejected at the tool input boundary for
@@ -45,6 +48,10 @@ export type JobErrorResult = z.infer<typeof jobErrorResultSchema>;
 export const crossPlatformSpendRowSchema = z.object({
   date: z.string().nullable(),
   platform: paidDiagnosticsPlatformSchema,
+  // "account" for account-wide rollups; "campaign" when broken down by campaign.
+  level: paidEntityLevelSchema.optional(),
+  hierarchy: entityHierarchySchema.optional(),
+  path_label: z.string().optional(),
   spend: z.number(),
   currency: z.string(),
   impressions: z.number(),
@@ -96,6 +103,10 @@ export type CrossPlatformSpendResult = z.infer<typeof crossPlatformSpendResultSc
 export const campaignPaceRowSchema = z.object({
   campaign_id: z.string(),
   name: z.string().nullable(),
+  // Always "campaign" — pacing is a campaign-level diagnostic.
+  level: paidEntityLevelSchema.optional(),
+  hierarchy: entityHierarchySchema.optional(),
+  path_label: z.string().optional(),
   budget_type: z.enum(["daily", "lifetime", "unknown"]),
   budget: z.number(),
   spent: z.number(),
@@ -128,6 +139,11 @@ export const creativeInsightRowSchema = z.object({
   ad_id: z.string(),
   ad_name: z.string().nullable(),
   campaign_id: z.string().nullable(),
+  // Always "ad" — creative insights are ad-level.
+  level: paidEntityLevelSchema.optional(),
+  hierarchy: entityHierarchySchema.optional(),
+  path_label: z.string().optional(),
+  parsed_name: parsedAdNameSchema.nullable().optional(),
   impressions: z.number(),
   spend: z.number(),
   three_second_views: z.number(),
