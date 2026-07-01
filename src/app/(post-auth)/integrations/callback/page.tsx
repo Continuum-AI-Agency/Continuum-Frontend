@@ -21,6 +21,9 @@ function successMessage(reason?: string | null): string {
   if (reason === "no_ads_accounts" || reason === "ads_enrichment_failed") {
     return "Connected, but no Google Ads accounts were found.";
   }
+  if (reason === "meta_partial_sync") {
+    return "Connected, but some Meta accounts may be missing. We'll keep trying to load them.";
+  }
   return "Integration connected.";
 }
 

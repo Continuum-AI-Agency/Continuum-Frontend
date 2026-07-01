@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, RefreshCw, Unplug } from "lucide-react";
+import { Plus, RefreshCw, UserPlus, Unplug } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -15,17 +15,14 @@ import {
   useDeauthorizeMeta,
   useDeauthorizeTikTok,
   useDeauthorizeX,
+  useStartGoogleAccountChooserSync,
   useStartGoogleSync,
   useStartMetaSync,
   useStartTikTokSync,
   useStartXSync,
 } from "@/lib/api/integrations";
-import { hasProviderConnections } from "@/lib/integrations/providerConnections";
-import {
-  openCenteredPopup,
-  waitForPopupClosed,
-  waitForPopupMessage,
-} from "@/lib/popup";
+import { getProviderConnectionSummary } from "@/lib/integrations/providerConnections";
+import { openCenteredPopup, waitForOAuthCompletion } from "@/lib/popup";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   PROVIDER_GROUP_DESCRIPTIONS,
@@ -50,6 +47,10 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
   const [isPending, startTransition] = useTransition();
   const metaSync = useStartMetaSync();
   const googleSync = useStartGoogleSync();
+  // #151: same shape as googleSync (mutateAsync(callbackUrl): Promise<GoogleSyncResponse>),
+  // just forces Google's account chooser server-side so a user can link Ads
+  // under a different Google identity than the one already connected.
+  const googleAccountChooserSync = useStartGoogleAccountChooserSync();
   const tiktokSync = useStartTikTokSync();
   const xSync = useStartXSync();
   const metaDeauthorize = useDeauthorizeMeta();
@@ -68,7 +69,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
     return url.toString();
   };
 
-  const handleConnect = (provider: ProviderGroup) => {
+  const handleConnect = (provider: ProviderGroup, options?: { forceAccountChooser?: boolean }) => {
     if (isProviderComingSoon(provider)) return;
     startTransition(async () => {
       let cleanup: (() => void) | undefined;
@@ -76,7 +77,9 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
         const callbackUrl = buildCallbackUrl(provider);
         const sync =
           provider === "google"
-            ? googleSync
+            ? options?.forceAccountChooser
+              ? googleAccountChooserSync
+              : googleSync
             : provider === "tiktok"
               ? tiktokSync
               : provider === "x"
@@ -110,24 +113,24 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
           context?: string;
           message?: string;
           state?: string | null;
+          warning?: string | null;
         };
         const predicate = (m: Msg) =>
           m.provider === provider &&
           m.context === "settings" &&
           (!expectedState || m.state === expectedState);
 
-        const successPromise = waitForPopupMessage<Msg>("oauth:success", {
+        // Races postMessage + BroadcastChannel completion signals against the
+        // popup closing, and only treats "closed" as a user cancellation when
+        // neither signal ever arrived. This is required for Google: its own
+        // Cross-Origin-Opener-Policy header severs window.opener, so the
+        // postMessage the callback page sends silently no-ops and only the
+        // BroadcastChannel signal gets through.
+        const result = await waitForOAuthCompletion<Msg>({
+          popup,
           predicate,
           signal: abortCtrl.signal,
         });
-        const errorPromise = waitForPopupMessage<Msg>("oauth:error", {
-          predicate,
-          signal: abortCtrl.signal,
-        }).then((p) => { throw new Error(p.message ?? "Connection cancelled."); });
-        const closedPromise = waitForPopupClosed(popup, { signal: abortCtrl.signal })
-          .then(() => { throw new Error("Connection cancelled."); });
-
-        const result = await Promise.race([successPromise, errorPromise, closedPromise]);
         if (!result.provider || result.provider !== provider) {
           show({ title: "Connection incomplete", description: "Provider could not be verified.", variant: "error" });
           cleanup();
@@ -137,7 +140,26 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
         try { popup.close(); } catch { /* ignore */ }
         cleanup();
         router.refresh();
-        show({ title: "Connected", description: `${PROVIDER_GROUP_LABELS[provider]} accounts synced.`, variant: "success" });
+        if (result.warning === "no_ads_accounts" || result.warning === "ads_enrichment_failed") {
+          // Distinct from a hard failure: the token connected fine, but no
+          // Google Ads accounts were found under this identity (see #151).
+          show({
+            title: "Connected, with a note",
+            description: "No Google Ads accounts were found for this account. Use \"Connect a different Google account for Ads\" if Ads lives under another identity.",
+            variant: "info",
+          });
+        } else if (result.warning === "meta_partial_sync") {
+          // Meta connected, but one or more Graph edges came back degraded, so
+          // some accounts may be missing (see #154). The asset picker retries a
+          // background resync on open, so this is a heads-up, not a failure.
+          show({
+            title: "Connected, with a note",
+            description: "Some Meta accounts may not have loaded. We'll keep trying — reopen the account picker in a moment if any are missing.",
+            variant: "info",
+          });
+        } else {
+          show({ title: "Connected", description: `${PROVIDER_GROUP_LABELS[provider]} accounts synced.`, variant: "success" });
+        }
       } catch (error) {
         show({
           title: "Connection failed",
@@ -211,7 +233,10 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
         <div className="mt-1 space-y-1">
           {PROVIDERS.map((providerId) => {
             const comingSoon = isProviderComingSoon(providerId);
-            const connected = !comingSoon && hasProviderConnections(integrations, providerId);
+            const connectionSummary = comingSoon
+              ? null
+              : getProviderConnectionSummary(integrations, providerId);
+            const connected = connectionSummary?.connected ?? false;
             const Icon = PROVIDER_GROUP_ICONS[providerId];
             return (
               <div
@@ -240,7 +265,9 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                     ) : null}
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
-                    {PROVIDER_GROUP_DESCRIPTIONS[providerId]}
+                    {connected && connectionSummary && connectionSummary.accountNames.length > 0
+                      ? connectionSummary.accountNames.join(", ")
+                      : PROVIDER_GROUP_DESCRIPTIONS[providerId]}
                   </p>
                 </div>
                 {comingSoon ? (
@@ -254,6 +281,18 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                   </Button>
                 ) : connected ? (
                   <div className="flex items-center gap-1">
+                    {providerId === "google" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Connect a different Google account for Ads"
+                        onClick={() => handleConnect(providerId, { forceAccountChooser: true })}
+                        disabled={isPending}
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -295,4 +334,3 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
     </Popover>
   );
 }
-

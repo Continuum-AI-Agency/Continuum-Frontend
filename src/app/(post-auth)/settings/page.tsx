@@ -1,54 +1,51 @@
-import { Suspense } from "react";
-import { Heading, Text } from "@radix-ui/themes";
-import { BrandDocumentsSection } from "@/components/settings/BrandDocumentsSection";
-import { BrandGuidelineSection } from "@/components/settings/BrandGuidelineSection";
-import { BrandBookSection } from "@/components/settings/brand/BrandBookSection";
-import { BrandMembersSection } from "@/components/settings/BrandMembersSection";
-import { RunStrategicAnalysisButton } from "@/components/strategic-analyses/RunStrategicAnalysisButton";
-import { BrandIdentityHeader } from "@/components/settings/brand/BrandIdentityHeader";
-import { BrandIdentitySection } from "@/components/settings/brand/BrandIdentitySection";
-import { BrandInvitesSection } from "@/components/settings/brand/BrandInvitesSection";
-import { BrandDangerZone } from "@/components/settings/brand/BrandDangerZone";
-import { BrandIntegrationsSwitcher } from "@/components/settings/brand/BrandIntegrationsSwitcher";
-import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection";
-import { MyConnectionsSharingSection } from "@/components/integrations/MyConnectionsSharingSection";
-import { BrandBillingPanel } from "@/components/settings/brand/BrandBillingPanel";
-import { UserProfileSection } from "@/components/settings/account/UserProfileSection";
-import { UserConnectionsSwitcher } from "@/components/settings/account/UserConnectionsSwitcher";
-import { McpConnectionsSection } from "@/components/settings/account/McpConnectionsSection";
-import { McpActivityTable } from "@/components/settings/account/McpActivityTable";
-import { UserBrandsPanel } from "@/components/settings/account/UserBrandsPanel";
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { fetchBrandProfileDetails } from "@/lib/brands/profile";
-import { fetchBrandDocuments } from "@/lib/brands/documents";
-import { fetchBrandBook } from "@/lib/brands/brandBook";
+import { Heading, Text } from '@radix-ui/themes';
+import { Suspense } from 'react';
+import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
+import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
+import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
+import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
+import { UserBrandsPanel } from '@/components/settings/account/UserBrandsPanel';
+import { UserConnectionsSwitcher } from '@/components/settings/account/UserConnectionsSwitcher';
+import { UserProfileSection } from '@/components/settings/account/UserProfileSection';
+import { BrandDocumentsSection } from '@/components/settings/BrandDocumentsSection';
+import { BrandGuidelineSection } from '@/components/settings/BrandGuidelineSection';
+import { BrandMembersSection } from '@/components/settings/BrandMembersSection';
+import { BrandAdNamingSection } from '@/components/settings/brand/BrandAdNamingSection';
+import { BrandBillingPanel } from '@/components/settings/brand/BrandBillingPanel';
+import { BrandBookSection } from '@/components/settings/brand/BrandBookSection';
+import { BrandDangerZone } from '@/components/settings/brand/BrandDangerZone';
+import { BrandIdentityHeader } from '@/components/settings/brand/BrandIdentityHeader';
+import { BrandIdentitySection } from '@/components/settings/brand/BrandIdentitySection';
+import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandIntegrationsSwitcher';
+import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
+import { AccountNavPill } from '@/components/settings/shell/AccountNavPill';
+import { BrandNavPill } from '@/components/settings/shell/BrandNavPill';
+import { SettingsSection } from '@/components/settings/shell/SettingsSection';
+import { SettingsShell } from '@/components/settings/shell/SettingsShell';
+import { resolveSection } from '@/components/settings/shell/sections';
+import { RunStrategicAnalysisButton } from '@/components/strategic-analyses/RunStrategicAnalysisButton';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { fetchBrandAdNamingSchema } from '@/lib/brands/adNaming';
+import { fetchBrandBook } from '@/lib/brands/brandBook';
+import { fetchBrandDocuments } from '@/lib/brands/documents';
+import { fetchBrandProfileDetails } from '@/lib/brands/profile';
+import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   createEmptyUserIntegrationSummary,
   fetchUserIntegrationSummary,
-} from "@/lib/integrations/userIntegrations";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
-import { ensureOnboardingState, fetchOnboardingState } from "@/lib/onboarding/storage";
-import { mapOnboardingStateToAgentPayload } from "@/lib/onboarding/mapping";
-import type { AgentRequestPayload } from "@/lib/onboarding/agentClient";
-import { SettingsShell } from "@/components/settings/shell/SettingsShell";
-import { SettingsSection } from "@/components/settings/shell/SettingsSection";
-import { BrandNavPill } from "@/components/settings/shell/BrandNavPill";
-import { AccountNavPill } from "@/components/settings/shell/AccountNavPill";
-import { resolveSection } from "@/components/settings/shell/sections";
+} from '@/lib/integrations/userIntegrations';
+import type { AgentRequestPayload } from '@/lib/onboarding/agentClient';
+import { mapOnboardingStateToAgentPayload } from '@/lib/onboarding/mapping';
+import { ensureOnboardingState, fetchOnboardingState } from '@/lib/onboarding/storage';
+import { createBrandProfileRepository } from '@/lib/repositories/brandProfile';
 
 type SettingsPageProps = {
   searchParams?: Promise<{ section?: string | string[] }>;
 };
 
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
-  const {
-    activeBrandId,
-    brandSummaries,
-    permissions,
-    activeBrandTier,
-    user,
-  } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, permissions, activeBrandTier, user } =
+    await getActiveBrandContext();
   const params = await searchParams;
   const initialSection = resolveSection(params?.section);
 
@@ -62,21 +59,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   }
 
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
-  const defaultBrandName = activeBrand?.name ?? "Untitled Brand";
+  const defaultBrandName = activeBrand?.name ?? 'Untitled Brand';
   const brandLogoUrl = activeBrand?.logoUrl ?? null;
-  const userEmail = user?.email ?? "Unknown";
+  const userEmail = user?.email ?? 'Unknown';
 
   const createBrandHeader = (name: string) => (
-    <BrandIdentityHeader
-      brandId={activeBrandId}
-      name={name}
-      logoUrl={brandLogoUrl}
-    />
+    <BrandIdentityHeader brandId={activeBrandId} name={name} logoUrl={brandLogoUrl} />
   );
 
   let activeSectionSlot: React.ReactNode;
 
-  if (initialSection === "general") {
+  if (initialSection === 'general') {
     const repo = createBrandProfileRepository();
     const [brandProfile, members, invites] = await Promise.all([
       fetchBrandProfileDetails(activeBrandId),
@@ -86,16 +79,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const brandName = brandProfile?.name ?? defaultBrandName;
     const currentUserRole =
       members.find((m) => m.id === user?.id || m.email === user?.email)?.role ?? null;
-    const canEdit = currentUserRole === "owner" || currentUserRole === "admin";
+    const canEdit = currentUserRole === 'owner' || currentUserRole === 'admin';
     const canDelete = canEdit;
 
     activeSectionSlot = (
       <>
         {createBrandHeader(brandName)}
-        <SettingsSection
-          title="Brand identity"
-          description="Logo, name, and workspace metadata."
-        >
+        <SettingsSection title="Brand identity" description="Logo, name, and workspace metadata.">
           <BrandIdentitySection
             key={activeBrandId}
             brandName={brandName}
@@ -108,11 +98,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           title="Members"
           description="Manage who can access this brand profile. Owners cannot be removed."
         >
-          <BrandMembersSection
-            brandId={activeBrandId}
-            members={members}
-            canEdit={canEdit}
-          />
+          <BrandMembersSection brandId={activeBrandId} members={members} canEdit={canEdit} />
         </SettingsSection>
         <SettingsSection
           title="Invitations"
@@ -125,15 +111,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             title="Danger zone"
             description="Irreversible actions for this brand profile."
           >
-          <BrandDangerZone
-            brandName={brandName}
-            hasProfile={Boolean(brandProfile)}
-            canDelete={canDelete}
-          />
-        </SettingsSection>
-      ) : null}
-      </>);
-  } else if (initialSection === "brand-book") {
+            <BrandDangerZone
+              brandName={brandName}
+              hasProfile={Boolean(brandProfile)}
+              canDelete={canDelete}
+            />
+          </SettingsSection>
+        ) : null}
+      </>
+    );
+  } else if (initialSection === 'brand-book') {
     const brandBook = await fetchBrandBook(activeBrandId);
 
     // No composite yet → let the empty state kick off a first-time report run.
@@ -144,7 +131,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       const onboardingState = await fetchOnboardingState(activeBrandId);
       const mapped = mapOnboardingStateToAgentPayload(activeBrandId, user.id, onboardingState);
       const brandName =
-        defaultBrandName !== "Untitled Brand" ? defaultBrandName : mapped.runContext.brand_name;
+        defaultBrandName !== 'Untitled Brand' ? defaultBrandName : mapped.runContext.brand_name;
       generationPayload = {
         ...mapped,
         brandProfile: { ...mapped.brandProfile, brand_name: brandName },
@@ -170,13 +157,20 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       </>
     );
-  } else if (initialSection === "integrations") {
+  } else if (initialSection === 'integrations') {
     const repo = createBrandProfileRepository();
-    const [integrationSummary, members] = await Promise.all([
+    const [integrationSummary, members, adNamingSchema] = await Promise.all([
       fetchBrandIntegrationSummary(activeBrandId),
       repo.fetchMembers(activeBrandId),
+      fetchBrandAdNamingSchema(activeBrandId, 'meta'),
     ]);
     await ensureOnboardingState(activeBrandId);
+    const namingRole =
+      members.find((m) => m.id === user?.id || m.email === user?.email)?.role ?? null;
+    // Editors (owner/admin/operator) may set the naming convention — matches the
+    // ad_naming_schemas write RLS and the paid_naming_schema_set MCP tool.
+    const canEditNaming =
+      namingRole === 'owner' || namingRole === 'admin' || namingRole === 'operator';
 
     activeSectionSlot = (
       <>
@@ -188,7 +182,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <BrandIntegrationsSwitcher
             initialSummary={integrationSummary}
             members={members}
-            currentUserId={user?.id ?? ""}
+            currentUserId={user?.id ?? ''}
           />
         </SettingsSection>
         <SettingsSection
@@ -205,9 +199,21 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <MyConnectionsSharingSection userId={user.id} />
           </SettingsSection>
         ) : null}
+        <SettingsSection
+          title="Ad naming convention"
+          description="Declare how you name ads so paid-media insights can read them by their named parts."
+        >
+          <BrandAdNamingSection
+            key={activeBrandId}
+            brandId={activeBrandId}
+            platform="meta"
+            initial={adNamingSchema}
+            canEdit={canEditNaming}
+          />
+        </SettingsSection>
       </>
     );
-  } else if (initialSection === "knowledge") {
+  } else if (initialSection === 'knowledge') {
     const documents = await fetchBrandDocuments(activeBrandId);
 
     activeSectionSlot = (
@@ -228,7 +234,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       </>
     );
-  } else if (initialSection === "billing") {
+  } else if (initialSection === 'billing') {
     activeSectionSlot = (
       <>
         {createBrandHeader(defaultBrandName)}
@@ -240,7 +246,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       </>
     );
-  } else if (initialSection === "profile") {
+  } else if (initialSection === 'profile') {
     activeSectionSlot = (
       <SettingsSection
         title="Your profile"
@@ -253,7 +259,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         />
       </SettingsSection>
     );
-  } else if (initialSection === "connections") {
+  } else if (initialSection === 'connections') {
     const userIntegrationSummary = user
       ? await fetchUserIntegrationSummary(user.id)
       : createEmptyUserIntegrationSummary();
@@ -264,7 +270,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           title="Personal connections"
           description="OAuth providers tied to your account. Assign these to brands from the brand integrations panel."
         >
-            <UserConnectionsSwitcher integrations={userIntegrationSummary} />
+          <UserConnectionsSwitcher integrations={userIntegrationSummary} />
         </SettingsSection>
         <SettingsSection
           title="Connected apps"
@@ -274,7 +280,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       </>
     );
-  } else if (initialSection === "activity") {
+  } else if (initialSection === 'activity') {
     activeSectionSlot = (
       <SettingsSection
         title="MCP activity"
@@ -289,7 +295,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         title="Your brands"
         description="Brands you have joined. Switching here updates the entire app."
       >
-          <UserBrandsPanel permissions={permissions} />
+        <UserBrandsPanel permissions={permissions} />
       </SettingsSection>
     );
   }
@@ -300,9 +306,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <Heading size="5" className="text-white">
           Settings
         </Heading>
-        <Text color="gray">
-          Manage this brand and your personal account.
-        </Text>
+        <Text color="gray">Manage this brand and your personal account.</Text>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

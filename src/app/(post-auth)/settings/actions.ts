@@ -9,6 +9,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { normalizeBrandDocumentStoragePath } from "@/lib/brands/document-download";
+import { AD_NAMING_SCHEMAS_TABLE } from "@/lib/brands/adNaming";
 import { getClaimsIdentity } from "@/lib/auth/claims";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
@@ -188,6 +189,68 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
   }
 
   return { nextBrandId };
+}
+
+export async function updateBrandAdNamingSchemaAction(input: {
+  brandId: string;
+  platform: "meta" | "google" | "all";
+  delimiter: string;
+  fields: string[];
+}): Promise<void> {
+  if (!input.brandId) throw new Error("brandId is required");
+
+  const delimiter = input.delimiter.trim();
+  if (!delimiter) throw new Error("A delimiter is required");
+
+  const fields = input.fields.map((field) => field.trim()).filter((field) => field.length > 0);
+  if (fields.length === 0) throw new Error("Add at least one naming field");
+  if (new Set(fields).size !== fields.length) throw new Error("Naming fields must be unique");
+
+  const supabase = await createSupabaseServerClient();
+  const { data: existing, error: readError } = await supabase
+    .schema("brand_profiles")
+    .from(AD_NAMING_SCHEMAS_TABLE)
+    .select("id, delimiter, fields, version")
+    .eq("brand_id", input.brandId)
+    .eq("platform", input.platform)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (readError) throw new Error(readError.message);
+
+  if (!existing) {
+    const { error: insertError } = await supabase
+      .schema("brand_profiles")
+      .from(AD_NAMING_SCHEMAS_TABLE)
+      .insert({
+        brand_id: input.brandId,
+        platform: input.platform,
+        delimiter,
+        fields,
+        version: 1,
+        is_active: true,
+      } as never);
+    if (insertError) throw new Error(insertError.message);
+    revalidatePath("/settings");
+    return;
+  }
+
+  const row = existing as unknown as { id: string; delimiter: string; fields: unknown; version: number };
+  const currentFields = Array.isArray(row.fields) ? row.fields.map(String) : [];
+  const unchanged =
+    row.delimiter === delimiter &&
+    currentFields.length === fields.length &&
+    currentFields.every((field, index) => field === fields[index]);
+  if (unchanged) return;
+
+  const { error: updateError } = await supabase
+    .schema("brand_profiles")
+    .from(AD_NAMING_SCHEMAS_TABLE)
+    .update({ delimiter, fields, version: row.version + 1 } as never)
+    .eq("id", row.id);
+  if (updateError) throw new Error(updateError.message);
+
+  revalidatePath("/settings");
 }
 
 export async function createSignedDocumentUrlAction(storagePath: string): Promise<string> {

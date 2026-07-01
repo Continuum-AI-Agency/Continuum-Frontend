@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "bun:test";
-import { findReusableBrandId } from "./reusableBrand";
+import { describe, expect, it } from "bun:test";
+import { findMatchingActiveBrandId, findReusableBrandId } from "./reusableBrand";
 
 function makeSupabase(opts: {
   perms?: Array<{ brand_profile_id: string }>;
   permErr?: unknown;
-  brands?: Array<{ id: string }>;
+  brands?: Array<{ id: string; brand_name?: string | null; context?: unknown }>;
   brandErr?: unknown;
 }) {
   return {
@@ -13,19 +13,24 @@ function makeSupabase(opts: {
         if (table === "permissions") {
           return {
             select: () => ({
-              eq: () => ({
-                eq: async () => ({ data: opts.perms ?? [], error: opts.permErr ?? null }),
-              }),
+              eq: async () => ({ data: opts.perms ?? [], error: opts.permErr ?? null }),
             }),
           };
         }
-        // brand_profiles
+        // brand_profiles — `.eq(...)` must satisfy two shapes: awaited
+        // directly (findMatchingActiveBrandId) AND chained with `.order(...)`
+        // (findReusableBrandId), so the eq() result is both thenable and
+        // exposes `.order()`.
+        const result = { data: opts.brands ?? [], error: opts.brandErr ?? null };
+        const eqResult = {
+          then: (onFulfilled: (value: typeof result) => unknown) =>
+            Promise.resolve(result).then(onFulfilled),
+          order: async () => result,
+        };
         return {
           select: () => ({
             in: () => ({
-              eq: () => ({
-                order: async () => ({ data: opts.brands ?? [], error: opts.brandErr ?? null }),
-              }),
+              eq: () => eqResult,
             }),
           }),
         };
@@ -35,7 +40,7 @@ function makeSupabase(opts: {
 }
 
 describe("findReusableBrandId", () => {
-  it("returns the oldest active owned brand", async () => {
+  it("returns the oldest active brand the user has ANY permission row on", async () => {
     const result = await findReusableBrandId(
       makeSupabase({
         perms: [{ brand_profile_id: "old" }, { brand_profile_id: "new" }],
@@ -46,11 +51,29 @@ describe("findReusableBrandId", () => {
     expect(result).toBe("old");
   });
 
-  it("returns null when the user owns no brands", async () => {
+  // Regression (ticket #162): an invited operator has a permissions row with
+  // role "operator" (never "owner"). Their own onboarding metadata is empty
+  // (first login after accepting an invite). Before this fix,
+  // findReusableBrandId only looked at role === "owner" and returned null,
+  // so the caller minted a brand new duplicate brand instead of routing the
+  // operator to the brand they already have access to.
+  it("resolves an invited operator (non-owner role) to their EXISTING brand_id, not a newly minted one", async () => {
+    const result = await findReusableBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: "existing-brand" }],
+        brands: [{ id: "existing-brand" }],
+      }),
+      "invited-operator-1"
+    );
+    expect(result).toBe("existing-brand");
+    expect(result).not.toBeNull();
+  });
+
+  it("returns null when the user has no permission rows", async () => {
     expect(await findReusableBrandId(makeSupabase({ perms: [] }), "u1")).toBeNull();
   });
 
-  it("returns null when the user owns brands but none are active", async () => {
+  it("returns null when the user has permission rows but none are active", async () => {
     const result = await findReusableBrandId(
       makeSupabase({ perms: [{ brand_profile_id: "dead" }], brands: [] }),
       "u1"
@@ -68,6 +91,70 @@ describe("findReusableBrandId", () => {
     const result = await findReusableBrandId(
       makeSupabase({ perms: [{ brand_profile_id: "x" }], brandErr: { code: "XX" } }),
       "u1"
+    );
+    expect(result).toBeNull();
+  });
+});
+
+describe("findMatchingActiveBrandId", () => {
+  it("matches on normalized brand_name", async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: "existing-brand" }],
+        brands: [{ id: "existing-brand", brand_name: "  Acme Co  ", context: {} }],
+      }),
+      "u1",
+      { brandName: "acme co" }
+    );
+    expect(result).toBe("existing-brand");
+  });
+
+  it("matches on normalized context.website_url", async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: "existing-brand" }],
+        brands: [
+          {
+            id: "existing-brand",
+            brand_name: "Something Else",
+            context: { website_url: "https://www.Example.com/" },
+          },
+        ],
+      }),
+      "u1",
+      { brandName: "totally different name", websiteUrl: "example.com" }
+    );
+    expect(result).toBe("existing-brand");
+  });
+
+  it("returns null when neither name nor website match", async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({
+        perms: [{ brand_profile_id: "existing-brand" }],
+        brands: [
+          { id: "existing-brand", brand_name: "Acme Co", context: { website_url: "acme.com" } },
+        ],
+      }),
+      "u1",
+      { brandName: "Untitled Brand", websiteUrl: "example.com" }
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the user has no accessible brands", async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({ perms: [] }),
+      "u1",
+      { brandName: "Acme Co" }
+    );
+    expect(result).toBeNull();
+  });
+
+  it("fails safe (null) when the brand lookup errors", async () => {
+    const result = await findMatchingActiveBrandId(
+      makeSupabase({ perms: [{ brand_profile_id: "x" }], brandErr: { code: "XX" } }),
+      "u1",
+      { brandName: "Acme Co" }
     );
     expect(result).toBeNull();
   });

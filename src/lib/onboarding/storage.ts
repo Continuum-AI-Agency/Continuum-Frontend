@@ -21,7 +21,7 @@ import {
   normalizeOnboardingState,
   parseOnboardingMetadata,
 } from "./state";
-import { findReusableBrandId } from "./reusableBrand";
+import { findMatchingActiveBrandId, findReusableBrandId } from "./reusableBrand";
 import { canPersistBrandRecord } from "./brandRecordGuard";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 import type { Database, Json } from "@/lib/supabase/types";
@@ -76,12 +76,22 @@ function resolveBrandProfileName(state?: OnboardingState): string {
   return "Untitled Brand";
 }
 
+/**
+ * Ensures a `brand_profiles.brand_profiles` row exists for `brandId` and
+ * syncs global fields the caller's onboarding state owns. Returns the brand
+ * id the caller should actually use: normally the same `brandId` it was
+ * given, but if the row doesn't exist yet AND an active brand the user
+ * already has access to matches this candidate by name or website (ticket
+ * #162 defense-in-depth), it short-circuits to that EXISTING brand id instead
+ * of inserting a duplicate. Callers must adopt the returned id (it may not
+ * equal the id passed in) rather than assuming they are the same.
+ */
 async function ensureBrandProfileRecord(
   supabase: SupabaseOnboardingClient,
   brandId: string,
   owner: BrandMember,
   state?: OnboardingState
-): Promise<void> {
+): Promise<string> {
   const { data: rawData, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
@@ -107,7 +117,7 @@ async function ensureBrandProfileRecord(
   // letting them write it overwrote the canonical brand_name for everyone (the
   // shell, the switcher). Invited members are read-only on the brand row.
   if (!canPersistBrandRecord(data, owner.id)) {
-    return;
+    return brandId;
   }
 
   const brandName = resolveBrandProfileName(state);
@@ -119,6 +129,14 @@ async function ensureBrandProfileRecord(
   const emailReportOptIn = state?.emailReportOptIn ?? true;
 
   if (!data) {
+    const duplicateBrandId = await findMatchingActiveBrandId(supabase, owner.id, {
+      brandName,
+      websiteUrl: state?.brand?.website ?? null,
+    });
+    if (duplicateBrandId && duplicateBrandId !== brandId) {
+      return duplicateBrandId;
+    }
+
     const { error: insertError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
@@ -138,7 +156,7 @@ async function ensureBrandProfileRecord(
       // trip a self-referential RLS check (Postgres 54001) and 500 routine writes
       // such as a logo update. Treat the row as present and stop.
       if (insertError.code === "23505") {
-        return;
+        return brandId;
       }
       throw insertError;
     }
@@ -154,7 +172,7 @@ async function ensureBrandProfileRecord(
         role: "owner",
       }, { onConflict: "brand_profile_id,user_id" } as any);
 
-    return;
+    return brandId;
   }
 
   if (
@@ -184,6 +202,7 @@ async function ensureBrandProfileRecord(
     }
   }
 
+  return brandId;
 }
 
 const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument["source"]>([
@@ -625,7 +644,7 @@ async function loadOnboardingContext(
     await persistMetadata(supabase, user, metadata);
   }
 
-  const { metadata: normalizedMetadata, brandId, dirty } = ensureActiveBrand(
+  let { metadata: normalizedMetadata, brandId, dirty } = ensureActiveBrand(
     metadata,
     owner,
     requestedBrandId
@@ -641,18 +660,33 @@ async function loadOnboardingContext(
     await persistMetadata(supabase, user, normalizedMetadata);
   }
 
-await ensureBrandProfileRecord(
-supabase,
-brandId,
-owner,
-normalizedMetadata.brands[brandId]
+  const resolvedBrandId = await ensureBrandProfileRecord(
+    supabase,
+    brandId,
+    owner,
+    normalizedMetadata.brands[brandId]
   );
 
-  // If ensureBrandProfileRecord updated the state (e.g. synced completedAt), persist it.
-  // We check if it's different from what we loaded.
-  const finalState = normalizedMetadata.brands[brandId];
-  if (JSON.stringify(finalState) !== JSON.stringify(metadata.brands[brandId])) {
+  if (resolvedBrandId !== brandId) {
+    // ensureBrandProfileRecord found an existing brand matching this
+    // candidate by name/website (ticket #162 duplicate guard) instead of
+    // inserting a new row — move this user's onboarding state onto the
+    // EXISTING brand id rather than tracking the one we were about to mint.
+    const pendingState = normalizedMetadata.brands[brandId];
+    delete normalizedMetadata.brands[brandId];
+    if (!normalizedMetadata.brands[resolvedBrandId]) {
+      normalizedMetadata.brands[resolvedBrandId] = pendingState;
+    }
+    normalizedMetadata.activeBrandId = resolvedBrandId;
+    brandId = resolvedBrandId;
     await persistMetadata(supabase, user, normalizedMetadata);
+  } else {
+    // If ensureBrandProfileRecord updated the state (e.g. synced completedAt), persist it.
+    // We check if it's different from what we loaded.
+    const finalState = normalizedMetadata.brands[brandId];
+    if (JSON.stringify(finalState) !== JSON.stringify(metadata.brands[brandId])) {
+      await persistMetadata(supabase, user, normalizedMetadata);
+    }
   }
 
   return {
@@ -848,9 +882,22 @@ export async function createBrandProfile(
   metadata.brands[brandId] = state;
   metadata.activeBrandId = brandId;
   await persistMetadata(supabase, user, metadata);
-  await ensureBrandProfileRecord(supabase, brandId, owner, state);
-  await upsertUserBrandPreference(supabase, user.id, brandId);
-  return { brandId, state };
+
+  const resolvedBrandId = await ensureBrandProfileRecord(supabase, brandId, owner, state);
+  if (resolvedBrandId !== brandId) {
+    // An existing active brand already matches this candidate by name/website
+    // (ticket #162 duplicate guard) — reuse it instead of tracking the
+    // brand-new id we minted, which never got a physical row.
+    delete metadata.brands[brandId];
+    if (!metadata.brands[resolvedBrandId]) {
+      metadata.brands[resolvedBrandId] = state;
+    }
+    metadata.activeBrandId = resolvedBrandId;
+    await persistMetadata(supabase, user, metadata);
+  }
+
+  await upsertUserBrandPreference(supabase, user.id, resolvedBrandId);
+  return { brandId: resolvedBrandId, state: metadata.brands[resolvedBrandId] };
 }
 
 export async function deleteBrandFromMetadata(

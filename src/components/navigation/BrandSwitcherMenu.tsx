@@ -27,6 +27,7 @@ import { useTheme } from "@/components/theme-provider";
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { useSwitchBrand } from "@/hooks/useSwitchBrand";
+import { useInfiniteUserBrands } from "@/hooks/useInfiniteUserBrands";
 import { BrandAvatar } from "@/components/brand/BrandAvatar";
 import {
   getActiveBrandLabel,
@@ -53,6 +54,19 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
   const [searchQuery, setSearchQuery] = React.useState("");
+
+  // Ticket #162: active-integration badge data. brandSummaries is the
+  // server-provided list (no integration status); this bulk-fetches it
+  // client-side via the same hook the settings brand list uses, so the
+  // status map is available here without a second bespoke query.
+  const { brands: brandsWithIntegrationStatus } = useInfiniteUserBrands({
+    userId: user?.id,
+    userEmail: user?.email,
+  });
+  const hasActiveIntegrationByBrandId = React.useMemo(
+    () => new Map(brandsWithIntegrationStatus.map((brand) => [brand.id, brand.hasActiveIntegration ?? false])),
+    [brandsWithIntegrationStatus]
+  );
 
   const isAdmin = isAdminUser(user);
 
@@ -135,6 +149,10 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
               const isActiveRow = brand.id === activeBrandId;
               const isRowSwitching = switchingToBrandId === brand.id;
               const label = getBrandMenuItemLabel(brand);
+              // undefined = status not loaded yet; only warn once we KNOW
+              // there is no active integration (avoids a flash of false
+              // positives before the bulk status fetch resolves).
+              const hasActiveIntegration = hasActiveIntegrationByBrandId.get(brand.id);
               return (
                 <DropdownMenu.Item
                   key={brand.id}
@@ -162,6 +180,11 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                     <BadgeIndicator />
                   ) : !brand.completed ? (
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Onboarding incomplete" />
+                  ) : hasActiveIntegration === false ? (
+                    <AlertTriangle
+                      className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                      aria-label="No active integration connected"
+                    />
                   ) : null}
                 </DropdownMenu.Item>
               );

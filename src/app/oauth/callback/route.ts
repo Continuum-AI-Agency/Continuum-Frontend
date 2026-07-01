@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveRequestOrigin } from "@/lib/server/origin";
+import { OAUTH_BROADCAST_CHANNEL_NAME } from "@/lib/popup";
 
 type PopupPayload =
   | {
@@ -36,17 +37,36 @@ function renderPopupResult(
     <script>
       (function () {
         const isPopup = ${!!isPopup};
-        try {
-          const payload = ${safePayload};
-          if (isPopup && window.opener) {
-            window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
-            try { window.close(); } catch (_) {}
-            return;
+        const payload = ${safePayload};
+        if (isPopup) {
+          // accounts.google.com sends its own Cross-Origin-Opener-Policy:
+          // same-origin header, which permanently severs window.opener on
+          // this popup for Google flows. window.opener.postMessage below
+          // then silently no-ops, so the BroadcastChannel post (same-origin
+          // delivery, no window reference required) is the signal the
+          // opener can still rely on. Broadcast first, then still attempt
+          // postMessage for providers that don't sever the opener.
+          try {
+            if (typeof BroadcastChannel !== "undefined") {
+              const channel = new BroadcastChannel(${JSON.stringify(OAUTH_BROADCAST_CHANNEL_NAME)});
+              channel.postMessage(payload);
+              channel.close();
+            }
+          } catch (error) {
+            console.error("Failed to broadcast oauth completion", error);
           }
-        } catch (error) {
-          console.error("Failed to notify opener", error);
+          if (window.opener) {
+            try {
+              window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
+              window.close();
+              return;
+            } catch (error) {
+              console.error("Failed to notify opener", error);
+            }
+          }
         }
-        // Fallback when opened in the main window
+        // Fallback when opened in the main window, or when the opener
+        // postMessage above failed/was unavailable.
         window.location.replace(${JSON.stringify(fallbackRedirect)});
       })();
     </script>
