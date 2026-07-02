@@ -11,7 +11,7 @@ export function bandFor(score: number): ScoreBand {
   return "weak";
 }
 
-const BAND_STYLES: Record<ScoreBand, { className: string; pip: string }> = {
+export const BAND_STYLES: Record<ScoreBand, { className: string; pip: string }> = {
   strong: {
     className:
       "border-[color-mix(in_srgb,#0daea2_28%,transparent)] bg-[color-mix(in_srgb,#0daea2_8%,transparent)] text-[#0a8a80]",

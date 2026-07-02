@@ -157,10 +157,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
                 {brand.name || "your brand"}
               </>
             ) : (
-              <>
-                {brand.name || "Your brand"}
-                <span className="text-muted-foreground">, decoded</span>
-              </>
+              brand.name || "Your brand"
             )}
           </h2>
           <RunProgressBanner buckets={agentBuckets} running={readinessLoading ?? false} onRetry={onRetry} />
@@ -284,7 +281,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           )}
           <UnderstandingCard buckets={agentBuckets} />
           {isTerminallyEmpty(agentBuckets, "readiness", readiness) ? null : (
-            <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
+            <ReadinessCard buckets={agentBuckets} readiness={readiness} />
           )}
         </HorizontalRow>
       </motion.div>
