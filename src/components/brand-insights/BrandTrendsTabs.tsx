@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandTrendsGrid } from "./BrandTrendsGrid";
 import { BrandEventsList } from "./BrandEventsList";
 import { BrandQuestionsList } from "./BrandQuestionsList";
-import { CompetitorSearchPanel } from "../competitors/CompetitorSearchPanel";
 import type { BrandInsightsTrend, BrandInsightsEvent, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 
 type Props = {
@@ -18,7 +17,7 @@ type Props = {
   generatedAt?: string;
 };
 
-export function BrandTrendsTabs({ trends, events = [], questionsByNiche, brandId, generatedAt }: Props) {
+export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generatedAt }: Props) {
   const questionsCount = useMemo(() => {
     if (!questionsByNiche?.questionsByNiche) return 0;
     return Object.values(questionsByNiche.questionsByNiche).reduce((total, niche) => {
@@ -47,7 +46,7 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, brandId
 
   return (
     <Tabs defaultValue="trends" className="flex flex-col gap-1">
-      <TabsList className="grid h-7 w-full grid-cols-2 gap-0.5 p-0.5 sm:w-fit sm:grid-cols-4">
+      <TabsList className="grid h-7 w-full grid-cols-3 gap-0.5 p-0.5 sm:w-fit sm:grid-cols-3">
         <TabsTrigger value="trends" className="h-6 px-2 text-xs">
           Trends <Badge variant="secondary">{trends.length}</Badge>
         </TabsTrigger>
@@ -56,9 +55,6 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, brandId
         </TabsTrigger>
         <TabsTrigger value="questions" className="h-6 px-2 text-xs">
           Questions <Badge variant="secondary">{questionsCount}</Badge>
-        </TabsTrigger>
-        <TabsTrigger value="competitors" className="h-6 px-2 text-xs">
-          Competitors
         </TabsTrigger>
       </TabsList>
 
@@ -72,10 +68,6 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, brandId
 
       <TabsContent value="questions" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto">
         <BrandQuestionsList questionsByNiche={questionsByNiche?.questionsByNiche ?? {}} density="compact" scrollWithinSection />
-      </TabsContent>
-
-      <TabsContent value="competitors" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto pr-1">
-        <CompetitorSearchPanel brandId={brandId} />
       </TabsContent>
     </Tabs>
   );

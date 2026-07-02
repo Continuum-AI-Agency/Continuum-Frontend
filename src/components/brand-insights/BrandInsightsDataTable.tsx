@@ -4,10 +4,13 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+
+const SECONDARY_COLUMN_WIDTH = "w-32";
 
 export type BrandInsightsTableRow = {
   id: string;
@@ -76,13 +79,13 @@ function RowSkeleton({ density = "default" }: Pick<BrandInsightsDataTableProps, 
   const compact = density === "compact";
   return (
     <TableRow>
-      <TableCell className={cn(compact ? "py-2" : "py-3")}>
+      <TableCell className={cn("px-3", compact ? "py-2" : "py-3")}>
         <div className="space-y-1">
           <Skeleton className={cn(compact ? "h-3.5 w-3/5" : "h-4 w-2/3")} />
           <Skeleton className={cn(compact ? "h-3 w-4/5" : "h-3.5 w-5/6")} />
         </div>
       </TableCell>
-      <TableCell className={cn(compact ? "py-2" : "py-3")}>
+      <TableCell className={cn("px-3", SECONDARY_COLUMN_WIDTH, compact ? "py-2" : "py-3")}>
         <div className="flex flex-wrap items-center gap-2">
           <Skeleton className="h-5 w-16 rounded-full" />
           <Skeleton className="h-5 w-14 rounded-full" />
@@ -181,11 +184,11 @@ export function BrandInsightsDataTable({
       <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
         <div className={cn("min-h-0 flex-1 overflow-y-auto", scrollWithinSection && "max-h-[70vh]")}>
           {isLoading ? (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>Content</TableHead>
-                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>{secondaryHeaderLabel}</TableHead>
+                  <TableHead className={cn("px-3 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>Content</TableHead>
+                  <TableHead className={cn("px-3 text-xs font-semibold tracking-wide", SECONDARY_COLUMN_WIDTH, compact ? "py-1.5" : "py-2")}>{secondaryHeaderLabel}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -200,10 +203,10 @@ export function BrandInsightsDataTable({
               <p className="text-muted-foreground max-w-lg text-sm">{emptyDescription}</p>
             </div>
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow>
-                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>
+                  <TableHead className={cn("px-3 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>
                     <button
                       type="button"
                       className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
@@ -217,7 +220,7 @@ export function BrandInsightsDataTable({
                       )}
                     </button>
                   </TableHead>
-                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>
+                  <TableHead className={cn("px-3 text-xs font-semibold tracking-wide", SECONDARY_COLUMN_WIDTH, compact ? "py-1.5" : "py-2")}>
                     <button
                       type="button"
                       className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
@@ -243,11 +246,13 @@ export function BrandInsightsDataTable({
                         .filter(Boolean)
                     )
                   );
+                  const hoverDetails = (row.details ?? []).filter((detail) => Boolean(detail.value?.trim()));
+                  const titleClassName = cn("block line-clamp-2 font-medium", compact ? "text-xs" : "text-sm");
 
                   return (
                     <Fragment key={row.id}>
                       <TableRow data-state={isExpanded ? "selected" : undefined}>
-                        <TableCell className={cn("px-4 align-top", rowPaddingClass)}>
+                        <TableCell className={cn("px-3 align-top whitespace-normal", rowPaddingClass)}>
                           <button
                             type="button"
                             className="group flex w-full items-start justify-between gap-2 text-left"
@@ -256,7 +261,32 @@ export function BrandInsightsDataTable({
                             aria-controls={`brand-insights-row-details-${row.id}`}
                           >
                             <span className="min-w-0">
-                              <span className={cn("block truncate font-medium", compact ? "text-xs" : "text-sm")}>{row.title}</span>
+                              {hoverDetails.length > 0 ? (
+                                <HoverCard openDelay={150} closeDelay={80}>
+                                  <HoverCardTrigger asChild>
+                                    <span className={titleClassName}>{row.title}</span>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent
+                                    side="right"
+                                    align="start"
+                                    sideOffset={12}
+                                    className="flex w-72 flex-col gap-2 text-xs leading-relaxed"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <p className="text-foreground font-medium">{row.title}</p>
+                                    {hoverDetails.map((detail) => (
+                                      <div key={detail.label}>
+                                        <p className="text-2xs text-muted-foreground font-semibold tracking-wide uppercase">
+                                          {detail.label}
+                                        </p>
+                                        <p className="text-foreground mt-0.5">{detail.value}</p>
+                                      </div>
+                                    ))}
+                                  </HoverCardContent>
+                                </HoverCard>
+                              ) : (
+                                <span className={titleClassName}>{row.title}</span>
+                              )}
                               {row.subtitle ? (
                                 <span className="text-muted-foreground mt-0.5 block line-clamp-2 text-xs leading-5">
                                   {row.subtitle}
@@ -271,7 +301,7 @@ export function BrandInsightsDataTable({
                             />
                           </button>
                         </TableCell>
-                        <TableCell className={cn("px-4 align-top", rowPaddingClass)}>
+                        <TableCell className={cn("px-3 align-top whitespace-normal", SECONDARY_COLUMN_WIDTH, rowPaddingClass)}>
                           <div className="space-y-1.5">
                             <p className="text-foreground text-xs font-semibold">{row.secondaryValue ?? "—"}</p>
                             {normalizedPlatforms.length > 0 ? (
@@ -292,7 +322,7 @@ export function BrandInsightsDataTable({
                       </TableRow>
                       {isExpanded ? (
                         <TableRow id={`brand-insights-row-details-${row.id}`} className="animate-in fade-in-0 duration-150 bg-muted/20 hover:bg-muted/20">
-                          <TableCell colSpan={2} className="px-4 pb-4">
+                          <TableCell colSpan={2} className="px-3 pb-4">
                             {row.details?.some((detail) => Boolean(detail.value?.trim())) ? (
                               <dl className="grid gap-2 sm:grid-cols-2">
                                 {row.details

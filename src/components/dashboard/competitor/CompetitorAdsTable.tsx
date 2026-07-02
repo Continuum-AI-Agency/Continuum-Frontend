@@ -10,6 +10,7 @@ import { InsightActionsDropdown, InsightContextActions } from "@/components/dash
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { CompetitorSearchBar } from "@/components/competitors/CompetitorSearchBar";
 import { CompetitorSpyLink } from "./CompetitorSpyLink";
 
 function compactDays(firstSeenAt: string, lastSeenAt: string): string {
@@ -154,7 +155,9 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
   );
 
   return (
-    <InsightDataTable
+    <div className="flex flex-col gap-2">
+      <CompetitorSearchBar comingSoon placeholder="Search competitor ads…" />
+      <InsightDataTable
       title="Competitor ads"
       headerAction={<CompetitorSpyLink href="/competitor-spy?tab=paid" />}
       rows={rows}
@@ -209,6 +212,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
           ) : null}
         </div>
       )}
-    />
+      />
+    </div>
   );
 }

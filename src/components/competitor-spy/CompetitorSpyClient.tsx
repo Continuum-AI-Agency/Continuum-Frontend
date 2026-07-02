@@ -7,7 +7,9 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { useShortcut } from "@/lib/keyboard/useShortcut";
 import { useAwarenessReport, useCompetitors } from "@/lib/api/competitorSpy";
 import { AdSnapshotGrid } from "./AdSnapshotGrid";
-import { InstagramPostGrid } from "./InstagramPostGrid";
+import { CompetitorOrganicExplorer } from "@/components/competitors/CompetitorOrganicExplorer";
+import { CompetitorSearchBar } from "@/components/competitors/CompetitorSearchBar";
+import { SaveToBoardButton } from "./SaveToBoardButton";
 import { CompetitorRail } from "./CompetitorRail";
 import { CompetitorSearchPalette } from "./CompetitorSearchPalette";
 import { BoardsPanel } from "./BoardsPanel";
@@ -147,7 +149,26 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
               className={RAIL_CLASS}
             />
             <div className="min-w-0 flex-1">
-              <InstagramPostGrid brandId={brandId} competitorId={competitorId} />
+              <CompetitorOrganicExplorer
+                brandId={brandId}
+                competitorId={competitorId}
+                feedLimit={24}
+                columnsClassName="columns-2 sm:columns-3 lg:columns-4 xl:columns-5"
+                renderActions={(view) =>
+                  view.competitorId ? (
+                    <SaveToBoardButton
+                      brandId={brandId}
+                      request={{
+                        kind: "organic",
+                        competitorId: view.competitorId,
+                        competitorName: view.competitorName,
+                        instagramUsername: view.instagramUsername,
+                        post: view.post,
+                      }}
+                    />
+                  ) : null
+                }
+              />
             </div>
           </div>
         ) : null}
@@ -162,7 +183,8 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
               className={RAIL_CLASS}
             />
             <div className="min-w-0 flex-1 space-y-4">
-              <div className="flex justify-end">
+              <div className="flex items-center gap-2">
+                <CompetitorSearchBar comingSoon placeholder="Search competitor ads…" className="flex-1" />
                 <StatusSegmented value={status} onChange={setStatus} />
               </div>
               <AdSnapshotGrid brandId={brandId} competitorId={competitorId} status={status} />

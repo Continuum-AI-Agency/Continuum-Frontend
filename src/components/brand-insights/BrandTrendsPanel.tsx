@@ -38,7 +38,7 @@ function formatDate(value?: string) {
 function BrandTrendsPanelSkeleton() {
   return (
     <Card className="flex flex-col gap-0 border py-0 shadow-none">
-      <CardHeader className="gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+      <CardHeader className="gap-[var(--app-shell-gap)] border-b px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-3 w-28" />
@@ -50,7 +50,7 @@ function BrandTrendsPanelSkeleton() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-1.5 p-2">
+      <CardContent className="min-h-0 flex-1 space-y-1.5 p-1.5">
         <Skeleton className="h-8 w-full rounded-lg" />
         <div className="flex gap-2">
           <Skeleton className="h-9 flex-1 rounded-md" />
@@ -98,7 +98,7 @@ export function BrandTrendsPanel({
 
   return (
     <Card data-tour-id="brand-trends" className={cn("flex flex-col gap-0 border py-0 shadow-none", className)}>
-      <CardHeader className="gap-0 border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+      <CardHeader className="gap-0 border-b px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-2">
             <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wide uppercase">
@@ -134,7 +134,7 @@ export function BrandTrendsPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-1.5 p-2">
+      <CardContent className="flex flex-col gap-1.5 p-1.5">
         <div>
           <BrandTrendsTabs
             trends={trends}

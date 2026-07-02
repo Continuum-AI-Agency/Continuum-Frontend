@@ -1,0 +1,136 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { ExternalLink, Heart, Images, MessageCircle, Play } from "lucide-react";
+
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { cn } from "@/lib/utils";
+import type { CompetitorPostView } from "./competitorPostView";
+
+const numberFormatter = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+
+function formatCount(value: number | null | undefined): string | null {
+  return typeof value === "number" ? numberFormatter.format(value) : null;
+}
+
+function formatDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function KindGlyph({ kind }: { kind: CompetitorPostView["post"]["kind"] }) {
+  if (kind === "reel") return <Play className="h-2.5 w-2.5 fill-current" aria-hidden />;
+  if (kind === "carousel") return <Images className="h-2.5 w-2.5" aria-hidden />;
+  return null;
+}
+
+function PostThumb({ coverUrl, alt, className }: { coverUrl: string | null; alt: string; className?: string }) {
+  const [errored, setErrored] = useState(false);
+  if (!coverUrl || errored) {
+    return (
+      <div className={cn("flex aspect-square items-center justify-center bg-muted text-2xs text-muted-foreground", className)}>
+        No preview
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- remote Instagram CDN preview, not static at build time
+    <img
+      src={coverUrl}
+      alt={alt}
+      loading="lazy"
+      onError={() => setErrored(true)}
+      className={cn("w-full object-cover", className)}
+    />
+  );
+}
+
+// A compact masonry tile that expands on hover into a blown-up preview with the
+// post copy and engagement metrics. Mirrors the paid-media CreativeTile pattern.
+export function CompetitorPostHoverTile({
+  view,
+  actions,
+}: {
+  view: CompetitorPostView;
+  actions?: ReactNode;
+}) {
+  const { post } = view;
+  const likeCount = formatCount(post.likeCount);
+  const commentsCount = formatCount(post.commentsCount);
+  const postDate = formatDate(post.timestamp);
+  const altText = `${view.competitorName} ${post.kind}`;
+
+  return (
+    <HoverCard openDelay={180} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <a
+          href={post.permalink}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
+          className="group/tile relative block overflow-hidden rounded-lg border border-border/70 bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <PostThumb
+            coverUrl={post.coverUrl}
+            alt={altText}
+            className="h-auto transition-transform duration-200 motion-safe:group-hover/tile:scale-105"
+          />
+          {(post.kind !== "post" || post.mediaCount > 1) && (
+            <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
+              <KindGlyph kind={post.kind} />
+              {post.mediaCount > 1 ? post.mediaCount : post.kind === "reel" ? "Reel" : null}
+            </span>
+          )}
+        </a>
+      </HoverCardTrigger>
+
+      <HoverCardContent align="start" className="w-72 overflow-hidden p-0">
+        <PostThumb coverUrl={post.coverUrl} alt={altText} className="max-h-64" />
+        <div className="flex flex-col gap-2 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">{view.competitorName}</p>
+              <p className="truncate text-xs text-muted-foreground">@{view.instagramUsername}</p>
+            </div>
+            {postDate ? <span className="shrink-0 text-2xs text-muted-foreground">{postDate}</span> : null}
+          </div>
+
+          {post.caption ? (
+            <p className="line-clamp-4 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+              {post.caption}
+            </p>
+          ) : null}
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {likeCount ? (
+              <span className="inline-flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5 text-red-500" /> {likeCount}
+              </span>
+            ) : null}
+            {commentsCount ? (
+              <span className="inline-flex items-center gap-1">
+                <MessageCircle className="h-3.5 w-3.5 text-blue-500" /> {commentsCount}
+              </span>
+            ) : null}
+            <span className="ml-auto capitalize">{post.kind}</span>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <a
+              href={post.permalink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open on Instagram
+            </a>
+            {actions}
+          </div>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
