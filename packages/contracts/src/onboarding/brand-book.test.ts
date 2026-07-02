@@ -27,12 +27,46 @@ describe("brandBookResponseSchema", () => {
       composite: COMPOSITE,
     });
     expect(parsed.brand_id).toBe("brand-mocky");
-    expect(parsed.composite.deep).toBeNull();
+    expect(parsed.composite?.deep).toBeNull();
     expect(parsed.summary_markdown).toBeNull();
     expect(parsed.documents).toEqual([]);
     expect(parsed.brand_md).toBeNull();
     expect(parsed.brand_tokens).toBeNull();
     expect(parsed.brand_md_is_edited).toBe(false);
+  });
+
+  it("defaults the materialization envelope (assembling, not present, no composite)", () => {
+    const parsed = brandBookResponseSchema.parse({ brand_id: "brand-mocky" });
+    expect(parsed.status).toBe("assembling");
+    expect(parsed.present).toBe(false);
+    expect(parsed.refreshed_at).toBeNull();
+    expect(parsed.stale).toBe(false);
+    expect(parsed.assembled).toBeNull();
+    // composite is nullable now: a book can exist with no brand report.
+    expect(parsed.composite).toBeNull();
+  });
+
+  it("parses a materialized assembled composite of the three sources", () => {
+    const parsed = brandBookResponseSchema.parse({
+      brand_id: "brand-mocky",
+      status: "ready",
+      present: true,
+      refreshed_at: "2026-07-01T12:00:00Z",
+      assembled: {
+        onboarding: { present: true, completed: true, completed_at: "2026-06-30T00:00:00Z", summary: { industry: "SaaS" } },
+        guidelines: [{ purpose: "general", status: "draft", version: 1, notes: "Executive summary", colors: { primary: "#111" } }],
+        documents: [{ id: "d1", name: "Personas.pdf", category: "audience_persona", status: "ready", created_at: "2026-06-22T00:00:00Z", excerpt: "Head of RevOps..." }],
+        report: { composite: COMPOSITE, brand_md: "# Book", brand_md_is_edited: false },
+      },
+    });
+    expect(parsed.status).toBe("ready");
+    expect(parsed.present).toBe(true);
+    expect(parsed.assembled?.onboarding?.completed).toBe(true);
+    expect(parsed.assembled?.guidelines[0]?.notes).toBe("Executive summary");
+    // structured guideline sections pass through untyped
+    expect((parsed.assembled?.guidelines[0] as Record<string, unknown>).colors).toEqual({ primary: "#111" });
+    expect(parsed.assembled?.documents[0]?.excerpt).toContain("RevOps");
+    expect(parsed.assembled?.report?.composite?.deep).toBeNull();
   });
 
   it("carries the effective brand.md, its parsed tokens, and the edited flag", () => {

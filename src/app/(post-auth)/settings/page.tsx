@@ -123,11 +123,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   } else if (initialSection === 'brand-book') {
     const brandBook = await fetchBrandBook(activeBrandId);
 
-    // No composite yet → let the empty state kick off a first-time report run.
-    // Build the same payload onboarding sends from stored onboarding state, but
-    // prefer the canonical brand record name over the mapper's derived fallback.
+    // Not ready yet (absent, assembling, or errored) → let the empty state kick
+    // off a first-time report run. Build the same payload onboarding sends from
+    // stored onboarding state, but prefer the canonical brand record name over
+    // the mapper's derived fallback.
     let generationPayload: AgentRequestPayload | null = null;
-    if (!brandBook && user?.id) {
+    if ((!brandBook || !brandBook.present) && user?.id) {
       const onboardingState = await fetchOnboardingState(activeBrandId);
       const mapped = mapOnboardingStateToAgentPayload(activeBrandId, user.id, onboardingState);
       const brandName =

@@ -2,9 +2,12 @@ import { brandBookResponseSchema, type BrandBookResponse } from "@continuum/cont
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Durable Brand Book read. Calls the DB-adjacent `get-brand-book` edge function
-// (which reads the composite under the caller's JWT/RLS) rather than the Fastify
-// backend — lower-latency for a pure read, no GCP-VM round-trip. Returns null on
-// any failure so the Settings viewer can render an empty state.
+// (which reads the materialized brand_book row under the caller's JWT/RLS) rather
+// than the Fastify backend — lower-latency for a pure read, no GCP-VM round-trip.
+// The edge function NEVER 404s: an absent/assembling book returns 200 with
+// `present:false`, so this resolves to a valid envelope the viewer can switch on.
+// Returns null only on a genuine transport error or a schema mismatch — the
+// benign "not built yet" case is no longer an error.
 export async function fetchBrandBook(brandId: string): Promise<BrandBookResponse | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.functions.invoke("get-brand-book", {
