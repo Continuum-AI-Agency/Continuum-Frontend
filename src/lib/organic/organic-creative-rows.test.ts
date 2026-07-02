@@ -45,6 +45,21 @@ describe("buildOrganicCreativeRows", () => {
     expect(rows[0]?.metricValue).toBe(9000);
   });
 
+  it("prefers thumbnailUrl over mediaUrl (mediaUrl is an unrenderable .mp4 for video posts)", () => {
+    const rows = buildOrganicCreativeRows({
+      metric: "reach",
+      posts: [
+        post({
+          id: "reel",
+          reach: 500,
+          mediaUrl: "https://cdn.example.com/reel.mp4",
+          thumbnailUrl: "https://cdn.example.com/reel-thumb.jpg",
+        }),
+      ],
+    });
+    expect(rows[0]?.thumbnailUrl).toBe("https://cdn.example.com/reel-thumb.jpg");
+  });
+
   it("does not coerce missing reach into a ranked zero", () => {
     const rows = buildOrganicCreativeRows({
       metric: "reach",

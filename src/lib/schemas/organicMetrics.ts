@@ -202,6 +202,10 @@ export const organicPostSchema = z.object({
   breakdown24h: z.array(organicPostBreakdownPointSchema).optional(),
   breakdown7d: z.array(organicPostBreakdownPointSchema).optional(),
   breakdown30d: z.array(organicPostBreakdownPointSchema).optional(),
+  // Period-over-period: current 7d vs prior 7d, per metric. Reach is never a
+  // key here — it's a unique-viewer count and can't be validly summed across
+  // days, so it stays lifetime-only with no comparison badge.
+  comparison: z.record(z.string(), metricComparisonSchema).nullable().optional(),
 });
 
 export type OrganicPost = z.infer<typeof organicPostSchema>;

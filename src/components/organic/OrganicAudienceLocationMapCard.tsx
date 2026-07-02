@@ -1,10 +1,17 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Badge, Box, Card, Flex, Heading, Text } from "@radix-ui/themes";
-
-import { Map, MapControls, MapMarker, MarkerContent, MarkerTooltip, type MapRef } from "@/components/ui/map";
-import { cn } from "@/lib/utils";
+import { Box, Card, Flex, Heading, Text } from '@radix-ui/themes';
+import React from 'react';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import {
+  Map,
+  MapControls,
+  MapMarker,
+  type MapRef,
+  MarkerContent,
+  MarkerTooltip,
+} from '@/components/ui/map';
+import { cn } from '@/lib/utils';
 
 type DemographicEntry = {
   key: string;
@@ -101,9 +108,9 @@ const CITY_COORDS: Record<string, [number, number]> = {
   bogota: [-74.07, 4.71],
   boston: [-71.06, 42.36],
   brussels: [4.35, 50.85],
-  "buenos aires": [-58.38, -34.6],
+  'buenos aires': [-58.38, -34.6],
   cairo: [31.24, 30.04],
-  "cape town": [18.42, -33.92],
+  'cape town': [18.42, -33.92],
   chicago: [-87.63, 41.88],
   dallas: [-96.8, 32.78],
   delhi: [77.1, 28.7],
@@ -111,7 +118,7 @@ const CITY_COORDS: Record<string, [number, number]> = {
   dubai: [55.27, 25.2],
   dublin: [-6.26, 53.35],
   frankfurt: [8.68, 50.11],
-  "hong kong": [114.17, 22.32],
+  'hong kong': [114.17, 22.32],
   houston: [-95.37, 29.76],
   istanbul: [28.98, 41.01],
   jakarta: [106.85, -6.21],
@@ -120,27 +127,27 @@ const CITY_COORDS: Record<string, [number, number]> = {
   lima: [-77.04, -12.05],
   lisbon: [-9.14, 38.72],
   london: [-0.13, 51.51],
-  "los angeles": [-118.24, 34.05],
+  'los angeles': [-118.24, 34.05],
   madrid: [-3.7, 40.42],
   manila: [120.98, 14.6],
   melbourne: [144.96, -37.81],
-  "mexico city": [-99.13, 19.43],
+  'mexico city': [-99.13, 19.43],
   miami: [-80.19, 25.76],
   milan: [9.19, 45.46],
   montreal: [-73.57, 45.5],
   mumbai: [72.88, 19.08],
   munich: [11.58, 48.14],
   nairobi: [36.82, -1.29],
-  "new york": [-74.01, 40.71],
+  'new york': [-74.01, 40.71],
   paris: [2.35, 48.86],
   philadelphia: [-75.17, 39.95],
   phoenix: [-112.07, 33.45],
   prague: [14.44, 50.08],
-  "rio de janeiro": [-43.17, -22.91],
+  'rio de janeiro': [-43.17, -22.91],
   rome: [12.5, 41.9],
-  "san francisco": [-122.42, 37.77],
+  'san francisco': [-122.42, 37.77],
   santiago: [-70.67, -33.45],
-  "sao paulo": [-46.63, -23.55],
+  'sao paulo': [-46.63, -23.55],
   seattle: [-122.33, 47.61],
   seoul: [126.98, 37.57],
   shanghai: [121.47, 31.23],
@@ -158,34 +165,34 @@ const CITY_COORDS: Record<string, [number, number]> = {
 };
 
 const TIMEFRAME_LABELS: Record<string, string> = {
-  this_week: "Last 7 days",
-  this_month: "Last 30 days",
-  prev_month: "Previous month",
-  last_14_days: "Last 14 days",
-  last_30_days: "Last 30 days",
-  last_90_days: "Last 90 days",
+  this_week: 'Last 7 days',
+  this_month: 'Last 30 days',
+  prev_month: 'Previous month',
+  last_14_days: 'Last 14 days',
+  last_30_days: 'Last 30 days',
+  last_90_days: 'Last 90 days',
 };
 
 function normalizeCityKey(value: string) {
   return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
 function timeframeLabel(value?: string) {
-  if (!value) return "Timeframe unavailable";
-  return TIMEFRAME_LABELS[value] ?? value.replace(/_/g, " ");
+  if (!value) return 'Timeframe unavailable';
+  return TIMEFRAME_LABELS[value] ?? value.replace(/_/g, ' ');
 }
 
 function resolveCountryLabel(value: string) {
   const normalized = value.trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(normalized)) return value;
   try {
-    const formatter = new Intl.DisplayNames(["en"], { type: "region" });
+    const formatter = new Intl.DisplayNames(['en'], { type: 'region' });
     return formatter.of(normalized) ?? normalized;
   } catch {
     return normalized;
@@ -193,21 +200,23 @@ function resolveCountryLabel(value: string) {
 }
 
 function pointBand(value: number, maxValue: number) {
-  if (maxValue <= 0) return "low";
+  if (maxValue <= 0) return 'low';
   const ratio = value / maxValue;
-  if (ratio >= 0.66) return "high";
-  if (ratio >= 0.33) return "medium";
-  return "low";
+  if (ratio >= 0.66) return 'high';
+  if (ratio >= 0.33) return 'medium';
+  return 'low';
 }
 
-function markerClassName(band: "high" | "medium" | "low") {
-  if (band === "high") return "border-emerald-200 bg-emerald-400/80 shadow-[0_0_0_10px_rgba(16,185,129,0.15)]";
-  if (band === "medium") return "border-teal-200 bg-teal-400/80 shadow-[0_0_0_8px_rgba(45,212,191,0.14)]";
-  return "border-cyan-200 bg-cyan-400/75 shadow-[0_0_0_6px_rgba(34,211,238,0.12)]";
+function markerClassName(band: 'high' | 'medium' | 'low') {
+  if (band === 'high')
+    return 'border-emerald-200 bg-emerald-400/80 shadow-[0_0_0_10px_rgba(16,185,129,0.15)]';
+  if (band === 'medium')
+    return 'border-teal-200 bg-teal-400/80 shadow-[0_0_0_8px_rgba(45,212,191,0.14)]';
+  return 'border-cyan-200 bg-cyan-400/75 shadow-[0_0_0_6px_rgba(34,211,238,0.12)]';
 }
 
 function resolveCityCoordinates(value: string): [number, number] | null {
-  const candidates = [value, value.split(",")[0] ?? "", value.split("-")[0] ?? ""]
+  const candidates = [value, value.split(',')[0] ?? '', value.split('-')[0] ?? '']
     .map((candidate) => normalizeCityKey(candidate))
     .filter((candidate) => candidate.length > 0);
   for (const candidate of candidates) {
@@ -221,13 +230,13 @@ function averageCenter(points: LocationPoint[]): [number, number] {
   if (points.length === 0) return [8, 24];
   const [sumLng, sumLat] = points.reduce(
     (acc, point) => [acc[0] + point.coordinates[0], acc[1] + point.coordinates[1]],
-    [0, 0]
+    [0, 0],
   );
   return [sumLng / points.length, sumLat / points.length];
 }
 
 export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, timeframe }: Props) {
-  const [mode, setMode] = React.useState<"country" | "city">("country");
+  const [mode, setMode] = React.useState<'country' | 'city'>('country');
   const [mapZoom, setMapZoom] = React.useState(1.2);
   const [selectedCountryCode, setSelectedCountryCode] = React.useState<string | null>(null);
   const mapRef = React.useRef<MapRef | null>(null);
@@ -238,20 +247,22 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
         .flatMap((entry) => {
           const code = entry.key.trim().toUpperCase();
           const coordinates =
-            typeof entry.lng === "number" && typeof entry.lat === "number"
-              ? [entry.lng, entry.lat] as [number, number]
+            typeof entry.lng === 'number' && typeof entry.lat === 'number'
+              ? ([entry.lng, entry.lat] as [number, number])
               : COUNTRY_COORDS[code];
           if (!coordinates) return [];
-          return [{
-            key: code,
-            label: resolveCountryLabel(entry.label || code),
-            value: entry.value,
-            coordinates,
-            countryCode: code,
-          }];
+          return [
+            {
+              key: code,
+              label: resolveCountryLabel(entry.label || code),
+              value: entry.value,
+              coordinates,
+              countryCode: code,
+            },
+          ];
         })
         .slice(0, 45),
-    [countryEntries]
+    [countryEntries],
   );
 
   const cityPoints = React.useMemo<LocationPoint[]>(
@@ -259,44 +270,45 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
       cityEntries
         .flatMap((entry) => {
           const coordinates =
-            typeof entry.lng === "number" && typeof entry.lat === "number"
-              ? [entry.lng, entry.lat] as [number, number]
+            typeof entry.lng === 'number' && typeof entry.lat === 'number'
+              ? ([entry.lng, entry.lat] as [number, number])
               : resolveCityCoordinates(entry.label || entry.key);
           if (!coordinates) return [];
-          return [{
-            key: entry.key,
-            label: entry.label,
-            value: entry.value,
-            coordinates,
-            countryCode: entry.countryCode,
-          }];
+          return [
+            {
+              key: entry.key,
+              label: entry.label,
+              value: entry.value,
+              coordinates,
+              countryCode: entry.countryCode,
+            },
+          ];
         })
         .slice(0, 45),
-    [cityEntries]
+    [cityEntries],
   );
 
   const cityZoomThreshold = 2.35;
-  const autoCityMode = mode === "country" && mapZoom >= cityZoomThreshold && cityPoints.length > 0;
-  const cityLayerVisible = mode === "city" || autoCityMode;
+  const autoCityMode = mode === 'country' && mapZoom >= cityZoomThreshold && cityPoints.length > 0;
+  const cityLayerVisible = mode === 'city' || autoCityMode;
   const countryLayerVisible = !cityLayerVisible;
-  const viewMode = cityLayerVisible ? "city" : "country";
+  const viewMode = cityLayerVisible ? 'city' : 'country';
   const scopedCityPoints =
     autoCityMode && selectedCountryCode
       ? cityPoints.filter((point) => point.countryCode === selectedCountryCode)
       : cityPoints;
-  const initialZoom = mode === "country" ? (countryPoints.length > 8 ? 1.15 : 1.8) : 2.6;
+  const initialZoom = mode === 'country' ? (countryPoints.length > 8 ? 1.15 : 1.8) : 2.6;
   const mapCenter = React.useMemo(
     () => averageCenter(countryLayerVisible ? countryPoints : scopedCityPoints),
-    [countryLayerVisible, countryPoints, scopedCityPoints]
+    [countryLayerVisible, countryPoints, scopedCityPoints],
   );
   const renderPoints = countryLayerVisible ? countryPoints : scopedCityPoints;
   const maxValue = renderPoints.reduce((max, point) => Math.max(max, point.value), 0);
-  const activeEntries =
-    countryLayerVisible
-      ? countryEntries
-      : (autoCityMode && selectedCountryCode
-          ? cityEntries.filter((entry) => entry.countryCode === selectedCountryCode)
-          : cityEntries);
+  const activeEntries = countryLayerVisible
+    ? countryEntries
+    : autoCityMode && selectedCountryCode
+      ? cityEntries.filter((entry) => entry.countryCode === selectedCountryCode)
+      : cityEntries;
   const topEntries = [...activeEntries].sort((a, b) => b.value - a.value).slice(0, 8);
 
   React.useEffect(() => {
@@ -304,75 +316,80 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
   }, [initialZoom]);
 
   React.useEffect(() => {
-    if (mode !== "country") return;
+    if (mode !== 'country') return;
     if (mapZoom >= cityZoomThreshold) return;
     if (!selectedCountryCode) return;
     setSelectedCountryCode(null);
   }, [cityZoomThreshold, mapZoom, mode, selectedCountryCode]);
 
-  const handleCountryPointClick = React.useCallback((point: LocationPoint) => {
-    if (mode !== "country" || cityPoints.length === 0) return;
-    setSelectedCountryCode(point.countryCode ?? point.key);
-    const targetZoom = Math.max(cityZoomThreshold + 0.5, 3.1);
-    mapRef.current?.flyTo({
-      center: point.coordinates,
-      zoom: targetZoom,
-      duration: 750,
-      essential: true,
-    });
-  }, [cityPoints.length, cityZoomThreshold, mode]);
+  const handleCountryPointClick = React.useCallback(
+    (point: LocationPoint) => {
+      if (mode !== 'country' || cityPoints.length === 0) return;
+      setSelectedCountryCode(point.countryCode ?? point.key);
+      const targetZoom = Math.max(cityZoomThreshold + 0.5, 3.1);
+      mapRef.current?.flyTo({
+        center: point.coordinates,
+        zoom: targetZoom,
+        duration: 750,
+        essential: true,
+      });
+    },
+    [cityPoints.length, cityZoomThreshold, mode],
+  );
 
   return (
     <Card variant="surface" className="border border-subtle bg-surface">
+      <SectionHeader
+        title="Audience Location"
+        meta={
+          <Text size="1" color="gray">
+            Followers by {viewMode} ({timeframeLabel(timeframe)})
+          </Text>
+        }
+        action={
+          <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
+            <button
+              type="button"
+              className={cn(
+                'h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+                mode === 'country' ? 'bg-accent/20 text-foreground' : 'text-muted-foreground',
+              )}
+              onClick={() => {
+                setMode('country');
+                setSelectedCountryCode(null);
+              }}
+              aria-label="Show country location data"
+              aria-pressed={mode === 'country'}
+            >
+              Country
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+                mode === 'city' ? 'bg-accent/20 text-foreground' : 'text-muted-foreground',
+              )}
+              onClick={() => {
+                setMode('city');
+                setSelectedCountryCode(null);
+              }}
+              aria-label="Show city location data"
+              aria-pressed={mode === 'city'}
+            >
+              City
+            </button>
+          </div>
+        }
+      />
       <Box p="3">
-        <Flex align="center" justify="between" gap="2" wrap="wrap" mb="2">
-          <Box>
-            <Heading size="3">Audience Location</Heading>
-            <Text size="1" color="gray">Followers by {viewMode} ({timeframeLabel(timeframe)})</Text>
-          </Box>
-          <Flex gap="2" align="center">
-            <Badge variant="soft" color="gray">{timeframeLabel(timeframe)}</Badge>
-            <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
-              <button
-                type="button"
-                className={cn(
-                  "min-h-10 rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
-                  mode === "country" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
-                )}
-                onClick={() => {
-                  setMode("country");
-                  setSelectedCountryCode(null);
-                }}
-                aria-label="Show country location data"
-                aria-pressed={mode === "country"}
-              >
-                Country
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "min-h-10 rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
-                  mode === "city" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
-                )}
-                onClick={() => {
-                  setMode("city");
-                  setSelectedCountryCode(null);
-                }}
-                aria-label="Show city location data"
-                aria-pressed={mode === "city"}
-              >
-                City
-              </button>
-            </div>
-          </Flex>
-        </Flex>
-
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative h-[clamp(240px,48svh,560px)] sm:h-[clamp(280px,52svh,580px)] overflow-hidden rounded-lg border border-subtle">
             {renderPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
                 <Text size="2" color="gray">
-                  {viewMode === "country" ? "Country breakdown unavailable." : "City breakdown unavailable."}
+                  {viewMode === 'country'
+                    ? 'Country breakdown unavailable.'
+                    : 'City breakdown unavailable.'}
                 </Text>
               </div>
             ) : (
@@ -392,7 +409,10 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               >
                 {renderPoints.map((point, index) => {
                   const band = pointBand(point.value, maxValue);
-                  const radius = Math.max(10, Math.min(32, 10 + (point.value / Math.max(1, maxValue)) * 22));
+                  const radius = Math.max(
+                    10,
+                    Math.min(32, 10 + (point.value / Math.max(1, maxValue)) * 22),
+                  );
                   return (
                     <MapMarker
                       key={`${viewMode}-${point.key}-${point.coordinates[0]}-${point.coordinates[1]}-${index}`}
@@ -407,9 +427,9 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                       <MarkerContent>
                         <div
                           className={cn(
-                            "rounded-full border transition-transform duration-200 hover:scale-110",
-                            countryLayerVisible && "cursor-zoom-in",
-                            markerClassName(band)
+                            'rounded-full border transition-transform duration-200 hover:scale-110',
+                            countryLayerVisible && 'cursor-zoom-in',
+                            markerClassName(band),
                           )}
                           style={{ width: radius, height: radius }}
                         />
@@ -445,7 +465,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               </Flex>
             </div>
 
-            {mode === "country" && cityPoints.length > 0 ? (
+            {mode === 'country' && cityPoints.length > 0 ? (
               <div className="pointer-events-none absolute right-3 top-3 hidden rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur sm:block">
                 <Text size="1" color="gray">
                   {autoCityMode
@@ -459,22 +479,30 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           </div>
 
           <div className="rounded-lg border border-subtle bg-white/70 p-3">
-            <Heading size="2" mb="2">Top {viewMode === "country" ? "countries" : "cities"}</Heading>
+            <Heading size="2" mb="2">
+              Top {viewMode === 'country' ? 'countries' : 'cities'}
+            </Heading>
             <div className="space-y-2 overflow-y-auto pr-1 xl:max-h-[clamp(180px,40svh,360px)]">
               {topEntries.length === 0 ? (
-                <Text size="2" color="gray">No entries available.</Text>
+                <Text size="2" color="gray">
+                  No entries available.
+                </Text>
               ) : (
                 topEntries.map((entry, index) => (
                   <Flex key={`${viewMode}-${entry.key}-${index}`} justify="between" align="center">
                     <Text size="2" color="gray" className="truncate pr-2">
-                      {viewMode === "country" ? resolveCountryLabel(entry.label || entry.key) : entry.label}
+                      {viewMode === 'country'
+                        ? resolveCountryLabel(entry.label || entry.key)
+                        : entry.label}
                     </Text>
-                    <Text size="2" weight="medium">{entry.value.toLocaleString()}</Text>
+                    <Text size="2" weight="medium">
+                      {entry.value.toLocaleString()}
+                    </Text>
                   </Flex>
                 ))
               )}
             </div>
-            {viewMode === "city" && activeEntries.length > renderPoints.length ? (
+            {viewMode === 'city' && activeEntries.length > renderPoints.length ? (
               <Text size="1" color="gray" mt="3">
                 Mapped {renderPoints.length}/{activeEntries.length} cities with known coordinates.
               </Text>

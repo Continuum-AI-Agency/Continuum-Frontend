@@ -68,6 +68,12 @@ function hasTotals(totals: PostWindowTotals) {
   return totals.views > 0 || totals.reach > 0 || totals.engagement > 0 || totals.comments > 0;
 }
 
+const ZERO_WINDOW_TOTALS: PostWindowTotals = { views: 0, reach: 0, engagement: 0, comments: 0 };
+
+// Sums the daily/hourly breakdown windows directly — never silently substitutes
+// the post's lifetime total when a window is empty/sparse. A caller asking for
+// "7d" totals must get a real 7-day figure (possibly zero), not the post's
+// all-time total mislabeled as a 7-day one.
 export function summarizePostWindowBreakdown(post: OrganicPost): PostWindowBreakdown {
   const daily30d = normalizeDailyPoints(post.breakdown30d);
   const daily7d = normalizeDailyPoints(post.breakdown7d);
@@ -85,19 +91,12 @@ export function summarizePostWindowBreakdown(post: OrganicPost): PostWindowBreak
         comments: first30d[0].comments,
       }
     : null;
-  const lifetimeTotals = totalsFromPostLifetime(post);
 
   const window24h = hasTotals(first24hFromHourly)
     ? first24hFromHourly
-    : first24hFromDaily ?? lifetimeTotals;
-  const window7d = (() => {
-    const totals = sumBreakdownPoints(first7d);
-    return hasTotals(totals) ? totals : lifetimeTotals;
-  })();
-  const window30d = (() => {
-    const totals = sumBreakdownPoints(first30d);
-    return hasTotals(totals) ? totals : lifetimeTotals;
-  })();
+    : first24hFromDaily ?? ZERO_WINDOW_TOTALS;
+  const window7d = sumBreakdownPoints(first7d);
+  const window30d = sumBreakdownPoints(first30d);
 
   return {
     window24h,
@@ -249,6 +248,9 @@ export function buildOrganicReportCsv(params: {
 
   rows.push([]);
   rows.push(["Posts Published in Last 30 Days"]);
+  // No windowed (24h/7d/30d) Reach column: Reach is a unique-viewer count, and
+  // summing daily reach deltas across a window overcounts it. Only the lifetime
+  // total is a valid Reach figure.
   rows.push([
     "Post ID",
     "Published At",
@@ -265,15 +267,12 @@ export function buildOrganicReportCsv(params: {
     "Lifetime Saved",
     "Avg Watch Time (s)",
     "Total Watch Time (s)",
-    "24h Reach",
     "24h Views",
     "24h Engagement",
     "24h Comments",
-    "7d Reach",
     "7d Views",
     "7d Engagement",
     "7d Comments",
-    "30d Reach",
     "30d Views",
     "30d Engagement",
     "30d Comments",
@@ -306,15 +305,12 @@ export function buildOrganicReportCsv(params: {
         toNumber(post.metrics?.saved),
         watchSecondsCell(post.metrics?.reelsAvgWatchTime),
         watchSecondsCell(post.metrics?.reelsVideoViewTotalTime),
-        windows.window24h.reach,
         windows.window24h.views,
         windows.window24h.engagement,
         windows.window24h.comments,
-        windows.window7d.reach,
         windows.window7d.views,
         windows.window7d.engagement,
         windows.window7d.comments,
-        windows.window30d.reach,
         windows.window30d.views,
         windows.window30d.engagement,
         windows.window30d.comments,
@@ -417,15 +413,12 @@ export function buildOrganicReportHtml(params: {
         <td>${htmlCell(fmtNumber(lifetime.comments))}</td>
         <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsAvgWatchTime) : "-")}</td>
         <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsVideoViewTotalTime) : "-")}</td>
-        <td>${htmlCell(fmtNumber(windows.window24h.reach))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.views))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.engagement))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.comments))}</td>
-        <td>${htmlCell(fmtNumber(windows.window7d.reach))}</td>
         <td>${htmlCell(fmtNumber(windows.window7d.views))}</td>
         <td>${htmlCell(fmtNumber(windows.window7d.engagement))}</td>
         <td>${htmlCell(fmtNumber(windows.window7d.comments))}</td>
-        <td>${htmlCell(fmtNumber(windows.window30d.reach))}</td>
         <td>${htmlCell(fmtNumber(windows.window30d.views))}</td>
         <td>${htmlCell(fmtNumber(windows.window30d.engagement))}</td>
         <td>${htmlCell(fmtNumber(windows.window30d.comments))}</td>
@@ -501,15 +494,12 @@ ${reelsWatchSection}
             <th>Lifetime Comments</th>
             <th>Avg Watch Time</th>
             <th>Total Watch Time</th>
-            <th>24h Reach</th>
             <th>24h Views</th>
             <th>24h Engagement</th>
             <th>24h Comments</th>
-            <th>7d Reach</th>
             <th>7d Views</th>
             <th>7d Engagement</th>
             <th>7d Comments</th>
-            <th>30d Reach</th>
             <th>30d Views</th>
             <th>30d Engagement</th>
             <th>30d Comments</th>

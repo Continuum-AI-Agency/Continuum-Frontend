@@ -33,12 +33,15 @@ export interface MetricDescriptor {
   emphasis: "primary" | "secondary";
   comparisonKey?: PostComparisonKey;
   tier?: HookRateTier;
+  // True for metrics with no valid period comparison (currently just Reach) —
+  // the tile shows a persistent "Lifetime" cue instead of a delta badge.
+  lifetimeOnly?: boolean;
 }
 
 // Tooltip copy shown on hover of each metric. No em dashes per design guidelines.
 export const POST_METRIC_DEFINITIONS: Record<MetricIconKey, string> = {
   views: "Total plays of this post.",
-  reach: "Unique accounts that saw this post.",
+  reach: "Unique accounts that saw this post, all-time. Not available as a period total since reach can't be summed across days without double-counting viewers.",
   engagement: "Interactions (likes, comments, shares, saves) relative to reach.",
   hook: "Share of viewers who watched past the first 3 seconds (100 minus skip rate).",
   watch: "Average time viewers spent watching this reel.",
@@ -84,6 +87,9 @@ function viewsDescriptor(post: OrganicPost, emphasis: MetricDescriptor["emphasis
   });
 }
 
+// Reach never carries a comparisonKey: it's a lifetime-only figure (Meta's
+// per-post reach is a unique-viewer count and can't be validly summed across
+// days), so no period-over-period badge is ever attempted for it.
 function reachDescriptor(post: OrganicPost, emphasis: MetricDescriptor["emphasis"]): MetricDescriptor {
   return descriptor({
     key: "reach",
@@ -93,7 +99,7 @@ function reachDescriptor(post: OrganicPost, emphasis: MetricDescriptor["emphasis
     iconKey: "reach",
     tooltip: POST_METRIC_DEFINITIONS.reach,
     emphasis,
-    comparisonKey: "reach",
+    lifetimeOnly: true,
   });
 }
 

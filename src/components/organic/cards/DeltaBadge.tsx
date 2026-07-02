@@ -1,7 +1,8 @@
 "use client";
 
-// Compact day-over-day change indicator: a direction arrow plus the magnitude.
-// Renders nothing when no comparison is available so cards stay clean.
+// Compact period-over-period change indicator (vs the prior window): a
+// direction arrow plus the magnitude. Renders nothing when no comparison is
+// available so cards stay clean.
 
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 
@@ -21,11 +22,16 @@ export function DeltaBadge({
 
   const direction = trendDirection(pct);
   const Icon = direction === "up" ? TrendingUp : direction === "down" ? TrendingDown : Minus;
+  // A near-zero prior window can produce a mathematically valid but visually
+  // unwieldy swing (e.g. +8800%); cap the label so the badge never forces
+  // its sibling label out of a narrow secondary row.
+  const magnitude = Math.abs(pct);
+  const label = magnitude > 999 ? ">999%" : `${magnitude.toFixed(1)}%`;
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-2xs font-medium leading-none tabular-nums",
+        "inline-flex items-center gap-0.5 whitespace-nowrap rounded px-1 py-0.5 text-2xs font-medium leading-none tabular-nums",
         direction === "up" && "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
         direction === "down" && "bg-rose-500/12 text-rose-700 dark:text-rose-300",
         direction === "flat" && "bg-slate-500/12 text-slate-600 dark:text-slate-300",
@@ -33,7 +39,7 @@ export function DeltaBadge({
       )}
     >
       <Icon className="size-3 shrink-0" aria-hidden />
-      {`${Math.abs(pct).toFixed(1)}%`}
+      {label}
     </span>
   );
 }

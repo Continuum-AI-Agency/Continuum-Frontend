@@ -3,8 +3,10 @@
 // Rich hover quick-look shown in the gallery HoverCard. Surfaces the adaptive
 // metric set for the post's media type, a 7-day per-post trend sparkline (with a
 // "building history" hint while the local snapshot walk fills in), and the
-// caption. Each tile carries a tooltip (definition + 24h delta). The full deep
-// dive still lives in the side panel that opens on click.
+// caption. Stat values are lifetime-to-date totals; each tile carries a tooltip
+// (definition + period-over-period delta vs the prior 7d, once 14 days of
+// history exist). The full deep dive still lives in the side panel that opens
+// on click.
 
 import * as React from "react";
 import { ExternalLink } from "lucide-react";
@@ -13,7 +15,7 @@ import type { OrganicPost } from "@/lib/schemas/organicMetrics";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { buildPostMetricSeries, post24hComparisons, type PostMetricKey } from "../organic-metrics-utils";
+import { buildPostMetricSeries, postPeriodComparisons, type PostMetricKey } from "../organic-metrics-utils";
 import { deltaTone, formatDateTime } from "../organic-format";
 import { getCardMetricSet, resolveCardMediaKind } from "./cardMetricSet";
 import { StatTile } from "./StatTile";
@@ -57,7 +59,7 @@ export function PostQuickLook({
 }) {
   const kind = resolveCardMediaKind(post);
   const descriptors = React.useMemo(() => getCardMetricSet(post), [post]);
-  const comparisons = React.useMemo(() => post24hComparisons(post), [post]);
+  const comparisons = React.useMemo(() => postPeriodComparisons(post), [post]);
 
   const primary = descriptors.filter((d) => d.emphasis === "primary");
   const secondary = descriptors.filter((d) => d.emphasis === "secondary");
@@ -110,6 +112,12 @@ export function PostQuickLook({
           </div>
         ) : (
           <>
+            <p className="text-2xs leading-snug text-muted-foreground">
+              All-time totals{" "}
+              {Object.keys(comparisons).length > 0
+                ? "· deltas vs prior 7d"
+                : "· deltas unlock after 14 days of history"}
+            </p>
             <div className={cn("grid gap-1.5", primary.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
               {primary.map((d) => (
                 <StatTile
@@ -120,6 +128,7 @@ export function PostQuickLook({
                   iconKey={d.iconKey}
                   tier={d.tier}
                   comparison={d.comparisonKey ? comparisons[d.comparisonKey] : undefined}
+                  lifetimeOnly={d.lifetimeOnly}
                   tooltip={d.tooltip}
                   emphasis="primary"
                 />
@@ -127,7 +136,7 @@ export function PostQuickLook({
             </div>
 
             {secondary.length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-subtle pt-2">
+              <div className="grid grid-cols-2 gap-x-1.5 gap-y-0.5 border-t border-subtle pt-2">
                 {secondary.map((d) => (
                   <StatTile
                     key={d.key}
@@ -136,6 +145,7 @@ export function PostQuickLook({
                     format={d.format}
                     iconKey={d.iconKey}
                     comparison={d.comparisonKey ? comparisons[d.comparisonKey] : undefined}
+                    lifetimeOnly={d.lifetimeOnly}
                     tooltip={d.tooltip}
                     emphasis="secondary"
                   />
@@ -182,7 +192,7 @@ export function PostQuickLook({
             </div>
           ) : (
             <p className="text-xs leading-snug text-muted-foreground">
-              Per-post trend builds over time. Re-open this post tomorrow for a day-over-day delta.
+              Per-post trend builds over time. Check back tomorrow once a second day is tracked.
             </p>
           )}
         </div>

@@ -6,7 +6,7 @@ import {
   filterPostsByYoutubeType,
   formatWatchTime,
   isYouTubeShort,
-  post24hComparisons,
+  postPeriodComparisons,
   summarizeYoutubeTypeMetrics,
 } from "./organic-metrics-utils";
 
@@ -46,30 +46,35 @@ describe("formatWatchTime", () => {
   });
 });
 
-describe("post24hComparisons day-over-day deltas", () => {
-  const post: OrganicPost = {
-    id: "p1",
-    breakdown7d: [
-      { date: "2020-01-01", reach: 100, views: 200, engagement: 10, comments: 2, likes: 8, shares: 1, saved: 3 },
-      { date: "2020-01-02", reach: 150, views: 260, engagement: 16, comments: 3, likes: 12, shares: 2, saved: 5 },
-    ],
-  } as OrganicPost;
+describe("postPeriodComparisons", () => {
+  // The FE no longer derives comparisons itself — it's a pass-through read of
+  // the backend-computed period-over-period field (periodComparisonFromBreakdown
+  // in fetch-organic-analytics/lib/post-snapshots.ts). Reach is never a key
+  // here: it's a unique-viewer count and can't be validly summed across days.
+  it("reads the backend-computed comparison map straight off the post", () => {
+    const post = {
+      id: "p1",
+      comparison: {
+        views: { current: 260, previous: 200, percentageChange: 30 },
+        likes: { current: 12, previous: 8, percentageChange: 50 },
+      },
+    } as unknown as OrganicPost;
 
-  it("computes comparisons for the charted metrics", () => {
-    const deltas = post24hComparisons(post);
-    expect(deltas.reach).toEqual({ current: 150, previous: 100, percentageChange: 50 });
-    expect(deltas.views?.current).toBe(260);
-  });
-
-  it("also computes likes / shares / saved deltas from the snapshot points", () => {
-    const deltas = post24hComparisons(post);
+    const deltas = postPeriodComparisons(post);
+    expect(deltas.views).toEqual({ current: 260, previous: 200, percentageChange: 30 });
     expect(deltas.likes).toEqual({ current: 12, previous: 8, percentageChange: 50 });
-    expect(deltas.shares).toEqual({ current: 2, previous: 1, percentageChange: 100 });
-    expect(deltas.saved).toEqual({ current: 5, previous: 3, percentageChange: 66.7 });
   });
 
-  it("returns nothing without at least two snapshots", () => {
-    expect(post24hComparisons({ id: "x", breakdown7d: [{ date: "2020-01-01", views: 1 }] } as OrganicPost)).toEqual({});
+  it("returns {} when the post has no comparison yet (insufficient history)", () => {
+    expect(postPeriodComparisons({ id: "x" } as OrganicPost)).toEqual({});
+  });
+
+  it("returns {} when comparison is explicitly null", () => {
+    expect(postPeriodComparisons({ id: "x", comparison: null } as unknown as OrganicPost)).toEqual({});
+  });
+
+  it("returns {} for a null post", () => {
+    expect(postPeriodComparisons(null)).toEqual({});
   });
 });
 

@@ -30,12 +30,15 @@ export function extractAwarenessHookRates(
   return byId;
 }
 
+// thumbnailUrl is always a static poster image; mediaUrl is the raw asset,
+// which for video/Reels posts is an .mp4 file an <img> can't render. Prefer
+// the thumbnail so video posts don't fall back to the letter-avatar tile.
 function resolveThumbnail(post: OrganicPost): string | undefined {
   return (
-    post.mediaUrl ??
     post.thumbnailUrl ??
-    post.carouselMedia?.[0]?.mediaUrl ??
+    post.mediaUrl ??
     post.carouselMedia?.[0]?.thumbnailUrl ??
+    post.carouselMedia?.[0]?.mediaUrl ??
     undefined
   );
 }

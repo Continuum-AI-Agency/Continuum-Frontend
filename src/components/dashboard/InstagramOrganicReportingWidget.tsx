@@ -19,14 +19,17 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Flag } from "lucide-react";
 import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
-import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicTrendPoint } from "@/lib/schemas/organicMetrics";
+import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicTrendPoint, OrganicPost } from "@/lib/schemas/organicMetrics";
 import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
 import type { IntegrationErrorCode } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
+import { Switch } from "@/components/ui/switch";
+import { buildPostActivityDays, renderPostActivityReferenceLines } from "@/components/organic/PostActivityMarkers";
 
 export type InstagramAccountOption = {
   integrationAccountId: string;
@@ -184,6 +187,8 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
   );
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
   const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
+  const [posts, setPosts] = React.useState<OrganicPost[]>([]);
+  const [showFlags, setShowFlags] = React.useState(true);
 
   // Re-resolve the selected account when the brand or platform changes (each
   // platform keeps its own remembered selection and its own account list).
@@ -193,6 +198,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
     setSelectedAccountId(isValid ? stored : (platformAccounts[0]?.integrationAccountId ?? null));
     setState({ status: "idle" });
     setExpandedMetric(null);
+    setPosts([]);
   }, [brandId, platform, platformAccounts, getSelection]);
 
   const selectedAccount = platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
@@ -229,6 +235,41 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
     }
 
     void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, selectedAccountId, platform]);
+
+  // Post-activity markers: fetched in parallel and off the critical path so the
+  // KPI/trend chart renders immediately and markers fill in a moment later.
+  // Instagram-only for now; failures are silent (markers just don't appear).
+  React.useEffect(() => {
+    if (selectedAccountId === null || platform !== "instagram") {
+      setPosts([]);
+      return;
+    }
+    const accountId = selectedAccountId;
+    let cancelled = false;
+
+    async function loadPosts() {
+      try {
+        const data = await fetchOrganicAnalytics({
+          brandId,
+          integrationAccountId: accountId,
+          platform: "instagram",
+          range: { preset: DEFAULT_RANGE_PRESET },
+          scope: "posts",
+          postsLimit: 25,
+        });
+        if (cancelled) return;
+        setPosts(data.posts ?? []);
+      } catch {
+        if (cancelled) return;
+        setPosts([]);
+      }
+    }
+
+    void loadPosts();
     return () => {
       cancelled = true;
     };
@@ -278,6 +319,21 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
         </div>
 
         <div className="flex items-center gap-1">
+          {platform === "instagram" && posts.length > 0 ? (
+            <label
+              htmlFor="ig-reporting-post-flags"
+              className="flex cursor-pointer select-none items-center gap-1 rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground"
+            >
+              <Flag size={11} className="text-primary" />
+              <span className="hidden sm:inline">Posts</span>
+              <Switch
+                id="ig-reporting-post-flags"
+                checked={showFlags}
+                onCheckedChange={setShowFlags}
+                aria-label="Toggle post activity markers"
+              />
+            </label>
+          ) : null}
           <div data-tour-id="dashboard-account-selector" className="inline-flex">
             <Select.Root
               value={selectedAccountId ?? ""}
@@ -332,6 +388,8 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
            ) : state.status === "success" ? (
              <MetricsPanel
                data={state.data}
+               posts={posts}
+               showFlags={showFlags}
                expandedMetric={expandedMetric}
                onMetricSelect={setExpandedMetric}
              />
@@ -370,10 +428,14 @@ function MiniBars({ values, active }: { values: number[]; active?: boolean }) {
 
 function MetricsPanel({
   data,
+  posts,
+  showFlags,
   expandedMetric,
   onMetricSelect,
 }: {
   data: OrganicMetricsResponse;
+  posts: OrganicPost[];
+  showFlags: boolean;
   expandedMetric: MetricKey | null;
   onMetricSelect: (key: MetricKey | null) => void;
 }) {
@@ -396,6 +458,16 @@ function MetricsPanel({
   const chartData = React.useMemo(
     () => buildDailySeries(data.trends, expandedKey),
     [data.trends, expandedKey],
+  );
+
+  const axisDates = React.useMemo(
+    () => new Set((chartData ?? []).map((point) => point.date)),
+    [chartData],
+  );
+
+  const activityDays = React.useMemo(
+    () => (showFlags ? buildPostActivityDays(data.trends, posts, axisDates) : []),
+    [showFlags, data.trends, posts, axisDates],
   );
 
   const chartConfig = {
@@ -499,6 +571,7 @@ function MetricsPanel({
                         activeDot={{ r: 6 }}
                         animationDuration={500}
                       />
+                      {renderPostActivityReferenceLines(activityDays)}
                     </LineChart>
                   </ChartContainer>
                 ) : (

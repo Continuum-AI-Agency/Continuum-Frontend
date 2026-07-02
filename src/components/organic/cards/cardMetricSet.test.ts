@@ -95,6 +95,15 @@ describe("getCardMetricSet secondary row", () => {
   });
 });
 
+describe("reachDescriptor lifetime-only", () => {
+  it("never carries a comparisonKey and is flagged lifetimeOnly (reach can't be summed across days)", () => {
+    const image = post({ mediaType: "IMAGE", metrics: { reach: 8100, views: 9400, totalInteractions: 380 } });
+    const reachTile = getCardMetricSet(image).find((d) => d.key === "reach");
+    expect(reachTile?.comparisonKey).toBeUndefined();
+    expect(reachTile?.lifetimeOnly).toBe(true);
+  });
+});
+
 describe("POST_METRIC_DEFINITIONS", () => {
   it("has copy for every metric and uses no em dashes", () => {
     const values = Object.values(POST_METRIC_DEFINITIONS);

@@ -151,9 +151,12 @@ export function postWindowRange(windowOffset: number, now = new Date()) {
   };
 }
 
-// Keys that support a day-over-day comparison: the 4 charted metrics plus the
-// raw engagement counts the snapshot deltas also carry (likes/shares/saved).
-export type PostComparisonKey = PostMetricKey | "likes" | "shares" | "saved";
+// Keys that support a period-over-period comparison (current 7d vs prior 7d,
+// backend-computed — see periodComparisonFromBreakdown in
+// supabase/functions/fetch-organic-analytics/lib/post-snapshots.ts). Reach is
+// deliberately excluded: it's a unique-viewer count and can't be validly
+// summed across days, so it stays lifetime-only with no comparison badge.
+export type PostComparisonKey = Exclude<PostMetricKey, "reach"> | "likes" | "shares" | "saved";
 
 export function normalizeDailyBreakdown(points: OrganicPostBreakdownPoint[] | undefined) {
   return (points ?? [])
@@ -171,15 +174,14 @@ export function normalizeDailyBreakdown(points: OrganicPostBreakdownPoint[] | un
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Raw per-day value for the sparkline series only — not used for comparisons
+// (those come straight from the backend-computed post.comparison field).
 function metricValueFromBreakdownPoint(point: {
   reach?: number;
   views?: number;
   engagement?: number;
   comments?: number;
-  likes?: number;
-  shares?: number;
-  saved?: number;
-}, metricKey: PostComparisonKey) {
+}, metricKey: PostMetricKey) {
   switch (metricKey) {
     case "reach":
       return point.reach ?? 0;
@@ -189,12 +191,6 @@ function metricValueFromBreakdownPoint(point: {
       return point.engagement ?? 0;
     case "comments":
       return point.comments ?? 0;
-    case "likes":
-      return point.likes ?? 0;
-    case "shares":
-      return point.shares ?? 0;
-    case "saved":
-      return point.saved ?? 0;
     default:
       return 0;
   }
@@ -227,47 +223,9 @@ export function buildPostMetricSeries(params: {
   }));
 }
 
-function percentageChange(current: number, previous: number) {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1));
-}
-
-export function post24hComparisons(post: OrganicPost | null): Partial<Record<PostComparisonKey, MetricComparison>> {
-  const daily = recentPostBreakdown(post);
-  if (daily.length < 2) return {};
-
-  const currentDay = daily[daily.length - 1];
-  const previousDay = daily[daily.length - 2];
-  if (!currentDay || !previousDay) return {};
-
-  const keys: PostComparisonKey[] = ["reach", "views", "engagement", "comments", "likes", "shares", "saved"];
-  const entries = keys.map((key) => {
-    const current = metricValueFromBreakdownPoint(currentDay, key);
-    const previous = metricValueFromBreakdownPoint(previousDay, key);
-    return [
-      key,
-      {
-        current,
-        previous,
-        percentageChange: percentageChange(current, previous),
-      } satisfies MetricComparison,
-    ] as const;
-  });
-
-  return Object.fromEntries(entries);
-}
-
-export function summarizePost7dMetrics(post: OrganicPost | null): Partial<Record<PostMetricKey, number>> {
-  const recent = recentPostBreakdown(post);
-  if (recent.length === 0) return {};
-
-  return recent.reduce<Partial<Record<PostMetricKey, number>>>(
-    (totals, point) => ({
-      reach: (totals.reach ?? 0) + (point.reach ?? 0),
-      views: (totals.views ?? 0) + (point.views ?? 0),
-      engagement: (totals.engagement ?? 0) + (point.engagement ?? 0),
-      comments: (totals.comments ?? 0) + (point.comments ?? 0),
-    }),
-    {}
-  );
+// Backend-computed period-over-period comparison (current 7d vs prior 7d) —
+// see periodComparisonFromBreakdown in fetch-organic-analytics/lib/post-snapshots.ts.
+// Reach is never present here; it stays lifetime-only (see PostComparisonKey).
+export function postPeriodComparisons(post: OrganicPost | null): Partial<Record<PostComparisonKey, MetricComparison>> {
+  return (post?.comparison as Partial<Record<PostComparisonKey, MetricComparison>> | null | undefined) ?? {};
 }

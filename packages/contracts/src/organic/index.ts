@@ -1,4 +1,5 @@
 export * from "./metrics";
+export * from "./annotatedTrend";
 export * from "./insights";
 export * from "./awareness";
 export * from "./persistedFrames";

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink } from "lucide-react";
 import type { OrganicCreativeMetric, OrganicCreativeRow } from "@continuum/contracts";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
+import { PostQuickLook } from "@/components/organic/cards/PostQuickLook";
 import type { OrganicPost } from "@/lib/schemas/organicMetrics";
 import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
 import { useOrganicInsights } from "@/hooks/useOrganicInsights";
+import { useOrganicPostDetail } from "@/hooks/useOrganicPostDetail";
 import {
   buildOrganicCreativeRows,
   extractAwarenessHookRates,
@@ -16,6 +17,7 @@ import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
 import { InsightDataTable, type InsightColumn } from "@/components/dashboard/datatable/InsightDataTable";
 import { DeltaBadge } from "@/components/shared/DeltaBadge";
 import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { LeaderboardThumbnail } from "./LeaderboardThumbnail";
 import { InsightActionsDropdown, InsightContextActions } from "./insightActions";
 
@@ -65,6 +67,17 @@ export function OrganicCreativesTable({
     enabled: Boolean(integrationAccountId),
   });
 
+  // The bulk posts fetch above is cached server-side for 12h; Meta's signed
+  // thumbnail/media URLs routinely expire inside that window. requestPostDetail
+  // lazily resolves a fresh single-post detail (fresh thumbnail_url + full
+  // caption/stats for the hovercard) per row, decoupled from the bulk fetch,
+  // sharing the same cache the organic post gallery's hovercard reads from.
+  const { requestPostDetail, loadingPostId, postDetailsById } = useOrganicPostDetail({
+    brandId,
+    platform,
+    integrationAccountId,
+  });
+
   useEffect(() => {
     if (!integrationAccountId) {
       setPostsState({ status: "idle" });
@@ -99,6 +112,22 @@ export function OrganicCreativesTable({
     );
   }, [postsState, awareness, metric]);
 
+  // The bulk-fetched post (immediate, may carry a stale/expired thumbnail) used
+  // as the hovercard's low-fidelity fallback until requestPostDetail resolves.
+  const bulkPostById = useMemo(() => {
+    const map = new Map<string, OrganicPost>();
+    if (postsState.status === "success") {
+      for (const post of postsState.posts) map.set(post.id, post);
+    }
+    return map;
+  }, [postsState]);
+
+  useEffect(() => {
+    for (const row of rows) {
+      requestPostDetail(row.id);
+    }
+  }, [rows, requestPostDetail]);
+
   const columns = useMemo<InsightColumn<DisplayRow>[]>(() => {
     const cols: InsightColumn<DisplayRow>[] = [
       {
@@ -110,41 +139,48 @@ export function OrganicCreativesTable({
       {
         id: "creative",
         header: "Creative",
-        cellClassName: "min-w-64",
-        cell: (row) => (
-          <div className="flex min-w-0 items-center gap-3">
-            {row.thumbnailUrl ? (
-              <LeaderboardThumbnail src={row.thumbnailUrl} alt={row.name} fallbackSeed={row.name} />
-            ) : null}
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <p className="truncate text-sm text-foreground">{row.name}</p>
-                {row.mediaType ? (
-                  <span className="shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
-                    {row.mediaType}
-                  </span>
-                ) : null}
-              </div>
-              {row.insightLine || row.permalink ? (
-                <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                  {row.insightLine ? <span className="truncate">{row.insightLine}</span> : null}
-                  {row.permalink ? (
-                    <a
-                      href={row.permalink}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(event) => event.stopPropagation()}
-                      className="inline-flex shrink-0 items-center gap-1 hover:text-foreground"
-                    >
-                      <ExternalLink className="size-3" />
-                      Open original
-                    </a>
+        cellClassName: "min-w-40",
+        // The lazily-fetched fresh detail (when it lands) beats the bulk row's
+        // baked-in thumbnail/name, which can already be stale by render time
+        // (see useOrganicPostDetail). Both feed the same PostQuickLook hovercard
+        // so the full caption + stat tiles + sparkline are one hover away
+        // instead of needing dedicated always-visible columns.
+        cell: (row) => {
+          const detail = postDetailsById[row.id];
+          const fallbackPost = bulkPostById.get(row.id);
+          const thumbnailUrl = detail?.thumbnailUrl ?? row.thumbnailUrl;
+          const quickLookPost = detail ?? fallbackPost;
+          return (
+            <HoverCard
+              openDelay={150}
+              closeDelay={120}
+              onOpenChange={(open) => {
+                if (open) requestPostDetail(row.id);
+              }}
+            >
+              <HoverCardTrigger asChild>
+                <div className="flex min-w-0 items-center gap-3">
+                  {thumbnailUrl ? (
+                    <LeaderboardThumbnail src={thumbnailUrl} alt={row.name} fallbackSeed={row.name} />
                   ) : null}
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <p className="truncate text-sm text-foreground">{row.name}</p>
+                    {row.mediaType ? (
+                      <span className="shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
+                        {row.mediaType}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
+              </HoverCardTrigger>
+              {quickLookPost ? (
+                <HoverCardContent side="right" align="start" className="w-[340px] p-3">
+                  <PostQuickLook post={quickLookPost} loading={loadingPostId === row.id} />
+                </HoverCardContent>
               ) : null}
-            </div>
-          </div>
-        ),
+            </HoverCard>
+          );
+        },
       },
       {
         id: "metric",
@@ -152,35 +188,6 @@ export function OrganicCreativesTable({
         align: "right",
         sortValue: (row) => row.metricValue,
         cell: (row) => formatCompact(row.metricValue),
-      },
-      {
-        id: "impressions",
-        header: "Impressions",
-        align: "right",
-        sortValue: (row) => row.impressions ?? -1,
-        cell: (row) => (typeof row.impressions === "number" ? formatCompact(row.impressions) : "—"),
-      },
-    ];
-
-    // The primary metric column already covers Views for YouTube (metric === "views");
-    // only add a distinct Views column when it wouldn't duplicate that.
-    if (metric !== "views") {
-      cols.push({
-        id: "views",
-        header: "Views",
-        align: "right",
-        sortValue: (row) => row.views ?? -1,
-        cell: (row) => (typeof row.views === "number" ? formatCompact(row.views) : "—"),
-      });
-    }
-
-    cols.push(
-      {
-        id: "comments",
-        header: "Comments",
-        align: "right",
-        sortValue: (row) => row.comments ?? -1,
-        cell: (row) => (typeof row.comments === "number" ? formatCompact(row.comments) : "—"),
       },
       {
         id: "hook",
@@ -202,10 +209,10 @@ export function OrganicCreativesTable({
         cell: (row) =>
           typeof row.vsAveragePct === "number" ? <DeltaBadge value={row.vsAveragePct} /> : "—",
       },
-    );
+    ];
 
     return cols;
-  }, [metric, metricLabel]);
+  }, [metricLabel, postDetailsById, bulkPostById, loadingPostId, requestPostDetail]);
 
   return (
     <InsightDataTable
