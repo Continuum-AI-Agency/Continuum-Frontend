@@ -1,5 +1,24 @@
 import { describe, expect, it } from "bun:test";
-import { findMatchingActiveBrandId, findReusableBrandId } from "./reusableBrand";
+import {
+  findMatchingActiveBrandId,
+  findPendingInviteBrandId,
+  findReusableBrandId,
+} from "./reusableBrand";
+
+function makeInviteSupabase(opts: {
+  invites?: Array<{ brand_profile_id: string }>;
+  error?: unknown;
+}) {
+  const result = { data: opts.invites ?? [], error: opts.error ?? null };
+  // The invites query chains select→ilike→is→is→gt→order→limit; every step
+  // returns the same chainable object and limit() resolves the result.
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "ilike", "is", "gt", "order"]) {
+    chain[method] = () => chain;
+  }
+  chain.limit = async () => result;
+  return { schema: () => ({ from: () => chain }) } as never;
+}
 
 function makeSupabase(opts: {
   perms?: Array<{ brand_profile_id: string }>;
@@ -93,6 +112,39 @@ describe("findReusableBrandId", () => {
       "u1"
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("findPendingInviteBrandId", () => {
+  // Root-cause fix: an invited user has a pending `invites` row (by email) but
+  // NO permissions row until they accept, so findReusableBrandId can't see the
+  // invited brand. Without reusing it here they'd get a junk "<name>'s Brand".
+  it("returns the invited brand_id when a pending invite exists for the email", async () => {
+    const result = await findPendingInviteBrandId(
+      makeInviteSupabase({ invites: [{ brand_profile_id: "invited-brand" }] }),
+      "duane@continuumai.agency"
+    );
+    expect(result).toBe("invited-brand");
+  });
+
+  it("returns null when there is no pending invite", async () => {
+    expect(
+      await findPendingInviteBrandId(makeInviteSupabase({ invites: [] }), "duane@continuumai.agency")
+    ).toBeNull();
+  });
+
+  it("returns null (no query) when the email is missing", async () => {
+    expect(await findPendingInviteBrandId(makeInviteSupabase({}), null)).toBeNull();
+    expect(await findPendingInviteBrandId(makeInviteSupabase({}), "  ")).toBeNull();
+  });
+
+  it("fails safe (null) when the invites lookup errors", async () => {
+    expect(
+      await findPendingInviteBrandId(
+        makeInviteSupabase({ error: { code: "XX" } }),
+        "duane@continuumai.agency"
+      )
+    ).toBeNull();
   });
 });
 

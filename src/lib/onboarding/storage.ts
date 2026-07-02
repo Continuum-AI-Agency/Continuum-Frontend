@@ -21,7 +21,11 @@ import {
   normalizeOnboardingState,
   parseOnboardingMetadata,
 } from "./state";
-import { findMatchingActiveBrandId, findReusableBrandId } from "./reusableBrand";
+import {
+  findMatchingActiveBrandId,
+  findPendingInviteBrandId,
+  findReusableBrandId,
+} from "./reusableBrand";
 import { canPersistBrandRecord } from "./brandRecordGuard";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 import type { Database, Json } from "@/lib/supabase/types";
@@ -638,7 +642,14 @@ async function loadOnboardingContext(
   }
 
   if (Object.keys(metadata.brands).length === 0) {
-    const reusableBrandId = await findReusableBrandId(supabase, owner.id);
+    // Prefer a brand the user already has access to (owner OR member). If none,
+    // check for a PENDING invite by email BEFORE minting a new brand: an invited
+    // user has no permissions row until they accept, so findReusableBrandId can't
+    // see the invited brand and they'd otherwise fall through to a junk
+    // "<name>'s Brand" INSERT instead of joining the brand they were invited to.
+    const reusableBrandId =
+      (await findReusableBrandId(supabase, owner.id)) ??
+      (await findPendingInviteBrandId(supabase, owner.email));
     const initialBrandId = reusableBrandId ?? createBrandId();
     metadata = createDefaultMetadata(initialBrandId, owner);
     await persistMetadata(supabase, user, metadata);

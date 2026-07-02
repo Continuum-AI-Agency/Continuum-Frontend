@@ -55,6 +55,43 @@ export async function findReusableBrandId(
   }
 }
 
+/**
+ * A PENDING invite lives in `brand_profiles.invites` keyed by email and does NOT
+ * create a `permissions` row until the user accepts — so findReusableBrandId
+ * (which reads `permissions`) cannot see it. Without this, an invited user with
+ * empty onboarding metadata falls through to a NEW-brand INSERT, producing a
+ * junk "<name>'s Brand" instead of joining the brand they were invited to
+ * (ticket #162 follow-up: invited members ending up with duplicate own-brands).
+ * Reuse the invited brand id here so the user lands on the real brand; the
+ * canPersistBrandRecord guard still blocks them from overwriting its name.
+ * Fail-safe: any error / no pending invite returns null so the caller falls
+ * back to its normal path.
+ */
+export async function findPendingInviteBrandId(
+  supabase: Client,
+  email: string | null | undefined
+): Promise<string | null> {
+  const normalized = email?.trim();
+  if (!normalized) return null;
+  try {
+    const { data, error } = await supabase
+      .schema("brand_profiles")
+      .from("invites")
+      .select("brand_profile_id, created_at")
+      .ilike("email", normalized)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (error) return null;
+    const first = ((data ?? []) as Array<{ brand_profile_id: string }>)[0];
+    return first?.brand_profile_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface BrandIdentityCandidate {
   brandName: string;
   websiteUrl?: string | null;

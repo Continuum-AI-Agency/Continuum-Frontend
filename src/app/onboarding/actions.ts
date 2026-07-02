@@ -36,6 +36,7 @@ const PLATFORM_KEY_TO_PROVIDER: Record<string, IntegrationProvider> = {
   youtube: "youtube",
   googleAds: "google-ads",
   dv360: "google-ads",
+  googleAnalytics: "google-ads",
   instagram: "meta",
   facebook: "meta",
   threads: "meta",
@@ -315,7 +316,7 @@ type EdgeAccount = {
 type AccountsByPlatformResponse = {
   syncedAt: string;
   accountsByPlatform: Record<
-    "youtube" | "googleAds" | "dv360" | "instagram" | "facebook" | "threads",
+    "youtube" | "googleAds" | "dv360" | "googleAnalytics" | "instagram" | "facebook" | "threads",
     EdgeAccount[]
   >;
 };
@@ -398,6 +399,7 @@ export async function syncIntegrationAccountsAction(
     "youtube",
     "googleAds",
     "dv360",
+    "googleAnalytics",
     "instagram",
     "facebook",
     "threads",
