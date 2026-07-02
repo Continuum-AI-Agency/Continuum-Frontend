@@ -71,7 +71,10 @@ export function PostQuickLook({
     [post, seriesKey]
   );
   const trendDays = post.breakdown7d?.length ?? 0;
-  const tone = deltaTone(comparisons[seriesKey]?.percentageChange);
+  // Reach is lifetime-only and never carries a comparison (see PostComparisonKey),
+  // so it can't index the comparisons map — fall back to a flat tone for it.
+  const comparisonKey = seriesKey === "reach" ? undefined : seriesKey;
+  const tone = deltaTone(comparisonKey ? comparisons[comparisonKey]?.percentageChange : undefined);
   const trendState = resolveTrendState(series.length, accountSeries?.length ?? 0);
 
   return (

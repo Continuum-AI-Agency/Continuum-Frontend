@@ -15,7 +15,11 @@ type MetricSparklineProps = {
   className?: string;
 };
 
-const TREND_FIELD_BY_METRIC: Record<CampaignPerformanceMetricKey, keyof DailyMetric> = {
+// Maps each chartable campaign metric onto its per-day field. GA4 keys
+// (gaSessions/gaConversions) are brand/property-level, absent from the per-campaign
+// DailyMetric series and never selectable in the matrix — they map to nothing and
+// fall through to the flat placeholder below.
+const TREND_FIELD_BY_METRIC: Partial<Record<CampaignPerformanceMetricKey, keyof DailyMetric>> = {
   spend: "spend",
   roas: "roas",
   ctr: "ctr_pct",
@@ -42,7 +46,7 @@ export function MetricSparkline({
   const field = TREND_FIELD_BY_METRIC[metric];
 
   const values = React.useMemo(() => {
-    if (!trends || trends.length < 2) return [];
+    if (!trends || !field || trends.length < 2) return [];
     return trends
       .map((point) => point[field])
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
