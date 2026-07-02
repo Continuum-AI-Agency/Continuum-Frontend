@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      google_analytics_properties: {
+        Row: {
+          account_id: string | null
+          brand_integration_id: string
+          display_name: string | null
+          id: string
+          property_id: string
+          raw_profile: Json
+          synced_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          brand_integration_id: string
+          display_name?: string | null
+          id?: string
+          property_id: string
+          raw_profile?: Json
+          synced_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          brand_integration_id?: string
+          display_name?: string | null
+          id?: string
+          property_id?: string
+          raw_profile?: Json
+          synced_at?: string
+        }
+        Relationships: []
+      }
       google_dv360_advertisers: {
         Row: {
           advertiser_id: string
@@ -446,6 +476,53 @@ export type Database = {
   }
   brand_profiles: {
     Tables: {
+      ad_naming_schemas: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          delimiter: string
+          fields: Json
+          id: string
+          is_active: boolean
+          platform: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          delimiter?: string
+          fields: Json
+          id?: string
+          is_active?: boolean
+          platform: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          delimiter?: string
+          fields?: Json
+          id?: string
+          is_active?: boolean
+          platform?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_naming_schemas_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -555,6 +632,112 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      brand_book: {
+        Row: {
+          assembled: Json
+          brand_id: string
+          created_at: string
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          error: Json | null
+          refreshed_at: string | null
+          source_versions: Json
+          status: Database["brand_profiles"]["Enums"]["brand_book_status"]
+          updated_at: string
+        }
+        Insert: {
+          assembled?: Json
+          brand_id: string
+          created_at?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          error?: Json | null
+          refreshed_at?: string | null
+          source_versions?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_book_status"]
+          updated_at?: string
+        }
+        Update: {
+          assembled?: Json
+          brand_id?: string
+          created_at?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          error?: Json | null
+          refreshed_at?: string | null
+          source_versions?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_book_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_book_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_book_jobs: {
+        Row: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          origin_env: string | null
+          payload: Json
+          status: Database["brand_profiles"]["Enums"]["brand_book_job_status"]
+          trigger: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          brand_id: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          job_id?: string
+          origin_env?: string | null
+          payload?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_book_job_status"]
+          trigger?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          brand_id?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          job_id?: string
+          origin_env?: string | null
+          payload?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_book_job_status"]
+          trigger?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_book_jobs_brand_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       brand_competitors: {
         Row: {
@@ -832,10 +1015,13 @@ export type Database = {
           brand_id: string
           claimed_at: string | null
           completed_at: string | null
+          deadline_at: string | null
           enqueued_at: string
           error: Json | null
           heartbeat_at: string | null
           job_id: string
+          not_before: string
+          origin_env: string | null
           payload: Json
           status: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
           trigger: string
@@ -846,10 +1032,13 @@ export type Database = {
           brand_id: string
           claimed_at?: string | null
           completed_at?: string | null
+          deadline_at?: string | null
           enqueued_at?: string
           error?: Json | null
           heartbeat_at?: string | null
           job_id?: string
+          not_before?: string
+          origin_env?: string | null
           payload?: Json
           status?: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
           trigger?: string
@@ -860,10 +1049,13 @@ export type Database = {
           brand_id?: string
           claimed_at?: string | null
           completed_at?: string | null
+          deadline_at?: string | null
           enqueued_at?: string
           error?: Json | null
           heartbeat_at?: string | null
           job_id?: string
+          not_before?: string
+          origin_env?: string | null
           payload?: Json
           status?: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
           trigger?: string
@@ -3776,6 +3968,30 @@ export type Database = {
           user_id: string
         }[]
       }
+      claim_next_brand_book_job: {
+        Args: { p_env?: string; p_lease_ttl_sec: number; p_worker_id: string }
+        Returns: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          origin_env: string | null
+          payload: Json
+          status: Database["brand_profiles"]["Enums"]["brand_book_job_status"]
+          trigger: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "brand_book_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_next_brand_deep_job: {
         Args: { p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -3800,16 +4016,19 @@ export type Database = {
         }
       }
       claim_next_brand_guideline_job: {
-        Args: { p_lease_ttl_sec: number; p_worker_id: string }
+        Args: { p_env?: string; p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
           attempts: number
           brand_id: string
           claimed_at: string | null
           completed_at: string | null
+          deadline_at: string | null
           enqueued_at: string
           error: Json | null
           heartbeat_at: string | null
           job_id: string
+          not_before: string
+          origin_env: string | null
           payload: Json
           status: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
           trigger: string
@@ -3847,6 +4066,15 @@ export type Database = {
       }
       cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
       cleanup_old_chat_messages: { Args: never; Returns: undefined }
+      complete_brand_book_job_owned: {
+        Args: {
+          p_error?: Json
+          p_job_id: string
+          p_status: Database["brand_profiles"]["Enums"]["brand_book_job_status"]
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       complete_brand_deep_job_owned: {
         Args: {
           p_error?: Json
@@ -3877,6 +4105,10 @@ export type Database = {
       decrypt_token: { Args: { ct: string }; Returns: string }
       decrypt_tokens: { Args: { p_cts: string[] }; Returns: string[] }
       encrypt_token: { Args: { token: string }; Returns: string }
+      enqueue_brand_book_job: {
+        Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
+        Returns: string
+      }
       enqueue_brand_deep_job: {
         Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
         Returns: string
@@ -4040,6 +4272,14 @@ export type Database = {
       has_brand_access:
         | { Args: { brand_id: string }; Returns: boolean }
         | { Args: { p_brand_id: string; p_user_id: string }; Returns: boolean }
+      has_brand_editor_access: {
+        Args: { p_brand_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      heartbeat_brand_book_job: {
+        Args: { p_job_id: string; p_worker_id: string }
+        Returns: boolean
+      }
       heartbeat_brand_deep_job: {
         Args: { p_job_id: string; p_worker_id: string }
         Returns: boolean
@@ -4129,9 +4369,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reschedule_brand_guideline_job: {
+        Args: { p_job_id: string; p_not_before: string; p_worker_id: string }
+        Returns: boolean
+      }
       resolve_admin_user_directory_name: {
         Args: { metadata: Json }
         Returns: string
+      }
+      resolve_google_analytics_integration_token_context: {
+        Args: { p_brand_profile_id: string; p_property_id?: string }
+        Returns: {
+          access_token: string
+          expires_at: string
+          integration_id: string
+          refresh_token: string
+        }[]
       }
       resolve_google_integration_token_context: {
         Args: { p_brand_profile_id: string; p_customer_id?: string }
@@ -4214,6 +4467,8 @@ export type Database = {
       }
     }
     Enums: {
+      brand_book_job_status: "queued" | "running" | "completed" | "failed"
+      brand_book_status: "assembling" | "ready" | "error"
       brand_deep_job_status: "queued" | "running" | "completed" | "failed"
       brand_guideline_job_status: "queued" | "running" | "completed" | "failed"
       brand_report_job_status: "queued" | "running" | "completed" | "failed"
@@ -9905,6 +10160,8 @@ export const Constants = {
   },
   brand_profiles: {
     Enums: {
+      brand_book_job_status: ["queued", "running", "completed", "failed"],
+      brand_book_status: ["assembling", "ready", "error"],
       brand_deep_job_status: ["queued", "running", "completed", "failed"],
       brand_guideline_job_status: ["queued", "running", "completed", "failed"],
       brand_report_job_status: ["queued", "running", "completed", "failed"],
