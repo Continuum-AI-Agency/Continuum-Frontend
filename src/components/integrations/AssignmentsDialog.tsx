@@ -726,7 +726,7 @@ export function AssignmentsDialog({
                 )}
 
               {orderedPlatforms.some((p) =>
-                ["googleAds", "youtube", "dv360"].includes(p.key)
+                ["googleAds", "youtube", "dv360", "googleAnalytics"].includes(p.key)
               ) && (
                 <Accordion.Root type="single" collapsible className="space-y-2">
                   <Accordion.Item
@@ -751,7 +751,9 @@ export function AssignmentsDialog({
                       <div className="px-3 pb-3 space-y-2 pt-3">
                         <Accordion.Root type="multiple" className="space-y-2">
                           {orderedPlatforms
-                            .filter(({ key }) => ["googleAds", "youtube", "dv360"].includes(key))
+                            .filter(({ key }) =>
+                              ["googleAds", "youtube", "dv360", "googleAnalytics"].includes(key)
+                            )
                             .map(({ key, label }) => {
                               const assets = groupedAssets[key] ?? [];
                               const selectedCount = countSelectedAssets(assets, selectedById);
@@ -903,9 +905,15 @@ export function AssignmentsDialog({
 
               {orderedPlatforms.some(
                 (p) =>
-                  !["googleAds", "youtube", "dv360", "facebook", "instagram", "threads"].includes(
-                    p.key
-                  )
+                  ![
+                    "googleAds",
+                    "youtube",
+                    "dv360",
+                    "googleAnalytics",
+                    "facebook",
+                    "instagram",
+                    "threads",
+                  ].includes(p.key)
               ) && (
                 <Accordion.Root type="single" collapsible className="space-y-2">
                   <Accordion.Item
@@ -936,6 +944,7 @@ export function AssignmentsDialog({
                                   "googleAds",
                                   "youtube",
                                   "dv360",
+                                  "googleAnalytics",
                                   "facebook",
                                   "instagram",
                                   "threads",

@@ -116,6 +116,7 @@ const googleSelectableHierarchyIntegrationSchema = z.object({
   ad_accounts: z.array(selectableAssetSchema).optional().default([]),
   youtube_channels: z.array(selectableAssetSchema).optional().default([]),
   dv360_advertisers: z.array(selectableAssetSchema).optional().default([]),
+  ga4_properties: z.array(selectableAssetSchema).optional().default([]),
 });
 
 const googleSelectableHierarchySchema = z.object({

@@ -5,7 +5,7 @@ import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { PLATFORM_KEYS, type PlatformKey } from "./platforms";
 import { resolveSelectableAssetLabel } from "./integrations/selectableAssetUtils";
 
-const GOOGLE_OAUTH_KEYS: PlatformKey[] = ["youtube", "googleAds", "dv360"];
+const GOOGLE_OAUTH_KEYS: PlatformKey[] = ["youtube", "googleAds", "dv360", "googleAnalytics"];
 const FACEBOOK_OAUTH_KEYS: PlatformKey[] = ["instagram", "facebook", "threads"];
 
 type MergeSelectableAssetsParams = {
@@ -28,6 +28,8 @@ function getPlatformKeysForProvider(providerKey: string): PlatformKey[] {
         return normalized === "google-ads" || normalized === "googleads";
       case "dv360":
         return normalized === "dv360" || normalized === "displayvideo360" || normalized === "display_video_360";
+      case "googleAnalytics":
+        return normalized === "google-analytics" || normalized === "googleanalytics" || normalized === "ga4";
       case "linkedin":
         return normalized === "linkedin";
       case "tiktok":

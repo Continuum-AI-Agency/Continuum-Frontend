@@ -56,6 +56,7 @@ export const PLATFORM_LABELS: Record<PlatformKey, string> = {
   googleAds: "Google Ads",
   amazonAds: "Amazon Ads",
   dv360: "DV360",
+  googleAnalytics: "Google Analytics",
   threads: "Threads",
 };
 
@@ -69,6 +70,7 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   googleAds: GoogleIcon,
   amazonAds: AmazonIcon,
   dv360: BarChart3,
+  googleAnalytics: GoogleIcon,
   threads: ThreadsIcon,
 };
 

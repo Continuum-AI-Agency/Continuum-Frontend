@@ -37,6 +37,11 @@ export const PaidMetricsResponseSchema = z.object({
     ctr: z.number(),
     cpc: z.number(),
     cpa: z.number().default(0),
+    // GA4 sessions/conversions merged in by date (Phase 5 dashboard trend
+    // line) — brand/property-level, not tied to the selected campaign.
+    // Optional + defaulted so payloads from brands without GA4 still validate.
+    gaSessions: z.number().default(0),
+    gaConversions: z.number().default(0),
   }),
   comparison: comparisonRecordSchema,
   trends: z.array(
@@ -49,6 +54,8 @@ export const PaidMetricsResponseSchema = z.object({
       ctr: z.number().optional(),
       cpc: z.number().optional(),
       cpa: z.number().optional(),
+      gaSessions: z.number().default(0),
+      gaConversions: z.number().default(0),
     })
   ),
   range: z.object({

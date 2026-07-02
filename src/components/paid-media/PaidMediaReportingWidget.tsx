@@ -92,7 +92,32 @@ const METRIC_LABELS: Record<MetricKey, string> = {
   ctr: "CTR",
   cpc: "CPC",
   cpa: "CPA",
+  // GA4 sessions/conversions merged into the paid trend line by date (brand/
+  // property-level, same regardless of the selected campaign — see
+  // paid-media-metrics/README.md).
+  gaSessions: "GA Sessions",
+  gaConversions: "GA Conversions",
 };
+
+type PaidMetricsTrendRow = PaidMetricsResponse["trends"][number];
+
+// Pure per-day value for the currently expanded metric-card's trend chart.
+// Direct metrics (spend, roas, GA4 sessions/conversions) come straight off
+// the merged trend row; derived metrics (ctr, cpc) are computed from clicks/
+// impressions/spend for that day. Extracted from the chart's useMemo so it is
+// independently testable without mounting recharts.
+export function deriveMetricTrendValue(day: PaidMetricsTrendRow, key: PaidPerformanceMetricKey): number {
+  if (key === "spend") return day.spend;
+  if (key === "roas") return day.roas;
+  if (key === "impressions") return day.impressions || 0;
+  if (key === "clicks") return day.clicks || 0;
+  if (key === "ctr") return day.clicks && day.impressions ? (day.clicks / day.impressions) * 100 : 0;
+  if (key === "cpc") return day.clicks && day.spend ? day.spend / day.clicks : 0;
+  // GA4 metrics: already a daily value merged in by date, no derivation.
+  if (key === "gaSessions") return day.gaSessions || 0;
+  if (key === "gaConversions") return day.gaConversions || 0;
+  return 0;
+}
 
 function formatValue(value: number, type: "currency" | "number" | "percent") {
   if (type === "currency") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -607,7 +632,11 @@ export function PaidMediaReportingWidget({
   );
 }
 
-function MetricsPanel({
+// Exported (rather than kept file-local) so it is independently testable —
+// the surrounding PaidMediaReportingWidget also owns ad-account/campaign
+// selection and Supabase-backed fetching, which would make a MetricsPanel
+// test disproportionately heavy for what it renders.
+export function MetricsPanel({
   data,
   expandedMetric,
   onMetricSelect,
@@ -625,6 +654,8 @@ function MetricsPanel({
     { key: "cpc", label: "CPC", value: metrics.cpc, format: "currency" },
     { key: "impressions", label: "Impressions", value: metrics.impressions, format: "number" },
     { key: "clicks", label: "Clicks", value: metrics.clicks, format: "number" },
+    { key: "gaSessions", label: "GA Sessions", value: metrics.gaSessions, format: "number" },
+    { key: "gaConversions", label: "GA Conversions", value: metrics.gaConversions, format: "number" },
   ];
 
   const expandedKey = expandedMetric;
@@ -633,28 +664,10 @@ function MetricsPanel({
   // Calculate trend data for the selected metric
   const chartData = React.useMemo(() => {
     if (!trends) return [];
-    return trends.map(day => {
-      let value = 0;
-      
-      // Handle direct metrics
-      if (expandedKey === 'spend') value = day.spend;
-      else if (expandedKey === 'roas') value = day.roas;
-      else if (expandedKey === 'impressions') value = day.impressions || 0;
-      else if (expandedKey === 'clicks') value = day.clicks || 0;
-      
-      // Handle derived metrics
-      else if (expandedKey === 'ctr') {
-        value = (day.clicks && day.impressions) ? (day.clicks / day.impressions) * 100 : 0;
-      }
-      else if (expandedKey === 'cpc') {
-        value = (day.clicks && day.spend) ? (day.spend / day.clicks) : 0;
-      }
-      
-      return {
-        date: day.date,
-        value: value
-      };
-    });
+    return trends.map(day => ({
+      date: day.date,
+      value: deriveMetricTrendValue(day, expandedKey),
+    }));
   }, [trends, expandedKey]);
 
   const metricColorMap: Record<string, string> = {
@@ -664,6 +677,8 @@ function MetricsPanel({
     clicks: "var(--chart-4)",
     ctr: "var(--chart-5)",
     cpc: "var(--chart-1)",
+    gaSessions: "var(--chart-2)",
+    gaConversions: "var(--chart-3)",
   };
 
   const activeColor = metricColorMap[expandedKey as string] || "var(--color-primary)";

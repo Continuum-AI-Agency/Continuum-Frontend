@@ -11,6 +11,7 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   dv360_advertiser: "dv360",
   display_video_360_advertiser: "dv360",
   displayvideo360_advertiser: "dv360",
+  ga4_property: "googleAnalytics",
   instagram_business_account: "instagram",
   instagram_account: "instagram",
   meta_instagram_account: "instagram",

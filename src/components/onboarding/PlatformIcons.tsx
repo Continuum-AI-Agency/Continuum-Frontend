@@ -146,6 +146,7 @@ export function PlatformIcon({ platform, size = 18, className }: IconProps & { p
     case "google":
     case "googleAds":
     case "dv360":
+    case "googleAnalytics":
       return <SvgRenderer svgContent={google.svg} size={size} className={className} title="Google" />;
     case "youtube":
       return <SvgRenderer svgContent={youtube.svg} size={size} className={className} title="YouTube" />;

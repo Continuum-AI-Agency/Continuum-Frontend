@@ -8,6 +8,7 @@ export const PLATFORM_KEYS = [
   "googleAds",
   "amazonAds",
   "dv360",
+  "googleAnalytics",
   "threads",
 ] as const;
 
@@ -23,6 +24,7 @@ const PLATFORM_LABELS: Record<PlatformKey, string> = {
   googleAds: "Google Ads",
   amazonAds: "Amazon Ads",
   dv360: "DV360",
+  googleAnalytics: "Google Analytics",
   threads: "Threads",
 };
 

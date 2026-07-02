@@ -127,4 +127,36 @@ describe("PaidMetricsResponseSchema", () => {
 
     expect(parsed.metrics.cpa).toBe(0);
   });
+
+  it("parses gaSessions/gaConversions when present on metrics and trends", () => {
+    const parsed = PaidMetricsResponseSchema.parse({
+      ...basePayload,
+      metrics: {
+        ...basePayload.metrics,
+        gaSessions: 420,
+        gaConversions: 12,
+      },
+      trends: [
+        {
+          ...basePayload.trends[0],
+          gaSessions: 60,
+          gaConversions: 3,
+        },
+      ],
+    });
+
+    expect(parsed.metrics.gaSessions).toBe(420);
+    expect(parsed.metrics.gaConversions).toBe(12);
+    expect(parsed.trends[0].gaSessions).toBe(60);
+    expect(parsed.trends[0].gaConversions).toBe(3);
+  });
+
+  it("defaults gaSessions/gaConversions to 0 for brands without GA4 (existing payloads still validate)", () => {
+    const parsed = PaidMetricsResponseSchema.parse(basePayload);
+
+    expect(parsed.metrics.gaSessions).toBe(0);
+    expect(parsed.metrics.gaConversions).toBe(0);
+    expect(parsed.trends[0].gaSessions).toBe(0);
+    expect(parsed.trends[0].gaConversions).toBe(0);
+  });
 });

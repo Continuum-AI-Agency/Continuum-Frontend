@@ -66,6 +66,7 @@ const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
   googleAds: "google",
   youtube: "google",
   dv360: "google",
+  googleAnalytics: "google",
   google: "google",
   tiktok: "tiktok",
   x: "x",

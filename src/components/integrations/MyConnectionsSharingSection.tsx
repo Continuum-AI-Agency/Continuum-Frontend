@@ -16,6 +16,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   amazon: "Amazon Ads",
   amazonAds: "Amazon Ads",
   dv360: "Display & Video 360",
+  googleAnalytics: "Google Analytics",
 };
 
 function formatProvider(provider: string): string {

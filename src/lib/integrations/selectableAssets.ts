@@ -32,6 +32,7 @@ const FALLBACK_TYPE_BY_PLATFORM: Record<PlatformKey, string> = {
   googleAds: "google_ad_account",
   amazonAds: "amazon_ad_account",
   dv360: "dv360_advertiser",
+  googleAnalytics: "ga4_property",
   threads: "meta_threads_account",
 };
 
@@ -41,6 +42,7 @@ const PROVIDER_BY_PLATFORM: Partial<Record<PlatformKey, string>> = {
   facebook: "meta",
   googleAds: "google",
   dv360: "google",
+  googleAnalytics: "google",
   threads: "meta",
   x: "x",
 };
@@ -55,7 +57,12 @@ function inferProviderFromType(type: string): string | undefined {
   ) {
     return "meta";
   }
-  if (normalized.includes("google") || normalized.includes("youtube") || normalized.includes("dv360")) {
+  if (
+    normalized.includes("google") ||
+    normalized.includes("youtube") ||
+    normalized.includes("dv360") ||
+    normalized.includes("ga4")
+  ) {
     return "google";
   }
   return undefined;
@@ -238,11 +245,13 @@ function filterProviderHierarchy(
           ad_accounts: filterSelectableAssetArray(integration.ad_accounts, allowedAccountIds),
           youtube_channels: filterSelectableAssetArray(integration.youtube_channels, allowedAccountIds),
           dv360_advertisers: filterSelectableAssetArray(integration.dv360_advertisers, allowedAccountIds),
+          ga4_properties: filterSelectableAssetArray(integration.ga4_properties, allowedAccountIds),
         }))
         .filter((integration: any) =>
           integration.ad_accounts.length > 0 ||
           integration.youtube_channels.length > 0 ||
-          integration.dv360_advertisers.length > 0
+          integration.dv360_advertisers.length > 0 ||
+          integration.ga4_properties.length > 0
         ),
     };
   }
@@ -324,6 +333,7 @@ export function getSelectableAssetsFlatList(response: SelectableAssetsResponse):
         if (integration.ad_accounts) assets.push(...integration.ad_accounts);
         if (integration.youtube_channels) assets.push(...integration.youtube_channels);
         if (integration.dv360_advertisers) assets.push(...integration.dv360_advertisers);
+        if (integration.ga4_properties) assets.push(...integration.ga4_properties);
       };
 
       if (provider.hierarchy?.meta?.integrations) {

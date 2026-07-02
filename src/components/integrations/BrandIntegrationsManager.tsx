@@ -210,7 +210,7 @@ export function BrandIntegrationsManager({
 
   const providerStats = useMemo<ProviderGroup[]>(() => {
     const metaKeys: PlatformKey[] = ["facebook", "instagram", "threads"];
-    const googleKeys: PlatformKey[] = ["googleAds", "youtube", "dv360"];
+    const googleKeys: PlatformKey[] = ["googleAds", "youtube", "dv360", "googleAnalytics"];
     const tiktokKeys: PlatformKey[] = ["tiktok"];
     const xKeys: PlatformKey[] = ["x"];
     const otherKeys = PLATFORMS.filter(
