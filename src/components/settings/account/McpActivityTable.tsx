@@ -191,51 +191,53 @@ export function McpActivityTable() {
       </div>
 
       <div className="rounded-md border border-border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((group) => (
-              <TableRow key={group.id}>
-                {group.headers.map((header) => (
-                  <TableHead key={header.id} className="text-2xs uppercase tracking-wider">
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {query.isLoading ? (
-              <LoadingRows columns={columns.length} />
-            ) : query.isError ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
-                  Could not load activity.{" "}
-                  <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
-                    Retry
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
-                  No tool calls yet.
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+        <div className="max-h-[min(560px,calc(100vh-21rem))] overflow-y-auto overscroll-contain">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-[var(--glass-bg)] backdrop-blur-xl">
+              {table.getHeaderGroups().map((group) => (
+                <TableRow key={group.id}>
+                  {group.headers.map((header) => (
+                    <TableHead key={header.id} className="text-2xs uppercase tracking-wider">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {query.isLoading ? (
+                <LoadingRows columns={columns.length} />
+              ) : query.isError ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+                    Could not load activity.{" "}
+                    <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
+                      Retry
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+                    No tool calls yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {query.hasNextPage ? (
