@@ -237,6 +237,11 @@ export const creativeBriefSchema = z.object({
   contentObjective: z.string(),
   targetAudience: z.string(),
   angle: z.string(),
+  // Optional locked hook (e.g. a winning hook chosen from creative_strategy). When
+  // present it rides through placement metadata and the generation engine uses it
+  // as the authoritative opening hook (skipping hook re-derivation), the same way
+  // `angle` locks the strategic angle. Optional so older peers keep parsing.
+  hook: z.string().nullable().optional(),
   trendIntegration: z.string().nullable(),
   toneAndVoice: z.string(),
   // Optional funnel stage the upstream agent can delegate. When present the
@@ -307,6 +312,9 @@ export const angleEvidenceSourceEnum = z.enum([
   "getTopPosts",
   "listTrends",
   "competitorSpy",
+  // First-party winning-angle/hook insights derived by the creative_strategy
+  // pipeline from the brand's own top-performing posts and ads.
+  "creativeStrategy",
 ]);
 export type AngleEvidenceSource = z.infer<typeof angleEvidenceSourceEnum>;
 

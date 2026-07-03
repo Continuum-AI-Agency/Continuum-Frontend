@@ -49,6 +49,7 @@ import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-u
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
 import { OrganicAwarenessReportView } from '@/components/organic/OrganicAwarenessReportView';
+import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
 import {
   formatDateTime,
   formatNumber,
@@ -1759,6 +1760,8 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? <OrganicAwarenessReportView report={awarenessReport} /> : null}
+
+      {isAccountView ? <CreativeStrategyCard brandId={brandId} /> : null}
 
       {isAccountView && platform !== 'tiktok' ? (
         <OrganicAudienceLocationMapCard
