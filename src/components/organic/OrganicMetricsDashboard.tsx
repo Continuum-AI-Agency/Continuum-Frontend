@@ -931,7 +931,7 @@ function MetricCard({
       variant="surface"
       className={cn(
         'border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none',
-        compact ? 'min-h-[48px]' : 'min-h-[60px]',
+        compact ? 'min-h-[48px]' : 'min-h-[96px]',
         active ? 'border-blue-500/70 bg-blue-500/10 shadow-blue-500/10' : '',
         interactive ? 'hover:-translate-y-0.5 hover:shadow-md' : '',
         hasInsights ? 'ring-1 ring-violet-400/30' : '',
@@ -944,7 +944,8 @@ function MetricCard({
         aria-label={ariaLabel ?? label}
         aria-pressed={interactive ? active : undefined}
         className={cn(
-          'h-full w-full rounded-[inherit] px-2.5 py-1.5 text-left',
+          'h-full w-full rounded-[inherit] text-left',
+          compact ? 'px-2.5 py-1.5' : 'flex flex-col justify-between p-3',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1',
           interactive ? 'cursor-pointer' : 'cursor-default',
         )}
@@ -977,7 +978,7 @@ function MetricCard({
           )}
         </Flex>
         <Text
-          size={compact ? '3' : '4'}
+          size={compact ? '3' : '5'}
           weight="bold"
           className="leading-tight tabular-nums tracking-tight"
         >
@@ -1608,7 +1609,7 @@ function Dashboard({
           initial="hidden"
           animate="visible"
           variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
-          className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
         >
           {getKpiConfig(platform).map((metric) => (
             <motion.div
