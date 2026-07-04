@@ -1,36 +1,39 @@
-"use server";
+'use server';
 
-import { redirect } from "next/navigation";
-import { revalidatePath, updateTag } from "next/cache";
-import { tags } from "@/lib/cache/tags";
-import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
-import type { BrandRole } from "@/lib/onboarding/state";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
-import { getPostHogClient } from "@/lib/posthog-server";
-import { normalizeBrandDocumentStoragePath } from "@/lib/brands/document-download";
-import { AD_NAMING_SCHEMAS_TABLE } from "@/lib/brands/adNaming";
-import { getClaimsIdentity } from "@/lib/auth/claims";
+import { revalidatePath, updateTag } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { getClaimsIdentity } from '@/lib/auth/claims';
+import { AD_NAMING_SCHEMAS_TABLE } from '@/lib/brands/adNaming';
+import { normalizeBrandDocumentStoragePath } from '@/lib/brands/document-download';
+import { tags } from '@/lib/cache/tags';
+import type { BrandRole } from '@/lib/onboarding/state';
+import { getPostHogClient } from '@/lib/posthog-server';
+import { createBrandProfileRepository } from '@/lib/repositories/brandProfile';
+import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
   const repo = createBrandProfileRepository();
   await repo.switchActiveBrand(brandId);
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout');
 }
 
 export async function renameBrandProfileAction(brandId: string, name: string): Promise<void> {
   if (!name.trim()) {
-    throw new Error("Brand name is required");
+    throw new Error('Brand name is required');
   }
   const repo = createBrandProfileRepository();
   await repo.renameBrand(brandId, name.trim());
 }
 
-export async function updateBrandLogoAction(brandId: string, logoPath: string | null): Promise<void> {
+export async function updateBrandLogoAction(
+  brandId: string,
+  logoPath: string | null,
+): Promise<void> {
   const repo = createBrandProfileRepository();
   await repo.updateLogo(brandId, logoPath);
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout');
 }
 
 export async function createBrandProfileAction(name?: string): Promise<void> {
@@ -42,20 +45,20 @@ export async function createBrandProfileAction(name?: string): Promise<void> {
     const posthog = getPostHogClient();
     posthog.capture({
       distinctId: user.id,
-      event: "brand_profile_created",
+      event: 'brand_profile_created',
       properties: { brand_id: result.brandId, brand_name: name?.trim() ?? null },
     });
     await posthog.shutdown();
   }
 
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout');
   redirect(`/onboarding?brand=${result.brandId}`);
 }
 
 export async function removeMemberAction(
   brandId: string,
   memberId: string,
-  email?: string
+  email?: string,
 ): Promise<void> {
   const repo = createBrandProfileRepository();
   await repo.removeMember(brandId, { userId: memberId, email });
@@ -64,10 +67,10 @@ export async function removeMemberAction(
 export async function changeMemberRoleAction(
   brandId: string,
   userId: string,
-  role: Exclude<BrandRole, "owner">,
+  role: Exclude<BrandRole, 'owner'>,
 ): Promise<void> {
-  if (!brandId) throw new Error("brandId is required");
-  if (!userId) throw new Error("userId is required");
+  if (!brandId) throw new Error('brandId is required');
+  if (!userId) throw new Error('userId is required');
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -75,9 +78,9 @@ export async function changeMemberRoleAction(
   } = await supabase.auth.getSession();
 
   const { error } = await supabase.functions.invoke<{ ok: true } | { error: string }>(
-    "brand_invite",
+    'brand_invite',
     {
-      body: { action: "change_role", brandId, userId, role },
+      body: { action: 'change_role', brandId, userId, role },
       headers: session?.access_token
         ? { Authorization: `Bearer ${session.access_token}` }
         : undefined,
@@ -86,14 +89,63 @@ export async function changeMemberRoleAction(
 
   if (error) {
     const message = await getFunctionsInvokeErrorMessage(error);
-    throw new Error(message ?? error.message ?? "Unable to change role");
+    throw new Error(message ?? error.message ?? 'Unable to change role');
   }
+}
+
+// Master on/off for the Continuum Pulse email. brand_profiles UPDATE is gated by
+// is_brand_admin under RLS, so a direct server-client update is safe here.
+export async function updatePulseOptInAction(brandId: string, optIn: boolean): Promise<void> {
+  if (!brandId) throw new Error('brandId is required');
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .update({ email_report_opt_in: optIn, updated_at: new Date().toISOString() } as never)
+    .eq('id', brandId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath('/settings');
+}
+
+// Tag/untag an existing member as a Pulse recipient. permissions is self-only
+// under RLS, so this routes through the brand_invite edge function (service-role
+// write, owner/admin authz) — same path role changes use.
+export async function setPulseRecipientAction(
+  brandId: string,
+  userId: string,
+  receives: boolean,
+): Promise<void> {
+  if (!brandId) throw new Error('brandId is required');
+  if (!userId) throw new Error('userId is required');
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const { error } = await supabase.functions.invoke<{ ok: true } | { error: string }>(
+    'brand_invite',
+    {
+      body: { action: 'set_report_recipient', brandId, userId, receives },
+      headers: session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined,
+    },
+  );
+
+  if (error) {
+    const message = await getFunctionsInvokeErrorMessage(error);
+    throw new Error(message ?? error.message ?? 'Unable to update recipient');
+  }
+  revalidatePath('/settings');
 }
 
 export async function createMagicLinkAction(
   brandId: string,
   email: string,
-  role: BrandRole
+  role: BrandRole,
 ): Promise<{
   link: string;
   inviteId: string | null;
@@ -105,7 +157,7 @@ export async function createMagicLinkAction(
   resent?: boolean;
 }> {
   if (!email.trim()) {
-    throw new Error("Email is required");
+    throw new Error('Email is required');
   }
 
   const supabase = await createSupabaseServerClient();
@@ -114,7 +166,7 @@ export async function createMagicLinkAction(
     data: { session },
   } = await supabase.auth.getSession();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
   const { data, error } = await supabase.functions.invoke<{
     link: string;
     inviteId: string | null;
@@ -124,21 +176,23 @@ export async function createMagicLinkAction(
     code?: string;
     existingUser?: boolean;
     resent?: boolean;
-  }>("brand_invite", {
+  }>('brand_invite', {
     body: {
-      action: "create",
+      action: 'create',
       brandId,
       email: email.trim(),
       role,
       siteUrl,
       forceResend: true,
     },
-    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+    headers: session?.access_token
+      ? { Authorization: `Bearer ${session.access_token}` }
+      : undefined,
   });
 
   if (error || !data?.link) {
     const message = await getFunctionsInvokeErrorMessage(error);
-    throw new Error(message ?? error?.message ?? "Unable to create invite");
+    throw new Error(message ?? error?.message ?? 'Unable to create invite');
   }
 
   const invitingUserId = session?.user?.id;
@@ -146,7 +200,7 @@ export async function createMagicLinkAction(
     const posthog = getPostHogClient();
     posthog.capture({
       distinctId: invitingUserId,
-      event: "team_member_invited",
+      event: 'team_member_invited',
       properties: {
         brand_id: brandId,
         invited_email: email.trim(),
@@ -166,9 +220,11 @@ export async function revokeInviteAction(brandId: string, inviteId: string): Pro
   await repo.revokeInvite(brandId, inviteId);
 }
 
-export async function deleteBrandProfileAction(brandId: string): Promise<{ nextBrandId: string | null }> {
+export async function deleteBrandProfileAction(
+  brandId: string,
+): Promise<{ nextBrandId: string | null }> {
   if (!brandId) {
-    throw new Error("Brand id is required");
+    throw new Error('Brand id is required');
   }
   const user = await getClaimsIdentity();
   const repo = createBrandProfileRepository();
@@ -176,13 +232,13 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
 
   // Invalidate the layout-level brand list so the soft-deleted brand drops from
   // the switcher/settings on the server render, not just via client refresh.
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout');
 
   if (user?.id) {
     const posthog = getPostHogClient();
     posthog.capture({
       distinctId: user.id,
-      event: "brand_profile_deleted",
+      event: 'brand_profile_deleted',
       properties: { brand_id: brandId },
     });
     await posthog.shutdown();
@@ -193,34 +249,34 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
 
 export async function updateBrandAdNamingSchemaAction(input: {
   brandId: string;
-  platform: "meta" | "google" | "all";
+  platform: 'meta' | 'google' | 'all';
   delimiter: string;
   fields: string[];
 }): Promise<void> {
-  if (!input.brandId) throw new Error("brandId is required");
+  if (!input.brandId) throw new Error('brandId is required');
 
   const delimiter = input.delimiter.trim();
-  if (!delimiter) throw new Error("A delimiter is required");
+  if (!delimiter) throw new Error('A delimiter is required');
 
   const fields = input.fields.map((field) => field.trim()).filter((field) => field.length > 0);
-  if (fields.length === 0) throw new Error("Add at least one naming field");
-  if (new Set(fields).size !== fields.length) throw new Error("Naming fields must be unique");
+  if (fields.length === 0) throw new Error('Add at least one naming field');
+  if (new Set(fields).size !== fields.length) throw new Error('Naming fields must be unique');
 
   const supabase = await createSupabaseServerClient();
   const { data: existing, error: readError } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(AD_NAMING_SCHEMAS_TABLE)
-    .select("id, delimiter, fields, version")
-    .eq("brand_id", input.brandId)
-    .eq("platform", input.platform)
-    .eq("is_active", true)
+    .select('id, delimiter, fields, version')
+    .eq('brand_id', input.brandId)
+    .eq('platform', input.platform)
+    .eq('is_active', true)
     .maybeSingle();
 
   if (readError) throw new Error(readError.message);
 
   if (!existing) {
     const { error: insertError } = await supabase
-      .schema("brand_profiles")
+      .schema('brand_profiles')
       .from(AD_NAMING_SCHEMAS_TABLE)
       .insert({
         brand_id: input.brandId,
@@ -231,11 +287,16 @@ export async function updateBrandAdNamingSchemaAction(input: {
         is_active: true,
       } as never);
     if (insertError) throw new Error(insertError.message);
-    revalidatePath("/settings");
+    revalidatePath('/settings');
     return;
   }
 
-  const row = existing as unknown as { id: string; delimiter: string; fields: unknown; version: number };
+  const row = existing as unknown as {
+    id: string;
+    delimiter: string;
+    fields: unknown;
+    version: number;
+  };
   const currentFields = Array.isArray(row.fields) ? row.fields.map(String) : [];
   const unchanged =
     row.delimiter === delimiter &&
@@ -244,24 +305,24 @@ export async function updateBrandAdNamingSchemaAction(input: {
   if (unchanged) return;
 
   const { error: updateError } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(AD_NAMING_SCHEMAS_TABLE)
     .update({ delimiter, fields, version: row.version + 1 } as never)
-    .eq("id", row.id);
+    .eq('id', row.id);
   if (updateError) throw new Error(updateError.message);
 
-  revalidatePath("/settings");
+  revalidatePath('/settings');
 }
 
 export async function createSignedDocumentUrlAction(storagePath: string): Promise<string> {
   const normalizedStoragePath = normalizeBrandDocumentStoragePath(storagePath);
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.storage
-    .from("brand-docs")
+    .from('brand-docs')
     .createSignedUrl(normalizedStoragePath, 60, { download: true });
 
   if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? "Failed to generate signed URL");
+    throw new Error(error?.message ?? 'Failed to generate signed URL');
   }
 
   return data.signedUrl;
@@ -273,11 +334,11 @@ export async function createInlineDocumentUrlAction(storagePath: string): Promis
   const normalizedStoragePath = normalizeBrandDocumentStoragePath(storagePath);
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.storage
-    .from("brand-docs")
+    .from('brand-docs')
     .createSignedUrl(normalizedStoragePath, 120);
 
   if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? "Failed to generate signed URL");
+    throw new Error(error?.message ?? 'Failed to generate signed URL');
   }
 
   return data.signedUrl;
@@ -285,22 +346,22 @@ export async function createInlineDocumentUrlAction(storagePath: string): Promis
 
 export async function regenerateBrandGuidelineAction(
   brandId: string,
-  purpose: string = "general",
+  purpose: string = 'general',
 ): Promise<{ guidelineId?: string; version?: number; skipped?: string }> {
-  if (!brandId) throw new Error("brandId required");
+  if (!brandId) throw new Error('brandId required');
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.functions.invoke<{
     guidelineId?: string;
     version?: number;
     skipped?: string;
-  }>("generate_brand_guideline", {
-    body: { brandId, trigger: "manual", purpose },
+  }>('generate_brand_guideline', {
+    body: { brandId, trigger: 'manual', purpose },
   });
   if (error) {
     const message = await getFunctionsInvokeErrorMessage(error);
-    throw new Error(message ?? "Failed to regenerate brand guideline");
+    throw new Error(message ?? 'Failed to regenerate brand guideline');
   }
   updateTag(tags.brandGuidelines(brandId));
-  revalidatePath("/settings", "page");
+  revalidatePath('/settings', 'page');
   return data ?? {};
 }

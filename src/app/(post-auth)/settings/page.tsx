@@ -10,6 +10,7 @@ import { UserProfileSection } from '@/components/settings/account/UserProfileSec
 import { BrandDocumentsSection } from '@/components/settings/BrandDocumentsSection';
 import { BrandGuidelineSection } from '@/components/settings/BrandGuidelineSection';
 import { BrandMembersSection } from '@/components/settings/BrandMembersSection';
+import { BrandActivationSection } from '@/components/settings/brand/BrandActivationSection';
 import { BrandAdNamingSection } from '@/components/settings/brand/BrandAdNamingSection';
 import { BrandBillingPanel } from '@/components/settings/brand/BrandBillingPanel';
 import { BrandBookSection } from '@/components/settings/brand/BrandBookSection';
@@ -18,17 +19,21 @@ import { BrandIdentityHeader } from '@/components/settings/brand/BrandIdentityHe
 import { BrandIdentitySection } from '@/components/settings/brand/BrandIdentitySection';
 import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandIntegrationsSwitcher';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
+import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
+import { RoleCapabilityLegend } from '@/components/settings/RoleCapabilityLegend';
 import { AccountNavPill } from '@/components/settings/shell/AccountNavPill';
 import { BrandNavPill } from '@/components/settings/shell/BrandNavPill';
 import { SettingsSection } from '@/components/settings/shell/SettingsSection';
 import { SettingsShell } from '@/components/settings/shell/SettingsShell';
 import { resolveSection } from '@/components/settings/shell/sections';
+import { GlossaryTooltip } from '@/components/shared/glossary';
 import { RunStrategicAnalysisButton } from '@/components/strategic-analyses/RunStrategicAnalysisButton';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandAdNamingSchema } from '@/lib/brands/adNaming';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
 import { fetchBrandDocuments } from '@/lib/brands/documents';
 import { fetchBrandProfileDetails } from '@/lib/brands/profile';
+import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   createEmptyUserIntegrationSummary,
@@ -69,12 +74,25 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   let activeSectionSlot: React.ReactNode;
 
-  if (initialSection === 'general') {
+  if (initialSection === 'activation') {
+    activeSectionSlot = (
+      <>
+        {createBrandHeader(defaultBrandName)}
+        <SettingsSection
+          title="Activation"
+          description="The setup that makes Continuum work for your brand, in one place. Finish these to unlock plans, insights, and competitor intelligence."
+        >
+          <BrandActivationSection />
+        </SettingsSection>
+      </>
+    );
+  } else if (initialSection === 'general') {
     const repo = createBrandProfileRepository();
-    const [brandProfile, members, invites] = await Promise.all([
+    const [brandProfile, members, invites, pulseRecipients] = await Promise.all([
       fetchBrandProfileDetails(activeBrandId),
       repo.fetchMembers(activeBrandId),
       repo.fetchInvites(activeBrandId),
+      fetchPulseRecipients(activeBrandId),
     ]);
     const brandName = brandProfile?.name ?? defaultBrandName;
     const currentUserRole =
@@ -99,6 +117,19 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           description="Manage who can access this brand profile. Owners cannot be removed."
         >
           <BrandMembersSection brandId={activeBrandId} members={members} canEdit={canEdit} />
+          <RoleCapabilityLegend />
+        </SettingsSection>
+        <SettingsSection
+          title="Continuum Pulse"
+          description="The performance + trends email. Turn it on or off, and choose which members receive it."
+        >
+          <BrandPulseSection
+            brandId={activeBrandId}
+            optIn={brandProfile?.emailReportOptIn ?? true}
+            recipients={pulseRecipients}
+            ownerUserId={brandProfile?.createdBy ?? null}
+            canEdit={canEdit}
+          />
         </SettingsSection>
         <SettingsSection
           title="Invitations"
@@ -275,7 +306,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
         <SettingsSection
           title="Connected apps"
-          description="MCP connectors (like Claude) you have authorized with your Continuum login. Revoke any you no longer use."
+          description={
+            <>
+              <GlossaryTooltip termKey="mcp">MCP</GlossaryTooltip> connectors (like Claude) you have
+              authorized with your Continuum login. Revoke any you no longer use.
+            </>
+          }
         >
           <McpConnectionsSection />
         </SettingsSection>
@@ -285,7 +321,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     activeSectionSlot = (
       <SettingsSection
         title="MCP activity"
-        description="Every tool call made through your connected MCP apps — which client, which tool, when, and whether it succeeded."
+        description={
+          <>
+            Every tool call made through your connected{' '}
+            <GlossaryTooltip termKey="mcp">MCP</GlossaryTooltip> apps — which client, which tool,
+            when, and whether it succeeded.
+          </>
+        }
       >
         <McpActivityTable />
       </SettingsSection>

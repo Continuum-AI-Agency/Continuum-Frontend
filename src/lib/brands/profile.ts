@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 type SupabaseSession = {
   access_token: string;
@@ -21,7 +21,7 @@ export type SupabaseFunctionClient = {
   functions: {
     invoke: <T>(
       name: string,
-      options: { body: { brandId: string }; headers?: Record<string, string> }
+      options: { body: { brandId: string }; headers?: Record<string, string> },
     ) => Promise<SupabaseFunctionResult<T>>;
   };
 };
@@ -34,15 +34,20 @@ export type BrandProfileDetails = {
   updatedAt: string;
   createdBy: string;
   completedAt: string | null;
+  emailReportOptIn: boolean;
 };
 
-export async function fetchBrandProfileDetails(brandId: string): Promise<BrandProfileDetails | null> {
+export async function fetchBrandProfileDetails(
+  brandId: string,
+): Promise<BrandProfileDetails | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("brand_profiles")
-    .select("id, brand_name, logo_path, created_at, updated_at, created_by, completed_at")
-    .eq("id", brandId)
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select(
+      'id, brand_name, logo_path, created_at, updated_at, created_by, completed_at, email_report_opt_in',
+    )
+    .eq('id', brandId)
     .maybeSingle();
 
   if (error) {
@@ -61,12 +66,13 @@ export async function fetchBrandProfileDetails(brandId: string): Promise<BrandPr
     updatedAt: data.updated_at,
     createdBy: data.created_by,
     completedAt: data.completed_at,
+    emailReportOptIn: (data as { email_report_opt_in?: boolean }).email_report_opt_in ?? true,
   };
 }
 
 export async function invokeDeleteBrandProfile(
   brandId: string,
-  client?: SupabaseFunctionClient
+  client?: SupabaseFunctionClient,
 ): Promise<void> {
   const supabase = client ?? (await createSupabaseServerClient());
 
@@ -77,10 +83,10 @@ export async function invokeDeleteBrandProfile(
 
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) {
-    throw new Error("Missing session access token");
+    throw new Error('Missing session access token');
   }
 
-  const { data, error } = await supabase.functions.invoke("delete_brand_profile", {
+  const { data, error } = await supabase.functions.invoke('delete_brand_profile', {
     body: { brandId },
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -89,8 +95,8 @@ export async function invokeDeleteBrandProfile(
     throw new Error(error.message);
   }
 
-  if (data && typeof data === "object" && "error" in data) {
-    const message = typeof data.error === "string" ? data.error : "Unable to delete brand profile.";
+  if (data && typeof data === 'object' && 'error' in data) {
+    const message = typeof data.error === 'string' ? data.error : 'Unable to delete brand profile.';
     throw new Error(message);
   }
 }
