@@ -103,7 +103,23 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
     completedAt: new Date().toISOString(),
     step: 2,
   });
-  
+
+  // Warm the dashboard caches the first-value report reads, so the email that the
+  // completedAt trigger just enqueued has full data and the dashboard the user is
+  // about to open is already warm. Fire-and-forget; the report worker also warms
+  // defensively on its first attempt.
+  after(async () => {
+    try {
+      const { warmBrandNowServer } = await import("@/lib/api/warmBrand.server");
+      await warmBrandNowServer(brandId);
+    } catch (error) {
+      console.warn("[completeOnboardingAction] brand warm failed", {
+        brandId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
   revalidatePath("/", "layout");
   return state;
 }
