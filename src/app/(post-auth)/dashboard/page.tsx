@@ -1,7 +1,14 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
+import { fetchBrandBook } from "@/lib/brands/brandBook";
 import { HomeBaseDashboard } from "@/components/dashboard/HomeBaseDashboard";
+import {
+  deriveDashboardSetup,
+  hasAnyAccount,
+} from "@/components/dashboard/first-run/setupState";
 import { PaidDashboardView } from "@/components/dashboard/views/PaidDashboardView";
 import { OrganicDashboardDataWrapper } from "@/components/dashboard/server/OrganicDashboardDataWrapper";
 import { PaidWidgetSkeleton, WidgetSkeleton } from "@/components/dashboard/skeletons/DashboardSkeletons";
@@ -17,10 +24,27 @@ function resolveDashboardView(value: string | string[] | undefined) {
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
   const activeView = resolveDashboardView(params?.view);
-  const { activeBrandId } = await getActiveBrandContext();
+  const { activeBrandId, user } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
   }
+
+  // First-run setup signals. fetchBrandIntegrationSummary is React-cache()d and
+  // is called again inside OrganicDashboardDataWrapper, so this does not add a
+  // second round-trip for the organic view.
+  const [brandIntegrations, userIntegrations, brandBook] = await Promise.all([
+    fetchBrandIntegrationSummary(activeBrandId),
+    user?.id
+      ? fetchUserIntegrationSummary(user.id)
+      : Promise.resolve(null),
+    fetchBrandBook(activeBrandId),
+  ]);
+
+  const setup = deriveDashboardSetup({
+    hasConnectedProviders: hasAnyAccount(userIntegrations),
+    hasAssignedAccounts: hasAnyAccount(brandIntegrations),
+    brandBook,
+  });
 
   const activeViewSlot =
     activeView === "paid" ? (
@@ -38,6 +62,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <HomeBaseDashboard
         activeView={activeView}
         activeViewSlot={activeViewSlot}
+        setup={setup}
+        brandBookRefreshedAt={brandBook?.refreshed_at ?? null}
       />
     </div>
   );
