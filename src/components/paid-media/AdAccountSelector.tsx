@@ -2,10 +2,11 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { Callout } from "@radix-ui/themes";
+import Link from "next/link";
+import { Check, ChevronsUpDown, PlugZapIcon, RefreshCwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PAID_SETUP_CONNECT_HREF } from "./paid-setup-diagnostics";
 import {
   Command,
   CommandEmpty,
@@ -35,6 +36,10 @@ type AdAccountSelectorProps = {
   initialTimelineAccounts?: AdAccount[];
 };
 
+// After this long without a resolved account list we stop showing a disabled
+// "Loading accounts" control and surface a real recovery path (BUG-003).
+const ACCOUNT_LOAD_TIMEOUT_MS = 12000;
+
 export function AdAccountSelector({
   brandId,
   selectedAccountId,
@@ -43,8 +48,10 @@ export function AdAccountSelector({
   initialTimelineAccounts,
 }: AdAccountSelectorProps) {
   const isGoogleAds = platform === "google-ads";
-  const { integrations, isLoading, isError } = useBrandIntegrations(brandId);
+  const { integrations, isLoading, isError, refresh } = useBrandIntegrations(brandId);
   const [open, setOpen] = React.useState(false);
+  const [timedOut, setTimedOut] = React.useState(false);
+  const [reloadNonce, setReloadNonce] = React.useState(0);
   const hasInitialAccounts = initialTimelineAccounts && initialTimelineAccounts.length > 0;
   const [timelineAccounts, setTimelineAccounts] = React.useState<AdAccount[]>(
     initialTimelineAccounts ?? []
@@ -85,6 +92,7 @@ export function AdAccountSelector({
 
   const initialAccountsUsedRef = React.useRef(hasInitialAccounts);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadNonce is a manual re-run signal for the Retry action; it is intentionally not read in the effect body.
   React.useEffect(() => {
     // Google Ads has no timeline endpoint — accounts come from integrations only.
     if (isGoogleAds) {
@@ -141,7 +149,7 @@ export function AdAccountSelector({
     return () => {
       isCancelled = true;
     };
-  }, [brandId, isGoogleAds]);
+  }, [brandId, isGoogleAds, reloadNonce]);
 
   // Auto-select first account if none selected
   React.useEffect(() => {
@@ -151,11 +159,49 @@ export function AdAccountSelector({
     }
   }, [timelineAccountsLoaded, selectedAccountId, adAccounts, onSelect]);
 
-  if (isError) {
+  // A hung account load can otherwise sit forever on a disabled "Loading
+  // accounts" control. Once we've been settling with nothing to show past the
+  // timeout, flip to the recovery state so the user always has a next action.
+  const isSettling = (isLoading || !timelineAccountsLoaded) && adAccounts.length === 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadNonce re-arms the timeout after a Retry even when isSettling is unchanged; it is intentionally not read in the body.
+  React.useEffect(() => {
+    if (!isSettling) {
+      setTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setTimedOut(true), ACCOUNT_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isSettling, reloadNonce]);
+
+  const handleRetry = React.useCallback(() => {
+    setTimedOut(false);
+    setReloadNonce((nonce) => nonce + 1);
+    void refresh();
+  }, [refresh]);
+
+  const resolved = !isLoading && timelineAccountsLoaded;
+  const showRecovery = isError || timedOut || (resolved && adAccounts.length === 0);
+
+  if (showRecovery) {
     return (
-      <Callout.Root color="red" variant="surface" size="1">
-        <Callout.Text>Error loading accounts</Callout.Text>
-      </Callout.Root>
+      <div className="flex items-center gap-1.5">
+        <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 px-2 text-xs">
+          <Link href={PAID_SETUP_CONNECT_HREF}>
+            <PlugZapIcon aria-hidden="true" className="h-3.5 w-3.5" />
+            Connect ad account
+          </Link>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          aria-label="Retry loading ad accounts"
+          onClick={handleRetry}
+        >
+          <RefreshCwIcon aria-hidden="true" className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     );
   }
 

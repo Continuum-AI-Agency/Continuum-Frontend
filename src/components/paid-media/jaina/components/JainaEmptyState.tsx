@@ -7,14 +7,21 @@ import { motion } from "motion/react";
 import { Attachment } from "@/components/ai-elements/attachments";
 
 import { Suggestion } from "@/components/ai-elements/suggestion";
+import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
+
+import { JainaSetupConcierge } from "./JainaSetupConcierge";
 
 type JainaEmptyStateProps = {
   adAccountId: string | null;
+  brandId?: string;
+  platform?: PaidMediaPlatform;
   onExampleClick?: (query: string, attachments: Attachment[]) => void;
 };
 
 export function JainaEmptyState({
   adAccountId,
+  brandId,
+  platform,
   onExampleClick,
 }: JainaEmptyStateProps) {
   const prompts = [
@@ -24,6 +31,12 @@ export function JainaEmptyState({
   ];
 
   if (!adAccountId) {
+    // Guided activation (FEAT-004) when we know the brand; otherwise fall back
+    // to the plain prompt so the empty state never hard-blocks on missing wiring.
+    if (brandId) {
+      return <JainaSetupConcierge brandId={brandId} platform={platform} />;
+    }
+
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <RocketIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />

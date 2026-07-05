@@ -2830,7 +2830,7 @@ export function JainaChatSurface({
         : FileTextIcon;
 
   if (!adAccountId) {
-    return <JainaEmptyState adAccountId={null} />;
+    return <JainaEmptyState adAccountId={null} brandId={brandProfileId} />;
   }
 
   return (

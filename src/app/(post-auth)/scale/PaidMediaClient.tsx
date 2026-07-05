@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type AdAccount, AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
+import { PaidSetupDiagnostics } from "@/components/paid-media/PaidSetupDiagnostics";
+import { PageHeader } from "@/components/shared/PageHeader";
 import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -133,6 +135,7 @@ export default function PaidMediaClientPage({
   }, []);
 
   // Reset brand-dependent state when server re-renders with a new brand
+  // biome-ignore lint/correctness/useExhaustiveDependencies: brandProfileId is the intended trigger — this reset must re-run when the active brand changes, not only when initialAdAccountId does.
   React.useEffect(() => {
     setSelectedAdAccount(initialAdAccountId ?? null);
     setSelectedCampaign(null);
@@ -181,6 +184,7 @@ export default function PaidMediaClientPage({
     };
   }, [activeTab, brandProfileId, selectedAdAccount]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedAdAccount is the intended trigger — the selected campaign is cleared whenever the ad account changes.
   React.useEffect(() => {
     setSelectedCampaign(null);
   }, [selectedAdAccount]);
@@ -248,6 +252,7 @@ export default function PaidMediaClientPage({
   }, [clampCanvasWidth]);
 
   const hasSeededCanvasWidth = React.useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeTab is the intended trigger — the canvas shell re-mounts per tab, so the observer must re-attach and re-seed its width when the tab changes.
   React.useEffect(() => {
     const shell = canvasShellRef.current;
     if (!shell || typeof ResizeObserver === "undefined") return;
@@ -268,9 +273,26 @@ export default function PaidMediaClientPage({
     return () => observer.disconnect();
   }, [clampCanvasWidth, activeTab]);
 
+  // When no ad account is selected the paid surfaces have nothing to render, so
+  // we replace the empty dashboard/optimization panels with an actionable setup
+  // path instead of blank charts (IMP-010 / BUG-003 / BUG-004). Jaina keeps its
+  // own concierge inside JainaChatSurface.
+  const renderBlockedState = () => (
+    <div className="flex h-full min-h-0 items-center justify-center overflow-y-auto p-4">
+      <PaidSetupDiagnostics
+        brandId={brandProfileId}
+        platform={platform}
+        onPlatformChange={handlePlatformChange}
+        heading="Connect an ad account to unlock Scale"
+        description="Scale reads your campaigns to show pacing, DCO actions, and performance. Finish the steps below to get started."
+      />
+    </div>
+  );
+
   if (!mounted) {
     return (
-      <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
+      <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
+        <Skeleton className="h-9 w-[min(20rem,50vw)] rounded-md" />
         <div className="rounded-lg border bg-card px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <Skeleton className="h-8 w-[min(18rem,45vw)] rounded-md" />
@@ -289,8 +311,14 @@ export default function PaidMediaClientPage({
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--app-shell-gap)] overflow-hidden"
+        className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-[var(--app-shell-gap)] overflow-hidden"
       >
+        <PageHeader
+          title="Scale"
+          description="Paid media command center — connect and assign an ad account to unlock campaign pacing, DCO actions, and Jaina."
+          className="px-[var(--app-shell-pad-inline)]"
+        />
+
         <div className="flex min-h-9 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] rounded-lg border border-border/70 bg-muted/10 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <div data-tour-id="paid-account-selector" className="inline-flex">
             <AdAccountSelector
@@ -360,16 +388,24 @@ export default function PaidMediaClientPage({
         </div>
 
         <TabsContent value="dashboard" className="box-border min-h-0 overflow-hidden">
-          <PaidMediaDashboard
-            brandId={brandProfileId}
-            adAccountId={selectedAdAccount}
-            platform={platform}
-            onPlatformChange={handlePlatformChange}
-          />
+          {selectedAdAccount ? (
+            <PaidMediaDashboard
+              brandId={brandProfileId}
+              adAccountId={selectedAdAccount}
+              platform={platform}
+              onPlatformChange={handlePlatformChange}
+            />
+          ) : (
+            renderBlockedState()
+          )}
         </TabsContent>
 
         <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
-          <CampaignPerformanceTab brandId={brandProfileId} adAccountId={selectedAdAccount} />
+          {selectedAdAccount ? (
+            <CampaignPerformanceTab brandId={brandProfileId} adAccountId={selectedAdAccount} />
+          ) : (
+            renderBlockedState()
+          )}
         </TabsContent>
 
         <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">

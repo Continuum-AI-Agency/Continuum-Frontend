@@ -1,11 +1,14 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
-import { render, waitFor, cleanup } from "@testing-library/react";
+import { render, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import { Theme } from "@radix-ui/themes";
 import React from "react";
 
 import { AdAccountSelector } from "./AdAccountSelector";
+import { PAID_SETUP_CONNECT_HREF } from "./paid-setup-diagnostics";
 
-const mockUseBrandIntegrations = mock(() => ({
+const mockRefresh = mock(() => Promise.resolve());
+
+const defaultIntegrationsReturn = {
   integrations: {
     facebook: {
       accounts: [
@@ -19,10 +22,22 @@ const mockUseBrandIntegrations = mock(() => ({
   },
   isLoading: false,
   isError: false,
-}));
+  refresh: mockRefresh,
+};
+
+const mockUseBrandIntegrations = mock(() => defaultIntegrationsReturn);
 
 mock.module("@/hooks/useBrandIntegrations", () => ({
   useBrandIntegrations: (...args: unknown[]) => mockUseBrandIntegrations(...args),
+}));
+
+mock.module("next/link", () => ({
+  __esModule: true,
+  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 global.ResizeObserver = class ResizeObserver {
@@ -39,7 +54,9 @@ describe("AdAccountSelector", () => {
 
   beforeEach(() => {
     mockSelect.mockClear();
+    mockRefresh.mockClear();
     mockUseBrandIntegrations.mockClear();
+    mockUseBrandIntegrations.mockImplementation(() => defaultIntegrationsReturn);
 
     global.fetch = mock(() =>
       Promise.resolve({
@@ -98,5 +115,35 @@ describe("AdAccountSelector", () => {
     await waitFor(() => {
       expect(mockSelect).toHaveBeenCalledWith("act_9530520017061961");
     });
+  });
+
+  it("shows a Connect + Retry recovery path when no ad accounts resolve", async () => {
+    mockUseBrandIntegrations.mockImplementation(() => ({
+      integrations: { facebook: { accounts: [] } },
+      isLoading: false,
+      isError: false,
+      refresh: mockRefresh,
+    }));
+
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ accounts: [] }),
+      } as Response)
+    );
+
+    const { findByRole } = render(
+      <ThemeWrapper>
+        <AdAccountSelector brandId="brand_123" selectedAccountId={null} onSelect={mockSelect} />
+      </ThemeWrapper>
+    );
+
+    const connectLink = await findByRole("link", { name: /connect ad account/i });
+    expect(connectLink.getAttribute("href")).toBe(PAID_SETUP_CONNECT_HREF);
+    expect(mockSelect).not.toHaveBeenCalled();
+
+    const retryButton = await findByRole("button", { name: "Retry loading ad accounts" });
+    fireEvent.click(retryButton);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 });
