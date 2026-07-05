@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, Heart, Images, MessageCircle, Play } from "lucide-react";
 
+import type { InstagramMediaItem } from "@continuum/contracts";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
-import type { CompetitorPostView } from "./competitorPostView";
+import { carouselSlides, type CompetitorPostView } from "./competitorPostView";
 
 const numberFormatter = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -47,8 +56,66 @@ function PostThumb({ coverUrl, alt, className }: { coverUrl: string | null; alt:
   );
 }
 
-// A compact masonry tile that expands on hover into a blown-up preview with the
-// post copy and engagement metrics. Mirrors the paid-media CreativeTile pattern.
+function SlideMedia({ item, poster, alt }: { item: InstagramMediaItem; poster: string | null; alt: string }) {
+  if (item.kind === "video") {
+    return (
+      <video
+        src={item.url}
+        poster={poster ?? undefined}
+        muted
+        playsInline
+        controls
+        className="aspect-square w-full bg-black object-cover"
+      />
+    );
+  }
+  return <PostThumb coverUrl={item.url} alt={alt} className="aspect-square" />;
+}
+
+// The enlarged, pageable preview for carousels: click the inward arrows to move
+// between slides while the pointer stays inside the hover card.
+function PostCarousel({ slides, poster, alt }: { slides: InstagramMediaItem[]; poster: string | null; alt: string }) {
+  const [api, setApi] = useState<CarouselApi | null>(null);
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const syncCurrent = () => setCurrent(api.selectedScrollSnap());
+    syncCurrent();
+    api.on("select", syncCurrent);
+    api.on("reInit", syncCurrent);
+    return () => {
+      api.off("select", syncCurrent);
+      api.off("reInit", syncCurrent);
+    };
+  }, [api]);
+
+  const arrowClass =
+    "h-7 w-7 border-0 bg-black/55 text-white backdrop-blur-sm hover:bg-black/75 hover:text-white disabled:opacity-30";
+
+  return (
+    <div className="relative">
+      <Carousel setApi={setApi} opts={{ loop: false }} className="w-full">
+        <CarouselContent className="ml-0">
+          {slides.map((item, index) => (
+            <CarouselItem key={`${item.url}-${index}`} className="pl-0">
+              <SlideMedia item={item} poster={poster} alt={`${alt} slide ${index + 1}`} />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <CarouselPrevious className={cn("left-2", arrowClass)} />
+        <CarouselNext className={cn("right-2", arrowClass)} />
+      </Carousel>
+      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
+        {current + 1}/{slides.length}
+      </span>
+    </div>
+  );
+}
+
+// A compact square thumbnail that expands on hover into a blown-up preview with the
+// post copy and engagement metrics. Carousels become a pageable slideshow inside the
+// hover card. Mirrors the paid-media CreativeTile pattern.
 export function CompetitorPostHoverTile({
   view,
   actions,
@@ -61,6 +128,7 @@ export function CompetitorPostHoverTile({
   const commentsCount = formatCount(post.commentsCount);
   const postDate = formatDate(post.timestamp);
   const altText = `${view.competitorName} ${post.kind}`;
+  const slides = carouselSlides(post);
 
   return (
     <HoverCard openDelay={180} closeDelay={100}>
@@ -70,12 +138,12 @@ export function CompetitorPostHoverTile({
           target="_blank"
           rel="noreferrer"
           aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
-          className="group/tile relative block overflow-hidden rounded-lg border border-border/70 bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group/tile relative block overflow-hidden rounded-md border border-border/70 bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <PostThumb
             coverUrl={post.coverUrl}
             alt={altText}
-            className="h-auto transition-transform duration-200 motion-safe:group-hover/tile:scale-105"
+            className="aspect-square h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-105"
           />
           {(post.kind !== "post" || post.mediaCount > 1) && (
             <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
@@ -86,8 +154,12 @@ export function CompetitorPostHoverTile({
         </a>
       </HoverCardTrigger>
 
-      <HoverCardContent align="start" className="w-72 overflow-hidden p-0">
-        <PostThumb coverUrl={post.coverUrl} alt={altText} className="max-h-64" />
+      <HoverCardContent align="start" className="w-80 overflow-hidden p-0">
+        {slides.length > 0 ? (
+          <PostCarousel slides={slides} poster={post.coverUrl} alt={altText} />
+        ) : (
+          <PostThumb coverUrl={post.coverUrl} alt={altText} className="max-h-72" />
+        )}
         <div className="flex flex-col gap-2 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

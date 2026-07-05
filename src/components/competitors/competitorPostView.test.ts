@@ -6,6 +6,7 @@ import type {
 } from "@continuum/contracts";
 
 import {
+  carouselSlides,
   competitorPostViewKey,
   organicPostToView,
   searchResultToViews,
@@ -75,5 +76,36 @@ describe("competitorPostView", () => {
     };
     const [view] = searchResultToViews(result);
     expect(view.competitorName).toBe("someshop");
+  });
+
+  describe("carouselSlides", () => {
+    it("returns every media item for a multi-item carousel", () => {
+      const carousel: InstagramPost = {
+        ...post,
+        id: "p2",
+        kind: "carousel",
+        mediaCount: 3,
+        items: [
+          { kind: "image", url: "https://cdn.example.com/1.jpg" },
+          { kind: "video", url: "https://cdn.example.com/2.mp4" },
+          { kind: "image", url: "https://cdn.example.com/3.jpg" },
+        ],
+      };
+      const slides = carouselSlides(carousel);
+      expect(slides).toHaveLength(3);
+      expect(slides.map((slide) => slide.kind)).toEqual(["image", "video", "image"]);
+    });
+
+    it("returns no slides for a single-item post or reel", () => {
+      expect(carouselSlides(post)).toHaveLength(0);
+      const reel: InstagramPost = {
+        ...post,
+        id: "p3",
+        kind: "reel",
+        mediaCount: 1,
+        items: [{ kind: "video", url: "https://cdn.example.com/reel.mp4" }],
+      };
+      expect(carouselSlides(reel)).toHaveLength(0);
+    });
   });
 });

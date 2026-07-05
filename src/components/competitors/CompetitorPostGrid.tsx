@@ -6,15 +6,16 @@ import { cn } from "@/lib/utils";
 import { CompetitorPostHoverTile } from "./CompetitorPostHoverTile";
 import { competitorPostViewKey, type CompetitorPostView } from "./competitorPostView";
 
-const SKELETON_HEIGHTS = ["h-28", "h-40", "h-32", "h-44", "h-28", "h-36", "h-40", "h-32"];
+const DEFAULT_GRID_CLASS = "grid grid-cols-3 sm:grid-cols-4 gap-2";
+const SKELETON_COUNT = 12;
 
-export function CompetitorPostMasonry({
+export function CompetitorPostGrid({
   views,
   isLoading,
   isError,
   emptyText,
   errorText = "Competitor posts are unavailable right now.",
-  columnsClassName = "columns-2 sm:columns-3",
+  gridClassName = DEFAULT_GRID_CLASS,
   renderActions,
 }: {
   views: CompetitorPostView[];
@@ -22,17 +23,14 @@ export function CompetitorPostMasonry({
   isError?: boolean;
   emptyText: string;
   errorText?: string;
-  columnsClassName?: string;
+  gridClassName?: string;
   renderActions?: (view: CompetitorPostView) => ReactNode;
 }) {
   if (isLoading) {
     return (
-      <div className={cn("gap-2", columnsClassName)}>
-        {SKELETON_HEIGHTS.map((height, index) => (
-          <div
-            key={index}
-            className={cn("mb-2 w-full animate-pulse break-inside-avoid rounded-lg bg-muted/70", height)}
-          />
+      <div className={gridClassName}>
+        {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
+          <div key={index} className="aspect-square w-full animate-pulse rounded-md bg-muted/70" />
         ))}
       </div>
     );
@@ -51,11 +49,13 @@ export function CompetitorPostMasonry({
   }
 
   return (
-    <div className={cn("gap-2", columnsClassName)}>
+    <div className={cn(gridClassName)}>
       {views.map((view) => (
-        <div key={competitorPostViewKey(view)} className="mb-2 break-inside-avoid">
-          <CompetitorPostHoverTile view={view} actions={renderActions?.(view)} />
-        </div>
+        <CompetitorPostHoverTile
+          key={competitorPostViewKey(view)}
+          view={view}
+          actions={renderActions?.(view)}
+        />
       ))}
     </div>
   );

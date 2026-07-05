@@ -7,6 +7,7 @@
 import type {
   CompetitorOrganicPost,
   InstagramCompetitorSearchResult,
+  InstagramMediaItem,
   InstagramPost,
 } from "@continuum/contracts";
 
@@ -19,6 +20,13 @@ export interface CompetitorPostView {
 
 export function competitorPostViewKey(view: CompetitorPostView): string {
   return `${view.instagramUsername}:${view.post.id}`;
+}
+
+// Slides to page through inside the enlarged hover preview. Only multi-item posts
+// (carousels) are pageable; single posts and reels return an empty list so callers
+// render the cover thumbnail instead of mounting a carousel.
+export function carouselSlides(post: InstagramPost): InstagramMediaItem[] {
+  return post.items.length > 1 ? post.items : [];
 }
 
 export function organicPostToView(item: CompetitorOrganicPost): CompetitorPostView {

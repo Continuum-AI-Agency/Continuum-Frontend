@@ -159,7 +159,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
       <CompetitorSearchBar comingSoon placeholder="Search competitor ads…" />
       <InsightDataTable
       title="Competitor ads"
-      headerAction={<CompetitorSpyLink href="/competitor-spy?tab=paid" />}
+      headerAction={<CompetitorSpyLink href="/competitor-spy?tab=inspiration" />}
       rows={rows}
       columns={columns}
       getRowId={(row) => row.snapshotId}

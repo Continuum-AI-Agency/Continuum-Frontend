@@ -2,36 +2,31 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useShortcut } from "@/lib/keyboard/useShortcut";
-import { useAwarenessReport, useCompetitors } from "@/lib/api/competitorSpy";
-import { AdSnapshotGrid } from "./AdSnapshotGrid";
-import { CompetitorOrganicExplorer } from "@/components/competitors/CompetitorOrganicExplorer";
-import { CompetitorSearchBar } from "@/components/competitors/CompetitorSearchBar";
-import { SaveToBoardButton } from "./SaveToBoardButton";
-import { CompetitorRail } from "./CompetitorRail";
+import { useAwarenessReport } from "@/lib/api/competitorSpy";
+import { InspirationBrowser } from "@/components/competitors/InspirationBrowser";
 import { CompetitorSearchPalette } from "./CompetitorSearchPalette";
 import { BoardsPanel } from "./BoardsPanel";
 import { AwarenessReportView } from "./AwarenessReportView";
 import { CompetitorsTab } from "./CompetitorsTab";
 
-type TabId = "overview" | "organic" | "paid" | "boards" | "competitors";
+type TabId = "overview" | "inspiration" | "boards" | "competitors";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
-  { id: "organic", label: "Instagram Posts" },
-  { id: "paid", label: "Paid Ads" },
+  { id: "inspiration", label: "Inspiration" },
   { id: "boards", label: "Boards" },
   { id: "competitors", label: "Competitors" },
 ];
 
-// Dashboard spy shortcuts deep-link a sub-view via ?tab=; anything else opens
-// Overview. Initial value only — in-page switching uses local state.
+// Dashboard spy shortcuts deep-link a sub-view via ?tab=; legacy organic|paid
+// links resolve to the unified Inspiration tab. Initial value only — in-page
+// switching uses local state.
 function resolveTab(value: string | null): TabId {
-  return value === "organic" || value === "paid" || value === "boards" || value === "competitors"
-    ? value
-    : "overview";
+  if (value === "boards" || value === "competitors") return value;
+  if (value === "inspiration" || value === "organic" || value === "paid") return "inspiration";
+  return "overview";
 }
 
 function tabClass(active: boolean): string {
@@ -40,53 +35,11 @@ function tabClass(active: boolean): string {
   }`;
 }
 
-const STATUS_OPTIONS: Array<{ id: "all" | "active" | "paused"; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "active", label: "Active" },
-  { id: "paused", label: "Paused" },
-];
-
-function StatusSegmented({
-  value,
-  onChange,
-}: {
-  value?: "active" | "paused";
-  onChange: (value: "active" | "paused" | undefined) => void;
-}) {
-  const current = value ?? "all";
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5">
-      {STATUS_OPTIONS.map((option) => {
-        const active = current === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(option.id === "all" ? undefined : option.id)}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-const RAIL_CLASS = "md:sticky md:top-0 md:w-60 md:shrink-0 md:self-start";
-
 export function CompetitorSpyClient({ brandId }: { brandId: string }) {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>(() => resolveTab(searchParams.get("tab")));
-  const [competitorId, setCompetitorId] = useState<string | undefined>(undefined);
-  const [status, setStatus] = useState<"active" | "paused" | undefined>(undefined);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const { data: competitors } = useCompetitors(brandId);
   const { data: awareness } = useAwarenessReport(brandId);
 
   useShortcut(
@@ -97,12 +50,6 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
       setPaletteOpen(true);
     },
   );
-
-  // Selecting a brand/ad from search scopes the rail-driven tabs to it.
-  function focusCompetitor(id: string): void {
-    setCompetitorId(id);
-    setTab((current) => (current === "organic" || current === "paid" ? current : "paid"));
-  }
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 md:p-6">
@@ -139,57 +86,14 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
       <div className="flex-1 overflow-auto">
         {tab === "overview" ? <AwarenessReportView report={awareness ?? null} /> : null}
 
-        {tab === "organic" ? (
-          <div className="flex flex-col gap-4 md:flex-row md:gap-5">
-            <CompetitorRail
-              competitors={competitors ?? []}
-              selectedId={competitorId}
-              onSelect={setCompetitorId}
-              onAdd={() => setTab("competitors")}
-              className={RAIL_CLASS}
-            />
-            <div className="min-w-0 flex-1">
-              <CompetitorOrganicExplorer
-                brandId={brandId}
-                competitorId={competitorId}
-                feedLimit={24}
-                columnsClassName="columns-2 sm:columns-3 lg:columns-4 xl:columns-5"
-                renderActions={(view) =>
-                  view.competitorId ? (
-                    <SaveToBoardButton
-                      brandId={brandId}
-                      request={{
-                        kind: "organic",
-                        competitorId: view.competitorId,
-                        competitorName: view.competitorName,
-                        instagramUsername: view.instagramUsername,
-                        post: view.post,
-                      }}
-                    />
-                  ) : null
-                }
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {tab === "paid" ? (
-          <div className="flex flex-col gap-4 md:flex-row md:gap-5">
-            <CompetitorRail
-              competitors={competitors ?? []}
-              selectedId={competitorId}
-              onSelect={setCompetitorId}
-              onAdd={() => setTab("competitors")}
-              className={RAIL_CLASS}
-            />
-            <div className="min-w-0 flex-1 space-y-4">
-              <div className="flex items-center gap-2">
-                <CompetitorSearchBar comingSoon placeholder="Search competitor ads…" className="flex-1" />
-                <StatusSegmented value={status} onChange={setStatus} />
-              </div>
-              <AdSnapshotGrid brandId={brandId} competitorId={competitorId} status={status} />
-            </div>
-          </div>
+        {tab === "inspiration" ? (
+          <InspirationBrowser
+            brandId={brandId}
+            defaultSource="all"
+            showRail
+            showSync
+            onManageCompetitors={() => setTab("competitors")}
+          />
         ) : null}
 
         {tab === "boards" ? <BoardsPanel brandId={brandId} /> : null}
@@ -201,7 +105,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
         brandId={brandId}
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        onSelectCompetitor={focusCompetitor}
+        onSelectCompetitor={() => setTab("inspiration")}
         onTrackNew={() => setTab("competitors")}
       />
     </div>
