@@ -7,11 +7,13 @@ import {
   TrendingUp,
   Activity,
   Bot,
+  BookOpen,
   CalendarDays,
   ChartColumn,
   Code,
   Gauge,
   Images,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +38,10 @@ export type AppNavigationItem = {
   disabled?: boolean;
   // Renders a lock affordance on a disabled entry (coming-soon, gated surface).
   locked?: boolean;
+  // User-facing explanation for why a disabled entry is inert (surfaced as a
+  // tooltip + accessible name). Required reading for disabled items so they
+  // never read as an unexplained dead affordance.
+  disabledReason?: string;
 };
 
 export type AppNavigationGroup = {
@@ -45,19 +51,23 @@ export type AppNavigationGroup = {
 
 // Sub-routes for the Organic section. Shown as flat nested items under the
 // "Organic" section header (Hessian-style), and reused as the parent's items
-// for breadcrumb resolution.
+// for breadcrumb resolution. Labels are area-qualified so "Organic Agent" and
+// "Organic Analytics" never collide with Scale's "Jaina"/"Paid Analytics" when
+// read outside their section header (breadcrumb, command palette, tooltip).
 const ORGANIC_ITEMS: AppNavigationItem[] = [
-  { label: "Agent", href: "/organic?tab=agent", icon: Bot, accentColor: "text-emerald-500" },
-  { label: "Analytics", href: "/organic?tab=metrics", icon: ChartColumn, accentColor: "text-emerald-500" },
+  { label: "Organic Agent", href: "/organic?tab=agent", icon: Bot, accentColor: "text-emerald-500" },
+  { label: "Organic Analytics", href: "/organic?tab=metrics", icon: ChartColumn, accentColor: "text-emerald-500" },
   { label: "Calendar", href: "/organic?tab=planner", icon: CalendarDays, accentColor: "text-emerald-500" },
 ];
 
-// Sub-routes for the Scale section. "Optimization" is the campaign performance
-// surface (the Scale page tab formerly labeled "Performance").
+// Sub-routes for the Scale section. The Scale agent is Jaina; "Paid Analytics"
+// and "Paid Optimization" mirror Organic's qualified labels so no sub-label is
+// ambiguous across areas. "Paid Optimization" is the campaign performance
+// surface (the Scale page tab keyed as "performance").
 const SCALE_ITEMS: AppNavigationItem[] = [
-  { label: "Agent", href: "/scale?tab=jaina", icon: Bot, accentColor: "text-amber-500" },
-  { label: "Analytics", href: "/scale?tab=dashboard", icon: Activity, accentColor: "text-amber-500" },
-  { label: "Optimization", href: "/scale?tab=performance", icon: Gauge, accentColor: "text-amber-500" },
+  { label: "Jaina", href: "/scale?tab=jaina", icon: Bot, accentColor: "text-amber-500" },
+  { label: "Paid Analytics", href: "/scale?tab=dashboard", icon: Activity, accentColor: "text-amber-500" },
+  { label: "Paid Optimization", href: "/scale?tab=performance", icon: Gauge, accentColor: "text-amber-500" },
 ];
 
 const HOME: AppNavigationItem = { label: "Home", href: "/dashboard", icon: Home };
@@ -93,13 +103,15 @@ const SCALE: AppNavigationItem = {
   items: SCALE_ITEMS,
 };
 
-// Locked developer surface. Greyed-out and non-interactive until released.
+// Locked developer surface. Greyed-out and non-interactive until released, with
+// a user-facing reason so it never reads as an unexplained dead entry (BUG-009).
 const DEVELOPERS: AppNavigationItem = {
   label: "Developers",
   href: "/developers",
   icon: Code,
   disabled: true,
   locked: true,
+  disabledReason: "Coming soon",
 };
 
 // The canonical sidebar IA: an unlabeled lead group, then one labeled section
@@ -159,4 +171,66 @@ export function isRouteActive(
   }
 
   return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
+}
+
+// A single page-specific action offered by the command palette. Each is a deep
+// link into a real surface — the palette uses these to teach what is available
+// from the page the user is currently on.
+export type CommandSuggestion = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+};
+
+// Static route -> suggestions map keyed by top-level route. Intentionally
+// backend-free: these are curated deep links, not search results. A
+// backend-ranked universal command search (FEAT-023) is out of scope here;
+// keep this map static and add routes as new surfaces ship.
+const CONTEXTUAL_SUGGESTIONS: Record<string, CommandSuggestion[]> = {
+  "/dashboard": [
+    { label: "Generate Brand Book", href: "/settings?section=brand-book", icon: BookOpen },
+    { label: "Connect Meta", href: "/settings?section=integrations", icon: Plug },
+    { label: "Create reel plan", href: "/organic?tab=planner", icon: CalendarDays },
+    { label: "Analyze ROAS drop", href: "/scale?tab=dashboard", icon: Activity },
+  ],
+  "/organic": [
+    { label: "Create reel plan", href: "/organic?tab=planner", icon: CalendarDays },
+    { label: "Ask the Organic Agent", href: "/organic?tab=agent", icon: Bot },
+    { label: "Review Organic Analytics", href: "/organic?tab=metrics", icon: ChartColumn },
+  ],
+  "/scale": [
+    { label: "Ask Jaina", href: "/scale?tab=jaina", icon: Bot },
+    { label: "Analyze ROAS drop", href: "/scale?tab=dashboard", icon: Activity },
+    { label: "Optimize campaigns", href: "/scale?tab=performance", icon: Gauge },
+  ],
+  "/ai-studio": [
+    { label: "Open media Library", href: "/library", icon: Images },
+    { label: "Create reel plan", href: "/organic?tab=planner", icon: CalendarDays },
+  ],
+  "/library": [
+    { label: "Open Canvas", href: "/ai-studio", icon: Frame },
+    { label: "Open content Calendar", href: "/organic?tab=planner", icon: CalendarDays },
+  ],
+  "/settings": [
+    { label: "Generate Brand Book", href: "/settings?section=brand-book", icon: BookOpen },
+    { label: "Connect Meta", href: "/settings?section=integrations", icon: Plug },
+    { label: "Manage knowledge base", href: "/settings?section=knowledge", icon: BookOpen },
+  ],
+  "/competitor-spy": [
+    { label: "Analyze ROAS drop", href: "/scale?tab=dashboard", icon: Activity },
+    { label: "Create reel plan", href: "/organic?tab=planner", icon: CalendarDays },
+  ],
+};
+
+// Resolve the suggestions for the current pathname by longest-matching route
+// prefix (so nested paths like /scale/approvals inherit the Scale set). Returns
+// an empty list for routes with no curated suggestions.
+export function getContextualSuggestions(currentPath: string): CommandSuggestion[] {
+  const matchedPrefix = Object.keys(CONTEXTUAL_SUGGESTIONS)
+    .filter(
+      (prefix) => currentPath === prefix || currentPath.startsWith(`${prefix}/`),
+    )
+    .sort((a, b) => b.length - a.length)[0];
+
+  return matchedPrefix ? CONTEXTUAL_SUGGESTIONS[matchedPrefix] : [];
 }

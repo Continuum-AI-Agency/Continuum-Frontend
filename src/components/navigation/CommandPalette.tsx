@@ -2,7 +2,7 @@
 
 import React from "react"
 import { motion } from "motion/react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Building2, Loader2, Moon, Sun } from "lucide-react"
 import {
   CommandDialog,
@@ -17,7 +17,7 @@ import {
 import { useTheme } from "@/components/theme-provider"
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider"
 import { isAdminUser } from "@/lib/brands/brand-switcher-utils"
-import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes"
+import { APP_NAVIGATION, APP_NAVIGATION_FOOTER, getContextualSuggestions } from "./routes"
 import { useCommandPalette } from "./CommandPaletteProvider"
 import { getLocalStorageJSON, setLocalStorageJSON } from "@/lib/storage"
 import {
@@ -43,10 +43,15 @@ function saveRecent(brandId: string, pages: RecentPage[]) {
 export function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
   const router = useRouter()
+  const pathname = usePathname()
   const { appearance, toggle } = useTheme()
   const { user, brandSummaries, activeBrandId, selectBrand, isSwitching, switchingToBrandId } =
     useActiveBrandContext()
   const isAdmin = isAdminUser(user)
+
+  // Page-specific suggestions, resolved from the current route (static map, no
+  // backend). Teaches the user what is worth doing from where they already are.
+  const suggestions = getContextualSuggestions(pathname ?? "")
 
   const [recentPages, setRecentPages] = React.useState<RecentPage[]>([])
 
@@ -98,6 +103,32 @@ export function CommandPalette() {
                   {page.label}
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        )}
+
+        {suggestions.length > 0 && (
+          <>
+            <CommandGroup heading="Suggested for this page">
+              {suggestions.map((suggestion) => {
+                const Icon = suggestion.icon
+                return (
+                  <CommandItem
+                    key={suggestion.href}
+                    value={`suggested ${suggestion.label}`}
+                    onSelect={() =>
+                      run(() => router.push(suggestion.href), {
+                        href: suggestion.href,
+                        label: suggestion.label,
+                      })
+                    }
+                  >
+                    <Icon />
+                    {suggestion.label}
+                  </CommandItem>
+                )
+              })}
             </CommandGroup>
             <CommandSeparator />
           </>

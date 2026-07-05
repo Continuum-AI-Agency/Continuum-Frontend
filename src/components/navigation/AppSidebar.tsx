@@ -118,23 +118,36 @@ function AppSidebarInner() {
   function renderNavItem(item: AppNavigationItem) {
     if (item.disabled) {
       const DisabledIcon = item.icon;
+      // Disabled entries always explain themselves: the reason drives both the
+      // hover tooltip (visible expanded AND collapsed) and the accessible name,
+      // so the entry never reads as an unexplained dead affordance (BUG-009).
+      const disabledName = item.disabledReason
+        ? `${item.label} (${item.disabledReason})`
+        : item.label;
       return (
         <SidebarMenuItem key={item.href}>
-          <SidebarMenuButton
-            aria-disabled="true"
-            tabIndex={-1}
-            tooltip={item.label}
-            size="default"
-            className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
-          >
-            <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
-            <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-              {item.label}
-            </span>
-            {item.locked ? (
-              <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden" />
-            ) : null}
-          </SidebarMenuButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarMenuButton
+                aria-disabled="true"
+                aria-label={disabledName}
+                tabIndex={-1}
+                size="default"
+                className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
+              >
+                <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
+                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                  {item.label}
+                </span>
+                {item.locked ? (
+                  <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden" />
+                ) : null}
+              </SidebarMenuButton>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center">
+              {item.disabledReason ?? item.label}
+            </TooltipContent>
+          </Tooltip>
           {item.badge ? (
             <SidebarMenuBadge className="pointer-events-none opacity-60">
               <Badge size="1" color={item.badge.tone ?? "violet"} radius="full" variant="surface">
@@ -155,6 +168,7 @@ function AppSidebarInner() {
 
       return (
         <SidebarMenuItem key={item.href}>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: hover/focus reveal is progressive enhancement only; keyboard users reach the sub-routes through the collapsible nav path, so no role is warranted on this wrapper. */}
           <div
             onMouseEnter={() => { router.prefetch(item.href); setHoveredQuickTabs(item.href); }}
             onMouseLeave={() => setHoveredQuickTabs((current) => (current === item.href ? null : current))}
@@ -368,6 +382,7 @@ function AppSidebarInner() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    type="button"
                     onClick={() => openPalette(true)}
                     className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
                     aria-label="Search (⌘K)"

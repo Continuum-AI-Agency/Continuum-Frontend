@@ -4,6 +4,7 @@ import {
   APP_NAVIGATION,
   APP_NAVIGATION_FOOTER,
   APP_NAVIGATION_GROUPS,
+  getContextualSuggestions,
   isRouteActive,
 } from "./routes";
 
@@ -45,11 +46,11 @@ describe("navigation structure", () => {
     expect(lead.items.map((i) => i.href)).toEqual(["/dashboard", "/ai-studio"]);
   });
 
-  it("nests Organic sub-routes as Agent / Analytics / Calendar", () => {
+  it("nests Organic sub-routes with area-qualified labels", () => {
     const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === "Organic");
     expect(organic?.items.map((i) => i.label)).toEqual([
-      "Agent",
-      "Analytics",
+      "Organic Agent",
+      "Organic Analytics",
       "Calendar",
     ]);
     expect(organic?.items.map((i) => i.href)).toEqual([
@@ -59,12 +60,12 @@ describe("navigation structure", () => {
     ]);
   });
 
-  it("nests Scale sub-routes as Agent / Analytics / Optimization", () => {
+  it("nests Scale sub-routes as Jaina / Paid Analytics / Paid Optimization", () => {
     const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === "Scale");
     expect(scale?.items.map((i) => i.label)).toEqual([
-      "Agent",
-      "Analytics",
-      "Optimization",
+      "Jaina",
+      "Paid Analytics",
+      "Paid Optimization",
     ]);
     expect(scale?.items.map((i) => i.href)).toEqual([
       "/scale?tab=jaina",
@@ -73,18 +74,34 @@ describe("navigation structure", () => {
     ]);
   });
 
+  it("disambiguates the Agent and Analytics sub-labels across Organic and Scale", () => {
+    const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === "Organic");
+    const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === "Scale");
+    const organicLabels = organic?.items.map((i) => i.label) ?? [];
+    const scaleLabels = scale?.items.map((i) => i.label) ?? [];
+
+    // No bare "Agent"/"Analytics" survives, and no label is shared across areas.
+    for (const label of [...organicLabels, ...scaleLabels]) {
+      expect(label).not.toBe("Agent");
+      expect(label).not.toBe("Analytics");
+    }
+    expect(organicLabels.some((label) => scaleLabels.includes(label))).toBe(false);
+  });
+
   it("puts Library under a Storage section", () => {
     const storage = APP_NAVIGATION_GROUPS.find((g) => g.label === "Storage");
     expect(storage?.items.map((i) => i.href)).toEqual(["/library"]);
   });
 
-  it("exposes a single locked, greyed-out Developers entry", () => {
+  it("exposes a single locked, greyed-out Developers entry with a stated reason", () => {
     const developers = APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find(
       (i) => i.label === "Developers",
     );
     expect(developers).toBeDefined();
     expect(developers!.disabled).toBe(true);
     expect(developers!.locked).toBe(true);
+    // BUG-009: a disabled entry must carry a user-facing reason.
+    expect(developers!.disabledReason).toBe("Coming soon");
   });
 
   it("footer is Settings + admin-gated Admin", () => {
@@ -120,5 +137,35 @@ describe("isRouteActive", () => {
       isRouteActive("/organic", params("tab=metrics"), { href: "/organic?tab=metrics" }),
     ).toBe(true);
     expect(isRouteActive("/scale", params(), { href: "/scale?tab=jaina" })).toBe(false);
+  });
+});
+
+describe("getContextualSuggestions", () => {
+  it("offers Scale-specific actions on /scale", () => {
+    const labels = getContextualSuggestions("/scale").map((s) => s.label);
+    expect(labels).toEqual(["Ask Jaina", "Analyze ROAS drop", "Optimize campaigns"]);
+  });
+
+  it("offers Organic-specific actions on /organic", () => {
+    const labels = getContextualSuggestions("/organic").map((s) => s.label);
+    expect(labels).toContain("Create reel plan");
+    expect(labels).toContain("Ask the Organic Agent");
+  });
+
+  it("inherits the area set on a nested sub-path via longest-prefix match", () => {
+    expect(getContextualSuggestions("/scale/approvals").map((s) => s.label)).toEqual(
+      getContextualSuggestions("/scale").map((s) => s.label),
+    );
+  });
+
+  it("returns no suggestions for an unmapped route", () => {
+    expect(getContextualSuggestions("/nowhere")).toEqual([]);
+  });
+
+  it("only points suggestions at real navigable hrefs", () => {
+    const hrefs = getContextualSuggestions("/dashboard").map((s) => s.href);
+    for (const href of hrefs) {
+      expect(href.startsWith("/")).toBe(true);
+    }
   });
 });
