@@ -315,6 +315,10 @@ export const angleEvidenceSourceEnum = z.enum([
   // First-party winning-angle/hook insights derived by the creative_strategy
   // pipeline from the brand's own top-performing posts and ads.
   "creativeStrategy",
+  // Follower age/gender demographics + follower-vs-non-follower reach split from
+  // the organic analytics pipeline, so an angle can be anchored to who the brand
+  // actually reaches.
+  "audienceDemographics",
 ]);
 export type AngleEvidenceSource = z.infer<typeof angleEvidenceSourceEnum>;
 
@@ -322,7 +326,7 @@ export const angleEvidenceMetricUnitEnum = z.enum(["pct", "count", "rate", "rati
 export type AngleEvidenceMetricUnit = z.infer<typeof angleEvidenceMetricUnitEnum>;
 
 export const angleEvidenceItemSchema = z.object({
-  kind: z.enum(["trend_lift", "hook_rate", "top_post", "trend", "competitor"]),
+  kind: z.enum(["trend_lift", "hook_rate", "top_post", "trend", "competitor", "demographic"]),
   refId: z.string().nullable().describe("trendId / mediaId / competitor handle"),
   label: z.string().describe('Human-readable, e.g. "Trend: cold brew hacks"'),
   metric: z
