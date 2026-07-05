@@ -1,12 +1,13 @@
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { CaptionWord } from '../utils/splice/captionCues';
 import type {
   SingleSourceWorkerRange,
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
+  TimelineOverlayWorkerItem,
   TimelineWorkerItem,
   WorkerClipInput,
 } from './spliceWorkerProtocol';
-import type { CaptionWord } from '../utils/splice/captionCues';
-import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 
 export type WorkerSpliceProgress = {
   progress: number;
@@ -38,8 +39,13 @@ export type RunSingleSourceSpliceInWorkerOptions = {
 
 export type RunTimelineInWorkerOptions = {
   items: TimelineWorkerItem[];
+  overlays?: TimelineOverlayWorkerItem[];
   videoBitrate?: number;
   audioBitrate?: number;
+  targetWidth?: number;
+  targetHeight?: number;
+  captionWords?: CaptionWord[];
+  captionStyle?: CaptionStyle;
   signal?: AbortSignal;
   onProgress?: (progress: WorkerSpliceProgress) => void;
   workerFactory?: () => Worker;
@@ -72,7 +78,10 @@ function createDefaultWorker(): Worker {
 // support/error/crash/abort. The start message (a `start` or `start_single_source`
 // frame) is the only difference between the two public entry points.
 function runWorkerJob(
-  startMessage: Extract<SpliceWorkerInbound, { kind: 'start' | 'start_single_source' | 'start_timeline' }>,
+  startMessage: Extract<
+    SpliceWorkerInbound,
+    { kind: 'start' | 'start_single_source' | 'start_timeline' }
+  >,
   options: WorkerJobOptions,
 ): Promise<WorkerSpliceResult> {
   const { signal, onProgress, workerFactory } = options;
@@ -182,9 +191,7 @@ function runWorkerJob(
   });
 }
 
-export function runSpliceInWorker(
-  options: RunSpliceInWorkerOptions,
-): Promise<WorkerSpliceResult> {
+export function runSpliceInWorker(options: RunSpliceInWorkerOptions): Promise<WorkerSpliceResult> {
   const { clips, videoBitrate, audioBitrate } = options;
   if (clips.length < 2) {
     return Promise.reject(new Error('Splice requires at least two clips'));
@@ -195,12 +202,22 @@ export function runSpliceInWorker(
 export function runSingleSourceSpliceInWorker(
   options: RunSingleSourceSpliceInWorkerOptions,
 ): Promise<WorkerSpliceResult> {
-  const { blob, ranges, maxShortEdgePx, captionWords, captionStyle, videoBitrate, audioBitrate } = options;
+  const { blob, ranges, maxShortEdgePx, captionWords, captionStyle, videoBitrate, audioBitrate } =
+    options;
   if (ranges.length < 1) {
     return Promise.reject(new Error('Single-source splice requires at least one range'));
   }
   return runWorkerJob(
-    { kind: 'start_single_source', blob, ranges, maxShortEdgePx, captionWords, captionStyle, videoBitrate, audioBitrate },
+    {
+      kind: 'start_single_source',
+      blob,
+      ranges,
+      maxShortEdgePx,
+      captionWords,
+      captionStyle,
+      videoBitrate,
+      audioBitrate,
+    },
     options,
   );
 }
@@ -208,9 +225,31 @@ export function runSingleSourceSpliceInWorker(
 export function runTimelineInWorker(
   options: RunTimelineInWorkerOptions,
 ): Promise<WorkerSpliceResult> {
-  const { items, videoBitrate, audioBitrate } = options;
+  const {
+    items,
+    overlays,
+    videoBitrate,
+    audioBitrate,
+    targetWidth,
+    targetHeight,
+    captionWords,
+    captionStyle,
+  } = options;
   if (items.length < 1) {
     return Promise.reject(new Error('Timeline requires at least one item'));
   }
-  return runWorkerJob({ kind: 'start_timeline', items, videoBitrate, audioBitrate }, options);
+  return runWorkerJob(
+    {
+      kind: 'start_timeline',
+      items,
+      overlays,
+      videoBitrate,
+      audioBitrate,
+      targetWidth,
+      targetHeight,
+      captionWords,
+      captionStyle,
+    },
+    options,
+  );
 }

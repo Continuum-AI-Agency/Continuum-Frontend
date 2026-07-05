@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { PlayIcon } from '@radix-ui/react-icons';
+import { ChatBubbleIcon, PlayIcon } from '@radix-ui/react-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,16 +20,29 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { StudioNode, TimelineEditorNodeData, TimelineInputSource } from '../../types';
+import { clipEffectsToCss, resolveTextOverlays, speedFor } from '../../utils/render/effectSpec';
+import { DEFAULT_EXPORT_PRESET_ID, EXPORT_PRESETS } from '../../utils/render/exportPresets';
+import { headFadeFor, tailFadeFor, transitionOverlayAt } from '../../utils/render/transitions';
+import { findActiveCue, groupWordsIntoCues } from '../../utils/splice/captionCues';
 import { resolveTimelineInputPool } from '../../utils/splice/resolveClipSources';
+import { ClipInspector } from './ClipInspector';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
 import { probeVideoDuration } from './mediaProbe';
+import { resolveOverlayTracks } from './multiTrack';
+import { OVERLAY_DROP_ID, trackIdFromOverlayDrop } from './OverlayTrack';
+import { OverlayTracks } from './OverlayTracks';
+import { laneItemEdges } from './snapping';
 import { CLIP_DRAG_PREFIX } from './TimelineClipBlock';
 import { TimelinePreview } from './TimelinePreview';
 import { TIMELINE_DROP_ID, TimelineTrack } from './TimelineTrack';
+import { useOverlayModel } from './useOverlayModel';
 import { type ClipMedia, usePlayheadPlayback } from './usePlayheadPlayback';
-import { clipAtTime, useTimelineEditorModel } from './useTimelineEditorModel';
+import { useTimelineCaptions } from './useTimelineCaptions';
+import { clipAtTime, toggleMarkerTime, useTimelineEditorModel } from './useTimelineEditorModel';
+import { useTimelineKeymap } from './useTimelineKeymap';
 import { useTimelineRender } from './useTimelineRender';
 
 const PX_PER_SEC = 80;
@@ -45,10 +58,14 @@ export function TimelineEditorDialog({
 }) {
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
   const edges = useStudioStore((state) => state.edges);
+  const setKeyboardScope = useStudioStore((state) => state.setKeyboardScope);
+  const updateNode = useStudioStore((state) => state.updateNode);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
 
   const node = nodes.find((candidate) => candidate.id === nodeId);
   const data = node?.data as TimelineEditorNodeData | undefined;
   const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const overlayTracks = useMemo(() => resolveOverlayTracks(data), [data]);
 
   const pool = useMemo(
     () => resolveTimelineInputPool(nodeId, edges, nodes),
@@ -82,8 +99,18 @@ export function TimelineEditorDialog({
     };
   }, [open, pool]);
 
-  const model = useTimelineEditorModel({ nodeId, items, sourceDurations, pxPerSec: PX_PER_SEC });
+  // Claim the keyboard while open so the canvas-level Delete/copy/undo handlers
+  // stand down (see useStudioStore.keyboardScope + StudioCanvas key handler).
+  useEffect(() => {
+    if (!open) return;
+    setKeyboardScope('modal');
+    return () => setKeyboardScope('canvas');
+  }, [open, setKeyboardScope]);
+
+  const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC);
+  const model = useTimelineEditorModel({ nodeId, items, sourceDurations, pxPerSec });
   const { render, isRendering, support } = useTimelineRender(nodeId);
+  const captions = useTimelineCaptions(nodeId);
 
   const mediaFor = useCallback(
     (itemId: string): ClipMedia | undefined => {
@@ -94,6 +121,7 @@ export function TimelineEditorDialog({
         kind: item.kind ?? source?.kind ?? 'video',
         url: source?.previewUrl,
         trimStartSec: item.trimStartSec ?? 0,
+        speed: speedFor(item.effects),
       };
     },
     [items, poolById],
@@ -106,7 +134,104 @@ export function TimelineEditorDialog({
     [poolById],
   );
 
+  const previewUrlFor = useCallback(
+    (sourceNodeId: string) => poolById.get(sourceNodeId)?.previewUrl,
+    [poolById],
+  );
+
+  const overlayModel = useOverlayModel({
+    nodeId,
+    tracks: overlayTracks,
+    sourceDurations,
+    labelFor,
+  });
+
+  // Base and overlay selections are mutually exclusive — selecting one clears
+  // the other so the inspector edits a single clip.
   const [selectedItemId, setSelectedItemId] = useState<string | undefined>(undefined);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | undefined>(undefined);
+  const selectBaseClip = useCallback((itemId: string) => {
+    setSelectedItemId(itemId);
+    setSelectedOverlayId(undefined);
+  }, []);
+  const selectOverlayClip = useCallback((itemId: string) => {
+    setSelectedOverlayId(itemId);
+    setSelectedItemId(undefined);
+  }, []);
+  const clearSelection = useCallback(() => {
+    setSelectedItemId(undefined);
+    setSelectedOverlayId(undefined);
+  }, []);
+
+  // Selection-driven keyboard actions. Delete removes the selected clip (base or
+  // overlay) — never the canvas node; S splits the clip under the playhead.
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedOverlayId) {
+      overlayModel.remove(selectedOverlayId);
+      setSelectedOverlayId(undefined);
+      return;
+    }
+    if (!selectedItemId) return;
+    model.remove(selectedItemId);
+    setSelectedItemId(undefined);
+  }, [model.remove, overlayModel.remove, selectedItemId, selectedOverlayId]);
+
+  const handleSplitAtPlayhead = useCallback(() => {
+    const clip = clipAtTime(model.layout, playback.playheadSec);
+    if (!clip) return;
+    model.split(clip.item.id, playback.playheadSec - clip.startSec);
+  }, [model.layout, model.split, playback.playheadSec]);
+
+  const handleDuplicateSelected = useCallback(() => {
+    if (selectedItemId) model.duplicate(selectedItemId);
+  }, [model.duplicate, selectedItemId]);
+
+  const markers = useMemo(() => data?.markers ?? [], [data?.markers]);
+  const handleToggleMarker = useCallback(() => {
+    updateNode(nodeId, (current) => ({
+      ...current,
+      data: {
+        ...(current.data as TimelineEditorNodeData),
+        markers: toggleMarkerTime(
+          (current.data as TimelineEditorNodeData).markers ?? [],
+          playback.playheadSec,
+        ),
+      },
+    }));
+    triggerSave();
+  }, [nodeId, playback.playheadSec, triggerSave, updateNode]);
+
+  useTimelineKeymap({
+    enabled: open,
+    playheadSec: playback.playheadSec,
+    totalSec: model.layout.totalSec,
+    onSeek: playback.seek,
+    onTogglePlay: playback.toggle,
+    onDeleteSelected: handleDeleteSelected,
+    onSplitAtPlayhead: handleSplitAtPlayhead,
+    onDuplicateSelected: handleDuplicateSelected,
+    onToggleMarker: handleToggleMarker,
+  });
+
+  const selectedClip = selectedItemId
+    ? model.layout.clips.find((clip) => clip.item.id === selectedItemId)
+    : undefined;
+  const selectedSourceDuration = selectedClip
+    ? sourceDurations.get(selectedClip.item.sourceNodeId)
+    : undefined;
+
+  // The inspector edits whichever clip is selected — base or overlay — binding
+  // its controls to the matching model.
+  const selectedOverlay = overlayModel.findItem(selectedOverlayId);
+  const inspectingOverlay = Boolean(selectedOverlay);
+  const inspectorItem = selectedOverlay ?? selectedClip?.item;
+  const inspectorDuration = selectedOverlay
+    ? overlayModel.durationOf(selectedOverlay)
+    : (selectedClip?.durationSec ?? 0);
+  const inspectorSourceDuration = selectedOverlay
+    ? overlayModel.sourceDurationOf(selectedOverlay)
+    : selectedSourceDuration;
+  const inspectorLabel = inspectorItem ? labelFor(inspectorItem.sourceNodeId) : '';
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -124,6 +249,16 @@ export function TimelineEditorDialog({
           | undefined;
         if (!payload?.sourceNodeId || !payload.kind || !over) return;
         const overId = String(over.id);
+        // Dropping onto an overlay lane places a layer at the playhead, in that lane.
+        if (overId.startsWith(OVERLAY_DROP_ID)) {
+          overlayModel.place(
+            payload.sourceNodeId,
+            payload.kind,
+            playback.playheadSec,
+            trackIdFromOverlayDrop(overId),
+          );
+          return;
+        }
         let atIndex: number | undefined;
         if (overId.startsWith(CLIP_DRAG_PREFIX)) {
           const targetId = overId.slice(CLIP_DRAG_PREFIX.length);
@@ -145,12 +280,24 @@ export function TimelineEditorDialog({
         );
       }
     },
-    [items, model],
+    [items, model, overlayModel.place, playback.playheadSec],
   );
 
   const handlePlace = useCallback(
     (source: TimelineInputSource) => model.place(source.nodeId, source.kind),
     [model],
+  );
+
+  const exportPresetId = data?.exportPresetId ?? DEFAULT_EXPORT_PRESET_ID;
+  const setExportPreset = useCallback(
+    (id: string) => {
+      updateNode(nodeId, (current) => ({
+        ...current,
+        data: { ...(current.data as TimelineEditorNodeData), exportPresetId: id, committed: false },
+      }));
+      triggerSave();
+    },
+    [nodeId, updateNode, triggerSave],
   );
 
   const handleRender = useCallback(async () => {
@@ -166,6 +313,66 @@ export function TimelineEditorDialog({
     activeClip && activeKind === 'image'
       ? poolById.get(activeClip.item.sourceNodeId)?.previewUrl
       : undefined;
+
+  // Effect CSS + text for the clip under the playhead, resolved at its normalized
+  // time so Ken Burns/animated effects track the scrubber. Same spec the export uses.
+  const activeClipT =
+    activeClip && activeClip.durationSec > 0
+      ? Math.max(
+          0,
+          Math.min(1, (playback.playheadSec - activeClip.startSec) / activeClip.durationSec),
+        )
+      : 0;
+  const activeMediaStyle = clipEffectsToCss(activeClip?.item.effects, activeClipT);
+  const activeTextOverlays = resolveTextOverlays(activeClip?.item.effects);
+
+  const activeIndex = activeClip
+    ? model.layout.clips.findIndex((clip) => clip.item.id === activeClip.item.id)
+    : -1;
+  const activeFadeOverlay = activeClip
+    ? transitionOverlayAt(
+        playback.playheadSec - activeClip.startSec,
+        activeClip.durationSec,
+        headFadeFor(activeClip.item.transition, activeIndex === 0),
+        tailFadeFor(model.layout.clips[activeIndex + 1]?.item.transition),
+      )
+    : null;
+
+  // Two-layer cross-dissolve preview: while the playhead is in the tail window of a
+  // clip whose successor cross-dissolves in, fade the incoming clip's frame in over
+  // the outgoing one (a real A→B blend, not a dip). The DOM preview approximates;
+  // the exported blend is exact.
+  const nextDissolveClip = model.layout.clips[activeIndex + 1];
+  const nextTransition = nextDissolveClip?.item.transition;
+  const activeCrossfade = (() => {
+    if (!activeClip || !nextDissolveClip || nextTransition?.type !== 'crossDissolve')
+      return undefined;
+    const dur = Math.min(nextTransition.durationSec, activeClip.durationSec);
+    if (dur <= 0) return undefined;
+    const localOut = playback.playheadSec - activeClip.startSec;
+    const tailStart = activeClip.durationSec - dur;
+    if (localOut < tailStart) return undefined;
+    const url = poolById.get(nextDissolveClip.item.sourceNodeId)?.previewUrl;
+    if (!url) return undefined;
+    const kind =
+      nextDissolveClip.item.kind ??
+      poolById.get(nextDissolveClip.item.sourceNodeId)?.kind ??
+      'video';
+    return { url, kind, opacity: Math.min(1, (localOut - tailStart) / dur) };
+  })();
+
+  // Active caption line at the playhead (auto-captions), shown in the preview when
+  // captions are enabled. Exact karaoke burn-in is in the export.
+  const captionCues = useMemo(() => {
+    const words = data?.captionWords;
+    if (!data?.captionsEnabled || !words || words.length === 0) return undefined;
+    return groupWordsIntoCues([...words].sort((a, b) => a.startSec - b.startSec));
+  }, [data?.captionsEnabled, data?.captionWords]);
+  const activeCaption = captionCues
+    ? (findActiveCue(captionCues, playback.playheadSec)
+        ?.words.map((word) => word.text)
+        .join(' ') ?? undefined)
+    : undefined;
 
   const progress = typeof data?.progress === 'number' ? Math.max(0, Math.min(1, data.progress)) : 0;
   const renderDisabled = isRendering || items.length === 0 || (support ? !support.ok : false);
@@ -186,6 +393,47 @@ export function TimelineEditorDialog({
             </DialogDescription>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => captions.generate()}
+              disabled={captions.isGenerating || isRendering || items.length === 0}
+              title="Transcribe the timeline audio with Gemini and add captions"
+            >
+              <ChatBubbleIcon className="h-3.5 w-3.5" />
+              {captions.isGenerating
+                ? 'Captioning…'
+                : (data?.captionWords?.length ?? 0) > 0
+                  ? 'Re-caption'
+                  : 'Auto-captions'}
+            </Button>
+            {(data?.captionWords?.length ?? 0) > 0 ? (
+              // biome-ignore lint/a11y/noLabelWithoutControl: label wraps its Switch control
+              <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+                <Switch
+                  checked={data?.captionsEnabled ?? false}
+                  onCheckedChange={(checked) => captions.setCaptionsEnabled(checked)}
+                />
+                Captions
+              </label>
+            ) : null}
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: label wraps its select control */}
+            <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+              Export
+              <select
+                className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
+                value={exportPresetId}
+                disabled={isRendering}
+                onChange={(event) => setExportPreset(event.target.value)}
+              >
+                {EXPORT_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Button
               variant="ghost"
               size="sm"
@@ -210,7 +458,7 @@ export function TimelineEditorDialog({
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr] grid-rows-1 gap-3 p-3">
+            <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr_320px] grid-rows-1 gap-3 p-3">
               <div className="min-h-0 overflow-hidden rounded-lg border border-border/60 p-2">
                 <MediaBin pool={pool} onPlace={handlePlace} />
               </div>
@@ -224,26 +472,101 @@ export function TimelineEditorDialog({
                   onTogglePlay={playback.toggle}
                   playheadSec={playback.playheadSec}
                   totalSec={model.layout.totalSec}
+                  mediaStyle={activeMediaStyle}
+                  textOverlays={activeTextOverlays}
+                  fadeOverlay={activeFadeOverlay}
+                  crossfade={activeCrossfade}
+                  caption={activeCaption}
+                />
+              </div>
+              <div className="min-h-0">
+                <ClipInspector
+                  item={inspectorItem}
+                  context={inspectingOverlay ? 'overlay' : 'base'}
+                  durationSec={inspectorDuration}
+                  sourceDurationSec={inspectorSourceDuration}
+                  label={inspectorLabel}
+                  onTrim={(range) => {
+                    if (inspectingOverlay) {
+                      if (selectedOverlayId) overlayModel.trim(selectedOverlayId, range);
+                    } else if (selectedItemId) {
+                      model.trim(selectedItemId, range);
+                    }
+                  }}
+                  onSetStill={(sec) => {
+                    if (inspectingOverlay) {
+                      if (selectedOverlayId) overlayModel.setStill(selectedOverlayId, sec);
+                    } else if (selectedItemId) {
+                      model.setStill(selectedItemId, sec);
+                    }
+                  }}
+                  onSetMute={(mute) => {
+                    if (inspectingOverlay) {
+                      if (selectedOverlayId) overlayModel.setMuteAudio(selectedOverlayId, mute);
+                    } else if (selectedItemId) {
+                      model.setMuteAudio(selectedItemId, mute);
+                    }
+                  }}
+                  onSetAudio={(patch) => {
+                    if (inspectingOverlay) {
+                      if (selectedOverlayId) overlayModel.setAudio(selectedOverlayId, patch);
+                    } else if (selectedItemId) {
+                      model.setAudio(selectedItemId, patch);
+                    }
+                  }}
+                  onSetEffects={(patch) => {
+                    if (inspectingOverlay) {
+                      if (selectedOverlayId) overlayModel.setEffects(selectedOverlayId, patch);
+                    } else if (selectedItemId) {
+                      model.setEffects(selectedItemId, patch);
+                    }
+                  }}
+                  onSetTransition={(transition) => {
+                    if (!inspectingOverlay && selectedItemId)
+                      model.setTransition(selectedItemId, transition);
+                  }}
+                  onClose={clearSelection}
                 />
               </div>
             </div>
 
-            <div className="flex h-[35%] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border/60 p-3">
-              <TimelineTrack
-                layout={model.layout}
-                pxPerSec={PX_PER_SEC}
-                playheadSec={playback.playheadSec}
-                onSeek={playback.seek}
-                selectedItemId={selectedItemId}
-                onSelectItem={setSelectedItemId}
-                labelFor={labelFor}
-                onTrim={model.trim}
-                onRemove={(itemId) => {
-                  model.remove(itemId);
-                  if (selectedItemId === itemId) setSelectedItemId(undefined);
-                }}
-                onSplit={model.split}
-              />
+            <div className="flex h-[42%] min-h-0 shrink-0 flex-col gap-2 overflow-hidden border-t border-border/60 p-3">
+              <div className="min-h-0 shrink-0 overflow-y-auto">
+                <OverlayTracks
+                  lanes={overlayModel.lanes}
+                  pxPerSec={pxPerSec}
+                  totalSec={model.layout.totalSec}
+                  selectedId={selectedOverlayId}
+                  onSelect={selectOverlayClip}
+                  onSetStart={overlayModel.setStart}
+                  onAddTrack={overlayModel.addTrack}
+                  onRemove={(itemId) => {
+                    overlayModel.remove(itemId);
+                    if (selectedOverlayId === itemId) setSelectedOverlayId(undefined);
+                  }}
+                />
+              </div>
+              <div className="min-h-0 flex-1">
+                <TimelineTrack
+                  layout={model.layout}
+                  pxPerSec={pxPerSec}
+                  onZoomChange={setPxPerSec}
+                  playheadSec={playback.playheadSec}
+                  onSeek={playback.seek}
+                  selectedItemId={selectedItemId}
+                  onSelectItem={selectBaseClip}
+                  labelFor={labelFor}
+                  previewUrlFor={previewUrlFor}
+                  extraSnapTimes={laneItemEdges(overlayModel.laneItems)}
+                  markers={markers}
+                  onTrim={model.trim}
+                  onRemove={(itemId) => {
+                    model.remove(itemId);
+                    if (selectedItemId === itemId) setSelectedItemId(undefined);
+                  }}
+                  onSplit={model.split}
+                />
+              </div>
             </div>
           </div>
         </DndContext>

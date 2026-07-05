@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
-import { concatFloat32, downmixToMono, encodeWav, floatToInt16, resampleLinear } from './extractAudioWav';
+import {
+  concatFloat32,
+  concatInt16,
+  downmixToMono,
+  encodeWav,
+  floatToInt16,
+  resampleLinear,
+} from './extractAudioWav';
 
 describe('downmixToMono', () => {
   it('passes a single channel through unchanged', () => {
@@ -19,7 +26,18 @@ describe('downmixToMono', () => {
 
 describe('concatFloat32', () => {
   it('concatenates chunks in order', () => {
-    const out = concatFloat32([new Float32Array([1, 2]), new Float32Array([3]), new Float32Array([4, 5])]);
+    const out = concatFloat32([
+      new Float32Array([1, 2]),
+      new Float32Array([3]),
+      new Float32Array([4, 5]),
+    ]);
+    expect(Array.from(out)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe('concatInt16', () => {
+  it('concatenates target-rate PCM chunks in order', () => {
+    const out = concatInt16([new Int16Array([1, 2]), new Int16Array([3]), new Int16Array([4, 5])]);
     expect(Array.from(out)).toEqual([1, 2, 3, 4, 5]);
   });
 });
@@ -58,7 +76,12 @@ describe('encodeWav', () => {
     expect(blob.type).toBe('audio/wav');
     const view = new DataView(await blob.arrayBuffer());
     const tag = (offset: number) =>
-      String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+      String.fromCharCode(
+        view.getUint8(offset),
+        view.getUint8(offset + 1),
+        view.getUint8(offset + 2),
+        view.getUint8(offset + 3),
+      );
     expect(tag(0)).toBe('RIFF');
     expect(tag(8)).toBe('WAVE');
     expect(tag(36)).toBe('data');

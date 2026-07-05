@@ -1,8 +1,8 @@
 import type { Edge } from '@xyflow/react';
 import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
-import type { StudioNode, ClipSlot, TimelineItem, TimelineInputSource } from '../../types';
+import type { StudioNode, ClipSlot, TimelineItem, TimelineInputSource, TimelineTrack } from '../../types';
 import type { NodeOutput } from '../../types/execution';
-import type { TimelineRenderItem } from './composeTimeline';
+import type { TimelineOverlayRenderItem, TimelineRenderItem } from './composeTimeline';
 import { parseDataUrl } from '../dataUrl';
 import { isVideoGeneratorNodeType } from '../videoModel';
 
@@ -195,6 +195,88 @@ export function resolveTimelineInputPool(
   return pool;
 }
 
+// A cached resolver from a source node id to its bytes + kind (a source placed
+// more than once — via split, or across base + overlay tracks — is fetched
+// once and shared). Shared by the base and overlay resolvers.
+function createTimelineSourceResolver(
+  nodeById: Map<string, StudioNode>,
+  resolvedOutputs: Map<string, NodeOutput>,
+): (sourceId: string) => Promise<{ kind: 'video' | 'image'; blob: Blob }> {
+  const cache = new Map<string, Promise<{ kind: 'video' | 'image'; blob: Blob }>>();
+  return (sourceId: string) => {
+    const cached = cache.get(sourceId);
+    if (cached) return cached;
+    const promise = (async () => {
+      const upstream = resolvedOutputs.get(sourceId);
+      let kind: 'video' | 'image';
+      let source: string | undefined;
+      if (upstream?.type === 'video' && upstream.url) {
+        kind = 'video';
+        source = upstream.url;
+      } else if (upstream?.type === 'image' && (isUsableUrl(upstream.url) || upstream.base64)) {
+        kind = 'image';
+        source = isUsableUrl(upstream.url)
+          ? upstream.url
+          : `data:${upstream.mimeType || 'image/png'};base64,${upstream.base64}`;
+      } else {
+        const resolved = readSourceKindAndUrl(nodeById.get(sourceId));
+        kind = resolved.kind;
+        source = resolved.url;
+      }
+      if (!source) {
+        throw new Error(`Timeline source ${sourceId}: upstream produced no media`);
+      }
+      const blob = await resolveSource(source);
+      return { kind, blob };
+    })();
+    cache.set(sourceId, promise);
+    return promise;
+  };
+}
+
+// Resolve each overlay-track placement to its source bytes. Overlays float on
+// top of the base track at their absolute `startSec`.
+export async function resolveTimelineOverlays(
+  tracks: TimelineTrack[],
+  edges: Edge[],
+  nodes: StudioNode[],
+  resolvedOutputs: Map<string, NodeOutput>,
+  targetNodeId: string,
+): Promise<TimelineOverlayRenderItem[]> {
+  const overlayItems = tracks.flatMap((track) => track.items);
+  if (overlayItems.length === 0) return [];
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const poolSourceIds = new Set(
+    edges
+      .filter((e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE)
+      .map((e) => e.source),
+  );
+  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
+
+  return Promise.all(
+    overlayItems.map(async (item) => {
+      if (!item.sourceNodeId || !poolSourceIds.has(item.sourceNodeId)) {
+        throw new Error(`Overlay item ${item.id}: no connected source`);
+      }
+      const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
+      return {
+        itemId: item.id,
+        kind,
+        blob,
+        startSec: Math.max(0, item.startSec ?? 0),
+        trimStartSec: item.trimStartSec,
+        trimEndSec: item.trimEndSec,
+        durationSec: item.durationSec,
+        muteAudio: item.muteAudio,
+        volume: item.volume,
+        audioFadeInSec: item.audioFadeInSec,
+        audioFadeOutSec: item.audioFadeOutSec,
+        effects: item.effects,
+      } satisfies TimelineOverlayRenderItem;
+    }),
+  );
+}
+
 // Resolve each Video Editor (timelineEditor) placement to its source bytes +
 // kind. Placements reference a pool member by `sourceNodeId`; the kind is
 // authoritative from the connected source node/output (an image node → still,
@@ -214,41 +296,7 @@ export async function resolveTimelineSources(
       .map((e) => e.source),
   );
   const ordered = [...items].sort((a, b) => a.order - b.order);
-  const resolvedCache = new Map<string, Promise<{ kind: 'video' | 'image'; blob: Blob }>>();
-
-  const resolveSourceNode = (sourceId: string): Promise<{ kind: 'video' | 'image'; blob: Blob }> => {
-    const cached = resolvedCache.get(sourceId);
-    if (cached) return cached;
-
-    const promise = (async () => {
-      const upstream = resolvedOutputs.get(sourceId);
-      let kind: 'video' | 'image';
-      let source: string | undefined;
-
-      if (upstream?.type === 'video' && upstream.url) {
-        kind = 'video';
-        source = upstream.url;
-      } else if (upstream?.type === 'image' && (isUsableUrl(upstream.url) || upstream.base64)) {
-        kind = 'image';
-        source = isUsableUrl(upstream.url)
-          ? upstream.url
-          : `data:${upstream.mimeType || 'image/png'};base64,${upstream.base64}`;
-      } else {
-        const resolved = readSourceKindAndUrl(nodeById.get(sourceId));
-        kind = resolved.kind;
-        source = resolved.url;
-      }
-
-      if (!source) {
-        throw new Error(`Timeline source ${sourceId}: upstream produced no media`);
-      }
-      const blob = await resolveSource(source);
-      return { kind, blob };
-    })();
-
-    resolvedCache.set(sourceId, promise);
-    return promise;
-  };
+  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
 
   return Promise.all(
     ordered.map(async (item) => {
@@ -264,6 +312,11 @@ export async function resolveTimelineSources(
         trimEndSec: item.trimEndSec,
         durationSec: item.durationSec,
         muteAudio: item.muteAudio,
+        volume: item.volume,
+        audioFadeInSec: item.audioFadeInSec,
+        audioFadeOutSec: item.audioFadeOutSec,
+        effects: item.effects,
+        transition: item.transition,
       } satisfies TimelineRenderItem;
     }),
   );

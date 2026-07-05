@@ -3,15 +3,19 @@
 import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { Scissors } from 'lucide-react';
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { boundaryTimes, snapSec } from './snapping';
 import { CLIP_DRAG_PREFIX, TimelineClipBlock } from './TimelineClipBlock';
 import { clipAtTime, type TimelineLayout } from './useTimelineEditorModel';
 
 export const TIMELINE_DROP_ID = 'timeline-drop';
 
 const TRACK_PADDING_PX = 240;
+const MIN_PX_PER_SEC = 20;
+const MAX_PX_PER_SEC = 240;
 
 function tickInterval(pxPerSec: number): number {
   if (pxPerSec >= 120) return 1;
@@ -22,22 +26,33 @@ function tickInterval(pxPerSec: number): number {
 export function TimelineTrack({
   layout,
   pxPerSec,
+  onZoomChange,
   playheadSec,
   onSeek,
   selectedItemId,
   onSelectItem,
   labelFor,
+  previewUrlFor,
+  extraSnapTimes,
+  markers,
   onTrim,
   onRemove,
   onSplit,
 }: {
   layout: TimelineLayout;
   pxPerSec: number;
+  onZoomChange?: (pxPerSec: number) => void;
   playheadSec: number;
   onSeek: (sec: number) => void;
   selectedItemId?: string;
   onSelectItem: (itemId: string) => void;
   labelFor: (sourceNodeId: string) => string;
+  previewUrlFor?: (sourceNodeId: string) => string | undefined;
+  // Cross-track snap targets (e.g. overlay-lane edges) merged into the playhead
+  // snap candidates alongside this track's own clip boundaries.
+  extraSnapTimes?: number[];
+  // Reference marks (output seconds) rendered on the ruler and used as snap targets.
+  markers?: number[];
   onTrim: (itemId: string, range: { startSec?: number; endSec?: number }) => void;
   onRemove: (itemId: string) => void;
   onSplit: (itemId: string, localSec: number) => void;
@@ -59,19 +74,31 @@ export function TimelineTrack({
     [layout.totalSec, pxPerSec],
   );
 
+  // Snap the scrub position to clip edges / timeline bounds when close, so
+  // clicks and playhead drags land precisely on cuts. Keyboard seeks stay exact
+  // (they bypass this and call onSeek directly).
+  const snapTimes = useMemo(
+    () => [...boundaryTimes(layout), ...(extraSnapTimes ?? []), ...(markers ?? [])],
+    [layout, extraSnapTimes, markers],
+  );
+  const seekAt = useCallback(
+    (clientX: number) => onSeek(snapSec(secFromClientX(clientX), snapTimes, pxPerSec)),
+    [onSeek, pxPerSec, secFromClientX, snapTimes],
+  );
+
   const handleLaneSeek = useCallback(
     (event: React.PointerEvent) => {
       if (event.target !== event.currentTarget) return;
-      onSeek(secFromClientX(event.clientX));
+      seekAt(event.clientX);
     },
-    [onSeek, secFromClientX],
+    [seekAt],
   );
 
   const startPlayheadDrag = useCallback(
     (event: React.PointerEvent) => {
       event.stopPropagation();
       event.preventDefault();
-      const handleMove = (moveEvent: PointerEvent) => onSeek(secFromClientX(moveEvent.clientX));
+      const handleMove = (moveEvent: PointerEvent) => seekAt(moveEvent.clientX);
       const handleUp = () => {
         window.removeEventListener('pointermove', handleMove);
         window.removeEventListener('pointerup', handleUp);
@@ -79,7 +106,7 @@ export function TimelineTrack({
       window.addEventListener('pointermove', handleMove);
       window.addEventListener('pointerup', handleUp);
     },
-    [onSeek, secFromClientX],
+    [seekAt],
   );
 
   const handleSplit = useCallback(() => {
@@ -105,6 +132,20 @@ export function TimelineTrack({
           <Scissors className="h-3.5 w-3.5" />
           Split at playhead
         </Button>
+        {onZoomChange ? (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-2xs text-muted-foreground">Zoom</span>
+            <Slider
+              className="w-28"
+              aria-label="Timeline zoom"
+              min={MIN_PX_PER_SEC}
+              max={MAX_PX_PER_SEC}
+              step={5}
+              value={[pxPerSec]}
+              onValueChange={(value) => onZoomChange(value[0] ?? pxPerSec)}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/60 bg-muted/20">
@@ -112,7 +153,7 @@ export function TimelineTrack({
           {/* Ruler */}
           <div
             className="relative h-5 border-b border-border/50"
-            onPointerDown={(event) => onSeek(secFromClientX(event.clientX))}
+            onPointerDown={(event) => seekAt(event.clientX)}
           >
             {Array.from({ length: tickCount }, (_, index) => {
               const sec = index * tick;
@@ -141,6 +182,7 @@ export function TimelineTrack({
                   pxPerSec={pxPerSec}
                   label={labelFor(clip.item.sourceNodeId)}
                   selected={clip.item.id === selectedItemId}
+                  previewUrl={previewUrlFor?.(clip.item.sourceNodeId)}
                   onSelect={() => onSelectItem(clip.item.id)}
                   onTrim={(range) => onTrim(clip.item.id, range)}
                   onRemove={() => onRemove(clip.item.id)}
@@ -154,6 +196,17 @@ export function TimelineTrack({
               </div>
             ) : null}
           </div>
+
+          {/* Markers (M) — reference lines across the lane */}
+          {(markers ?? []).map((marker) => (
+            <div
+              key={`marker-${marker}`}
+              className="pointer-events-none absolute bottom-0 top-0 z-[5] w-px bg-amber-500/50"
+              style={{ left: marker * pxPerSec }}
+            >
+              <div className="absolute -left-1 top-0 h-2 w-2 rounded-b-sm bg-amber-500" />
+            </div>
+          ))}
 
           {/* Playhead */}
           <div

@@ -6,9 +6,14 @@ import type { StudioNode, TimelineEditorNodeData, TimelineItem } from '../../typ
 import type { NodeOutput } from '../../types/execution';
 import { collectDownstreamLeafIds, executeWorkflow } from '../../utils/executeWorkflow';
 import { persistTimelineRender } from '../../utils/persistTimelineRender';
-import { resolveTimelineSources } from '../../utils/splice/resolveClipSources';
+import { resolveExportPreset } from '../../utils/render/exportPresets';
+import {
+  resolveTimelineOverlays,
+  resolveTimelineSources,
+} from '../../utils/splice/resolveClipSources';
 import { checkSpliceSupport, type WebCodecsSupport } from '../../utils/splice/webcodecsSupport';
 import { runTimelineInWorker } from '../../workers/spliceWorkerClient';
+import { resolveOverlayTracks } from './multiTrack';
 
 // The Video Editor (timelineEditor) render orchestration, shared by the node
 // launcher and the full editor dialog: resolve the placed timeline to source
@@ -52,8 +57,10 @@ export function useTimelineRender(nodeId: string): UseTimelineRenderResult {
     const edges = state.edges;
     const brandId = state.brandId;
     const node = nodes.find((candidate) => candidate.id === nodeId);
-    const items = ((node?.data as TimelineEditorNodeData | undefined)?.items ??
-      []) as TimelineItem[];
+    const nodeData = node?.data as TimelineEditorNodeData | undefined;
+    const items = (nodeData?.items ?? []) as TimelineItem[];
+    const overlayTracks = resolveOverlayTracks(nodeData);
+    const exportPreset = resolveExportPreset(nodeData?.exportPresetId);
 
     if (items.length === 0) {
       show({
@@ -77,15 +84,25 @@ export function useTimelineRender(nodeId: string): UseTimelineRenderResult {
     }));
 
     try {
-      const resolved = await resolveTimelineSources(
-        items,
+      const resolvedOutputs = new Map<string, NodeOutput>();
+      const resolved = await resolveTimelineSources(items, edges, nodes, resolvedOutputs, nodeId);
+      const resolvedOverlays = await resolveTimelineOverlays(
+        overlayTracks,
         edges,
         nodes,
-        new Map<string, NodeOutput>(),
+        resolvedOutputs,
         nodeId,
       );
+      const captionsOn =
+        Boolean(nodeData?.captionsEnabled) && (nodeData?.captionWords?.length ?? 0) > 0;
       const result = await runTimelineInWorker({
         items: resolved,
+        overlays: resolvedOverlays,
+        videoBitrate: exportPreset.videoBitrate,
+        targetWidth: exportPreset.width ?? undefined,
+        targetHeight: exportPreset.height ?? undefined,
+        captionWords: captionsOn ? nodeData?.captionWords : undefined,
+        captionStyle: captionsOn ? nodeData?.captionStyle : undefined,
         signal: controller.signal,
         onProgress: ({ progress }) => {
           useStudioStore.getState().updateNodeData(nodeId, { progress });

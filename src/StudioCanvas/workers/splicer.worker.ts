@@ -1,12 +1,10 @@
 /// <reference lib="webworker" />
+
+import { composeTimeline } from '../utils/splice/composeTimeline';
 import { spliceClips } from '../utils/splice/spliceClips';
 import { spliceSingleSource } from '../utils/splice/spliceSingleSource';
-import { composeTimeline } from '../utils/splice/composeTimeline';
 import { checkSpliceSupport } from '../utils/splice/webcodecsSupport';
-import type {
-  SpliceWorkerInbound,
-  SpliceWorkerOutbound,
-} from './spliceWorkerProtocol';
+import type { SpliceWorkerInbound, SpliceWorkerOutbound } from './spliceWorkerProtocol';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -121,8 +119,13 @@ async function handleStartTimeline(
   try {
     const result = await composeTimeline({
       items: input.items,
+      overlays: input.overlays,
       videoBitrate: input.videoBitrate,
       audioBitrate: input.audioBitrate,
+      targetWidth: input.targetWidth,
+      targetHeight: input.targetHeight,
+      captionWords: input.captionWords,
+      captionStyle: input.captionStyle,
       signal: activeAbortController.signal,
       onProgress: ({ progress, processedClips, totalClips }) => {
         if (aborted) return;

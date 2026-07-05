@@ -7,7 +7,11 @@ import {
   effectiveItemDuration,
   placeItem,
   removeItem,
+  duplicateItem,
+  toggleMarkerTime,
   reorderItems,
+  setItemAudio,
+  setItemMuteAudio,
   setStillDuration,
   splitItem,
   trimItem,
@@ -27,6 +31,23 @@ const image = (id: string, order: number, extra: Partial<TimelineItem> = {}): Ti
   sourceNodeId: `src-${id}`,
   kind: 'image',
   ...extra,
+});
+
+describe('setItemMuteAudio', () => {
+  it('toggles muteAudio on the matching video item only', () => {
+    const items = [video('a', 0), video('b', 1)];
+    const muted = setItemMuteAudio(items, 'a', true);
+    expect(muted.find((item) => item.id === 'a')?.muteAudio).toBe(true);
+    expect(muted.find((item) => item.id === 'b')?.muteAudio).toBeUndefined();
+    expect(setItemMuteAudio(muted, 'a', false).find((item) => item.id === 'a')?.muteAudio).toBe(
+      false,
+    );
+  });
+
+  it('never mutes image stills', () => {
+    const items = [image('a', 0)];
+    expect(setItemMuteAudio(items, 'a', true)[0].muteAudio).toBeUndefined();
+  });
 });
 
 describe('effectiveItemDuration', () => {
@@ -129,5 +150,47 @@ describe('splitItem', () => {
     const items = [video('a', 0, { trimStartSec: 0, trimEndSec: 5 })];
     expect(splitItem(items, 'a', 0)).toBe(items);
     expect(splitItem(items, 'a', 5)).toBe(items);
+  });
+});
+
+describe('setItemAudio', () => {
+  it('merges volume + fades onto a video clip and clamps to sane ranges', () => {
+    const items = [video('a', 0, { trimStartSec: 0, trimEndSec: 5 })];
+    const next = setItemAudio(items, 'a', { volume: 9, audioFadeInSec: -1, audioFadeOutSec: 0.5 });
+    expect(next[0]).toMatchObject({ volume: 4, audioFadeInSec: 0, audioFadeOutSec: 0.5 });
+  });
+
+  it('only patches the provided fields and leaves images untouched', () => {
+    const items = [video('a', 0, { volume: 1 }), image('b', 1, { durationSec: 3 })];
+    const next = setItemAudio(items, 'a', { audioFadeInSec: 0.3 });
+    expect(next[0]).toMatchObject({ volume: 1, audioFadeInSec: 0.3 });
+    expect(setItemAudio(items, 'b', { volume: 2 })[1].volume).toBeUndefined();
+  });
+});
+
+describe('duplicateItem', () => {
+  it('inserts a copy with a new id directly after the original and renumbers', () => {
+    const next = duplicateItem([video('a', 0, { trimStartSec: 1, trimEndSec: 3 }), video('b', 1)], 'a');
+    expect(next.map((i) => i.id).length).toBe(3);
+    expect(next[1].id).not.toBe('a');
+    expect(next[1]).toMatchObject({ sourceNodeId: 'src-a', trimStartSec: 1, trimEndSec: 3, order: 1 });
+    expect(next.map((i) => i.order)).toEqual([0, 1, 2]);
+  });
+
+  it('is a no-op for an unknown id', () => {
+    const items = [video('a', 0)];
+    expect(duplicateItem(items, 'zzz')).toBe(items);
+  });
+});
+
+describe('toggleMarkerTime', () => {
+  it('inserts a marker sorted and removes one within epsilon (toggle)', () => {
+    const added = toggleMarkerTime([2, 5], 3.5);
+    expect(added).toEqual([2, 3.5, 5]);
+    expect(toggleMarkerTime(added, 3.52)).toEqual([2, 5]); // within epsilon → removed
+  });
+
+  it('ignores negative times', () => {
+    expect(toggleMarkerTime([1], -2)).toEqual([1]);
   });
 });

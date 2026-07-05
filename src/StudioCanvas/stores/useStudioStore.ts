@@ -27,6 +27,11 @@ import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 export type InteractionMode = 'pan' | 'select';
 
+// Which surface currently owns keyboard input. While a full-screen editor (e.g.
+// the Video Editor dialog) is open, it sets 'modal' so the canvas-level
+// Delete/copy/paste/undo handlers stand down and the editor's own keymap wins.
+export type KeyboardScope = 'canvas' | 'modal';
+
 // The canvas always renders edges as bezier curves. The type is fixed so that
 // consumers reading defaultEdgeType get a stable value and serialized workflows
 // with any edge type load correctly (they all become bezier on load).
@@ -37,6 +42,7 @@ interface StudioState {
   edges: Edge[];
   defaultEdgeType: EdgeType;
   interactionMode: InteractionMode;
+  keyboardScope: KeyboardScope;
   deletedNodeIds: string[];
   deletedEdgeIds: string[];
   onNodesChange: OnNodesChange<StudioNode>;
@@ -50,6 +56,7 @@ interface StudioState {
   getConnectedEdges: (nodeId: string, handleType?: 'source' | 'target') => Edge[];
   setDefaultEdgeType: (type: EdgeType) => void;
   setInteractionMode: (mode: InteractionMode) => void;
+  setKeyboardScope: (scope: KeyboardScope) => void;
   duplicateNode: (id: string) => void;
   deleteNode: (id: string) => void;
   detachNodeConnections: (id: string) => void;
@@ -265,6 +272,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   edges: [],
   defaultEdgeType: FIXED_EDGE_TYPE,
   interactionMode: 'pan',
+  keyboardScope: 'canvas',
   deletedNodeIds: [],
   deletedEdgeIds: [],
   saveTrigger: 0,
@@ -412,6 +420,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   setInteractionMode: (mode: InteractionMode) => {
     set({ interactionMode: mode });
+  },
+
+  setKeyboardScope: (scope: KeyboardScope) => {
+    set({ keyboardScope: scope });
   },
 
   duplicateNode: (id: string) => {

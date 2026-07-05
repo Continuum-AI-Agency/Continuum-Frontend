@@ -724,6 +724,7 @@ function Flow({
     redo,
     interactionMode,
     setInteractionMode,
+    keyboardScope,
     triggerSave,
     setBrandId,
     updateNodeData,
@@ -931,6 +932,12 @@ function Flow({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A full-screen editor (e.g. the Video Editor dialog) owns the keyboard
+      // while open. Standing down here keeps Delete/Backspace, copy/paste, and
+      // undo from acting on the canvas node behind the editor.
+      if (keyboardScope === 'modal') {
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (target) {
         const tagName = target.tagName;
@@ -996,7 +1003,7 @@ function Flow({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [copySelectedNodes, cutSelectedNodes, deleteElements, edges, nodes, pasteNodes, redo, setInteractionMode, takeSnapshot, undo]);
+  }, [copySelectedNodes, cutSelectedNodes, deleteElements, edges, keyboardScope, nodes, pasteNodes, redo, setInteractionMode, takeSnapshot, undo]);
 
   const readyNodeIds = useMemo(() => {
     const isGeneratorReady = (node: StudioNode) => {
@@ -1231,6 +1238,12 @@ function Flow({
             onConnectEnd={onConnectEnd}
             isValidConnection={isValidConnectionCallback}
             connectionLineComponent={ConnectionLine}
+            // While a modal editor owns the keyboard, disable React Flow's own
+            // Backspace/Delete node-deletion. Spread conditionally: passing
+            // deleteKeyCode={undefined} would still override the Canvas default
+            // (["Backspace","Delete"]) since Canvas spreads props after it, so
+            // only inject the prop in the modal case. null = no delete key.
+            {...(keyboardScope === 'modal' ? { deleteKeyCode: null } : {})}
             panOnDrag={interactionMode === 'pan'}
             panOnScroll
             selectionOnDrag={interactionMode === 'select'}

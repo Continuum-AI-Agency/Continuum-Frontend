@@ -3,6 +3,12 @@ import { useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { TimelineEditorNodeData, TimelineItem } from '../../types';
+import { type ClipEffectSpec, speedFor } from '../../utils/render/effectSpec';
+import {
+  type ClipTransition,
+  computeOutputPlacements,
+  overlapInSecFor,
+} from '../../utils/render/transitions';
 
 // Pure timeline geometry + mutation helpers for the Video Editor (timelineEditor)
 // single-track sequencer. Placements reference an input-pool source by
@@ -33,11 +39,22 @@ export function effectiveItemDuration(item: TimelineItem, sourceDurationSec?: nu
   const start = Math.max(0, item.trimStartSec ?? 0);
   const fallbackEnd = sourceDurationSec ?? start + DEFAULT_STILL_SEC;
   const end = item.trimEndSec ?? fallbackEnd;
-  return Math.max(MIN_CLIP_SEC, end - start);
+  // Speed compresses/stretches how long the trimmed source occupies the output.
+  return Math.max(MIN_CLIP_SEC, (end - start) / speedFor(item.effects));
 }
 
 export function normalizeOrder(items: TimelineItem[]): TimelineItem[] {
   return items.map((item, index) => ({ ...item, order: index }));
+}
+
+// Toggle a marker at `sec`: remove it if one already sits within `epsilon`,
+// otherwise insert it (kept sorted). Markers are reference points on the ruler for
+// aligning cuts/overlays.
+export function toggleMarkerTime(markers: number[], sec: number, epsilon = 0.05): number[] {
+  if (sec < 0) return markers;
+  const near = markers.filter((marker) => Math.abs(marker - sec) <= epsilon);
+  if (near.length > 0) return markers.filter((marker) => Math.abs(marker - sec) > epsilon);
+  return [...markers, sec].sort((a, b) => a - b);
 }
 
 export function computeLayout(
@@ -46,20 +63,27 @@ export function computeLayout(
   pxPerSec: number,
 ): TimelineLayout {
   const ordered = [...items].sort((a, b) => a.order - b.order);
-  let cursor = 0;
-  const clips = ordered.map((item) => {
-    const durationSec = durationFor(item);
-    const clip: ClipLayout = {
+  const durations = ordered.map(durationFor);
+  // Cross-dissolves overlap adjacent clips, so a clip's output start (and the
+  // total) come from the shared placement math the renderer also uses.
+  const { placements, totalSec } = computeOutputPlacements(
+    ordered.map((item, index) => ({
+      outputDurationSec: durations[index],
+      crossDissolveInSec: overlapInSecFor(item.transition),
+    })),
+  );
+  const clips = ordered.map((item, index) => {
+    const startSec = placements[index].outputStartSec;
+    const durationSec = durations[index];
+    return {
       item,
-      startSec: cursor,
+      startSec,
       durationSec,
-      leftPx: cursor * pxPerSec,
+      leftPx: startSec * pxPerSec,
       widthPx: durationSec * pxPerSec,
-    };
-    cursor += durationSec;
-    return clip;
+    } satisfies ClipLayout;
   });
-  return { clips, totalSec: cursor };
+  return { clips, totalSec };
 }
 
 export function clipAtTime(layout: TimelineLayout, sec: number): ClipLayout | undefined {
@@ -87,6 +111,17 @@ export function placeItem(
 
 export function removeItem(items: TimelineItem[], itemId: string): TimelineItem[] {
   return normalizeOrder(items.filter((item) => item.id !== itemId));
+}
+
+// Insert a copy of the item (new id, same source/trim/effects) directly after it —
+// copy-paste / duplicate. Order is renumbered so the copy sits next in sequence.
+export function duplicateItem(items: TimelineItem[], itemId: string): TimelineItem[] {
+  const index = items.findIndex((item) => item.id === itemId);
+  if (index < 0) return items;
+  const copy: TimelineItem = { ...items[index], id: uuidv4() };
+  const next = [...items];
+  next.splice(index + 1, 0, copy);
+  return normalizeOrder(next);
 }
 
 export function reorderItems(items: TimelineItem[], fromId: string, toId: string): TimelineItem[] {
@@ -128,6 +163,62 @@ export function setStillDuration(
   );
 }
 
+export function setItemMuteAudio(
+  items: TimelineItem[],
+  itemId: string,
+  mute: boolean,
+): TimelineItem[] {
+  return items.map((item) =>
+    item.id === itemId && item.kind !== 'image' ? { ...item, muteAudio: mute } : item,
+  );
+}
+
+export interface ClipAudioPatch {
+  volume?: number;
+  audioFadeInSec?: number;
+  audioFadeOutSec?: number;
+}
+
+// Merge a per-clip audio patch (gain + manual fades) onto a video item. Clamped
+// to sane ranges; images have no audio and are left untouched.
+export function setItemAudio(
+  items: TimelineItem[],
+  itemId: string,
+  patch: ClipAudioPatch,
+): TimelineItem[] {
+  return items.map((item) => {
+    if (item.id !== itemId || item.kind === 'image') return item;
+    const next = { ...item };
+    if (patch.volume !== undefined) next.volume = Math.max(0, Math.min(4, patch.volume));
+    if (patch.audioFadeInSec !== undefined) next.audioFadeInSec = Math.max(0, patch.audioFadeInSec);
+    if (patch.audioFadeOutSec !== undefined)
+      next.audioFadeOutSec = Math.max(0, patch.audioFadeOutSec);
+    return next;
+  });
+}
+
+// Shallow-merge an effect patch onto the item. Sub-objects (adjustments,
+// transform, kenBurns) are replaced wholesale by the caller (the inspector
+// spreads the current value before patching a single field).
+export function updateClipEffects(
+  items: TimelineItem[],
+  itemId: string,
+  patch: Partial<ClipEffectSpec>,
+): TimelineItem[] {
+  return items.map((item) =>
+    item.id === itemId ? { ...item, effects: { ...item.effects, ...patch } } : item,
+  );
+}
+
+// Set (or clear, with undefined) the transition into a clip.
+export function setItemTransition(
+  items: TimelineItem[],
+  itemId: string,
+  transition: ClipTransition | undefined,
+): TimelineItem[] {
+  return items.map((item) => (item.id === itemId ? { ...item, transition } : item));
+}
+
 export function splitItem(
   items: TimelineItem[],
   itemId: string,
@@ -146,9 +237,12 @@ export function splitItem(
     first = { ...item, durationSec: localSec };
     second = { ...item, id: uuidv4(), durationSec: duration - localSec };
   } else {
+    // localSec is output time; convert to source time by the clip's speed so the
+    // cut lands on the right source frame for sped-up / slowed clips.
+    const speed = speedFor(item.effects);
     const start = Math.max(0, item.trimStartSec ?? 0);
-    const end = item.trimEndSec ?? start + duration;
-    const splitAt = start + localSec;
+    const end = item.trimEndSec ?? start + duration * speed;
+    const splitAt = start + localSec * speed;
     first = { ...item, trimStartSec: start, trimEndSec: splitAt };
     second = { ...item, id: uuidv4(), trimStartSec: splitAt, trimEndSec: end };
   }
@@ -163,9 +257,14 @@ export interface TimelineEditorModel {
   durationFor: (item: TimelineItem) => number;
   place: (sourceNodeId: string, kind: 'video' | 'image', atIndex?: number) => void;
   remove: (itemId: string) => void;
+  duplicate: (itemId: string) => void;
   reorder: (fromId: string, toId: string) => void;
   trim: (itemId: string, range: { startSec?: number; endSec?: number }) => void;
   setStill: (itemId: string, sec: number) => void;
+  setMuteAudio: (itemId: string, mute: boolean) => void;
+  setAudio: (itemId: string, patch: ClipAudioPatch) => void;
+  setEffects: (itemId: string, patch: Partial<ClipEffectSpec>) => void;
+  setTransition: (itemId: string, transition: ClipTransition | undefined) => void;
   split: (itemId: string, localSec: number) => void;
 }
 
@@ -222,6 +321,10 @@ export function useTimelineEditorModel(params: {
       [items, writeItems],
     ),
     remove: useCallback((itemId) => writeItems(removeItem(items, itemId)), [items, writeItems]),
+    duplicate: useCallback(
+      (itemId) => writeItems(duplicateItem(items, itemId)),
+      [items, writeItems],
+    ),
     reorder: useCallback(
       (fromId, toId) => writeItems(reorderItems(items, fromId, toId)),
       [items, writeItems],
@@ -232,6 +335,22 @@ export function useTimelineEditorModel(params: {
     ),
     setStill: useCallback(
       (itemId, sec) => writeItems(setStillDuration(items, itemId, sec)),
+      [items, writeItems],
+    ),
+    setMuteAudio: useCallback(
+      (itemId, mute) => writeItems(setItemMuteAudio(items, itemId, mute)),
+      [items, writeItems],
+    ),
+    setAudio: useCallback(
+      (itemId, patch) => writeItems(setItemAudio(items, itemId, patch)),
+      [items, writeItems],
+    ),
+    setEffects: useCallback(
+      (itemId, patch) => writeItems(updateClipEffects(items, itemId, patch)),
+      [items, writeItems],
+    ),
+    setTransition: useCallback(
+      (itemId, transition) => writeItems(setItemTransition(items, itemId, transition)),
       [items, writeItems],
     ),
     split: useCallback(

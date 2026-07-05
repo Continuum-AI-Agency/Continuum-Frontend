@@ -12,7 +12,11 @@ export interface ClipMedia {
   kind: 'video' | 'image';
   url?: string;
   trimStartSec: number;
+  /** Playback rate for the clip; 1 when unset. */
+  speed?: number;
 }
+
+const clipSpeed = (media: ClipMedia): number => (media.speed && media.speed > 0 ? media.speed : 1);
 
 export interface PlayheadPlayback {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -62,9 +66,11 @@ export function usePlayheadPlayback(params: {
     const media = mediaFor(clip.item.id);
     if (media?.kind === 'video' && media.url) {
       ensureVideoSrc(video, media.url);
+      const speed = clipSpeed(media);
       const local = Math.max(0, sec - clip.startSec);
       try {
-        video.currentTime = media.trimStartSec + local;
+        video.playbackRate = speed;
+        video.currentTime = media.trimStartSec + local * speed;
       } catch {
         // currentTime may throw before metadata loads; ignored — re-applied on tick.
       }
@@ -94,12 +100,15 @@ export function usePlayheadPlayback(params: {
       const media = mediaFor(clip.item.id);
       if (media?.kind === 'video' && media.url) {
         ensureVideoSrc(video, media.url);
+        const speed = clipSpeed(media);
+        if (video.playbackRate !== speed) video.playbackRate = speed;
         if (video.paused) void video.play().catch(() => undefined);
-        const clipEnd = media.trimStartSec + clip.durationSec;
+        // clip.durationSec is output time; the source span consumed is × speed.
+        const clipEnd = media.trimStartSec + clip.durationSec * speed;
         if (video.currentTime >= clipEnd - SNAP_EPSILON) {
           next = clip.startSec + clip.durationSec;
         } else {
-          next = clip.startSec + Math.max(0, video.currentTime - media.trimStartSec);
+          next = clip.startSec + Math.max(0, (video.currentTime - media.trimStartSec) / speed);
         }
       } else {
         if (!video.paused) video.pause();

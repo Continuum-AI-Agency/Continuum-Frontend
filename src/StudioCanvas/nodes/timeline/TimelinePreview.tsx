@@ -2,9 +2,10 @@
 
 import { VideoIcon } from '@radix-ui/react-icons';
 import { Pause, Play } from 'lucide-react';
-import React from 'react';
+import type React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
 
 function formatTime(sec: number): string {
   const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
@@ -26,6 +27,11 @@ export function TimelinePreview({
   onTogglePlay,
   playheadSec,
   totalSec,
+  mediaStyle,
+  textOverlays,
+  fadeOverlay,
+  crossfade,
+  caption,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   showVideo: boolean;
@@ -35,18 +41,31 @@ export function TimelinePreview({
   onTogglePlay: () => void;
   playheadSec: number;
   totalSec: number;
+  // Effect CSS (filter/transform/opacity) for the active clip — the same spec
+  // that the canvas export bakes in, so preview and output match.
+  mediaStyle?: React.CSSProperties;
+  textOverlays?: ResolvedTextOverlay[];
+  // Fade/dip transition wash over the whole frame at the current playhead.
+  fadeOverlay?: { color: string; alpha: number } | null;
+  // Incoming clip's frame faded in over the current one during a cross-dissolve.
+  crossfade?: { url: string; kind: 'video' | 'image'; opacity: number };
+  // Active auto-caption line at the playhead (lower-third). Karaoke burn-in is exact
+  // in the export; the preview shows the plain line.
+  caption?: string;
 }) {
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="relative flex-1 overflow-hidden rounded-lg border border-border/60 bg-black">
+      {/* containerType lets text overlays size via cqh (fraction of frame height). */}
+      <div
+        className="relative flex-1 overflow-hidden rounded-lg border border-border/60 bg-black"
+        style={{ containerType: 'size' }}
+      >
         <video
           ref={videoRef}
           playsInline
           muted={false}
-          className={cn(
-            'absolute inset-0 h-full w-full object-contain transition-opacity',
-            showVideo ? 'opacity-100' : 'opacity-0',
-          )}
+          className="absolute inset-0 h-full w-full object-contain transition-opacity"
+          style={{ ...mediaStyle, opacity: showVideo ? (mediaStyle?.opacity ?? 1) : 0 }}
         />
         {!showVideo && activeImageUrl ? (
           // biome-ignore lint/performance/noImgElement: in-memory still preview; next/image adds no value for canvas media
@@ -54,7 +73,75 @@ export function TimelinePreview({
             src={activeImageUrl}
             alt="Timeline preview frame"
             className="absolute inset-0 h-full w-full object-contain"
+            style={mediaStyle}
           />
+        ) : null}
+
+        {crossfade && crossfade.opacity > 0 ? (
+          crossfade.kind === 'video' ? (
+            <video
+              key={crossfade.url}
+              src={crossfade.url}
+              muted
+              playsInline
+              preload="metadata"
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              style={{ opacity: crossfade.opacity }}
+            />
+          ) : (
+            // biome-ignore lint/performance/noImgElement: in-memory dissolve frame; next/image adds no value
+            <img
+              src={crossfade.url}
+              alt=""
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              style={{ opacity: crossfade.opacity }}
+            />
+          )
+        ) : null}
+
+        {textOverlays?.map((overlay) => (
+          <div
+            key={overlay.id}
+            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-pre-wrap text-center leading-tight"
+            style={{
+              left: `${overlay.xFrac * 100}%`,
+              top: `${overlay.yFrac * 100}%`,
+              fontSize: `${overlay.sizeFrac * 100}cqh`,
+              color: overlay.color,
+              fontWeight: overlay.fontWeight,
+              background: overlay.background,
+              padding: overlay.background ? '0.15em 0.4em' : undefined,
+              borderRadius: overlay.background ? '0.15em' : undefined,
+              textShadow: overlay.background ? undefined : '0 0 0.18em rgba(0,0,0,0.75)',
+              maxWidth: '90%',
+            }}
+          >
+            {overlay.text}
+          </div>
+        ))}
+
+        {fadeOverlay && fadeOverlay.alpha > 0 ? (
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundColor: fadeOverlay.color, opacity: Math.min(1, fadeOverlay.alpha) }}
+          />
+        ) : null}
+
+        {caption ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-[12%] flex justify-center px-4"
+            aria-hidden="true"
+          >
+            <span
+              className="max-w-[90%] text-center font-bold uppercase leading-tight text-white"
+              style={{
+                fontSize: '5.5cqh',
+                textShadow: '0 0 0.18em rgba(0,0,0,0.9), 0 0 0.06em rgba(0,0,0,1)',
+              }}
+            >
+              {caption}
+            </span>
+          </div>
         ) : null}
 
         {isEmpty ? (

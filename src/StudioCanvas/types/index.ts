@@ -184,6 +184,30 @@ export interface TimelineItem {
   // For image stills: how long the frame holds in the output (seconds).
   durationSec?: number;
   muteAudio?: boolean;
+  // Per-clip audio gain (1 = unchanged, 0 = silent) and manual fade in/out
+  // (seconds), applied in the render mixdown on top of any transition crossfade.
+  volume?: number;
+  audioFadeInSec?: number;
+  audioFadeOutSec?: number;
+  // Per-clip visual/audio effects (color, opacity, transform, Ken Burns, speed,
+  // text). Applied identically in the CSS preview and the canvas export.
+  effects?: ClipEffectSpec;
+  // Transition INTO this clip from the previous one (the boundary before it).
+  transition?: ClipTransition;
+  // Absolute output start (seconds) for OVERLAY-track items, which float on top
+  // of the base track at a fixed time. Ignored for base-track items (sequential).
+  startSec?: number;
+}
+
+export type TimelineTrackKind = 'base' | 'overlay';
+
+// A layer in the Video Editor. The base track is the main sequence; overlay
+// tracks composite on top (picture-in-picture, logos, image/text overlays),
+// each item placed at an absolute `startSec` and positioned via its transform.
+export interface TimelineTrack {
+  id: string;
+  kind: TimelineTrackKind;
+  items: TimelineItem[];
 }
 
 // A placeable member of the Video Editor input pool, derived from a connected
@@ -197,9 +221,22 @@ export interface TimelineInputSource {
 
 export interface TimelineEditorNodeData extends BaseNodeData {
   items: TimelineItem[];
+  // Overlay layers composited over the base `items` track. Optional/additive so
+  // existing single-track timelines keep working unchanged.
+  overlayTracks?: TimelineTrack[];
   outputFormat?: 'mp4';
   videoCodec?: 'avc';
   audioCodec?: 'aac';
+  // Export-preset id (utils/render/exportPresets) — resolution/aspect/bitrate for
+  // the render. Absent = 'source' (keep the first clip's dimensions).
+  exportPresetId?: string;
+  // Reference marks (output seconds) on the ruler, for aligning cuts/overlays.
+  markers?: number[];
+  // Auto-captions (Gemini-transcribed, output-time words). When captionsEnabled,
+  // the render burns them in and the preview shows them at the playhead.
+  captionsEnabled?: boolean;
+  captionWords?: CaptionWord[];
+  captionStyle?: CaptionStyle;
   progress?: number;
   // Break-point gate: the workflow halts at this node until the human renders.
   // `committed` flips true once a render has been persisted this session, which

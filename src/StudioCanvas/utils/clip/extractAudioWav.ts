@@ -7,6 +7,14 @@ import { loadMediabunny } from '@/StudioCanvas/utils/splice/appendRange';
 
 const TARGET_SAMPLE_RATE = 16_000;
 
+export type ExtractAudioWavOptions = {
+  signal?: AbortSignal;
+};
+
+export function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException('Audio extraction aborted', 'AbortError');
+}
+
 export function downmixToMono(channels: Float32Array[]): Float32Array {
   if (channels.length === 0) return new Float32Array(0);
   if (channels.length === 1) return channels[0];
@@ -31,7 +39,22 @@ export function concatFloat32(chunks: Float32Array[]): Float32Array {
   return out;
 }
 
-export function resampleLinear(input: Float32Array, inputRate: number, targetRate: number): Float32Array {
+export function concatInt16(chunks: Int16Array[]): Int16Array {
+  const total = chunks.reduce((n, chunk) => n + chunk.length, 0);
+  const out = new Int16Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
+export function resampleLinear(
+  input: Float32Array,
+  inputRate: number,
+  targetRate: number,
+): Float32Array {
   if (inputRate === targetRate || input.length === 0) return input;
   const ratio = targetRate / inputRate;
   const outLength = Math.max(1, Math.round(input.length * ratio));
@@ -88,8 +111,35 @@ export function encodeWav(pcm: Int16Array, sampleRate: number): Blob {
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
-export async function extractAudioWav(blob: Blob): Promise<Blob> {
+function resampleLinearWithCarry(
+  input: Float32Array,
+  previousTail: Float32Array,
+  inputRate: number,
+  targetRate: number,
+): { samples: Float32Array; tail: Float32Array } {
+  const source =
+    previousTail.length > 0
+      ? (() => {
+          const combined = new Float32Array(previousTail.length + input.length);
+          combined.set(previousTail, 0);
+          combined.set(input, previousTail.length);
+          return combined;
+        })()
+      : input;
+
+  const tailLength = Math.min(source.length, 2);
+  const stableLength = Math.max(0, source.length - tailLength);
+  const stable = source.subarray(0, stableLength);
+  const tail = source.slice(stableLength);
+  return { samples: resampleLinear(stable, inputRate, targetRate), tail };
+}
+
+export async function extractAudioWav(
+  blob: Blob,
+  options: ExtractAudioWavOptions = {},
+): Promise<Blob> {
   const mb = await loadMediabunny();
+  throwIfAborted(options.signal);
   const input = new mb.Input({ source: new mb.BlobSource(blob), formats: mb.ALL_FORMATS });
   try {
     const audioTrack = await input.getPrimaryAudioTrack();
@@ -98,10 +148,12 @@ export async function extractAudioWav(blob: Blob): Promise<Blob> {
     }
 
     const sink = new mb.AudioSampleSink(audioTrack);
-    const monoChunks: Float32Array[] = [];
+    const pcmChunks: Int16Array[] = [];
+    let resampleTail = new Float32Array(0);
     let sourceSampleRate = 0;
 
     for await (const sample of sink.samples()) {
+      throwIfAborted(options.signal);
       sourceSampleRate = sample.sampleRate || sourceSampleRate;
       const channels: Float32Array[] = [];
       for (let c = 0; c < sample.numberOfChannels; c += 1) {
@@ -109,17 +161,29 @@ export async function extractAudioWav(blob: Blob): Promise<Blob> {
         sample.copyTo(channelData, { planeIndex: c, format: 'f32-planar' });
         channels.push(channelData);
       }
-      monoChunks.push(downmixToMono(channels));
+      const { samples, tail } = resampleLinearWithCarry(
+        downmixToMono(channels),
+        resampleTail,
+        sourceSampleRate,
+        TARGET_SAMPLE_RATE,
+      );
+      resampleTail = tail;
+      if (samples.length > 0) pcmChunks.push(floatToInt16(samples));
       sample.close();
     }
 
-    if (sourceSampleRate === 0 || monoChunks.length === 0) {
+    if (sourceSampleRate === 0 || (pcmChunks.length === 0 && resampleTail.length === 0)) {
       throw new Error('No audio samples decoded from source video');
     }
 
-    const mono = concatFloat32(monoChunks);
-    const resampled = resampleLinear(mono, sourceSampleRate, TARGET_SAMPLE_RATE);
-    return encodeWav(floatToInt16(resampled), TARGET_SAMPLE_RATE);
+    if (resampleTail.length > 0) {
+      pcmChunks.push(
+        floatToInt16(resampleLinear(resampleTail, sourceSampleRate, TARGET_SAMPLE_RATE)),
+      );
+    }
+
+    throwIfAborted(options.signal);
+    return encodeWav(concatInt16(pcmChunks), TARGET_SAMPLE_RATE);
   } finally {
     try {
       (input as unknown as { dispose?: () => void }).dispose?.();

@@ -5,6 +5,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Cross2Icon, ImageIcon, VideoIcon } from '@radix-ui/react-icons';
 import React, { useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { ClipWaveform } from './ClipWaveform';
+import { useClipMediaPreview } from './useClipMediaPreview';
 import type { ClipLayout } from './useTimelineEditorModel';
 
 export const CLIP_DRAG_PREFIX = 'clip:';
@@ -18,6 +20,7 @@ export function TimelineClipBlock({
   pxPerSec,
   label,
   selected,
+  previewUrl,
   onSelect,
   onTrim,
   onRemove,
@@ -26,6 +29,7 @@ export function TimelineClipBlock({
   pxPerSec: number;
   label: string;
   selected: boolean;
+  previewUrl?: string;
   onSelect: () => void;
   onTrim: (range: { startSec?: number; endSec?: number }) => void;
   onRemove: () => void;
@@ -35,6 +39,8 @@ export function TimelineClipBlock({
   });
 
   const isVideo = clip.item.kind === 'video';
+  const hasAudio = isVideo && !clip.item.muteAudio;
+  const { thumbnails, peaks } = useClipMediaPreview({ url: previewUrl, isVideo, hasAudio });
 
   const startTrim = useCallback(
     (edge: 'start' | 'end') => (event: React.PointerEvent) => {
@@ -80,7 +86,38 @@ export function TimelineClipBlock({
       {...attributes}
       {...listeners}
     >
-      <div className="pointer-events-none flex min-w-0 flex-1 items-center gap-1.5 px-2">
+      {thumbnails.length > 0 ? (
+        <div className="pointer-events-none absolute inset-0 flex opacity-80" aria-hidden="true">
+          {thumbnails.map((src, index) => (
+            <img
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed-order filmstrip frames from one source
+              key={`${clip.item.id}-thumb-${index}`}
+              src={src}
+              alt=""
+              className="h-full min-w-0 flex-1 object-cover"
+              draggable={false}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {thumbnails.length > 0 ? (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/40" />
+      ) : null}
+
+      {peaks.length > 0 ? (
+        <ClipWaveform
+          peaks={peaks}
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-4 text-primary/70"
+        />
+      ) : null}
+
+      <div
+        className={cn(
+          'pointer-events-none relative flex min-w-0 flex-1 items-center gap-1.5 px-2',
+          thumbnails.length > 0 && 'text-white',
+        )}
+      >
         {isVideo ? (
           <VideoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         ) : (

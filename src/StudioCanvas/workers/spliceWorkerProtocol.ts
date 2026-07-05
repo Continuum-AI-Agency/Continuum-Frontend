@@ -1,5 +1,7 @@
-import type { CaptionWord } from '../utils/splice/captionCues';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { ClipEffectSpec } from '../utils/render/effectSpec';
+import type { ClipTransition } from '../utils/render/transitions';
+import type { CaptionWord } from '../utils/splice/captionCues';
 
 export type WorkerClipInput = {
   slotId: string;
@@ -25,6 +27,28 @@ export type TimelineWorkerItem = {
   trimEndSec?: number;
   durationSec?: number;
   muteAudio?: boolean;
+  volume?: number;
+  audioFadeInSec?: number;
+  audioFadeOutSec?: number;
+  effects?: ClipEffectSpec;
+  transition?: ClipTransition;
+};
+
+// One overlay-track placement. Structurally matches composeTimeline's
+// TimelineOverlayRenderItem so it passes straight through the worker.
+export type TimelineOverlayWorkerItem = {
+  itemId: string;
+  kind: 'video' | 'image';
+  blob: Blob;
+  startSec: number;
+  trimStartSec?: number;
+  trimEndSec?: number;
+  durationSec?: number;
+  muteAudio?: boolean;
+  volume?: number;
+  audioFadeInSec?: number;
+  audioFadeOutSec?: number;
+  effects?: ClipEffectSpec;
 };
 
 export type SpliceWorkerInbound =
@@ -47,8 +71,14 @@ export type SpliceWorkerInbound =
   | {
       kind: 'start_timeline';
       items: TimelineWorkerItem[];
+      overlays?: TimelineOverlayWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;
+      targetWidth?: number;
+      targetHeight?: number;
+      // Auto-caption words (output-time) + style, burned in when present.
+      captionWords?: CaptionWord[];
+      captionStyle?: CaptionStyle;
     }
   | { kind: 'cancel' };
 
