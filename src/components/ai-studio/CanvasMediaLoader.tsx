@@ -2,13 +2,51 @@
 
 import React from "react";
 import { ImageIcon, MagicWandIcon, VideoIcon } from "@radix-ui/react-icons";
+import { ErrorRetryState } from "@/components/shared/state";
 import { cn } from "@/lib/utils";
+
+// "loading" keeps the decorative canvas warm-up (the default, unchanged
+// behaviour). "error" is the deterministic failure surface (IMP-011): when the
+// caller's realtime status resolves to a failure, it passes status="error" plus
+// an onRetry so the canvas never sits on an ambiguous forever-loading state.
+type CanvasMediaLoaderStatus = "loading" | "error";
 
 type CanvasMediaLoaderProps = {
   className?: string;
+  status?: CanvasMediaLoaderStatus;
+  errorMessage?: string;
+  onRetry?: () => void;
 };
 
-export function CanvasMediaLoader({ className }: CanvasMediaLoaderProps) {
+const DEFAULT_ERROR_MESSAGE =
+  "We couldn't finish loading the AI Studio canvas. This is usually a connection issue — retry to reconnect.";
+
+export function CanvasMediaLoader({
+  className,
+  status = "loading",
+  errorMessage,
+  onRetry,
+}: CanvasMediaLoaderProps) {
+  if (status === "error") {
+    return (
+      <div
+        className={cn(
+          "relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-b from-background via-muted/40 to-background px-6 py-8",
+          className,
+        )}
+      >
+        <div className="relative z-10 w-full max-w-[520px] rounded-lg border border-border/70 bg-background/95 p-[var(--card-pad)] shadow-md backdrop-blur">
+          <ErrorRetryState
+            title="AI Studio canvas didn't load"
+            message={errorMessage ?? DEFAULT_ERROR_MESSAGE}
+            onRetry={onRetry}
+            retryLabel="Retry"
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       role="status"
