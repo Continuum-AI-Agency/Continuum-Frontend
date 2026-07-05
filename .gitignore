@@ -80,3 +80,9 @@ calendar/
 
 # Nutrient viewer assets copied from node_modules at dev/build time
 /public/nutrient-viewer/
+
+# Playwright E2E run artifacts (see e2e/README.md)
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

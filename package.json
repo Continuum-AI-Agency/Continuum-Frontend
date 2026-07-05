@@ -10,8 +10,9 @@
     "start": "next start",
     "lint": "cd .. && bun run agent:check -- --staged --scope Continuum-Frontend",
     "typecheck": "bunx tsc --noEmit",
-    "tests": "bun test",
+    "tests": "bun test --path-ignore-patterns '**/e2e/**'",
     "test": "bun run tests",
+    "test:e2e": "playwright test",
     "supabase:gen:types": "node scripts/generate-supabase-types.mjs",
     "generate:types": "node scripts/generate-supabase-types.mjs",
     "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.mjs",
@@ -132,6 +133,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
     "@tailwindcss/postcss": "^4.2.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "^1.3.10",
