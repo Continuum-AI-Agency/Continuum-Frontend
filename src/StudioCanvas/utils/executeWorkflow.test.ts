@@ -5,18 +5,6 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 
-function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  });
-}
-
 describe('executeWorkflow', () => {
   const originalFetch = globalThis.fetch;
 
@@ -578,82 +566,49 @@ describe('executeWorkflow', () => {
     expect(payload.video?.uri).toBe('https://cdn.continuum.test/videos/veo-output.mp4');
   });
 
-  it('should parse fast enrichment SSE deltas across chunk boundaries', async () => {
-    mock.module("@/lib/supabase/client", () => ({
-      createSupabaseBrowserClient: () => ({
-        auth: {
-          getSession: async () => ({ data: { session: { access_token: "token" } } }),
-        },
-      }),
-    }));
-
-    const fetchMock = mock(async () => {
-      return new Response(
-        streamFromChunks([
-          'event: ready\n',
-          'data: {"requestId":"abc"}\n\n',
-          'event: delta\n',
-          'da',
-          'ta: {"delta":"Hello"}\n\n',
-          'event: delta\ndata: {"delta":" world"}\n\n',
-          'event: done\ndata: {"requestId":"abc"}\n\n',
-        ]),
-        {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        }
-      );
-    });
+  it('routes text-box enrichment through executeEnrichment with the inherited grounding data piece', async () => {
+    const fetchMock = mock(async () => new Response(null, { status: 200 }));
     globalThis.fetch = fetchMock as typeof fetch;
 
     const nodes: StudioNode[] = [
       { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+      {
+        id: 'nano-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: '', skillIds: ['skill-x'], brandBookPieces: ['voice'] },
+        type: 'nanoGen',
+      },
+    ];
+    const edges = [
+      { id: 'e1', source: 'text-1', target: 'nano-1', targetHandle: 'prompt' },
     ];
     useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges as any);
 
     const executeGeneration = mock(async () => ({ success: true }));
-    const controls = buildControls(executeGeneration);
+    const executeEnrichment = mock(async () => ({ success: true, output: { type: 'text', value: 'enriched' } }));
+    const controls = buildControls(executeGeneration, undefined, executeEnrichment);
 
     await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    const finalNodes = useStudioStore.getState().nodes;
-    const updatedNode = finalNodes.find((n) => n.id === 'text-1');
-    expect(updatedNode?.data.value).toBe('Hello world');
-    expect(updatedNode?.data.isComplete).toBe(true);
-    expect(updatedNode?.data.error).toBeUndefined();
+    // No direct edge-function fetch — enrichment now flows through the Backend service.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(executeEnrichment).toHaveBeenCalledTimes(1);
+    const payload = executeEnrichment.mock.calls[0][1] as { skillIds?: string[]; brandBookPieces?: string[] };
+    expect(payload.skillIds).toEqual(['skill-x']);
+    expect(payload.brandBookPieces).toEqual(['voice']);
   });
 
-  it('should fail string node when fast enrichment emits an error event', async () => {
-    mock.module("@/lib/supabase/client", () => ({
-      createSupabaseBrowserClient: () => ({
-        auth: {
-          getSession: async () => ({ data: { session: { access_token: "token" } } }),
-        },
-      }),
-    }));
-
-    globalThis.fetch = mock(async () => {
-      return new Response(
-        streamFromChunks([
-          'event: error\ndata: {"message":"Gemini upstream failed"}\n\n',
-          'event: done\ndata: {"requestId":"abc"}\n\n',
-        ]),
-        {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        }
-      );
-    }) as typeof fetch;
-
+  it('should fail string node when enrichment returns an error', async () => {
     const nodes: StudioNode[] = [
       { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
     ];
     useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([]);
 
     const executeGeneration = mock(async () => ({ success: true }));
-    const controls = buildControls(executeGeneration);
+    const executeEnrichment = mock(async () => ({ success: false, error: 'Gemini upstream failed' }));
+    const controls = buildControls(executeGeneration, undefined, executeEnrichment);
 
     await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
 

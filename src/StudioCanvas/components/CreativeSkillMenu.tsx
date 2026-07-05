@@ -13,14 +13,13 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandSkills } from '@/lib/organic/skills';
 
 // Pure toggle used by each node's updateNode callback. Exported for unit testing.
 export function toggleSkillId(skillIds: string[] | undefined, skillId: string): string[] {
   const current = skillIds ?? [];
-  return current.includes(skillId)
-    ? current.filter((id) => id !== skillId)
-    : [...current, skillId];
+  return current.includes(skillId) ? current.filter((id) => id !== skillId) : [...current, skillId];
 }
 
 export function CreativeSkillMenu({
@@ -49,19 +48,37 @@ export function CreativeSkillMenu({
         ) : creativeSkills.length === 0 ? (
           <ContextMenuItem disabled>No creative skills yet</ContextMenuItem>
         ) : (
-          creativeSkills.map((skill) => (
-            <ContextMenuCheckboxItem
-              key={skill.id}
-              checked={selectedSkillIds.includes(skill.id)}
-              onSelect={(event) => {
-                event.preventDefault();
-                onToggle(skill.id);
-              }}
-            >
-              {skill.name}
-              {skill.isTemplate ? ' · Library' : ''}
-            </ContextMenuCheckboxItem>
-          ))
+          <TooltipProvider delayDuration={250}>
+            {creativeSkills.map((skill) => (
+              <ContextMenuCheckboxItem
+                key={skill.id}
+                checked={selectedSkillIds.includes(skill.id)}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  onToggle(skill.id);
+                }}
+              >
+                {skill.description ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="min-w-0 flex-1 truncate">
+                        {skill.name}
+                        {skill.isTemplate ? ' · Library' : ''}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      {skill.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate">
+                    {skill.name}
+                    {skill.isTemplate ? ' · Library' : ''}
+                  </span>
+                )}
+              </ContextMenuCheckboxItem>
+            ))}
+          </TooltipProvider>
         )}
       </ContextMenuSubContent>
     </ContextMenuSub>

@@ -1,6 +1,8 @@
 // Shared types for chat-based image/video generation in AI Studio.
 // SupportedModel is kept in sync with MODEL_CATALOG in @continuum/contracts.
 
+import type { BrandBookPieceKind } from "@continuum/contracts";
+
 export type SupportedModel =
   | "nano-banana"
   | "gemini-3-pro-image-preview"
@@ -131,6 +133,9 @@ export type BackendChatImageRequestPayload = {
   negative_prompt?: string;
   // Creative-direction skill ids; the Backend folds their directives into the prompt.
   skill_ids?: string[];
+  // Brand-book pieces tagged on the node; the Backend renders them into an
+  // authoritative forced block.
+  brand_book_pieces?: BrandBookPieceKind[];
   seed?: number;
   cfg_scale?: number;
   steps?: number;

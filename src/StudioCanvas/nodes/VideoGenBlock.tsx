@@ -1,15 +1,20 @@
-import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
-import { useStudioStore } from '../stores/useStudioStore';
-import { VideoGenNodeData } from '../types';
-import { CreativeSkillMenu, toggleSkillId } from '../components/CreativeSkillMenu';
+import type { BrandBookPieceKind } from '@continuum/contracts';
 import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon, VideoIcon } from '@radix-ui/react-icons';
-import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
-import { executeWorkflow } from '../utils/executeWorkflow';
-import { useToast } from '@/components/ui/ToastProvider';
-import { downloadAsset } from '../utils/downloadAsset';
+import {
+  Handle,
+  type HandleProps,
+  type NodeProps,
+  NodeResizer,
+  Position,
+  type Node as ReactFlowNode,
+  useEdges,
+  useNodeId,
+} from '@xyflow/react';
+import type React from 'react';
+import { useCallback, useState } from 'react';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Toolbar } from '@/components/ai-elements/toolbar';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -24,33 +29,45 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-
-import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty"
-import { useNodeSelection } from '../contexts/PresenceContext';
-import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Toolbar } from '@/components/ai-elements/toolbar';
+} from '@/components/ui/empty';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { BrandBookMenu } from '../components/BrandBookMenu';
+import { CreativeSkillMenu, toggleSkillId } from '../components/CreativeSkillMenu';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { GroundingChip } from '../components/GroundingChip';
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { useStudioStore } from '../stores/useStudioStore';
+import type { VideoGenNodeData } from '../types';
 import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import { toggleBrandPiece } from '../utils/brandEnforcement';
+import { downloadAsset } from '../utils/downloadAsset';
+import { executeWorkflow } from '../utils/executeWorkflow';
 import {
   getVideoGeneratorImageLimit,
   getVideoGeneratorReferenceMode,
+  resolveVideoGeneratorModel,
   supportsVideoGeneratorFrameInputs,
   supportsVideoGeneratorReferenceImages,
   supportsVideoGeneratorReferenceVideo,
-  resolveVideoGeneratorModel,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
 
-const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
+const LimitedHandle = ({
+  maxConnections,
+  isConnectable,
+  ...props
+}: HandleProps & { maxConnections?: number }) => {
   const edges = useEdges();
   const nodeId = useNodeId();
   const handleId = props.id ?? null;
@@ -71,7 +88,9 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
   return <Handle {...props} isConnectable={baseConnectable && withinLimit} />;
 };
 
-const getResolutionOptions = (model: VideoGeneratorModel): Array<NonNullable<VideoGenNodeData['resolution']>> => {
+const getResolutionOptions = (
+  model: VideoGeneratorModel,
+): Array<NonNullable<VideoGenNodeData['resolution']>> => {
   if (model === 'veo-3.1' || model === 'veo-3.1-fast') return ['720p', '1080p', '4k'];
   return ['720p', '1080p'];
 };
@@ -88,7 +107,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
-  const model = resolveVideoGeneratorModel({ type: 'videoGen', data: data as unknown as Record<string, unknown> });
+  const model = resolveVideoGeneratorModel({
+    type: 'videoGen',
+    data: data as unknown as Record<string, unknown>,
+  });
   const modelLabel = VIDEO_GENERATOR_MODEL_LABELS[model];
   const supportsFrameInputs = supportsVideoGeneratorFrameInputs(model);
   const supportsReferenceVideo = supportsVideoGeneratorReferenceVideo(model);
@@ -99,14 +121,24 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
   const generatorDescription = `${modelLabel} • ${data.resolution ?? '720p'} • ${data.aspectRatio ?? '16:9'}`;
 
   const promptConnections = flowEdges.filter(
-    (edge) => edge.target === id && ['prompt-in', 'prompt'].includes(edge.targetHandle ?? '')
+    (edge) => edge.target === id && ['prompt-in', 'prompt'].includes(edge.targetHandle ?? ''),
   ).length;
-  const negativeConnections = flowEdges.filter((edge) => edge.target === id && edge.targetHandle === 'negative').length;
-  const firstFrameConnections = flowEdges.filter((edge) => edge.target === id && edge.targetHandle === 'first-frame').length;
-  const lastFrameConnections = flowEdges.filter((edge) => edge.target === id && edge.targetHandle === 'last-frame').length;
-  const referenceVideoConnections = flowEdges.filter((edge) => edge.target === id && edge.targetHandle === 'ref-video').length;
+  const negativeConnections = flowEdges.filter(
+    (edge) => edge.target === id && edge.targetHandle === 'negative',
+  ).length;
+  const firstFrameConnections = flowEdges.filter(
+    (edge) => edge.target === id && edge.targetHandle === 'first-frame',
+  ).length;
+  const lastFrameConnections = flowEdges.filter(
+    (edge) => edge.target === id && edge.targetHandle === 'last-frame',
+  ).length;
+  const referenceVideoConnections = flowEdges.filter(
+    (edge) => edge.target === id && edge.targetHandle === 'ref-video',
+  ).length;
   const refImageCount = flowEdges.filter(
-    (edge) => edge.target === id && (edge.targetHandle === 'ref-images' || edge.targetHandle === 'ref-image')
+    (edge) =>
+      edge.target === id &&
+      (edge.targetHandle === 'ref-images' || edge.targetHandle === 'ref-image'),
   ).length;
 
   const imageLimit = getVideoGeneratorImageLimit(model, referenceVideoConnections > 0);
@@ -124,7 +156,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
       setEdges(flowEdges);
       triggerSave();
     },
-    [flowEdges, id, setEdges, triggerSave, updateNode]
+    [flowEdges, id, setEdges, triggerSave, updateNode],
   );
 
   const handleAspectRatioChange = useCallback(
@@ -154,7 +186,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
       });
       triggerSave();
     },
-    [id, triggerSave, updateNode]
+    [id, triggerSave, updateNode],
   );
 
   const handleResolutionChange = useCallback(
@@ -168,7 +200,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
       }));
       triggerSave();
     },
-    [id, triggerSave, updateNode]
+    [id, triggerSave, updateNode],
   );
 
   const handleToggleSkill = useCallback(
@@ -182,11 +214,25 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
       }));
       triggerSave();
     },
-    [id, triggerSave, updateNode]
+    [id, triggerSave, updateNode],
+  );
+
+  const handleToggleBrandPiece = useCallback(
+    (kind: BrandBookPieceKind) => {
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as VideoGenNodeData),
+          brandBookPieces: toggleBrandPiece((node.data as VideoGenNodeData).brandBookPieces, kind),
+        },
+      }));
+      triggerSave();
+    },
+    [id, triggerSave, updateNode],
   );
 
   const handleRun = useCallback(async () => {
-    console.info("[studio] run video node", { nodeId: id, model });
+    console.info('[studio] run video node', { nodeId: id, model });
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId, model]);
 
@@ -214,15 +260,26 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
     <TooltipProvider>
       <ContextMenu>
         <ContextMenuTrigger asChild>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: canvas node hover affordance, not an interactive control */}
           <div
             className={cn(
-              "relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow",
-              isSelectedByOther && "selected-by-other"
+              'relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow',
+              isSelectedByOther && 'selected-by-other',
             )}
             style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
+            <div className="absolute -top-3 left-2 z-10">
+              <GroundingChip
+                brandId={brandId}
+                skillIds={data.skillIds}
+                brandBookPieces={data.brandBookPieces}
+                editable
+                onToggleSkill={handleToggleSkill}
+                onTogglePiece={handleToggleBrandPiece}
+              />
+            </div>
             <NodeResizer
               minWidth={300}
               minHeight={170}
@@ -236,7 +293,13 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
               position={Position.Top}
               className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
             >
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleRun}
+                title="Run Node"
+              >
                 <PlayIcon className="h-4 w-4" />
               </Button>
             </Toolbar>
@@ -247,13 +310,17 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
               className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
             >
               <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
-                <AspectRatio ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16} className="h-full w-full overflow-hidden bg-muted">
+                <AspectRatio
+                  ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16}
+                  className="h-full w-full overflow-hidden bg-muted"
+                >
                   {data.isExecuting ? (
                     <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                       <GenerationPulseLoader />
                     </div>
                   ) : displayVideo ? (
                     <div className="relative w-full h-full flex items-center justify-center bg-black/85">
+                      {/* biome-ignore lint/a11y/useMediaCaption: generated preview clip has no caption track */}
                       <video
                         src={displayVideo as string}
                         controls
@@ -363,7 +430,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                     <TooltipTrigger asChild>
                       <div
                         className="relative pointer-events-auto group/handle"
-                        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                        style={{
+                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                        }}
                       >
                         <LimitedHandle
                           type="target"
@@ -386,7 +455,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                     <TooltipTrigger asChild>
                       <div
                         className="relative pointer-events-auto group/handle"
-                        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                        style={{
+                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                        }}
                       >
                         <LimitedHandle
                           type="target"
@@ -432,7 +503,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Reference Images: {refImageCount}/{imageLimit ?? '∞'}</p>
+                    <p>
+                      Reference Images: {refImageCount}/{imageLimit ?? '∞'}
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -463,10 +536,12 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
               )}
             </div>
 
-            <div className={cn(
-              "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
-              (selected || isHovered) ? "opacity-100" : "opacity-0"
-            )}>
+            <div
+              className={cn(
+                'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
+                selected || isHovered ? 'opacity-100' : 'opacity-0',
+              )}
+            >
               {generatorDescription}
             </div>
           </div>
@@ -520,6 +595,11 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
             selectedSkillIds={data.skillIds ?? []}
             onToggle={handleToggleSkill}
           />
+          <BrandBookMenu
+            brandId={brandId}
+            pieces={data.brandBookPieces}
+            onToggle={handleToggleBrandPiece}
+          />
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
             <PlayIcon className="mr-2 h-4 w-4" />
@@ -536,7 +616,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
             Download Output
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => deleteNode(id)}
+          >
             <TrashIcon className="mr-2 h-4 w-4" />
             Delete
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
@@ -544,5 +627,5 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
         </ContextMenuContent>
       </ContextMenu>
     </TooltipProvider>
-   );
+  );
 }

@@ -506,6 +506,45 @@ describe('buildNodePayload', () => {
         expect(payload).not.toBeNull();
         expect(payload?.prompt).toBe('');
     });
+
+    it('inherits skills and brand-book pieces from the downstream image generator', async () => {
+      const node: StudioNode = { id: 'string', type: 'string', position: { x: 0, y: 0 }, data: { value: 'a hero shot' } };
+      const genNode: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: '', skillIds: ['skill-1'], brandBookPieces: ['voice', 'colors'] },
+      };
+      const edges: Edge[] = [
+        { id: 'e1', source: 'string', target: 'nano', sourceHandle: 'output', targetHandle: 'prompt' },
+      ];
+      const payload = await buildEnrichPayload(node, new Map(), [node, genNode], edges, 'brand-1');
+      expect(payload?.skillIds).toEqual(['skill-1']);
+      expect(payload?.brandBookPieces).toEqual(['voice', 'colors']);
+    });
+
+    it('inherits the effective (default-full) brand book from an untagged video generator', async () => {
+      const node: StudioNode = { id: 'string', type: 'string', position: { x: 0, y: 0 }, data: { value: 'a promo clip' } };
+      const genNode: StudioNode = {
+        id: 'veo',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: '', enhancePrompt: false },
+      };
+      const edges: Edge[] = [
+        { id: 'e1', source: 'string', target: 'veo', sourceHandle: 'output', targetHandle: 'prompt-in' },
+      ];
+      const payload = await buildEnrichPayload(node, new Map(), [node, genNode], edges, 'brand-1');
+      expect(payload?.brandBookPieces).toEqual(['full']);
+      expect(payload?.skillIds).toBeUndefined();
+    });
+
+    it('defaults to the full brand book with no skills when unconnected to a generator', async () => {
+      const node: StudioNode = { id: 'string', type: 'string', position: { x: 0, y: 0 }, data: { value: 'a hero shot' } };
+      const payload = await buildEnrichPayload(node, new Map(), [node], [], 'brand-1');
+      expect(payload?.brandBookPieces).toEqual(['full']);
+      expect(payload?.skillIds).toBeUndefined();
+    });
   });
 
   describe('creative skills', () => {
@@ -543,6 +582,53 @@ describe('buildNodePayload', () => {
       const payload = buildVeoPayload(node, new Map(), [], [], 'brand-1');
       expect(payload?.skillIds).toEqual(['sk_9']);
       expect(toBackendPayload(payload!).skill_ids).toEqual(['sk_9']);
+    });
+  });
+
+  describe('brand-book enforcement', () => {
+    it('defaults an untagged image node to the full brand book', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'A cat' },
+      };
+      const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
+      expect(payload?.brandBookPieces).toEqual(['full']);
+      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['full']);
+    });
+
+    it('passes an explicit piece selection through to the backend payload', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'A cat', brandBookPieces: ['colors', 'voice'] },
+      };
+      const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
+      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['colors', 'voice']);
+    });
+
+    it('sends an empty array when enforcement is explicitly turned off', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'A cat', brandBookPieces: [] },
+      };
+      const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
+      expect(toBackendPayload(payload!).brand_book_pieces).toEqual([]);
+    });
+
+    it('defaults an untagged video node to the full brand book', () => {
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: 'A video', enhancePrompt: false },
+      };
+      const payload = buildVeoPayload(node, new Map(), [], [], 'brand-1');
+      expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['full']);
     });
   });
 });

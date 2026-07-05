@@ -1,4 +1,4 @@
-import { StudioNode, Edge } from './index';
+import { StudioNode, Edge, BrandBookPieceKind } from './index';
 
 export type ExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -39,6 +39,11 @@ export type DependencyGraph = {
 export interface EnrichPromptPayload {
   prompt: string;
   brandId?: string;
+  // Grounding data piece inherited from the downstream generation node this text
+  // box feeds — the Backend folds these into the enrichment system prompt so the
+  // rewrite is on-brand (services/studio-grounding.ts).
+  skillIds?: string[];
+  brandBookPieces?: BrandBookPieceKind[];
   context: {
     // A reference carries a signed `imageUrl` (preferred) OR inline base64 `data`
     // (fallback). The backend resolves the URL to bytes for the model.
@@ -82,6 +87,8 @@ export interface GenerationPayload {
   negativePrompt?: string;
   // Creative-direction skill ids resolved + folded into the prompt by the Backend.
   skillIds?: string[];
+  // Brand-book pieces the Backend renders into an authoritative forced block.
+  brandBookPieces?: BrandBookPieceKind[];
   aspectRatio?: string;
   resolution?: string;
   imageSize?: '512px' | '1K' | '2K' | '4K';

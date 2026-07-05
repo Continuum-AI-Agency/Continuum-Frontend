@@ -1,14 +1,20 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
-import { useStudioStore } from '../stores/useStudioStore';
-import { NanoGenNodeData, StudioNode } from '../types';
-import { ImageIcon } from '@radix-ui/react-icons';
-import { cn } from '@/lib/utils';
-import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
-import { executeWorkflow } from '../utils/executeWorkflow';
-import { resignCanvasNodes } from '../utils/resignCanvasNodes';
-import { useToast } from '@/components/ui/ToastProvider';
-import { downloadAsset } from '../utils/downloadAsset';
+import type { BrandBookPieceKind } from '@continuum/contracts';
+import { CopyIcon, DownloadIcon, ImageIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
+import {
+  Handle,
+  type HandleProps,
+  type NodeProps,
+  NodeResizer,
+  Position,
+  type Node as ReactFlowNode,
+  useEdges,
+  useNodeId,
+} from '@xyflow/react';
+import type React from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Toolbar } from '@/components/ai-elements/toolbar';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -17,30 +23,40 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-  ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
-
-import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty"
-import { useNodeSelection } from '../contexts/PresenceContext';
-import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Toolbar } from '@/components/ai-elements/toolbar';
-import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+} from '@/components/ui/empty';
+import { useToast } from '@/components/ui/ToastProvider';
+import { cn } from '@/lib/utils';
+import { BrandBookMenu } from '../components/BrandBookMenu';
 import { CreativeSkillMenu, toggleSkillId } from '../components/CreativeSkillMenu';
+import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { GroundingChip } from '../components/GroundingChip';
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { useStudioStore } from '../stores/useStudioStore';
+import type { NanoGenNodeData, StudioNode } from '../types';
 import { getAspectRatioValue, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import { toggleBrandPiece } from '../utils/brandEnforcement';
+import { downloadAsset } from '../utils/downloadAsset';
+import { executeWorkflow } from '../utils/executeWorkflow';
+import { resignCanvasNodes } from '../utils/resignCanvasNodes';
 
-const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
+const LimitedHandle = ({
+  maxConnections,
+  isConnectable,
+  ...props
+}: HandleProps & { maxConnections?: number }) => {
   const edges = useEdges();
   const nodeId = useNodeId();
   const handleId = props.id ?? null;
@@ -70,7 +86,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
-  
+
   const [isHovered, setIsHovered] = useState(false);
 
   const handleModelChange = useCallback(
@@ -86,17 +102,27 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           ...(node.data as NanoGenNodeData),
           model,
           imageSize:
-            model === 'nano-banana' || model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max'
+            model === 'nano-banana' ||
+            model === 'gpt-image-2' ||
+            model === 'flux-2-pro' ||
+            model === 'flux-2-max'
               ? undefined
               : model === 'nano-banana-pro'
-                ? (isProSize ? currentSize : '1K')
-                : (isNano2Size ? currentSize : '512px'),
-          maxReferenceImages: model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max' ? 1 : undefined,
+                ? isProSize
+                  ? currentSize
+                  : '1K'
+                : isNano2Size
+                  ? currentSize
+                  : '512px',
+          maxReferenceImages:
+            model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max'
+              ? 1
+              : undefined,
         },
       }));
       triggerSave();
     },
-    [data.imageSize, id, triggerSave, updateNode]
+    [data.imageSize, id, triggerSave, updateNode],
   );
 
   const handleImageSizeChange = useCallback(
@@ -110,7 +136,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       }));
       triggerSave();
     },
-    [id, triggerSave, updateNode]
+    [id, triggerSave, updateNode],
   );
 
   const handleAspectRatioChange = useCallback(
@@ -140,7 +166,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       });
       triggerSave();
     },
-    [id, triggerSave, updateNode]
+    [id, triggerSave, updateNode],
   );
 
   const handleToggleSkill = useCallback(
@@ -154,11 +180,25 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       }));
       triggerSave();
     },
-    [id, triggerSave, updateNode]
+    [id, triggerSave, updateNode],
+  );
+
+  const handleToggleBrandPiece = useCallback(
+    (kind: BrandBookPieceKind) => {
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as NanoGenNodeData),
+          brandBookPieces: toggleBrandPiece((node.data as NanoGenNodeData).brandBookPieces, kind),
+        },
+      }));
+      triggerSave();
+    },
+    [id, triggerSave, updateNode],
   );
 
   const handleRun = useCallback(async () => {
-    console.info("[studio] run image node", { nodeId: id });
+    console.info('[studio] run image node', { nodeId: id });
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
@@ -177,7 +217,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       ]);
       const url = (resigned?.data as Record<string, unknown> | undefined)?.generatedImageUrl;
       if (typeof url === 'string' && url) {
-        useStudioStore.getState().updateNodeData(id, { generatedImage: url, generatedImageUrl: url });
+        useStudioStore
+          .getState()
+          .updateNodeData(id, { generatedImage: url, generatedImageUrl: url });
       }
     } catch (err) {
       console.warn('[studio] failed to re-sign expired image url', err);
@@ -188,19 +230,21 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const ratio = getAspectRatioValue(aspectRatio);
   const fileBaseName = `image-${id}`;
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
+  const isHighFidelityNanoModel =
+    data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
   const currentImageSize = data.imageSize || (data.model === 'nano-banana-2' ? '512px' : '1K');
-  const modelLabel = data.model === 'nano-banana-pro'
-    ? 'Nano Banana Pro'
-    : data.model === 'nano-banana-2'
-      ? 'Nano Banana 2'
-      : data.model === 'gpt-image-2'
-        ? 'GPT Image 2'
-        : data.model === 'flux-2-pro'
-          ? 'FLUX.2 Pro'
-          : data.model === 'flux-2-max'
-            ? 'FLUX.2 Max'
-            : 'Nano Banana';
+  const modelLabel =
+    data.model === 'nano-banana-pro'
+      ? 'Nano Banana Pro'
+      : data.model === 'nano-banana-2'
+        ? 'Nano Banana 2'
+        : data.model === 'gpt-image-2'
+          ? 'GPT Image 2'
+          : data.model === 'flux-2-pro'
+            ? 'FLUX.2 Pro'
+            : data.model === 'flux-2-max'
+              ? 'FLUX.2 Max'
+              : 'Nano Banana';
   const generatorDescription = `${modelLabel}${isHighFidelityNanoModel ? ` • ${currentImageSize}` : ''} • ${aspectRatio}`;
 
   const handleDownload = useCallback(() => {
@@ -222,146 +266,162 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: canvas node hover affordance, not an interactive control */}
         <div
-          data-tour-id={data.isTourSeed ? "studio-node-image-gen" : undefined}
+          data-tour-id={data.isTourSeed ? 'studio-node-image-gen' : undefined}
           className={cn(
-            "relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
-            isSelectedByOther && "selected-by-other"
+            'relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
+            isSelectedByOther && 'selected-by-other',
           )}
           style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-      <NodeResizer 
-        minWidth={200} 
-        minHeight={200} 
-        isVisible={selected} 
-        lineClassName="border-brand-primary/60" 
-        handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
-      />
+          <div className="absolute -top-3 left-2 z-10">
+            <GroundingChip
+              brandId={brandId}
+              skillIds={data.skillIds}
+              brandBookPieces={data.brandBookPieces}
+              editable
+              onToggleSkill={handleToggleSkill}
+              onTogglePiece={handleToggleBrandPiece}
+            />
+          </div>
+          <NodeResizer
+            minWidth={200}
+            minHeight={200}
+            isVisible={selected}
+            lineClassName="border-brand-primary/60"
+            handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+          />
 
-      <Toolbar
-        isVisible={isToolbarVisible}
-        position={Position.Top}
-        className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
-      >
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
-            <PlayIcon className="h-4 w-4" />
-          </Button>
-      </Toolbar>
+          <Toolbar
+            isVisible={isToolbarVisible}
+            position={Position.Top}
+            className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleRun}
+              title="Run Node"
+            >
+              <PlayIcon className="h-4 w-4" />
+            </Button>
+          </Toolbar>
 
-      <CanvasNode
-        handles={{ target: false, source: false }}
-        selected={selected}
-        className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
-      >
-        <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
-            {data.isExecuting ? (
-              <div className="w-full h-full flex items-center justify-center bg-muted p-4">
+          <CanvasNode
+            handles={{ target: false, source: false }}
+            selected={selected}
+            className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+          >
+            <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
+              {data.isExecuting ? (
+                <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                   <AspectRatio ratio={ratio} className="w-full h-full">
-                      <GenerationPulseLoader />
-                  </AspectRatio>
-              </div>
-            ) : previewImage ? (
-              <div className="relative w-full h-full flex items-center justify-center bg-muted">
-                <div className="w-full h-full">
-                  <AspectRatio ratio={ratio} className="h-full w-full">
-                    <img
-                      src={previewImage as string}
-                      alt="Generated Image"
-                      className="h-full w-full object-contain"
-                      onError={handleImageError}
-                    />
+                    <GenerationPulseLoader />
                   </AspectRatio>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleDownload();
-                  }}
-                  title="Download Output"
-                  aria-label="Download generated image"
-                >
-                  <DownloadIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <ImageIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>No Image</EmptyTitle>
-                    <EmptyDescription>Generated image will appear here</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              </div>
-            )}
-        </NodeContent>
-      </CanvasNode>
-
-      <div
-        className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-      >
-        <Handle 
-          type="source" 
-          position={Position.Right} 
-          id="image" 
-          className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto" 
-        />
-      </div>
-
-      {/* Handles Container - Outside of Card to prevent clipping */}
-      <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
-          
-          <div
-            className="relative pointer-events-auto group/handle"
-            style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
-          >
-            <LimitedHandle 
-              type="target" 
-              position={Position.Left} 
-              id="prompt" 
-              maxConnections={1}
-              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
-            />
-            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-              Prompt
-            </span>
-          </div>
-          
-
+              ) : previewImage ? (
+                <div className="relative w-full h-full flex items-center justify-center bg-muted">
+                  <div className="w-full h-full">
+                    <AspectRatio ratio={ratio} className="h-full w-full">
+                      <img
+                        src={previewImage as string}
+                        alt="Generated result"
+                        className="h-full w-full object-contain"
+                        onError={handleImageError}
+                      />
+                    </AspectRatio>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDownload();
+                    }}
+                    title="Download Output"
+                    aria-label="Download generated image"
+                  >
+                    <DownloadIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <ImageIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>No Image</EmptyTitle>
+                      <EmptyDescription>Generated image will appear here</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                </div>
+              )}
+            </NodeContent>
+          </CanvasNode>
 
           <div
-            className="relative pointer-events-auto group/handle"
+            className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
             style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
           >
-            <LimitedHandle 
-              type="target" 
-              position={Position.Left} 
-              id="ref-image" 
-              maxConnections={refImageLimit}
-              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="image"
+              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
             />
-            <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-              Ref Image
-            </span>
           </div>
-       </div>
 
-      <div className={cn(
-        "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
-        (selected || isHovered) ? "opacity-100" : "opacity-0"
-      )}>
-        {generatorDescription}
-      </div>
-    </div>
+          {/* Handles Container - Outside of Card to prevent clipping */}
+          <div className="absolute -left-5 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
+            <div
+              className="relative pointer-events-auto group/handle"
+              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+            >
+              <LimitedHandle
+                type="target"
+                position={Position.Left}
+                id="prompt"
+                maxConnections={1}
+                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+              />
+              <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                Prompt
+              </span>
+            </div>
+
+            <div
+              className="relative pointer-events-auto group/handle"
+              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+            >
+              <LimitedHandle
+                type="target"
+                position={Position.Left}
+                id="ref-image"
+                maxConnections={refImageLimit}
+                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+              />
+              <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                Ref Image
+              </span>
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              'pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity',
+              selected || isHovered ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            {generatorDescription}
+          </div>
+        </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuLabel>Image Generator</ContextMenuLabel>
@@ -454,6 +514,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           selectedSkillIds={data.skillIds ?? []}
           onToggle={handleToggleSkill}
         />
+        <BrandBookMenu
+          brandId={brandId}
+          pieces={data.brandBookPieces}
+          onToggle={handleToggleBrandPiece}
+        />
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleRun}>
           <PlayIcon className="mr-2 h-4 w-4" />
@@ -470,7 +535,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           Download Output
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+        <ContextMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => deleteNode(id)}
+        >
           <TrashIcon className="mr-2 h-4 w-4" />
           Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>

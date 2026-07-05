@@ -57,6 +57,18 @@ describe('workflowSerialization', () => {
     expect((broadcast.nodes[0].data as Record<string, unknown>).generationSignature).toBe(sig);
   });
 
+  it('preserves brandBookPieces across persist serialization', () => {
+    const node = buildNode({
+      id: 'gen',
+      type: 'nanoGen',
+      data: { positivePrompt: 'a prompt', model: 'nano-banana', brandBookPieces: ['colors', 'voice'] },
+    });
+
+    const persisted = serializeWorkflowSnapshot([node], [], 'bezier');
+
+    expect((persisted.nodes[0].data as Record<string, unknown>).brandBookPieces).toEqual(['colors', 'voice']);
+  });
+
   it('drops edges referencing missing nodes', () => {
     const snapshot = normalizeWorkflowSnapshot(
       {

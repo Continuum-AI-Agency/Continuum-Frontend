@@ -975,10 +975,8 @@ export async function executeWorkflow(
       const brandId = options.brandId || "default-brand";
       if (node.type === 'string') {
         const payload = await buildEnrichPayload(node, resolvedOutputs, nodes, edges, brandId);
-        
-        const hasExternalInputs = (payload?.context?.images?.length ?? 0) > 0 || !!payload?.context?.audio || (payload?.context?.documents?.length ?? 0) > 0 || !!payload?.context?.video;
 
-        console.info("[studio] executeNode string", { nodeId, hasExternalInputs, promptLength: payload?.prompt?.length });
+        console.info("[studio] executeNode string", { nodeId, promptLength: payload?.prompt?.length });
 
         if (typeof executeEnrichment !== 'function') {
              updateNodeStatus(nodeId, 'failed', "Enrichment execution unavailable");
@@ -997,102 +995,15 @@ export async function executeWorkflow(
              useStudioStore.getState().updateNodeData(nodeId, { value: nextValue });
         };
 
-        let result;
-        if (!hasExternalInputs && payload?.prompt && payload.prompt.trim()) {
-            console.info("[studio] triggering fast enrichment for node", nodeId);
-            const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-            const supabase = createSupabaseBrowserClient();
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
-
-            console.info("[studio] using token for fast enrichment", token ? "present" : "missing");
-            if (!token) {
-                throw new Error("Authentication session required for prompt enrichment");
-            }
-
-            const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'apikey': process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-                    'Accept': 'text/event-stream',
-                },
-                body: JSON.stringify({ prompt: payload.prompt }),
-            });
-
-            if (!response.ok) {
-                const err = await response.text();
-                console.error("[studio] Fast enrichment HTTP error", response.status, err);
-                updateNodeStatus(nodeId, 'failed', err || "Fast enrichment failed");
-                return false;
-            }
-
-            const reader = response.body?.getReader();
-            if (!reader) {
-                updateNodeStatus(nodeId, 'failed', "No response body");
-                return false;
-            }
-
-            let accumulatedValue = "";
-            let streamError: string | undefined;
-
-            await readServerSentEvents({
-              reader,
-              onEvent: (eventName, data) => {
-                const payloadText = data.trimStart();
-
-                if (eventName === "delta" || eventName === "message") {
-                  try {
-                    const parsed = JSON.parse(payloadText) as { delta?: string };
-                    if (typeof parsed.delta === "string" && parsed.delta.length > 0) {
-                      accumulatedValue += parsed.delta;
-                      onPartialUpdate({ delta: parsed.delta });
-                    }
-                  } catch {
-                    console.warn("[studio] failed to parse fast enrichment delta", {
-                      nodeId,
-                      eventName,
-                      payloadPreview: payloadText.slice(0, 120),
-                    });
-                  }
-                  return;
-                }
-
-                if (eventName === "error") {
-                  try {
-                    const parsed = JSON.parse(payloadText) as { message?: string; error?: string };
-                    streamError = parsed.message || parsed.error || payloadText || "Fast enrichment failed";
-                  } catch {
-                    streamError = payloadText || "Fast enrichment failed";
-                  }
-                }
-              },
-            });
-
-            if (streamError) {
-                console.error("[studio] fast enrichment stream error", { nodeId, streamError });
-                updateNodeStatus(nodeId, 'failed', streamError);
-                return false;
-            }
-
-            if (!accumulatedValue.trim()) {
-                console.error("[studio] fast enrichment stream completed without output", { nodeId });
-                updateNodeStatus(nodeId, 'failed', "Fast enrichment returned empty output");
-                return false;
-            }
-
-            setNodeOutput(nodeId, { type: 'text', value: accumulatedValue });
-            updateNodeStatus(nodeId, 'completed');
-            console.info("[studio] fast enrichment complete", { nodeId, length: accumulatedValue.length });
+        // All text-box enrichment runs through the Backend PromptEnrichmentService
+        // so it is brand + skill aware (services/studio-grounding.ts). The grounding
+        // data piece rides in the payload, inherited from the downstream gen node.
+        if (!payload) {
+            setNodeOutput(nodeId, { type: 'text', value: (node.data as any).value || "" });
             return true;
-        } else {
-            if (!payload) {
-                setNodeOutput(nodeId, { type: 'text', value: (node.data as any).value || "" });
-                return true;
-            }
-            result = await executeEnrichment(nodeId, payload, onPartialUpdate);
         }
+
+        const result = await executeEnrichment(nodeId, payload, onPartialUpdate);
         
         if (result && !result.success) {
              console.error("Enrichment error", result.error);

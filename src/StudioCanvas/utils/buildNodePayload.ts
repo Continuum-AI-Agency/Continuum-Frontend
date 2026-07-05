@@ -1,17 +1,33 @@
 import type { Edge } from '@xyflow/react';
-import { StudioNode } from '../types';
-import { EnrichPromptPayload, ExtendVideoInput, ExtendVideoPayload, GenerationPayload, NodeOutput } from '../types/execution';
-import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from '@/lib/types/chatImage';
-import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData, StringNodeData, ImageNodeData } from '../types';
-import { parseDataUrl } from './dataUrl';
+import type {
+  BackendChatImageRequestPayload,
+  BackendExtendVideoRequestPayload,
+} from '@/lib/types/chatImage';
+import type {
+  ExtendVideoNodeData,
+  ImageNodeData,
+  NanoGenNodeData,
+  StringNodeData,
+  StudioNode,
+  VideoGenNodeData,
+} from '../types';
+import type {
+  EnrichPromptPayload,
+  ExtendVideoInput,
+  ExtendVideoPayload,
+  GenerationPayload,
+  NodeOutput,
+} from '../types/execution';
+import { DEFAULT_BRAND_BOOK_PIECES, effectiveBrandBookPieces } from './brandEnforcement';
 import { compositeImages } from './compositeImages';
+import { parseDataUrl } from './dataUrl';
 import {
   getVideoGeneratorBackendModel,
   getVideoGeneratorReferenceMode,
-  supportsVideoGeneratorFrameInputs,
-  supportsVideoGeneratorReferenceVideo,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
+  supportsVideoGeneratorFrameInputs,
+  supportsVideoGeneratorReferenceVideo,
 } from './videoModel';
 
 // A reference image for a generation/enrich payload. A signed `imageUrl` is the
@@ -44,7 +60,10 @@ const imageRefFromOutput = (output: NodeOutput | undefined): ImageRef | undefine
   return undefined;
 };
 
-const imageRefFromValue = (value: string | undefined, fallbackMime = 'image/png'): ImageRef | undefined => {
+const imageRefFromValue = (
+  value: string | undefined,
+  fallbackMime = 'image/png',
+): ImageRef | undefined => {
   const parsed = parseDataUrl(value);
   if (parsed?.base64) return { data: parsed.base64, mimeType: parsed.mimeType };
   if (isHttpUrl(value)) return { imageUrl: value.trim(), mimeType: fallbackMime };
@@ -56,11 +75,9 @@ function resolveInputValue(
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
-  edges: Edge[]
+  edges: Edge[],
 ): { text?: string; image?: string; imageUrl?: string; fileName?: string } | undefined {
-  const incomingEdge = edges.find(
-    (e) => e.target === nodeId && e.targetHandle === handleId
-  );
+  const incomingEdge = edges.find((e) => e.target === nodeId && e.targetHandle === handleId);
 
   if (!incomingEdge) return undefined;
 
@@ -76,7 +93,7 @@ function resolveInputValue(
     return undefined;
   }
 
-  const sourceNode = nodes.find(n => n.id === incomingEdge.source);
+  const sourceNode = nodes.find((n) => n.id === incomingEdge.source);
   if (sourceNode) {
     if (sourceNode.type === 'string' && sourceNode.data.value) {
       return { text: sourceNode.data.value as string };
@@ -101,11 +118,11 @@ function resolveVideoInput(
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
-  edges: Edge[]
-): { data: string; mimeType: string; filename?: string; sourcePath?: string; sourceUrl?: string } | undefined {
-  const incomingEdge = edges.find(
-    (e) => e.target === nodeId && e.targetHandle === handleId
-  );
+  edges: Edge[],
+):
+  | { data: string; mimeType: string; filename?: string; sourcePath?: string; sourceUrl?: string }
+  | undefined {
+  const incomingEdge = edges.find((e) => e.target === nodeId && e.targetHandle === handleId);
 
   if (!incomingEdge) return undefined;
 
@@ -118,7 +135,7 @@ function resolveVideoInput(
     return undefined;
   }
 
-  const sourceNode = nodes.find(n => n.id === incomingEdge.source);
+  const sourceNode = nodes.find((n) => n.id === incomingEdge.source);
   if (sourceNode?.type === 'video') {
     const parsed = parseDataUrl((sourceNode.data as any).video as string | undefined);
     if (parsed?.base64) {
@@ -140,11 +157,9 @@ function resolveExtendVideoInput(
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
-  edges: Edge[]
+  edges: Edge[],
 ): ExtendVideoInput | undefined {
-  const incomingEdge = edges.find(
-    (e) => e.target === nodeId && e.targetHandle === handleId
-  );
+  const incomingEdge = edges.find((e) => e.target === nodeId && e.targetHandle === handleId);
 
   if (!incomingEdge) return undefined;
 
@@ -184,7 +199,9 @@ function resolveExtendVideoInput(
     if (parsed?.base64) {
       return { data: parsed.base64, mimeType: parsed.mimeType };
     }
-    const fallbackUri = (typeof generatedVideo === 'string' && generatedVideo.trim()) || (typeof generatedVideoUrl === 'string' && generatedVideoUrl.trim());
+    const fallbackUri =
+      (typeof generatedVideo === 'string' && generatedVideo.trim()) ||
+      (typeof generatedVideoUrl === 'string' && generatedVideoUrl.trim());
     if (fallbackUri) {
       return { uri: fallbackUri };
     }
@@ -196,8 +213,11 @@ function resolveExtendVideoInput(
 async function resolveImageInput(
   edge: Edge,
   resolvedData: Map<string, NodeOutput>,
-  nodeById: Map<string, StudioNode>
-): Promise<{ data?: string; imageUrl?: string; mimeType: string; sourcePath?: string; sourceUrl?: string } | undefined> {
+  nodeById: Map<string, StudioNode>,
+): Promise<
+  | { data?: string; imageUrl?: string; mimeType: string; sourcePath?: string; sourceUrl?: string }
+  | undefined
+> {
   const output = resolvedData.get(edge.source);
   const outputRef = imageRefFromOutput(output);
   if (outputRef) {
@@ -242,15 +262,13 @@ function resolveAudioInput(
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
-  edges: Edge[]
+  edges: Edge[],
 ): { base64: string; mimeType: string } | undefined {
-  const incomingEdge = edges.find(
-    (e) => e.target === nodeId && e.targetHandle === handleId
-  );
+  const incomingEdge = edges.find((e) => e.target === nodeId && e.targetHandle === handleId);
 
   if (!incomingEdge) return undefined;
 
-  const sourceNode = nodes.find(n => n.id === incomingEdge.source);
+  const sourceNode = nodes.find((n) => n.id === incomingEdge.source);
   if (sourceNode?.type === 'audio') {
     const parsed = parseDataUrl((sourceNode.data as any).audio as string | undefined);
     if (parsed?.base64) {
@@ -281,24 +299,21 @@ function resolveDocumentInput(
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
-  edges: Edge[]
+  edges: Edge[],
 ): ResolvedDocument[] | undefined {
-  const incomingEdges = edges.filter(
-    (e) => e.target === nodeId && e.targetHandle === handleId
-  );
+  const incomingEdges = edges.filter((e) => e.target === nodeId && e.targetHandle === handleId);
 
   if (incomingEdges.length === 0) return undefined;
 
   const documents: ResolvedDocument[] = [];
 
   for (const edge of incomingEdges) {
-    const sourceNode = nodes.find(n => n.id === edge.source);
+    const sourceNode = nodes.find((n) => n.id === edge.source);
     if (sourceNode?.type !== 'document') continue;
     const docs = (sourceNode.data as any).documents || [];
     for (const doc of docs) {
       // Only include if there is at least one data source to read.
-      const hasSource =
-        doc.extractedText || doc.sourceUrl || doc.sourceDocumentId || doc.content;
+      const hasSource = doc.extractedText || doc.sourceUrl || doc.sourceDocumentId || doc.content;
       if (!hasSource) continue;
       documents.push({
         name: doc.name || 'document',
@@ -315,30 +330,62 @@ function resolveDocumentInput(
 }
 
 const normalizeVeoResolution = (model: VideoGenNodeData['model'], resolution?: string): string => {
-  if ((model === 'veo-3.1' || model === 'veo-3.1-fast' || model === 'veo-3.1-lite') && resolution === '4K') {
+  if (
+    (model === 'veo-3.1' || model === 'veo-3.1-fast' || model === 'veo-3.1-lite') &&
+    resolution === '4K'
+  ) {
     return '4k';
   }
   return resolution || '720p';
 };
 
+// Enrichment inherits its grounding from the generation node the text box feeds:
+// the same skills + brand-book pieces that node would generate with, so the
+// enriched prompt reflects the actual output. Falls back to the default-ON brand
+// book (no skills) when the text box is not yet wired to a generator. Takes the
+// first connected generator when several are downstream.
+export function resolveInheritedGrounding(
+  nodeId: string,
+  allNodes: StudioNode[],
+  allEdges: Edge[],
+): Pick<EnrichPromptPayload, 'skillIds' | 'brandBookPieces'> {
+  const nodeById = new Map(allNodes.map((n) => [n.id, n]));
+  const targetGenNode = allEdges
+    .filter((edge) => edge.source === nodeId)
+    .map((edge) => nodeById.get(edge.target))
+    .find(
+      (candidate): candidate is StudioNode =>
+        !!candidate && (candidate.type === 'nanoGen' || isVideoGeneratorNodeType(candidate.type)),
+    );
+
+  if (targetGenNode) {
+    const genData = targetGenNode.data as NanoGenNodeData | VideoGenNodeData;
+    return {
+      skillIds: genData.skillIds && genData.skillIds.length > 0 ? genData.skillIds : undefined,
+      brandBookPieces: effectiveBrandBookPieces(genData.brandBookPieces),
+    };
+  }
+
+  return { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES };
+}
 
 export async function buildEnrichPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
   allEdges: Edge[],
-  brandId: string
+  brandId: string,
 ): Promise<EnrichPromptPayload | null> {
   const data = node.data as StringNodeData;
-  const prompt = data.value || "";
+  const prompt = data.value || '';
 
   // Resolve Images (Multiple allowed)
-  const imageEdges = allEdges.filter(
-    (e) => e.target === node.id && e.targetHandle === 'image'
+  const imageEdges = allEdges.filter((e) => e.target === node.id && e.targetHandle === 'image');
+
+  const nodeById = new Map(allNodes.map((n) => [n.id, n]));
+  const imagePromises = imageEdges.map((edge) =>
+    resolveImageInput(edge, resolvedData, nodeById as Map<string, StudioNode>),
   );
-  
-  const nodeById = new Map(allNodes.map(n => [n.id, n]));
-  const imagePromises = imageEdges.map(edge => resolveImageInput(edge, resolvedData, nodeById as Map<string, StudioNode>));
   const images = (await Promise.all(imagePromises)).filter(Boolean);
 
   // Resolve Audio (Single)
@@ -351,27 +398,33 @@ export async function buildEnrichPayload(
 
   if (!prompt && !images.length && !audio && !documents?.length && !video) {
     if (node.type === 'string') {
-       // BDD: Given a string node, when all input handles are empty, then return an empty payload to trigger fast enrichment.
+      // BDD: Given a string node, when all input handles are empty, then return an empty payload to trigger fast enrichment.
     } else {
-       return null;
+      return null;
     }
   }
+
+  const grounding = resolveInheritedGrounding(node.id, allNodes, allEdges);
 
   return {
     prompt,
     brandId,
+    ...grounding,
     context: {
-      images: images.length > 0
-        ? images.map((img) => ({
-            type: (img!.imageUrl ? 'url' : 'base64') as 'url' | 'base64',
-            data: img!.data,
-            imageUrl: img!.imageUrl,
-            mimeType: img!.mimeType,
-            sourcePath: img!.sourcePath,
-            sourceUrl: img!.sourceUrl,
-          }))
+      images:
+        images.length > 0
+          ? images.map((img) => ({
+              type: (img!.imageUrl ? 'url' : 'base64') as 'url' | 'base64',
+              data: img!.data,
+              imageUrl: img!.imageUrl,
+              mimeType: img!.mimeType,
+              sourcePath: img!.sourcePath,
+              sourceUrl: img!.sourceUrl,
+            }))
+          : undefined,
+      audio: audio
+        ? { type: 'base64' as const, data: audio.base64, mimeType: audio.mimeType }
         : undefined,
-      audio: audio ? { type: 'base64' as const, data: audio.base64, mimeType: audio.mimeType } : undefined,
       video: video
         ? {
             type: 'base64' as const,
@@ -382,7 +435,7 @@ export async function buildEnrichPayload(
           }
         : undefined,
       documents: documents,
-    }
+    },
   };
 }
 
@@ -391,24 +444,23 @@ export function buildNanoGenPayload(
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
   allEdges: Edge[],
-  brandId: string
+  brandId: string,
 ): GenerationPayload | null {
   const data = node.data as NanoGenNodeData;
 
-  let prompt = data.positivePrompt || "";
+  let prompt = data.positivePrompt || '';
   const promptInput = resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges);
   if (promptInput?.text) {
     prompt = promptInput.text;
   }
-
-
 
   if (!prompt.trim()) {
     return null;
   }
 
   const refImageEdges = allEdges.filter(
-    (e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images')
+    (e) =>
+      e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'),
   );
 
   const injectionParts: string[] = [];
@@ -416,18 +468,22 @@ export function buildNanoGenPayload(
   const referenceImages = refImageEdges
     .map((edge, index) => {
       const output = resolvedData.get(edge.source);
-      const sourceNode = allNodes.find(n => n.id === edge.source);
+      const sourceNode = allNodes.find((n) => n.id === edge.source);
       const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
 
       if (refType !== 'default') {
-          const refNumber = index + 1;
-          if (refType === 'product') {
-              injectionParts.push(`Ref. Image #${refNumber} is the primary Product to feature.`);
-          } else if (refType === 'color') {
-              injectionParts.push(`Ref. Image #${refNumber} provides the Color/Theme to generate in compliance with.`);
-          } else if (refType === 'person') {
-              injectionParts.push(`Ref. Image #${refNumber} is a Person/Character that must appear in the generation.`);
-          }
+        const refNumber = index + 1;
+        if (refType === 'product') {
+          injectionParts.push(`Ref. Image #${refNumber} is the primary Product to feature.`);
+        } else if (refType === 'color') {
+          injectionParts.push(
+            `Ref. Image #${refNumber} provides the Color/Theme to generate in compliance with.`,
+          );
+        } else if (refType === 'person') {
+          injectionParts.push(
+            `Ref. Image #${refNumber} is a Person/Character that must appear in the generation.`,
+          );
+        }
       }
 
       const ref = imageRefFromOutput(output);
@@ -447,51 +503,59 @@ export function buildNanoGenPayload(
     .filter(Boolean) as GenerationPayload['referenceImages'];
 
   if (injectionParts.length > 0) {
-      prompt += `\n\n[System Context Injection]\n${injectionParts.join('\n')}`;
+    prompt += `\n\n[System Context Injection]\n${injectionParts.join('\n')}`;
   }
 
-  const backendModel = data.model === 'nano-banana'
-    ? 'gemini-2.5-flash-image'
-    : data.model === 'nano-banana-pro'
-      ? 'gemini-3-pro-image-preview'
+  const backendModel =
+    data.model === 'nano-banana'
+      ? 'gemini-2.5-flash-image'
+      : data.model === 'nano-banana-pro'
+        ? 'gemini-3-pro-image-preview'
+        : data.model === 'nano-banana-2'
+          ? 'gemini-3.1-flash-image-preview'
+          : data.model === 'gpt-image-2'
+            ? 'openai/gpt-image-2/edit'
+            : data.model === 'flux-2-pro'
+              ? 'fal-ai/flux-2-pro/edit'
+              : data.model === 'flux-2-max'
+                ? 'fal-ai/flux-2-max/edit'
+                : data.model;
+  const isHighFidelityNanoModel =
+    data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
+  const imageSize =
+    data.model === 'nano-banana-pro'
+      ? data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K'
+        ? data.imageSize
+        : '1K'
       : data.model === 'nano-banana-2'
-        ? 'gemini-3.1-flash-image-preview'
-        : data.model === 'gpt-image-2'
-          ? 'openai/gpt-image-2/edit'
-          : data.model === 'flux-2-pro'
-            ? 'fal-ai/flux-2-pro/edit'
-            : data.model === 'flux-2-max'
-              ? 'fal-ai/flux-2-max/edit'
-              : data.model;
-  const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
-  const imageSize = data.model === 'nano-banana-pro'
-    ? (data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K' ? data.imageSize : '1K')
-    : data.model === 'nano-banana-2'
-      ? (data.imageSize || '512px')
-      : undefined;
-  const resolution = data.model === 'nano-banana'
-    ? '1024x1024'
-    : imageSize === '512px'
-      ? '512x512'
-      : imageSize === '2K'
-        ? '2048x2048'
-        : imageSize === '4K'
-          ? '4096x4096'
-          : '1024x1024';
+        ? data.imageSize || '512px'
+        : undefined;
+  const resolution =
+    data.model === 'nano-banana'
+      ? '1024x1024'
+      : imageSize === '512px'
+        ? '512x512'
+        : imageSize === '2K'
+          ? '2048x2048'
+          : imageSize === '4K'
+            ? '4096x4096'
+            : '1024x1024';
 
   return {
     brandId,
     model: backendModel,
     medium: 'image',
     prompt,
-    negativePrompt: typeof data.negativePrompt === 'string' && data.negativePrompt.trim()
-      ? data.negativePrompt
-      : undefined,
+    negativePrompt:
+      typeof data.negativePrompt === 'string' && data.negativePrompt.trim()
+        ? data.negativePrompt
+        : undefined,
     aspectRatio: data.aspectRatio || '16:9',
     resolution,
     imageSize: isHighFidelityNanoModel ? imageSize : undefined,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
+    brandBookPieces: effectiveBrandBookPieces(data.brandBookPieces),
   };
 }
 
@@ -500,19 +564,21 @@ export function buildVeoPayload(
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
   allEdges: Edge[],
-  brandId: string
+  brandId: string,
 ): GenerationPayload | null {
   const data = node.data as VideoGenNodeData;
   const model = resolveVideoGeneratorModel(node);
   const referenceMode = getVideoGeneratorReferenceMode(model);
 
-  let prompt = data.prompt || "";
-  const promptInput = resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges) || resolveInputValue(node.id, 'prompt-in', resolvedData, allNodes, allEdges);
+  let prompt = data.prompt || '';
+  const promptInput =
+    resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges) ||
+    resolveInputValue(node.id, 'prompt-in', resolvedData, allNodes, allEdges);
   if (promptInput?.text) {
     prompt = promptInput.text;
   }
 
-  let negativePrompt = data.negativePrompt || "";
+  let negativePrompt = data.negativePrompt || '';
   const negativeInput = resolveInputValue(node.id, 'negative', resolvedData, allNodes, allEdges);
   if (negativeInput?.text) {
     negativePrompt = negativeInput.text;
@@ -522,21 +588,30 @@ export function buildVeoPayload(
     return null;
   }
 
-  let firstFrame: GenerationPayload['firstFrame'] = undefined;
-  let lastFrame: GenerationPayload['lastFrame'] = undefined;
-  let referenceVideo: GenerationPayload['referenceVideo'] = undefined;
-  let imageReferences: GenerationPayload['imageReferences'] = undefined;
+  let firstFrame: GenerationPayload['firstFrame'];
+  let lastFrame: GenerationPayload['lastFrame'];
+  let referenceVideo: GenerationPayload['referenceVideo'];
+  let imageReferences: GenerationPayload['imageReferences'];
 
   const frameFromInput = (
     input: { image?: string; imageUrl?: string; fileName?: string } | undefined,
     filename: string,
   ): GenerationPayload['firstFrame'] | undefined => {
-    if (input?.image) return { data: input.image, mimeType: 'image/png', filename: input.fileName || filename };
-    if (input?.imageUrl) return { imageUrl: input.imageUrl, mimeType: 'image/png', filename: input.fileName || filename };
+    if (input?.image)
+      return { data: input.image, mimeType: 'image/png', filename: input.fileName || filename };
+    if (input?.imageUrl)
+      return {
+        imageUrl: input.imageUrl,
+        mimeType: 'image/png',
+        filename: input.fileName || filename,
+      };
     return undefined;
   };
 
-  const frameFromValue = (value: string | undefined, filename: string): GenerationPayload['firstFrame'] | undefined => {
+  const frameFromValue = (
+    value: string | undefined,
+    filename: string,
+  ): GenerationPayload['firstFrame'] | undefined => {
     const ref = imageRefFromValue(value);
     if (!ref) return undefined;
     return { data: ref.data, imageUrl: ref.imageUrl, mimeType: 'image/png', filename };
@@ -547,32 +622,44 @@ export function buildVeoPayload(
     firstFrame = frameFromInput(frame0Input, 'frame-0.png');
 
     if (!firstFrame) {
-        const legacyFirst = resolveInputValue(node.id, 'first-frame', resolvedData, allNodes, allEdges);
-        firstFrame = frameFromInput(legacyFirst, 'frame-0.png');
+      const legacyFirst = resolveInputValue(
+        node.id,
+        'first-frame',
+        resolvedData,
+        allNodes,
+        allEdges,
+      );
+      firstFrame = frameFromInput(legacyFirst, 'frame-0.png');
     }
 
     const frameList = (data as any).frameList || [];
     if (!firstFrame && frameList[0]?.src) {
-        firstFrame = frameFromValue(frameList[0].src, 'frame-0.png') ?? undefined;
+      firstFrame = frameFromValue(frameList[0].src, 'frame-0.png') ?? undefined;
     }
 
     const legacyLast = resolveInputValue(node.id, 'last-frame', resolvedData, allNodes, allEdges);
     const legacyLastFrame = frameFromInput(legacyLast, 'frame-last.png');
     if (legacyLastFrame) {
-        lastFrame = legacyLastFrame;
+      lastFrame = legacyLastFrame;
     } else {
-        for (let i = 8; i > 0; i--) {
-            const frameInput = resolveInputValue(node.id, `frame-${i}`, resolvedData, allNodes, allEdges);
-            const frameFrame = frameFromInput(frameInput, `frame-${i}.png`);
-            if (frameFrame) {
-                lastFrame = frameFrame;
-                break;
-            }
-            if (frameList[i]?.src) {
-                lastFrame = frameFromValue(frameList[i].src, `frame-${i}.png`) ?? undefined;
-                break;
-            }
+      for (let i = 8; i > 0; i--) {
+        const frameInput = resolveInputValue(
+          node.id,
+          `frame-${i}`,
+          resolvedData,
+          allNodes,
+          allEdges,
+        );
+        const frameFrame = frameFromInput(frameInput, `frame-${i}.png`);
+        if (frameFrame) {
+          lastFrame = frameFrame;
+          break;
         }
+        if (frameList[i]?.src) {
+          lastFrame = frameFromValue(frameList[i].src, `frame-${i}.png`) ?? undefined;
+          break;
+        }
+      }
     }
   }
 
@@ -587,46 +674,59 @@ export function buildVeoPayload(
     }
   }
 
-  const referenceImages = referenceMode === 'images' || model === 'kling-omni'
-    ? (() => {
-        const edges = allEdges.filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'));
-        const injectionParts: string[] = [];
-        
-        const refs = edges.map((edge, index) => {
-          const output = resolvedData.get(edge.source);
-          const sourceNode = allNodes.find(n => n.id === edge.source);
-          const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
+  const referenceImages =
+    referenceMode === 'images' || model === 'kling-omni'
+      ? (() => {
+          const edges = allEdges.filter(
+            (e) =>
+              e.target === node.id &&
+              (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'),
+          );
+          const injectionParts: string[] = [];
 
-          if (refType !== 'default') {
-              const refNumber = index + 1;
-              if (refType === 'product') {
-                  injectionParts.push(`Ref. Image #${refNumber} is the primary Product to feature.`);
-              } else if (refType === 'color') {
-                  injectionParts.push(`Ref. Image #${refNumber} provides the Color/Theme to generate in compliance with.`);
-              } else if (refType === 'person') {
-                  injectionParts.push(`Ref. Image #${refNumber} is a Person/Character that must appear in the generation.`);
+          const refs = edges
+            .map((edge, index) => {
+              const output = resolvedData.get(edge.source);
+              const sourceNode = allNodes.find((n) => n.id === edge.source);
+              const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
+
+              if (refType !== 'default') {
+                const refNumber = index + 1;
+                if (refType === 'product') {
+                  injectionParts.push(
+                    `Ref. Image #${refNumber} is the primary Product to feature.`,
+                  );
+                } else if (refType === 'color') {
+                  injectionParts.push(
+                    `Ref. Image #${refNumber} provides the Color/Theme to generate in compliance with.`,
+                  );
+                } else if (refType === 'person') {
+                  injectionParts.push(
+                    `Ref. Image #${refNumber} is a Person/Character that must appear in the generation.`,
+                  );
+                }
               }
-          }
 
-          const ref = imageRefFromOutput(output);
-          if (ref) {
-            return {
-              data: ref.data,
-              imageUrl: ref.imageUrl,
-              mimeType: ref.mimeType,
-              weight: 1,
-              referenceType: 'asset' as const,
-            };
-          }
-          return null;
-        }).filter(Boolean) as GenerationPayload['referenceImages'];
+              const ref = imageRefFromOutput(output);
+              if (ref) {
+                return {
+                  data: ref.data,
+                  imageUrl: ref.imageUrl,
+                  mimeType: ref.mimeType,
+                  weight: 1,
+                  referenceType: 'asset' as const,
+                };
+              }
+              return null;
+            })
+            .filter(Boolean) as GenerationPayload['referenceImages'];
 
-        if (injectionParts.length > 0) {
+          if (injectionParts.length > 0) {
             prompt += `\n\n[System Context Injection]\n${injectionParts.join('\n')}`;
-        }
-        return refs;
-    })()
-    : undefined;
+          }
+          return refs;
+        })()
+      : undefined;
 
   if (model === 'seedance-2.0') {
     const mappedImageReferences = referenceImages?.map((image, index) => ({
@@ -636,9 +736,8 @@ export function buildVeoPayload(
       filename: image.filename ?? `seedance-ref-${index + 1}.png`,
     }));
 
-    imageReferences = mappedImageReferences && mappedImageReferences.length > 0
-      ? mappedImageReferences
-      : undefined;
+    imageReferences =
+      mappedImageReferences && mappedImageReferences.length > 0 ? mappedImageReferences : undefined;
   }
 
   const backendModel = getVideoGeneratorBackendModel(model);
@@ -657,8 +756,12 @@ export function buildVeoPayload(
     referenceVideo,
     imageReferences,
     // seedance-2.0 uses imageReferences (data/mimeType/filename); original referenceImages intentionally omitted to avoid duplicate payload
-    referenceImages: model !== 'seedance-2.0' && referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    referenceImages:
+      model !== 'seedance-2.0' && referenceImages && referenceImages.length > 0
+        ? referenceImages
+        : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,
+    brandBookPieces: effectiveBrandBookPieces(data.brandBookPieces),
   };
 }
 
@@ -667,7 +770,7 @@ export function buildExtendVideoPayload(
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
   allEdges: Edge[],
-  brandId: string
+  brandId: string,
 ): ExtendVideoPayload | null {
   const data = node.data as ExtendVideoNodeData;
 
@@ -699,16 +802,32 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     aspect_ratio: payload.aspectRatio || '16:9',
     resolution: payload.resolution,
     image_size: payload.imageSize,
-    duration_seconds: payload.durationSeconds ? String(payload.durationSeconds) as "4" | "6" | "8" : undefined,
+    duration_seconds: payload.durationSeconds
+      ? (String(payload.durationSeconds) as '4' | '6' | '8')
+      : undefined,
     negative_prompt: payload.negativePrompt,
     first_frame: payload.firstFrame
-      ? { data: payload.firstFrame.data, image_url: payload.firstFrame.imageUrl, mime_type: payload.firstFrame.mimeType, filename: payload.firstFrame.filename }
+      ? {
+          data: payload.firstFrame.data,
+          image_url: payload.firstFrame.imageUrl,
+          mime_type: payload.firstFrame.mimeType,
+          filename: payload.firstFrame.filename,
+        }
       : undefined,
     last_frame: payload.lastFrame
-      ? { data: payload.lastFrame.data, image_url: payload.lastFrame.imageUrl, mime_type: payload.lastFrame.mimeType, filename: payload.lastFrame.filename }
+      ? {
+          data: payload.lastFrame.data,
+          image_url: payload.lastFrame.imageUrl,
+          mime_type: payload.lastFrame.mimeType,
+          filename: payload.lastFrame.filename,
+        }
       : undefined,
     reference_video: payload.referenceVideo
-      ? { data: payload.referenceVideo.data, mime_type: payload.referenceVideo.mimeType, filename: payload.referenceVideo.filename }
+      ? {
+          data: payload.referenceVideo.data,
+          mime_type: payload.referenceVideo.mimeType,
+          filename: payload.referenceVideo.filename,
+        }
       : undefined,
     image_references: payload.imageReferences?.map((image) => ({
       data: image.data,
@@ -727,19 +846,21 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       referenceType: img.referenceType,
     })),
     skill_ids: payload.skillIds,
+    brand_book_pieces: payload.brandBookPieces,
   };
 }
 
 export function toBackendExtendVideoPayload(
-  payload: ExtendVideoPayload
+  payload: ExtendVideoPayload,
 ): BackendExtendVideoRequestPayload {
-  const videoPayload = 'data' in payload.video
-    ? {
-        data: payload.video.data,
-        mime_type: payload.video.mimeType,
-        filename: payload.video.filename,
-      }
-    : { uri: payload.video.uri };
+  const videoPayload =
+    'data' in payload.video
+      ? {
+          data: payload.video.data,
+          mime_type: payload.video.mimeType,
+          filename: payload.video.filename,
+        }
+      : { uri: payload.video.uri };
 
   return {
     service: payload.service,

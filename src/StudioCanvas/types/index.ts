@@ -1,6 +1,30 @@
-import { type Node, type Edge, type OnConnect, type OnNodesChange, type OnEdgesChange, type NodeChange, type EdgeChange, type Connection } from '@xyflow/react';
+import type { BrandBookPieceKind } from '@continuum/contracts';
+import {
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeChange,
+  type OnConnect,
+  type OnEdgesChange,
+  type OnNodesChange,
+} from '@xyflow/react';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { ClipEffectSpec } from '../utils/render/effectSpec';
+import type { ClipTransition } from '../utils/render/transitions';
+import type { CaptionWord } from '../utils/splice/captionCues';
 
-export type { Node, Edge, OnConnect, OnNodesChange, OnEdgesChange, NodeChange, EdgeChange, Connection };
+export type {
+  BrandBookPieceKind,
+  Connection,
+  Edge,
+  EdgeChange,
+  Node,
+  NodeChange,
+  OnConnect,
+  OnEdgesChange,
+  OnNodesChange,
+};
 
 export type DataType = 'string' | 'image' | 'video' | 'audio' | 'document' | 'trigger';
 
@@ -31,10 +55,23 @@ export interface FrameSlot {
   type: 'image' | 'video';
 }
 
-export type ImageStylePreset = 'photorealistic' | 'anime' | '3d-render' | 'cyberpunk' | 'studio-ghibli' | 'clay' | 'none';
+export type ImageStylePreset =
+  | 'photorealistic'
+  | 'anime'
+  | '3d-render'
+  | 'cyberpunk'
+  | 'studio-ghibli'
+  | 'clay'
+  | 'none';
 
 export interface NanoGenNodeData extends BaseNodeData {
-  model: 'nano-banana' | 'nano-banana-pro' | 'nano-banana-2' | 'gpt-image-2' | 'flux-2-pro' | 'flux-2-max';
+  model:
+    | 'nano-banana'
+    | 'nano-banana-pro'
+    | 'nano-banana-2'
+    | 'gpt-image-2'
+    | 'flux-2-pro'
+    | 'flux-2-max';
   positivePrompt: string;
   aspectRatio: string;
   imageSize?: '512px' | '1K' | '2K' | '4K';
@@ -43,6 +80,9 @@ export interface NanoGenNodeData extends BaseNodeData {
   // Creative-direction skill ids applied to this generation; the Backend resolves
   // their directives and folds them into the prompt.
   skillIds?: string[];
+  // Brand-book pieces enforced on this generation; the Backend renders them into
+  // an authoritative forced block. Non-empty means the node is brand-enforced.
+  brandBookPieces?: BrandBookPieceKind[];
   seed?: number;
   steps?: number;
   guidance?: number;
@@ -57,7 +97,7 @@ export interface NanoGenNodeData extends BaseNodeData {
 export interface StringNodeData extends BaseNodeData {
   value: string;
   model?: LLMModel;
-  inputs?: Array<{ type: 'image' | 'video' | 'text', src: string }>;
+  inputs?: Array<{ type: 'image' | 'video' | 'text'; src: string }>;
   isSplitting?: boolean;
 }
 
@@ -117,13 +157,22 @@ export interface DocumentNodeData extends BaseNodeData {
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
-  model: 'veo-3.1' | 'veo-3.1-fast' | 'veo-3.1-lite' | 'kling-omni' | 'pixverse-v6' | 'seedance-2.0';
+  model:
+    | 'veo-3.1'
+    | 'veo-3.1-fast'
+    | 'veo-3.1-lite'
+    | 'kling-omni'
+    | 'pixverse-v6'
+    | 'seedance-2.0';
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
   // Creative-direction skill ids applied to this generation; the Backend resolves
   // their directives and folds them into the prompt.
   skillIds?: string[];
+  // Brand-book pieces enforced on this generation; the Backend renders them into
+  // an authoritative forced block. Non-empty means the node is brand-enforced.
+  brandBookPieces?: BrandBookPieceKind[];
   aspectRatio?: '16:9' | '9:16';
   resolution?: '720p' | '1080p' | '2K' | '4K' | '4k';
   durationSeconds?: 4 | 6 | 8;

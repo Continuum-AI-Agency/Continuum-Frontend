@@ -62,6 +62,12 @@ const videoSchema = z.object({
 const enrichBodySchema = z.object({
   prompt: z.string().default(''),
   brandId: z.string().optional(),
+  // Grounding data piece — inherited from the downstream generation node. This
+  // same-origin fallback route does text assembly only (no LLM), so it accepts the
+  // fields for shape-compatibility but does not apply them; the Backend
+  // PromptEnrichmentService is where grounding is folded into the rewrite.
+  skillIds: z.array(z.string()).optional(),
+  brandBookPieces: z.array(z.string()).optional(),
   context: z
     .object({
       images: z.array(imageSchema).optional(),

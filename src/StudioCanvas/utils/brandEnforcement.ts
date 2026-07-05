@@ -1,0 +1,172 @@
+// Canvas-side helpers for brand-book enforcement on generation nodes. The stored
+// value is `brandBookPieces` on node data; these helpers give it default-ON
+// semantics (undefined ⇒ the whole brand book) and the toggle logic the context
+// menu uses. The Backend renders the tagged pieces into an authoritative forced
+// block (App/ai-studio/services/brand-enforcement.ts) — this is the mirror of the
+// skillIds mechanism, but structured.
+
+import {
+  type BrandBookPieceKind,
+  type BrandMdTokens,
+  expandBrandBookPieces,
+} from '@continuum/contracts';
+
+// Default-ON: a generation node with no explicit selection enforces the whole
+// brand book. An explicit empty array means the user turned enforcement off.
+export const DEFAULT_BRAND_BOOK_PIECES: BrandBookPieceKind[] = ['full'];
+
+// The concrete pieces in canonical order (no "full"). Sourced from the contract so
+// FE and BE agree on the set.
+export const CONCRETE_BRAND_BOOK_PIECES = expandBrandBookPieces(['full']);
+
+// Menu rows for the individual pieces, in the order they render. Each carries a
+// short description — what the piece forces into the generation — shown as the
+// hover tooltip in the skill/brand menus and in the grounding chip.
+export const BRAND_BOOK_PIECE_OPTIONS: {
+  kind: BrandBookPieceKind;
+  label: string;
+  description: string;
+}[] = [
+  {
+    kind: 'colors',
+    label: 'Colors',
+    description: 'Force the exact brand palette (hex values) into the generation.',
+  },
+  {
+    kind: 'typography',
+    label: 'Typography',
+    description: 'Reference the brand typefaces so any lettering stays on-brand.',
+  },
+  {
+    kind: 'voice',
+    label: 'Voice',
+    description: 'Apply the brand tone, style, and power/banned words to any copy.',
+  },
+  {
+    kind: 'imagery',
+    label: 'Vision / Imagery',
+    description: 'Enforce the visual direction, mood, and things to avoid.',
+  },
+  {
+    kind: 'personality',
+    label: 'Personality',
+    description: 'Carry the brand archetype, traits, and descriptors.',
+  },
+  {
+    kind: 'audience',
+    label: 'Audience',
+    description: 'Ground the output in the primary audience and anchors.',
+  },
+  {
+    kind: 'logo',
+    label: 'Logo',
+    description: 'Attach the brand logo as a reference image for the generation.',
+  },
+];
+
+// Label for a piece kind (including the "full" sentinel), for badges and tooltips.
+export const BRAND_BOOK_PIECE_LABELS: Record<BrandBookPieceKind, string> = {
+  full: 'Entire brand book',
+  colors: 'Colors',
+  typography: 'Typography',
+  voice: 'Voice',
+  imagery: 'Vision / Imagery',
+  personality: 'Personality',
+  audience: 'Audience',
+  logo: 'Logo',
+};
+
+// Compact one-line summary of a node's grounding for the chip label, e.g.
+// "Brand · Skills 2" (entire book), "Brand 3 · Skills 2" (partial), "Skills 2"
+// (brand off), or "Off" (nothing enforced). Pure — unit tested.
+export function groundingChipLabel(
+  pieces: BrandBookPieceKind[] | undefined,
+  skillCount: number,
+): string {
+  const brandPart = isEntireBookEnforced(pieces)
+    ? 'Brand'
+    : isBrandEnforced(pieces)
+      ? `Brand ${enforcedConcretePieces(pieces).length}`
+      : null;
+  const skillPart = skillCount > 0 ? `Skills ${skillCount}` : null;
+  const parts = [brandPart, skillPart].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(' · ') : 'Off';
+}
+
+export function effectiveBrandBookPieces(
+  pieces: BrandBookPieceKind[] | undefined,
+): BrandBookPieceKind[] {
+  return pieces ?? DEFAULT_BRAND_BOOK_PIECES;
+}
+
+export function isBrandEnforced(pieces: BrandBookPieceKind[] | undefined): boolean {
+  return effectiveBrandBookPieces(pieces).length > 0;
+}
+
+// True when every concrete piece is covered — either via the "full" sentinel or an
+// explicit list of all pieces.
+export function isEntireBookEnforced(pieces: BrandBookPieceKind[] | undefined): boolean {
+  const effective = effectiveBrandBookPieces(pieces);
+  if (effective.includes('full')) return true;
+  return CONCRETE_BRAND_BOOK_PIECES.every((kind) => effective.includes(kind));
+}
+
+export function isPieceEnforced(
+  pieces: BrandBookPieceKind[] | undefined,
+  kind: BrandBookPieceKind,
+): boolean {
+  if (kind === 'full') return isEntireBookEnforced(pieces);
+  const effective = effectiveBrandBookPieces(pieces);
+  return effective.includes('full') || effective.includes(kind);
+}
+
+// The concrete pieces currently enforced (expanding "full"), for badge summaries.
+export function enforcedConcretePieces(
+  pieces: BrandBookPieceKind[] | undefined,
+): BrandBookPieceKind[] {
+  return expandBrandBookPieces(effectiveBrandBookPieces(pieces));
+}
+
+export type BrandPieceAvailability = Record<BrandBookPieceKind, boolean>;
+
+// Which pieces the brand actually carries — drives disabling menu rows the brand
+// has not built yet, so the UI can nudge the user to finish their brand book.
+export function brandBookAvailability(
+  tokens: BrandMdTokens | null | undefined,
+): BrandPieceAvailability {
+  const concrete = {
+    colors: !!tokens && tokens.colors.length > 0,
+    typography: !!tokens && tokens.typography.length > 0,
+    voice: !!tokens?.voice,
+    imagery: !!tokens?.imagery,
+    personality: !!tokens?.personality,
+    audience: !!tokens?.audience,
+    logo: !!tokens?.logo?.storage_path,
+  };
+  return { full: Object.values(concrete).some(Boolean), ...concrete };
+}
+
+// Pure toggle used by the context menu. "full" flips the whole book on/off;
+// toggling a concrete piece expands the current selection to concrete pieces,
+// flips that one, and re-normalizes to "full" when all are selected.
+export function toggleBrandPiece(
+  pieces: BrandBookPieceKind[] | undefined,
+  kind: BrandBookPieceKind,
+): BrandBookPieceKind[] {
+  if (kind === 'full') {
+    return isEntireBookEnforced(pieces) ? [] : ['full'];
+  }
+
+  const effective = effectiveBrandBookPieces(pieces);
+  const concrete = new Set(
+    effective.includes('full')
+      ? CONCRETE_BRAND_BOOK_PIECES
+      : effective.filter((piece) => piece !== 'full'),
+  );
+
+  if (concrete.has(kind)) concrete.delete(kind);
+  else concrete.add(kind);
+
+  const next = CONCRETE_BRAND_BOOK_PIECES.filter((piece) => concrete.has(piece));
+  return next.length === CONCRETE_BRAND_BOOK_PIECES.length ? ['full'] : next;
+}
