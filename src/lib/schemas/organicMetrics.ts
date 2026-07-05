@@ -101,6 +101,19 @@ export const organicTrendPointSchema = z.object({
   followerReach: z.number().optional(),
   nonFollowerReach: z.number().optional(),
   comments: z.number().optional(),
+  // Synthesized/secondary per-day series (added incrementally per platform):
+  // IG reel-retention bucketed by publish day, YouTube daily likes + hookRate,
+  // TikTok snapshot-delta counts. All optional and sparse — the dashboard only
+  // makes a metric clickable once its series accrues enough points.
+  avgRetentionRate: z.number().optional(),
+  retentionRate: z.number().optional(),
+  avgSkipRate: z.number().optional(),
+  likes: z.number().optional(),
+  hookRate: z.number().optional(),
+  shares: z.number().optional(),
+  subscribers: z.number().optional(),
+  following: z.number().optional(),
+  videoCount: z.number().optional(),
   boosted: z.boolean().optional(),
   boostedAt: z.string().optional(),
 });

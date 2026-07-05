@@ -115,6 +115,33 @@ export function summarizeYoutubeTypeMetrics(posts: OrganicPost[]): YoutubeTypeSu
   };
 }
 
+// A metric's daily line chart is only meaningful once the backend has emitted
+// enough real per-day points. Some series are synthesized/sparse — IG reel
+// retention bucketed by publish day, YouTube hookRate, TikTok snapshot deltas —
+// and accrue over several days. Below this threshold a KPI card stays a static
+// headline tile (no drilldown); once its series crosses it the card becomes
+// clickable automatically.
+export const MIN_GRAPHABLE_TREND_POINTS = 3;
+
+export function countNumericTrendPoints(
+  trends: ReadonlyArray<Record<string, unknown>> | undefined,
+  trendKey: string | undefined
+): number {
+  if (!trendKey) return 0;
+  return (trends ?? []).reduce(
+    (count, trend) => (typeof trend[trendKey] === "number" ? count + 1 : count),
+    0
+  );
+}
+
+export function isTrendKeyGraphable(
+  trends: ReadonlyArray<Record<string, unknown>> | undefined,
+  trendKey: string | undefined,
+  minPoints: number = MIN_GRAPHABLE_TREND_POINTS
+): boolean {
+  return countNumericTrendPoints(trends, trendKey) >= minPoints;
+}
+
 export const POST_GALLERY_WINDOW_DAYS = 30;
 export const POST_GALLERY_MAX_DAYS = 90;
 

@@ -3,9 +3,12 @@ import { describe, expect, it } from "bun:test";
 import type { OrganicPost } from "@/lib/schemas/organicMetrics";
 import {
   calculateHookRate,
+  countNumericTrendPoints,
   filterPostsByYoutubeType,
   formatWatchTime,
+  isTrendKeyGraphable,
   isYouTubeShort,
+  MIN_GRAPHABLE_TREND_POINTS,
   postPeriodComparisons,
   summarizeYoutubeTypeMetrics,
 } from "./organic-metrics-utils";
@@ -135,5 +138,65 @@ describe("summarizeYoutubeTypeMetrics", () => {
       comments: 0,
       avgHookRate: undefined,
     });
+  });
+});
+
+describe("countNumericTrendPoints", () => {
+  const trends = [
+    { date: "2026-06-01", reach: 100, avgRetentionRate: 42 },
+    { date: "2026-06-02", reach: 0 }, // zero is still a real numeric point
+    { date: "2026-06-03", reach: 120, avgRetentionRate: 55 },
+    { date: "2026-06-04" }, // missing reach
+    { date: "2026-06-05", reach: null as unknown as number }, // null is not numeric
+  ];
+
+  it("counts only points where the trend key is a number (zero counts)", () => {
+    expect(countNumericTrendPoints(trends, "reach")).toBe(3);
+  });
+
+  it("counts a sparse synthesized series correctly", () => {
+    expect(countNumericTrendPoints(trends, "avgRetentionRate")).toBe(2);
+  });
+
+  it("returns 0 for an unmapped/undefined trend key", () => {
+    expect(countNumericTrendPoints(trends, undefined)).toBe(0);
+  });
+
+  it("returns 0 for a key never present on any point", () => {
+    expect(countNumericTrendPoints(trends, "hookRate")).toBe(0);
+  });
+
+  it("returns 0 for empty/undefined trends", () => {
+    expect(countNumericTrendPoints([], "reach")).toBe(0);
+    expect(countNumericTrendPoints(undefined, "reach")).toBe(0);
+  });
+});
+
+describe("isTrendKeyGraphable", () => {
+  it("defaults to requiring MIN_GRAPHABLE_TREND_POINTS numeric points", () => {
+    expect(MIN_GRAPHABLE_TREND_POINTS).toBe(3);
+    const enough = [
+      { date: "a", reach: 1 },
+      { date: "b", reach: 2 },
+      { date: "c", reach: 3 },
+    ];
+    expect(isTrendKeyGraphable(enough, "reach")).toBe(true);
+  });
+
+  it("is not graphable while a sparse series is still accruing (below threshold)", () => {
+    const twoDays = [
+      { date: "a", avgRetentionRate: 40 },
+      { date: "b", avgRetentionRate: 45 },
+    ];
+    expect(isTrendKeyGraphable(twoDays, "avgRetentionRate")).toBe(false);
+  });
+
+  it("honors a custom minimum", () => {
+    const oneDay = [{ date: "a", avgRetentionRate: 40 }];
+    expect(isTrendKeyGraphable(oneDay, "avgRetentionRate", 1)).toBe(true);
+  });
+
+  it("is never graphable for an unmapped key", () => {
+    expect(isTrendKeyGraphable([{ date: "a", reach: 1 }], undefined)).toBe(false);
   });
 });

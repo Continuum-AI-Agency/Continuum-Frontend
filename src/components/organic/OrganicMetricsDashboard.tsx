@@ -64,6 +64,7 @@ import {
   type DrilldownWindow,
   filterPostsByYoutubeType,
   formatWatchTime,
+  isTrendKeyGraphable,
   isYouTubeShort,
   POST_GALLERY_WINDOW_DAYS,
   type PostMetricKey,
@@ -243,6 +244,14 @@ const ACCOUNT_TREND_MAP: Partial<
     | 'storiesViews'
     | 'followerReach'
     | 'nonFollowerReach'
+    | 'avgRetentionRate'
+    | 'avgSkipRate'
+    | 'likes'
+    | 'hookRate'
+    | 'shares'
+    | 'subscribers'
+    | 'following'
+    | 'videoCount'
   >
 > = {
   accountsEngaged: 'accountsEngaged',
@@ -257,6 +266,14 @@ const ACCOUNT_TREND_MAP: Partial<
   newFollowers: 'newFollowers',
   profileVisits24h: 'profileVisits24h',
   profileVisitsYesterday: 'profileVisits24h',
+  avgRetentionRate: 'avgRetentionRate',
+  avgSkipRate: 'avgSkipRate',
+  likes: 'likes',
+  hookRate: 'hookRate',
+  shares: 'shares',
+  subscribers: 'subscribers',
+  following: 'following',
+  videoCount: 'videoCount',
 };
 
 // Maps insight metric tags → KPI keys they're relevant to
@@ -1454,7 +1471,12 @@ function Dashboard({
   const [showPostFlags, setShowPostFlags] = React.useState(true);
 
   // Fetch organic insights (KPI tooltips) + the assembled AI-Awareness report.
-  const { insights: organicInsights, awareness: awarenessReport } = useOrganicInsights({
+  const {
+    insights: organicInsights,
+    awareness: awarenessReport,
+    isLoading: isAwarenessLoading,
+    refresh: refreshAwareness,
+  } = useOrganicInsights({
     brandId,
     integrationAccountId,
     platform,
@@ -1512,6 +1534,33 @@ function Dashboard({
   const postCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
   const postsScrollerRef = React.useRef<HTMLDivElement | null>(null);
   const postsLoadSentinelRef = React.useRef<HTMLDivElement | null>(null);
+  // A KPI is drillable only once its per-day series carries enough real points.
+  // Series the backend can't (yet) supply — retention before reels accrue, TikTok
+  // deltas before snapshots accumulate, metrics with no daily API source — leave
+  // the card as a static headline tile instead of offering an empty chart.
+  const graphableAccountMetrics = React.useMemo(() => {
+    const set = new Set<keyof OrganicMetrics>();
+    for (const metric of getKpiConfig(platform)) {
+      if (isTrendKeyGraphable(data.trends, ACCOUNT_TREND_MAP[metric.key])) {
+        set.add(metric.key);
+      }
+    }
+    return set;
+  }, [data.trends, platform]);
+
+  // Keep the drilldown pointed at a metric that actually graphs: if the active
+  // selection isn't in this platform's KPI set or isn't graphable yet, fall back
+  // to the first graphable KPI (leaves the empty-state text only when none are).
+  React.useEffect(() => {
+    const config = getKpiConfig(platform);
+    const stillValid =
+      config.some((metric) => metric.key === selectedAccountMetric) &&
+      graphableAccountMetrics.has(selectedAccountMetric);
+    if (stillValid) return;
+    const firstGraphable = config.find((metric) => graphableAccountMetrics.has(metric.key));
+    if (firstGraphable) setSelectedAccountMetric(firstGraphable.key);
+  }, [platform, graphableAccountMetrics, selectedAccountMetric]);
+
   const accountSeries = buildAccountMetricSeries({
     data,
     metricKey: selectedAccountMetric,
@@ -1631,9 +1680,13 @@ function Dashboard({
                 comparison={metricComparisonFor(data, metric.key)}
                 active={selectedAccountMetric === metric.key}
                 ariaLabel={`Account metric ${metric.label}`}
-                onClick={() => {
-                  setSelectedAccountMetric(metric.key);
-                }}
+                onClick={
+                  graphableAccountMetrics.has(metric.key)
+                    ? () => {
+                        setSelectedAccountMetric(metric.key);
+                      }
+                    : undefined
+                }
                 insights={insightsByKpi.get(metric.key)}
               />
             </motion.div>
@@ -1759,7 +1812,13 @@ function Dashboard({
         <YoutubeContentTypeSplitCard performance={data.contentTypePerformance ?? []} />
       ) : null}
 
-      {isAccountView ? <OrganicAwarenessReportView report={awarenessReport} /> : null}
+      {isAccountView ? (
+        <OrganicAwarenessReportView
+          report={awarenessReport}
+          isRefreshing={isAwarenessLoading}
+          onRefresh={refreshAwareness}
+        />
+      ) : null}
 
       {isAccountView ? <CreativeStrategyCard brandId={brandId} /> : null}
 

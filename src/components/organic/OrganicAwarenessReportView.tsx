@@ -148,8 +148,12 @@ function AwarenessBlockCard({ block }: { block: OrganicAwarenessBlock }) {
 
 export function OrganicAwarenessReportView({
   report,
+  isRefreshing = false,
+  onRefresh,
 }: {
   report: OrganicAwarenessReportPayload | null;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const [open, setOpen] = React.useState(true);
 
@@ -181,14 +185,26 @@ export function OrganicAwarenessReportView({
               {report.windowStart} – {report.windowEnd}
             </Text>
           </Box>
-          <button
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-            aria-expanded={open}
-          >
-            {open ? "Hide" : "Show"}
-          </button>
+          <Flex align="center" gap="2">
+            {onRefresh ? (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isRefreshing ? "Refreshing…" : "Refresh"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setOpen((value) => !value)}
+              className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+              aria-expanded={open}
+            >
+              {open ? "Hide" : "Show"}
+            </button>
+          </Flex>
         </Flex>
 
         {open ? (
