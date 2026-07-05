@@ -44,6 +44,7 @@ import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { VideoDecoderBlock } from '../nodes/VideoDecoderBlock';
 import { VideoEditorBlock } from '../nodes/VideoEditorBlock';
 import { TimelineEditorBlock } from '../nodes/TimelineEditorBlock';
+import { PublishToPlannerBlock } from '../nodes/PublishToPlannerBlock';
 import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
@@ -110,6 +111,7 @@ type StudioCanvasNodeType =
   | 'extendVideo'
   | 'videoEditor'
   | 'timelineEditor'
+  | 'publishToPlanner'
   | 'string'
   | 'note'
   | 'image'
@@ -218,6 +220,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         tag: 'Intelligence',
       },
       {
+        type: 'publishToPlanner',
+        label: 'Publish to Planner',
+        desc: 'Attach an edited video to an organic draft',
+        tag: 'Publishing',
+      },
+      {
         type: 'note',
         label: 'Note / Annotation',
         desc: 'Free-text canvas note with bold (⌘B)',
@@ -235,6 +243,7 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'extendVideo',
   'videoEditor',
   'timelineEditor',
+  'publishToPlanner',
   'string',
   'note',
   'image',
@@ -308,6 +317,13 @@ const createNodeConfig = (
     return { data: { value: '' } };
   }
 
+  if (type === 'publishToPlanner') {
+    return {
+      data: { clientKey: crypto.randomUUID?.() ?? `pub-${Date.now()}`, status: 'draft' },
+      style: { width: 300, height: 220 },
+    };
+  }
+
   if (type === 'note') {
     return {
       data: { content: '' },
@@ -354,6 +370,7 @@ const nodeTypes = {
   extendVideo: ExtendVideoBlock,
   videoEditor: VideoEditorBlock,
   timelineEditor: TimelineEditorBlock,
+  publishToPlanner: PublishToPlannerBlock,
   string: StringNode,
   note: NoteNode,
   image: ImageNode,

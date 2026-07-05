@@ -15,6 +15,7 @@ export const STUDIO_NODE_TYPES = [
   "extendVideo",
   "videoEditor",
   "timelineEditor",
+  "publishToPlanner",
   "image",
   "video",
   "audio",
@@ -224,6 +225,13 @@ export const TIMELINE_MEDIA_POOL_LIMIT = 20;
 export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
   handleId === TIMELINE_MEDIA_INPUT_HANDLE;
 
+// Publish-to-Planner sink node: a single video-producing input it attaches to an
+// organic Planner draft. One video in, no source output (terminal node), so it is
+// deliberately absent from isVideoProducingSource.
+export const PUBLISH_VIDEO_INPUT_HANDLE = "video-in";
+export const isPublishVideoHandle = (handleId?: string | null): boolean =>
+  handleId === PUBLISH_VIDEO_INPUT_HANDLE;
+
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === "string" && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
 
@@ -279,6 +287,8 @@ export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
     }
     case "timelineEditor":
       return [TIMELINE_MEDIA_INPUT_HANDLE];
+    case "publishToPlanner":
+      return [PUBLISH_VIDEO_INPUT_HANDLE];
     case "string":
       return ["image", "audio", "document", "video"];
     case "videoDecode":
@@ -309,6 +319,7 @@ export function getTargetHandleConnectionLimit(
   if (node.type === "videoDecode" && targetHandle === "video") return 1;
   if (node.type === "videoEditor" && isClipSlotHandle(targetHandle)) return 1;
   if (node.type === "timelineEditor" && isTimelineMediaHandle(targetHandle)) return TIMELINE_MEDIA_POOL_LIMIT;
+  if (node.type === "publishToPlanner" && isPublishVideoHandle(targetHandle)) return 1;
 
   if (!isVideoGeneratorNode(node)) return undefined;
 
@@ -384,6 +395,9 @@ export function isValidConnection(
     if (!isVideoProducingSource(sourceNode) && !isImageSource) return false;
   } else if (targetNode.type === "videoDecode") {
     if (targetHandle !== "video") return false;
+    if (!isVideoProducingSource(sourceNode)) return false;
+  } else if (targetNode.type === "publishToPlanner") {
+    if (!isPublishVideoHandle(targetHandle)) return false;
     if (!isVideoProducingSource(sourceNode)) return false;
   } else if (isVideoGeneratorNode(targetNode)) {
     const model = resolveVideoGeneratorModel(targetNode);
@@ -511,6 +525,11 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
           committed: false,
         },
         style: { width: 320, height: 260 },
+      };
+    case "publishToPlanner":
+      return {
+        data: { clientKey: newSlotId(1), status: "draft" },
+        style: { width: 300, height: 220 },
       };
     case "string":
       return { data: { value: "" } };

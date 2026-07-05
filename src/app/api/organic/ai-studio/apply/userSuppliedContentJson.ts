@@ -23,6 +23,8 @@ export type PersistedApplyAsset = {
   mimeType?: string;
   width?: number;
   height?: number;
+  // Video reels carry a duration so the Planner preview can show it; images omit it.
+  durationSec?: number;
 };
 
 // Media-output fields on `mediaSuggestion` that describe the previous (agent)
@@ -69,6 +71,7 @@ export function buildUserSuppliedContentJson(params: {
     ...(asset.mimeType ? { mimeType: asset.mimeType } : {}),
     ...(asset.width !== undefined ? { width: asset.width } : {}),
     ...(asset.height !== undefined ? { height: asset.height } : {}),
+    ...(asset.durationSec !== undefined ? { durationSec: asset.durationSec } : {}),
     signedUrl: asset.storageUrl,
   }));
 

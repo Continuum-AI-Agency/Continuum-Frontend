@@ -24,6 +24,7 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   extendVideo: ["prompt"],
   videoEditor: ["outputFormat"],
   timelineEditor: ["outputFormat"],
+  publishToPlanner: ["platform", "status", "scheduledAt"],
   image: ["fileName", "referenceType", "aspectRatio"],
   video: ["fileName"],
   audio: ["fileName"],

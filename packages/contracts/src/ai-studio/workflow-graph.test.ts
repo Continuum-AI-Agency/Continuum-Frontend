@@ -11,6 +11,7 @@ import {
   isTimelineMediaHandle,
   TIMELINE_MEDIA_INPUT_HANDLE,
   TIMELINE_MEDIA_POOL_LIMIT,
+  PUBLISH_VIDEO_INPUT_HANDLE,
   mediaKindForHandle,
   isMediaKindCompatibleWithHandle,
   createNodeData,
@@ -38,6 +39,7 @@ const nodes = [
   node("extend1", "extendVideo", { prompt: "" }),
   node("videoGen1", "videoGen", { model: "kling-omni", prompt: "" }),
   node("timeline1", "timelineEditor", { items: [{ id: "a", order: 0 }, { id: "b", order: 1 }] }),
+  node("publish1", "publishToPlanner", { status: "draft" }),
 ];
 
 describe("node type enum + schema", () => {
@@ -45,7 +47,8 @@ describe("node type enum + schema", () => {
     expect(STUDIO_NODE_TYPES).toContain("nanoGen");
     expect(STUDIO_NODE_TYPES).toContain("videoDecode");
     expect(STUDIO_NODE_TYPES).toContain("timelineEditor");
-    expect(STUDIO_NODE_TYPES).toHaveLength(13);
+    expect(STUDIO_NODE_TYPES).toContain("publishToPlanner");
+    expect(STUDIO_NODE_TYPES).toHaveLength(14);
   });
 
   it("rejects an unknown node type", () => {
@@ -140,6 +143,45 @@ describe("isValidConnection — type matrix", () => {
     ).toBe(true);
     expect(
       isValidConnection({ source: "image1", sourceHandle: "image", target: "veoLite", targetHandle: "ref-images" }, [], liteNodes),
+    ).toBe(false);
+  });
+
+  it("allows a video-producing source → publishToPlanner but rejects images/text and other handles", () => {
+    expect(getAllowedTargetHandles(node("p", "publishToPlanner"))).toEqual([PUBLISH_VIDEO_INPUT_HANDLE]);
+    expect(getAllowedSourceHandles(node("p", "publishToPlanner"))).toEqual([]);
+    expect(
+      isValidConnection(
+        { source: "timeline1", sourceHandle: "video", target: "publish1", targetHandle: PUBLISH_VIDEO_INPUT_HANDLE },
+        [],
+        nodes,
+      ),
+    ).toBe(true);
+    expect(
+      isValidConnection(
+        { source: "image1", sourceHandle: "image", target: "publish1", targetHandle: PUBLISH_VIDEO_INPUT_HANDLE },
+        [],
+        nodes,
+      ),
+    ).toBe(false);
+    expect(
+      isValidConnection(
+        { source: "video1", sourceHandle: "video", target: "publish1", targetHandle: "prompt" },
+        [],
+        nodes,
+      ),
+    ).toBe(false);
+  });
+
+  it("caps publishToPlanner at a single video input", () => {
+    const edges = [
+      { id: "e1", source: "video1", sourceHandle: "video", target: "publish1", targetHandle: PUBLISH_VIDEO_INPUT_HANDLE },
+    ];
+    expect(
+      isValidConnection(
+        { source: "videoGen1", sourceHandle: "video", target: "publish1", targetHandle: PUBLISH_VIDEO_INPUT_HANDLE },
+        edges,
+        nodes,
+      ),
     ).toBe(false);
   });
 });
