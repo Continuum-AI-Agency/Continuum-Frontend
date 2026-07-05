@@ -22,7 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { AtSign, FolderOpen, Plus, ScanLine, Sparkles, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { AtSign, FolderOpen, Plus, ScanLine, ShieldCheck, Sparkles, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -52,6 +52,7 @@ import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { CreateSkillFromSelectionDialog } from './CreateSkillFromSelectionDialog';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
+import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
@@ -776,6 +777,35 @@ function Flow({
     setIsCreateSkillOpen(true);
   }, [nodes]);
 
+  // Applies full brand-book enforcement to every selected generation node at once,
+  // so the user can brand-enforce a whole flow in one action. Reference/text nodes
+  // are ignored (they carry no generation prompt).
+  const enforceBrandBookOnSelection = useCallback(() => {
+    const targets = nodes.filter(
+      (node) =>
+        node.selected &&
+        (node.type === 'nanoGen' ||
+          node.type === 'videoGen' ||
+          node.type === 'veoDirector' ||
+          node.type === 'veoFast'),
+    );
+    if (targets.length === 0) {
+      show({
+        title: 'No generation nodes selected',
+        description: 'Select image or video generation nodes to enforce the brand book.',
+        variant: 'error',
+      });
+      return;
+    }
+    targets.forEach((node) => updateNodeData(node.id, { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES }));
+    triggerSave();
+    show({
+      title: 'Brand book enforced',
+      description: `${targets.length} node${targets.length === 1 ? '' : 's'} will follow the full brand book.`,
+      variant: 'success',
+    });
+  }, [nodes, show, triggerSave, updateNodeData]);
+
   // Places unfurled media as unattached reference nodes, laid out in a centered
   // row at the viewport center. Nodes have no edges, so they are inert references
   // until the user wires them into a generator.
@@ -1361,6 +1391,15 @@ function Flow({
           >
             <Sparkles className="mr-2 h-4 w-4" />
             Create skill from selection
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            inset
+            disabled={!nodes.some((node) => node.selected)}
+            onSelect={enforceBrandBookOnSelection}
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            Enforce brand book on selection
           </ContextMenuItem>
 
           <ContextMenuSub>

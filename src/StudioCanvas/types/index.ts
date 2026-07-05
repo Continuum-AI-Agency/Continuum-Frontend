@@ -212,7 +212,47 @@ export interface TimelineEditorNodeData extends BaseNodeData {
   unsupportedReason?: string;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | VideoEditorNodeData | TimelineEditorNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData | VideoDecodeNodeData;
+export type PublishTargetStatus = 'draft' | 'approved' | 'scheduled';
+
+// Terminal "Publish to Planner" node. Takes one upstream video (the edited MP4)
+// and attaches it to an organic Planner draft — linking the seed draft the canvas
+// was launched from, or creating a new one. Emits no downstream media (a sink).
+export interface PublishToPlannerNodeData extends BaseNodeData {
+  // Stable identity minted at creation; also the draft's `client_key`, so a
+  // re-publish updates the same draft rather than spawning duplicates. Survives
+  // canvas persistence (UUID has dashes, not stripped as a base64-like token).
+  clientKey?: string;
+  // The draft this node is bound to: pre-seeded when the canvas was launched from
+  // a Planner draft, otherwise set after the first publish. Enables the
+  // "Open in Planner" deep-link.
+  draftId?: string;
+  weekStartId?: string;
+  platform?: string;
+  // Full ISO timestamptz for the target slot (never date-only).
+  scheduledAt?: string;
+  status?: PublishTargetStatus;
+  // Optional caption the node applies to the draft (else left for the Planner).
+  caption?: string;
+  // Durable, re-signable coords of the published video (base64-safe to persist).
+  publishedStoragePath?: string;
+  publishedBucket?: string;
+  publishedUrl?: string;
+  publishedAt?: string;
+}
+
+export type StudioNodeData =
+  | StringNodeData
+  | NanoGenNodeData
+  | VideoGenNodeData
+  | ExtendVideoNodeData
+  | VideoEditorNodeData
+  | TimelineEditorNodeData
+  | PublishToPlannerNodeData
+  | ImageNodeData
+  | VideoNodeData
+  | AudioNodeData
+  | DocumentNodeData
+  | VideoDecodeNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'awaiting' | 'completed' | 'failed';
