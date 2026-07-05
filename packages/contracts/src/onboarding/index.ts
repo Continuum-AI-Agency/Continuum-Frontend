@@ -9,6 +9,7 @@ export * from "./brand-guidelines";
 export * from "./scrape";
 export * from "./readiness";
 export * from "./readiness-summary";
+export * from "./brand-grounding";
 export * from "./first-impression";
 export * from "./brand-report";
 export * from "./brand-deep";
