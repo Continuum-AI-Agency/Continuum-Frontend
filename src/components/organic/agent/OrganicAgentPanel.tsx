@@ -56,6 +56,8 @@ import {
   parseMediaFolderKey,
 } from "@/lib/agent/media-mentions";
 import { buildCanvasReference, getCanvasPreview } from "./canvasMentions";
+import { DisabledControl } from "../DisabledControl";
+import { describeComposerBlock } from "../disabledReasons";
 
 type OrganicAgentPanelProps = {
   brandId: string;
@@ -533,7 +535,9 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   );
 
   const jobs = Object.values(state.jobs);
-  const inputDisabled = isStreaming || (!state.sessionId && !activeSessionId);
+  const hasSession = Boolean(state.sessionId || activeSessionId);
+  const inputDisabled = isStreaming || !hasSession;
+  const composerHint = describeComposerBlock({ isStreaming, hasSession });
   const buildAllSuggestions = useCallback(async (): Promise<AgentMentionSuggestion[]> => {
     const scheduledDraftSuggestions = calendarDays.flatMap((day) =>
       day.slots.map((draft) => {
@@ -816,17 +820,24 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
             <p className="max-w-[220px] text-center text-sm text-muted-foreground/70 text-pretty">
               Your AI marketing strategist. Start by describing what you need.
             </p>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {STARTER_PROMPTS.map((s) => (
-                <Suggestion
-                  key={s}
-                  suggestion={s}
-                  disabled={inputDisabled}
-                  onClick={(text) => handleSubmit(text)}
-                  className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
-                />
-              ))}
-            </div>
+            <DisabledControl hint={composerHint}>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {STARTER_PROMPTS.map((s) => (
+                  <Suggestion
+                    key={s}
+                    suggestion={s}
+                    disabled={inputDisabled}
+                    onClick={(text) => handleSubmit(text)}
+                    className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
+                  />
+                ))}
+              </div>
+            </DisabledControl>
+            {composerHint ? (
+              <p className="max-w-[240px] text-center text-xs text-muted-foreground/80 text-pretty">
+                {composerHint.reason}
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-3 p-1 pr-1.5">
@@ -1030,6 +1041,11 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
           }
           placeholder="Plan me 3 posts this week on the beauty trend…"
         />
+        {composerHint ? (
+          <p className="mt-1 px-1 text-xs text-muted-foreground/80 text-pretty">
+            {composerHint.reason}
+          </p>
+        ) : null}
       </div>
       </div>
     </div>

@@ -31,6 +31,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { DisabledControl } from '@/components/organic/DisabledControl';
+import { describeExportBlock, describeRefreshBlock } from '@/components/organic/disabledReasons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
 import { PostCommentsPanel } from '@/components/organic/primitives/PostCommentsPanel';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -136,6 +138,13 @@ type AccountsByPlatform = {
 
 type MetricsPlatform = 'instagram' | 'facebook' | 'tiktok' | 'youtube';
 type MetricsViewMode = 'account' | 'posts';
+
+const PLATFORM_LABELS: Record<MetricsPlatform, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+};
 
 type Props = {
   brandId: string;
@@ -2603,18 +2612,36 @@ export function OrganicMetricsDashboard({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <IconButton
-            variant="surface"
-            radius="large"
-            size="2"
-            onClick={handleRefresh}
-            disabled={!selectedAccountId || isLoadingView || isPending}
-            aria-label="Refresh organic analytics"
+          <DisabledControl
+            side="bottom"
+            hint={describeRefreshBlock({
+              hasAccount: Boolean(selectedAccountId),
+              isLoading: isLoadingView || isPending,
+              platformLabel: PLATFORM_LABELS[platform],
+            })}
           >
-            <ReloadIcon className={cn(isLoadingView && 'animate-spin')} />
-          </IconButton>
+            <IconButton
+              variant="surface"
+              radius="large"
+              size="2"
+              onClick={handleRefresh}
+              disabled={!selectedAccountId || isLoadingView || isPending}
+              aria-label="Refresh organic analytics"
+            >
+              <ReloadIcon className={cn(isLoadingView && 'animate-spin')} />
+            </IconButton>
+          </DisabledControl>
 
-          <DropdownMenu>
+          <DisabledControl
+            side="bottom"
+            hint={describeExportBlock({
+              hasAccount: Boolean(selectedAccountId),
+              isLoading: isLoadingView,
+              isExporting: exportingReportFormat !== null,
+              platformLabel: PLATFORM_LABELS[platform],
+            })}
+          >
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="surface"
@@ -2645,7 +2672,8 @@ export function OrganicMetricsDashboard({
                 Export HTML
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+            </DropdownMenu>
+          </DisabledControl>
         </div>
       </div>
 

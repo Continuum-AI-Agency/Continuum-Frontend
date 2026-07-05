@@ -38,6 +38,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { DisabledControl } from "../DisabledControl"
+import {
+  describeAddPlaceholderBlock,
+  describeClearBlock,
+  describeGenerateBlock,
+} from "../disabledReasons"
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const // Monday-started, matches the planner
 
@@ -196,6 +202,12 @@ export function CalendarToolbar({
   const showPlanned = useCalendarStore((state) => state.showPlanned)
   const setShowPlanned = useCalendarStore((state) => state.setShowPlanned)
 
+  const addHint = describeAddPlaceholderBlock({ isGenerating })
+  const generateHint = describeGenerateBlock({ isGenerating, seededDraftCount })
+  const clearHint = describeClearBlock({ isGenerating, draftsCount })
+  const showPlanningNote =
+    !isGenerating && draftsCount === 0 && seededDraftCount === 0
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -282,42 +294,57 @@ export function CalendarToolbar({
                 <LightningBoltIcon className="mr-1 h-3.5 w-3.5" />
                 Trends
               </Button>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="outline"
-                aria-label="Add placeholder"
-                disabled={isGenerating}
-                onClick={onAddPlaceholder}
-              >
-                <PlusIcon className={isGenerating ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="default"
-                disabled={isGenerating || seededDraftCount === 0}
-                onClick={onGenerate}
-              >
-                {isGenerating ? (
-                  <LightningBoltIcon className="mr-1 h-3.5 w-3.5 animate-pulse" />
-                ) : (
-                  <RocketIcon className="mr-1 h-3.5 w-3.5" />
-                )}
-                Generate
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={isGenerating || draftsCount === 0}
-                onClick={onClear}
-              >
-                <TrashIcon className="mr-1 h-3.5 w-3.5" />
-                Clear
-              </Button>
+              <DisabledControl hint={addHint}>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label="Add placeholder"
+                  disabled={isGenerating}
+                  onClick={onAddPlaceholder}
+                >
+                  <PlusIcon className={isGenerating ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
+                </Button>
+              </DisabledControl>
+              <DisabledControl hint={generateHint}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="default"
+                  disabled={isGenerating || seededDraftCount === 0}
+                  onClick={onGenerate}
+                >
+                  {isGenerating ? (
+                    <LightningBoltIcon className="mr-1 h-3.5 w-3.5 animate-pulse" />
+                  ) : (
+                    <RocketIcon className="mr-1 h-3.5 w-3.5" />
+                  )}
+                  Generate
+                </Button>
+              </DisabledControl>
+              <DisabledControl hint={clearHint}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isGenerating || draftsCount === 0}
+                  onClick={onClear}
+                >
+                  <TrashIcon className="mr-1 h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              </DisabledControl>
             </div>
           </div>
+
+          {showPlanningNote ? (
+            <div className="mt-2 rounded-md bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground text-pretty">
+              <span className="font-medium text-foreground">Planning mode</span>{" "}
+              — no account needed. Add a placeholder or open Trends to sketch a
+              week, or ask the agent to draft ideas. AI drafts pull from your
+              Brand Book; publishing needs a connected account.
+            </div>
+          ) : null}
 
           {slotProgress ? (
             <div className="mt-2 space-y-1">

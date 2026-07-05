@@ -38,6 +38,7 @@ mock.module("@/components/ui/button", () => ({
     "aria-pressed"?: boolean
   }) => (
     <button
+      type="button"
       disabled={disabled}
       onClick={onClick}
       aria-label={ariaLabel}
@@ -96,7 +97,12 @@ mock.module("@/components/ui/context-menu", () => ({
     disabled?: boolean
     className?: string
   }) => (
-    <button className={className} disabled={disabled} onClick={() => onSelect?.()}>
+    <button
+      type="button"
+      className={className}
+      disabled={disabled}
+      onClick={() => onSelect?.()}
+    >
       {children}
     </button>
   ),
@@ -276,5 +282,61 @@ describe("CalendarToolbar", () => {
     )
     fireEvent.click(allButton!)
     expect(onDateRangeChange).toHaveBeenCalledWith(null)
+  })
+
+  it("explains why Generate is disabled when no placeholders exist", () => {
+    const { container } = render(
+      <CalendarToolbar {...defaultProps({ seededDraftCount: 0 })} />,
+    )
+    expect(container.textContent).toContain(
+      "Add at least one placeholder to the calendar first.",
+    )
+    expect(container.querySelector("[aria-describedby]")).toBeTruthy()
+  })
+
+  it("explains why Clear is disabled when there are no drafts", () => {
+    const { container } = render(
+      <CalendarToolbar {...defaultProps({ draftsCount: 0 })} />,
+    )
+    expect(container.textContent).toContain(
+      "There are no drafts on the calendar to clear yet.",
+    )
+  })
+
+  it("explains that controls are paused while generation is running", () => {
+    const { container } = render(
+      <CalendarToolbar {...defaultProps({ isGenerating: true })} />,
+    )
+    expect(container.textContent).toContain("Generation is already running.")
+    expect(container.textContent).toContain(
+      "Adding placeholders is paused until it finishes.",
+    )
+  })
+
+  it("shows no disabled reason when Generate and Clear are actionable", () => {
+    const { container } = render(<CalendarToolbar {...defaultProps()} />)
+    expect(container.textContent).not.toContain("Add at least one placeholder")
+    expect(container.textContent).not.toContain("no drafts on the calendar")
+    expect(container.textContent).not.toContain("Generation is already running")
+  })
+
+  it("shows planning-mode guidance when the calendar is empty and idle", () => {
+    const { container } = render(
+      <CalendarToolbar
+        {...defaultProps({
+          seededDraftCount: 0,
+          draftsCount: 0,
+          isGenerating: false,
+        })}
+      />,
+    )
+    expect(container.textContent).toContain("Planning mode")
+    expect(container.textContent).toContain("no account needed")
+    expect(container.textContent).toContain("Brand Book")
+  })
+
+  it("hides planning-mode guidance once drafts exist", () => {
+    const { container } = render(<CalendarToolbar {...defaultProps()} />)
+    expect(container.textContent).not.toContain("Planning mode")
   })
 })
