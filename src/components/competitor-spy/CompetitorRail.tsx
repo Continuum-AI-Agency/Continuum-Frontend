@@ -1,8 +1,9 @@
 "use client";
 
-import type { Competitor } from "@continuum/contracts";
+import type { Competitor, CompetitorHealthTone } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 import { compactCount, initials, tileStyle } from "./brandVisuals";
+import { competitorHealthChip } from "./competitorHealth";
 
 // Left-rail ticker for competitor selection (replaces the filter dropdown).
 // Vertical on md+, a horizontal scroll strip on mobile. Flat, hairline-bordered,
@@ -31,12 +32,37 @@ function Tile({ children, style }: { children: string; style?: React.CSSProperti
   );
 }
 
+const TONE_DOT: Record<CompetitorHealthTone, string> = {
+  positive: "bg-emerald-500",
+  info: "bg-sky-500",
+  warning: "bg-amber-500",
+  danger: "bg-destructive",
+  neutral: "bg-muted-foreground",
+};
+
+// Non-interactive health signal for the rail row (which is itself a button, so it
+// cannot nest the focusable CompetitorHealthBadge). Colour + native title convey
+// state; the full diagnostics tooltip lives in the Competitors tab list.
+function HealthDot({ competitor, adsFound }: { competitor: Competitor; adsFound?: number | null }) {
+  const chip = competitorHealthChip(competitor, adsFound);
+  return (
+    <span
+      role="img"
+      className={cn("size-2 shrink-0 rounded-full", TONE_DOT[chip.tone])}
+      title={chip.label}
+      aria-label={`Health: ${chip.label}`}
+    />
+  );
+}
+
 export function CompetitorRail({
   competitors,
   selectedId,
   onSelect,
   onAdd,
   metricLabel = "followers",
+  showHealth = false,
+  adCounts,
   className,
 }: {
   competitors: Competitor[];
@@ -44,6 +70,8 @@ export function CompetitorRail({
   onSelect: (id: string | undefined) => void;
   onAdd?: () => void;
   metricLabel?: string;
+  showHealth?: boolean;
+  adCounts?: Record<string, number>;
   className?: string;
 }) {
   return (
@@ -100,12 +128,14 @@ export function CompetitorRail({
                   {needsReview ? "needs review" : (handle ?? competitor.slug)}
                 </span>
               </span>
-              {metric ? (
-                <span
-                  className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
-                  title={`${metricLabel}`}
-                >
-                  {metric}
+              {showHealth || metric ? (
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {showHealth ? <HealthDot competitor={competitor} adsFound={adCounts?.[competitor.id]} /> : null}
+                  {metric ? (
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground" title={metricLabel}>
+                      {metric}
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </button>

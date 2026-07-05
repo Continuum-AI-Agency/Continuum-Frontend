@@ -2,8 +2,14 @@
 
 import { X } from "lucide-react";
 import type { Competitor } from "@continuum/contracts";
-import { useCompetitors, useDeleteCompetitor, useResolvePaidPage } from "@/lib/api/competitorSpy";
+import {
+  useAdCounts,
+  useCompetitors,
+  useDeleteCompetitor,
+  useResolvePaidPage,
+} from "@/lib/api/competitorSpy";
 import { compactCount, initials, tileStyle } from "./brandVisuals";
+import { CompetitorHealthBadge } from "./CompetitorHealthBadge";
 
 function paidBadge(c: Competitor): { label: string; className: string } {
   switch (c.paidStatus) {
@@ -22,6 +28,7 @@ function paidBadge(c: Competitor): { label: string; className: string } {
 
 export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
   const { data: competitors, isLoading } = useCompetitors(brandId);
+  const { data: adCounts } = useAdCounts(brandId);
   const remove = useDeleteCompetitor(brandId);
   const resolvePaid = useResolvePaidPage(brandId);
 
@@ -68,6 +75,7 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                 {followers ? <span className="tabular-nums">{followers} followers</span> : null}
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
+                <CompetitorHealthBadge competitor={c} adsFound={adCounts?.[c.id]} />
                 <span
                   className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${
                     organicReady

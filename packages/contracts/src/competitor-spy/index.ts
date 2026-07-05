@@ -17,8 +17,11 @@ export const competitorStatusSchema = z.enum(["active", "archived"]);
 export const adStatusSchema = z.enum(["active", "paused"]);
 export const adSourceSchema = z.enum(["meta_ad_library"]);
 export const competitorOrganicStatusSchema = z.enum(["ready", "needs_instagram", "unavailable"]);
+export type CompetitorOrganicStatus = z.infer<typeof competitorOrganicStatusSchema>;
 export const competitorPaidStatusSchema = z.enum(["ready", "resolving", "needs_review", "unresolved", "error"]);
+export type CompetitorPaidStatus = z.infer<typeof competitorPaidStatusSchema>;
 export const metaPageResolutionStatusSchema = z.enum(["unresolved", "resolving", "resolved", "needs_review", "error"]);
+export type MetaPageResolutionStatus = z.infer<typeof metaPageResolutionStatusSchema>;
 
 export const metaPageResolutionCandidateSchema = z
   .object({
@@ -286,3 +289,5 @@ export * from "./smartSearch";
 export * from "./savedBoards";
 // Onboarding-derived competitor recommendations (Competitors tab).
 export * from "./recommended";
+// Health-chip projection over the status enums above (Brand Spy competitor chips).
+export * from "./health-chip";
