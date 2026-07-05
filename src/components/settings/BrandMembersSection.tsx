@@ -9,10 +9,11 @@ import {
   removeMemberAction,
 } from "@/app/(post-auth)/settings/actions";
 import { useToast } from "@/components/ui/ToastProvider";
+import { formatMemberEmail } from "@/lib/brands/memberDisplay";
 
 export type BrandMemberRow = {
   id: string;
-  email: string;
+  email: string | null;
   role: string;
   isRecentlyAccepted?: boolean;
 };
@@ -29,7 +30,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
   const [isPending, startTransition] = useTransition();
   const ownerEmails = members.filter((m) => m.role === "owner").map((m) => m.email);
 
-  const handleRoleChange = (memberId: string, email: string, next: string) => {
+  const handleRoleChange = (memberId: string, email: string | null, next: string) => {
     startTransition(async () => {
       try {
         await changeMemberRoleAction(
@@ -37,7 +38,11 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
           memberId,
           next as Exclude<BrandRole, "owner">,
         );
-        show({ title: "Role updated", description: `${email} is now ${next}.`, variant: "success" });
+        show({
+          title: "Role updated",
+          description: `${formatMemberEmail(email)} is now ${next}.`,
+          variant: "success",
+        });
         router.refresh();
       } catch (error) {
         show({
@@ -49,13 +54,13 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
     });
   };
 
-  const handleRemove = (memberId: string, email: string) => {
+  const handleRemove = (memberId: string, email: string | null) => {
     startTransition(async () => {
       try {
-        await removeMemberAction(brandId, memberId, email);
+        await removeMemberAction(brandId, memberId, email ?? undefined);
         show({
           title: "Member removed",
-          description: `${email} no longer has access.`,
+          description: `${formatMemberEmail(email)} no longer has access.`,
           variant: "success",
         });
         router.refresh();
@@ -82,7 +87,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                   <Text as="p" size="2" weight="medium" className="break-all">
-                    {member.email}
+                    {formatMemberEmail(member.email)}
                   </Text>
                   {member.isRecentlyAccepted ? (
                     <Badge color="green" variant="soft" className="mt-1">
@@ -144,7 +149,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                 <Table.Row key={member.id}>
                   <Table.Cell>
                     <Flex align="center" gap="2">
-                      <span>{member.email}</span>
+                      <span>{formatMemberEmail(member.email)}</span>
                       {member.isRecentlyAccepted ? (
                         <Badge color="green" variant="soft">
                           New

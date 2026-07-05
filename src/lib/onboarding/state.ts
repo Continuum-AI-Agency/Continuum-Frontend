@@ -170,14 +170,14 @@ export type { DocumentCategory } from "@continuum/contracts";
 export type DocumentProgressStep = z.infer<typeof documentProgressStepSchema>;
 export type DocumentErrorCode = z.infer<typeof documentErrorCodeSchema>;
 
-const brandMemberSchema = z.object({
+export const brandMemberSchema = z.object({
   id: z.string(),
-  email: z.string().email(),
+  email: z.string().email().nullable(),
   role: brandRoleSchema,
   isRecentlyAccepted: z.boolean().optional(),
 });
 
-const brandInviteSchema = z.object({
+export const brandInviteSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   role: brandRoleSchema,
@@ -261,10 +261,11 @@ function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState
 }
 
 export function createDefaultOnboardingState(owner?: BrandMember): OnboardingState {
+  const ownerHandle = owner?.email?.split("@")[0];
   return {
     step: 0,
     brand: {
-      name: owner ? `${owner.email.split("@")[0]}'s Brand` : "",
+      name: ownerHandle ? `${ownerHandle}'s Brand` : owner ? "My Brand" : "",
       industry: "",
       brandVoice: null,
       brandVoiceTags: [],

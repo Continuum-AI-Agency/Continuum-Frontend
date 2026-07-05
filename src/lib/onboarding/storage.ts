@@ -172,7 +172,6 @@ async function ensureBrandProfileRecord(
       .upsert({
         brand_profile_id: brandId,
         user_id: owner.id,
-        email: owner.email,
         role: "owner",
       }, { onConflict: "brand_profile_id,user_id" } as any);
 

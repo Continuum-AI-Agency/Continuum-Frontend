@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { BrandMember, BrandInvite, BrandRole } from "@/lib/onboarding/state";
+import { brandInviteSchema, brandMemberSchema, type BrandMember, type BrandInvite } from "@/lib/onboarding/state";
 
 export async function fetchBrandMembers(brandId: string): Promise<BrandMember[]> {
   const supabase = await createSupabaseServerClient();
@@ -17,7 +17,8 @@ export async function fetchBrandMembers(brandId: string): Promise<BrandMember[]>
   const RECENTLY_ACCEPTED_WINDOW_MS = 24 * 60 * 60 * 1000;
   const now = Date.now();
 
-  return (data ?? []).map((row: any) => {
+  const members: BrandMember[] = [];
+  for (const row of data ?? []) {
     const createdAt = row.created_at as string | null;
     const acknowledged = row.acknowledged_at as string | null;
     const isRecentlyAccepted =
@@ -25,13 +26,22 @@ export async function fetchBrandMembers(brandId: string): Promise<BrandMember[]>
       typeof createdAt === "string" &&
       now - new Date(createdAt).getTime() < RECENTLY_ACCEPTED_WINDOW_MS;
 
-    return {
+    const parsed = brandMemberSchema.safeParse({
       id: row.user_id,
-      email: row.email ?? "",
-      role: row.role as BrandRole,
+      email: row.email,
+      role: row.role,
       isRecentlyAccepted,
-    };
-  });
+    });
+
+    if (!parsed.success) {
+      console.error(`[members] Skipping malformed member row for brand ${brandId}`, parsed.error);
+      continue;
+    }
+
+    members.push(parsed.data);
+  }
+
+  return members;
 }
 
 export async function acknowledgeOwnMembership(brandId: string, userId: string): Promise<void> {
@@ -66,12 +76,24 @@ export async function fetchBrandInvites(brandId: string): Promise<BrandInvite[]>
     return [];
   }
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    email: row.email,
-    role: row.role as BrandRole,
-    token: "", 
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-  }));
+  const invites: BrandInvite[] = [];
+  for (const row of data ?? []) {
+    const parsed = brandInviteSchema.safeParse({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      token: "",
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    });
+
+    if (!parsed.success) {
+      console.error(`[members] Skipping malformed invite row for brand ${brandId}`, parsed.error);
+      continue;
+    }
+
+    invites.push(parsed.data);
+  }
+
+  return invites;
 }
