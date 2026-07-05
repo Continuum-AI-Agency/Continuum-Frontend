@@ -20,6 +20,7 @@ import { BrandIdentitySection } from '@/components/settings/brand/BrandIdentityS
 import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandIntegrationsSwitcher';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
 import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
+import { SkillsSettingsSection } from '@/components/settings/brand/SkillsSettingsSection';
 import { RoleCapabilityLegend } from '@/components/settings/RoleCapabilityLegend';
 import { AccountNavPill } from '@/components/settings/shell/AccountNavPill';
 import { BrandNavPill } from '@/components/settings/shell/BrandNavPill';
@@ -149,6 +150,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             />
           </SettingsSection>
         ) : null}
+      </>
+    );
+  } else if (initialSection === 'skills') {
+    activeSectionSlot = (
+      <>
+        {createBrandHeader(defaultBrandName)}
+        <SettingsSection
+          title="Creative skills"
+          description="Reusable creative-direction skills folded into AI Studio generations and agent content. Create your own, browse the first-party library, and edit or archive existing ones."
+        >
+          <SkillsSettingsSection brandId={activeBrandId} />
+        </SettingsSection>
       </>
     );
   } else if (initialSection === 'brand-book') {

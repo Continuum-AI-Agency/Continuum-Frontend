@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 type SettingsSectionProps = {
   title: string;
-  description?: string;
+  description?: ReactNode;
   action?: ReactNode;
   className?: string;
   children: ReactNode;
