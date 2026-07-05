@@ -1,34 +1,37 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import type { OrganicCreativeMetric, OrganicCreativeRow } from "@continuum/contracts";
-import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
-import { PostQuickLook } from "@/components/organic/cards/PostQuickLook";
-import type { OrganicPost } from "@/lib/schemas/organicMetrics";
-import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
-import { useOrganicInsights } from "@/hooks/useOrganicInsights";
-import { useOrganicPostDetail } from "@/hooks/useOrganicPostDetail";
+import type { OrganicCreativeMetric, OrganicCreativeRow } from '@continuum/contracts';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  type InsightColumn,
+  InsightDataTable,
+} from '@/components/dashboard/datatable/InsightDataTable';
+import type { InstagramAccountOption } from '@/components/dashboard/InstagramOrganicReportingWidget';
+import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
+import { DeltaBadge } from '@/components/shared/DeltaBadge';
+import { ModuleShortcutLink } from '@/components/shared/ModuleShortcutLink';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useOrganicInsights } from '@/hooks/useOrganicInsights';
+import { useOrganicPostDetail } from '@/hooks/useOrganicPostDetail';
+import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
+import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
 import {
   buildOrganicCreativeRows,
   extractAwarenessHookRates,
-} from "@/lib/organic/organic-creative-rows";
-import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
-import { resolveOrganicAccount } from "@/lib/organic/resolve-organic-account";
-import { InsightDataTable, type InsightColumn } from "@/components/dashboard/datatable/InsightDataTable";
-import { DeltaBadge } from "@/components/shared/DeltaBadge";
-import { ModuleShortcutLink } from "@/components/shared/ModuleShortcutLink";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { LeaderboardThumbnail } from "./LeaderboardThumbnail";
-import { InsightActionsDropdown, InsightContextActions } from "./insightActions";
+} from '@/lib/organic/organic-creative-rows';
+import { resolveOrganicAccount } from '@/lib/organic/resolve-organic-account';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
+import { InsightActionsDropdown, InsightContextActions } from './insightActions';
+import { LeaderboardThumbnail } from './LeaderboardThumbnail';
 
-const RANGE_PRESET = "last_7d" as const;
+const RANGE_PRESET = 'last_7d' as const;
 
-type Platform = "instagram" | "youtube";
+type Platform = 'instagram' | 'youtube';
 
 type PostsState =
-  | { status: "idle" | "loading" }
-  | { status: "error" }
-  | { status: "success"; posts: OrganicPost[] };
+  | { status: 'idle' | 'loading' }
+  | { status: 'error' }
+  | { status: 'success'; posts: OrganicPost[] };
 
 type OrganicCreativesTableProps = {
   brandId: string;
@@ -39,7 +42,9 @@ type OrganicCreativesTableProps = {
 type DisplayRow = OrganicCreativeRow & { rank: number };
 
 function formatCompact(value: number): string {
-  return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(
+    value,
+  );
 }
 
 // Top organic creatives ranked by reach (views for YouTube) as a dense, sortable
@@ -53,11 +58,11 @@ export function OrganicCreativesTable({
 }: OrganicCreativesTableProps) {
   const resolved = resolveOrganicAccount(brandId, accounts, youtubeAccounts);
   const integrationAccountId = resolved?.account.integrationAccountId ?? null;
-  const platform: Platform = resolved?.platform ?? "instagram";
-  const metric: OrganicCreativeMetric = platform === "youtube" ? "views" : "reach";
-  const metricLabel = metric === "views" ? "Views" : "Reach";
+  const platform: Platform = resolved?.platform ?? 'instagram';
+  const metric: OrganicCreativeMetric = platform === 'youtube' ? 'views' : 'reach';
+  const metricLabel = metric === 'views' ? 'Views' : 'Reach';
 
-  const [postsState, setPostsState] = useState<PostsState>({ status: "idle" });
+  const [postsState, setPostsState] = useState<PostsState>({ status: 'idle' });
 
   const { awareness } = useOrganicInsights({
     brandId,
@@ -80,24 +85,24 @@ export function OrganicCreativesTable({
 
   useEffect(() => {
     if (!integrationAccountId) {
-      setPostsState({ status: "idle" });
+      setPostsState({ status: 'idle' });
       return;
     }
     let cancelled = false;
-    setPostsState({ status: "loading" });
+    setPostsState({ status: 'loading' });
     fetchOrganicAnalytics({
       brandId,
       integrationAccountId,
       platform,
       range: { preset: RANGE_PRESET },
-      scope: "posts",
+      scope: 'posts',
       postsLimit: 25,
     })
       .then((response) => {
-        if (!cancelled) setPostsState({ status: "success", posts: response.posts ?? [] });
+        if (!cancelled) setPostsState({ status: 'success', posts: response.posts ?? [] });
       })
       .catch(() => {
-        if (!cancelled) setPostsState({ status: "error" });
+        if (!cancelled) setPostsState({ status: 'error' });
       });
     return () => {
       cancelled = true;
@@ -105,7 +110,7 @@ export function OrganicCreativesTable({
   }, [brandId, integrationAccountId, platform]);
 
   const rows = useMemo<DisplayRow[]>(() => {
-    if (postsState.status !== "success") return [];
+    if (postsState.status !== 'success') return [];
     const awarenessHookRateById = extractAwarenessHookRates(awareness);
     return buildOrganicCreativeRows({ posts: postsState.posts, metric, awarenessHookRateById }).map(
       (row, index) => ({ ...row, rank: index + 1 }),
@@ -116,7 +121,7 @@ export function OrganicCreativesTable({
   // as the hovercard's low-fidelity fallback until requestPostDetail resolves.
   const bulkPostById = useMemo(() => {
     const map = new Map<string, OrganicPost>();
-    if (postsState.status === "success") {
+    if (postsState.status === 'success') {
       for (const post of postsState.posts) map.set(post.id, post);
     }
     return map;
@@ -131,15 +136,15 @@ export function OrganicCreativesTable({
   const columns = useMemo<InsightColumn<DisplayRow>[]>(() => {
     const cols: InsightColumn<DisplayRow>[] = [
       {
-        id: "rank",
-        header: "#",
-        cellClassName: "w-8 text-muted-foreground",
+        id: 'rank',
+        header: '#',
+        cellClassName: 'w-8 text-muted-foreground',
         cell: (row) => <span className="font-mono text-xs tabular-nums">{row.rank}</span>,
       },
       {
-        id: "creative",
-        header: "Creative",
-        cellClassName: "min-w-40",
+        id: 'creative',
+        header: 'Creative',
+        cellClassName: 'min-w-40',
         // The lazily-fetched fresh detail (when it lands) beats the bulk row's
         // baked-in thumbnail/name, which can already be stale by render time
         // (see useOrganicPostDetail). Both feed the same PostQuickLook hovercard
@@ -161,7 +166,11 @@ export function OrganicCreativesTable({
               <HoverCardTrigger asChild>
                 <div className="flex min-w-0 items-center gap-3">
                   {thumbnailUrl ? (
-                    <LeaderboardThumbnail src={thumbnailUrl} alt={row.name} fallbackSeed={row.name} />
+                    <LeaderboardThumbnail
+                      src={thumbnailUrl}
+                      alt={row.name}
+                      fallbackSeed={row.name}
+                    />
                   ) : null}
                   <div className="flex min-w-0 items-baseline gap-2">
                     <p className="truncate text-sm text-foreground">{row.name}</p>
@@ -183,31 +192,33 @@ export function OrganicCreativesTable({
         },
       },
       {
-        id: "metric",
+        id: 'metric',
         header: metricLabel,
-        align: "right",
+        align: 'right',
         sortValue: (row) => row.metricValue,
         cell: (row) => formatCompact(row.metricValue),
       },
       {
-        id: "hook",
-        header: "Hook",
-        align: "right",
+        id: 'hook',
+        header: 'Hook',
+        align: 'right',
         sortValue: (row) => row.hookRate ?? -1,
         cell: (row) =>
-          typeof row.hookRate === "number" ? (
-            <span style={{ color: hookRateTextColor(row.hookRate) }}>{Math.round(row.hookRate)}%</span>
+          typeof row.hookRate === 'number' ? (
+            <span style={{ color: hookRateTextColor(row.hookRate) }}>
+              {Math.round(row.hookRate)}%
+            </span>
           ) : (
-            "—"
+            '—'
           ),
       },
       {
-        id: "delta",
-        header: "vs avg",
-        align: "right",
+        id: 'delta',
+        header: 'vs avg',
+        align: 'right',
         sortValue: (row) => row.vsAveragePct ?? 0,
         cell: (row) =>
-          typeof row.vsAveragePct === "number" ? <DeltaBadge value={row.vsAveragePct} /> : "—",
+          typeof row.vsAveragePct === 'number' ? <DeltaBadge value={row.vsAveragePct} /> : '—',
       },
     ];
 
@@ -222,12 +233,13 @@ export function OrganicCreativesTable({
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
-      defaultSort={{ columnId: "metric", direction: "desc" }}
-      isLoading={postsState.status === "idle" || postsState.status === "loading"}
+      maxHeight="28rem"
+      defaultSort={{ columnId: 'metric', direction: 'desc' }}
+      isLoading={postsState.status === 'idle' || postsState.status === 'loading'}
       emptyState={
-        postsState.status === "error"
+        postsState.status === 'error'
           ? "Couldn't load your creatives right now."
-          : "No posts yet for this account."
+          : 'No posts yet for this account.'
       }
       contextMenu={(row) => <InsightContextActions permalink={row.permalink} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.permalink} />}

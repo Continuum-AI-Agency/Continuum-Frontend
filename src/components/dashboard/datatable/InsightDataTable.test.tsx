@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "bun:test";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from 'bun:test';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -7,44 +7,50 @@ Object.assign(global.window, {
   TypeError: globalThis.TypeError,
 });
 
-import { InsightDataTable, type InsightColumn } from "./InsightDataTable";
+import { type InsightColumn, InsightDataTable } from './InsightDataTable';
 
 type Row = { id: string; name: string; reach: number };
 
 const rows: Row[] = [
-  { id: "a", name: "Alpha", reach: 30 },
-  { id: "b", name: "Bravo", reach: 50 },
-  { id: "c", name: "Charlie", reach: 10 },
+  { id: 'a', name: 'Alpha', reach: 30 },
+  { id: 'b', name: 'Bravo', reach: 50 },
+  { id: 'c', name: 'Charlie', reach: 10 },
 ];
 
 const columns: InsightColumn<Row>[] = [
-  { id: "name", header: "Post", cell: (row) => <span>{row.name}</span> },
-  { id: "reach", header: "Reach", align: "right", sortValue: (row) => row.reach, cell: (row) => <span>{row.reach}</span> },
+  { id: 'name', header: 'Post', cell: (row) => <span>{row.name}</span> },
+  {
+    id: 'reach',
+    header: 'Reach',
+    align: 'right',
+    sortValue: (row) => row.reach,
+    cell: (row) => <span>{row.reach}</span>,
+  },
 ];
 
 function renderedOrder(): string[] {
-  return screen.getAllByText(/Alpha|Bravo|Charlie/).map((node) => node.textContent ?? "");
+  return screen.getAllByText(/Alpha|Bravo|Charlie/).map((node) => node.textContent ?? '');
 }
 
-describe("InsightDataTable", () => {
+describe('InsightDataTable', () => {
   afterEach(() => cleanup());
 
-  it("renders rows in source order by default", () => {
+  it('renders rows in source order by default', () => {
     render(<InsightDataTable rows={rows} columns={columns} getRowId={(row) => row.id} />);
-    expect(renderedOrder()).toEqual(["Alpha", "Bravo", "Charlie"]);
+    expect(renderedOrder()).toEqual(['Alpha', 'Bravo', 'Charlie']);
   });
 
-  it("sorts descending then ascending when a sortable header is toggled", () => {
+  it('sorts descending then ascending when a sortable header is toggled', () => {
     render(<InsightDataTable rows={rows} columns={columns} getRowId={(row) => row.id} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Reach/ }));
-    expect(renderedOrder()).toEqual(["Bravo", "Alpha", "Charlie"]); // desc: 50, 30, 10
+    fireEvent.click(screen.getByRole('button', { name: /Reach/ }));
+    expect(renderedOrder()).toEqual(['Bravo', 'Alpha', 'Charlie']); // desc: 50, 30, 10
 
-    fireEvent.click(screen.getByRole("button", { name: /Reach/ }));
-    expect(renderedOrder()).toEqual(["Charlie", "Alpha", "Bravo"]); // asc: 10, 30, 50
+    fireEvent.click(screen.getByRole('button', { name: /Reach/ }));
+    expect(renderedOrder()).toEqual(['Charlie', 'Alpha', 'Bravo']); // asc: 10, 30, 50
   });
 
-  it("reveals expanded content only for the clicked row", () => {
+  it('reveals expanded content only for the clicked row', () => {
     render(
       <InsightDataTable
         rows={rows}
@@ -54,13 +60,13 @@ describe("InsightDataTable", () => {
       />,
     );
 
-    expect(screen.queryByText("insight for Bravo")).toBeNull();
-    fireEvent.click(screen.getByText("Bravo"));
-    expect(screen.getByText("insight for Bravo")).toBeDefined();
-    expect(screen.queryByText("insight for Alpha")).toBeNull();
+    expect(screen.queryByText('insight for Bravo')).toBeNull();
+    fireEvent.click(screen.getByText('Bravo'));
+    expect(screen.getByText('insight for Bravo')).toBeDefined();
+    expect(screen.queryByText('insight for Alpha')).toBeNull();
   });
 
-  it("shows the empty state when there are no rows", () => {
+  it('shows the empty state when there are no rows', () => {
     render(
       <InsightDataTable
         rows={[]}
@@ -69,13 +75,41 @@ describe("InsightDataTable", () => {
         emptyState="No posts yet."
       />,
     );
-    expect(screen.getByText("No posts yet.")).toBeDefined();
+    expect(screen.getByText('No posts yet.')).toBeDefined();
   });
 
-  it("renders skeleton rows while loading", () => {
+  it('renders skeleton rows while loading', () => {
     const { container } = render(
       <InsightDataTable rows={[]} columns={columns} getRowId={(row) => row.id} isLoading />,
     );
     expect(container.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+  });
+
+  it('caps height, scrolls the body, and pins the header when maxHeight is set', () => {
+    const { container } = render(
+      <InsightDataTable
+        rows={rows}
+        columns={columns}
+        getRowId={(row) => row.id}
+        maxHeight="20rem"
+      />,
+    );
+    const scrollContainer = container.querySelector(
+      '[data-slot="table-container"]',
+    ) as HTMLElement | null;
+    expect(scrollContainer?.className).toContain('overflow-y-auto');
+    expect(scrollContainer?.style.maxHeight).toBe('20rem');
+    expect(container.querySelector('[data-slot="table-header"]')?.className).toContain('sticky');
+  });
+
+  it('does not constrain height by default', () => {
+    const { container } = render(
+      <InsightDataTable rows={rows} columns={columns} getRowId={(row) => row.id} />,
+    );
+    const scrollContainer = container.querySelector(
+      '[data-slot="table-container"]',
+    ) as HTMLElement | null;
+    expect(scrollContainer?.className).not.toContain('overflow-y-auto');
+    expect(scrollContainer?.style.maxHeight).toBe('');
   });
 });
