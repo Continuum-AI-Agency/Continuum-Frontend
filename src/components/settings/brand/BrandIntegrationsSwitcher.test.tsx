@@ -102,4 +102,13 @@ describe("BrandIntegrationsSwitcher", () => {
     expect(dialog.getAttribute("data-assigned-ids")).toBe("asset-1");
     expect(screen.queryByText("Manage brand integrations")).toBeNull();
   });
+
+  it("shows the empty state with an assign CTA when no accounts are tagged", () => {
+    integrations = undefined;
+    render(<BrandIntegrationsSwitcher initialSummary={undefined} />);
+
+    expect(screen.getByText("No integrations assigned")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Assign accounts" })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
 });

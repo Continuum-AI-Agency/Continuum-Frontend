@@ -29,8 +29,8 @@ mock.module("@/lib/api/integrations", () => ({
     isLoading: false,
     refetch: mock(async () => ({ data: userAssets })),
   }),
-  // The dialog now background-resyncs Meta when it looks connected-but-empty
-  // (#154); the mock module must expose the mutation hook it consumes.
+  // The dialog background-resyncs Meta when it looks connected-but-empty (#154);
+  // the mock module must expose the mutation hook it consumes.
   useResyncMeta: () => ({
     mutateAsync: mock(async () => ({ updated: [], failed: [] })),
   }),
@@ -57,6 +57,14 @@ mock.module("@/components/ui/ToastProvider", () => ({
 import { AssignmentsDialog } from "./AssignmentsDialog";
 
 const emptySummary = {} as BrandIntegrationSummary;
+
+function rowCheckbox(name: string): HTMLElement {
+  const label = screen.getByText(name).closest("label");
+  if (!label) throw new Error(`row label for "${name}" not found`);
+  const checkbox = label.querySelector("[role=checkbox]");
+  if (!checkbox) throw new Error(`checkbox for "${name}" not found`);
+  return checkbox as HTMLElement;
+}
 
 describe("AssignmentsDialog", () => {
   beforeEach(() => {
@@ -87,15 +95,16 @@ describe("AssignmentsDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("Meta Portfolio"));
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    // Sections render directly (no accordion to expand). The standalone Meta
+    // section carries the IG row and its explanatory subtitle.
+    expect(screen.getByText("Continuum Instagram")).toBeTruthy();
+    expect(screen.getByText("Not attached to a Meta ad account")).toBeTruthy();
+
+    fireEvent.click(rowCheckbox("Continuum Instagram"));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save Assignments" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
     });
 
-    expect(screen.getByText("Continuum Instagram")).toBeTruthy();
-    expect(screen.getByText("Accounts not attached to a Meta ad account")).toBeTruthy();
     expect(applyBrandIntegrationAssignmentsActionMock).toHaveBeenCalledWith("brand-1", [
       "ig-account-1",
     ]);
@@ -103,10 +112,8 @@ describe("AssignmentsDialog", () => {
 
   it("shows an IG-only user's standalone account even when a teammate has tagged a Meta asset", async () => {
     // Alice connected only an Instagram account (no Meta ad account, no FB Page).
-    // Bob tagged his Facebook page into the same brand. Pre-fix, Alice's IG
-    // disappeared from the dialog because the meta provider merge skipped the
-    // flat-list fallback. Post-fix, both rows appear in the Standalone Meta
-    // accounts section.
+    // Bob tagged his Facebook page into the same brand. Both rows must appear in
+    // the standalone Meta accounts section.
     userAssets = [
       {
         id: "alice-ig-only",
@@ -155,18 +162,14 @@ describe("AssignmentsDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("Meta Portfolio"));
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
-
-    // Both rows must be present in the standalone section.
     expect(screen.getByText("Alice IG")).toBeTruthy();
     expect(screen.getByText("Bob's Page")).toBeTruthy();
   });
 
-  it("renders teammate-owned rows with a 'Tagged by' caption and a disabled checkbox", async () => {
+  it("renders teammate-owned rows with a 'Tagged by' caption and a disabled, checked checkbox", async () => {
     // Alice's own assets are unchanged from the default beforeEach. Bob has
-    // tagged his Instagram account into the same brand — Alice should see
-    // it but be unable to edit it.
+    // tagged his Instagram account into the same brand — Alice sees it but
+    // cannot edit it.
     const teammateSummary = {
       instagram: {
         accounts: [
@@ -202,21 +205,15 @@ describe("AssignmentsDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("Meta Portfolio"));
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
-
     expect(screen.getByText("Bob's IG")).toBeTruthy();
     expect(screen.getByText(/Tagged by bob/)).toBeTruthy();
 
-    // Bob's row checkbox is in the standalone Meta accounts table — find it
-    // by walking up from the asset name to its row.
-    const bobRow = screen.getByText("Bob's IG").closest("tr");
-    expect(bobRow).toBeTruthy();
-    const bobCheckbox = bobRow!.querySelector("[role=checkbox]");
-    expect(bobCheckbox).toBeTruthy();
-    expect(bobCheckbox!.getAttribute("aria-disabled") === "true" ||
-      bobCheckbox!.hasAttribute("disabled") ||
-      bobCheckbox!.getAttribute("data-disabled") !== null).toBe(true);
-    expect(bobCheckbox!.getAttribute("aria-checked")).toBe("true");
+    const bobCheckbox = rowCheckbox("Bob's IG");
+    expect(
+      bobCheckbox.getAttribute("aria-disabled") === "true" ||
+        bobCheckbox.hasAttribute("disabled") ||
+        bobCheckbox.getAttribute("data-disabled") !== null
+    ).toBe(true);
+    expect(bobCheckbox.getAttribute("aria-checked")).toBe("true");
   });
 });
