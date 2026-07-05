@@ -1,26 +1,22 @@
 "use client";
 
-// One metric tile: label + icon + value (+ optional delta, tier chip, tooltip).
-// Shared by the gallery HoverCard quick-look and the post snapshot side panel so
-// numbers read identically. "primary" emphasis is a boxed tile; "secondary" is a
+// One metric tile: label + icon + value (+ optional delta, tooltip). Shared by
+// the gallery HoverCard quick-look and the post snapshot side panel so numbers
+// read identically. "primary" emphasis is a boxed tile; "secondary" is a
 // compact label/value row. A tooltip (definition + period-over-period delta) is
 // shown when provided; callers must render it inside a TooltipProvider.
+// Graded metrics (e.g. hook rate) pass `valueColor` to tint the value text
+// itself along the app-wide grading gradient (see hook-rate-color.ts) rather
+// than a separate tier chip.
 
 import type { MetricComparison } from "@/lib/schemas/organicMetrics";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatCompactNumber, formatRate } from "../organic-format";
-import { formatWatchTime, type HookRateTier } from "../organic-metrics-utils";
+import { formatWatchTime } from "../organic-metrics-utils";
 import { DeltaBadge } from "./DeltaBadge";
 import { METRIC_ICONS } from "./metricIcons";
 import type { MetricFormat, MetricIconKey } from "./cardMetricSet";
-
-const TIER_CHIP: Record<HookRateTier, { label: string; className: string }> = {
-  elite: { label: "Elite", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  good: { label: "Good", className: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
-  average: { label: "Average", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  poor: { label: "Poor", className: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
-};
 
 function formatMetric(value: number | undefined, format: MetricFormat): string {
   if (format === "watchtime") return formatWatchTime(value);
@@ -34,7 +30,7 @@ export type StatTileProps = {
   format: MetricFormat;
   iconKey?: MetricIconKey;
   comparison?: MetricComparison | null;
-  tier?: HookRateTier;
+  valueColor?: string;
   emphasis?: "primary" | "secondary";
   tooltip?: string;
   className?: string;
@@ -49,7 +45,7 @@ export function StatTile({
   format,
   iconKey,
   comparison,
-  tier,
+  valueColor,
   emphasis = "primary",
   tooltip,
   className,
@@ -57,7 +53,6 @@ export function StatTile({
 }: StatTileProps) {
   const Icon = iconKey ? METRIC_ICONS[iconKey] : undefined;
   const formatted = formatMetric(value, format);
-  const tierChip = tier ? TIER_CHIP[tier] : undefined;
   const pct = comparison?.percentageChange;
 
   const body =
@@ -73,17 +68,12 @@ export function StatTile({
           <span className="text-xs font-medium leading-none">{label}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
-          <span className="text-lg font-semibold leading-none tabular-nums tracking-tight">{formatted}</span>
-          {tierChip ? (
-            <span
-              className={cn(
-                "rounded px-1 py-0.5 text-3xs font-semibold uppercase leading-none tracking-wide",
-                tierChip.className
-              )}
-            >
-              {tierChip.label}
-            </span>
-          ) : null}
+          <span
+            className="text-lg font-semibold leading-none tabular-nums tracking-tight"
+            style={valueColor ? { color: valueColor } : undefined}
+          >
+            {formatted}
+          </span>
         </div>
         {comparison ? (
           <DeltaBadge comparison={comparison} className="self-start" />
@@ -104,7 +94,12 @@ export function StatTile({
           <span>{label}</span>
         </span>
         <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-          <span className="text-xs font-semibold tabular-nums tracking-tight">{formatted}</span>
+          <span
+            className="text-xs font-semibold tabular-nums tracking-tight"
+            style={valueColor ? { color: valueColor } : undefined}
+          >
+            {formatted}
+          </span>
           {comparison ? (
             <DeltaBadge comparison={comparison} />
           ) : lifetimeOnly ? (

@@ -6,7 +6,8 @@
 // is referenced by key and resolved to a lucide component in the view layer.
 
 import type { OrganicPost } from "@/lib/schemas/organicMetrics";
-import { calculateHookRate, hookRateTier, type HookRateTier } from "./../organic-metrics-utils";
+import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
+import { calculateHookRate } from "./../organic-metrics-utils";
 import type { PostComparisonKey } from "./../organic-metrics-utils";
 
 export type CardMediaKind = "reel" | "image" | "carousel";
@@ -32,7 +33,10 @@ export interface MetricDescriptor {
   tooltip: string;
   emphasis: "primary" | "secondary";
   comparisonKey?: PostComparisonKey;
-  tier?: HookRateTier;
+  // Grades the value text itself along the app-wide hook-rate gradient
+  // (red->yellow low, lime->pine high; neutral in between) instead of a
+  // separate tier chip, matching how hook rate is graded everywhere else.
+  valueColor?: string;
   // True for metrics with no valid period comparison (currently just Reach) —
   // the tile shows a persistent "Lifetime" cue instead of a delta badge.
   lifetimeOnly?: boolean;
@@ -129,7 +133,7 @@ function hookDescriptor(post: OrganicPost): MetricDescriptor | null {
     iconKey: "hook",
     tooltip: POST_METRIC_DEFINITIONS.hook,
     emphasis: "primary",
-    tier: hookRateTier(hookRate),
+    valueColor: hookRateTextColor(hookRate),
   });
 }
 

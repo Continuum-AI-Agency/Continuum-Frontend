@@ -6,10 +6,7 @@ import type {
 
 export type DrilldownWindow = "7d" | "30d";
 export type PostMetricKey = "reach" | "views" | "engagement" | "comments";
-export type HookRateTier = "elite" | "good" | "average" | "poor";
 export type PostSortKey = "recent" | "hookRate" | "views" | "reach" | "engagement";
-
-const HOOK_RATE_THRESHOLDS = { elite: 40, good: 25, average: 15 } as const;
 
 // Hook rate is the native organic signal only: hookRate = 100 - reels_skip_rate,
 // computed edge-side and delivered on metrics.hookRate. There is no watch-time
@@ -32,13 +29,6 @@ export function formatWatchTime(ms: number | undefined): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
-}
-
-export function hookRateTier(rate: number): HookRateTier {
-  if (rate >= HOOK_RATE_THRESHOLDS.elite) return "elite";
-  if (rate >= HOOK_RATE_THRESHOLDS.good) return "good";
-  if (rate >= HOOK_RATE_THRESHOLDS.average) return "average";
-  return "poor";
 }
 
 export function sortPosts(posts: OrganicPost[], key: PostSortKey): OrganicPost[] {

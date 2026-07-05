@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { OrganicPost } from "@/lib/schemas/organicMetrics";
+import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
 import {
   engagementRate,
   getCardMetricSet,
@@ -50,7 +51,7 @@ describe("getCardMetricSet adaptive primary row", () => {
     });
     expect(primaryKeys(reel)).toEqual(["views", "hook", "avgWatch"]);
     const hook = getCardMetricSet(reel).find((d) => d.key === "hook");
-    expect(hook?.tier).toBe("elite");
+    expect(hook?.valueColor).toBe(hookRateTextColor(68));
     expect(hook?.format).toBe("percent");
   });
 
