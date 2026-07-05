@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { documentCategorySchema, toDocumentCategory } from "../documents/category";
 import { brandReportResultSchema } from "./brand-report";
+import { brandDnaSchema } from "./brand-dna";
 import { brandMdTokensSchema } from "./brand-md";
 import { readinessAnalysisSchema } from "./readiness";
 
@@ -71,6 +72,9 @@ export const brandBookReportLayerSchema = z
     brand_md: z.string().nullable().default(null),
     brand_tokens: brandMdTokensSchema.nullable().default(null),
     brand_md_is_edited: z.boolean().default(false),
+    // Lean DNA (positioning thesis + pillars) the compose worker copies from the
+    // report pipeline. Typed here rather than leaking through .passthrough().
+    dna: brandDnaSchema.nullable().default(null),
   })
   .passthrough();
 export type BrandBookReportLayer = z.infer<typeof brandBookReportLayerSchema>;
