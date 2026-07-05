@@ -129,7 +129,7 @@ export function PostQuickLook({
                   value={d.value}
                   format={d.format}
                   iconKey={d.iconKey}
-                  tier={d.tier}
+                  valueColor={d.valueColor}
                   comparison={d.comparisonKey ? comparisons[d.comparisonKey] : undefined}
                   lifetimeOnly={d.lifetimeOnly}
                   tooltip={d.tooltip}
@@ -147,6 +147,7 @@ export function PostQuickLook({
                     value={d.value}
                     format={d.format}
                     iconKey={d.iconKey}
+                    valueColor={d.valueColor}
                     comparison={d.comparisonKey ? comparisons[d.comparisonKey] : undefined}
                     lifetimeOnly={d.lifetimeOnly}
                     tooltip={d.tooltip}
