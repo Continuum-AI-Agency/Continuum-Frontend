@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState, ErrorRetryState } from "@/components/shared/state";
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
 import type { ActionLog, ActionStatus, ScopeType } from "@/lib/types/dco";
 import { cn } from "@/lib/utils";
@@ -404,21 +405,32 @@ export function DCOActionAlertsBox({
 
         <div className="flex-1 min-h-0">
           {error ? (
-            <div className="m-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </div>
-          ) : null}
-
-          {isLoading ? (
+            <ErrorRetryState
+              title="Couldn't load DCO actions"
+              message={error}
+              onRetry={handleRefresh}
+              className="m-2 min-h-[220px]"
+            />
+          ) : isLoading ? (
             <div className="space-y-2 p-2">
               {Array.from({ length: 8 }).map((_, idx) => (
                 <Skeleton key={`alert-skeleton-${idx}`} className="h-10 w-full bg-muted/70" />
               ))}
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div className="flex h-full min-h-[220px] items-center justify-center p-4 text-sm text-muted-foreground">
-              No alerts for this filter set.
-            </div>
+            logs.length === 0 ? (
+              <EmptyState
+                className="m-2 min-h-[220px]"
+                headline="DCO actions will appear here"
+                description="Once optimization runs, budget moves, creative swaps, and audience tests land here with rationale and status."
+              />
+            ) : (
+              <EmptyState
+                className="m-2 min-h-[220px]"
+                headline="No actions match these filters"
+                description="Adjust the status, scope, or search filters to see more events."
+              />
+            )
           ) : (
             <ScrollArea className="h-full">
               <Table className="text-xs">

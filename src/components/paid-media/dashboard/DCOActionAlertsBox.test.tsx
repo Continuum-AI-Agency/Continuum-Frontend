@@ -52,15 +52,18 @@ const logs: ActionLog[] = [
   },
 ];
 
+let mockLogs: ActionLog[] = logs;
+let mockError: string | null = null;
+
 mock.module("@/hooks/useDCOActionLogs", () => ({
   useDCOActionLogs: () => ({
-    logs,
+    logs: mockLogs,
     isLoading: false,
-    error: null,
+    error: mockError,
     pagination: {
       page: 1,
       pageSize: 80,
-      totalCount: 1,
+      totalCount: mockLogs.length,
       totalPages: 1,
       hasNextPage: false,
       hasPrevPage: false,
@@ -108,6 +111,8 @@ describe("DCOActionAlertsBox", () => {
     mockSetFilters.mockClear();
     mockSetSort.mockClear();
     mockGoToPage.mockClear();
+    mockLogs = logs;
+    mockError = null;
   });
 
   afterEach(() => {
@@ -136,8 +141,8 @@ describe("DCOActionAlertsBox", () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("shows before/after creative URLs in detail hover metadata for creative switch rows", () => {
-    const { container } = render(
+  it("reveals the before/after creative comparison on hover for creative switch rows", () => {
+    const { container, getByText } = render(
       <DCOActionAlertsBox
         brandId="brand_1"
         metaAccountId="act_1"
@@ -145,13 +150,43 @@ describe("DCOActionAlertsBox", () => {
       />
     );
 
-    const detailCell = Array.from(container.getElementsByTagName("td")).find((cell) =>
-      cell.getAttribute("title")?.includes("Before: https://cdn.example.com/original.mp4")
+    expect(getByText("Hover to view creative comparison")).toBeTruthy();
+
+    const creativeRow = Array.from(container.getElementsByTagName("tr")).find((row) =>
+      row.textContent?.includes("CREATIVE_SWITCH_EXTERNAL")
+    );
+    expect(creativeRow).toBeTruthy();
+    fireEvent.mouseEnter(creativeRow as HTMLTableRowElement);
+
+    expect(
+      container.querySelector('video[src="https://cdn.example.com/original.mp4"]')
+    ).toBeTruthy();
+    expect(
+      container.querySelector('video[src="https://cdn.example.com/new.mp4"]')
+    ).toBeTruthy();
+  });
+
+  it("shows an error state with a retry that refreshes the alerts", () => {
+    mockError = "Meta API request failed";
+
+    const { getByRole, getByText } = render(
+      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />
     );
 
-    expect(detailCell).toBeTruthy();
-    expect(detailCell?.textContent).toContain("Hover to view before/after creative URLs");
-    expect(detailCell?.getAttribute("title")).toContain("Before: https://cdn.example.com/original.mp4");
-    expect(detailCell?.getAttribute("title")).toContain("After: https://cdn.example.com/new.mp4");
+    expect(getByRole("alert")).toBeTruthy();
+    expect(getByText("Meta API request failed")).toBeTruthy();
+
+    fireEvent.click(getByRole("button", { name: /retry/i }));
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an outcome-first empty state when there are no actions at all", () => {
+    mockLogs = [];
+
+    const { getByText } = render(
+      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />
+    );
+
+    expect(getByText("DCO actions will appear here")).toBeTruthy();
   });
 });
