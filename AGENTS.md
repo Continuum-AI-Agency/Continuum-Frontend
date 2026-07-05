@@ -134,9 +134,8 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 ## 6. MCP Usage
 
 * **Purpose:** MCP tools are for reference and guidance only; they must not mutate production data or state.
-* **Supabase MCP (Read-Only):** Use it for looking up schemas, tables, migrations, and query behavior to inform frontend work. Do not run write operations or migrations unless explicitly requested and approved.
-* **Radix MCP (Design System):** Use it to retrieve official Radix primitives documentation/source for building our UI foundations. Prefer Radix primitives over custom equivalents unless a clear gap exists.
-* **shadcn MCP (Component Recipes):** Use it for vetted component patterns and composition guidance; adapt to our styleguide and Radix-first foundations.
+* **Supabase MCP (Read-Only):** Use it for looking up schemas, tables, migrations, and query behavior to inform frontend work. Do not run write operations or migrations unless explicitly requested and approved. This is the only MCP server configured in the repo's `.mcp.json`.
+* **Radix-first UI:** Prefer Radix primitives over custom equivalents unless a clear gap exists. When adapting vetted component patterns (e.g. shadcn recipes), fit them to our styleguide and Radix-first foundations.
 * **Document Gaps:** If MCP data is missing or unclear, state assumptions and ask for clarification rather than guessing.
 
 ## 7. Tests
@@ -175,11 +174,6 @@ When you learn something, place a note of it here:
 - Impersonation callbacks must persist `is_impersonating` (for `/auth/callback` and `/callback` paths) so middleware bypasses the `/set-password` requirement for admin impersonation sessions.
 - Use the `fetch-brand-integrations` Edge Function as the source of truth for brand-assigned assets. It ensures members can see owner-linked integrations by using the Service Role bypass while verifying the requester's brand access.
 - Avoid redundant permission upserts in brand initialization paths (e.g. `ensureBrandProfileRecord`) to prevent role drift for invited members; always sync global brand data (name, logo, `completed_at`) back to user-scoped onboarding states.
-- Campaign compare should support TradingView-style multi-entity plotting: add/remove multiple campaigns/indexes to one metric chart, and keep indexes grouped by default with an optional `Decompose` toggle to expose member campaigns.
-- Minimize dropdown-driven selection for paid media exploration: prefer left-rail ticker-style list menus for campaign/index/ad set selection with quick row actions and lightweight chart focus.
-- Replace full-page paid media action logs with a compact, context-aware alert feed (search + status filter + sort + pagination) so the primary chart/explorer keeps most visual real estate.
-- In brand integration assignment UIs, always merge brand-assigned integration accounts into selectable assets so invited members can view and keep existing brand-linked accounts even without personal OAuth ownership.
-- Impersonation callbacks must persist `is_impersonating` (for `/auth/callback` and `/callback` paths) so middleware bypasses the `/set-password` requirement for admin impersonation sessions.
 - Exclude `/socket.io` and `/.well-known/appspecific/*` probes from Next middleware matchers so extension/devtools polling does not trigger Supabase auth lookups on 404 noise requests.
 - Keep paid-media marker placement synchronized with alerts refresh: when `DCOActionAlertsBox` refreshes, trigger `CampaignAdSetWorkspace` action-log refresh so chart markers re-render against the latest alerts.
 - In paid-media observability charts, place action markers at the nearest in-window chart timestamp (time-sensitive), render full top markers only for the active layer (`CAMPAIGN` in campaign view, `ADSET` in adset view), and demote non-layer scopes (for example `AD`) to bottom bookmarks.
