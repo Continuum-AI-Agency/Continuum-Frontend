@@ -7,10 +7,16 @@ import {
 } from "@/lib/integrations/grants";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { tags } from "@/lib/cache/tags";
+import { invalidateCachePrefix } from "@/lib/cache/redis.server";
+import { appCacheKeys } from "@/lib/cache/keys";
 
-function revalidateBrandIntegrationConsumers(brandProfileId: string) {
+async function revalidateBrandIntegrationConsumers(brandProfileId: string) {
   // Immediate invalidation so the same request reads fresh data after the mutation.
   updateTag(tags.integrations.forBrand(brandProfileId));
+
+  // Cross-request Upstash tier (fetchBrandIntegrationSummary): clear every
+  // member's cached view of this brand, since the assignment change affects all.
+  await invalidateCachePrefix(appCacheKeys.brandIntegrationsPrefix(brandProfileId));
 
   // Path-based invalidation remains until consumer pages adopt cacheTag()
   // on the read side. Once tagged, drop these revalidatePath calls.
@@ -28,7 +34,7 @@ export async function grantIntegrationToBrandAction(
   if (!integrationId) throw new Error("integrationId is required");
 
   const grantId = await grantIntegrationToBrand(brandProfileId, integrationId);
-  revalidateBrandIntegrationConsumers(brandProfileId);
+  await revalidateBrandIntegrationConsumers(brandProfileId);
   return grantId;
 }
 
@@ -40,7 +46,7 @@ export async function revokeIntegrationFromBrandAction(
   if (!brandProfileId) throw new Error("brandProfileId is required");
 
   await revokeIntegrationFromBrand(grantId);
-  revalidateBrandIntegrationConsumers(brandProfileId);
+  await revalidateBrandIntegrationConsumers(brandProfileId);
 }
 
 export async function applyBrandIntegrationAssignmentsAction(
@@ -94,6 +100,6 @@ export async function applyBrandIntegrationAssignmentsAction(
     if (insertError) throw new Error(insertError.message);
   }
 
-  revalidateBrandIntegrationConsumers(brandProfileId);
+  await revalidateBrandIntegrationConsumers(brandProfileId);
   return { linked: desiredAccountIds.length };
 }
