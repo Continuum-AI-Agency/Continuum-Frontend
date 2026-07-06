@@ -1,0 +1,43 @@
+// Optimization-engine IO boundary, surfaced as canonical FE<->BE contracts.
+//
+// The single source of truth is @continuum/optimization-engine; these are
+// re-exports per AGENTS.md §4 (every type that crosses the FE<->BE boundary
+// lives in @continuum/contracts and is imported by both sides).
+//
+// Resolution note: the zod validators come from the `@continuum/optimization-
+// engine/schemas` subpath, which is a PHYSICAL root-level file in that package
+// — so the Backend's classic `node` resolution finds it (it ignores package
+// `exports`). The pure types come from the engine's root entry, which is
+// dependency-free. Both work in the Frontend (bundler) and Backend (node).
+
+// Boundary types crossing FE<->BE (request snapshots + cycle results), from the
+// pure (zod-free) root entry.
+export type {
+  AdSetSnapshot,
+  AdSetStatus,
+  AudienceType,
+  Confidence,
+  EngineConfig,
+  OptimizationObjective,
+  ReallocationResult,
+  Recommendation,
+  WindowMetrics,
+  WindowWeights,
+} from '@continuum/optimization-engine';
+export type { ProposedAction } from '@continuum/optimization-engine/schemas';
+// Runtime zod validators for the IO edge (API routes, DB rows, queue jobs).
+export {
+  AdSetSnapshotSchema,
+  AdSetStatusSchema,
+  AudienceTypeSchema,
+  ConfidenceSchema,
+  EngineConfigSchema,
+  OptimizationObjectiveSchema,
+  ProposedActionSchema,
+  WindowMetricsSchema,
+  WindowWeightsSchema,
+} from '@continuum/optimization-engine/schemas';
+// MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
+export * from './mcp';
+// Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
+export * from './service';
