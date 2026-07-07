@@ -38,6 +38,35 @@ export function confidenceBand(band: string | null | undefined): {
   return { variant: 'secondary', label: 'Medium' };
 }
 
+/** A cycle item's freeze reason → a labeled "Held" state. Returns null when the
+ *  item was NOT held (budget was actually reallocated). Rendering this instead of
+ *  a $0.00 change is the point: a held ad set was left unchanged ON PURPOSE, not
+ *  scored to no-change. Tolerant of loose DB strings. */
+export function freezeLabel(
+  reason: string | null | undefined,
+): { label: string; hint: string } | null {
+  switch (reason) {
+    case 'no_conversions':
+      return {
+        label: 'Held · no conversion signal',
+        hint: 'Spending but no tracked conversions yet — budget left unchanged until signal arrives.',
+      };
+    case 'missing_window':
+      return {
+        label: 'Held · incomplete data',
+        hint: 'Not enough trailing-window history to score reliably — held this cycle.',
+      };
+    case 'unsupported_budget':
+      return {
+        label: 'Held · CBO/lifetime',
+        hint: 'Budget is managed at the campaign level (CBO or lifetime) — the optimizer does not touch it.',
+      };
+    default:
+      if (reason) return { label: 'Held', hint: 'Budget left unchanged on purpose this cycle.' };
+      return null;
+  }
+}
+
 /** Recommendation kind → a short human label + glyph for the actions queue. */
 export function recommendationLabel(kind: string): { label: string; glyph: string } {
   switch (kind) {

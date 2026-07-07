@@ -1,33 +1,15 @@
-"use client";
+'use client';
 
-import React, { useMemo, useState, type ReactNode } from "react";
-import {
-  Badge,
-  Box,
-  Button,
-  Callout,
-  Flex,
-  Heading,
-  IconButton,
-  Text,
-} from "@radix-ui/themes";
-import { ChevronDownIcon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
-import { RefreshCw } from "lucide-react";
-import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
-import { isProviderComingSoon } from "@/components/settings/shell/platformIcons";
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import {
-  fetchUserTikTokAccountIds,
-  fetchUserXAccountIds,
-  useStartGoogleSync,
-  useStartMetaSync,
-  useStartTikTokSync,
-  useStartXSync,
-} from "@/lib/api/integrations";
-import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
-import { useToast } from "@/components/ui/ToastProvider";
-import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
+import { ChevronDownIcon, ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { RefreshCw } from 'lucide-react';
+import React, { type ComponentProps, type ReactNode, useMemo, useState } from 'react';
+import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { Pill } from '@/components/kibo-ui/pill';
+import { PLATFORMS, type PlatformKey } from '@/components/onboarding/platforms';
+import { isProviderComingSoon } from '@/components/settings/shell/platformIcons';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
   Table as ShadcnTable,
   TableBody as ShadcnTableBody,
@@ -35,10 +17,30 @@ import {
   TableHead as ShadcnTableHead,
   TableHeader as ShadcnTableHeader,
   TableRow as ShadcnTableRow,
-} from "@/components/ui/table";
-import { AssignmentsDialog } from "./AssignmentsDialog";
-import { PlatformIcon } from "./internal/PlatformIcon";
-import { resolveStatusColor } from "./internal/statusColors";
+} from '@/components/ui/table';
+import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import {
+  fetchUserLinkedInAccountIds,
+  fetchUserTikTokAccountIds,
+  fetchUserXAccountIds,
+  useStartGoogleSync,
+  useStartLinkedInSync,
+  useStartMetaSync,
+  useStartTikTokSync,
+  useStartXSync,
+} from '@/lib/api/integrations';
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import { openCenteredPopup, waitForPopupClosed } from '@/lib/popup';
+import { AssignmentsDialog } from './AssignmentsDialog';
+import { PlatformIcon } from './internal/PlatformIcon';
+import { resolveStatusColor, type StatusColor } from './internal/statusColors';
+
+const STATUS_PILL_VARIANT: Record<StatusColor, ComponentProps<typeof Pill>['variant']> = {
+  green: 'success',
+  amber: 'warning',
+  red: 'destructive',
+  gray: 'muted',
+};
 
 export type BrandIntegrationsManagerProps = {
   brandProfileId?: string;
@@ -65,18 +67,20 @@ type ProviderGroup = {
 };
 
 function buildCallbackUrl(group: string, context: string): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === 'undefined') return '';
   const origin = window.location.origin;
-  const url = new URL("/integrations/callback", origin);
-  const provider = ["facebook", "meta", "instagram", "threads"].includes(group)
-    ? "meta"
-    : group === "tiktok"
-      ? "tiktok"
-      : group === "x"
-        ? "x"
-        : "google";
-  url.searchParams.set("provider", provider);
-  url.searchParams.set("context", context);
+  const url = new URL('/integrations/callback', origin);
+  const provider = ['facebook', 'meta', 'instagram', 'threads'].includes(group)
+    ? 'meta'
+    : group === 'tiktok'
+      ? 'tiktok'
+      : group === 'linkedin'
+        ? 'linkedin'
+        : group === 'x'
+          ? 'x'
+          : 'google';
+  url.searchParams.set('provider', provider);
+  url.searchParams.set('context', context);
   return url.toString();
 }
 
@@ -99,7 +103,7 @@ export function BrandIntegrationsManager({
   const { show } = useToast();
 
   const fetched = useBrandIntegrations(summary ? undefined : brandProfileId, summary);
-  const resolvedSummary = (summary ?? fetched.integrations ?? ({} as BrandIntegrationSummary));
+  const resolvedSummary = summary ?? fetched.integrations ?? ({} as BrandIntegrationSummary);
   const isLoading = isLoadingProp || (summary ? false : fetched.isLoading);
   const refresh = onRefresh ?? fetched.refresh;
 
@@ -110,33 +114,42 @@ export function BrandIntegrationsManager({
   const startMetaSync = useStartMetaSync();
   const startGoogleSync = useStartGoogleSync();
   const startTikTokSync = useStartTikTokSync();
+  const startLinkedInSync = useStartLinkedInSync();
   const startXSync = useStartXSync();
 
   const handleConnect = async (platformKey: string) => {
     if (isProviderComingSoon(platformKey)) return;
     setIsSyncing(true);
     try {
-      const context = brandProfileId ?? "settings";
+      const context = brandProfileId ?? 'settings';
 
-      let group = "google";
-      if (["facebook", "instagram", "threads", "meta"].includes(platformKey)) {
-        group = "meta";
-      } else if (platformKey === "tiktok") {
-        group = "tiktok";
-      } else if (platformKey === "x") {
-        group = "x";
+      let group = 'google';
+      if (['facebook', 'instagram', 'threads', 'meta'].includes(platformKey)) {
+        group = 'meta';
+      } else if (platformKey === 'tiktok') {
+        group = 'tiktok';
+      } else if (platformKey === 'linkedin') {
+        group = 'linkedin';
+      } else if (platformKey === 'x') {
+        group = 'x';
       }
 
       const callbackUrl = buildCallbackUrl(group, context);
 
       let popupUrl: string | null = null;
-      if (group === "meta") {
+      if (group === 'meta') {
         const res = await startMetaSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
-      } else if (group === "tiktok") {
+      } else if (group === 'tiktok') {
         const res = await startTikTokSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
-      } else if (group === "x") {
+      } else if (group === 'linkedin') {
+        const res = await startLinkedInSync.mutateAsync({
+          callbackUrl,
+          mode: platformKey === 'linkedin' ? 'organic' : 'paid',
+        });
+        popupUrl = res.url;
+      } else if (group === 'x') {
         const res = await startXSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
       } else {
@@ -148,7 +161,7 @@ export function BrandIntegrationsManager({
         const popup = openCenteredPopup(popupUrl, `Connect ${group}`, 600, 700);
         if (popup) {
           await waitForPopupClosed(popup);
-          if (group === "tiktok" && brandProfileId) {
+          if (group === 'tiktok' && brandProfileId) {
             try {
               const tiktokIds = await fetchUserTikTokAccountIds();
               if (tiktokIds.length > 0) {
@@ -159,16 +172,16 @@ export function BrandIntegrationsManager({
                   Array.from(new Set([...assignedIds, ...tiktokIds])),
                 );
                 show({
-                  title: "TikTok connected",
-                  description: "Account assigned to this brand.",
-                  variant: "success",
+                  title: 'TikTok connected',
+                  description: 'Account assigned to this brand.',
+                  variant: 'success',
                 });
               }
             } catch (err) {
-              console.error("[BrandIntegrationsManager] TikTok auto-assign failed", err);
+              console.error('[BrandIntegrationsManager] TikTok auto-assign failed', err);
             }
           }
-          if (group === "x" && brandProfileId) {
+          if (group === 'x' && brandProfileId) {
             try {
               const xIds = await fetchUserXAccountIds();
               if (xIds.length > 0) {
@@ -179,13 +192,35 @@ export function BrandIntegrationsManager({
                   Array.from(new Set([...assignedIds, ...xIds])),
                 );
                 show({
-                  title: "X connected",
-                  description: "Account assigned to this brand.",
-                  variant: "success",
+                  title: 'X connected',
+                  description: 'Account assigned to this brand.',
+                  variant: 'success',
                 });
               }
             } catch (err) {
-              console.error("[BrandIntegrationsManager] X auto-assign failed", err);
+              console.error('[BrandIntegrationsManager] X auto-assign failed', err);
+            }
+          }
+          if (group === 'linkedin' && brandProfileId) {
+            try {
+              const linkedinIds = await fetchUserLinkedInAccountIds({
+                type: platformKey === 'linkedin' ? 'linkedin_organization' : 'linkedin_ad_account',
+              });
+              if (linkedinIds.length > 0) {
+                // Merge with existing assignments; the action replaces the full
+                // set, so passing only these ids would unassign other providers.
+                await applyBrandIntegrationAssignmentsAction(
+                  brandProfileId,
+                  Array.from(new Set([...assignedIds, ...linkedinIds])),
+                );
+                show({
+                  title: 'LinkedIn connected',
+                  description: 'Accounts assigned to this brand.',
+                  variant: 'success',
+                });
+              }
+            } catch (err) {
+              console.error('[BrandIntegrationsManager] LinkedIn auto-assign failed', err);
             }
           }
           if (refresh) await refresh();
@@ -194,9 +229,9 @@ export function BrandIntegrationsManager({
     } catch (error) {
       console.error(error);
       show({
-        title: "Connection failed",
-        description: "Could not start OAuth flow.",
-        variant: "error",
+        title: 'Connection failed',
+        description: 'Could not start OAuth flow.',
+        variant: 'error',
       });
     } finally {
       setIsSyncing(false);
@@ -205,37 +240,37 @@ export function BrandIntegrationsManager({
 
   const assignedIds = useMemo(
     () => extractAssignedIntegrationAccountIds(resolvedSummary),
-    [resolvedSummary]
+    [resolvedSummary],
   );
 
   const providerStats = useMemo<ProviderGroup[]>(() => {
-    const metaKeys: PlatformKey[] = ["facebook", "instagram", "threads"];
-    const googleKeys: PlatformKey[] = ["googleAds", "youtube", "dv360", "googleAnalytics"];
-    const tiktokKeys: PlatformKey[] = ["tiktok"];
-    const xKeys: PlatformKey[] = ["x"];
+    const metaKeys: PlatformKey[] = ['facebook', 'instagram', 'threads'];
+    const googleKeys: PlatformKey[] = ['googleAds', 'youtube', 'dv360', 'googleAnalytics'];
+    const tiktokKeys: PlatformKey[] = ['tiktok'];
+    const linkedinKeys: PlatformKey[] = ['linkedin'];
+    const xKeys: PlatformKey[] = ['x'];
     const otherKeys = PLATFORMS.filter(
       (p) =>
         !metaKeys.includes(p.key) &&
         !googleKeys.includes(p.key) &&
         !tiktokKeys.includes(p.key) &&
-        !xKeys.includes(p.key)
+        !linkedinKeys.includes(p.key) &&
+        !xKeys.includes(p.key),
     ).map((p) => p.key);
 
-    const getGroupStats = (
-      keys: PlatformKey[],
-      label: string,
-      groupKey: string
-    ): ProviderGroup => {
+    const getGroupStats = (keys: PlatformKey[], label: string, groupKey: string): ProviderGroup => {
       let totalConnected = 0;
       let totalAccounts = 0;
-      const allAccounts: ProviderGroup["accounts"] = [];
+      const allAccounts: ProviderGroup['accounts'] = [];
 
       keys.forEach((key) => {
         const accounts = resolvedSummary[key]?.accounts ?? [];
         if (accounts.length > 0) totalConnected++;
         totalAccounts += accounts.length;
         allAccounts.push(
-          ...accounts.map((a) => ({ ...a, _platformKey: key }) as ProviderGroup["accounts"][number])
+          ...accounts.map(
+            (a) => ({ ...a, _platformKey: key }) as ProviderGroup['accounts'][number],
+          ),
         );
       });
 
@@ -250,11 +285,12 @@ export function BrandIntegrationsManager({
     };
 
     return [
-      getGroupStats(metaKeys, "Meta Portfolio", "meta"),
-      getGroupStats(googleKeys, "Google & YouTube", "google"),
-      getGroupStats(tiktokKeys, "TikTok", "tiktok"),
-      getGroupStats(xKeys, "X", "x"),
-      ...(otherKeys.length > 0 ? [getGroupStats(otherKeys, "Other Integrations", "other")] : []),
+      getGroupStats(metaKeys, 'Meta Portfolio', 'meta'),
+      getGroupStats(googleKeys, 'Google & YouTube', 'google'),
+      getGroupStats(tiktokKeys, 'TikTok', 'tiktok'),
+      getGroupStats(linkedinKeys, 'LinkedIn', 'linkedin'),
+      getGroupStats(xKeys, 'X', 'x'),
+      ...(otherKeys.length > 0 ? [getGroupStats(otherKeys, 'Other Integrations', 'other')] : []),
     ];
   }, [resolvedSummary]);
 
@@ -266,43 +302,41 @@ export function BrandIntegrationsManager({
   };
 
   return (
-    <Flex direction="column" gap="5">
+    <div className="flex flex-col gap-6">
       {showHeader && (
-        <Flex justify="between" align="start">
-          <Box>
-            <Heading size="6" className="text-white">
-              Integrations
-            </Heading>
-            <Text color="gray" size="2">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-foreground">Integrations</h2>
+            <p className="text-sm text-muted-foreground">
               Manage accounts linked to this brand profile.
-            </Text>
-          </Box>
-          <Flex gap="2">
+            </p>
+          </div>
+          <div className="flex gap-2">
             {brandProfileId && (
               <Button variant="ghost" onClick={() => setEditOpen(true)} disabled={isLoading}>
                 Edit assignments
               </Button>
             )}
             {refresh && (
-              <IconButton variant="ghost" onClick={() => refresh()} disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              </IconButton>
+              <Button variant="ghost" size="icon" onClick={() => refresh()} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
             )}
-          </Flex>
-        </Flex>
+          </div>
+        </div>
       )}
 
       {!showHeader && brandProfileId && (
-        <Flex justify="end" gap="2">
-          <Button variant="soft" onClick={() => setEditOpen(true)} disabled={isLoading}>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setEditOpen(true)} disabled={isLoading}>
             Edit assignments
           </Button>
           {refresh && (
-            <IconButton variant="ghost" onClick={() => refresh()} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            </IconButton>
+            <Button variant="ghost" size="icon" onClick={() => refresh()} disabled={isLoading}>
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
           )}
-        </Flex>
+        </div>
       )}
 
       {brandProfileId && (
@@ -321,9 +355,9 @@ export function BrandIntegrationsManager({
           <ShadcnTableHeader>
             <ShadcnTableRow className="bg-white/5 hover:bg-white/5 border-white/10">
               <ShadcnTableHead className="w-[40px]"></ShadcnTableHead>
-              <ShadcnTableHead className="text-black font-bold">Provider</ShadcnTableHead>
-              <ShadcnTableHead className="text-black font-bold">Status</ShadcnTableHead>
-              <ShadcnTableHead className="text-right text-black font-bold">
+              <ShadcnTableHead className="font-bold text-foreground">Provider</ShadcnTableHead>
+              <ShadcnTableHead className="font-bold text-foreground">Status</ShadcnTableHead>
+              <ShadcnTableHead className="text-right font-bold text-foreground">
                 Assigned Assets
               </ShadcnTableHead>
               <ShadcnTableHead className="w-[140px]"></ShadcnTableHead>
@@ -333,13 +367,17 @@ export function BrandIntegrationsManager({
             {providerStats.map((group) => {
               const isExpanded = expandedViewPlatforms.has(group.key);
               const comingSoon = isProviderComingSoon(group.key);
-              const statusColor = comingSoon ? "gray" : group.connected ? "green" : "gray";
+              const statusColor: StatusColor = comingSoon
+                ? 'gray'
+                : group.connected
+                  ? 'green'
+                  : 'gray';
 
               return (
                 <React.Fragment key={group.key}>
                   <ShadcnTableRow
                     className={`cursor-pointer border-white/5 transition-colors ${
-                      group.count > 0 && !comingSoon ? "hover:bg-white/5" : "opacity-60"
+                      group.count > 0 && !comingSoon ? 'hover:bg-white/5' : 'opacity-60'
                     }`}
                     onClick={() => group.count > 0 && toggleViewPlatform(group.key)}
                   >
@@ -347,39 +385,32 @@ export function BrandIntegrationsManager({
                       {group.count > 0 && (
                         <ChevronDownIcon
                           className={`h-4 w-4 transition-transform duration-200 ${
-                            isExpanded ? "rotate-180" : ""
+                            isExpanded ? 'rotate-180' : ''
                           }`}
+                          aria-hidden="true"
                         />
                       )}
                     </ShadcnTableCell>
                     <ShadcnTableCell className="py-4">
-                      <Flex align="center" gap="3">
-                        <Text weight="bold" className="text-black">
-                          {group.label}
-                        </Text>
-                      </Flex>
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-foreground">{group.label}</span>
+                      </div>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="py-4">
-                      <Badge
-                        color={statusColor}
-                        variant="soft"
-                        className="font-bold text-2xs"
+                      <Pill
+                        variant={STATUS_PILL_VARIANT[statusColor]}
+                        className="text-2xs font-bold"
                       >
-                        {comingSoon ? "COMING SOON" : group.connected ? "ACTIVE" : "NONE"}
-                      </Badge>
+                        {comingSoon ? 'COMING SOON' : group.connected ? 'ACTIVE' : 'NONE'}
+                      </Pill>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="py-4 text-right">
                       {group.count > 0 ? (
-                        <Badge
-                          variant="outline"
-                          className="bg-indigo-500/5 text-indigo-400 border-indigo-500/20 font-bold tabular-nums"
-                        >
+                        <Pill variant="violet" className="font-bold tabular-nums">
                           {group.count} accounts
-                        </Badge>
+                        </Pill>
                       ) : (
-                        <Text size="1" color="gray">
-                          None
-                        </Text>
+                        <span className="text-xs text-muted-foreground">None</span>
                       )}
                     </ShadcnTableCell>
                     <ShadcnTableCell
@@ -387,19 +418,19 @@ export function BrandIntegrationsManager({
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Button
-                        size="1"
-                        variant={group.connected ? "ghost" : "surface"}
+                        size="sm"
+                        variant={group.connected ? 'ghost' : 'outline'}
                         onClick={() => handleConnect(group.key)}
                         disabled={isSyncing || isLoading || comingSoon}
                         className="h-6 text-2xs font-bold uppercase tracking-wider px-2"
                       >
                         {comingSoon
-                          ? "Coming soon"
+                          ? 'Coming soon'
                           : isSyncing
-                            ? "Syncing..."
+                            ? 'Syncing...'
                             : group.connected
-                              ? "Re-sync"
-                              : "Sync"}
+                              ? 'Re-sync'
+                              : 'Sync'}
                       </Button>
                     </ShadcnTableCell>
                   </ShadcnTableRow>
@@ -407,61 +438,54 @@ export function BrandIntegrationsManager({
                   {isExpanded && group.accounts.length > 0 && (
                     <ShadcnTableRow className="bg-muted/30 border-none hover:bg-muted/30">
                       <ShadcnTableCell colSpan={5} className="p-0 border-b border-white/5">
-                        <Box p="4" className="bg-muted/20">
+                        <div className="bg-muted/20 p-4">
                           <div className="space-y-2 pl-8">
                             {group.accounts.map((account) => {
                               const sColor = resolveStatusColor(account.status);
                               const platformName = PLATFORMS.find(
-                                (p) => p.key === account._platformKey
+                                (p) => p.key === account._platformKey,
                               )?.label;
                               return (
-                                <Flex
+                                <div
                                   key={account.integrationAccountId}
-                                  justify="between"
-                                  align="center"
-                                  className="py-1"
+                                  className="flex items-center justify-between py-1"
                                 >
-                                  <Flex align="center" gap="3">
-                                    <Box className="min-w-0">
-                                      <Text
-                                        size="2"
-                                        className="text-black block truncate font-bold"
-                                      >
+                                  <div className="flex items-center gap-3">
+                                    <div className="min-w-0">
+                                      <span className="block truncate text-sm font-semibold text-foreground">
                                         {account.name}
-                                      </Text>
-                                      <Flex gap="2" align="center">
+                                      </span>
+                                      <div className="flex items-center gap-2">
                                         {PlatformIcon({ platform: account._platformKey }) || (
-                                          <Badge
-                                            variant="outline"
-                                            className="text-3xs uppercase opacity-50 px-1 py-0 h-4"
+                                          <Pill
+                                            variant="muted"
+                                            className="h-4 px-1 py-0 text-3xs uppercase opacity-50"
                                           >
                                             {platformName}
-                                          </Badge>
+                                          </Pill>
                                         )}
-                                        <Text
-                                          size="1"
-                                          color="gray"
-                                          className="block font-mono opacity-60"
-                                          style={{ fontSize: "10px" }}
+                                        <span
+                                          className="block font-mono text-muted-foreground opacity-60"
+                                          style={{ fontSize: '10px' }}
                                         >
-                                          ID: {account.externalAccountId || account.integrationAccountId}
-                                        </Text>
-                                      </Flex>
-                                    </Box>
-                                  </Flex>
-                                  <Badge
-                                    color={sColor}
-                                    variant="soft"
-                                    size="1"
+                                          ID:{' '}
+                                          {account.externalAccountId ||
+                                            account.integrationAccountId}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <Pill
+                                    variant={STATUS_PILL_VARIANT[sColor]}
                                     className="text-3xs uppercase tracking-wider opacity-80"
                                   >
-                                    {account.status || "Active"}
-                                  </Badge>
-                                </Flex>
+                                    {account.status || 'Active'}
+                                  </Pill>
+                                </div>
                               );
                             })}
                           </div>
-                        </Box>
+                        </div>
                       </ShadcnTableCell>
                     </ShadcnTableRow>
                   )}
@@ -472,15 +496,13 @@ export function BrandIntegrationsManager({
         </ShadcnTable>
       </div>
 
-      <Callout.Root color="amber" className="bg-amber-500/5 border-amber-500/20">
-        <Callout.Icon>
-          <ExclamationTriangleIcon />
-        </Callout.Icon>
-        <Callout.Text size="1">
+      <Alert className="border-warning/30 bg-warning/5">
+        <ExclamationTriangleIcon className="text-warning" aria-hidden="true" />
+        <AlertDescription className="text-xs">
           {emptyHint ??
-            "Connect providers in your personal settings, then use “Edit assignments” to share them here."}
-        </Callout.Text>
-      </Callout.Root>
-    </Flex>
+            'Connect providers in your personal settings, then use “Edit assignments” to share them here.'}
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 }

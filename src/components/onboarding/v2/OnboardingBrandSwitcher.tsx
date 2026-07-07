@@ -1,12 +1,19 @@
-"use client";
+'use client';
 
-import React from "react";
-import { DropdownMenu, Text, ScrollArea, Box } from "@radix-ui/themes";
-import { AlertTriangle, ChevronsUpDown, Loader2 } from "lucide-react";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useSwitchBrand } from "@/hooks/useSwitchBrand";
-import { BrandAvatar } from "@/components/brand/BrandAvatar";
-import { getBrandMenuItemLabel } from "@/lib/brands/brand-switcher-utils";
+import { AlertTriangle, ChevronsUpDown, Loader2 } from 'lucide-react';
+import React from 'react';
+import { BrandAvatar } from '@/components/brand/BrandAvatar';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSwitchBrand } from '@/hooks/useSwitchBrand';
+import { getBrandMenuItemLabel } from '@/lib/brands/brand-switcher-utils';
+import { cn } from '@/lib/utils';
 
 export function OnboardingBrandSwitcher() {
   const { activeBrandId, brandSummaries, isSwitching, switchingToBrandId } =
@@ -17,13 +24,11 @@ export function OnboardingBrandSwitcher() {
   if (brandSummaries.length <= 1) return null;
 
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
-  const activeBrandLabel = activeBrand
-    ? getBrandMenuItemLabel(activeBrand)
-    : "Switch brand";
+  const activeBrandLabel = activeBrand ? getBrandMenuItemLabel(activeBrand) : 'Switch brand';
 
   return (
-    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
-      <DropdownMenu.Trigger>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenuTrigger asChild>
         <button
           type="button"
           disabled={isSwitching}
@@ -42,34 +47,31 @@ export function OnboardingBrandSwitcher() {
           <span className="max-w-[120px] truncate">{activeBrandLabel}</span>
           <ChevronsUpDown className="h-3.5 w-3.5 text-[color-mix(in_srgb,var(--sidebar-foreground)_60%,transparent)]" />
         </button>
-      </DropdownMenu.Trigger>
+      </DropdownMenuTrigger>
 
-      <DropdownMenu.Content
+      <DropdownMenuContent
         align="end"
         className="min-w-[220px] border"
         style={{
-          backgroundColor: "var(--popover)",
-          color: "var(--popover-foreground)",
-          borderColor: "var(--border)",
+          backgroundColor: 'var(--popover)',
+          color: 'var(--popover-foreground)',
+          borderColor: 'var(--border)',
         }}
       >
-        <Box px="2" pt="1" pb="0">
-          <Text
-            size="1"
-            className="text-[color-mix(in_srgb,var(--popover-foreground)_52%,transparent)] uppercase tracking-wider font-semibold"
-          >
+        <div className="px-2 pt-1 pb-0">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[color-mix(in_srgb,var(--popover-foreground)_52%,transparent)]">
             Switch brand
-          </Text>
-        </Box>
+          </span>
+        </div>
 
-        <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: "200px" }}>
+        <ScrollArea className="max-h-[200px]">
           {brandSummaries.map((brand) => {
             const isActiveRow = brand.id === activeBrandId;
             const isRowSwitching = switchingToBrandId === brand.id;
             const label = getBrandMenuItemLabel(brand);
 
             return (
-              <DropdownMenu.Item
+              <DropdownMenuItem
                 key={brand.id}
                 disabled={isSwitching}
                 onSelect={(event) => {
@@ -84,28 +86,28 @@ export function OnboardingBrandSwitcher() {
               >
                 <div className="flex items-center gap-2">
                   <BrandAvatar name={label} logoUrl={brand.logoUrl ?? null} size="sm" />
-                  <Text weight={isActiveRow ? "bold" : "regular"} size="2">
+                  <span className={cn('text-sm', isActiveRow ? 'font-semibold' : 'font-normal')}>
                     {label}
-                  </Text>
+                  </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {!brand.completed && (
                     <AlertTriangle
-                      className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                      className="h-3.5 w-3.5 shrink-0 text-warning"
                       aria-label="Onboarding incomplete"
                     />
                   )}
                   {isRowSwitching ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                   ) : isActiveRow ? (
-                    <span className="inline-flex h-2 w-2 rounded-full bg-violet-500" aria-hidden />
+                    <span className="inline-flex h-2 w-2 rounded-full bg-primary" aria-hidden />
                   ) : null}
                 </div>
-              </DropdownMenu.Item>
+              </DropdownMenuItem>
             );
           })}
         </ScrollArea>
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

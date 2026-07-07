@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mediaSearchResultsFrameSchema } from "./media";
+import { aeoSnapshotCardSchema } from "../organic/aeo";
 import {
   uiBrandBookFrameSchema,
   uiReadinessScorecardFrameSchema,
@@ -642,6 +643,11 @@ const uiBulkRunSchema = z.object({
   }).loose(),
 });
 
+const uiAeoSnapshotCardSchema = z.object({
+  type: z.literal("ui.aeo_snapshot_card"),
+  data: aeoSnapshotCardSchema,
+});
+
 const agentRunStartedSchema = z.object({
   type: z.literal("agent.run_started"),
   data: z.object({
@@ -826,6 +832,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   uiPlanStatusSchema,
   uiSkillProposalSchema,
   uiBulkRunSchema,
+  uiAeoSnapshotCardSchema,
   agentRunStartedSchema,
   agentChatStartedSchema,
   jobEnqueuedSchema,
@@ -863,6 +870,8 @@ export type OrganicUiPipelineCardFrame = z.infer<typeof uiPipelineCardSchema>;
 export type OrganicCreativeBrief = z.infer<typeof creativeBriefSchema>;
 
 export type OrganicUiBulkRunFrame = z.infer<typeof uiBulkRunSchema>;
+
+export type OrganicUiAeoSnapshotCardFrame = z.infer<typeof uiAeoSnapshotCardSchema>;
 
 /**
  * Normalized display shape for a post fetched by any of the organic agent's

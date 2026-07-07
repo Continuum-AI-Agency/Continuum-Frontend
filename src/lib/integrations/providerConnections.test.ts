@@ -74,4 +74,13 @@ describe("getProviderConnectionSummary / hasProviderConnections", () => {
     expect(hasProviderConnections(summary, "google")).toBe(false);
     expect(getProviderConnectionSummary(summary, "x").accountNames).toEqual([]);
   });
+
+  it("detects LinkedIn provider connections", () => {
+    const summary = summaryOf({
+      linkedin: [account({ id: "a1", name: "Acme LinkedIn", provider: "linkedin", platformKey: "linkedin" })],
+    });
+
+    expect(hasProviderConnections(summary, "linkedin")).toBe(true);
+    expect(getProviderConnectionSummary(summary, "linkedin").accountNames).toEqual(["Acme LinkedIn"]);
+  });
 });

@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import React from "react";
-import { PlusIcon, MinusIcon, BorderAllIcon } from "@radix-ui/react-icons";
-import { Button } from "@radix-ui/themes";
+import { BorderAllIcon, MinusIcon, PlusIcon } from '@radix-ui/react-icons';
+import React from 'react';
+
+import { Button } from '@/components/ui/button';
 
 type ZoomControlsProps = {
   instance: any;
@@ -14,7 +15,7 @@ export function ZoomControls({ instance }: ZoomControlsProps) {
       <div className="flex flex-col gap-1">
         <Button
           type="button"
-          size="1"
+          size="sm"
           onClick={() => instance.zoomIn?.({ duration: 300 })}
           className="w-8 h-8 p-0"
           aria-label="Zoom in"
@@ -23,7 +24,7 @@ export function ZoomControls({ instance }: ZoomControlsProps) {
         </Button>
         <Button
           type="button"
-          size="1"
+          size="sm"
           onClick={() => instance.zoomOut?.({ duration: 300 })}
           className="w-8 h-8 p-0"
           aria-label="Zoom out"
@@ -32,7 +33,7 @@ export function ZoomControls({ instance }: ZoomControlsProps) {
         </Button>
         <Button
           type="button"
-          size="1"
+          size="sm"
           onClick={() => instance.fitView?.({ padding: 0.1, duration: 300 })}
           className="w-8 h-8 p-0"
           aria-label="Fit view"

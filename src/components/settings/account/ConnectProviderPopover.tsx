@@ -12,11 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   useDeauthorizeGoogle,
+  useDeauthorizeLinkedIn,
   useDeauthorizeMeta,
   useDeauthorizeTikTok,
   useDeauthorizeX,
   useStartGoogleAccountChooserSync,
   useStartGoogleSync,
+  useStartLinkedInSync,
   useStartMetaSync,
   useStartTikTokSync,
   useStartXSync,
@@ -34,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 
-const PROVIDERS: ProviderGroup[] = ["facebook", "google", "tiktok", "x"];
+const PROVIDERS: ProviderGroup[] = ["facebook", "google", "tiktok", "linkedin", "x"];
 
 type ConnectProviderPopoverProps = {
   integrations: UserIntegrationSummary;
@@ -52,10 +54,12 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
   // under a different Google identity than the one already connected.
   const googleAccountChooserSync = useStartGoogleAccountChooserSync();
   const tiktokSync = useStartTikTokSync();
+  const linkedinSync = useStartLinkedInSync();
   const xSync = useStartXSync();
   const metaDeauthorize = useDeauthorizeMeta();
   const googleDeauthorize = useDeauthorizeGoogle();
   const tiktokDeauthorize = useDeauthorizeTikTok();
+  const linkedinDeauthorize = useDeauthorizeLinkedIn();
   const xDeauthorize = useDeauthorizeX();
 
   const buildCallbackUrl = (provider: ProviderGroup) => {
@@ -69,7 +73,10 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
     return url.toString();
   };
 
-  const handleConnect = (provider: ProviderGroup, options?: { forceAccountChooser?: boolean }) => {
+  const handleConnect = (
+    provider: ProviderGroup,
+    options?: { forceAccountChooser?: boolean; linkedinMode?: "paid" | "organic" }
+  ) => {
     if (isProviderComingSoon(provider)) return;
     startTransition(async () => {
       let cleanup: (() => void) | undefined;
@@ -82,15 +89,26 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
               : googleSync
             : provider === "tiktok"
               ? tiktokSync
+            : provider === "linkedin"
+                ? linkedinSync
               : provider === "x"
                 ? xSync
                 : metaSync;
-        const syncResponse = await sync.mutateAsync(callbackUrl);
+        const syncResponse = provider === "linkedin"
+          ? await linkedinSync.mutateAsync({
+            callbackUrl,
+            mode: options?.linkedinMode ?? "paid",
+          })
+          : await sync.mutateAsync(callbackUrl);
         const expectedState = "state" in syncResponse ? syncResponse.state : null;
 
         const popup = openCenteredPopup(
           syncResponse.url,
-          `Connect ${PROVIDER_GROUP_LABELS[provider]}`
+          provider === "linkedin" && options?.linkedinMode === "organic"
+            ? "Connect LinkedIn Organic"
+            : provider === "linkedin"
+              ? "Connect LinkedIn Ads"
+              : `Connect ${PROVIDER_GROUP_LABELS[provider]}`
         );
         if (!popup) {
           show({ title: "Popup blocked", description: "Allow popups to continue.", variant: "error" });
@@ -158,7 +176,12 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
             variant: "info",
           });
         } else {
-          show({ title: "Connected", description: `${PROVIDER_GROUP_LABELS[provider]} accounts synced.`, variant: "success" });
+          const linkedInLabel = provider === "linkedin"
+            ? options?.linkedinMode === "organic"
+              ? "LinkedIn Organic"
+              : "LinkedIn Ads"
+            : PROVIDER_GROUP_LABELS[provider];
+          show({ title: "Connected", description: `${linkedInLabel} accounts synced.`, variant: "success" });
         }
       } catch (error) {
         show({
@@ -187,6 +210,8 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
           const account = integrations.tiktok?.accounts[0];
           if (!account?.externalAccountId) throw new Error("No TikTok account found.");
           await tiktokDeauthorize.mutateAsync(account.externalAccountId);
+        } else if (provider === "linkedin") {
+          await linkedinDeauthorize.mutateAsync();
         } else if (provider === "x") {
           const account = integrations.x?.accounts[0];
           if (!account?.externalAccountId) throw new Error("No X account found.");
@@ -293,12 +318,24 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                         <UserPlus className="h-3.5 w-3.5" />
                       </Button>
                     ) : null}
+                    {providerId === "linkedin" ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        title="Connect LinkedIn Organic separately"
+                        onClick={() => handleConnect(providerId, { linkedinMode: "organic" })}
+                        disabled={isPending}
+                      >
+                        Organic
+                      </Button>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
                       title="Reconnect to refresh accounts"
-                      onClick={() => handleConnect(providerId)}
+                      onClick={() => handleConnect(providerId, providerId === "linkedin" ? { linkedinMode: "paid" } : undefined)}
                       disabled={isPending}
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -312,6 +349,28 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                       disabled={isPending}
                     >
                       <Unplug className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : providerId === "linkedin" ? (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => handleConnect(providerId, { linkedinMode: "paid" })}
+                      disabled={isPending}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Ads
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => handleConnect(providerId, { linkedinMode: "organic" })}
+                      disabled={isPending}
+                    >
+                      Organic
                     </Button>
                   </div>
                 ) : (

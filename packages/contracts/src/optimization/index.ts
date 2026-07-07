@@ -32,6 +32,7 @@ export {
   AudienceTypeSchema,
   ConfidenceSchema,
   EngineConfigSchema,
+  FreezeReasonSchema,
   OptimizationObjectiveSchema,
   ProposedActionSchema,
   WindowMetricsSchema,

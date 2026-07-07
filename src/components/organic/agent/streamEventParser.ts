@@ -1,18 +1,20 @@
-import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
+import type { UiFetchedPost } from '@continuum/contracts';
 import {
+  aeoSnapshotCardSchema,
+  type BulkContentPlan,
   bulkContentPlanSchema,
+  type MediaSearchResultsFrame,
   mediaSearchResultsFrameSchema,
+  type OrganicStreamFrame,
   organicPlanStatusDataSchema,
   organicPostCardDataSchema,
   organicStreamFrameSchema,
   organicTrendChartDataSchema,
   POST_FETCHING_TOOL_NAMES,
   proposedPlanSchema,
-  type BulkContentPlan,
-  type MediaSearchResultsFrame,
-  type OrganicStreamFrame,
-} from "@continuum/contracts";
-import type { UiFetchedPost } from "@continuum/contracts";
+} from '@continuum/contracts';
+import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
+import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import type {
   AgentJobState,
   CheckpointState,
@@ -23,22 +25,23 @@ import type {
   SkillProposalCardData,
   ToolApproval,
   ToolCallEvent,
+  UiAeoSnapshotCard,
   UiCard,
   UiPlanCard,
   UiPostCard,
   UiTrendChart,
-} from "./types";
-import { PIPELINE_STAGES } from "./types";
+} from './types';
+import { PIPELINE_STAGES } from './types';
 
 // Labels for the post_list card synthesized from a post-fetching tool's result.
 // Shared by the live stream hook AND the session-restore path so both build the
 // same card from a tool result — one source, no drift.
 export const POST_TOOL_LABELS: Record<string, string> = {
-  listDrafts: "Drafts",
-  getTopPosts: "Top Posts",
-  listOwnInstagramMedia: "Recent Media",
-  getCalendarPostedContent: "Posted Content",
-  getCompetitorInstagramTopPosts: "Competitor Posts",
+  listDrafts: 'Drafts',
+  getTopPosts: 'Top Posts',
+  listOwnInstagramMedia: 'Recent Media',
+  getCalendarPostedContent: 'Posted Content',
+  getCompetitorInstagramTopPosts: 'Competitor Posts',
 };
 
 /**
@@ -49,7 +52,7 @@ export function postListCardFromToolResult(toolName: string, result: unknown): U
   if (!(POST_FETCHING_TOOL_NAMES as readonly string[]).includes(toolName)) return null;
   const posts = normalizePostToolResult(toolName, result);
   if (posts.length === 0) return null;
-  return { type: "post_list", data: posts, label: POST_TOOL_LABELS[toolName] };
+  return { type: 'post_list', data: posts, label: POST_TOOL_LABELS[toolName] };
 }
 
 export type ParsedPipelineStage = {
@@ -60,7 +63,7 @@ export type ParsedPipelineStage = {
   stage: PipelineStage;
   agentName?: string;
   pct?: number;
-  status?: "active" | "done" | "failed";
+  status?: 'active' | 'done' | 'failed';
 };
 
 export type ParsedPlanStatus = {
@@ -72,25 +75,32 @@ export type ParsedPlanStatus = {
 };
 
 export type ParsedOrganicStreamEvent =
-  | { kind: "delta"; delta: string }
-  | { kind: "toolCall"; event: ToolCallEvent }
-  | { kind: "toolResult"; toolCallId: string; toolName: string; result: unknown; ok: boolean; reason?: string }
-  | { kind: "postList"; posts: UiFetchedPost[] }
-  | { kind: "error"; message: string }
-  | { kind: "complete" }
-  | { kind: "uiCard"; card: UiCard }
-  | { kind: "postCard"; card: UiPostCard }
-  | { kind: "jobUpdate"; job: Partial<AgentJobState> & { jobId: string } }
-  | { kind: "draftBlueprint"; draftId: string; previews: string[] }
-  | { kind: "runStarted"; runId: string; jobId: string }
-  | { kind: "pipelineStage"; event: ParsedPipelineStage }
-  | { kind: "pipelineCard"; card: Partial<PipelineCardState> & { jobId: string } }
-  | { kind: "planStatus"; event: ParsedPlanStatus }
-  | { kind: "toolApproval"; approval: ToolApproval }
-  | { kind: "bulkRun"; run: ParsedBulkRun }
-  | { kind: "mediaSearchResults"; frame: MediaSearchResultsFrame }
-  | { kind: "ignored"; type?: string }
-  | { kind: "invalid"; type?: string };
+  | { kind: 'delta'; delta: string }
+  | { kind: 'toolCall'; event: ToolCallEvent }
+  | {
+      kind: 'toolResult';
+      toolCallId: string;
+      toolName: string;
+      result: unknown;
+      ok: boolean;
+      reason?: string;
+    }
+  | { kind: 'postList'; posts: UiFetchedPost[] }
+  | { kind: 'error'; message: string }
+  | { kind: 'complete' }
+  | { kind: 'uiCard'; card: UiCard }
+  | { kind: 'postCard'; card: UiPostCard }
+  | { kind: 'jobUpdate'; job: Partial<AgentJobState> & { jobId: string } }
+  | { kind: 'draftBlueprint'; draftId: string; previews: string[] }
+  | { kind: 'runStarted'; runId: string; jobId: string }
+  | { kind: 'pipelineStage'; event: ParsedPipelineStage }
+  | { kind: 'pipelineCard'; card: Partial<PipelineCardState> & { jobId: string } }
+  | { kind: 'planStatus'; event: ParsedPlanStatus }
+  | { kind: 'toolApproval'; approval: ToolApproval }
+  | { kind: 'bulkRun'; run: ParsedBulkRun }
+  | { kind: 'mediaSearchResults'; frame: MediaSearchResultsFrame }
+  | { kind: 'ignored'; type?: string }
+  | { kind: 'invalid'; type?: string };
 
 export type ParsedBulkRun = {
   runId: string;
@@ -102,7 +112,7 @@ export type ParsedBulkRun = {
 export type OrganicWireFrame = OrganicStreamFrame;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function getEventPayload(event: Record<string, unknown>): Record<string, unknown> {
@@ -110,7 +120,7 @@ function getEventPayload(event: Record<string, unknown>): Record<string, unknown
 }
 
 function readNonEmptyString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -120,7 +130,7 @@ function normalizeToolName(event: Record<string, unknown>): string {
     readNonEmptyString(event.toolName) ??
     readNonEmptyString(event.tool_name) ??
     readNonEmptyString(event.name) ??
-    "unknown_tool"
+    'unknown_tool'
   );
 }
 
@@ -148,11 +158,11 @@ export function normalizeToolResultEvent(event: Record<string, unknown>) {
   const payload = getEventPayload(event);
   const toolName = normalizeToolName(payload);
   const toolCallId = normalizeToolCallId(payload, toolName);
-  const hasResult = Object.prototype.hasOwnProperty.call(payload, "result");
+  const hasResult = Object.hasOwn(payload, 'result');
   // `ok` is now derived from the tool envelope on the Backend; a returned
   // `error` envelope arrives as ok:false with a `reason`, so the chip can show
   // a real failure instead of a false success.
-  const ok = typeof payload.ok === "boolean" ? payload.ok : true;
+  const ok = typeof payload.ok === 'boolean' ? payload.ok : true;
   const reason = readNonEmptyString(payload.reason);
   return {
     toolCallId,
@@ -163,7 +173,7 @@ export function normalizeToolResultEvent(event: Record<string, unknown>) {
       ? payload.result
       : {
           ok,
-          error: isRecord(payload.error) ? payload.error : { message: reason ?? "Tool failed" },
+          error: isRecord(payload.error) ? payload.error : { message: reason ?? 'Tool failed' },
         },
   };
 }
@@ -176,7 +186,7 @@ export function normalizeTrendChartEvent(event: Record<string, unknown>): UiTren
   const result = organicTrendChartDataSchema.safeParse(getEventPayload(event));
   return result.success
     ? result.data
-    : { chartType: "bar", title: "", windows: [], series: [], topSignals: [] };
+    : { chartType: 'bar', title: '', windows: [], series: [], topSignals: [] };
 }
 
 function parseJobUpdate(type: string, event: Record<string, unknown>) {
@@ -186,7 +196,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
   if (!jobId || !brandId) return null;
 
   switch (type) {
-    case "job.enqueued":
+    case 'job.enqueued':
       return {
         jobId,
         brandId,
@@ -195,53 +205,55 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
         trendId:
           payload.trendId === null
             ? null
-            : typeof payload.trendId === "string"
+            : typeof payload.trendId === 'string'
               ? payload.trendId
               : undefined,
-        status: "queued" as const,
+        status: 'queued' as const,
       };
-    case "job.progress":
+    case 'job.progress':
       return {
         jobId,
         brandId,
-        status: "running" as const,
+        status: 'running' as const,
         stage: readNonEmptyString(payload.stage) ?? undefined,
         agentName: readNonEmptyString(payload.agentName) ?? undefined,
         message: readNonEmptyString(payload.message) ?? undefined,
       };
-    case "draft.ready":
-    case "draft.text_ready":
+    case 'draft.ready':
+    case 'draft.text_ready':
       return {
         jobId,
         brandId,
-        status: "running" as const,
+        status: 'running' as const,
         draftId: readNonEmptyString(payload.draftId) ?? undefined,
         placement: payload.placement as CalendarPlacement | undefined,
       };
-    case "job.completed":
+    case 'job.completed':
       return {
         jobId,
         brandId,
-        status: "completed" as const,
+        status: 'completed' as const,
         draftId: readNonEmptyString(payload.draftId) ?? undefined,
       };
-    case "job.failed":
+    case 'job.failed':
       return {
         jobId,
         brandId,
-        status: "failed" as const,
+        status: 'failed' as const,
         error: isRecord(payload.error)
           ? {
               code: readNonEmptyString(payload.error.code) ?? undefined,
-              message: readNonEmptyString(payload.error.message) ?? "Job failed",
+              message: friendlyStreamError(
+                readNonEmptyString(payload.error.message) ?? 'Job failed',
+              ),
             }
-          : { message: "Job failed" },
+          : { message: 'Job failed' },
       };
-    case "job.cancelled":
+    case 'job.cancelled':
       return {
         jobId,
         brandId,
-        status: "cancelled" as const,
+        status: 'cancelled' as const,
       };
     default:
       return {
@@ -264,7 +276,7 @@ function parseDraftBlueprint(
   const rawPreviews = Array.isArray(payload.previews) ? payload.previews : [];
   const previews = rawPreviews
     .map((p) => (isRecord(p) ? readNonEmptyString(p.signedUrl) : undefined))
-    .filter((url): url is string => Boolean(url) && !url!.startsWith("data:"));
+    .filter((url): url is string => Boolean(url) && !url!.startsWith('data:'));
   return { draftId, previews };
 }
 
@@ -297,20 +309,25 @@ function parseSkillProposalCard(event: Record<string, unknown>): SkillProposalCa
   const proposalId = readNonEmptyString(payload.proposalId);
   const brandId = readNonEmptyString(payload.brandId);
   const name = readNonEmptyString(payload.name);
-  const directives = typeof payload.directives === "string" ? payload.directives : "";
+  const directives = typeof payload.directives === 'string' ? payload.directives : '';
   if (!proposalId || !brandId || !name || !directives) return null;
-  const kind = payload.kind === "analytic" ? "analytic" : "creative_direction";
+  const kind = payload.kind === 'analytic' ? 'analytic' : 'creative_direction';
   return {
     proposalId,
     brandId,
     name,
     kind,
-    description: typeof payload.description === "string" ? payload.description : null,
+    description: typeof payload.description === 'string' ? payload.description : null,
     directives,
     tags: Array.isArray(payload.tags)
-      ? payload.tags.filter((t): t is string => typeof t === "string")
+      ? payload.tags.filter((t): t is string => typeof t === 'string')
       : [],
   };
+}
+
+function parseAeoSnapshotCard(event: Record<string, unknown>): UiAeoSnapshotCard | null {
+  const result = aeoSnapshotCardSchema.safeParse(getEventPayload(event));
+  return result.success ? result.data : null;
 }
 
 function parseBulkRun(event: Record<string, unknown>): ParsedBulkRun | null {
@@ -323,14 +340,14 @@ function parseBulkRun(event: Record<string, unknown>): ParsedBulkRun | null {
     runId,
     planId,
     brandId,
-    total: typeof payload.total === "number" ? payload.total : 0,
+    total: typeof payload.total === 'number' ? payload.total : 0,
   };
 }
 
 const PIPELINE_STAGE_SET = new Set<string>(PIPELINE_STAGES);
 
 function isPipelineStage(value: unknown): value is PipelineStage {
-  return typeof value === "string" && PIPELINE_STAGE_SET.has(value);
+  return typeof value === 'string' && PIPELINE_STAGE_SET.has(value);
 }
 
 function parsePipelineStage(event: Record<string, unknown>): ParsedPipelineStage | null {
@@ -341,42 +358,43 @@ function parsePipelineStage(event: Record<string, unknown>): ParsedPipelineStage
   if (!isPipelineStage(payload.stage)) return null;
 
   const status =
-    payload.status === "active" || payload.status === "done" || payload.status === "failed"
+    payload.status === 'active' || payload.status === 'done' || payload.status === 'failed'
       ? payload.status
       : undefined;
 
   return {
     jobId,
     brandId,
-    planId: typeof payload.planId === "string" ? payload.planId : null,
-    planItemId: typeof payload.planItemId === "string" ? payload.planItemId : null,
+    planId: typeof payload.planId === 'string' ? payload.planId : null,
+    planItemId: typeof payload.planItemId === 'string' ? payload.planItemId : null,
     stage: payload.stage,
     agentName: readNonEmptyString(payload.agentName) ?? undefined,
-    pct: typeof payload.pct === "number" && Number.isFinite(payload.pct) ? payload.pct : undefined,
+    pct: typeof payload.pct === 'number' && Number.isFinite(payload.pct) ? payload.pct : undefined,
     status,
   };
 }
 
-const MEDIA_STATUS_VALUES = new Set(["pending", "generating", "ready", "user_supplied", "skipped"])
+const MEDIA_STATUS_VALUES = new Set(['pending', 'generating', 'ready', 'user_supplied', 'skipped']);
 
 function parseCheckpoint(raw: unknown): CheckpointState | undefined {
-  if (!isRecord(raw)) return undefined
+  if (!isRecord(raw)) return undefined;
   const mediaStatus =
-    typeof raw.mediaStatus === "string" && MEDIA_STATUS_VALUES.has(raw.mediaStatus)
-      ? (raw.mediaStatus as CheckpointState["mediaStatus"])
-      : undefined
+    typeof raw.mediaStatus === 'string' && MEDIA_STATUS_VALUES.has(raw.mediaStatus)
+      ? (raw.mediaStatus as CheckpointState['mediaStatus'])
+      : undefined;
   return {
     textReady: raw.textReady === true ? true : raw.textReady === false ? false : undefined,
-    blueprintReady: raw.blueprintReady === true ? true : raw.blueprintReady === false ? false : undefined,
+    blueprintReady:
+      raw.blueprintReady === true ? true : raw.blueprintReady === false ? false : undefined,
     mediaStatus,
     awaitingMediaChoice: raw.awaitingMediaChoice === true ? true : undefined,
-  }
+  };
 }
 
 function parsePipelineQuality(raw: unknown): PipelineQuality | null {
   if (!isRecord(raw)) return null;
   const num = (v: unknown): number | undefined =>
-    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
   return {
     passed: raw.passed === true,
     overallScore: num(raw.overallScore) ?? 0,
@@ -396,39 +414,41 @@ function parsePipelineCard(
   if (!jobId) return null;
 
   const status =
-    payload.status === "running" ||
-    payload.status === "completed" ||
-    payload.status === "failed" ||
-    payload.status === "cancelled"
+    payload.status === 'running' ||
+    payload.status === 'completed' ||
+    payload.status === 'failed' ||
+    payload.status === 'cancelled'
       ? payload.status
-      : "running";
+      : 'running';
 
   const preview = isRecord(payload.preview)
     ? {
-        caption: typeof payload.preview.caption === "string" ? payload.preview.caption : null,
-        imageUrl: typeof payload.preview.imageUrl === "string" ? payload.preview.imageUrl : null,
+        caption: typeof payload.preview.caption === 'string' ? payload.preview.caption : null,
+        imageUrl: typeof payload.preview.imageUrl === 'string' ? payload.preview.imageUrl : null,
         images: Array.isArray(payload.preview.images)
-          ? (payload.preview.images as unknown[]).filter((u): u is string => typeof u === "string")
+          ? (payload.preview.images as unknown[]).filter((u): u is string => typeof u === 'string')
           : undefined,
-        format: typeof payload.preview.format === "string" ? payload.preview.format : null,
+        format: typeof payload.preview.format === 'string' ? payload.preview.format : null,
       }
     : undefined;
 
   return {
     jobId,
     brandId: readNonEmptyString(payload.brandId) ?? undefined,
-    planId: typeof payload.planId === "string" ? payload.planId : null,
-    planItemId: typeof payload.planItemId === "string" ? payload.planItemId : null,
+    planId: typeof payload.planId === 'string' ? payload.planId : null,
+    planItemId: typeof payload.planItemId === 'string' ? payload.planItemId : null,
     platform: readNonEmptyString(payload.platform) ?? undefined,
     status,
     currentStage: isPipelineStage(payload.currentStage) ? payload.currentStage : undefined,
     preview,
     quality: parsePipelineQuality(payload.quality),
-    draftId: typeof payload.draftId === "string" ? payload.draftId : null,
+    draftId: typeof payload.draftId === 'string' ? payload.draftId : null,
     error: isRecord(payload.error)
       ? {
           code: readNonEmptyString(payload.error.code) ?? undefined,
-          message: readNonEmptyString(payload.error.message) ?? "Pipeline failed",
+          message: friendlyStreamError(
+            readNonEmptyString(payload.error.message) ?? 'Pipeline failed',
+          ),
         }
       : undefined,
     checkpoint: parseCheckpoint(payload.checkpoint),
@@ -453,11 +473,11 @@ function parseToolApproval(event: Record<string, unknown>): ToolApproval | null 
   return { approvalId, toolCallId, toolName, input: payload.input };
 }
 
-function toSourcePlatform(raw: unknown): UiFetchedPost["source"] {
-  if (raw === "facebook") return "facebook";
-  if (raw === "tiktok") return "tiktok";
-  if (raw === "instagram") return "instagram";
-  return "instagram";
+function toSourcePlatform(raw: unknown): UiFetchedPost['source'] {
+  if (raw === 'facebook') return 'facebook';
+  if (raw === 'tiktok') return 'tiktok';
+  if (raw === 'instagram') return 'instagram';
+  return 'instagram';
 }
 
 function extractArray(result: unknown, ...keys: string[]): unknown[] {
@@ -472,94 +492,99 @@ function extractArray(result: unknown, ...keys: string[]): unknown[] {
 export function normalizePostToolResult(toolName: string, result: unknown): UiFetchedPost[] {
   // Organic tools return a unified envelope `{ status, summary, data }`. Unwrap
   // to the structured payload here; a non-success status carries no post rows.
-  const envelope =
-    isRecord(result) && typeof result.status === "string" ? result : null;
-  if (envelope && envelope.status === "error") return [];
+  const envelope = isRecord(result) && typeof result.status === 'string' ? result : null;
+  if (envelope && envelope.status === 'error') return [];
   const payload: unknown = envelope ? envelope.data : result;
 
   switch (toolName) {
-    case "listDrafts": {
-      return extractArray(payload, "drafts").flatMap((item) => {
+    case 'listDrafts': {
+      return extractArray(payload, 'drafts').flatMap((item) => {
         if (!isRecord(item)) return [];
         const draftId = readNonEmptyString(item.draftId);
         if (!draftId) return [];
-        return [{
-          postId: draftId,
-          source: "draft" as const,
-          platform: readNonEmptyString(item.platform),
-          caption: readNonEmptyString(item.caption),
-          mediaUrl: null,
-          permalink: null,
-          postedAt: null,
-          scheduledAt: readNonEmptyString(item.scheduledAt),
-          format: readNonEmptyString(item.format),
-          status: readNonEmptyString(item.status),
-          topic: readNonEmptyString(item.topic),
-          metrics: null,
-          rank: null,
-          quality: isRecord(item.quality) ? { passed: item.quality.passed === true } : null,
-        }];
+        return [
+          {
+            postId: draftId,
+            source: 'draft' as const,
+            platform: readNonEmptyString(item.platform),
+            caption: readNonEmptyString(item.caption),
+            mediaUrl: null,
+            permalink: null,
+            postedAt: null,
+            scheduledAt: readNonEmptyString(item.scheduledAt),
+            format: readNonEmptyString(item.format),
+            status: readNonEmptyString(item.status),
+            topic: readNonEmptyString(item.topic),
+            metrics: null,
+            rank: null,
+            quality: isRecord(item.quality) ? { passed: item.quality.passed === true } : null,
+          },
+        ];
       });
     }
 
-    case "getTopPosts": {
+    case 'getTopPosts': {
       if (!isRecord(payload)) return [];
       const platform = toSourcePlatform(payload.platform);
-      return extractArray(payload, "rows").flatMap((item) => {
+      return extractArray(payload, 'rows').flatMap((item) => {
         if (!isRecord(item)) return [];
         const postId = readNonEmptyString(item.post_id);
         if (!postId) return [];
         const metrics = isRecord(item.metrics)
           ? (item.metrics as Record<string, number | null>)
           : null;
-        return [{
-          postId,
-          source: platform,
-          platform: typeof payload.platform === "string" ? payload.platform : null,
-          caption: readNonEmptyString(item.caption_snippet),
-          mediaUrl: readNonEmptyString(item.thumbnail_url),
-          permalink: readNonEmptyString(item.permalink),
-          postedAt: readNonEmptyString(item.posted_at),
-          scheduledAt: null,
-          format: null,
-          status: "published",
-          topic: null,
-          metrics,
-          rank: typeof item.rank === "number" ? item.rank : null,
-          quality: null,
-        }];
+        return [
+          {
+            postId,
+            source: platform,
+            platform: typeof payload.platform === 'string' ? payload.platform : null,
+            caption: readNonEmptyString(item.caption_snippet),
+            mediaUrl: readNonEmptyString(item.thumbnail_url),
+            permalink: readNonEmptyString(item.permalink),
+            postedAt: readNonEmptyString(item.posted_at),
+            scheduledAt: null,
+            format: null,
+            status: 'published',
+            topic: null,
+            metrics,
+            rank: typeof item.rank === 'number' ? item.rank : null,
+            quality: null,
+          },
+        ];
       });
     }
 
-    case "listOwnInstagramMedia": {
-      return extractArray(payload, "posts").flatMap((item) => {
+    case 'listOwnInstagramMedia': {
+      return extractArray(payload, 'posts').flatMap((item) => {
         if (!isRecord(item)) return [];
         const mediaId = readNonEmptyString(item.mediaId);
         if (!mediaId) return [];
-        const likeCount = typeof item.likeCount === "number" ? item.likeCount : null;
-        const commentsCount = typeof item.commentsCount === "number" ? item.commentsCount : null;
-        return [{
-          postId: mediaId,
-          source: "instagram" as const,
-          platform: "instagram",
-          caption: readNonEmptyString(item.captionSnippet),
-          mediaUrl: null,
-          permalink: readNonEmptyString(item.permalink),
-          postedAt: readNonEmptyString(item.timestamp),
-          scheduledAt: null,
-          format: readNonEmptyString(item.productType) ?? readNonEmptyString(item.mediaType),
-          status: "published",
-          topic: null,
-          metrics: { likes: likeCount, comments: commentsCount },
-          rank: typeof item.rank === "number" ? item.rank : null,
-          quality: null,
-        }];
+        const likeCount = typeof item.likeCount === 'number' ? item.likeCount : null;
+        const commentsCount = typeof item.commentsCount === 'number' ? item.commentsCount : null;
+        return [
+          {
+            postId: mediaId,
+            source: 'instagram' as const,
+            platform: 'instagram',
+            caption: readNonEmptyString(item.captionSnippet),
+            mediaUrl: null,
+            permalink: readNonEmptyString(item.permalink),
+            postedAt: readNonEmptyString(item.timestamp),
+            scheduledAt: null,
+            format: readNonEmptyString(item.productType) ?? readNonEmptyString(item.mediaType),
+            status: 'published',
+            topic: null,
+            metrics: { likes: likeCount, comments: commentsCount },
+            rank: typeof item.rank === 'number' ? item.rank : null,
+            quality: null,
+          },
+        ];
       });
     }
 
-    case "getCalendarPostedContent": {
+    case 'getCalendarPostedContent': {
       if (!isRecord(payload)) return [];
-      return extractArray(payload, "posts").flatMap((item) => {
+      return extractArray(payload, 'posts').flatMap((item) => {
         if (!isRecord(item)) return [];
         const postId = readNonEmptyString(item.post_id);
         if (!postId) return [];
@@ -567,34 +592,39 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
         const metrics = isRecord(item.metrics)
           ? (item.metrics as Record<string, number | null>)
           : null;
-        return [{
-          postId,
-          source: platform,
-          platform: typeof item.platform === "string" ? item.platform : null,
-          caption: readNonEmptyString(item.caption),
-          mediaUrl: readNonEmptyString(item.media_url),
-          permalink: readNonEmptyString(item.permalink),
-          postedAt: readNonEmptyString(item.posted_at),
-          scheduledAt: null,
-          format: null,
-          status: "published",
-          topic: null,
-          metrics,
-          rank: null,
-          quality: null,
-        }];
+        return [
+          {
+            postId,
+            source: platform,
+            platform: typeof item.platform === 'string' ? item.platform : null,
+            caption: readNonEmptyString(item.caption),
+            mediaUrl: readNonEmptyString(item.media_url),
+            permalink: readNonEmptyString(item.permalink),
+            postedAt: readNonEmptyString(item.posted_at),
+            scheduledAt: null,
+            format: null,
+            status: 'published',
+            topic: null,
+            metrics,
+            rank: null,
+            quality: null,
+          },
+        ];
       });
     }
 
-    case "getCompetitorInstagramTopPosts": {
+    case 'getCompetitorInstagramTopPosts': {
       if (!isRecord(payload)) return [];
-      return extractArray(payload, "posts").flatMap((item) => {
+      return extractArray(payload, 'posts').flatMap((item) => {
         if (!isRecord(item)) return [];
         const postId = readNonEmptyString(item.id);
         if (!postId) return [];
         const creative = isRecord(item.creative) ? item.creative : null;
         const children = Array.isArray(creative?.children) ? (creative.children as unknown[]) : [];
-        const firstChild = children.length > 0 && isRecord(children[0]) ? (children[0] as Record<string, unknown>) : null;
+        const firstChild =
+          children.length > 0 && isRecord(children[0])
+            ? (children[0] as Record<string, unknown>)
+            : null;
         const firstChildMedia = firstChild
           ? (readNonEmptyString(firstChild.mediaUrl) ?? readNonEmptyString(firstChild.thumbnailUrl))
           : null;
@@ -602,26 +632,28 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
           firstChildMedia ??
           readNonEmptyString(creative?.mediaUrl as unknown) ??
           readNonEmptyString(creative?.thumbnailUrl as unknown);
-        return [{
-          postId,
-          source: "instagram" as const,
-          platform: "instagram",
-          caption: readNonEmptyString(item.captionSnippet),
-          mediaUrl: resolvedMediaUrl,
-          permalink: readNonEmptyString(item.permalink),
-          postedAt: readNonEmptyString(item.timestamp),
-          scheduledAt: null,
-          format: readNonEmptyString(item.mediaType),
-          status: null,
-          topic: null,
-          metrics: {
-            likes: typeof item.likes === "number" ? item.likes : null,
-            comments: typeof item.comments === "number" ? item.comments : null,
-            engagement: typeof item.engagement === "number" ? item.engagement : null,
+        return [
+          {
+            postId,
+            source: 'instagram' as const,
+            platform: 'instagram',
+            caption: readNonEmptyString(item.captionSnippet),
+            mediaUrl: resolvedMediaUrl,
+            permalink: readNonEmptyString(item.permalink),
+            postedAt: readNonEmptyString(item.timestamp),
+            scheduledAt: null,
+            format: readNonEmptyString(item.mediaType),
+            status: null,
+            topic: null,
+            metrics: {
+              likes: typeof item.likes === 'number' ? item.likes : null,
+              comments: typeof item.comments === 'number' ? item.comments : null,
+              engagement: typeof item.engagement === 'number' ? item.engagement : null,
+            },
+            rank: null,
+            quality: null,
           },
-          rank: null,
-          quality: null,
-        }];
+        ];
       });
     }
 
@@ -631,7 +663,7 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
 }
 
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
-  if (!isRecord(raw)) return { kind: "invalid" };
+  if (!isRecord(raw)) return { kind: 'invalid' };
 
   // The shared contract schema is both the boundary check AND the source: on
   // success the validated frame drives routing (its discriminant) and supplies
@@ -641,112 +673,121 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
   // and is never silently dropped — the same resilience the reload path needs.
   const validation = organicStreamFrameSchema.safeParse(raw);
   const type = validation.success ? validation.data.type : readNonEmptyString(raw.type);
-  if (!type) return { kind: "invalid" };
-  if (!validation.success && type !== "response.source" && type !== "response.output_text.done") {
-    console.warn("Invalid Organic stream frame schema for type:", type);
+  if (!type) return { kind: 'invalid' };
+  if (!validation.success && type !== 'response.source' && type !== 'response.output_text.done') {
+    console.warn('Invalid Organic stream frame schema for type:', type);
   }
   const frame: Record<string, unknown> = validation.success
     ? (validation.data as unknown as Record<string, unknown>)
     : raw;
 
   switch (type) {
-    case "response.created":
-    case "response.source":
-    case "response.output_text.done":
-      return { kind: "ignored", type };
-    case "response.output_text.delta":
+    case 'response.created':
+    case 'response.source':
+    case 'response.output_text.done':
+      return { kind: 'ignored', type };
+    case 'response.output_text.delta':
       return {
-        kind: "delta",
+        kind: 'delta',
         delta: (() => {
           const payload = getEventPayload(frame);
-          return typeof payload.delta === "string" ? payload.delta : "";
+          return typeof payload.delta === 'string' ? payload.delta : '';
         })(),
       };
-    case "response.done":
-      return { kind: "complete" };
-    case "response.error": {
+    case 'response.done':
+      return { kind: 'complete' };
+    case 'response.error': {
       const payload = getEventPayload(frame);
-      const message =
-        readNonEmptyString(payload.message) ??
-        "Unknown stream error";
-      return { kind: "error", message };
+      const message = readNonEmptyString(payload.message) ?? 'Unknown stream error';
+      return { kind: 'error', message };
     }
-    case "tool.call":
-      return { kind: "toolCall", event: normalizeToolCallEvent(frame) };
-    case "tool.result": {
+    case 'tool.call':
+      return { kind: 'toolCall', event: normalizeToolCallEvent(frame) };
+    case 'tool.result': {
       const { toolCallId, toolName, result, ok, reason } = normalizeToolResultEvent(frame);
-      return { kind: "toolResult", toolCallId, toolName, result, ok, reason: reason ?? undefined };
+      return { kind: 'toolResult', toolCallId, toolName, result, ok, reason: reason ?? undefined };
     }
-    case "ui.trend_chart":
-      return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(frame) } };
-    case "ui.plan_card": {
+    case 'ui.trend_chart':
+      return {
+        kind: 'uiCard',
+        card: { type: 'trend_chart', data: normalizeTrendChartEvent(frame) },
+      };
+    case 'ui.plan_card': {
       // The bulk plan rides on the same frame, discriminated by data.kind.
-      if (getEventPayload(frame).kind === "bulk") {
+      if (getEventPayload(frame).kind === 'bulk') {
         const bulk = parseBulkPlanCard(frame);
         return bulk
-          ? { kind: "uiCard", card: { type: "bulk_plan_card", data: bulk } }
-          : { kind: "invalid", type };
+          ? { kind: 'uiCard', card: { type: 'bulk_plan_card', data: bulk } }
+          : { kind: 'invalid', type };
       }
       const card = parseUiPlanCard(frame);
-      return card ? { kind: "uiCard", card: { type: "plan_card", data: card } } : { kind: "invalid", type };
+      return card
+        ? { kind: 'uiCard', card: { type: 'plan_card', data: card } }
+        : { kind: 'invalid', type };
     }
-    case "ui.post_card": {
+    case 'ui.post_card': {
       const card = parseUiPostCard(frame);
-      return card ? { kind: "postCard", card } : { kind: "invalid", type };
+      return card ? { kind: 'postCard', card } : { kind: 'invalid', type };
     }
-    case "ui.skill_proposal": {
+    case 'ui.skill_proposal': {
       const card = parseSkillProposalCard(frame);
       return card
-        ? { kind: "uiCard", card: { type: "skill_proposal", data: card } }
-        : { kind: "invalid", type };
+        ? { kind: 'uiCard', card: { type: 'skill_proposal', data: card } }
+        : { kind: 'invalid', type };
     }
-    case "agent.run_started": {
+    case 'ui.aeo_snapshot_card': {
+      const card = parseAeoSnapshotCard(frame);
+      return card
+        ? { kind: 'uiCard', card: { type: 'aeo_snapshot', data: card } }
+        : { kind: 'invalid', type };
+    }
+    case 'agent.run_started': {
       const payload = getEventPayload(frame);
       const runId = readNonEmptyString(payload.runId);
-      if (!runId) return { kind: "invalid", type };
-      return { kind: "runStarted", runId, jobId: readNonEmptyString(payload.jobId) ?? "" };
+      if (!runId) return { kind: 'invalid', type };
+      return { kind: 'runStarted', runId, jobId: readNonEmptyString(payload.jobId) ?? '' };
     }
-    case "draft.blueprint_ready": {
+    case 'draft.blueprint_ready': {
       const blueprint = parseDraftBlueprint(frame);
-      return blueprint ? { kind: "draftBlueprint", ...blueprint } : { kind: "invalid", type };
+      return blueprint ? { kind: 'draftBlueprint', ...blueprint } : { kind: 'invalid', type };
     }
-    case "job.enqueued":
-    case "job.progress":
-    case "draft.ready":
-    case "draft.text_ready":
-    case "job.completed":
-    case "job.failed":
-    case "job.cancelled": {
+    case 'job.enqueued':
+    case 'job.progress':
+    case 'draft.ready':
+    case 'draft.text_ready':
+    case 'job.completed':
+    case 'job.failed':
+    case 'job.cancelled': {
       const job = parseJobUpdate(type, frame);
-      return job ? { kind: "jobUpdate", job } : { kind: "invalid", type };
+      return job ? { kind: 'jobUpdate', job } : { kind: 'invalid', type };
     }
-    case "pipeline.stage": {
+    case 'pipeline.stage': {
       const event = parsePipelineStage(frame);
-      return event ? { kind: "pipelineStage", event } : { kind: "invalid", type };
+      return event ? { kind: 'pipelineStage', event } : { kind: 'invalid', type };
     }
-    case "ui.pipeline_card": {
+    case 'ui.pipeline_card': {
       const card = parsePipelineCard(frame);
-      return card ? { kind: "pipelineCard", card } : { kind: "invalid", type };
+      return card ? { kind: 'pipelineCard', card } : { kind: 'invalid', type };
     }
-    case "ui.plan_status": {
+    case 'ui.plan_status': {
       const event = parsePlanStatus(frame);
-      return event ? { kind: "planStatus", event } : { kind: "invalid", type };
+      return event ? { kind: 'planStatus', event } : { kind: 'invalid', type };
     }
-    case "tool.approval_required": {
+    case 'tool.approval_required': {
       const approval = parseToolApproval(frame);
-      return approval ? { kind: "toolApproval", approval } : { kind: "invalid", type };
+      return approval ? { kind: 'toolApproval', approval } : { kind: 'invalid', type };
     }
-    case "ui.bulk_run": {
+    case 'ui.bulk_run': {
       const run = parseBulkRun(frame);
-      return run ? { kind: "bulkRun", run } : { kind: "invalid", type };
+      return run ? { kind: 'bulkRun', run } : { kind: 'invalid', type };
     }
-    case "media.search_results": {
+    case 'media.search_results': {
       const result = mediaSearchResultsFrameSchema.safeParse(frame);
       return result.success
-        ? { kind: "mediaSearchResults", frame: result.data }
-        : { kind: "invalid", type };
+        ? { kind: 'mediaSearchResults', frame: result.data }
+        : { kind: 'invalid', type };
     }
     default:
-      return { kind: "ignored", type };
+      return { kind: 'ignored', type };
   }
 }

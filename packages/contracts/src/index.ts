@@ -10,6 +10,7 @@ export * from './insights/index';
 export * from './mcp/index';
 export * from './media/index';
 export * from './onboarding/index';
+export * from './optimization/index';
 export * from './organic/index';
 export * from './paid/index';
 export * from './skills/index';

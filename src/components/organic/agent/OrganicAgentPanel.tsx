@@ -30,6 +30,7 @@ import type { PlanApprovalDecision, ToolApproval } from "./types";
 import { MediaLibrarySearchResults } from "./MediaLibrarySearchResults";
 import { PostContentCardGrid } from "./PostContentCardGrid";
 import { SkillProposalCard } from "./SkillProposalCard";
+import { AeoSnapshotCard } from "./AeoSnapshotCard";
 import { SkillPickerButton } from "./SkillPickerButton";
 import { SkillWizardLauncher } from "./SkillWizard/SkillWizardLauncher";
 import { MessageActions } from "./MessageActions";
@@ -101,7 +102,7 @@ export type OrganicAgentMentionContext = {
   }>;
 };
 
-const STARTER_PROMPTS = ["Plan this week's posts", "Show me trending topics", "Draft an Instagram reel"];
+const STARTER_PROMPTS = ["Plan this week's posts", "Run an AEO snapshot", "Show me trending topics", "Draft an Instagram reel"];
 
 function resolveTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -131,6 +132,8 @@ function cardKey(card: UiCard, index: number): string {
       return `post_list:${card.label ?? index}`;
     case "skill_proposal":
       return `skill_proposal:${card.data.proposalId}`;
+    case "aeo_snapshot":
+      return `aeo_snapshot:${card.data.snapshotId}`;
     default:
       return String(index);
   }
@@ -963,6 +966,13 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                                 void refreshBrandSkills();
                               }}
                             />
+                          </motion.div>
+                        );
+                      }
+                      if (card.type === "aeo_snapshot") {
+                        return (
+                          <motion.div key={cardKey(card, i)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.18, ease }}>
+                            <AeoSnapshotCard snapshot={card.data} />
                           </motion.div>
                         );
                       }

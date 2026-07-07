@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@radix-ui/themes";
-import { Loader2 } from "lucide-react";
-import { motion } from "motion/react";
-import Link from "next/link";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { EmailSent } from "@/components/auth/EmailSent";
-import { FormAlert } from "@/components/auth/FormAlert";
-import { FormInput } from "@/components/auth/FormInput";
-import { useAuth } from "@/hooks/useAuth";
-import { magicLinkSchema, type MagicLinkInput } from "@/lib/auth/schemas";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { EmailSent } from '@/components/auth/EmailSent';
+import { FormAlert } from '@/components/auth/FormAlert';
+import { FormInput } from '@/components/auth/FormInput';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { type MagicLinkInput, magicLinkSchema } from '@/lib/auth/schemas';
 
 type LoginFormProps = {
   redirectTo?: string;
@@ -19,16 +19,10 @@ type LoginFormProps = {
 };
 
 export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
-  const {
-    sendMagicLink,
-    signInWithGooglePopup,
-    isPending,
-    isGooglePending,
-    error,
-    clearError,
-  } = useAuth({ initialError });
+  const { sendMagicLink, signInWithGooglePopup, isPending, isGooglePending, error, clearError } =
+    useAuth({ initialError });
   const [emailSent, setEmailSent] = useState(false);
-  const [submittedEmail, setSubmittedEmail] = useState("");
+  const [submittedEmail, setSubmittedEmail] = useState('');
 
   const {
     register,
@@ -36,7 +30,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
     formState: { errors },
   } = useForm<MagicLinkInput>({
     resolver: zodResolver(magicLinkSchema),
-    defaultValues: { email: "" },
+    defaultValues: { email: '' },
   });
 
   const onSubmit = async (data: MagicLinkInput) => {
@@ -45,8 +39,8 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
 
     const success = await sendMagicLink({ email: data.email, redirectTo });
     if (success) {
-      const posthog = await import("posthog-js");
-      posthog.default.capture("user_logged_in", { method: "magic_link", email: data.email });
+      const posthog = await import('posthog-js');
+      posthog.default.capture('user_logged_in', { method: 'magic_link', email: data.email });
       setEmailSent(true);
     }
   };
@@ -77,7 +71,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4 sm:mt-6 sm:space-y-5">
           <FormInput
-            {...register("email")}
+            {...register('email')}
             id="email"
             type="email"
             label="Email address"
@@ -88,15 +82,15 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
 
           <Button
             type="submit"
-            size="3"
+            size="lg"
             disabled={isPending}
             style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "var(--primary)",
-              color: "var(--primary-foreground)",
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'var(--primary)',
+              color: 'var(--primary-foreground)',
             }}
             className="min-h-11 rounded-xl py-3 font-semibold shadow-[0_14px_28px_-14px_rgba(17,24,39,0.55)] transition-[filter,box-shadow,transform] duration-200 hover:brightness-110 hover:shadow-[0_18px_36px_-16px_rgba(17,24,39,0.65)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
           >
@@ -105,7 +99,9 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Sending link...
               </span>
-            ) : "Send sign-in link"}
+            ) : (
+              'Send sign-in link'
+            )}
           </Button>
         </form>
 
@@ -114,9 +110,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
             <div className="w-full border-t border-subtle" />
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-surface px-4 text-sm text-secondary">
-              Or continue with
-            </span>
+            <span className="bg-surface px-4 text-sm text-secondary">Or continue with</span>
           </div>
         </div>
 
@@ -158,12 +152,20 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
 
         <div className="mt-5 sm:mt-8">
           <p className="text-center text-xs text-secondary">
-            By continuing, you agree to our{" "}
-            <Link href="/terms" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--primary)" }}>
+            By continuing, you agree to our{' '}
+            <Link
+              href="/terms"
+              className="underline transition-opacity hover:opacity-80"
+              style={{ color: 'var(--primary)' }}
+            >
               Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--primary)" }}>
+            </Link>{' '}
+            and{' '}
+            <Link
+              href="/privacy"
+              className="underline transition-opacity hover:opacity-80"
+              style={{ color: 'var(--primary)' }}
+            >
               Privacy Policy
             </Link>
           </p>
@@ -177,11 +179,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
       transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
       className="glass-panel rounded-[2rem] border-subtle p-8 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.55)]"
     >
-      <EmailSent
-        email={submittedEmail}
-        onResend={handleResend}
-        isResending={isPending}
-      />
+      <EmailSent email={submittedEmail} onResend={handleResend} isResending={isPending} />
     </motion.div>
   );
 }

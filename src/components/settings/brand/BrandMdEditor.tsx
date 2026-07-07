@@ -1,13 +1,15 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Badge, Button, Tabs, Text } from "@radix-ui/themes";
-import { parseBrandMd } from "@continuum/contracts";
-import { saveBrandMd, resetBrandMd } from "@/lib/api/brandBook.client";
-import { useToast } from "@/components/ui/ToastProvider";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
-import { useBrandMdDirty } from "./BrandMdDirtyContext";
+import { parseBrandMd } from '@continuum/contracts';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { resetBrandMd, saveBrandMd } from '@/lib/api/brandBook.client';
+import { useBrandMdDirty } from './BrandMdDirtyContext';
 
 type Props = {
   brandId: string;
@@ -25,12 +27,12 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   const { show } = useToast();
   const { setDirty } = useBrandMdDirty();
 
-  const [draft, setDraft] = useState(initialBrandMd ?? "");
+  const [draft, setDraft] = useState(initialBrandMd ?? '');
   const [isPending, startTransition] = useTransition();
   const [isResetting, startResetTransition] = useTransition();
 
   // Track whether the current draft differs from the last-saved value.
-  const savedRef = useRef(initialBrandMd ?? "");
+  const savedRef = useRef(initialBrandMd ?? '');
   const dirty = draft !== savedRef.current;
 
   // Keep the context dirty flag in sync so BrandBookActions can suppress refresh.
@@ -40,7 +42,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
 
   // When the parent RSC refreshes (e.g. after a reset), re-sync local draft.
   useEffect(() => {
-    const next = initialBrandMd ?? "";
+    const next = initialBrandMd ?? '';
     savedRef.current = next;
     setDraft(next);
   }, [initialBrandMd]);
@@ -48,7 +50,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   const parsed = parseBrandMd(draft);
   const frontMatterValid = parsed.tokens !== null;
   // If there is no front-matter fence at all, show "not present" rather than "invalid".
-  const hasFrontMatter = draft.trimStart().startsWith("---");
+  const hasFrontMatter = draft.trimStart().startsWith('---');
 
   const handleSave = () => {
     startTransition(async () => {
@@ -58,13 +60,13 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
         savedRef.current = saved;
         setDraft(saved);
         setDirty(false);
-        show({ title: "Brand document saved", variant: "success" });
+        show({ title: 'Brand document saved', variant: 'success' });
         router.refresh();
       } catch (e) {
         show({
-          title: "Save failed",
-          description: e instanceof Error ? e.message : "Please try again.",
-          variant: "error",
+          title: 'Save failed',
+          description: e instanceof Error ? e.message : 'Please try again.',
+          variant: 'error',
         });
       }
     });
@@ -74,17 +76,17 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
     startResetTransition(async () => {
       try {
         const result = await resetBrandMd(brandId);
-        const next = result.brand_md ?? "";
+        const next = result.brand_md ?? '';
         savedRef.current = next;
         setDraft(next);
         setDirty(false);
-        show({ title: "Reverted to generated document", variant: "success" });
+        show({ title: 'Reverted to generated document', variant: 'success' });
         router.refresh();
       } catch (e) {
         show({
-          title: "Revert failed",
-          description: e instanceof Error ? e.message : "Please try again.",
-          variant: "error",
+          title: 'Revert failed',
+          description: e instanceof Error ? e.message : 'Please try again.',
+          variant: 'error',
         });
       }
     });
@@ -92,13 +94,11 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
 
   if (initialBrandMd === null) {
     return (
-      <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-6 text-center space-y-2">
-        <Text size="2" color="gray">
-          No brand document generated yet.
-        </Text>
-        <Text size="1" color="gray" as="p">
+      <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-6 text-center">
+        <p className="text-sm text-muted-foreground">No brand document generated yet.</p>
+        <p className="text-xs text-muted-foreground">
           Run "Deepen analysis" to generate your brand.md, then return here to edit.
-        </Text>
+        </p>
       </div>
     );
   }
@@ -108,29 +108,15 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   return (
     <div className="space-y-3">
       {/* Header row: title + badges + actions */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Text size="2" weight="medium" className="text-gray-200">
-            brand.md
-          </Text>
-          {isEdited && !dirty ? (
-            <Badge color="amber" variant="soft" radius="full">
-              Edited
-            </Badge>
-          ) : null}
-          {dirty ? (
-            <Badge color="blue" variant="soft" radius="full">
-              Unsaved changes
-            </Badge>
-          ) : null}
+          <span className="text-sm font-medium text-foreground">brand.md</span>
+          {isEdited && !dirty ? <Pill variant="warning">Edited</Pill> : null}
+          {dirty ? <Pill variant="teal">Unsaved changes</Pill> : null}
           {hasFrontMatter ? (
-            <Badge
-              color={frontMatterValid ? "green" : "red"}
-              variant="soft"
-              radius="full"
-            >
-              front matter: {frontMatterValid ? "valid" : "invalid"}
-            </Badge>
+            <Pill variant={frontMatterValid ? 'success' : 'destructive'}>
+              front matter: {frontMatterValid ? 'valid' : 'invalid'}
+            </Pill>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -139,43 +125,38 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
               onClick={handleReset}
               disabled={isBusy}
               variant="ghost"
-              size="1"
-              color="gray"
+              size="sm"
+              className="text-muted-foreground"
             >
-              {isResetting ? "Reverting…" : "Revert to generated"}
+              {isResetting ? 'Reverting…' : 'Revert to generated'}
             </Button>
           ) : null}
-          <Button
-            onClick={handleSave}
-            disabled={isBusy || !dirty}
-            variant="soft"
-            size="2"
-          >
-            {isPending ? "Saving…" : "Save"}
+          <Button onClick={handleSave} disabled={isBusy || !dirty} variant="secondary">
+            {isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </div>
 
       {/* Tab: Edit | Preview */}
-      <Tabs.Root defaultValue="edit">
-        <Tabs.List>
-          <Tabs.Trigger value="edit">Edit</Tabs.Trigger>
-          <Tabs.Trigger value="preview">Preview</Tabs.Trigger>
-        </Tabs.List>
+      <Tabs defaultValue="edit">
+        <TabsList>
+          <TabsTrigger value="edit">Edit</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+        </TabsList>
 
-        <Tabs.Content value="edit" className="pt-3">
+        <TabsContent value="edit" className="pt-3">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={24}
             spellCheck={false}
-            className="w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 font-mono text-xs text-gray-200 resize-y focus:outline-none focus:ring-1 focus:ring-white/20"
+            className="w-full resize-y rounded-md border border-border/60 bg-muted/30 px-3 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label="brand.md editor"
           />
-        </Tabs.Content>
+        </TabsContent>
 
-        <Tabs.Content value="preview" className="pt-3">
-          <div className="min-h-[200px] rounded-md border border-white/10 bg-black/20 px-4 py-3">
+        <TabsContent value="preview" className="pt-3">
+          <div className="min-h-[200px] rounded-md border border-border/60 bg-muted/30 px-4 py-3">
             {parsed.body.trim() ? (
               <SafeMarkdown
                 content={parsed.body}
@@ -183,13 +164,11 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
                 className="prose prose-invert prose-sm max-w-none"
               />
             ) : (
-              <Text size="2" color="gray">
-                Nothing to preview yet.
-              </Text>
+              <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
             )}
           </div>
-        </Tabs.Content>
-      </Tabs.Root>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

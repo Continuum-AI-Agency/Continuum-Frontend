@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { format, parseISO } from "date-fns";
-import { AlertCircle, Loader2, X } from "lucide-react";
-import { Badge } from "@radix-ui/themes";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { useDraftStoryboard } from "../hooks/useDraftStoryboard";
-import type { AgentJobState } from "./types";
+import { format, parseISO } from 'date-fns';
+import { AlertCircle, Loader2, X } from 'lucide-react';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useDraftStoryboard } from '../hooks/useDraftStoryboard';
+import type { AgentJobState } from './types';
 
 type JobGridProps = {
   jobs: AgentJobState[];
@@ -16,9 +16,9 @@ type JobGridProps = {
 };
 
 function formatScheduledAt(scheduledAt: string | undefined): string {
-  if (!scheduledAt) return "";
+  if (!scheduledAt) return '';
   try {
-    return format(parseISO(scheduledAt), "EEE MMM d, h:mm a");
+    return format(parseISO(scheduledAt), 'EEE MMM d, h:mm a');
   } catch {
     return scheduledAt;
   }
@@ -26,15 +26,11 @@ function formatScheduledAt(scheduledAt: string | undefined): string {
 
 function PlatformBadge({ platform }: { platform: string | undefined }) {
   if (!platform) return null;
-  return (
-    <Badge variant="soft" color="indigo" size="1">
-      {platform}
-    </Badge>
-  );
+  return <Pill variant="violet">{platform}</Pill>;
 }
 
 function toQualityPercent(score: number | undefined | null): number | null {
-  if (typeof score !== "number" || !Number.isFinite(score)) return null;
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   return score <= 1 ? Math.round(score * 100) : Math.round(score);
 }
 
@@ -55,7 +51,7 @@ type PlacementQualityDetails = {
 
 function getPlacementQualityDetails(job: AgentJobState): PlacementQualityDetails {
   const quality = (job.placement as { quality?: unknown } | undefined)?.quality;
-  if (!quality || typeof quality !== "object") {
+  if (!quality || typeof quality !== 'object') {
     return {
       passed: null,
       overallScore: null,
@@ -67,14 +63,14 @@ function getPlacementQualityDetails(job: AgentJobState): PlacementQualityDetails
 
   const record = quality as Record<string, unknown>;
   return {
-    passed: typeof record.passed === "boolean" ? record.passed : null,
-    overallScore: typeof record.overallScore === "number" ? record.overallScore : null,
-    summary: typeof record.summary === "string" ? record.summary : null,
+    passed: typeof record.passed === 'boolean' ? record.passed : null,
+    overallScore: typeof record.overallScore === 'number' ? record.overallScore : null,
+    summary: typeof record.summary === 'string' ? record.summary : null,
     requiredFixes: Array.isArray(record.requiredFixes)
-      ? record.requiredFixes.filter((value): value is string => typeof value === "string")
+      ? record.requiredFixes.filter((value): value is string => typeof value === 'string')
       : [],
     blockingIssues: Array.isArray(record.blockingIssues)
-      ? record.blockingIssues.filter((value): value is string => typeof value === "string")
+      ? record.blockingIssues.filter((value): value is string => typeof value === 'string')
       : [],
   };
 }
@@ -93,7 +89,7 @@ function JobCard({
   // post still shows a thumbnail even when the live blueprint frame never arrived.
   const draftStoryboard = useDraftStoryboard(job.draftId);
 
-  if (job.status === "queued") {
+  if (job.status === 'queued') {
     return (
       <Card className="overflow-hidden">
         <CardContent className="flex flex-col gap-2 p-3">
@@ -103,7 +99,7 @@ function JobCard({
               <PlatformBadge platform={job.platform} />
             </div>
             <div className="flex items-center gap-1">
-              <Badge variant="soft" color="gray" size="1">Queued</Badge>
+              <Pill variant="muted">Queued</Pill>
               {onCancelAction && (
                 <Button
                   size="sm"
@@ -116,26 +112,24 @@ function JobCard({
               )}
             </div>
           </div>
-          {scheduledLabel && (
-            <p className="text-xs text-muted-foreground">{scheduledLabel}</p>
-          )}
+          {scheduledLabel && <p className="text-xs text-muted-foreground">{scheduledLabel}</p>}
         </CardContent>
       </Card>
     );
   }
 
-  if (job.status === "running") {
+  if (job.status === 'running') {
     const stageLabel =
-      typeof job.stage === "string" && job.stage
-        ? job.stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-        : "Working";
+      typeof job.stage === 'string' && job.stage
+        ? job.stage.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        : 'Working';
     return (
       <Card className="overflow-hidden">
         <CardContent className="flex flex-col gap-2 p-3">
           <div className="flex items-center justify-between gap-2">
             <PlatformBadge platform={job.platform} />
             <div className="flex items-center gap-1">
-              <Badge variant="soft" color="amber" size="1">{stageLabel}</Badge>
+              <Pill variant="warning">{stageLabel}</Pill>
               {onCancelAction && (
                 <Button
                   size="sm"
@@ -149,7 +143,7 @@ function JobCard({
             </div>
           </div>
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-            {typeof job.pct === "number" ? (
+            {typeof job.pct === 'number' ? (
               <div
                 className="h-full rounded-full bg-amber-400 transition-[width] duration-500 ease-out"
                 style={{ width: `${Math.max(5, Math.min(100, job.pct))}%` }}
@@ -161,22 +155,21 @@ function JobCard({
           {job.agentName && (
             <p className="truncate text-xs text-muted-foreground">{job.agentName}</p>
           )}
-          {scheduledLabel && (
-            <p className="text-xs text-muted-foreground">{scheduledLabel}</p>
-          )}
+          {scheduledLabel && <p className="text-xs text-muted-foreground">{scheduledLabel}</p>}
         </CardContent>
       </Card>
     );
   }
 
-  if (job.status === "completed") {
+  if (job.status === 'completed') {
     const card = job.uiPostCard;
     const placementQuality = getPlacementQualityDetails(job);
-    const caption = card?.caption ?? job.placement?.copy?.caption ?? "";
+    const caption = card?.caption ?? job.placement?.copy?.caption ?? '';
     const hashtags = getCombinedHashtags(job, card?.hashtags ?? []);
     const score = toQualityPercent(card?.quality?.score ?? placementQuality.overallScore);
     const passed = card?.quality?.passed ?? placementQuality.passed ?? false;
-    const format = card?.format ?? job.placement?.content?.format ?? job.placement?.content?.type ?? null;
+    const format =
+      card?.format ?? job.placement?.content?.format ?? job.placement?.content?.type ?? null;
     const qualitySummary = placementQuality.summary;
     const requiredFixes = placementQuality.requiredFixes;
     const blockingIssues = placementQuality.blockingIssues;
@@ -189,7 +182,7 @@ function JobCard({
     // preview from the blueprint job. Never base64.
     const thumbnailUrl =
       job.placement?.publishingAssets?.find(
-        (asset) => typeof asset.storageUrl === "string" && asset.storageUrl.length > 0,
+        (asset) => typeof asset.storageUrl === 'string' && asset.storageUrl.length > 0,
       )?.storageUrl ??
       job.previewImages?.[0] ??
       draftStoryboard[0] ??
@@ -201,17 +194,11 @@ function JobCard({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <PlatformBadge platform={job.platform} />
-              {format && (
-                <Badge variant="soft" color="gray" size="1">{format}</Badge>
-              )}
+              {format && <Pill variant="muted">{format}</Pill>}
             </div>
             <div className="flex items-center gap-1">
-              {score != null && (
-                <Badge variant="soft" color={passed ? "green" : "orange"} size="1">
-                  {score}%
-                </Badge>
-              )}
-              <Badge variant="soft" color="green" size="1">Ready</Badge>
+              {score != null && <Pill variant={passed ? 'success' : 'warning'}>{score}%</Pill>}
+              <Pill variant="success">Ready</Pill>
             </div>
           </div>
           {thumbnailUrl && (
@@ -222,9 +209,7 @@ function JobCard({
               className="aspect-[4/5] w-full rounded-md object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
             />
           )}
-          {caption && (
-            <p className="line-clamp-2 text-xs text-foreground">{caption}</p>
-          )}
+          {caption && <p className="line-clamp-2 text-xs text-foreground">{caption}</p>}
           {hashtags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {hashtags.slice(0, 3).map((tag) => (
@@ -232,7 +217,7 @@ function JobCard({
                   key={tag}
                   className="rounded-full bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground"
                 >
-                  {tag.startsWith("#") ? tag : `#${tag}`}
+                  {tag.startsWith('#') ? tag : `#${tag}`}
                 </span>
               ))}
               {hashtags.length > 3 && (
@@ -242,9 +227,7 @@ function JobCard({
               )}
             </div>
           )}
-          {scheduledLabel && (
-            <p className="text-xs text-muted-foreground">{scheduledLabel}</p>
-          )}
+          {scheduledLabel && <p className="text-xs text-muted-foreground">{scheduledLabel}</p>}
         </CardContent>
       </Card>
     );
@@ -257,36 +240,38 @@ function JobCard({
         <HoverCardContent align="start" className="w-[380px] space-y-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <PlatformBadge platform={job.platform} />
-            {format && (
-              <Badge variant="soft" color="gray" size="1">{format}</Badge>
-            )}
+            {format && <Pill variant="muted">{format}</Pill>}
             {score != null && (
-              <Badge variant="soft" color={passed ? "green" : "orange"} size="1">
-                Quality {score}%
-              </Badge>
+              <Pill variant={passed ? 'success' : 'warning'}>Quality {score}%</Pill>
             )}
-            {topic && (
-              <Badge variant="soft" color="indigo" size="1">{topic}</Badge>
-            )}
+            {topic && <Pill variant="violet">{topic}</Pill>}
           </div>
 
           {caption && (
             <div className="space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Caption</p>
-              <p className="max-h-24 overflow-y-auto text-xs leading-relaxed text-foreground">{caption}</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Caption
+              </p>
+              <p className="max-h-24 overflow-y-auto text-xs leading-relaxed text-foreground">
+                {caption}
+              </p>
             </div>
           )}
 
           {qualitySummary && (
             <div className="space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Quality Summary</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Quality Summary
+              </p>
               <p className="text-xs leading-relaxed text-foreground">{qualitySummary}</p>
             </div>
           )}
 
           {requiredFixes.length > 0 && (
             <div className="space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Required Fixes</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Required Fixes
+              </p>
               <ul className="list-disc space-y-1 pl-4 text-xs text-foreground">
                 {requiredFixes.slice(0, 4).map((fix: string, index: number) => (
                   <li key={`${job.jobId}-fix-${index}`}>{fix}</li>
@@ -297,7 +282,9 @@ function JobCard({
 
           {blockingIssues.length > 0 && (
             <div className="space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Blocking Issues</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Blocking Issues
+              </p>
               <ul className="list-disc space-y-1 pl-4 text-xs text-destructive">
                 {blockingIssues.slice(0, 4).map((issue: string, index: number) => (
                   <li key={`${job.jobId}-block-${index}`}>{issue}</li>
@@ -308,18 +295,28 @@ function JobCard({
 
           {(creativeIdea || mediaPrompt || cta || trendId) && (
             <div className="space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Creative Context</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Creative Context
+              </p>
               {creativeIdea && (
-                <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">Idea:</span> {creativeIdea}</p>
+                <p className="text-xs leading-relaxed text-foreground">
+                  <span className="font-medium">Idea:</span> {creativeIdea}
+                </p>
               )}
               {mediaPrompt && (
-                <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">Prompt:</span> {mediaPrompt}</p>
+                <p className="text-xs leading-relaxed text-foreground">
+                  <span className="font-medium">Prompt:</span> {mediaPrompt}
+                </p>
               )}
               {cta && (
-                <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">CTA:</span> {cta}</p>
+                <p className="text-xs leading-relaxed text-foreground">
+                  <span className="font-medium">CTA:</span> {cta}
+                </p>
               )}
               {trendId && (
-                <p className="text-xs leading-relaxed text-muted-foreground"><span className="font-medium">Trend:</span> {trendId}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-medium">Trend:</span> {trendId}
+                </p>
               )}
             </div>
           )}
@@ -328,7 +325,7 @@ function JobCard({
     );
   }
 
-  if (job.status === "failed") {
+  if (job.status === 'failed') {
     return (
       <Card className="overflow-hidden border-destructive/30">
         <CardContent className="flex flex-col gap-2 p-3">
@@ -337,7 +334,7 @@ function JobCard({
               <AlertCircle className="h-3.5 w-3.5 text-destructive" />
               <PlatformBadge platform={job.platform} />
             </div>
-            <Badge variant="soft" color="red" size="1">Failed</Badge>
+            <Pill variant="destructive">Failed</Pill>
           </div>
           {job.error?.message && (
             <p className="line-clamp-2 text-xs text-destructive/80">{job.error.message}</p>
@@ -362,11 +359,9 @@ function JobCard({
       <CardContent className="flex flex-col gap-2 p-3">
         <div className="flex items-center justify-between gap-2">
           <PlatformBadge platform={job.platform} />
-          <Badge variant="soft" color="gray" size="1">Cancelled</Badge>
+          <Pill variant="muted">Cancelled</Pill>
         </div>
-        {scheduledLabel && (
-          <p className="text-xs text-muted-foreground">{scheduledLabel}</p>
-        )}
+        {scheduledLabel && <p className="text-xs text-muted-foreground">{scheduledLabel}</p>}
       </CardContent>
     </Card>
   );

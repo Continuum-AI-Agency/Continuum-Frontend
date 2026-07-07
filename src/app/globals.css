@@ -32,6 +32,11 @@
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 
+  --success: #16a34a; /* green-600 — positive / confirmation states */
+  --success-foreground: #ffffff;
+  --warning: #b45309; /* amber-700 — caution states */
+  --warning-foreground: #ffffff;
+
   --border: #e4e2f7; /* violet-tinted border */
   --input: #e4e2f7;
   --ring: #5A48F9; /* unify with primary */
@@ -298,6 +303,10 @@ html {
   --accent-foreground: #E5E7EB;
   --destructive: #EF4444;
   --destructive-foreground: #0B1220;
+  --success: #34d399; /* emerald-400 */
+  --success-foreground: #052e16;
+  --warning: #fbbf24; /* amber-400 */
+  --warning-foreground: #241a02;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
   --ring: #7C6FFF;
@@ -377,6 +386,10 @@ html {
     --accent-foreground: #E5E7EB;
     --destructive: #EF4444;
     --destructive-foreground: #0B1220;
+    --success: #34d399;
+    --success-foreground: #052e16;
+    --warning: #fbbf24;
+    --warning-foreground: #241a02;
     --border: rgba(255,255,255,0.10);
     --input: rgba(255,255,255,0.10);
     --ring: #7C6FFF;
@@ -705,6 +718,31 @@ body {
   --wave-2-b: #EDE6FA; /* soft lavender */
   --wave-3-a: #FFE3EC; /* blush */
   --wave-3-b: #F3E7FF; /* pastel purple */
+
+  /* BasedKit chart tokens (light). Sequential --chart-scale-* is a brand violet
+     ramp low→high; brand categorical --chart-1..5 stay defined above and are NOT
+     overridden. */
+  --chart-background: var(--background);
+  --chart-foreground: var(--foreground);
+  --chart-foreground-muted: var(--muted-foreground);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: color-mix(in srgb, var(--primary) 60%, transparent);
+  --chart-grid: var(--border);
+  --chart-brush-border: var(--chart-grid);
+  --chart-tooltip-background: #0b1220f2;
+  --chart-tooltip-foreground: #f8fafc;
+  --chart-tooltip-muted: #94a3b8;
+  --chart-marker-background: var(--card);
+  --chart-marker-border: var(--border);
+  --chart-marker-foreground: var(--foreground);
+  --chart-label: var(--muted-foreground);
+  --chart-scale-01: #ece9fe;
+  --chart-scale-02: #cfc7fc;
+  --chart-scale-03: #a99dfa;
+  --chart-scale-04: #7c6bff;
+  --chart-scale-05: #5a48f9;
+  --chart-scale-pattern-color: #ece9fe;
 }
 
 [data-theme="dark"] {
@@ -828,6 +866,11 @@ body {
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -844,6 +887,27 @@ body {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
+  --color-chart-scale-05: var(--chart-scale-05);
+  --color-chart-scale-04: var(--chart-scale-04);
+  --color-chart-scale-03: var(--chart-scale-03);
+  --color-chart-scale-02: var(--chart-scale-02);
+  --color-chart-scale-01: var(--chart-scale-01);
+  --color-chart-label: var(--chart-label);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --chart-brush-border: var(--chart-brush-border);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --chart-line-secondary: var(--chart-line-secondary);
+  --chart-line-primary: var(--chart-line-primary);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-background: var(--chart-background);
 }
 
 @layer base {
@@ -921,4 +985,31 @@ body {
   color: var(--primary);
   font-weight: 500;
   border-radius: 2px;
+}
+
+.dark {
+  /* BasedKit chart tokens (dark). Brand categorical --chart-1..5 stay defined in
+     the [data-theme="dark"] block and are NOT overridden here. Sequential
+     --chart-scale-* is a brand violet ramp low→high for dark surfaces. */
+  --chart-background: var(--background);
+  --chart-foreground: var(--foreground);
+  --chart-foreground-muted: var(--muted-foreground);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: color-mix(in srgb, var(--primary) 55%, transparent);
+  --chart-grid: var(--border);
+  --chart-brush-border: var(--chart-grid);
+  --chart-tooltip-background: #0b1220f2;
+  --chart-tooltip-foreground: #f8fafc;
+  --chart-tooltip-muted: #94a3b8;
+  --chart-marker-background: var(--card);
+  --chart-marker-border: var(--border);
+  --chart-marker-foreground: var(--foreground);
+  --chart-label: var(--muted-foreground);
+  --chart-scale-01: #2a2555;
+  --chart-scale-02: #3d357f;
+  --chart-scale-03: #5546c2;
+  --chart-scale-04: #6f61e6;
+  --chart-scale-05: #8b7dff;
+  --chart-scale-pattern-color: #2a2555;
 }

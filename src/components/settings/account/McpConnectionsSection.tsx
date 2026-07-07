@@ -1,44 +1,45 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
 import {
-  mcpConnectionsResponseSchema,
   type McpClientRegistration,
   type McpConnectionsResponse,
-} from "@continuum/contracts";
-import { http } from "@/lib/api/http";
+  mcpConnectionsResponseSchema,
+} from '@continuum/contracts';
+import { useCallback, useEffect, useState } from 'react';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { http } from '@/lib/api/http';
 
-type LoadState = "loading" | "ready" | "error";
+type LoadState = 'loading' | 'ready' | 'error';
 
-const STATUS_COLOR: Record<McpClientRegistration["status"], "green" | "amber" | "gray"> = {
-  connected: "green",
-  pending: "amber",
-  revoked: "gray",
+const STATUS_PILL: Record<McpClientRegistration['status'], 'success' | 'warning' | 'muted'> = {
+  connected: 'success',
+  pending: 'warning',
+  revoked: 'muted',
 };
 
 function formatTimestamp(value: string | null): string {
-  if (!value) return "—";
+  if (!value) return '—';
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
 }
 
 export function McpConnectionsSection() {
-  const [state, setState] = useState<LoadState>("loading");
+  const [state, setState] = useState<LoadState>('loading');
   const [connections, setConnections] = useState<McpClientRegistration[]>([]);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setState("loading");
+    setState('loading');
     try {
       const data = await http.request<McpConnectionsResponse>({
-        path: "/mcp/connections",
+        path: '/mcp/connections',
         schema: mcpConnectionsResponseSchema,
       });
       setConnections(data.connections);
-      setState("ready");
+      setState('ready');
     } catch {
-      setState("error");
+      setState('error');
     }
   }, []);
 
@@ -50,71 +51,72 @@ export function McpConnectionsSection() {
     async (id: string) => {
       setRevokingId(id);
       try {
-        await http.request({ path: `/mcp/connections/${id}/revoke`, method: "POST" });
+        await http.request({ path: `/mcp/connections/${id}/revoke`, method: 'POST' });
         await load();
       } catch {
-        setState("error");
+        setState('error');
       } finally {
         setRevokingId(null);
       }
     },
-    [load]
+    [load],
   );
 
-  if (state === "loading") {
-    return <Text color="gray">Loading connected apps…</Text>;
+  if (state === 'loading') {
+    return <p className="text-sm text-muted-foreground">Loading connected apps…</p>;
   }
 
-  if (state === "error") {
+  if (state === 'error') {
     return (
-      <Flex direction="column" gap="2" align="start">
-        <Text color="gray">Could not load connected apps.</Text>
-        <Button variant="soft" onClick={() => void load()}>
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-sm text-muted-foreground">Could not load connected apps.</p>
+        <Button variant="secondary" onClick={() => void load()}>
           Retry
         </Button>
-      </Flex>
+      </div>
     );
   }
 
   if (connections.length === 0) {
     return (
-      <Text color="gray">
+      <p className="text-sm text-muted-foreground">
         No connectors linked yet. Add the Continuum connector in Claude and authorize it to see it
         here.
-      </Text>
+      </p>
     );
   }
 
   return (
-    <Flex direction="column" gap="2">
+    <div className="flex flex-col gap-2">
       {connections.map((connection) => (
-        <Card key={connection.id} variant="surface">
-          <Flex align="center" justify="between" gap="3" wrap="wrap">
-            <Flex direction="column" gap="1">
-              <Flex align="center" gap="2">
-                <Text weight="medium">{connection.client_name ?? connection.client_id}</Text>
-                <Badge color={STATUS_COLOR[connection.status]}>{connection.status}</Badge>
-              </Flex>
-              <Text size="1" color="gray">
+        <div key={connection.id} className="rounded-lg border bg-card p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">
+                  {connection.client_name ?? connection.client_id}
+                </span>
+                <Pill variant={STATUS_PILL[connection.status]}>{connection.status}</Pill>
+              </div>
+              <span className="text-xs text-muted-foreground">
                 Authorized {formatTimestamp(connection.authorized_at)}
                 {connection.last_seen_at
                   ? ` · last active ${formatTimestamp(connection.last_seen_at)}`
-                  : ""}
-              </Text>
-            </Flex>
-            {connection.status !== "revoked" ? (
+                  : ''}
+              </span>
+            </div>
+            {connection.status !== 'revoked' ? (
               <Button
-                color="red"
-                variant="soft"
+                variant="destructive"
                 disabled={revokingId === connection.id}
                 onClick={() => void revoke(connection.id)}
               >
-                {revokingId === connection.id ? "Revoking…" : "Revoke"}
+                {revokingId === connection.id ? 'Revoking…' : 'Revoke'}
               </Button>
             ) : null}
-          </Flex>
-        </Card>
+          </div>
+        </div>
       ))}
-    </Flex>
+    </div>
   );
 }

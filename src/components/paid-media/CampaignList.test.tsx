@@ -1,153 +1,115 @@
-
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { CampaignList } from "./CampaignList";
-import { Theme } from "@radix-ui/themes";
-import React from "react";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { CampaignList } from './CampaignList';
 
 // Mock Supabase client
-const mockGetSession = mock(() => Promise.resolve({
-  data: { session: { access_token: "fake-token" } }
-}));
-
-mock.module("@/lib/supabase/client", () => ({
-  createSupabaseBrowserClient: () => ({
-    auth: {
-      getSession: mockGetSession
-    }
-  })
-}));
-
-// Wrapper
-const ThemeWrapper = ({ children }: { children: React.ReactNode }) => (
-  <Theme>{children}</Theme>
+const mockGetSession = mock(() =>
+  Promise.resolve({
+    data: { session: { access_token: 'fake-token' } },
+  }),
 );
 
-describe("CampaignList", () => {
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({
+    auth: {
+      getSession: mockGetSession,
+    },
+  }),
+}));
+
+describe('CampaignList', () => {
   const originalFetch = global.fetch;
   const mockSelect = mock();
 
   beforeEach(() => {
     mockSelect.mockClear();
     mockGetSession.mockClear();
-    
+
     // Default success mock
     global.fetch = mock((url) => {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({
-          campaigns: [
-            { id: "cmp_1", name: "Summer Sale", status: "ACTIVE", spend: 1000, roas: 3.5 },
-            { id: "cmp_2", name: "Winter Promo", status: "PAUSED", spend: 500, roas: 2.0 }
-          ]
-        })
+        json: () =>
+          Promise.resolve({
+            campaigns: [
+              { id: 'cmp_1', name: 'Summer Sale', status: 'ACTIVE', spend: 1000, roas: 3.5 },
+              { id: 'cmp_2', name: 'Winter Promo', status: 'PAUSED', spend: 500, roas: 2.0 },
+            ],
+          }),
       } as Response);
     });
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    cleanup();
   });
 
-  it("renders loading state when adAccountId is present", async () => {
+  it('renders loading state when adAccountId is present', async () => {
     // Delay resolution
-    global.fetch = mock(() => new Promise(() => {})); 
-    
+    global.fetch = mock(() => new Promise(() => {}));
+
     render(
-      <ThemeWrapper>
-        <CampaignList 
-          brandId="brand_123" 
-          adAccountId="act_123" 
-          onSelectCampaign={mockSelect} 
-        />
-      </ThemeWrapper>
+      <CampaignList brandId="brand_123" adAccountId="act_123" onSelectCampaign={mockSelect} />,
     );
-    
-    expect(screen.getByText("Loading campaigns...")).toBeTruthy();
+
+    expect(screen.getByText('Loading campaigns...')).toBeTruthy();
   });
 
-  it("renders empty state when no campaigns found", async () => {
-    global.fetch = mock(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ campaigns: [] })
-    } as Response));
+  it('renders empty state when no campaigns found', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ campaigns: [] }),
+      } as Response),
+    );
 
     render(
-      <ThemeWrapper>
-        <CampaignList 
-          brandId="brand_123" 
-          adAccountId="act_123" 
-          onSelectCampaign={mockSelect} 
-        />
-      </ThemeWrapper>
+      <CampaignList brandId="brand_123" adAccountId="act_123" onSelectCampaign={mockSelect} />,
     );
 
     await waitFor(() => {
-      expect(screen.getByText("No campaigns found")).toBeTruthy();
+      expect(screen.getByText('No campaigns found')).toBeTruthy();
     });
   });
 
-  it("renders campaigns table", async () => {
+  it('renders campaigns table', async () => {
     render(
-      <ThemeWrapper>
-        <CampaignList 
-          brandId="brand_123" 
-          adAccountId="act_123" 
-          onSelectCampaign={mockSelect} 
-        />
-      </ThemeWrapper>
+      <CampaignList brandId="brand_123" adAccountId="act_123" onSelectCampaign={mockSelect} />,
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Summer Sale")).toBeTruthy();
-      expect(screen.getByText("Winter Promo")).toBeTruthy();
-      expect(screen.getByText("3.50")).toBeTruthy(); // ROAS
+      expect(screen.getByText('Summer Sale')).toBeTruthy();
+      expect(screen.getByText('Winter Promo')).toBeTruthy();
+      expect(screen.getByText('3.50')).toBeTruthy(); // ROAS
     });
   });
 
-  it("calls onSelectCampaign when row is clicked", async () => {
+  it('calls onSelectCampaign when row is clicked', async () => {
     render(
-      <ThemeWrapper>
-        <CampaignList 
-          brandId="brand_123" 
-          adAccountId="act_123" 
-          onSelectCampaign={mockSelect} 
-        />
-      </ThemeWrapper>
+      <CampaignList brandId="brand_123" adAccountId="act_123" onSelectCampaign={mockSelect} />,
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Summer Sale")).toBeTruthy();
+      expect(screen.getByText('Summer Sale')).toBeTruthy();
     });
 
-    const row = screen.getByText("Summer Sale");
+    const row = screen.getByText('Summer Sale');
     fireEvent.click(row);
 
-    expect(mockSelect).toHaveBeenCalledWith("cmp_1");
+    expect(mockSelect).toHaveBeenCalledWith('cmp_1');
   });
 
-  it("fetches new campaigns when adAccountId changes", async () => {
+  it('fetches new campaigns when adAccountId changes', async () => {
     const { rerender } = render(
-      <ThemeWrapper>
-        <CampaignList 
-          brandId="brand_123" 
-          adAccountId="act_123" 
-          onSelectCampaign={mockSelect} 
-        />
-      </ThemeWrapper>
+      <CampaignList brandId="brand_123" adAccountId="act_123" onSelectCampaign={mockSelect} />,
     );
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
 
     // Change prop
     rerender(
-      <ThemeWrapper>
-        <CampaignList 
-          brandId="brand_123" 
-          adAccountId="act_456" 
-          onSelectCampaign={mockSelect} 
-        />
-      </ThemeWrapper>
+      <CampaignList brandId="brand_123" adAccountId="act_456" onSelectCampaign={mockSelect} />,
     );
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));

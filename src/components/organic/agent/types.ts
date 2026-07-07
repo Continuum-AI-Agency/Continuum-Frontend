@@ -2,6 +2,7 @@ import type { CalendarPlacement } from "@/lib/organic/calendar-generation"
 import type { AgentMentionMetadata, AgentMentionReference } from "@/lib/agent-references"
 import { pipelineStageEnum } from "@continuum/contracts"
 import type {
+  AeoSnapshotCard,
   BulkContentPlan,
   MediaSearchResultsFrame,
   OrganicPostCardData,
@@ -39,6 +40,8 @@ export type UiTrendChart = OrganicTrendChartData
 
 export type UiPostCard = OrganicPostCardData
 
+export type UiAeoSnapshotCard = AeoSnapshotCard
+
 // PlanItem, PlanItemStatus, PlanEvidence, PlanStatus are re-exported from
 // @continuum/contracts above. UiPlanCard is the canonical proposed-plan shape.
 export type UiPlanCard = ProposedPlan
@@ -71,6 +74,7 @@ export type UiCard =
   | { type: "bulk_plan_card"; data: BulkContentPlan }
   | { type: "post_list"; data: UiFetchedPost[]; label?: string }
   | { type: "skill_proposal"; data: SkillProposalCardData }
+  | { type: "aeo_snapshot"; data: UiAeoSnapshotCard }
 
 export type BulkRunStatus = "running" | "completed" | "failed"
 

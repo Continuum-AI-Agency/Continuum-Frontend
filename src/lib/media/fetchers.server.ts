@@ -1,12 +1,13 @@
-import "server-only";
+import 'server-only';
 
-import type { MediaAsset, MediaCollection, MediaKind, MediaSource } from "@continuum/contracts";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { mediaSchema } from "./supabase-media";
-import { rowToMediaAsset } from "./mapper";
-import { mintSignedUrls } from "./signed-urls";
-import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from "./schema";
-import { resolveSmartQueryFilter } from "./smart-collections";
+import type { MediaAsset, MediaCollection, MediaKind, MediaSource } from '@continuum/contracts';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
+import { rowToMediaAsset } from './mapper';
+import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
+import { mintSignedUrls } from './signed-urls';
+import { resolveSmartQueryFilter } from './smart-collections';
+import { mediaSchema } from './supabase-media';
 
 const PAGE_SIZE = 48;
 
@@ -21,27 +22,29 @@ export async function fetchMediaAssets(
   let effectiveKind = options.kind;
 
   let query = mediaSchema(client)
-    .from("assets")
+    .from('assets')
     .select(MEDIA_ASSET_SELECT)
-    .eq("brand_id", brandId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
+    .eq('brand_id', brandId)
+    .is('deleted_at', null)
+    // Hide non-cover carousel slides — the cover tile carries the whole group.
+    .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER)
+    .order('created_at', { ascending: false })
     .limit(limit);
 
   if (options.collectionId) {
     const { data: collection, error: collectionError } = await mediaSchema(client)
-      .from("collections")
-      .select("kind, smart_query")
-      .eq("id", options.collectionId)
-      .eq("brand_id", brandId)
+      .from('collections')
+      .select('kind, smart_query')
+      .eq('id', options.collectionId)
+      .eq('brand_id', brandId)
       .maybeSingle();
     if (collectionError) {
-      console.error("[media/fetchers] collection query failed", collectionError);
+      console.error('[media/fetchers] collection query failed', collectionError);
       return [];
     }
     const col = collection as { kind: string; smart_query: Record<string, unknown> | null } | null;
 
-    if (col?.kind === "smart") {
+    if (col?.kind === 'smart') {
       // Smart collection: derive by filter, not membership.
       const smart = resolveSmartQueryFilter(col.smart_query);
       effectiveSource = smart.source ?? options.source;
@@ -49,13 +52,13 @@ export async function fetchMediaAssets(
     } else {
       // Manual collection: constrain by collection_items membership.
       const { data: items, error: itemsError } = await mediaSchema(client)
-        .from("collection_items")
-        .select("asset_id")
-        .eq("collection_id", options.collectionId)
-        .order("position", { ascending: true });
+        .from('collection_items')
+        .select('asset_id')
+        .eq('collection_id', options.collectionId)
+        .order('position', { ascending: true });
 
       if (itemsError) {
-        console.error("[media/fetchers] collection_items query failed", itemsError);
+        console.error('[media/fetchers] collection_items query failed', itemsError);
         return [];
       }
 
@@ -63,47 +66,48 @@ export async function fetchMediaAssets(
       if (assetIds.length === 0) return [];
 
       query = mediaSchema(client)
-        .from("assets")
+        .from('assets')
         .select(MEDIA_ASSET_SELECT)
-        .in("id", assetIds)
-        .is("deleted_at", null)
+        .in('id', assetIds)
+        .is('deleted_at', null)
         .limit(limit);
     }
   }
 
-  if (effectiveSource) query = query.eq("source", effectiveSource);
-  if (effectiveKind) query = query.eq("kind", effectiveKind);
+  if (effectiveSource) query = query.eq('source', effectiveSource);
+  if (effectiveKind) query = query.eq('kind', effectiveKind);
 
   const { data, error } = await query;
   if (error) {
-    console.error("[media/fetchers] assets query failed", error);
+    console.error('[media/fetchers] assets query failed', error);
     return [];
   }
 
   const rows = (data ?? []) as unknown as MediaAssetRow[];
-  const signedUrlMap = await mintSignedUrls(
-    rows.map((r) => ({ path: r.storage_path, bucket: r.bucket })),
-  );
+  const signedUrlMap = await mintSignedUrls([
+    ...rows.map((r) => ({ path: r.storage_path, bucket: r.bucket })),
+    ...carouselSignablePaths(rows),
+  ]);
 
-  return rows.map((row) =>
-    rowToMediaAsset(row, signedUrlMap.get(row.storage_path) ?? null),
-  );
+  return rows.map((row) => {
+    const asset = rowToMediaAsset(row, signedUrlMap.get(row.storage_path) ?? null);
+    const carousel = buildCarousel(row, signedUrlMap);
+    return carousel ? { ...asset, carousel } : asset;
+  });
 }
 
-export async function fetchMediaCollections(
-  brandId: string,
-): Promise<MediaCollection[]> {
+export async function fetchMediaCollections(brandId: string): Promise<MediaCollection[]> {
   const client = await createSupabaseServerClient();
 
   const { data, error } = await mediaSchema(client)
-    .from("collections")
-    .select("*")
-    .eq("brand_id", brandId)
-    .order("created_at", { ascending: false })
+    .from('collections')
+    .select('*')
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending: false })
     .returns<MediaCollectionRow[]>();
 
   if (error) {
-    console.error("[media/fetchers] collections query failed", error);
+    console.error('[media/fetchers] collections query failed', error);
     return [];
   }
 
@@ -126,14 +130,14 @@ export async function fetchMediaCollections(
 export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
   const client = await createSupabaseServerClient();
   const { data, error } = await mediaSchema(client)
-    .from("assets")
-    .select("size_bytes")
-    .eq("brand_id", brandId)
-    .is("deleted_at", null)
+    .from('assets')
+    .select('size_bytes')
+    .eq('brand_id', brandId)
+    .is('deleted_at', null)
     .returns<{ size_bytes: number | null }[]>();
 
   if (error) {
-    console.error("[media/fetchers] storage usage query failed", error);
+    console.error('[media/fetchers] storage usage query failed', error);
     return 0;
   }
 

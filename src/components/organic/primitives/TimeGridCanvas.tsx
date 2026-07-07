@@ -1,45 +1,47 @@
-"use client"
+'use client';
 
-import * as React from "react"
+import * as React from 'react';
 
-import { formatDayId } from "./calendar-utils"
-import { PlannerHeader } from "./PlannerHeader"
-import { PlannerMatrix } from "./PlannerMatrix"
-import type { CreatePostMode, PlannerPlatform, PlannerPlatformKey } from "./planner-platforms"
+import { formatDayId } from './calendar-utils';
+import { PlannerHeader } from './PlannerHeader';
+import { PlannerMatrix } from './PlannerMatrix';
 import type {
-  OrganicCalendarDay,
-  OrganicPlatformTag,
-  OrganicSeedDragPayload,
-} from "./types"
+  CreatePostFormat,
+  CreatePostMode,
+  PlannerPlatform,
+  PlannerPlatformKey,
+} from './planner-platforms';
+import type { OrganicCalendarDay, OrganicPlatformTag, OrganicSeedDragPayload } from './types';
 
 type TimeGridCanvasProps = {
-  days: OrganicCalendarDay[]
-  platforms: PlannerPlatform[]
-  selectedDraftId: string | null
-  selectedDraftIds: string[]
-  rangeTitle: string
-  rangeSubtitle?: string
-  viewMode: "day" | "week"
-  onViewModeChange: (mode: "day" | "week") => void
-  onPreviousWeek: () => void
-  onNextWeek: () => void
+  days: OrganicCalendarDay[];
+  platforms: PlannerPlatform[];
+  selectedDraftId: string | null;
+  selectedDraftIds: string[];
+  rangeTitle: string;
+  rangeSubtitle?: string;
+  viewMode: 'day' | 'week';
+  onViewModeChange: (mode: 'day' | 'week') => void;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
   onCreatePost: (options?: {
-    dayId?: string
-    platform?: PlannerPlatformKey
-    status?: "draft" | "scheduled" | "placeholder"
-    mode?: CreatePostMode
-  }) => void
-  onSelectDraft: (id: string) => void
-  onToggleSelection: (id: string) => void
-  onRegenerate: (draftId: string) => void
-  onClearFailure?: (draftId: string) => void
+    dayId?: string;
+    platform?: PlannerPlatformKey;
+    status?: 'draft' | 'scheduled' | 'placeholder';
+    mode?: CreatePostMode;
+    format?: CreatePostFormat;
+  }) => void;
+  onSelectDraft: (id: string) => void;
+  onToggleSelection: (id: string) => void;
+  onRegenerate: (draftId: string) => void;
+  onClearFailure?: (draftId: string) => void;
   onNativeDrop?: (
     dayId: string,
     time: string,
     data: OrganicSeedDragPayload,
-    platformKey?: OrganicPlatformTag
-  ) => void
-}
+    platformKey?: OrganicPlatformTag,
+  ) => void;
+};
 
 export function TimeGridCanvas({
   days,
@@ -59,7 +61,7 @@ export function TimeGridCanvas({
   onClearFailure,
   onNativeDrop,
 }: TimeGridCanvasProps) {
-  const todayId = React.useMemo(() => formatDayId(new Date()), [])
+  const todayId = React.useMemo(() => formatDayId(new Date()), []);
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-2 rounded-lg bg-card/50 p-2">
@@ -83,15 +85,16 @@ export function TimeGridCanvas({
         onRegenerate={onRegenerate}
         onClearFailure={onClearFailure}
         onNativeDrop={onNativeDrop}
-        onCreatePost={({ dayId, platformKey, status, mode }) =>
+        onCreatePost={({ dayId, platformKey, status, mode, format }) =>
           onCreatePost({
             dayId,
             platform: platformKey,
             status,
             mode,
+            format,
           })
         }
       />
     </section>
-  )
+  );
 }

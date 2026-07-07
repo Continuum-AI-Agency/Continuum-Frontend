@@ -44,6 +44,7 @@ const PROVIDER_BY_PLATFORM: Partial<Record<PlatformKey, string>> = {
   dv360: "google",
   googleAnalytics: "google",
   threads: "meta",
+  linkedin: "linkedin",
   x: "x",
 };
 
@@ -64,6 +65,9 @@ function inferProviderFromType(type: string): string | undefined {
     normalized.includes("ga4")
   ) {
     return "google";
+  }
+  if (normalized.includes("linkedin")) {
+    return "linkedin";
   }
   return undefined;
 }

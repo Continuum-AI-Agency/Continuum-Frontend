@@ -1,9 +1,11 @@
 // Pure derivations for the dashboard Competitor Spy tables. Kept hook-free so
 // the status/recency logic is unit testable without React or the network.
 
+import { formatRelativeTime } from '@/lib/time/relativeTime';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type AdStatusTone = "new" | "active" | "paused";
+export type AdStatusTone = 'new' | 'active' | 'paused';
 
 export function isRecentlyIdentified(firstSeenAt: string, now: number, windowDays = 7): boolean {
   const seen = Date.parse(firstSeenAt);
@@ -15,23 +17,18 @@ export function isRecentlyIdentified(firstSeenAt: string, now: number, windowDay
 // A competitor ad is "New" when it was first seen within the recency window,
 // "Paused" when delivery has stopped, otherwise "Active".
 export function adStatusBadge(
-  status: "active" | "paused",
+  status: 'active' | 'paused',
   firstSeenAt: string,
   now: number,
 ): { label: string; tone: AdStatusTone } {
-  if (status === "paused") return { label: "Paused", tone: "paused" };
-  if (isRecentlyIdentified(firstSeenAt, now)) return { label: "New", tone: "new" };
-  return { label: "Active", tone: "active" };
+  if (status === 'paused') return { label: 'Paused', tone: 'paused' };
+  if (isRecentlyIdentified(firstSeenAt, now)) return { label: 'New', tone: 'new' };
+  return { label: 'Active', tone: 'active' };
 }
 
 export function formatRelativeDay(iso: string | null | undefined, now: number): string {
-  if (!iso) return "";
+  if (!iso) return '';
   const time = Date.parse(iso);
-  if (Number.isNaN(time)) return "";
-  const days = Math.floor((now - time) / DAY_MS);
-  if (days <= 0) return "today";
-  if (days === 1) return "1d ago";
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return months < 12 ? `${months}mo ago` : `${Math.floor(days / 365)}y ago`;
+  if (Number.isNaN(time)) return '';
+  return formatRelativeTime(time, now);
 }

@@ -1,14 +1,12 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Archive, X } from "lucide-react";
-import { Button } from "@radix-ui/themes";
-
-import { SheetClose, SheetTitle } from "@/components/ui/sheet";
-import * as SheetPrimitive from "@radix-ui/react-dialog";
-import { Sheet } from "@/components/ui/sheet";
-import { StudioMediaLibraryPanel } from "@/components/creative-assets/StudioMediaLibraryPanel";
-import { cn } from "@/lib/utils";
+import * as SheetPrimitive from '@radix-ui/react-dialog';
+import { Archive, X } from 'lucide-react';
+import React from 'react';
+import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetClose, SheetTitle } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
 
 type CreativeLibrarySidebarProps = {
   brandProfileId: string;
@@ -34,7 +32,7 @@ export function CreativeLibrarySidebar({
           onClick={() => setOpen(true)}
           aria-label="Open creative library"
         >
-          <Archive className="h-5 w-5" />
+          <Archive className="size-5" />
         </Button>
       </div>
 
@@ -42,13 +40,13 @@ export function CreativeLibrarySidebar({
         <SheetPrimitive.Portal>
           <SheetPrimitive.Content
             className={cn(
-              "fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
-              "bg-slate-950/95 border-l border-white/10 text-white backdrop-blur-xl",
-              "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right",
-              "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
-              "inset-y-0 right-0 h-full focus:outline-none"
+              'fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
+              'bg-slate-950/95 border-l border-white/10 text-white backdrop-blur-xl',
+              'data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right',
+              'data-[state=open]:animate-in data-[state=open]:slide-in-from-right',
+              'inset-y-0 right-0 h-full focus:outline-none',
             )}
-            style={{ width: expandedWidth, maxWidth: "100vw" }}
+            style={{ width: expandedWidth, maxWidth: '100vw' }}
             onPointerDownOutside={() => setOpen(false)}
           >
             <div className="flex h-full flex-col">
@@ -60,7 +58,7 @@ export function CreativeLibrarySidebar({
                 <SheetClose asChild>
                   <Button
                     variant="ghost"
-                    size="1"
+                    size="icon-sm"
                     className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-white/10 hover:text-white"
                   >
                     <X className="h-4 w-4" />

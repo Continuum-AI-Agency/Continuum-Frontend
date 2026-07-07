@@ -1,9 +1,9 @@
-import {
-  type StudioNodeType,
-  type WorkflowMediaKind,
-  type GraphNodeLike,
-  type GraphEdgeLike,
-} from "./workflow-graph";
+import type {
+  GraphEdgeLike,
+  GraphNodeLike,
+  StudioNodeType,
+  WorkflowMediaKind,
+} from './workflow-graph';
 
 // Token-lean projection of a canvas graph for the MCP agent. Raw canvas nodes
 // carry positions, styles, xyflow internals, runtime flags, base64, and signed
@@ -11,23 +11,31 @@ import {
 // high-signal config + wiring + attachment identity, and is the single source of
 // the lean shape returned by `get` and every edit confirmation.
 
-const FREE_TEXT_KEYS = new Set(["value", "prompt", "positivePrompt", "negativePrompt"]);
+const FREE_TEXT_KEYS = new Set(['value', 'prompt', 'positivePrompt', 'negativePrompt']);
 const FREE_TEXT_CAP = 160;
 
 export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
-  string: ["value"],
-  videoDecode: ["value"],
-  nanoGen: ["model", "positivePrompt", "aspectRatio", "imageSize"],
-  videoGen: ["model", "prompt", "negativePrompt", "aspectRatio", "durationSeconds", "resolution"],
-  veoDirector: ["model", "prompt", "negativePrompt", "aspectRatio", "durationSeconds", "resolution"],
-  veoFast: ["model", "prompt", "negativePrompt", "aspectRatio", "durationSeconds", "resolution"],
-  extendVideo: ["prompt"],
-  videoEditor: ["outputFormat"],
-  timelineEditor: ["outputFormat"],
-  publishToPlanner: ["platform", "status", "scheduledAt"],
-  image: ["fileName", "referenceType", "aspectRatio"],
-  video: ["fileName"],
-  audio: ["fileName"],
+  string: ['value'],
+  videoDecode: ['value'],
+  nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],
+  videoGen: ['model', 'prompt', 'negativePrompt', 'aspectRatio', 'durationSeconds', 'resolution'],
+  veoDirector: [
+    'model',
+    'prompt',
+    'negativePrompt',
+    'aspectRatio',
+    'durationSeconds',
+    'resolution',
+  ],
+  veoFast: ['model', 'prompt', 'negativePrompt', 'aspectRatio', 'durationSeconds', 'resolution'],
+  omniGen: ['model', 'prompt', 'aspectRatio'],
+  extendVideo: ['prompt'],
+  videoEditor: ['outputFormat'],
+  timelineEditor: ['outputFormat'],
+  publishToPlanner: ['platform', 'status', 'scheduledAt'],
+  image: ['fileName', 'referenceType', 'aspectRatio'],
+  video: ['fileName'],
+  audio: ['fileName'],
   document: [],
 };
 
@@ -68,25 +76,35 @@ function isEmpty(value: unknown): boolean {
   return (
     value === undefined ||
     value === null ||
-    value === "" ||
+    value === '' ||
     (Array.isArray(value) && value.length === 0)
   );
 }
 
-function projectConfig(type: string, data: Record<string, unknown>): Record<string, unknown> | undefined {
+function projectConfig(
+  type: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const whitelist = AGENT_FIELD_WHITELIST[type as StudioNodeType] ?? [];
   const config: Record<string, unknown> = {};
   for (const key of whitelist) {
     let value = data[key];
     if (isEmpty(value)) continue;
-    if (FREE_TEXT_KEYS.has(key) && typeof value === "string") value = capText(value);
+    if (FREE_TEXT_KEYS.has(key) && typeof value === 'string') value = capText(value);
     config[key] = value;
   }
   return Object.keys(config).length > 0 ? config : undefined;
 }
 
-const OUTPUT_IMAGE_TYPES = new Set(["nanoGen"]);
-const OUTPUT_VIDEO_TYPES = new Set(["videoGen", "veoDirector", "veoFast", "extendVideo", "videoEditor", "timelineEditor"]);
+const OUTPUT_IMAGE_TYPES = new Set(['nanoGen']);
+const OUTPUT_VIDEO_TYPES = new Set([
+  'videoGen',
+  'veoDirector',
+  'veoFast',
+  'extendVideo',
+  'videoEditor',
+  'timelineEditor',
+]);
 
 function attachmentFor(
   node: GraphNodeLike & { type?: string },
@@ -95,21 +113,39 @@ function attachmentFor(
   const data = node.data ?? {};
   const consumingHandle = edges.find((e) => e.source === node.id)?.targetHandle ?? undefined;
 
-  if ((node.type === "image" || node.type === "video") && typeof data.sourcePath === "string") {
+  if ((node.type === 'image' || node.type === 'video') && typeof data.sourcePath === 'string') {
     return {
       node_id: node.id,
       handle: consumingHandle ?? node.type,
-      media_kind: node.type === "image" ? "image" : "video",
-      file_name: typeof data.fileName === "string" ? data.fileName : undefined,
-      asset_ref: typeof data.assetId === "string" ? data.assetId : undefined,
+      media_kind: node.type === 'image' ? 'image' : 'video',
+      file_name: typeof data.fileName === 'string' ? data.fileName : undefined,
+      asset_ref: typeof data.assetId === 'string' ? data.assetId : undefined,
     };
   }
 
-  if (OUTPUT_IMAGE_TYPES.has(node.type ?? "") && typeof data.generatedImageStoragePath === "string") {
-    return { node_id: node.id, handle: "output", media_kind: "image", asset_ref: typeof data.generatedImageAssetId === "string" ? data.generatedImageAssetId : undefined };
+  if (
+    OUTPUT_IMAGE_TYPES.has(node.type ?? '') &&
+    typeof data.generatedImageStoragePath === 'string'
+  ) {
+    return {
+      node_id: node.id,
+      handle: 'output',
+      media_kind: 'image',
+      asset_ref:
+        typeof data.generatedImageAssetId === 'string' ? data.generatedImageAssetId : undefined,
+    };
   }
-  if (OUTPUT_VIDEO_TYPES.has(node.type ?? "") && typeof data.generatedVideoStoragePath === "string") {
-    return { node_id: node.id, handle: "output", media_kind: "video", asset_ref: typeof data.generatedVideoAssetId === "string" ? data.generatedVideoAssetId : undefined };
+  if (
+    OUTPUT_VIDEO_TYPES.has(node.type ?? '') &&
+    typeof data.generatedVideoStoragePath === 'string'
+  ) {
+    return {
+      node_id: node.id,
+      handle: 'output',
+      media_kind: 'video',
+      asset_ref:
+        typeof data.generatedVideoAssetId === 'string' ? data.generatedVideoAssetId : undefined,
+    };
   }
 
   return undefined;
@@ -120,18 +156,18 @@ export function projectGraphForAgent(graph: ProjectionInput): ProjectedGraph {
   const nodes: ProjectedNode[] = [];
 
   for (const node of graph.nodes) {
-    const type = node.type ?? "unknown";
+    const type = node.type ?? 'unknown';
     nodeTypes[type] = (nodeTypes[type] ?? 0) + 1;
     const data = node.data ?? {};
     const projected: ProjectedNode = { id: node.id, type };
-    if (typeof data.label === "string" && data.label.trim()) projected.label = data.label;
+    if (typeof data.label === 'string' && data.label.trim()) projected.label = data.label;
     const config = projectConfig(type, data);
     if (config) projected.config = config;
     nodes.push(projected);
   }
 
   const wiring = graph.edges.map(
-    (e) => `${e.source}.${e.sourceHandle ?? "out"} → ${e.target}.${e.targetHandle ?? "in"}`,
+    (e) => `${e.source}.${e.sourceHandle ?? 'out'} → ${e.target}.${e.targetHandle ?? 'in'}`,
   );
 
   const attachments: ProjectedAttachment[] = [];

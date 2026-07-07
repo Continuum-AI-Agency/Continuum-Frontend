@@ -12,11 +12,17 @@ import { formatCurrency, humanize } from '../format';
 
 type PortfolioRowCardProps = {
   portfolio: PortfolioListItem;
+  currency?: string | null;
   selected?: boolean;
   onSelect?: () => void;
 };
 
-export function PortfolioRowCard({ portfolio, selected, onSelect }: PortfolioRowCardProps) {
+export function PortfolioRowCard({
+  portfolio,
+  currency,
+  selected,
+  onSelect,
+}: PortfolioRowCardProps) {
   const pending = portfolio.pending_recommendations;
 
   return (
@@ -45,7 +51,7 @@ export function PortfolioRowCard({ portfolio, selected, onSelect }: PortfolioRow
       <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">
           <p className="text-sm font-semibold tabular-nums">
-            {formatCurrency(portfolio.daily_total)}
+            {formatCurrency(portfolio.daily_total, currency)}
           </p>
           <p className="text-[11px] text-muted-foreground">/day</p>
         </div>

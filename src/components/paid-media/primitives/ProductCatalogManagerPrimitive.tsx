@@ -1,15 +1,24 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Badge, Callout, Flex, Heading, Text } from "@radix-ui/themes";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useForm } from "react-hook-form";
-import { AlertTriangle, Check, ChevronsUpDown, Database, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type { z } from "zod";
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  AlertTriangle,
+  Check,
+  ChevronsUpDown,
+  Database,
+  Plus,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import type { z } from 'zod';
+import { Pill, type PillProps } from '@/components/kibo-ui/pill';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Command,
   CommandEmpty,
@@ -17,30 +26,17 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+} from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  createProductCatalog,
-  deleteProductCatalog,
-  listProductCatalogs,
-  updateProductCatalog,
-} from "@/lib/api/productCatalogs.client";
-import {
-  listProductCatalogLinks,
-  removeCatalogProduct,
-  renameCatalogProduct,
-  upsertProductCatalogLink,
-} from "@/lib/api/productCatalogLinks.client";
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -48,46 +44,62 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { useSelectableAssets } from '@/lib/api/integrations';
+import {
+  listProductCatalogLinks,
+  removeCatalogProduct,
+  renameCatalogProduct,
+  upsertProductCatalogLink,
+} from '@/lib/api/productCatalogLinks.client';
+import {
+  createProductCatalog,
+  deleteProductCatalog,
+  listProductCatalogs,
+  updateProductCatalog,
+} from '@/lib/api/productCatalogs.client';
+import {
+  getSelectableAssetLabel,
+  getSelectableAssetsFlatListForProvider,
+} from '@/lib/integrations/selectableAssets';
+import type {
+  ProductCatalogLinkRecord,
+  UpsertProductCatalogLinkInput,
+} from '@/lib/schemas/productCatalogLinks';
 import {
   EMPTY_PRODUCT_CATALOG_FORM,
+  formatLinkedAdObjectIds,
   PRODUCT_CATALOG_SYNC_STATUS_LABELS,
   PRODUCT_CATALOG_VERTICAL_LABELS,
-  formatLinkedAdObjectIds,
-  parseLinkedAdObjectIds,
-  productCatalogFormSchema,
   type ProductCatalogFormValues,
   type ProductCatalogRecord,
-} from "@/lib/schemas/productCatalogs";
-import {
-  type ProductCatalogLinkRecord,
-  type UpsertProductCatalogLinkInput,
-} from "@/lib/schemas/productCatalogLinks";
-import { useSelectableAssets } from "@/lib/api/integrations";
-import { getSelectableAssetLabel, getSelectableAssetsFlatListForProvider } from "@/lib/integrations/selectableAssets";
-import { cn } from "@/lib/utils";
+  parseLinkedAdObjectIds,
+  productCatalogFormSchema,
+} from '@/lib/schemas/productCatalogs';
+import { cn } from '@/lib/utils';
 
-const SYNC_STATUS_BADGE_COLOR = {
-  active: "green",
-  stale: "amber",
-  error: "red",
-  draft: "gray",
-} as const;
+const SYNC_STATUS_PILL_VARIANT: Record<ProductCatalogRecord['syncStatus'], PillProps['variant']> = {
+  active: 'success',
+  stale: 'warning',
+  error: 'destructive',
+  draft: 'muted',
+};
 
 const MOTION_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
-const AD_OBJECT_SELECT_CUSTOM = "__ad-object-custom__";
-const PRODUCT_SELECT_CUSTOM = "__product-custom__";
+const AD_OBJECT_SELECT_CUSTOM = '__ad-object-custom__';
+const PRODUCT_SELECT_CUSTOM = '__product-custom__';
 
 type ProductCatalogManagerPrimitiveProps = {
   brandId: string;
 };
 
-type LinkDraftInput = Omit<UpsertProductCatalogLinkInput, "brandId">;
+type LinkDraftInput = Omit<UpsertProductCatalogLinkInput, 'brandId'>;
 type ProductCatalogFormInput = z.input<typeof productCatalogFormSchema>;
 
 type KnownAdObjectOption = {
   id: string;
-  level: ProductCatalogFormValues["linkedAdObjectLevel"];
+  level: ProductCatalogFormValues['linkedAdObjectLevel'];
   name: string | null;
   status: string | null;
 };
@@ -95,7 +107,7 @@ type KnownAdObjectOption = {
 type CatalogProductSummary = {
   externalProductId: string;
   title: string | null;
-  availability: LinkDraftInput["product"]["availability"];
+  availability: LinkDraftInput['product']['availability'];
   activeLinks: number;
   totalLinks: number;
   lastSeenAt: string | null;
@@ -114,68 +126,67 @@ type MetaBusinessOption = {
 
 const EMPTY_LINK_DRAFT: LinkDraftInput = {
   product: {
-    externalProductId: "",
-    title: "",
-    availability: "unknown",
-    imageUrl: "",
-    productUrl: "",
-    currency: "",
+    externalProductId: '',
+    title: '',
+    availability: 'unknown',
+    imageUrl: '',
+    productUrl: '',
+    currency: '',
   },
   adObject: {
-    platform: "meta",
-    objectType: "adset",
-    externalObjectId: "",
-    name: "",
-    status: "",
+    platform: 'meta',
+    objectType: 'adset',
+    externalObjectId: '',
+    name: '',
+    status: '',
   },
   activity: {
     isActive: true,
-    source: "manual",
+    source: 'manual',
   },
 };
-
 
 function mapCatalogToFormValues(catalog: ProductCatalogRecord): ProductCatalogFormValues {
   return {
     name: catalog.name,
-    externalCatalogId: catalog.externalCatalogId ?? "",
-    businessId: catalog.businessId ?? "",
-    catalogStoreId: catalog.catalogStoreId ?? "",
+    externalCatalogId: catalog.externalCatalogId ?? '',
+    businessId: catalog.businessId ?? '',
+    catalogStoreId: catalog.catalogStoreId ?? '',
     vertical: catalog.vertical,
-    feedUrl: catalog.feedUrl ?? "",
-    defaultImageUrl: catalog.defaultImageUrl ?? "",
-    fallbackImageUrl: catalog.fallbackImageUrl ?? "",
+    feedUrl: catalog.feedUrl ?? '',
+    defaultImageUrl: catalog.defaultImageUrl ?? '',
+    fallbackImageUrl: catalog.fallbackImageUrl ?? '',
     linkedAdObjectLevel: catalog.linkedAdObjectLevel,
     linkedAdObjectIdsText: formatLinkedAdObjectIds(catalog.linkedAdObjectIds),
-    notes: catalog.notes ?? "",
+    notes: catalog.notes ?? '',
   };
 }
 
 function catalogLinkToUpsertInput(
   brandId: string,
   link: ProductCatalogLinkRecord,
-  isActive: boolean
+  isActive: boolean,
 ): UpsertProductCatalogLinkInput {
   return {
     brandId,
     product: {
       externalProductId: link.product.externalProductId,
-      title: link.product.title ?? "",
+      title: link.product.title ?? '',
       availability: link.product.availability,
-      imageUrl: link.product.imageUrl ?? "",
-      productUrl: link.product.productUrl ?? "",
-      currency: link.product.currency ?? "",
+      imageUrl: link.product.imageUrl ?? '',
+      productUrl: link.product.productUrl ?? '',
+      currency: link.product.currency ?? '',
     },
     adObject: {
       platform: link.adObject.platform,
       objectType: link.adObject.objectType,
       externalObjectId: link.adObject.externalObjectId,
-      name: link.adObject.name ?? "",
-      status: link.adObject.status ?? "",
+      name: link.adObject.name ?? '',
+      status: link.adObject.status ?? '',
     },
     activity: {
       isActive,
-      source: "manual",
+      source: 'manual',
     },
   };
 }
@@ -183,7 +194,9 @@ function catalogLinkToUpsertInput(
 function SectionDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="shrink-0 text-2xs font-semibold uppercase tracking-widest text-white/30">{label}</span>
+      <span className="shrink-0 text-2xs font-semibold uppercase tracking-widest text-white/30">
+        {label}
+      </span>
       <div className="h-px flex-1 bg-white/[0.06]" />
     </div>
   );
@@ -194,7 +207,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   const latestCatalogLinkRequestRef = useRef<string | null>(null);
   const [catalogs, setCatalogs] = useState<ProductCatalogRecord[]>([]);
   const [activeCatalogId, setActiveCatalogId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -212,29 +225,29 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   const [catalogStoreOpen, setCatalogStoreOpen] = useState(false);
   const [productRenameDrafts, setProductRenameDrafts] = useState<Record<string, string>>({});
   const [linkDraft, setLinkDraft] = useState<LinkDraftInput>(EMPTY_LINK_DRAFT);
-  const [customLinkedAdObjectId, setCustomLinkedAdObjectId] = useState("");
-  const [customActivityProductId, setCustomActivityProductId] = useState("");
-  const [customActivityAdObjectId, setCustomActivityAdObjectId] = useState("");
+  const [customLinkedAdObjectId, setCustomLinkedAdObjectId] = useState('');
+  const [customActivityProductId, setCustomActivityProductId] = useState('');
+  const [customActivityAdObjectId, setCustomActivityAdObjectId] = useState('');
 
   const form = useForm<ProductCatalogFormInput, unknown, ProductCatalogFormValues>({
     resolver: zodResolver(productCatalogFormSchema),
     defaultValues: EMPTY_PRODUCT_CATALOG_FORM,
-    mode: "onBlur",
+    mode: 'onBlur',
   });
   const selectableAssetsQuery = useSelectableAssets(undefined, { enabled: true });
 
   const activeCatalog = useMemo(
     () => catalogs.find((catalog) => catalog.id === activeCatalogId) ?? null,
-    [catalogs, activeCatalogId]
+    [catalogs, activeCatalogId],
   );
   const isCreateMode = activeCatalog === null;
-  const watchedBusinessId = form.watch("businessId");
-  const watchedCatalogStoreId = form.watch("catalogStoreId");
-  const watchedLinkedAdObjectLevel = form.watch("linkedAdObjectLevel");
-  const watchedLinkedAdObjectIdsText = form.watch("linkedAdObjectIdsText");
+  const watchedBusinessId = form.watch('businessId');
+  const watchedCatalogStoreId = form.watch('catalogStoreId');
+  const watchedLinkedAdObjectLevel = form.watch('linkedAdObjectLevel');
+  const watchedLinkedAdObjectIdsText = form.watch('linkedAdObjectIdsText');
   const selectedLinkedAdObjectIds = useMemo(
-    () => parseLinkedAdObjectIds(watchedLinkedAdObjectIdsText ?? ""),
-    [watchedLinkedAdObjectIdsText]
+    () => parseLinkedAdObjectIds(watchedLinkedAdObjectIdsText ?? ''),
+    [watchedLinkedAdObjectIdsText],
   );
   const metaBusinessOptions = useMemo<MetaBusinessOption[]>(() => {
     const data = selectableAssetsQuery.data;
@@ -244,40 +257,56 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     const provider = data.providers?.meta;
     const hierarchy = provider?.hierarchy as
       | {
-          meta?: { integrations?: Array<{ businesses?: Array<{ business_id?: string | null; business_name?: string | null; ad_accounts?: Array<{ ad_account_id?: string | null }> }> }> };
-          integrations?: Array<{ businesses?: Array<{ business_id?: string | null; business_name?: string | null; ad_accounts?: Array<{ ad_account_id?: string | null }> }> }>;
+          meta?: {
+            integrations?: Array<{
+              businesses?: Array<{
+                business_id?: string | null;
+                business_name?: string | null;
+                ad_accounts?: Array<{ ad_account_id?: string | null }>;
+              }>;
+            }>;
+          };
+          integrations?: Array<{
+            businesses?: Array<{
+              business_id?: string | null;
+              business_name?: string | null;
+              ad_accounts?: Array<{ ad_account_id?: string | null }>;
+            }>;
+          }>;
         }
       | undefined;
 
     const integrations = hierarchy?.meta?.integrations ?? hierarchy?.integrations ?? [];
     for (const integration of integrations) {
       for (const business of integration.businesses ?? []) {
-        const businessId = (business.business_id ?? "").trim();
+        const businessId = (business.business_id ?? '').trim();
         if (!businessId) continue;
         const metaAccountIds = Array.from(
           new Set(
             (business.ad_accounts ?? [])
-              .map((account) => (account.ad_account_id ?? "").trim())
-              .filter((value) => value.length > 0)
-          )
+              .map((account) => (account.ad_account_id ?? '').trim())
+              .filter((value) => value.length > 0),
+          ),
         );
         const existing = byId.get(businessId);
         if (!existing) {
           byId.set(businessId, {
             id: businessId,
-            name: (business.business_name ?? "").trim() || `Business ${businessId}`,
+            name: (business.business_name ?? '').trim() || `Business ${businessId}`,
             metaAccountIds,
           });
           continue;
         }
-        if (existing.name.startsWith("Business ") && business.business_name?.trim()) {
+        if (existing.name.startsWith('Business ') && business.business_name?.trim()) {
           existing.name = business.business_name.trim();
         }
-        existing.metaAccountIds = Array.from(new Set([...existing.metaAccountIds, ...metaAccountIds]));
+        existing.metaAccountIds = Array.from(
+          new Set([...existing.metaAccountIds, ...metaAccountIds]),
+        );
       }
     }
 
-    const metaAssets = getSelectableAssetsFlatListForProvider(data, "meta");
+    const metaAssets = getSelectableAssetsFlatListForProvider(data, 'meta');
     for (const asset of metaAssets) {
       const businessId = asset.business_id?.trim();
       if (!businessId) continue;
@@ -292,7 +321,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       }
       if (asset.ad_account_id?.trim()) {
         existing.metaAccountIds = Array.from(
-          new Set([...existing.metaAccountIds, asset.ad_account_id.trim()])
+          new Set([...existing.metaAccountIds, asset.ad_account_id.trim()]),
         );
       }
     }
@@ -303,11 +332,11 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   const metaPageOptions = useMemo<MetaPageOption[]>(() => {
     const data = selectableAssetsQuery.data;
     if (!data) return [];
-    const selectedBusinessId = (watchedBusinessId ?? "").trim();
-    const metaAssets = getSelectableAssetsFlatListForProvider(data, "meta");
+    const selectedBusinessId = (watchedBusinessId ?? '').trim();
+    const metaAssets = getSelectableAssetsFlatListForProvider(data, 'meta');
     const byId = new Map<string, MetaPageOption>();
     for (const asset of metaAssets) {
-      if (asset.type !== "meta_page") continue;
+      if (asset.type !== 'meta_page') continue;
       if (selectedBusinessId && asset.business_id?.trim() !== selectedBusinessId) continue;
       const id = asset.external_id?.trim();
       if (!id) continue;
@@ -321,18 +350,20 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   }, [selectableAssetsQuery.data, watchedBusinessId]);
 
   const selectedBusinessOption = useMemo(
-    () => metaBusinessOptions.find((option) => option.id === (watchedBusinessId ?? "").trim()) ?? null,
-    [metaBusinessOptions, watchedBusinessId]
+    () =>
+      metaBusinessOptions.find((option) => option.id === (watchedBusinessId ?? '').trim()) ?? null,
+    [metaBusinessOptions, watchedBusinessId],
   );
 
   const selectedMetaAccountId = useMemo(
-    () => selectedBusinessOption?.metaAccountIds[0] ?? "",
-    [selectedBusinessOption]
+    () => selectedBusinessOption?.metaAccountIds[0] ?? '',
+    [selectedBusinessOption],
   );
 
   const selectedCatalogStoreOption = useMemo(
-    () => metaPageOptions.find((option) => option.id === (watchedCatalogStoreId ?? "").trim()) ?? null,
-    [metaPageOptions, watchedCatalogStoreId]
+    () =>
+      metaPageOptions.find((option) => option.id === (watchedCatalogStoreId ?? '').trim()) ?? null,
+    [metaPageOptions, watchedCatalogStoreId],
   );
 
   const knownAdObjectOptions = useMemo(() => {
@@ -381,7 +412,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
 
   const knownAdObjectOptionsForSelectedLevel = useMemo(() => {
     const levelOptions = knownAdObjectOptions.filter(
-      (option) => option.level === watchedLinkedAdObjectLevel
+      (option) => option.level === watchedLinkedAdObjectLevel,
     );
     const knownIds = new Set(levelOptions.map((option) => option.id));
     for (const selectedId of selectedLinkedAdObjectIds) {
@@ -414,31 +445,28 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   }, [catalogLinks]);
 
   const knownActivityStatuses = useMemo(() => {
-    const defaults = ["ACTIVE", "PAUSED", "ARCHIVED"];
+    const defaults = ['ACTIVE', 'PAUSED', 'ARCHIVED'];
     const values = new Set(defaults);
     for (const link of catalogLinks) {
-      const status = (link.adObject.status ?? "").trim();
+      const status = (link.adObject.status ?? '').trim();
       if (status) values.add(status);
     }
     return Array.from(values).sort((left, right) => left.localeCompare(right));
   }, [catalogLinks]);
 
   const knownActivitySources = useMemo(() => {
-    const defaults = ["manual", "sync", "backfill", "reconcile"];
+    const defaults = ['manual', 'sync', 'backfill', 'reconcile'];
     const values = new Set(defaults);
     for (const link of catalogLinks) {
-      const source = (link.activity.source ?? "").trim();
+      const source = (link.activity.source ?? '').trim();
       if (source) values.add(source);
     }
     return Array.from(values).sort((left, right) => left.localeCompare(right));
   }, [catalogLinks]);
 
   const knownActivityAdObjectOptions = useMemo(
-    () =>
-      knownAdObjectOptions.filter(
-        (option) => option.level === linkDraft.adObject.objectType
-      ),
-    [knownAdObjectOptions, linkDraft.adObject.objectType]
+    () => knownAdObjectOptions.filter((option) => option.level === linkDraft.adObject.objectType),
+    [knownAdObjectOptions, linkDraft.adObject.objectType],
   );
 
   const activityProductSelectValue = useMemo(() => {
@@ -465,12 +493,12 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       const haystack = [
         catalog.name,
         catalog.externalCatalogId,
-        catalog.businessId ?? "",
-        catalog.catalogStoreId ?? "",
+        catalog.businessId ?? '',
+        catalog.catalogStoreId ?? '',
         PRODUCT_CATALOG_VERTICAL_LABELS[catalog.vertical],
         PRODUCT_CATALOG_SYNC_STATUS_LABELS[catalog.syncStatus],
       ]
-        .join(" ")
+        .join(' ')
         .toLowerCase();
 
       return haystack.includes(query);
@@ -483,7 +511,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       active: catalogLinks.filter((link) => link.activity.isActive).length,
       inactive: catalogLinks.filter((link) => !link.activity.isActive).length,
     }),
-    [catalogLinks]
+    [catalogLinks],
   );
 
   const catalogProducts = useMemo<CatalogProductSummary[]>(() => {
@@ -509,12 +537,14 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       if (!existing.title && link.product.title) {
         existing.title = link.product.title;
       }
-      if (new Date(link.activity.lastSeenAt).getTime() > new Date(existing.lastSeenAt ?? 0).getTime()) {
+      if (
+        new Date(link.activity.lastSeenAt).getTime() > new Date(existing.lastSeenAt ?? 0).getTime()
+      ) {
         existing.lastSeenAt = link.activity.lastSeenAt;
       }
     }
     return Array.from(productsById.values()).sort((left, right) =>
-      left.externalProductId.localeCompare(right.externalProductId)
+      left.externalProductId.localeCompare(right.externalProductId),
     );
   }, [catalogLinks]);
 
@@ -533,13 +563,18 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
         setCatalogLinks(links);
       } catch (loadError) {
         if (latestCatalogLinkRequestRef.current !== catalogId) return;
-        setCatalogLinksError(loadError instanceof Error ? loadError.message : "Unable to load catalog product activity.");
+        setCatalogLinksError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Unable to load catalog product activity.',
+        );
       } finally {
-        if (latestCatalogLinkRequestRef.current !== catalogId) return;
-        setIsCatalogLinksLoading(false);
+        if (latestCatalogLinkRequestRef.current === catalogId) {
+          setIsCatalogLinksLoading(false);
+        }
       }
     },
-    [brandId]
+    [brandId],
   );
 
   useEffect(() => {
@@ -556,9 +591,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     setActiveCatalogLinkId(null);
     setActiveCatalogProductId(null);
     setProductRenameDrafts({});
-    setCustomLinkedAdObjectId("");
-    setCustomActivityProductId("");
-    setCustomActivityAdObjectId("");
+    setCustomLinkedAdObjectId('');
+    setCustomActivityProductId('');
+    setCustomActivityAdObjectId('');
     if (!activeCatalogId) {
       latestCatalogLinkRequestRef.current = null;
       setCatalogLinks([]);
@@ -579,10 +614,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   }, [deleteArmed]);
 
   useEffect(() => {
-    const currentCatalogStoreId = (form.getValues("catalogStoreId") ?? "").trim();
+    const currentCatalogStoreId = (form.getValues('catalogStoreId') ?? '').trim();
     if (!currentCatalogStoreId) return;
     if (metaPageOptions.some((option) => option.id === currentCatalogStoreId)) return;
-    form.setValue("catalogStoreId", "", {
+    form.setValue('catalogStoreId', '', {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -591,9 +626,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
 
   useEffect(() => {
     if (!isCreateMode) return;
-    const currentBusinessId = (form.getValues("businessId") ?? "").trim();
+    const currentBusinessId = (form.getValues('businessId') ?? '').trim();
     if (currentBusinessId || metaBusinessOptions.length === 0) return;
-    form.setValue("businessId", metaBusinessOptions[0].id, {
+    form.setValue('businessId', metaBusinessOptions[0].id, {
       shouldDirty: false,
       shouldTouch: false,
       shouldValidate: false,
@@ -602,9 +637,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
 
   useEffect(() => {
     if (!isCreateMode) return;
-    const currentCatalogStoreId = (form.getValues("catalogStoreId") ?? "").trim();
+    const currentCatalogStoreId = (form.getValues('catalogStoreId') ?? '').trim();
     if (currentCatalogStoreId || metaPageOptions.length === 0) return;
-    form.setValue("catalogStoreId", metaPageOptions[0].id, {
+    form.setValue('catalogStoreId', metaPageOptions[0].id, {
       shouldDirty: false,
       shouldTouch: false,
       shouldValidate: false,
@@ -615,7 +650,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     setProductRenameDrafts((current) => {
       const next: Record<string, string> = {};
       for (const product of catalogProducts) {
-        next[product.externalProductId] = current[product.externalProductId] ?? product.title ?? "";
+        next[product.externalProductId] = current[product.externalProductId] ?? product.title ?? '';
       }
       return next;
     });
@@ -640,10 +675,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
         });
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load product catalogs.");
+        setError(
+          loadError instanceof Error ? loadError.message : 'Unable to load product catalogs.',
+        );
       } finally {
-        if (!mounted) return;
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -671,7 +709,11 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
         setCatalogLinks([]);
       }
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Unable to refresh product catalogs.");
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : 'Unable to refresh product catalogs.',
+      );
     } finally {
       setIsRefreshing(false);
     }
@@ -695,29 +737,34 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       if (activeCatalogId) {
         const updated = await updateProductCatalog(activeCatalogId, {
           name: values.name.trim(),
-          businessId: values.businessId?.trim() ?? "",
-          catalogStoreId: values.catalogStoreId?.trim() ?? "",
+          businessId: values.businessId?.trim() ?? '',
+          catalogStoreId: values.catalogStoreId?.trim() ?? '',
           vertical: values.vertical,
-          feedUrl: values.feedUrl?.trim() ?? "",
-          defaultImageUrl: values.defaultImageUrl?.trim() ?? "",
-          fallbackImageUrl: values.fallbackImageUrl?.trim() ?? "",
+          feedUrl: values.feedUrl?.trim() ?? '',
+          defaultImageUrl: values.defaultImageUrl?.trim() ?? '',
+          fallbackImageUrl: values.fallbackImageUrl?.trim() ?? '',
           linkedAdObjectLevel: values.linkedAdObjectLevel,
-          linkedAdObjectIds: parseLinkedAdObjectIds(values.linkedAdObjectIdsText ?? ""),
+          linkedAdObjectIds: parseLinkedAdObjectIds(values.linkedAdObjectIdsText ?? ''),
           dataFeedEnabled: activeCatalog?.dataFeedEnabled ?? true,
           productTaggingEnabled: activeCatalog?.productTaggingEnabled ?? true,
-          syncStatus: activeCatalog?.syncStatus ?? "draft",
+          syncStatus: activeCatalog?.syncStatus ?? 'draft',
           productCount: activeCatalog?.productCount ?? derivedCatalogItemCount,
           feedCount: activeCatalog?.feedCount ?? 0,
           productSetCount: activeCatalog?.productSetCount ?? 0,
           lastSyncedAt: activeCatalog?.lastSyncedAt ?? null,
-          notes: values.notes?.trim() ?? "",
+          notes: values.notes?.trim() ?? '',
         });
-        setCatalogs((current) => [updated, ...current.filter((catalog) => catalog.id !== updated.id)]);
+        setCatalogs((current) => [
+          updated,
+          ...current.filter((catalog) => catalog.id !== updated.id),
+        ]);
         setActiveCatalogId(updated.id);
         await loadCatalogLinks(updated.id, { silent: true });
       } else {
         if (!selectedMetaAccountId) {
-          throw new Error("Selected Meta business has no connected ad account for API authorization.");
+          throw new Error(
+            'Selected Meta business has no connected ad account for API authorization.',
+          );
         }
 
         const created = await createProductCatalog({
@@ -726,14 +773,14 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
           businessId: values.businessId.trim(),
           catalogStoreId: values.catalogStoreId.trim(),
           metaAccountId: selectedMetaAccountId,
-          vertical: "commerce",
+          vertical: 'commerce',
           linkedAdObjectLevel: values.linkedAdObjectLevel,
         });
         setCatalogs((current) => [created, ...current]);
         setActiveCatalogId(created.id);
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save product catalog.");
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save product catalog.');
     } finally {
       setIsSaving(false);
     }
@@ -767,7 +814,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       });
       setDeleteArmed(false);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete product catalog.");
+      setError(
+        deleteError instanceof Error ? deleteError.message : 'Unable to delete product catalog.',
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -785,22 +834,22 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
         brandId,
         product: {
           externalProductId: linkDraft.product.externalProductId.trim(),
-          title: linkDraft.product.title?.trim() ?? "",
+          title: linkDraft.product.title?.trim() ?? '',
           availability: linkDraft.product.availability,
-          imageUrl: linkDraft.product.imageUrl?.trim() ?? "",
-          productUrl: linkDraft.product.productUrl?.trim() ?? "",
-          currency: linkDraft.product.currency?.trim() ?? "",
+          imageUrl: linkDraft.product.imageUrl?.trim() ?? '',
+          productUrl: linkDraft.product.productUrl?.trim() ?? '',
+          currency: linkDraft.product.currency?.trim() ?? '',
         },
         adObject: {
-          platform: "meta",
+          platform: 'meta',
           objectType: linkDraft.adObject.objectType,
           externalObjectId: linkDraft.adObject.externalObjectId.trim(),
-          name: linkDraft.adObject.name?.trim() ?? "",
-          status: linkDraft.adObject.status?.trim() ?? "",
+          name: linkDraft.adObject.name?.trim() ?? '',
+          status: linkDraft.adObject.status?.trim() ?? '',
         },
         activity: {
           isActive: linkDraft.activity.isActive,
-          source: linkDraft.activity.source?.trim() || "manual",
+          source: linkDraft.activity.source?.trim() || 'manual',
         },
       });
 
@@ -810,7 +859,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       ]);
       setLinkDraft(EMPTY_LINK_DRAFT);
     } catch (saveError) {
-      setCatalogLinksError(saveError instanceof Error ? saveError.message : "Unable to save product activity link.");
+      setCatalogLinksError(
+        saveError instanceof Error ? saveError.message : 'Unable to save product activity link.',
+      );
     } finally {
       setIsCatalogLinkSaving(false);
     }
@@ -826,14 +877,18 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     try {
       const updatedLink = await upsertProductCatalogLink(
         activeCatalogId,
-        catalogLinkToUpsertInput(brandId, link, nextIsActive)
+        catalogLinkToUpsertInput(brandId, link, nextIsActive),
       );
       setCatalogLinks((current) => [
         updatedLink,
         ...current.filter((entry) => entry.activity.id !== updatedLink.activity.id),
       ]);
     } catch (saveError) {
-      setCatalogLinksError(saveError instanceof Error ? saveError.message : "Unable to update product activity status.");
+      setCatalogLinksError(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Unable to update product activity status.',
+      );
     } finally {
       setActiveCatalogLinkId(null);
       setIsCatalogLinkSaving(false);
@@ -849,11 +904,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       await renameCatalogProduct(activeCatalogId, {
         brandId,
         externalProductId,
-        title: (productRenameDrafts[externalProductId] ?? "").trim(),
+        title: (productRenameDrafts[externalProductId] ?? '').trim(),
       });
       await loadCatalogLinks(activeCatalogId, { silent: true });
     } catch (saveError) {
-      setCatalogLinksError(saveError instanceof Error ? saveError.message : "Unable to rename catalog product.");
+      setCatalogLinksError(
+        saveError instanceof Error ? saveError.message : 'Unable to rename catalog product.',
+      );
     } finally {
       setActiveCatalogProductId(null);
       setIsCatalogProductSaving(false);
@@ -872,7 +929,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       });
       await loadCatalogLinks(activeCatalogId, { silent: true });
     } catch (deleteError) {
-      setCatalogLinksError(deleteError instanceof Error ? deleteError.message : "Unable to remove catalog product.");
+      setCatalogLinksError(
+        deleteError instanceof Error ? deleteError.message : 'Unable to remove catalog product.',
+      );
     } finally {
       setActiveCatalogProductId(null);
       setIsCatalogProductSaving(false);
@@ -880,7 +939,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
   };
 
   const setLinkedAdObjectIds = (nextIds: string[]) => {
-    form.setValue("linkedAdObjectIdsText", formatLinkedAdObjectIds(Array.from(new Set(nextIds))), {
+    form.setValue('linkedAdObjectIdsText', formatLinkedAdObjectIds(Array.from(new Set(nextIds))), {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -901,7 +960,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     if (!selectedLinkedAdObjectIds.includes(normalized)) {
       setLinkedAdObjectIds([...selectedLinkedAdObjectIds, normalized]);
     }
-    setCustomLinkedAdObjectId("");
+    setCustomLinkedAdObjectId('');
   };
 
   const handleActivityProductSelection = (value: string) => {
@@ -918,7 +977,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       product: {
         ...current.product,
         externalProductId: value,
-        title: current.product.title?.trim() ? current.product.title : matched?.title ?? "",
+        title: current.product.title?.trim() ? current.product.title : (matched?.title ?? ''),
       },
     }));
   };
@@ -937,12 +996,11 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
       adObject: {
         ...current.adObject,
         externalObjectId: value,
-        name: current.adObject.name?.trim() ? current.adObject.name : matched?.name ?? "",
-        status: current.adObject.status?.trim() ? current.adObject.status : matched?.status ?? "",
+        name: current.adObject.name?.trim() ? current.adObject.name : (matched?.name ?? ''),
+        status: current.adObject.status?.trim() ? current.adObject.status : (matched?.status ?? ''),
       },
     }));
   };
-
 
   return (
     <motion.div
@@ -956,10 +1014,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div>
-              <Heading size="3" className="text-white">Catalogs</Heading>
-              <Text size="1" color="gray">{catalogs.length} configured</Text>
+              <h3 className="text-base font-semibold text-white">Catalogs</h3>
+              <span className="text-xs text-muted-foreground">{catalogs.length} configured</span>
             </div>
-            <Flex align="center" gap="2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void refreshCatalogs()}
@@ -967,13 +1025,18 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 aria-label="Refresh catalogs"
                 className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-white/10 text-muted-foreground transition-colors hover:border-white/20 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
-              <Button type="button" size="sm" className="h-8 cursor-pointer gap-1.5" onClick={handleCreateNew}>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 cursor-pointer gap-1.5"
+                onClick={handleCreateNew}
+              >
                 <Plus className="h-3.5 w-3.5" />
                 New
               </Button>
-            </Flex>
+            </div>
           </div>
 
           <Input
@@ -987,22 +1050,30 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
           {isLoading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-[52px] animate-pulse rounded-lg border border-white/[0.04] bg-white/[0.03]" />
+                <div
+                  key={i}
+                  className="h-[52px] animate-pulse rounded-lg border border-white/[0.04] bg-white/[0.03]"
+                />
               ))}
             </div>
           ) : filteredCatalogs.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-white/10 py-10 text-center">
               <Database className="h-7 w-7 text-white/20" aria-hidden />
               <div className="space-y-1">
-                <Text size="2" className="font-medium text-white/70">No catalogs</Text>
-                <Text size="1" color="gray" className="mx-auto block max-w-[180px] leading-relaxed">
+                <span className="text-sm font-medium text-white/70">No catalogs</span>
+                <span className="mx-auto block max-w-[180px] text-xs leading-relaxed text-muted-foreground">
                   {searchQuery
-                    ? "No catalogs match your search."
-                    : "Create a catalog to link Meta product feeds to your campaigns."}
-                </Text>
+                    ? 'No catalogs match your search.'
+                    : 'Create a catalog to link Meta product feeds to your campaigns.'}
+                </span>
               </div>
               {!searchQuery ? (
-                <Button type="button" size="sm" onClick={handleCreateNew} className="mt-1 cursor-pointer gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCreateNew}
+                  className="mt-1 cursor-pointer gap-1.5"
+                >
                   <Plus className="h-3.5 w-3.5" />
                   Create First Catalog
                 </Button>
@@ -1014,10 +1085,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 {filteredCatalogs.map((catalog) => {
                   const selected = catalog.id === activeCatalogId;
                   const statusDot =
-                    catalog.syncStatus === "active" ? "bg-green-400"
-                    : catalog.syncStatus === "stale" ? "bg-amber-400"
-                    : catalog.syncStatus === "error" ? "bg-red-400"
-                    : "bg-white/20";
+                    catalog.syncStatus === 'active'
+                      ? 'bg-green-400'
+                      : catalog.syncStatus === 'stale'
+                        ? 'bg-amber-400'
+                        : catalog.syncStatus === 'error'
+                          ? 'bg-red-400'
+                          : 'bg-white/20';
                   return (
                     <motion.button
                       key={catalog.id}
@@ -1028,28 +1102,36 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       type="button"
                       onClick={() => setActiveCatalogId(catalog.id)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
+                        if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           setActiveCatalogId(catalog.id);
                         }
                       }}
                       className={`w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                         selected
-                          ? "border-primary/40 bg-primary/[0.12]"
-                          : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.10] hover:bg-white/[0.05]"
+                          ? 'border-primary/40 bg-primary/[0.12]'
+                          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.10] hover:bg-white/[0.05]'
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
-                        <div className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
+                        <div
+                          className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`}
+                        />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium leading-snug text-white">{catalog.name}</div>
+                          <div className="truncate text-sm font-medium leading-snug text-white">
+                            {catalog.name}
+                          </div>
                           <div className="mt-0.5 truncate font-mono text-xs leading-tight text-white/40">
-                            {catalog.externalCatalogId || "—"}
+                            {catalog.externalCatalogId || '—'}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="text-xs font-semibold text-white/80">{catalog.productCount.toLocaleString()}</div>
-                          <div className="text-2xs text-white/30">{catalog.linkedAdObjectIds.length} linked</div>
+                          <div className="text-xs font-semibold text-white/80">
+                            {catalog.productCount.toLocaleString()}
+                          </div>
+                          <div className="text-2xs text-white/30">
+                            {catalog.linkedAdObjectIds.length} linked
+                          </div>
                         </div>
                       </div>
                     </motion.button>
@@ -1062,32 +1144,32 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
 
         {/* Detail / form panel */}
         <div className="glass-panel rounded-xl p-5">
-          <Flex direction="column" gap="4">
-            <Flex align="start" justify="between" gap="3" wrap="wrap">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
-                  key={activeCatalog?.id ?? "new"}
+                  key={activeCatalog?.id ?? 'new'}
                   initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -6 }}
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
-                  <Heading size="4" className="text-white">
-                    {activeCatalog ? activeCatalog.name : "New Product Catalog"}
-                  </Heading>
-                  <Text size="1" color="gray">
+                  <h4 className="text-lg font-semibold text-white">
+                    {activeCatalog ? activeCatalog.name : 'New Product Catalog'}
+                  </h4>
+                  <span className="text-xs text-muted-foreground">
                     {activeCatalog
-                      ? "Edit catalog settings, feed config, and ad object mapping."
-                      : "Register a Meta-backed product catalog for DCO feed delivery."}
-                  </Text>
+                      ? 'Edit catalog settings, feed config, and ad object mapping.'
+                      : 'Register a Meta-backed product catalog for DCO feed delivery.'}
+                  </span>
                 </motion.div>
               </AnimatePresence>
               {activeCatalog ? (
-                <Badge color={SYNC_STATUS_BADGE_COLOR[activeCatalog.syncStatus]} radius="full" variant="soft">
+                <Pill variant={SYNC_STATUS_PILL_VARIANT[activeCatalog.syncStatus]}>
                   {PRODUCT_CATALOG_SYNC_STATUS_LABELS[activeCatalog.syncStatus]}
-                </Badge>
+                </Pill>
               ) : null}
-            </Flex>
+            </div>
 
             <AnimatePresence initial={false}>
               {error ? (
@@ -1097,10 +1179,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
-                  <Callout.Root color="red" variant="surface">
-                    <Callout.Icon><AlertTriangle className="h-4 w-4" /></Callout.Icon>
-                    <Callout.Text>{error}</Callout.Text>
-                  </Callout.Root>
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -1108,20 +1190,28 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
             {!isCreateMode && activeCatalog ? (
               <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-6">
                 {[
-                  { label: "Products", value: activeCatalog.productCount.toLocaleString() },
-                  { label: "Feeds", value: String(activeCatalog.feedCount) },
-                  { label: "Product Sets", value: String(activeCatalog.productSetCount) },
-                  { label: "Vertical", value: PRODUCT_CATALOG_VERTICAL_LABELS[activeCatalog.vertical] },
-                  { label: "Status", value: PRODUCT_CATALOG_SYNC_STATUS_LABELS[activeCatalog.syncStatus] },
+                  { label: 'Products', value: activeCatalog.productCount.toLocaleString() },
+                  { label: 'Feeds', value: String(activeCatalog.feedCount) },
+                  { label: 'Product Sets', value: String(activeCatalog.productSetCount) },
                   {
-                    label: "Last Synced",
+                    label: 'Vertical',
+                    value: PRODUCT_CATALOG_VERTICAL_LABELS[activeCatalog.vertical],
+                  },
+                  {
+                    label: 'Status',
+                    value: PRODUCT_CATALOG_SYNC_STATUS_LABELS[activeCatalog.syncStatus],
+                  },
+                  {
+                    label: 'Last Synced',
                     value: activeCatalog.lastSyncedAt
                       ? new Date(activeCatalog.lastSyncedAt).toLocaleDateString()
-                      : "Never",
+                      : 'Never',
                   },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-background/60 px-3 py-2.5">
-                    <div className="text-2xs font-semibold uppercase tracking-widest text-white/30">{label}</div>
+                    <div className="text-2xs font-semibold uppercase tracking-widest text-white/30">
+                      {label}
+                    </div>
                     <div className="mt-0.5 truncate text-xs text-white/75">{value}</div>
                   </div>
                 ))}
@@ -1135,8 +1225,16 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="catalog-name">Catalog Name</Label>
-                    <Input id="catalog-name" placeholder="Spring Prospecting 2026" {...form.register("name")} />
-                    {form.formState.errors.name ? <Text size="1" color="red">{form.formState.errors.name.message}</Text> : null}
+                    <Input
+                      id="catalog-name"
+                      placeholder="Spring Prospecting 2026"
+                      {...form.register('name')}
+                    />
+                    {form.formState.errors.name ? (
+                      <span className="text-xs text-destructive">
+                        {form.formState.errors.name.message}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="space-y-1.5">
@@ -1144,7 +1242,9 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                     <Popover open={businessOpen} onOpenChange={setBusinessOpen}>
                       <PopoverTrigger asChild>
                         <Button
-                          type="button" variant="outline" role="combobox"
+                          type="button"
+                          variant="outline"
+                          role="combobox"
                           aria-expanded={businessOpen}
                           className="h-10 w-full cursor-pointer justify-between text-left font-normal"
                           disabled={selectableAssetsQuery.isLoading}
@@ -1152,9 +1252,11 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                           <span className="truncate">
                             {selectedBusinessOption
                               ? `${selectedBusinessOption.name} (${selectedBusinessOption.id})`
-                              : watchedBusinessId?.trim() ? watchedBusinessId.trim()
-                              : selectableAssetsQuery.isLoading ? "Loading…"
-                              : "Select business"}
+                              : watchedBusinessId?.trim()
+                                ? watchedBusinessId.trim()
+                                : selectableAssetsQuery.isLoading
+                                  ? 'Loading…'
+                                  : 'Select business'}
                           </span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -1171,14 +1273,27 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                                   value={`${business.name} ${business.id}`}
                                   keywords={[business.id]}
                                   onSelect={() => {
-                                    form.setValue("businessId", business.id, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                    form.setValue('businessId', business.id, {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    });
                                     setBusinessOpen(false);
                                   }}
                                   className="cursor-pointer"
                                 >
-                                  <Check className={cn("mr-2 h-4 w-4", watchedBusinessId?.trim() === business.id ? "opacity-100" : "opacity-0")} />
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      watchedBusinessId?.trim() === business.id
+                                        ? 'opacity-100'
+                                        : 'opacity-0',
+                                    )}
+                                  />
                                   <span className="truncate">{business.name}</span>
-                                  <span className="ml-auto truncate pl-2 font-mono text-xs text-muted-foreground">{business.id}</span>
+                                  <span className="ml-auto truncate pl-2 font-mono text-xs text-muted-foreground">
+                                    {business.id}
+                                  </span>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -1186,11 +1301,21 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    {form.formState.errors.businessId ? <Text size="1" color="red">{form.formState.errors.businessId.message}</Text> : null}
+                    {form.formState.errors.businessId ? (
+                      <span className="text-xs text-destructive">
+                        {form.formState.errors.businessId.message}
+                      </span>
+                    ) : null}
                     {watchedBusinessId?.trim() ? (
                       <button
                         type="button"
-                        onClick={() => form.setValue("businessId", "", { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+                        onClick={() =>
+                          form.setValue('businessId', '', {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          })
+                        }
                         className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-white"
                       >
                         Clear selection
@@ -1200,13 +1325,17 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
 
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label>
-                      Catalog Store{" "}
-                      <Text size="1" color="gray" className="font-normal">(Page ID Connector)</Text>
+                      Catalog Store{' '}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        (Page ID Connector)
+                      </span>
                     </Label>
                     <Popover open={catalogStoreOpen} onOpenChange={setCatalogStoreOpen}>
                       <PopoverTrigger asChild>
                         <Button
-                          type="button" variant="outline" role="combobox"
+                          type="button"
+                          variant="outline"
+                          role="combobox"
                           aria-expanded={catalogStoreOpen}
                           className="h-10 w-full cursor-pointer justify-between text-left font-normal"
                           disabled={selectableAssetsQuery.isLoading || !watchedBusinessId?.trim()}
@@ -1214,10 +1343,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                           <span className="truncate">
                             {selectedCatalogStoreOption
                               ? `${selectedCatalogStoreOption.name} (${selectedCatalogStoreOption.id})`
-                              : watchedCatalogStoreId?.trim() ? watchedCatalogStoreId.trim()
-                              : !watchedBusinessId?.trim() ? "Select a business first"
-                              : selectableAssetsQuery.isLoading ? "Loading pages…"
-                              : "Select page"}
+                              : watchedCatalogStoreId?.trim()
+                                ? watchedCatalogStoreId.trim()
+                                : !watchedBusinessId?.trim()
+                                  ? 'Select a business first'
+                                  : selectableAssetsQuery.isLoading
+                                    ? 'Loading pages…'
+                                    : 'Select page'}
                           </span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -1234,14 +1366,27 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                                   value={`${page.name} ${page.id}`}
                                   keywords={[page.id]}
                                   onSelect={() => {
-                                    form.setValue("catalogStoreId", page.id, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                    form.setValue('catalogStoreId', page.id, {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    });
                                     setCatalogStoreOpen(false);
                                   }}
                                   className="cursor-pointer"
                                 >
-                                  <Check className={cn("mr-2 h-4 w-4", watchedCatalogStoreId?.trim() === page.id ? "opacity-100" : "opacity-0")} />
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      watchedCatalogStoreId?.trim() === page.id
+                                        ? 'opacity-100'
+                                        : 'opacity-0',
+                                    )}
+                                  />
                                   <span className="truncate">{page.name}</span>
-                                  <span className="ml-auto truncate pl-2 font-mono text-xs text-muted-foreground">{page.id}</span>
+                                  <span className="ml-auto truncate pl-2 font-mono text-xs text-muted-foreground">
+                                    {page.id}
+                                  </span>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -1249,19 +1394,24 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    {form.formState.errors.catalogStoreId ? <Text size="1" color="red">{form.formState.errors.catalogStoreId.message}</Text> : null}
+                    {form.formState.errors.catalogStoreId ? (
+                      <span className="text-xs text-destructive">
+                        {form.formState.errors.catalogStoreId.message}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
                 {isCreateMode ? (
                   <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                    <Text size="1" color="gray">
-                      Meta assigns catalog ID and statistics after creation. Only name, business, and store page are required.
-                    </Text>
+                    <span className="text-xs text-muted-foreground">
+                      Meta assigns catalog ID and statistics after creation. Only name, business,
+                      and store page are required.
+                    </span>
                     {!selectedMetaAccountId && watchedBusinessId?.trim() ? (
-                      <Text size="1" color="red" className="mt-1 block">
+                      <span className="mt-1 block text-xs text-destructive">
                         No connected Meta ad account found for this business.
-                      </Text>
+                      </span>
                     ) : null}
                   </div>
                 ) : null}
@@ -1274,18 +1424,42 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="catalog-feed-url">Feed URL</Label>
-                      <Input id="catalog-feed-url" placeholder="https://example.com/feed.xml" {...form.register("feedUrl")} />
-                      {form.formState.errors.feedUrl ? <Text size="1" color="red">{form.formState.errors.feedUrl.message}</Text> : null}
+                      <Input
+                        id="catalog-feed-url"
+                        placeholder="https://example.com/feed.xml"
+                        {...form.register('feedUrl')}
+                      />
+                      {form.formState.errors.feedUrl ? (
+                        <span className="text-xs text-destructive">
+                          {form.formState.errors.feedUrl.message}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="catalog-default-image">Default Image</Label>
-                      <Input id="catalog-default-image" placeholder="https://cdn.example.com/default.jpg" {...form.register("defaultImageUrl")} />
-                      {form.formState.errors.defaultImageUrl ? <Text size="1" color="red">{form.formState.errors.defaultImageUrl.message}</Text> : null}
+                      <Input
+                        id="catalog-default-image"
+                        placeholder="https://cdn.example.com/default.jpg"
+                        {...form.register('defaultImageUrl')}
+                      />
+                      {form.formState.errors.defaultImageUrl ? (
+                        <span className="text-xs text-destructive">
+                          {form.formState.errors.defaultImageUrl.message}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="catalog-fallback-image">Fallback Image</Label>
-                      <Input id="catalog-fallback-image" placeholder="https://cdn.example.com/fallback.jpg" {...form.register("fallbackImageUrl")} />
-                      {form.formState.errors.fallbackImageUrl ? <Text size="1" color="red">{form.formState.errors.fallbackImageUrl.message}</Text> : null}
+                      <Input
+                        id="catalog-fallback-image"
+                        placeholder="https://cdn.example.com/fallback.jpg"
+                        {...form.register('fallbackImageUrl')}
+                      />
+                      {form.formState.errors.fallbackImageUrl ? (
+                        <span className="text-xs text-destructive">
+                          {form.formState.errors.fallbackImageUrl.message}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1301,9 +1475,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       <Select
                         value={watchedLinkedAdObjectLevel}
                         onValueChange={(value) => {
-                          form.setValue("linkedAdObjectLevel", value as ProductCatalogFormValues["linkedAdObjectLevel"], { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                          form.setValue(
+                            'linkedAdObjectLevel',
+                            value as ProductCatalogFormValues['linkedAdObjectLevel'],
+                            { shouldDirty: true, shouldTouch: true, shouldValidate: true },
+                          );
                           setLinkedAdObjectIds([]);
-                          setCustomLinkedAdObjectId("");
+                          setCustomLinkedAdObjectId('');
                         }}
                       >
                         <SelectTrigger id="catalog-linked-level" className="w-full">
@@ -1320,17 +1498,28 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       <Label>Linked Ad Object IDs</Label>
                       <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-md border border-white/[0.08] bg-background/30 p-2.5">
                         {knownAdObjectOptionsForSelectedLevel.length === 0 ? (
-                          <Text size="1" color="gray">No {watchedLinkedAdObjectLevel} IDs found. Add a custom ID below.</Text>
+                          <span className="text-xs text-muted-foreground">
+                            No {watchedLinkedAdObjectLevel} IDs found. Add a custom ID below.
+                          </span>
                         ) : (
                           knownAdObjectOptionsForSelectedLevel.map((option) => (
-                            <div key={`${option.level}:${option.id}`} className="flex items-center gap-2">
+                            <div
+                              key={`${option.level}:${option.id}`}
+                              className="flex items-center gap-2"
+                            >
                               <Checkbox
                                 id={`catalog-linked-id-${option.level}-${option.id}`}
                                 checked={selectedLinkedAdObjectIds.includes(option.id)}
-                                onCheckedChange={(checked) => handleLinkedAdObjectSelection(option.id, checked === true)}
+                                onCheckedChange={(checked) =>
+                                  handleLinkedAdObjectSelection(option.id, checked === true)
+                                }
                               />
-                              <Label htmlFor={`catalog-linked-id-${option.level}-${option.id}`} className="cursor-pointer font-mono text-xs font-normal">
-                                {option.id}{option.name ? ` · ${option.name}` : ""}
+                              <Label
+                                htmlFor={`catalog-linked-id-${option.level}-${option.id}`}
+                                className="cursor-pointer font-mono text-xs font-normal"
+                              >
+                                {option.id}
+                                {option.name ? ` · ${option.name}` : ''}
                               </Label>
                             </div>
                           ))
@@ -1342,11 +1531,20 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                           value={customLinkedAdObjectId}
                           onChange={(event) => setCustomLinkedAdObjectId(event.target.value)}
                           onKeyDown={(event) => {
-                            if (event.key === "Enter") { event.preventDefault(); handleAddCustomLinkedAdObjectId(); }
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              handleAddCustomLinkedAdObjectId();
+                            }
                           }}
                           inputSize="sm"
                         />
-                        <Button type="button" variant="outline" size="sm" onClick={handleAddCustomLinkedAdObjectId} className="cursor-pointer shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddCustomLinkedAdObjectId}
+                          className="cursor-pointer shrink-0"
+                        >
                           Add
                         </Button>
                       </div>
@@ -1359,7 +1557,12 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               {!isCreateMode ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="catalog-notes">Notes</Label>
-                  <Textarea id="catalog-notes" rows={2} placeholder="Feed caveats, validation notes, product set details…" {...form.register("notes")} />
+                  <Textarea
+                    id="catalog-notes"
+                    rows={2}
+                    placeholder="Feed caveats, validation notes, product set details…"
+                    {...form.register('notes')}
+                  />
                 </div>
               ) : null}
 
@@ -1372,12 +1575,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                     exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
                     transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                   >
-                    <Callout.Root color="red" variant="surface" size="1">
-                      <Callout.Icon><AlertTriangle className="h-3.5 w-3.5" /></Callout.Icon>
-                      <Callout.Text>
-                        <strong>{activeCatalog.name}</strong> will be permanently removed from Continuum and Meta. This cannot be undone.
-                      </Callout.Text>
-                    </Callout.Root>
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <AlertDescription>
+                        <strong>{activeCatalog.name}</strong> will be permanently removed from
+                        Continuum and Meta. This cannot be undone.
+                      </AlertDescription>
+                    </Alert>
                   </motion.div>
                 ) : null}
               </AnimatePresence>
@@ -1386,22 +1590,26 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               <div className="flex items-center justify-between pt-1">
                 <div className="flex items-center gap-3">
                   {activeCatalog ? (
-                    <Text size="1" color="gray">Updated {new Date(activeCatalog.updatedAt).toLocaleString()}</Text>
+                    <span className="text-xs text-muted-foreground">
+                      Updated {new Date(activeCatalog.updatedAt).toLocaleString()}
+                    </span>
                   ) : null}
-                  {form.formState.isDirty ? <Text size="1" color="amber">Unsaved changes</Text> : null}
+                  {form.formState.isDirty ? (
+                    <span className="text-xs text-warning">Unsaved changes</span>
+                  ) : null}
                 </div>
-                <Flex align="center" gap="2">
+                <div className="flex items-center gap-2">
                   {activeCatalog ? (
                     <Button
                       type="button"
-                      variant={deleteArmed ? "destructive" : "outline"}
+                      variant={deleteArmed ? 'destructive' : 'outline'}
                       size="sm"
                       onClick={() => void handleDelete()}
                       disabled={isDeleting || isSaving}
                       className="cursor-pointer gap-1.5"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      {isDeleting ? "Deleting…" : deleteArmed ? "Confirm" : "Delete"}
+                      {isDeleting ? 'Deleting…' : deleteArmed ? 'Confirm' : 'Delete'}
                     </Button>
                   ) : null}
                   <Button
@@ -1410,12 +1618,12 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                     disabled={isSaving || isDeleting || (isCreateMode && !selectedMetaAccountId)}
                     className="cursor-pointer"
                   >
-                    {isSaving ? "Saving…" : activeCatalog ? "Update Catalog" : "Create Catalog"}
+                    {isSaving ? 'Saving…' : activeCatalog ? 'Update Catalog' : 'Create Catalog'}
                   </Button>
-                </Flex>
+                </div>
               </div>
             </form>
-          </Flex>
+          </div>
         </div>
       </div>
 
@@ -1425,22 +1633,28 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
           className="glass-panel rounded-xl p-5"
           initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: MOTION_EASE, delay: shouldReduceMotion ? 0 : 0.12 }}
+          transition={{
+            duration: shouldReduceMotion ? 0 : 0.22,
+            ease: MOTION_EASE,
+            delay: shouldReduceMotion ? 0 : 0.12,
+          }}
         >
-          <Flex direction="column" gap="4">
-            <Flex align="center" justify="between" wrap="wrap" gap="2">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <Heading size="3" className="text-white">Product Activity Mapping</Heading>
-                <Text size="1" color="gray">Link products to campaign objects for DCO attribution and feed diagnostics.</Text>
+                <h3 className="text-base font-semibold text-white">Product Activity Mapping</h3>
+                <span className="text-xs text-muted-foreground">
+                  Link products to campaign objects for DCO attribution and feed diagnostics.
+                </span>
               </div>
-              <Flex align="center" gap="2">
-                <Badge color="gray" radius="full" variant="soft">{catalogLinkSummary.total} tracked</Badge>
-                <Badge color="green" radius="full" variant="soft">{catalogLinkSummary.active} active</Badge>
+              <div className="flex items-center gap-2">
+                <Pill variant="muted">{catalogLinkSummary.total} tracked</Pill>
+                <Pill variant="success">{catalogLinkSummary.active} active</Pill>
                 {catalogLinkSummary.inactive > 0 ? (
-                  <Badge color="amber" radius="full" variant="soft">{catalogLinkSummary.inactive} inactive</Badge>
+                  <Pill variant="warning">{catalogLinkSummary.inactive} inactive</Pill>
                 ) : null}
-              </Flex>
-            </Flex>
+              </div>
+            </div>
 
             <AnimatePresence initial={false}>
               {catalogLinksError ? (
@@ -1450,10 +1664,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
-                  <Callout.Root color="red" variant="surface">
-                    <Callout.Icon><AlertTriangle className="h-4 w-4" /></Callout.Icon>
-                    <Callout.Text>{catalogLinksError}</Callout.Text>
-                  </Callout.Root>
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{catalogLinksError}</AlertDescription>
+                  </Alert>
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -1463,11 +1677,15 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               <SectionDivider label={`Catalog Products (${catalogProducts.length})`} />
               {isCatalogLinksLoading ? (
                 <div className="space-y-2">
-                  {[0, 1].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />)}
+                  {[0, 1].map((i) => (
+                    <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />
+                  ))}
                 </div>
               ) : catalogProducts.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-white/[0.08] py-6 text-center">
-                  <Text size="1" color="gray">No products yet. Add one using the activity form below.</Text>
+                  <span className="text-xs text-muted-foreground">
+                    No products yet. Add one using the activity form below.
+                  </span>
                 </div>
               ) : (
                 <div className="max-h-56 overflow-y-auto rounded-lg border border-white/[0.08]">
@@ -1484,9 +1702,14 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       {catalogProducts.map((product) => (
                         <TableRow key={product.externalProductId}>
                           <TableCell>
-                            <div className="font-mono text-xs font-medium text-white">{product.externalProductId}</div>
+                            <div className="font-mono text-xs font-medium text-white">
+                              {product.externalProductId}
+                            </div>
                             <div className="text-xs text-muted-foreground">
-                              {product.title?.trim() || "Untitled"}{product.lastSeenAt ? ` · ${new Date(product.lastSeenAt).toLocaleDateString()}` : ""}
+                              {product.title?.trim() || 'Untitled'}
+                              {product.lastSeenAt
+                                ? ` · ${new Date(product.lastSeenAt).toLocaleDateString()}`
+                                : ''}
                             </div>
                           </TableCell>
                           <TableCell className="text-xs">{product.availability}</TableCell>
@@ -1497,17 +1720,46 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Input
-                                value={productRenameDrafts[product.externalProductId] ?? ""}
-                                onChange={(e) => setProductRenameDrafts((current) => ({ ...current, [product.externalProductId]: e.target.value }))}
+                                value={productRenameDrafts[product.externalProductId] ?? ''}
+                                onChange={(e) =>
+                                  setProductRenameDrafts((current) => ({
+                                    ...current,
+                                    [product.externalProductId]: e.target.value,
+                                  }))
+                                }
                                 placeholder="Rename product"
                                 inputSize="sm"
                                 className="w-36"
                               />
-                              <Button type="button" size="sm" variant="outline" disabled={isCatalogProductSaving} onClick={() => void handleRenameCatalogProduct(product.externalProductId)} className="cursor-pointer shrink-0">
-                                {isCatalogProductSaving && activeCatalogProductId === product.externalProductId ? "…" : "Rename"}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={isCatalogProductSaving}
+                                onClick={() =>
+                                  void handleRenameCatalogProduct(product.externalProductId)
+                                }
+                                className="cursor-pointer shrink-0"
+                              >
+                                {isCatalogProductSaving &&
+                                activeCatalogProductId === product.externalProductId
+                                  ? '…'
+                                  : 'Rename'}
                               </Button>
-                              <Button type="button" size="sm" variant="destructive" disabled={isCatalogProductSaving} onClick={() => void handleRemoveCatalogProduct(product.externalProductId)} className="cursor-pointer shrink-0">
-                                {isCatalogProductSaving && activeCatalogProductId === product.externalProductId ? "…" : "Remove"}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                disabled={isCatalogProductSaving}
+                                onClick={() =>
+                                  void handleRemoveCatalogProduct(product.externalProductId)
+                                }
+                                className="cursor-pointer shrink-0"
+                              >
+                                {isCatalogProductSaving &&
+                                activeCatalogProductId === product.externalProductId
+                                  ? '…'
+                                  : 'Remove'}
                               </Button>
                             </div>
                           </TableCell>
@@ -1525,11 +1777,19 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-product-id-select">Product ID</Label>
-                  <Select value={activityProductSelectValue} onValueChange={handleActivityProductSelection}>
-                    <SelectTrigger id="activity-product-id-select" className="w-full"><SelectValue placeholder="Choose or add product" /></SelectTrigger>
+                  <Select
+                    value={activityProductSelectValue}
+                    onValueChange={handleActivityProductSelection}
+                  >
+                    <SelectTrigger id="activity-product-id-select" className="w-full">
+                      <SelectValue placeholder="Choose or add product" />
+                    </SelectTrigger>
                     <SelectContent>
                       {knownActivityProducts.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>{product.id}{product.title ? ` · ${product.title}` : ""}</SelectItem>
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.id}
+                          {product.title ? ` · ${product.title}` : ''}
+                        </SelectItem>
                       ))}
                       <SelectItem value={PRODUCT_SELECT_CUSTOM}>Custom Product ID…</SelectItem>
                     </SelectContent>
@@ -1540,7 +1800,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       value={linkDraft.product.externalProductId}
                       onChange={(e) => {
                         setCustomActivityProductId(e.target.value);
-                        setLinkDraft((current) => ({ ...current, product: { ...current.product, externalProductId: e.target.value } }));
+                        setLinkDraft((current) => ({
+                          ...current,
+                          product: { ...current.product, externalProductId: e.target.value },
+                        }));
                       }}
                       inputSize="sm"
                     />
@@ -1551,8 +1814,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   <Input
                     id="activity-product-title"
                     placeholder="Weekend Hoodie"
-                    value={linkDraft.product.title ?? ""}
-                    onChange={(e) => setLinkDraft((current) => ({ ...current, product: { ...current.product, title: e.target.value } }))}
+                    value={linkDraft.product.title ?? ''}
+                    onChange={(e) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        product: { ...current.product, title: e.target.value },
+                      }))
+                    }
                   />
                 </div>
               </div>
@@ -1560,8 +1828,21 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-availability">Availability</Label>
-                  <Select value={linkDraft.product.availability} onValueChange={(value) => setLinkDraft((current) => ({ ...current, product: { ...current.product, availability: value as LinkDraftInput["product"]["availability"] } }))}>
-                    <SelectTrigger id="activity-availability" className="w-full"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={linkDraft.product.availability}
+                    onValueChange={(value) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        product: {
+                          ...current.product,
+                          availability: value as LinkDraftInput['product']['availability'],
+                        },
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="activity-availability" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unknown">Unknown</SelectItem>
                       <SelectItem value="in_stock">In Stock</SelectItem>
@@ -1572,8 +1853,22 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-object-type">Ad Object Type</Label>
-                  <Select value={linkDraft.adObject.objectType} onValueChange={(value) => setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, objectType: value as LinkDraftInput["adObject"]["objectType"], externalObjectId: "" } }))}>
-                    <SelectTrigger id="activity-object-type" className="w-full"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={linkDraft.adObject.objectType}
+                    onValueChange={(value) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        adObject: {
+                          ...current.adObject,
+                          objectType: value as LinkDraftInput['adObject']['objectType'],
+                          externalObjectId: '',
+                        },
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="activity-object-type" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="campaign">Campaign</SelectItem>
                       <SelectItem value="adset">Ad Set</SelectItem>
@@ -1583,11 +1878,19 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-object-id-select">Ad Object ID</Label>
-                  <Select value={activityAdObjectSelectValue} onValueChange={handleActivityAdObjectSelection}>
-                    <SelectTrigger id="activity-object-id-select" className="w-full"><SelectValue placeholder="Choose ID" /></SelectTrigger>
+                  <Select
+                    value={activityAdObjectSelectValue}
+                    onValueChange={handleActivityAdObjectSelection}
+                  >
+                    <SelectTrigger id="activity-object-id-select" className="w-full">
+                      <SelectValue placeholder="Choose ID" />
+                    </SelectTrigger>
                     <SelectContent>
                       {knownActivityAdObjectOptions.map((option) => (
-                        <SelectItem key={`${option.level}:${option.id}`} value={option.id}>{option.id}{option.name ? ` · ${option.name}` : ""}</SelectItem>
+                        <SelectItem key={`${option.level}:${option.id}`} value={option.id}>
+                          {option.id}
+                          {option.name ? ` · ${option.name}` : ''}
+                        </SelectItem>
                       ))}
                       <SelectItem value={AD_OBJECT_SELECT_CUSTOM}>Custom Ad Object ID…</SelectItem>
                     </SelectContent>
@@ -1598,7 +1901,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       value={linkDraft.adObject.externalObjectId}
                       onChange={(e) => {
                         setCustomActivityAdObjectId(e.target.value);
-                        setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, externalObjectId: e.target.value } }));
+                        setLinkDraft((current) => ({
+                          ...current,
+                          adObject: { ...current.adObject, externalObjectId: e.target.value },
+                        }));
                       }}
                       inputSize="sm"
                     />
@@ -1609,51 +1915,109 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-object-name">Ad Object Name</Label>
-                  <Input id="activity-object-name" placeholder="Prospecting · Broad 18-34" value={linkDraft.adObject.name ?? ""} onChange={(e) => setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, name: e.target.value } }))} />
+                  <Input
+                    id="activity-object-name"
+                    placeholder="Prospecting · Broad 18-34"
+                    value={linkDraft.adObject.name ?? ''}
+                    onChange={(e) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        adObject: { ...current.adObject, name: e.target.value },
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-object-status">Delivery Status</Label>
-                  <Select value={(linkDraft.adObject.status ?? "").trim() || "ACTIVE"} onValueChange={(value) => setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, status: value } }))}>
-                    <SelectTrigger id="activity-object-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={(linkDraft.adObject.status ?? '').trim() || 'ACTIVE'}
+                    onValueChange={(value) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        adObject: { ...current.adObject, status: value },
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="activity-object-status" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {knownActivityStatuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                      {knownActivityStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="activity-source">Source</Label>
-                  <Select value={(linkDraft.activity.source ?? "").trim() || "manual"} onValueChange={(value) => setLinkDraft((current) => ({ ...current, activity: { ...current.activity, source: value } }))}>
-                    <SelectTrigger id="activity-source" className="w-full"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={(linkDraft.activity.source ?? '').trim() || 'manual'}
+                    onValueChange={(value) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        activity: { ...current.activity, source: value },
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="activity-source" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {knownActivitySources.map((source) => <SelectItem key={source} value={source}>{source}</SelectItem>)}
+                      {knownActivitySources.map((source) => (
+                        <SelectItem key={source} value={source}>
+                          {source}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-              <Flex align="center" justify="between" wrap="wrap" gap="3">
-                <label htmlFor="activity-is-active" className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <label
+                  htmlFor="activity-is-active"
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]"
+                >
                   <Checkbox
                     id="activity-is-active"
                     checked={linkDraft.activity.isActive}
-                    onCheckedChange={(checked) => setLinkDraft((current) => ({ ...current, activity: { ...current.activity, isActive: checked === true } }))}
+                    onCheckedChange={(checked) =>
+                      setLinkDraft((current) => ({
+                        ...current,
+                        activity: { ...current.activity, isActive: checked === true },
+                      }))
+                    }
                   />
-                  <Text size="2" className="text-white/80">Mark as active in delivery</Text>
+                  <span className="text-sm text-white/80">Mark as active in delivery</span>
                 </label>
-                <Button type="button" size="sm" disabled={isCatalogLinkSaving || isCatalogLinksLoading} onClick={() => void handleCreateCatalogLink()} className="cursor-pointer">
-                  {isCatalogLinkSaving && !activeCatalogLinkId ? "Saving…" : "Save Product Activity"}
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isCatalogLinkSaving || isCatalogLinksLoading}
+                  onClick={() => void handleCreateCatalogLink()}
+                  className="cursor-pointer"
+                >
+                  {isCatalogLinkSaving && !activeCatalogLinkId
+                    ? 'Saving…'
+                    : 'Save Product Activity'}
                 </Button>
-              </Flex>
+              </div>
             </div>
 
             {/* Activity links table */}
             {isCatalogLinksLoading ? (
               <div className="space-y-2">
-                {[0, 1, 2].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />)}
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />
+                ))}
               </div>
             ) : catalogLinks.length === 0 ? (
               <div className="rounded-lg border border-dashed border-white/[0.08] py-6 text-center">
-                <Text size="1" color="gray">No product-to-ad activity links recorded for this catalog yet.</Text>
+                <span className="text-xs text-muted-foreground">
+                  No product-to-ad activity links recorded for this catalog yet.
+                </span>
               </div>
             ) : (
               <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-white/[0.08]">
@@ -1671,31 +2035,47 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                     {catalogLinks.map((link) => (
                       <TableRow key={link.activity.id}>
                         <TableCell>
-                          <div className="font-mono text-xs font-medium text-white">{link.product.externalProductId}</div>
-                          <div className="text-xs text-muted-foreground">{link.product.title ?? "Untitled"} · {link.product.availability}</div>
+                          <div className="font-mono text-xs font-medium text-white">
+                            {link.product.externalProductId}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {link.product.title ?? 'Untitled'} · {link.product.availability}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <div className="text-xs text-white">{link.adObject.objectType.toUpperCase()} · {link.adObject.externalObjectId}</div>
-                          <div className="text-xs text-muted-foreground">{link.adObject.name ?? "Unnamed"}{link.adObject.status ? ` (${link.adObject.status})` : ""}</div>
+                          <div className="text-xs text-white">
+                            {link.adObject.objectType.toUpperCase()} ·{' '}
+                            {link.adObject.externalObjectId}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {link.adObject.name ?? 'Unnamed'}
+                            {link.adObject.status ? ` (${link.adObject.status})` : ''}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <Badge color={link.activity.isActive ? "green" : "gray"} radius="full" variant="soft">
-                            {link.activity.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                          <Pill variant={link.activity.isActive ? 'success' : 'muted'}>
+                            {link.activity.isActive ? 'Active' : 'Inactive'}
+                          </Pill>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {new Date(link.activity.lastSeenAt).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
-                            type="button" size="sm" variant="outline"
+                            type="button"
+                            size="sm"
+                            variant="outline"
                             disabled={isCatalogLinkSaving}
-                            onClick={() => void handleToggleCatalogLink(link, !link.activity.isActive)}
+                            onClick={() =>
+                              void handleToggleCatalogLink(link, !link.activity.isActive)
+                            }
                             className="cursor-pointer"
                           >
                             {isCatalogLinkSaving && activeCatalogLinkId === link.activity.id
-                              ? "…"
-                              : link.activity.isActive ? "Deactivate" : "Activate"}
+                              ? '…'
+                              : link.activity.isActive
+                                ? 'Deactivate'
+                                : 'Activate'}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -1704,7 +2084,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 </Table>
               </div>
             )}
-          </Flex>
+          </div>
         </motion.div>
       ) : null}
     </motion.div>

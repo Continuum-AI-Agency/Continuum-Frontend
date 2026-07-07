@@ -1,9 +1,8 @@
-"use client";
+'use client';
 
-import { Card } from "@radix-ui/themes";
-import { PropsWithChildren, forwardRef } from "react";
-import { motion } from "motion/react";
-import { cn } from "../../lib/utils";
+import { motion } from 'motion/react';
+import { forwardRef, type PropsWithChildren } from 'react';
+import { cn } from '../../lib/utils';
 
 export type GlassCardProps = PropsWithChildren<{
   className?: string;
@@ -11,23 +10,23 @@ export type GlassCardProps = PropsWithChildren<{
 
 export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(function GlassCard(
   { className, children },
-  ref: React.Ref<HTMLDivElement>
+  ref,
 ) {
   return (
     <motion.div
       ref={ref}
       whileHover={{ scale: 1.025, y: -4 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className="h-full motion-safe:will-change-transform"
     >
-      <Card
+      <div
         className={cn(
-          "h-full bg-card text-card-foreground border border-border/60 shadow-lg",
-          className
+          'h-full rounded-lg border border-border/60 bg-card text-card-foreground shadow-lg',
+          className,
         )}
       >
         {children}
-      </Card>
+      </div>
     </motion.div>
   );
 });

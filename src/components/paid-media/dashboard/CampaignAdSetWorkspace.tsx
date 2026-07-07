@@ -637,8 +637,13 @@ export function CampaignAdSetWorkspace({
   const timeWindow = React.useMemo(() => resolveTimeRangeWindow(timeRange), [timeRange]);
   const metricsRange = React.useMemo(() => toMetricsRange(timeRange), [timeRange]);
 
-  // Ad-set/ad drill-in and DCO action markers are Meta-only edge functions.
   const isMeta = platform === "meta";
+  const isLinkedIn = platform === "linkedin";
+  const supportsNestedPaidSurfaces = isMeta || isLinkedIn;
+  const segmentLabel = isLinkedIn ? "Segments" : "Ad Sets";
+  const segmentLabelSingular = isLinkedIn ? "segment" : "ad set";
+  const creativeLabel = isLinkedIn ? "Creatives" : "Ads";
+  const creativeLabelSingular = isLinkedIn ? "creative" : "ad";
 
   const startDateIso = React.useMemo(() => `${timeWindow.since}T00:00:00.000Z`, [timeWindow.since]);
   const endDateIso = React.useMemo(() => `${timeWindow.until}T23:59:59.999Z`, [timeWindow.until]);
@@ -958,9 +963,7 @@ export function CampaignAdSetWorkspace({
 
   const loadCampaignAdSets = React.useCallback(
     async (campaign: Campaign) => {
-      // Ad-set drill-in is served by Meta-only edge functions; non-Meta
-      // platforms stay at campaign-level observability.
-      if (!isMeta) {
+      if (!supportsNestedPaidSurfaces) {
         setAdSetsByCampaign((prev) => ({
           ...prev,
           [campaign.id]: { status: "success", adSets: [], source: undefined },
@@ -986,13 +989,15 @@ export function CampaignAdSetWorkspace({
       try {
         const supabase = createSupabaseBrowserClient();
         const { data, error } = await supabase.functions.invoke(
-          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaign.id}`,
+          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaign.id}&platform=${platform}`,
           {
             method: "POST",
             body: {
+              platform,
               brandId,
               adAccountId: accountId,
               campaignId: campaign.id,
+              range: metricsRange,
             },
           }
         );
@@ -1012,13 +1017,29 @@ export function CampaignAdSetWorkspace({
         }));
 
         const baseAdSets = rawAdSets.length > 0 ? rawAdSets : fallbackAdSets;
+        if (isLinkedIn) {
+          setAdSetsByCampaign((prev) => ({
+            ...prev,
+            [campaign.id]: {
+              status: "success",
+              adSets: baseAdSets.map((adSet) => ({
+                ...adSet,
+                campaignId: campaign.id,
+                campaignName: campaign.name,
+              })),
+              source: rawAdSets.length > 0 ? "live" : "timeline",
+            },
+          }));
+          return;
+        }
+
         const enriched = await mapWithConcurrency(baseAdSets, 5, async (adSet) => {
           try {
             const response = await fetch("/api/paid-metrics", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                platform: "meta",
+                platform,
                 brandId,
                 accountId,
                 campaignId: campaign.id,
@@ -1081,19 +1102,19 @@ export function CampaignAdSetWorkspace({
                 ? undefined
                 : error instanceof Error
                   ? error.message
-                  : "Failed to load ad sets",
+                  : `Failed to load ${segmentLabel.toLowerCase()}`,
             errorCode: fallback.length > 0 ? undefined : errorCode,
             retryAfter: fallback.length > 0 ? undefined : retryAfter,
           },
         }));
       }
     },
-    [accountId, adSetsByCampaign, brandId, isMeta, metricsRange, timelineFallbackByCampaign]
+    [accountId, adSetsByCampaign, brandId, isLinkedIn, metricsRange, platform, segmentLabel, supportsNestedPaidSurfaces, timelineFallbackByCampaign]
   );
 
   const loadAdsForAdSet = React.useCallback(
     async (adSetId: string, options?: { force?: boolean }) => {
-      if (!adSetId || !isMeta) return;
+      if (!adSetId || !supportsNestedPaidSurfaces) return;
       const force = options?.force === true;
       const existing = adsByAdSet[adSetId];
       if (!force && (existing?.status === "loading" || existing?.status === "success")) {
@@ -1118,6 +1139,7 @@ export function CampaignAdSetWorkspace({
           brandId,
           adAccountId: accountId,
           adSetId,
+          platform,
           includeTrends: "true",
           trendResolution: "daily",
         });
@@ -1138,6 +1160,7 @@ export function CampaignAdSetWorkspace({
         const { data, error } = await supabase.functions.invoke(`paid-media-reporting/ads?${params.toString()}`, {
           method: "POST",
           body: {
+            platform,
             brandId,
             adAccountId: accountId,
             adSetId,
@@ -1177,7 +1200,7 @@ export function CampaignAdSetWorkspace({
           [adSetId]: {
             status: "error",
             ads: prev[adSetId]?.ads ?? [],
-            errorMessage: error instanceof Error ? error.message : "Failed to load ads",
+            errorMessage: error instanceof Error ? error.message : `Failed to load ${creativeLabel.toLowerCase()}`,
             errorCode: (error as { errorCode?: IntegrationErrorCode }).errorCode,
             retryAfter: (error as { retryAfter?: number }).retryAfter,
           },
@@ -1186,7 +1209,7 @@ export function CampaignAdSetWorkspace({
         inFlightAdLoadsRef.current.delete(adSetId);
       }
     },
-    [accountId, adsByAdSet, brandId, isMeta, metricsRange]
+    [accountId, adsByAdSet, brandId, creativeLabel, metricsRange, platform, supportsNestedPaidSurfaces]
   );
 
   React.useEffect(() => {
@@ -1744,6 +1767,15 @@ export function CampaignAdSetWorkspace({
     if (!next) setOpenCreativeDetail(null);
   }, []);
 
+  const openCampaignSegments = React.useCallback(
+    (campaign: Campaign) => {
+      setScope({ type: "campaign", id: campaign.id });
+      setViewMode("adsets");
+      onSelectedCampaignChange?.(campaign.id);
+    },
+    [onSelectedCampaignChange]
+  );
+
   return (
     <>
     <Card className="h-full min-h-[var(--dashboard-min-panel-height)] gap-0 overflow-hidden border-border/70 py-0">
@@ -1776,7 +1808,7 @@ export function CampaignAdSetWorkspace({
                 className="h-8 px-3 text-xs"
                 onClick={() => setViewMode("adsets")}
               >
-                Ad Sets
+                {segmentLabel}
               </Button>
             </div>
 
@@ -2231,7 +2263,7 @@ export function CampaignAdSetWorkspace({
                                               onSelectedCampaignChange?.(undefined);
                                             }}
                                           >
-                                            Open ad sets
+                                            Open {segmentLabel.toLowerCase()}
                                           </ContextMenuItem>
                                           <ContextMenuItem onSelect={() => toggleCompareEntity(indexKey)}>
                                             {isAdded ? "Remove from compare" : "Add to compare"}
@@ -2283,18 +2315,18 @@ export function CampaignAdSetWorkspace({
                                                 <span className="text-sidebar-foreground/65">
                                                   {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
                                                 </span>
-                                                <span
-                                                  title={`Open ad sets for ${campaign.name}`}
+                                                <button
+                                                  type="button"
+                                                  title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
                                                   onClick={(event) => {
                                                     event.stopPropagation();
-                                                    setScope({ type: "campaign", id: campaign.id });
-                                                    setViewMode("adsets");
-                                                    onSelectedCampaignChange?.(campaign.id);
+                                                    openCampaignSegments(campaign);
                                                   }}
+                                                  onKeyDown={(event) => handleCampaignSegmentsKeyDown(event, campaign)}
                                                   className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                                 >
                                                   <ChevronRightIcon className="h-3 w-3" />
-                                                </span>
+                                                </button>
                                               </button>
                                             );
                                           })}
@@ -2355,18 +2387,18 @@ export function CampaignAdSetWorkspace({
                                         <span className="text-sidebar-foreground/65">
                                           {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
                                         </span>
-                                        <span
-                                          title={`Open ad sets for ${campaign.name}`}
+                                        <button
+                                          type="button"
+                                          title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
                                           onClick={(event) => {
                                             event.stopPropagation();
-                                            setScope({ type: "campaign", id: campaign.id });
-                                            setViewMode("adsets");
-                                            onSelectedCampaignChange?.(campaign.id);
+                                            openCampaignSegments(campaign);
                                           }}
+                                          onKeyDown={(event) => handleCampaignSegmentsKeyDown(event, campaign)}
                                           className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                         >
                                           <ChevronRightIcon className="h-3 w-3" />
-                                        </span>
+                                        </button>
                                       </button>
                                     </SidebarMenuItem>
                                   );
@@ -2452,18 +2484,18 @@ export function CampaignAdSetWorkspace({
                                 <span className="text-sidebar-foreground/65">
                                   {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
                                 </span>
-                                <span
-                                  title={`Open ad sets for ${campaign.name}`}
+                                <button
+                                  type="button"
+                                  title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    setScope({ type: "campaign", id: campaign.id });
-                                    setViewMode("adsets");
-                                    onSelectedCampaignChange?.(campaign.id);
+                                    openCampaignSegments(campaign);
                                   }}
+                                  onKeyDown={(event) => handleCampaignSegmentsKeyDown(event, campaign)}
                                   className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                 >
                                   <ChevronRightIcon className="h-3 w-3" />
-                                </span>
+                                </button>
                               </button>
                             </SidebarMenuItem>
                           );
@@ -2484,7 +2516,7 @@ export function CampaignAdSetWorkspace({
                 <IntegrationErrorBanner
                   errorCode={adSetErrors[0]?.errorCode}
                   message={adSetErrors[0]?.message}
-                  platform="meta"
+                  platform={platform}
                   retryAfter={adSetErrors[0]?.retryAfter}
                 />
               ) : null}
@@ -2494,15 +2526,17 @@ export function CampaignAdSetWorkspace({
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">
                       {selectedScopedAdSets.length === 0
-                        ? "Select ad sets"
+                        ? `Select ${segmentLabel.toLowerCase()}`
                         : selectedScopedAdSets.length === 1
                           ? selectedScopedAdSets[0]?.name
-                          : `Selected Ad Sets (${selectedScopedAdSets.length})`}
+                          : `Selected ${segmentLabel} (${selectedScopedAdSets.length})`}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {selectedScopedAdSets.length} selected · {showSelectedAdSetAverage ? "avg on" : "avg off"} ·{" "}
                       {showSelectedAdSetLines ? "lines on" : "lines off"} ·{" "}
-                      {isAdViewActive ? `ad level (${selectedAdIds.length}/3)` : "adset level"}
+                      {isAdViewActive
+                        ? `${creativeLabelSingular} level (${selectedAdIds.length}/3)`
+                        : `${segmentLabelSingular} level`}
                     </div>
                   </div>
                   <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
@@ -2591,17 +2625,17 @@ export function CampaignAdSetWorkspace({
                           {isAdSetLoading ? (
                             <span className="inline-flex items-center gap-2">
                               <ReloadIcon className="h-4 w-4 animate-spin" />
-                              Loading ad set timeline...
+                              Loading {segmentLabelSingular} timeline...
                             </span>
                           ) : (
-                            "No timeline data for selected ad sets."
+                            `No timeline data for selected ${segmentLabel.toLowerCase()}.`
                           )}
                         </div>
                       )}
                     </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-56">
-                    <ContextMenuLabel>Ad set view actions</ContextMenuLabel>
+                    <ContextMenuLabel>{segmentLabelSingular} view actions</ContextMenuLabel>
                     <ContextMenuSeparator />
                     <ContextMenuSub>
                       <ContextMenuSubTrigger inset>Quick actions</ContextMenuSubTrigger>
@@ -2694,7 +2728,7 @@ export function CampaignAdSetWorkspace({
                 <Input
                   value={campaignQuery}
                   onChange={(event) => setCampaignQuery(event.target.value)}
-                  placeholder="Search scope and ad sets..."
+                  placeholder={`Search scope and ${segmentLabel.toLowerCase()}...`}
                   className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
                 />
                 <Breadcrumb>
@@ -2708,7 +2742,7 @@ export function CampaignAdSetWorkspace({
                     </BreadcrumbItem>
                     <BreadcrumbSeparator />
                     <BreadcrumbItem>
-                      <BreadcrumbPage className="text-xs">Ad Sets</BreadcrumbPage>
+                      <BreadcrumbPage className="text-xs">{segmentLabel}</BreadcrumbPage>
                     </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
@@ -2782,7 +2816,7 @@ export function CampaignAdSetWorkspace({
 
                 <SidebarGroup className="pt-1">
                   <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                    Ad Sets ({selectedScopedAdSets.length} selected)
+                    {segmentLabel} ({selectedScopedAdSets.length} selected)
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <ScrollArea className="h-[min(20rem,38dvh)] px-1 pb-1">
@@ -2797,7 +2831,7 @@ export function CampaignAdSetWorkspace({
                         </div>
                       ) : filteredScopedAdSets.length === 0 ? (
                         <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
-                          No ad sets for this scope.
+                          No {segmentLabel.toLowerCase()} for this scope.
                         </div>
                       ) : (
                         <SidebarMenu>
@@ -2876,6 +2910,8 @@ export function CampaignAdSetWorkspace({
                     errorCode={focusedAdSetAdsState?.errorCode}
                     errorMessage={focusedAdSetAdsState?.errorMessage}
                     retryAfter={focusedAdSetAdsState?.retryAfter}
+                    platform={platform}
+                    segmentLabelSingular={segmentLabelSingular}
                     onRetry={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
                     selectedIds={selectedAdIdSet}
                     selectionCount={selectedAdIds.length}

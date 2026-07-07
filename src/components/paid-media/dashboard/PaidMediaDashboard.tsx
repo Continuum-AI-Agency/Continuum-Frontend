@@ -1,47 +1,50 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { BellIcon, CalendarIcon, InfoCircledIcon, ReloadIcon } from "@radix-ui/react-icons";
-import { Select } from "@radix-ui/themes";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { format, parseISO } from "date-fns";
-import type { DateRange } from "react-day-picker";
+import { BellIcon, CalendarIcon, InfoCircledIcon, ReloadIcon } from '@radix-ui/react-icons';
+import { format, parseISO } from 'date-fns';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import * as React from 'react';
+import type { DateRange } from 'react-day-picker';
+import { PendingActivityTabs } from '@/components/approvals/PendingActivityTabs';
 
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { consumePrefetchedIndexes } from "@/lib/prefetch/paid-media-cache";
-import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
-import { usePaidMediaPerformanceStore } from "@/lib/paid-media/performance-store";
-import type { CampaignPerformanceRow, PaidMediaPlatform } from "@/lib/paid-media/performance-types";
-import { AccountInsightsPanel } from "./AccountInsightsPanel";
-import { CampaignInsightsPanel } from "./CampaignInsightsPanel";
-import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
-import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
-import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
-import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { CampaignIndexRecord } from '@/lib/paid-media/campaign-indexes';
+import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
+import type { CampaignPerformanceRow, PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { consumePrefetchedIndexes } from '@/lib/prefetch/paid-media-cache';
+import { cn } from '@/lib/utils';
+import { AccountInsightsPanel } from './AccountInsightsPanel';
+import { CampaignAdSetWorkspace } from './CampaignAdSetWorkspace';
+import { CampaignIndexManagerDialog } from './CampaignIndexManagerDialog';
+import { CampaignInsightsPanel } from './CampaignInsightsPanel';
+import { DCOActionAlertsBox } from './DCOActionAlertsBox';
+import { LinkedInInsightsPanel } from './LinkedInInsightsPanel';
 import {
   buildDefaultCustomRange,
-  TIME_RANGE_OPTIONS,
-  toMetricsRange,
   type PaidMediaTimeRange,
+  TIME_RANGE_OPTIONS,
   type TimePreset,
-} from "./timeRange";
+  toMetricsRange,
+} from './timeRange';
 
 type Campaign = CampaignPerformanceRow;
 
 type Platform = PaidMediaPlatform;
-type TimelineResolution = "daily" | "hourly";
+type TimelineResolution = 'daily' | 'hourly';
 
 type PaidMediaDashboardProps = {
   brandId: string;
@@ -51,10 +54,10 @@ type PaidMediaDashboardProps = {
 };
 
 type LoadState =
-  | { status: "idle" }
-  | { status: "loading-campaigns" }
-  | { status: "error"; message: string }
-  | { status: "success" };
+  | { status: 'idle' }
+  | { status: 'loading-campaigns' }
+  | { status: 'error'; message: string }
+  | { status: 'success' };
 
 type IndexSaveDraft = {
   id?: string;
@@ -68,32 +71,34 @@ export function PaidMediaDashboard({
   platform,
   onPlatformChange,
 }: PaidMediaDashboardProps) {
-  const loadCampaignPerformance = usePaidMediaPerformanceStore((state) => state.loadCampaignPerformance);
+  const loadCampaignPerformance = usePaidMediaPerformanceStore(
+    (state) => state.loadCampaignPerformance,
+  );
   const defaultCustomRange = React.useMemo(() => buildDefaultCustomRange(), []);
-  const [timeRangePreset, setTimeRangePreset] = React.useState<TimePreset>("last_7d");
+  const [timeRangePreset, setTimeRangePreset] = React.useState<TimePreset>('last_7d');
   const [customSince, setCustomSince] = React.useState(defaultCustomRange.since);
   const [customUntil, setCustomUntil] = React.useState(defaultCustomRange.until);
   const [customRangeOpen, setCustomRangeOpen] = React.useState(false);
-  const [timelineResolution, setTimelineResolution] = React.useState<TimelineResolution>("daily");
+  const [timelineResolution, setTimelineResolution] = React.useState<TimelineResolution>('daily');
   const [activeOnly, setActiveOnly] = React.useState(true);
-  const [loadState, setLoadState] = React.useState<LoadState>({ status: "idle" });
+  const [loadState, setLoadState] = React.useState<LoadState>({ status: 'idle' });
   const prefersReducedMotion = useReducedMotion();
 
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | undefined>();
   const [campaignIndexes, setCampaignIndexes] = React.useState<CampaignIndexRecord[]>([]);
-  const [selectedCampaignIndexId, setSelectedCampaignIndexId] = React.useState<string>("all");
+  const [selectedCampaignIndexId, setSelectedCampaignIndexId] = React.useState<string>('all');
   const [indexDialogOpen, setIndexDialogOpen] = React.useState(false);
   const [alertsPanelOpen, setAlertsPanelOpen] = React.useState(false);
   const [alertsRefreshTick, setAlertsRefreshTick] = React.useState(0);
   const [savingIndex, setSavingIndex] = React.useState(false);
   const loadCampaignsRequestIdRef = React.useRef(0);
   const timeRange = React.useMemo<PaidMediaTimeRange>(() => {
-    if (timeRangePreset !== "custom") {
+    if (timeRangePreset !== 'custom') {
       return { preset: timeRangePreset };
     }
     return {
-      preset: "custom",
+      preset: 'custom',
       since: customSince,
       until: customUntil,
     };
@@ -104,18 +109,18 @@ export function PaidMediaDashboard({
       from: parseISO(customSince),
       to: parseISO(customUntil),
     }),
-    [customSince, customUntil]
+    [customSince, customUntil],
   );
   const customRangeLabel = React.useMemo(() => {
     const from = customRangeSelection.from;
     const to = customRangeSelection.to;
     if (!from) {
-      return "Pick a date range";
+      return 'Pick a date range';
     }
     if (!to) {
-      return format(from, "LLL dd, yyyy");
+      return format(from, 'LLL dd, yyyy');
     }
-    return `${format(from, "LLL dd, yyyy")} - ${format(to, "LLL dd, yyyy")}`;
+    return `${format(from, 'LLL dd, yyyy')} - ${format(to, 'LLL dd, yyyy')}`;
   }, [customRangeSelection.from, customRangeSelection.to]);
 
   const loadCampaigns = React.useCallback(async () => {
@@ -125,11 +130,11 @@ export function PaidMediaDashboard({
     if (!adAccountId) {
       setCampaigns([]);
       setSelectedCampaignId(undefined);
-      setLoadState({ status: "idle" });
+      setLoadState({ status: 'idle' });
       return;
     }
 
-    setLoadState({ status: "loading-campaigns" });
+    setLoadState({ status: 'loading-campaigns' });
 
     try {
       const campaignsWithMetrics = await loadCampaignPerformance(
@@ -139,22 +144,22 @@ export function PaidMediaDashboard({
           platform,
           range: metricsRange,
         },
-        { force: false }
+        { force: false },
       );
 
       if (requestId !== loadCampaignsRequestIdRef.current) {
         return;
       }
       setCampaigns(campaignsWithMetrics);
-      setLoadState({ status: "success" });
+      setLoadState({ status: 'success' });
     } catch (error) {
       if (requestId !== loadCampaignsRequestIdRef.current) {
         return;
       }
-      console.error("Failed to load campaigns:", error);
+      console.error('Failed to load campaigns:', error);
       setLoadState({
-        status: "error",
-        message: error instanceof Error ? error.message : "Failed to load campaigns",
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Failed to load campaigns',
       });
     }
   }, [adAccountId, brandId, loadCampaignPerformance, metricsRange, platform]);
@@ -162,7 +167,7 @@ export function PaidMediaDashboard({
   const loadCampaignIndexes = React.useCallback(async () => {
     if (!adAccountId) {
       setCampaignIndexes([]);
-      setSelectedCampaignIndexId("all");
+      setSelectedCampaignIndexId('all');
       return;
     }
 
@@ -178,22 +183,22 @@ export function PaidMediaDashboard({
         : await fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then(
             async (response) => {
               if (!response.ok) {
-                throw new Error("Failed to load campaign indexes");
+                throw new Error('Failed to load campaign indexes');
               }
               return (await response.json()) as { indexes?: CampaignIndexRecord[] };
-            }
+            },
           );
       const indexes = Array.isArray(payload.indexes) ? payload.indexes : [];
       setCampaignIndexes(indexes);
 
       setSelectedCampaignIndexId((current) => {
-        if (current === "all") return current;
-        return indexes.some((index) => index.id === current) ? current : "all";
+        if (current === 'all') return current;
+        return indexes.some((index) => index.id === current) ? current : 'all';
       });
     } catch (error) {
-      console.error("Failed to load campaign indexes", error);
+      console.error('Failed to load campaign indexes', error);
       setCampaignIndexes([]);
-      setSelectedCampaignIndexId("all");
+      setSelectedCampaignIndexId('all');
     }
   }, [adAccountId, brandId]);
 
@@ -216,25 +221,25 @@ export function PaidMediaDashboard({
 
   const handleTimeRangeChange = (value: TimePreset) => {
     setTimeRangePreset(value);
-    if (value !== "custom") {
+    if (value !== 'custom') {
       setCustomRangeOpen(false);
     }
   };
 
   const handleCustomRangeSelect = (range: DateRange | undefined) => {
     if (!range?.from || !range?.to) return;
-    setCustomSince(format(range.from, "yyyy-MM-dd"));
-    setCustomUntil(format(range.to, "yyyy-MM-dd"));
+    setCustomSince(format(range.from, 'yyyy-MM-dd'));
+    setCustomUntil(format(range.to, 'yyyy-MM-dd'));
     setCustomRangeOpen(false);
   };
 
   const selectedCampaignIndex = React.useMemo(
     () => campaignIndexes.find((index) => index.id === selectedCampaignIndexId),
-    [campaignIndexes, selectedCampaignIndexId]
+    [campaignIndexes, selectedCampaignIndexId],
   );
 
   const dialogInitialValue = React.useMemo<IndexSaveDraft | undefined>(() => {
-    if (!selectedCampaignIndex || selectedCampaignIndexId === "all") return undefined;
+    if (!selectedCampaignIndex || selectedCampaignIndexId === 'all') return undefined;
     return {
       id: selectedCampaignIndex.id,
       name: selectedCampaignIndex.name,
@@ -250,8 +255,8 @@ export function PaidMediaDashboard({
       try {
         if (draft.id) {
           const updateResponse = await fetch(`/api/paid-media/campaign-indexes/${draft.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: draft.name,
               campaignIds: draft.campaignIds,
@@ -259,12 +264,12 @@ export function PaidMediaDashboard({
           });
 
           if (!updateResponse.ok) {
-            throw new Error("Failed to update campaign index");
+            throw new Error('Failed to update campaign index');
           }
         } else {
-          const createResponse = await fetch("/api/paid-media/campaign-indexes", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+          const createResponse = await fetch('/api/paid-media/campaign-indexes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               brandId,
               metaAccountId: adAccountId,
@@ -274,7 +279,7 @@ export function PaidMediaDashboard({
           });
 
           if (!createResponse.ok) {
-            throw new Error("Failed to create campaign index");
+            throw new Error('Failed to create campaign index');
           }
 
           const payload = (await createResponse.json()) as { index?: CampaignIndexRecord };
@@ -286,66 +291,77 @@ export function PaidMediaDashboard({
         await loadCampaignIndexes();
         setIndexDialogOpen(false);
       } catch (error) {
-        console.error("Failed to save campaign index", error);
+        console.error('Failed to save campaign index', error);
       } finally {
         setSavingIndex(false);
       }
     },
-    [adAccountId, brandId, loadCampaignIndexes]
+    [adAccountId, brandId, loadCampaignIndexes],
   );
 
-  const deleteCampaignIndex = React.useCallback(async (indexId: string) => {
-    setSavingIndex(true);
-    try {
-      const response = await fetch(`/api/paid-media/campaign-indexes/${indexId}`, {
-        method: "DELETE",
-      });
+  const deleteCampaignIndex = React.useCallback(
+    async (indexId: string) => {
+      setSavingIndex(true);
+      try {
+        const response = await fetch(`/api/paid-media/campaign-indexes/${indexId}`, {
+          method: 'DELETE',
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to delete campaign index");
+        if (!response.ok) {
+          throw new Error('Failed to delete campaign index');
+        }
+
+        setSelectedCampaignIndexId('all');
+        await loadCampaignIndexes();
+      } catch (error) {
+        console.error('Failed to delete campaign index', error);
+      } finally {
+        setSavingIndex(false);
       }
-
-      setSelectedCampaignIndexId("all");
-      await loadCampaignIndexes();
-    } catch (error) {
-      console.error("Failed to delete campaign index", error);
-    } finally {
-      setSavingIndex(false);
-    }
-  }, [loadCampaignIndexes]);
+    },
+    [loadCampaignIndexes],
+  );
 
   const dashboardToolbar = (
     <>
-      {loadState.status === "loading-campaigns" ? (
+      {loadState.status === 'loading-campaigns' ? (
         <span className="rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground">
           Loading
         </span>
       ) : null}
 
-      <Select.Root value={platform} onValueChange={handlePlatformChange}>
-        <Select.Trigger placeholder="Select platform" className="min-h-8 min-w-[110px] text-xs" />
-        <Select.Content>
-          <Select.Item value="meta">Meta</Select.Item>
-          <Select.Item value="google-ads">Google Ads</Select.Item>
-          <Select.Item value="dv360" disabled>
+      <Select value={platform} onValueChange={(value) => handlePlatformChange(value as Platform)}>
+        <SelectTrigger className="min-h-8 min-w-[110px] text-xs">
+          <SelectValue placeholder="Select platform" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="meta">Meta</SelectItem>
+          <SelectItem value="google-ads">Google Ads</SelectItem>
+          <SelectItem value="linkedin">LinkedIn Ads</SelectItem>
+          <SelectItem value="dv360" disabled>
             DV360
-          </Select.Item>
-        </Select.Content>
-      </Select.Root>
+          </SelectItem>
+        </SelectContent>
+      </Select>
 
-      <Select.Root value={timeRangePreset} onValueChange={handleTimeRangeChange}>
-        <Select.Trigger placeholder="Select time range" className="min-h-8 min-w-[120px] text-xs" />
-        <Select.Content>
+      <Select
+        value={timeRangePreset}
+        onValueChange={(value) => handleTimeRangeChange(value as TimePreset)}
+      >
+        <SelectTrigger className="min-h-8 min-w-[120px] text-xs">
+          <SelectValue placeholder="Select time range" />
+        </SelectTrigger>
+        <SelectContent>
           {TIME_RANGE_OPTIONS.map((option) => (
-            <Select.Item key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value}>
               {option.label}
-            </Select.Item>
+            </SelectItem>
           ))}
-        </Select.Content>
-      </Select.Root>
+        </SelectContent>
+      </Select>
 
       <AnimatePresence initial={false}>
-        {timeRangePreset === "custom" && (
+        {timeRangePreset === 'custom' && (
           <motion.div
             key="custom-range-calendar"
             initial={prefersReducedMotion ? false : { opacity: 0, y: -6, scale: 0.985 }}
@@ -359,8 +375,9 @@ export function PaidMediaDashboard({
                   variant="outline"
                   size="sm"
                   className={cn(
-                    "h-8 min-w-[220px] justify-start gap-1.5 text-left text-xs font-normal",
-                    customRangeOpen && "border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20"
+                    'h-8 min-w-[220px] justify-start gap-1.5 text-left text-xs font-normal',
+                    customRangeOpen &&
+                      'border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20',
                   )}
                 >
                   <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
@@ -390,7 +407,7 @@ export function PaidMediaDashboard({
             size="sm"
             className="h-8 text-xs"
             onClick={() => {
-              setSelectedCampaignIndexId("all");
+              setSelectedCampaignIndexId('all');
             }}
           >
             New index
@@ -413,7 +430,12 @@ export function PaidMediaDashboard({
 
       <DropdownMenu open={alertsPanelOpen} onOpenChange={setAlertsPanelOpen} modal={false}>
         <DropdownMenuTrigger asChild>
-          <Button data-tour-id="paid-dco-alerts" variant="outline" size="sm" className="h-8 text-xs">
+          <Button
+            data-tour-id="paid-dco-alerts"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+          >
             <BellIcon className="mr-1.5 h-3.5 w-3.5" />
             Alerts
           </Button>
@@ -447,7 +469,7 @@ export function PaidMediaDashboard({
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-72 text-xs text-muted-foreground">
-          Charting library provided by{" "}
+          Charting library provided by{' '}
           <a
             href="https://www.tradingview.com/lightweight-charts/"
             target="_blank"
@@ -464,18 +486,18 @@ export function PaidMediaDashboard({
         variant="secondary"
         size="icon-sm"
         onClick={handleRefresh}
-        disabled={loadState.status === "loading-campaigns"}
+        disabled={loadState.status === 'loading-campaigns'}
         className="h-8 w-8"
         aria-label="Refresh campaigns"
       >
-        <ReloadIcon className={loadState.status === "loading-campaigns" ? "animate-spin" : ""} />
+        <ReloadIcon className={loadState.status === 'loading-campaigns' ? 'animate-spin' : ''} />
       </Button>
     </>
   );
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
-      {loadState.status === "error" ? (
+      {loadState.status === 'error' ? (
         <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {loadState.message}
         </div>
@@ -508,7 +530,23 @@ export function PaidMediaDashboard({
             />
 
             <div className="min-h-0">
-              {selectedCampaignId ? (
+              {platform === 'linkedin' ? (
+                <LinkedInInsightsPanel
+                  brandId={brandId}
+                  adAccountId={adAccountId}
+                  campaignId={selectedCampaignId}
+                  campaignName={campaigns.find((c) => c.id === selectedCampaignId)?.name}
+                  timeRange={timeRange}
+                />
+              ) : platform !== 'meta' ? (
+                <div className="rounded-lg border border-border/70 bg-background px-3 py-2">
+                  <p className="text-sm font-medium text-foreground">Platform insights</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Performance KPIs, trends, and ranked entities are loaded above. Narrative
+                    insight panels are available for Meta and LinkedIn.
+                  </p>
+                </div>
+              ) : selectedCampaignId ? (
                 <CampaignInsightsPanel
                   brandId={brandId}
                   adAccountId={adAccountId}

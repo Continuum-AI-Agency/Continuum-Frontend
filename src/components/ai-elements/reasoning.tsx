@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
-import { Box, Flex, IconButton, Text } from "@radix-ui/themes";
-import { ChevronDownIcon, ChevronRightIcon, InfoCircledIcon } from "@radix-ui/react-icons";
-import * as Collapsible from "@radix-ui/react-collapsible";
-import { useState, type ReactNode } from "react";
+import * as Collapsible from '@radix-ui/react-collapsible';
+import { ChevronDownIcon, InfoCircledIcon } from '@radix-ui/react-icons';
+import { type ReactNode, useState } from 'react';
+
+import { Button } from '@/components/ui/button';
 
 type ReasoningProps = {
   children: ReactNode;
@@ -11,14 +12,12 @@ type ReasoningProps = {
   isStreaming?: boolean;
 };
 
-export function Reasoning({ children, defaultOpen = false, isStreaming = false }: ReasoningProps) {
+export function Reasoning({ children, defaultOpen = false }: ReasoningProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="w-full">
-      <Box className="rounded-lg border border-white/5 bg-white/5 overflow-hidden">
-        {children}
-      </Box>
+      <div className="overflow-hidden rounded-lg border bg-muted/40">{children}</div>
     </Collapsible.Root>
   );
 }
@@ -26,22 +25,15 @@ export function Reasoning({ children, defaultOpen = false, isStreaming = false }
 export function ReasoningTrigger({ children }: { children: ReactNode }) {
   return (
     <Collapsible.Trigger asChild>
-      <Flex
-        align="center"
-        justify="between"
-        p="2"
-        className="cursor-pointer hover:bg-white/5 transition-colors"
-      >
-        <Flex align="center" gap="2">
-          <InfoCircledIcon className="text-blue-400" />
-          <Text size="2" weight="medium" className="text-secondary">
-            {children}
-          </Text>
-        </Flex>
-        <IconButton variant="ghost" size="1" color="gray">
-          <ChevronDownIcon className="transition-transform duration-200" />
-        </IconButton>
-      </Flex>
+      <div className="flex cursor-pointer items-center justify-between p-2 transition-colors hover:bg-muted/40">
+        <div className="flex items-center gap-2">
+          <InfoCircledIcon className="text-secondary" aria-hidden="true" />
+          <span className="text-sm font-medium text-secondary">{children}</span>
+        </div>
+        <Button variant="ghost" size="icon-sm">
+          <ChevronDownIcon className="transition-transform duration-200" aria-hidden="true" />
+        </Button>
+      </div>
     </Collapsible.Trigger>
   );
 }
@@ -49,9 +41,7 @@ export function ReasoningTrigger({ children }: { children: ReactNode }) {
 export function ReasoningContent({ children }: { children: ReactNode }) {
   return (
     <Collapsible.Content>
-      <Box p="3" className="border-t border-white/5 space-y-2">
-        {children}
-      </Box>
+      <div className="space-y-2 border-t p-3">{children}</div>
     </Collapsible.Content>
   );
 }

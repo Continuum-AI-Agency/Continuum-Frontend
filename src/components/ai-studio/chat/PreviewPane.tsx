@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
-import Image from "next/image";
-import { Pencil2Icon, ReloadIcon, StopIcon } from "@radix-ui/react-icons";
-
-import type { StreamState } from "@/lib/types/chatImage";
+import { Pencil2Icon, ReloadIcon, StopIcon } from '@radix-ui/react-icons';
+import Image from 'next/image';
+import React from 'react';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import type { StreamState } from '@/lib/types/chatImage';
 
 type PreviewPaneProps = {
   brandName: string;
@@ -16,34 +16,51 @@ type PreviewPaneProps = {
   canMarkup?: boolean;
 };
 
-export function PreviewPane({ brandName, streamState, onCancel, onReset, onMarkup, canMarkup }: PreviewPaneProps) {
+export function PreviewPane({
+  brandName,
+  streamState,
+  onCancel,
+  onReset,
+  onMarkup,
+  canMarkup,
+}: PreviewPaneProps) {
   return (
-    <Card
-      className="relative flex h-full min-h-[480px] flex-col overflow-hidden shadow-2xl"
+    <div
+      className="relative flex h-full min-h-[480px] flex-col overflow-hidden rounded-xl p-3 shadow-2xl"
       style={{
-        backgroundColor: "var(--color-surface)",
-        border: "1px solid var(--gray-6)",
-        color: "var(--gray-12)",
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--gray-6)',
+        color: 'var(--gray-12)',
       }}
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div>
-          <Text weight="medium">Preview for {brandName}</Text>
-          <div className="text-xs text-gray-400">{streamState.status === "streaming" ? "Streaming" : "Idle"}</div>
+          <span className="font-medium">Preview for {brandName}</span>
+          <div className="text-xs text-gray-400">
+            {streamState.status === 'streaming' ? 'Streaming' : 'Idle'}
+          </div>
         </div>
-        <Flex gap="2">
-          <Badge color={streamState.status === "streaming" ? "blue" : streamState.status === "error" ? "red" : "green"}>
+        <div className="flex gap-2">
+          <Pill
+            variant={
+              streamState.status === 'streaming'
+                ? 'teal'
+                : streamState.status === 'error'
+                  ? 'destructive'
+                  : 'success'
+            }
+          >
             {streamState.status}
-          </Badge>
+          </Pill>
           {canMarkup ? (
-            <Button size="1" variant="outline" onClick={onMarkup}>
+            <Button size="sm" variant="outline" onClick={onMarkup}>
               <Pencil2Icon /> Markup
             </Button>
           ) : null}
-          <Button size="1" variant="ghost" onClick={onReset}>
+          <Button size="sm" variant="ghost" onClick={onReset}>
             <ReloadIcon /> Reset
           </Button>
-        </Flex>
+        </div>
       </div>
 
       <div
@@ -51,15 +68,16 @@ export function PreviewPane({ brandName, streamState, onCancel, onReset, onMarku
         style={{
           background:
             streamState.videoUrl || streamState.currentBase64 || streamState.posterBase64
-              ? "transparent"
-              : "radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-9), transparent 80%), transparent 35%), " +
-                "radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--accent-10), transparent 82%), transparent 30%), var(--color-panel)",
+              ? 'transparent'
+              : 'radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-9), transparent 80%), transparent 35%), ' +
+                'radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--accent-10), transparent 82%), transparent 30%), var(--color-panel)',
           minHeight: 320,
-          height: "1200px",
-          maxHeight: "100vh",
+          height: '1200px',
+          maxHeight: '100vh',
         }}
       >
         {streamState.videoUrl ? (
+          // biome-ignore lint/a11y/useMediaCaption: pre-existing user-generated artifact preview; no caption track exists, out of scope for this styling swap.
           <video
             src={streamState.videoUrl}
             controls
@@ -83,24 +101,28 @@ export function PreviewPane({ brandName, streamState, onCancel, onReset, onMarku
             priority
           />
         ) : (
-          <Text color="gray">Drop a prompt and generate to see preview.</Text>
+          <span className="text-gray-400">Drop a prompt and generate to see preview.</span>
         )}
 
-        {streamState.status === "streaming" ? (
+        {streamState.status === 'streaming' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-            <Text className="mb-2">Streaming… {streamState.progressPct ?? 0}%</Text>
+            <span className="mb-2">Streaming… {streamState.progressPct ?? 0}%</span>
             <div className="h-2 w-64 overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full bg-gradient-to-r from-indigo-400 to-blue-400"
                 style={{ width: `${Math.min(streamState.progressPct ?? 0, 100)}%` }}
               />
             </div>
-            <Button size="2" variant="outline" color="red" className="mt-3" onClick={onCancel}>
+            <Button
+              variant="outline"
+              className="mt-3 border-destructive text-destructive hover:text-destructive"
+              onClick={onCancel}
+            >
               <StopIcon /> Cancel
             </Button>
           </div>
         ) : null}
       </div>
-    </Card>
+    </div>
   );
 }

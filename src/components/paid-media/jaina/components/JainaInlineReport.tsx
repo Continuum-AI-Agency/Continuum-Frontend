@@ -1,22 +1,20 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Badge, Button, Heading, Text } from "@radix-ui/themes";
-import { DownloadIcon, FileCode2Icon } from "lucide-react";
-import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
-import { useToast } from "@/components/ui/ToastProvider";
-import {
-  type FrontendCheckpointReport,
-  hasReportContent,
-} from "@/lib/jaina/schemas";
-import { buildJitSnapshotFallbackTables } from "../reportTableUtils";
-import { downloadJainaReportHtml, downloadJainaReportPdf } from "../reportExport";
-import { JainaReportCharts, isJainaChartInput } from "./JainaReportCharts";
-import { JainaReportMetrics } from "./JainaReportMetrics";
-import { JainaReportRecommendations } from "./JainaReportRecommendations";
-import { JainaReportSections } from "./JainaReportSections";
-import { JainaReportTables } from "./JainaReportTables";
+import { DownloadIcon, FileCode2Icon } from 'lucide-react';
+import * as React from 'react';
+import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import { useToast } from '@/components/ui/ToastProvider';
+import { type FrontendCheckpointReport, hasReportContent } from '@/lib/jaina/schemas';
+import { downloadJainaReportHtml, downloadJainaReportPdf } from '../reportExport';
+import { buildJitSnapshotFallbackTables } from '../reportTableUtils';
+import { isJainaChartInput, JainaReportCharts } from './JainaReportCharts';
+import { JainaReportMetrics } from './JainaReportMetrics';
+import { JainaReportRecommendations } from './JainaReportRecommendations';
+import { JainaReportSections } from './JainaReportSections';
+import { JainaReportTables } from './JainaReportTables';
 
 type JainaInlineReportProps = {
   report: FrontendCheckpointReport | null;
@@ -32,12 +30,12 @@ export function JainaInlineReport({
   const { show } = useToast();
   const fallbackTables = React.useMemo(
     () => (report ? buildJitSnapshotFallbackTables(report) : []),
-    [report]
+    [report],
   );
 
   const topLevelCharts = React.useMemo(
     () => (report ? report.graphs.filter((chart) => isJainaChartInput(chart)) : []),
-    [report]
+    [report],
   );
 
   const effectiveRecommendations = React.useMemo(() => {
@@ -57,9 +55,9 @@ export function JainaInlineReport({
       });
     } catch {
       show({
-        title: "Export failed",
-        description: "Unable to generate PDF report right now.",
-        variant: "error",
+        title: 'Export failed',
+        description: 'Unable to generate PDF report right now.',
+        variant: 'error',
       });
     }
   }, [fallbackTables, report, show]);
@@ -73,9 +71,9 @@ export function JainaInlineReport({
       });
     } catch {
       show({
-        title: "Export failed",
-        description: "Unable to generate HTML report right now.",
-        variant: "error",
+        title: 'Export failed',
+        description: 'Unable to generate HTML report right now.',
+        variant: 'error',
       });
     }
   }, [fallbackTables, report, show]);
@@ -83,28 +81,27 @@ export function JainaInlineReport({
   if (!report || !hasReportContent(report)) return null;
 
   const blockLabel = (category: string): string => {
-    if (category === "summary_breakdown") return "Summary";
-    if (category === "insight_recommendation") return "Insight";
-    if (category === "data") return "Data";
-    if (category === "graph") return "Graph";
+    if (category === 'summary_breakdown') return 'Summary';
+    if (category === 'insight_recommendation') return 'Insight';
+    if (category === 'data') return 'Data';
+    if (category === 'graph') return 'Graph';
     return category;
   };
 
   return (
     <section className="mt-6 space-y-6 border-t border-border/60 pt-6">
       <header className="flex items-center justify-between gap-3">
-        <Heading size="4" className="tracking-tight">
-          {report.report_title || "Checkpoint Analysis"}
-        </Heading>
+        <h2 className="text-lg font-semibold tracking-tight">
+          {report.report_title || 'Checkpoint Analysis'}
+        </h2>
         <div className="flex items-center gap-2">
-          <Badge variant="soft" color="indigo" className="uppercase text-2xs tracking-wide">
-            {report.language || "EN"}
-          </Badge>
+          <Pill variant="violet" className="uppercase text-2xs tracking-wide">
+            {report.language || 'EN'}
+          </Pill>
           <Button
             type="button"
-            size="1"
-            variant="soft"
-            color="gray"
+            size="sm"
+            variant="secondary"
             onClick={() => void handleDownload()}
             disabled={isStreaming}
             aria-label="Download report as PDF"
@@ -117,22 +114,18 @@ export function JainaInlineReport({
 
       {report.executive_summary ? (
         <div className="space-y-2">
-          <Text size="2" weight="medium" className="text-foreground/85">
-            Executive Summary
-          </Text>
+          <span className="text-sm font-medium text-foreground/85">Executive Summary</span>
           <SafeMarkdown
             content={report.executive_summary}
             className="text-base leading-6 text-muted-foreground"
-            mode={isStreaming ? "streaming" : "static"}
+            mode={isStreaming ? 'streaming' : 'static'}
           />
         </div>
       ) : null}
 
       {report.blocks.length > 0 ? (
         <div className="space-y-2">
-          <Text size="2" weight="medium" className="text-foreground/85">
-            Checkpoint Blocks
-          </Text>
+          <span className="text-sm font-medium text-foreground/85">Checkpoint Blocks</span>
           <div className="space-y-2">
             {report.blocks.map((block) => (
               <div
@@ -140,19 +133,15 @@ export function JainaInlineReport({
                 className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
               >
                 <div className="mb-1 flex items-center gap-2">
-                  <Badge variant="outline" className="text-2xs uppercase tracking-wide">
+                  <Pill variant="outline" className="text-2xs uppercase tracking-wide">
                     {blockLabel(block.category)}
-                  </Badge>
-                  <Badge variant="soft" color="gray" className="text-2xs">
+                  </Pill>
+                  <Pill variant="muted" className="text-2xs">
                     {block.scope}
-                  </Badge>
+                  </Pill>
                 </div>
-                <Text size="2" weight="medium" className="block">
-                  {block.title}
-                </Text>
-                <Text size="1" className="text-muted-foreground">
-                  {block.summary}
-                </Text>
+                <span className="text-sm font-medium block">{block.title}</span>
+                <span className="text-xs text-muted-foreground">{block.summary}</span>
               </div>
             ))}
           </div>
@@ -170,9 +159,7 @@ export function JainaInlineReport({
 
       {report.follow_up_questions.length > 0 ? (
         <div className="space-y-2 pt-2">
-          <Text size="2" weight="medium" className="text-foreground/85">
-            Follow-up
-          </Text>
+          <span className="text-sm font-medium text-foreground/85">Follow-up</span>
           <Suggestions className="pb-1">
             {report.follow_up_questions.map((question, index) => (
               <Suggestion
@@ -186,14 +173,13 @@ export function JainaInlineReport({
       ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-        <Text size="1" className="text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           Export includes summary, metrics, charts, tables, recommendations, and follow-up prompts.
-        </Text>
+        </span>
         <Button
           type="button"
-          size="1"
-          variant="surface"
-          color="gray"
+          size="sm"
+          variant="outline"
           onClick={handleHtmlExport}
           disabled={isStreaming}
           aria-label="Export response as HTML"

@@ -49,6 +49,7 @@ mock.module("@/lib/api/http", () => ({
 import {
   assignBrandIntegrationAccount,
   startGoogleSync,
+  startLinkedInSync,
   unassignBrandIntegrationAccount,
 } from "@/lib/api/integrations";
 
@@ -111,5 +112,28 @@ describe("startGoogleSync", () => {
 
     const [{ path }] = httpRequestMock.mock.calls[0] as [HttpRequestArgs];
     expect(path).toContain("force_account_chooser=true");
+  });
+});
+
+describe("startLinkedInSync", () => {
+  beforeEach(() => {
+    httpRequestMock.mockClear();
+  });
+
+  it("starts the LinkedIn OAuth flow with callback_url", async () => {
+    await startLinkedInSync("https://app.test/integrations/callback?provider=linkedin");
+
+    const [{ path }] = httpRequestMock.mock.calls[0] as [HttpRequestArgs];
+    expect(path).toContain("/integrations/linkedin/sync?");
+    expect(path).toContain("callback_url=");
+    expect(path).not.toContain("mode=");
+  });
+
+  it("threads LinkedIn organic mode through to the sync request", async () => {
+    await startLinkedInSync("https://app.test/integrations/callback?provider=linkedin", { mode: "organic" });
+
+    const [{ path }] = httpRequestMock.mock.calls[0] as [HttpRequestArgs];
+    expect(path).toContain("/integrations/linkedin/sync?");
+    expect(path).toContain("mode=organic");
   });
 });

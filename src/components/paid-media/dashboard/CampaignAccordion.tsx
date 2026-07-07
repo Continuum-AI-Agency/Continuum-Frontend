@@ -1,20 +1,26 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { ReloadIcon } from "@radix-ui/react-icons";
-
+import type { IntegrationErrorCode } from '@continuum/contracts';
+import { ReloadIcon } from '@radix-ui/react-icons';
+import { Megaphone } from 'lucide-react';
+import * as React from 'react';
+import { EmptyState } from '@/components/shared/state';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { AdSetTable, type AdSet, type AdSetAdsLoadState } from "./AdSetTable";
-import { PerformanceDetails, type PaidMetricsComparison, type PaidMetricsTrendPoint } from "./PerformanceDetails";
-import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
-import type { IntegrationErrorCode } from "@continuum/contracts";
+} from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { type AdSet, type AdSetAdsLoadState, AdSetTable } from './AdSetTable';
+import {
+  type PaidMetricsComparison,
+  type PaidMetricsTrendPoint,
+  PerformanceDetails,
+} from './PerformanceDetails';
 
 type Campaign = {
   id: string;
@@ -41,7 +47,8 @@ type CampaignAccordionProps = {
   brandId: string;
   accountId: string;
   timeRange: { preset: string };
-  resolution: "daily" | "hourly";
+  platform?: PaidMediaPlatform;
+  resolution: 'daily' | 'hourly';
   activeOnly?: boolean;
   dcoManagedCampaignIds?: string[];
   onSelectedCampaignChange?: (campaignId: string | undefined) => void;
@@ -49,7 +56,7 @@ type CampaignAccordionProps = {
 
 type AdSetLoadState = {
   [campaignId: string]: {
-    status: "idle" | "loading" | "success" | "error";
+    status: 'idle' | 'loading' | 'success' | 'error';
     adSets: AdSet[];
     errorMessage?: string;
     errorCode?: IntegrationErrorCode;
@@ -60,24 +67,24 @@ type AdSetLoadState = {
 const META_RATE_LIMIT_COOLDOWN_MS = 60000;
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     minimumFractionDigits: 2,
   }).format(value);
 }
 
-function getStatusColor(status: string): "default" | "secondary" | "destructive" | "outline" {
+function getStatusColor(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status.toUpperCase()) {
-    case "ACTIVE":
-      return "default";
-    case "PAUSED":
-      return "secondary";
-    case "ARCHIVED":
-    case "DELETED":
-      return "destructive";
+    case 'ACTIVE':
+      return 'default';
+    case 'PAUSED':
+      return 'secondary';
+    case 'ARCHIVED':
+    case 'DELETED':
+      return 'destructive';
     default:
-      return "outline";
+      return 'outline';
   }
 }
 
@@ -93,29 +100,37 @@ function getCampaignSeverityScore(campaign: Campaign): number {
 function isMetaRateLimitMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
-    normalized.includes("user request limit reached") ||
-    normalized.includes("code 17") ||
-    normalized.includes("error_subcode: 2446079") ||
-    normalized.includes("2446079")
+    normalized.includes('user request limit reached') ||
+    normalized.includes('code 17') ||
+    normalized.includes('error_subcode: 2446079') ||
+    normalized.includes('2446079')
   );
 }
 
-async function extractInvokeError(error: unknown): Promise<{ message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }> {
+async function extractInvokeError(
+  error: unknown,
+): Promise<{ message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }> {
   if (!(error instanceof Error)) {
-    return { message: "Edge function request failed" };
+    return { message: 'Edge function request failed' };
   }
 
   const baseMessage = error.message;
-  const maybeContext = (error as { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }).context;
+  const maybeContext = (
+    error as { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }
+  ).context;
   if (!maybeContext) {
     return { message: baseMessage };
   }
 
   try {
-    if (typeof maybeContext.json === "function") {
-      const payload = (await maybeContext.json()) as { error?: string; errorCode?: IntegrationErrorCode; retryAfter?: number };
+    if (typeof maybeContext.json === 'function') {
+      const payload = (await maybeContext.json()) as {
+        error?: string;
+        errorCode?: IntegrationErrorCode;
+        retryAfter?: number;
+      };
       return {
-        message: typeof payload?.error === "string" ? payload.error : baseMessage,
+        message: typeof payload?.error === 'string' ? payload.error : baseMessage,
         errorCode: payload?.errorCode,
         retryAfter: payload?.retryAfter,
       };
@@ -125,7 +140,7 @@ async function extractInvokeError(error: unknown): Promise<{ message: string; er
   }
 
   try {
-    if (typeof maybeContext.text === "function") {
+    if (typeof maybeContext.text === 'function') {
       const text = await maybeContext.text();
       if (text) {
         return { message: text };
@@ -143,6 +158,7 @@ export function CampaignAccordion({
   brandId,
   accountId,
   timeRange,
+  platform = 'meta',
   resolution,
   activeOnly = false,
   dcoManagedCampaignIds = [],
@@ -152,15 +168,17 @@ export function CampaignAccordion({
   const [adStateByAdSet, setAdStateByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
   const [openCampaignId, setOpenCampaignId] = React.useState<string | undefined>();
   const rateLimitedUntilRef = React.useRef<number>(0);
+  const isLinkedIn = platform === 'linkedin';
+  const segmentLabel = isLinkedIn ? 'segments' : 'ad sets';
 
   const filteredCampaigns = React.useMemo(() => {
     const dcoManagedIdSet = new Set(dcoManagedCampaignIds);
     const candidates = campaigns.filter((campaign) => {
-      if (activeOnly && campaign.status.toUpperCase() !== "ACTIVE") {
+      if (activeOnly && campaign.status.toUpperCase() !== 'ACTIVE') {
         return false;
       }
 
-      if (resolution === "hourly" && !dcoManagedIdSet.has(campaign.id)) {
+      if (resolution === 'hourly' && !dcoManagedIdSet.has(campaign.id)) {
         return false;
       }
 
@@ -186,7 +204,10 @@ export function CampaignAccordion({
 
   const loadAdSets = React.useCallback(
     async (campaignId: string) => {
-      if (adSetState[campaignId]?.status === "loading" || adSetState[campaignId]?.status === "success") {
+      if (
+        adSetState[campaignId]?.status === 'loading' ||
+        adSetState[campaignId]?.status === 'success'
+      ) {
         return;
       }
 
@@ -195,9 +216,9 @@ export function CampaignAccordion({
         setAdSetState((prev) => ({
           ...prev,
           [campaignId]: {
-            status: "error",
+            status: 'error',
             adSets: prev[campaignId]?.adSets ?? [],
-            errorMessage: `Meta API rate limit active. Retry in ~${secondsLeft}s.`,
+            errorMessage: `${platform === 'linkedin' ? 'LinkedIn' : 'Meta'} API rate limit active. Retry in ~${secondsLeft}s.`,
           },
         }));
         return;
@@ -205,22 +226,24 @@ export function CampaignAccordion({
 
       setAdSetState((prev) => ({
         ...prev,
-        [campaignId]: { status: "loading", adSets: [] },
+        [campaignId]: { status: 'loading', adSets: [] },
       }));
 
       try {
         const supabase = createSupabaseBrowserClient();
 
         const { data, error: fetchError } = await supabase.functions.invoke(
-          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}`,
+          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}&platform=${platform}`,
           {
-            method: "POST",
+            method: 'POST',
             body: {
+              platform,
               brandId,
               adAccountId: accountId,
               campaignId,
+              range: timeRange,
             },
-          }
+          },
         );
 
         if (fetchError) {
@@ -234,11 +257,12 @@ export function CampaignAccordion({
         const adSetsWithMetrics = await Promise.all(
           rawAdSets.map(async (adSet: AdSet) => {
             try {
-              const metricsResponse = await fetch("/api/paid-metrics", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+              const metricsResponse = await fetch('/api/paid-metrics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  platform: "meta",
+                  platform,
+                  ...(isLinkedIn ? { scope: 'campaign', campaignId } : {}),
                   brandId,
                   accountId,
                   adsetId: adSet.id,
@@ -260,27 +284,27 @@ export function CampaignAccordion({
             }
 
             return adSet;
-          })
+          }),
         );
 
         setAdSetState((prev) => ({
           ...prev,
-          [campaignId]: { status: "success", adSets: adSetsWithMetrics },
+          [campaignId]: { status: 'success', adSets: adSetsWithMetrics },
         }));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message = error instanceof Error ? error.message : 'Unknown error';
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
 
-        if (errorCode === "RATE_LIMITED" || isMetaRateLimitMessage(message)) {
+        if (errorCode === 'RATE_LIMITED' || isMetaRateLimitMessage(message)) {
           rateLimitedUntilRef.current = Date.now() + META_RATE_LIMIT_COOLDOWN_MS;
         }
 
-        console.error("Failed to load ad sets:", error);
+        console.error(`Failed to load ${segmentLabel}:`, error);
         setAdSetState((prev) => ({
           ...prev,
           [campaignId]: {
-            status: "error",
+            status: 'error',
             adSets: [],
             errorMessage: message,
             errorCode,
@@ -289,7 +313,7 @@ export function CampaignAccordion({
         }));
       }
     },
-    [accountId, adSetState, brandId, timeRange]
+    [accountId, adSetState, brandId, isLinkedIn, platform, segmentLabel, timeRange],
   );
 
   React.useEffect(() => {
@@ -321,14 +345,14 @@ export function CampaignAccordion({
       setAdStateByAdSet((prev) => {
         const currentState = prev[adSetId];
 
-        if (currentState?.status === "loading" || currentState?.status === "success") {
+        if (currentState?.status === 'loading' || currentState?.status === 'success') {
           shouldLoad = false;
           return prev;
         }
 
         return {
           ...prev,
-          [adSetId]: { status: "loading", ads: [] },
+          [adSetId]: { status: 'loading', ads: [] },
         };
       });
 
@@ -340,16 +364,17 @@ export function CampaignAccordion({
         const supabase = createSupabaseBrowserClient();
 
         const { data, error: fetchError } = await supabase.functions.invoke(
-          `paid-media-reporting/ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRange.preset}`,
+          `paid-media-reporting/ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRange.preset}&platform=${platform}`,
           {
-            method: "POST",
+            method: 'POST',
             body: {
+              platform,
               brandId,
               adAccountId: accountId,
               adSetId,
               datePreset: timeRange.preset,
             },
-          }
+          },
         );
 
         if (fetchError) {
@@ -359,34 +384,40 @@ export function CampaignAccordion({
         setAdStateByAdSet((prev) => ({
           ...prev,
           [adSetId]: {
-            status: "success",
+            status: 'success',
             ads: data?.ads ?? [],
           },
         }));
       } catch (error) {
-        console.error("Failed to load ads for ad set:", error);
+        console.error(`Failed to load creatives for ${segmentLabel}:`, error);
         setAdStateByAdSet((prev) => ({
           ...prev,
           [adSetId]: {
-            status: "error",
+            status: 'error',
             ads: [],
-            errorMessage: error instanceof Error ? error.message : "Failed to load ads",
+            errorMessage: error instanceof Error ? error.message : 'Failed to load ads',
           },
         }));
       }
     },
-    [accountId, brandId, timeRange.preset]
+    [accountId, brandId, platform, segmentLabel, timeRange.preset],
   );
 
   if (filteredCampaigns.length === 0) {
-    return <div className="py-8 text-center text-muted-foreground">No campaigns found.</div>;
+    return (
+      <EmptyState
+        className="py-8"
+        media={<Megaphone aria-hidden="true" className="size-5" />}
+        headline="No campaigns found"
+      />
+    );
   }
 
   return (
     <Accordion
-      key={`${accountId}-${timeRange.preset}-${resolution}-${activeOnly ? "active" : "all"}`}
+      key={`${accountId}-${timeRange.preset}-${resolution}-${activeOnly ? 'active' : 'all'}`}
       type="single"
-      value={openCampaignId ?? ""}
+      value={openCampaignId ?? ''}
       collapsible
       onValueChange={(value) => {
         const nextValue = value || undefined;
@@ -400,7 +431,7 @@ export function CampaignAccordion({
       className="w-full"
     >
       {filteredCampaigns.map((campaign) => {
-        const state = adSetState[campaign.id] || { status: "idle", adSets: [] };
+        const state = adSetState[campaign.id] || { status: 'idle', adSets: [] };
 
         return (
           <AccordionItem key={campaign.id} value={campaign.id}>
@@ -427,25 +458,26 @@ export function CampaignAccordion({
                   trends={campaign.trends}
                   className="mb-4"
                 />
-                {state.status === "loading" ? (
+                {state.status === 'loading' ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
                     <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                    Loading ad sets...
+                    Loading {segmentLabel}...
                   </div>
                 ) : null}
-                {state.status === "error" ? (
+                {state.status === 'error' ? (
                   <div className="py-4">
                     <IntegrationErrorBanner
                       errorCode={state.errorCode}
                       message={state.errorMessage}
-                      platform="meta"
+                      platform={platform}
                       retryAfter={state.retryAfter}
                     />
                   </div>
                 ) : null}
-                {state.status === "success" ? (
+                {state.status === 'success' ? (
                   <AdSetTable
                     adSets={state.adSets}
+                    segmentLabel={segmentLabel}
                     adsByAdSet={adStateByAdSet}
                     onAdSetToggle={(adSetId, expanded) => {
                       if (expanded) {

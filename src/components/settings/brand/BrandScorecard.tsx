@@ -1,19 +1,28 @@
-"use client";
+'use client';
 
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Badge, Button, Text } from "@radix-ui/themes";
-import type { BrandReportResult } from "@continuum/contracts";
+import type { BrandReportResult } from '@continuum/contracts';
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
 
-import { recomputeReadiness } from "@/lib/api/brandBook.client";
-import { useToast } from "@/components/ui/ToastProvider";
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { recomputeReadiness } from '@/lib/api/brandBook.client';
 
-// Derives a human-readable severity label from a 0-100 score.
-function scoreBadgeColor(score: number): "green" | "yellow" | "red" | "gray" {
-  if (score >= 75) return "green";
-  if (score >= 50) return "yellow";
-  if (score >= 1) return "red";
-  return "gray";
+// Maps a 0-100 score to a semantic Pill tone.
+function scorePillVariant(score: number): 'success' | 'warning' | 'destructive' | 'muted' {
+  if (score >= 75) return 'success';
+  if (score >= 50) return 'warning';
+  if (score >= 1) return 'destructive';
+  return 'muted';
+}
+
+// Maps a 0-100 score to the semantic bar fill token.
+function scoreBarClass(score: number): string {
+  if (score >= 75) return 'bg-success';
+  if (score >= 50) return 'bg-warning';
+  if (score >= 1) return 'bg-destructive';
+  return 'bg-muted-foreground';
 }
 
 type Props = {
@@ -35,10 +44,10 @@ export function BrandScorecard({ result, brandId }: Props) {
     startRecalculate(async () => {
       try {
         await recomputeReadiness(brandId);
-        show({ title: "Readiness recalculated", variant: "success" });
+        show({ title: 'Readiness recalculated', variant: 'success' });
         router.refresh();
       } catch {
-        show({ title: "Could not recalculate readiness", variant: "error" });
+        show({ title: 'Could not recalculate readiness', variant: 'error' });
       }
     });
   };
@@ -55,29 +64,25 @@ export function BrandScorecard({ result, brandId }: Props) {
   const strategyAudit = result.audits?.strategy;
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-4 space-y-4">
+    <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
       <div className="flex items-center gap-3">
-        <Text size="2" weight="medium" className="text-gray-200">
-          Brand Readiness
-        </Text>
-        <Badge color={scoreBadgeColor(overall)} variant="soft" radius="full">
-          {overall} / 100
-        </Badge>
+        <span className="text-sm font-medium text-foreground">Brand Readiness</span>
+        <Pill variant={scorePillVariant(overall)}>{overall} / 100</Pill>
         {strategyAudit ? (
-          <Badge color={scoreBadgeColor(strategyAudit.score)} variant="soft" radius="full">
+          <Pill variant={scorePillVariant(strategyAudit.score)}>
             Strategy {strategyAudit.score}
-          </Badge>
+          </Pill>
         ) : null}
         {brandId ? (
           <Button
             type="button"
-            size="1"
-            variant="soft"
+            size="sm"
+            variant="secondary"
             className="ml-auto"
             onClick={onRecalculate}
             disabled={isRecalculating}
           >
-            {isRecalculating ? "Recalculating…" : "Recalculate"}
+            {isRecalculating ? 'Recalculating…' : 'Recalculate'}
           </Button>
         ) : null}
       </div>
@@ -85,7 +90,12 @@ export function BrandScorecard({ result, brandId }: Props) {
       {dimensions.length > 0 ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {dimensions.map(([key, dim]) => (
-            <DimensionBar key={key} label={dimensionLabel(key)} score={dim.score} rationale={dim.rationale} />
+            <DimensionBar
+              key={key}
+              label={dimensionLabel(key)}
+              score={dim.score}
+              rationale={dim.rationale}
+            />
           ))}
         </div>
       ) : null}
@@ -102,29 +112,15 @@ function DimensionBar({
   score: number;
   rationale: string;
 }) {
-  const color = scoreBadgeColor(score);
-  const barColor =
-    color === "green"
-      ? "bg-green-500"
-      : color === "yellow"
-        ? "bg-yellow-500"
-        : color === "red"
-          ? "bg-red-500"
-          : "bg-gray-600";
-
   return (
     <div className="space-y-1" title={rationale}>
       <div className="flex items-center justify-between gap-2">
-        <Text size="1" className="text-gray-400 truncate">
-          {label}
-        </Text>
-        <Text size="1" weight="medium" className="text-gray-300 shrink-0">
-          {score}
-        </Text>
+        <span className="truncate text-xs text-muted-foreground">{label}</span>
+        <span className="shrink-0 text-xs font-medium text-foreground">{score}</span>
       </div>
-      <div className="h-1 w-full rounded-full bg-white/10">
+      <div className="h-1 w-full rounded-full bg-muted">
         <div
-          className={`h-1 rounded-full ${barColor} transition-all`}
+          className={`h-1 rounded-full ${scoreBarClass(score)} transition-all`}
           style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
         />
       </div>
@@ -134,13 +130,13 @@ function DimensionBar({
 
 function dimensionLabel(key: string): string {
   const labels: Record<string, string> = {
-    value_proposition: "Value prop",
-    icp_clarity: "ICP clarity",
-    customer_pains: "Customer pains",
-    success_metrics: "Success metrics",
-    positioning: "Positioning",
-    messaging_coherence: "Messaging",
-    brand_identity: "Identity",
+    value_proposition: 'Value prop',
+    icp_clarity: 'ICP clarity',
+    customer_pains: 'Customer pains',
+    success_metrics: 'Success metrics',
+    positioning: 'Positioning',
+    messaging_coherence: 'Messaging',
+    brand_identity: 'Identity',
   };
-  return labels[key] ?? key.replace(/_/g, " ");
+  return labels[key] ?? key.replace(/_/g, ' ');
 }

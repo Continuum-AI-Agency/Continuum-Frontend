@@ -38,6 +38,8 @@ type CreativeGalleryProps = {
   errorCode?: IntegrationErrorCode;
   errorMessage?: string;
   retryAfter?: number;
+  platform?: string;
+  segmentLabelSingular?: string;
   onRetry: () => void;
   selectedIds: ReadonlySet<string>;
   selectionCount: number;
@@ -73,6 +75,8 @@ export function CreativeGallery({
   errorCode,
   errorMessage,
   retryAfter,
+  platform = "meta",
+  segmentLabelSingular = "ad set",
   onRetry,
   selectedIds,
   selectionCount,
@@ -112,7 +116,7 @@ export function CreativeGallery({
             Creatives{focusedAdSetName ? ` · ${focusedAdSetName}` : ""}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Select up to {selectionLimit} ads to overlay ad-level KPI trends.
+            Select up to {selectionLimit} creatives to overlay KPI trends.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -186,7 +190,7 @@ export function CreativeGallery({
           <IntegrationErrorBanner
             errorCode={errorCode}
             message={errorMessage}
-            platform="meta"
+            platform={platform}
             retryAfter={retryAfter}
           />
           <Button variant="outline" size="xs" onClick={onRetry}>
@@ -201,7 +205,7 @@ export function CreativeGallery({
           ))}
         </div>
       ) : ads.length === 0 ? (
-        <EmptyState message="No creatives returned for this ad set." />
+        <EmptyState message={`No creatives returned for this ${segmentLabelSingular}.`} />
       ) : visible.length === 0 ? (
         <EmptyState message="No creatives match your filters.">
           {hasFilters ? (

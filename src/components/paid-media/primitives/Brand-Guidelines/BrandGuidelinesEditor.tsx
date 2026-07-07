@@ -1,55 +1,49 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { Controller, type FieldError, type FieldErrors, type Path, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { CheckIcon, Pencil2Icon } from '@radix-ui/react-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Controller, type FieldError, type FieldErrors, type Path, useForm } from 'react-hook-form';
+import { Pill, type PillProps } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Flex,
-  Grid,
-  Heading,
-  Tabs,
-  Text,
-  TextArea,
-  TextField,
-} from "@radix-ui/themes";
-import { CheckIcon, Pencil2Icon } from "@radix-ui/react-icons";
-
+  approveBrandGuidelineAction,
+  saveBrandGuidelineDraftAction,
+} from '@/lib/actions/brandGuidelines';
 import {
-  EMPTY_BRAND_GUIDELINE_FORM,
-  brandGuidelineDraftSchema,
   type BrandGuidelineDetail,
   type BrandGuidelineDraft,
-} from "@/lib/schemas/brandGuidelines";
-import { approveBrandGuidelineAction, saveBrandGuidelineDraftAction } from "@/lib/actions/brandGuidelines";
-import { BrandGuidelineTagsSection } from "./BrandGuidelineTagsSection";
+  brandGuidelineDraftSchema,
+  EMPTY_BRAND_GUIDELINE_FORM,
+} from '@/lib/schemas/brandGuidelines';
+import { BrandGuidelineTagsSection } from './BrandGuidelineTagsSection';
 
-const STATUS_COLOR = {
-  draft: "gray",
-  review: "amber",
-  approved: "green",
-  archived: "red",
-} as const;
+const STATUS_PILL_VARIANT: Record<BrandGuidelineDetail['status'], PillProps['variant']> = {
+  draft: 'muted',
+  review: 'warning',
+  approved: 'success',
+  archived: 'destructive',
+};
 
 const COLOR_FIELDS = [
-  { key: "primary", label: "Primary" },
-  { key: "secondary", label: "Secondary" },
-  { key: "accent", label: "Accent" },
-  { key: "neutral", label: "Neutral" },
+  { key: 'primary', label: 'Primary' },
+  { key: 'secondary', label: 'Secondary' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'neutral', label: 'Neutral' },
 ] as const;
 
 const HEX_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 const VERBAL_IDENTITY_FIELDS: { name: Path<BrandGuidelineDraft>; label: string }[] = [
-  { name: "verbalIdentity.audiencePersona", label: "Audience persona" },
-  { name: "verbalIdentity.story", label: "Brand story" },
-  { name: "verbalIdentity.values", label: "Values" },
-  { name: "verbalIdentity.vision", label: "Vision" },
-  { name: "verbalIdentity.mission", label: "Mission" },
-  { name: "verbalIdentity.message", label: "Core message" },
+  { name: 'verbalIdentity.audiencePersona', label: 'Audience persona' },
+  { name: 'verbalIdentity.story', label: 'Brand story' },
+  { name: 'verbalIdentity.values', label: 'Values' },
+  { name: 'verbalIdentity.vision', label: 'Vision' },
+  { name: 'verbalIdentity.mission', label: 'Mission' },
+  { name: 'verbalIdentity.message', label: 'Core message' },
 ];
 
 type BrandGuidelinesEditorProps = {
@@ -58,12 +52,15 @@ type BrandGuidelinesEditorProps = {
   onSaved: (guideline: BrandGuidelineDetail) => void;
 };
 
-function fieldError(errors: FieldErrors<BrandGuidelineDraft>, path: string): FieldError | undefined {
-  const segments = path.split(".");
+function fieldError(
+  errors: FieldErrors<BrandGuidelineDraft>,
+  path: string,
+): FieldError | undefined {
+  const segments = path.split('.');
   let current: unknown = errors;
 
   for (const segment of segments) {
-    if (!current || typeof current !== "object") {
+    if (!current || typeof current !== 'object') {
       return undefined;
     }
     current = (current as Record<string, unknown>)[segment];
@@ -80,7 +77,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
 
     return {
       purpose: guideline.purpose,
-      notes: guideline.notes ?? "",
+      notes: guideline.notes ?? '',
       status: guideline.status,
       colors: guideline.colors,
       logo: guideline.logo,
@@ -95,7 +92,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
   const form = useForm<BrandGuidelineDraft>({
     resolver: zodResolver(brandGuidelineDraftSchema),
     defaultValues,
-    mode: "onBlur",
+    mode: 'onBlur',
   });
 
   useEffect(() => {
@@ -103,7 +100,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
     setError(null);
   }, [defaultValues, form]);
 
-  const status = guideline?.status ?? "draft";
+  const status = guideline?.status ?? 'draft';
   const version = guideline?.version ?? null;
 
   const handleSaveDraft = form.handleSubmit(async (values) => {
@@ -113,7 +110,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
       const saved = await saveBrandGuidelineDraftAction(brandId, guideline?.id ?? null, values);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save draft.");
+      setError(err instanceof Error ? err.message : 'Unable to save draft.');
     } finally {
       setIsSaving(false);
     }
@@ -126,7 +123,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
       const saved = await approveBrandGuidelineAction(brandId, guideline?.id ?? null, values);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to approve guideline.");
+      setError(err instanceof Error ? err.message : 'Unable to approve guideline.');
     } finally {
       setIsSaving(false);
     }
@@ -135,408 +132,393 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
   const errors = form.formState.errors;
 
   return (
-    <Card className="glass-panel p-6">
-      <Flex direction="column" gap="4">
-        <Flex align="center" justify="between" wrap="wrap" gap="2">
-          <Flex align="center" gap="2">
-            <Heading size="4" className="text-white">
-              Brand Guidelines
-            </Heading>
-            <Badge color={STATUS_COLOR[status]} radius="full" variant="surface">
-              {status}
-            </Badge>
-          </Flex>
-          <Flex align="center" gap="2">
+    <div className="glass-panel rounded-lg p-6">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h4 className="text-lg font-semibold text-white">Brand Guidelines</h4>
+            <Pill variant={STATUS_PILL_VARIANT[status]}>{status}</Pill>
+          </div>
+          <div className="flex items-center gap-2">
             {version ? (
-              <Text size="2" color="gray">
-                Version {version}
-              </Text>
+              <span className="text-sm text-muted-foreground">Version {version}</span>
             ) : (
-              <Text size="2" color="gray">
-                New guideline
-              </Text>
+              <span className="text-sm text-muted-foreground">New guideline</span>
             )}
-          </Flex>
-        </Flex>
+          </div>
+        </div>
 
-        <Flex direction="column" gap="3">
-          <Flex direction="column" gap="1">
-            <Text size="2" color="gray">
-              Purpose
-            </Text>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-muted-foreground">Purpose</span>
             <Controller
               control={form.control}
               name="purpose"
               render={({ field }) => (
-                <TextField.Root {...field} placeholder="Winter launch, evergreen brand book, etc." />
+                <Input {...field} placeholder="Winter launch, evergreen brand book, etc." />
               )}
             />
-            {fieldError(errors, "purpose")?.message ? (
-              <Text size="1" color="red">
-                {fieldError(errors, "purpose")?.message}
-              </Text>
+            {fieldError(errors, 'purpose')?.message ? (
+              <span className="text-xs text-destructive">
+                {fieldError(errors, 'purpose')?.message}
+              </span>
             ) : null}
-          </Flex>
+          </div>
 
-          <Flex direction="column" gap="1">
-            <Text size="2" color="gray">
-              Notes
-            </Text>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-muted-foreground">Notes</span>
             <Controller
               control={form.control}
               name="notes"
               render={({ field }) => (
-                <TextArea {...field} placeholder="Context, intended usage, or special constraints." rows={3} />
+                <Textarea
+                  {...field}
+                  placeholder="Context, intended usage, or special constraints."
+                  rows={3}
+                />
               )}
             />
-          </Flex>
-        </Flex>
+          </div>
+        </div>
 
         {error ? (
-          <Box className="rounded-md border border-red-6/40 bg-red-3/40 p-3">
-            <Text size="2" color="red">
-              {error}
-            </Text>
-          </Box>
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3">
+            <span className="text-sm text-destructive">{error}</span>
+          </div>
         ) : null}
 
-        <Tabs.Root defaultValue="color">
-          <Tabs.List>
-            <Tabs.Trigger value="color">Color</Tabs.Trigger>
-            <Tabs.Trigger value="logo">Logo</Tabs.Trigger>
-            <Tabs.Trigger value="typography">Typography</Tabs.Trigger>
-            <Tabs.Trigger value="stationery">Stationery</Tabs.Trigger>
-            <Tabs.Trigger value="styleDesign">Style Design</Tabs.Trigger>
-            <Tabs.Trigger value="verbalIdentity">Verbal Identity</Tabs.Trigger>
-          </Tabs.List>
+        <Tabs defaultValue="color">
+          <TabsList className="h-auto flex-wrap">
+            <TabsTrigger value="color">Color</TabsTrigger>
+            <TabsTrigger value="logo">Logo</TabsTrigger>
+            <TabsTrigger value="typography">Typography</TabsTrigger>
+            <TabsTrigger value="stationery">Stationery</TabsTrigger>
+            <TabsTrigger value="styleDesign">Style Design</TabsTrigger>
+            <TabsTrigger value="verbalIdentity">Verbal Identity</TabsTrigger>
+          </TabsList>
 
-          <Tabs.Content value="color">
-            <Flex direction="column" gap="3" className="pt-3">
-              <Text size="2" color="gray">
+          <TabsContent value="color">
+            <div className="flex flex-col gap-3 pt-3">
+              <span className="text-sm text-muted-foreground">
                 Hex values only. Color comes first and drives the rest of the guideline system.
-              </Text>
-              <Grid columns={{ initial: "1", sm: "2" }} gap="3">
+              </span>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {COLOR_FIELDS.map((fieldDef) => (
                   <Controller
                     key={fieldDef.key}
                     control={form.control}
                     name={`colors.${fieldDef.key}` as const}
                     render={({ field }) => {
-                      const isValid = HEX_REGEX.test(field.value ?? "");
-                      const swatch = isValid ? field.value : "transparent";
+                      const isValid = HEX_REGEX.test(field.value ?? '');
+                      const swatch = isValid ? field.value : 'transparent';
                       return (
-                        <Flex direction="column" gap="1">
-                          <Text size="2" color="gray">
-                            {fieldDef.label}
-                          </Text>
-                          <Flex align="center" gap="2">
-                            <Box
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-muted-foreground">{fieldDef.label}</span>
+                          <div className="flex items-center gap-2">
+                            <div
                               className="h-8 w-8 rounded-md border border-[var(--glass-border)]"
                               style={{ backgroundColor: swatch }}
                             />
-                            <TextField.Root {...field} placeholder="#1A1A1A" />
-                          </Flex>
-                          {fieldDef.key === "primary" && fieldError(errors, "colors.primary")?.message ? (
-                            <Text size="1" color="red">
-                              {fieldError(errors, "colors.primary")?.message}
-                            </Text>
+                            <Input {...field} placeholder="#1A1A1A" />
+                          </div>
+                          {fieldDef.key === 'primary' &&
+                          fieldError(errors, 'colors.primary')?.message ? (
+                            <span className="text-xs text-destructive">
+                              {fieldError(errors, 'colors.primary')?.message}
+                            </span>
                           ) : null}
-                          {fieldDef.key === "secondary" && fieldError(errors, "colors.secondary")?.message ? (
-                            <Text size="1" color="red">
-                              {fieldError(errors, "colors.secondary")?.message}
-                            </Text>
+                          {fieldDef.key === 'secondary' &&
+                          fieldError(errors, 'colors.secondary')?.message ? (
+                            <span className="text-xs text-destructive">
+                              {fieldError(errors, 'colors.secondary')?.message}
+                            </span>
                           ) : null}
-                        </Flex>
+                        </div>
                       );
                     }}
                   />
                 ))}
-              </Grid>
-            </Flex>
-          </Tabs.Content>
+              </div>
+            </div>
+          </TabsContent>
 
-          <Tabs.Content value="logo">
-            <Flex direction="column" gap="4" className="pt-3">
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Usage guidelines
-                  </Text>
+          <TabsContent value="logo">
+            <div className="flex flex-col gap-4 pt-3">
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Usage guidelines</span>
                   <Controller
                     control={form.control}
                     name="logo.usageGuidelines"
                     render={({ field }) => (
-                      <TextArea {...field} rows={3} placeholder="Where and how the logo should appear." />
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Where and how the logo should appear."
+                      />
                     )}
                   />
-                </Flex>
-              </Card>
-              <Grid columns={{ initial: "1", md: "2" }} gap="3">
-                <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">
-                      Clear space
-                    </Text>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Clear space</span>
                     <Controller
                       control={form.control}
                       name="logo.clearSpace"
                       render={({ field }) => (
-                        <TextArea {...field} rows={2} placeholder="Minimum clear space guidance." />
+                        <Textarea {...field} rows={2} placeholder="Minimum clear space guidance." />
                       )}
                     />
-                  </Flex>
-                </Card>
-                <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">
-                      Misuse
-                    </Text>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Misuse</span>
                     <Controller
                       control={form.control}
                       name="logo.misuse"
                       render={({ field }) => (
-                        <TextArea {...field} rows={2} placeholder="Common misuse to avoid." />
+                        <Textarea {...field} rows={2} placeholder="Common misuse to avoid." />
                       )}
                     />
-                  </Flex>
-                </Card>
-              </Grid>
+                  </div>
+                </div>
+              </div>
               <BrandGuidelineTagsSection
                 title="Logo"
                 name="tags.logo"
                 control={form.control}
                 helper="3-5 tags that capture how the logo should feel and appear."
               />
-            </Flex>
-          </Tabs.Content>
+            </div>
+          </TabsContent>
 
-          <Tabs.Content value="typography">
-            <Flex direction="column" gap="4" className="pt-3">
-              <Grid columns={{ initial: "1", md: "2" }} gap="3">
-                <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">
-                      Heading font
-                    </Text>
+          <TabsContent value="typography">
+            <div className="flex flex-col gap-4 pt-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Heading font</span>
                     <Controller
                       control={form.control}
                       name="typography.headingFont"
-                      render={({ field }) => (
-                        <TextField.Root {...field} placeholder="e.g., Space Grotesk" />
-                      )}
+                      render={({ field }) => <Input {...field} placeholder="e.g., Space Grotesk" />}
                     />
-                  </Flex>
-                </Card>
-                <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">
-                      Body font
-                    </Text>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Body font</span>
                     <Controller
                       control={form.control}
                       name="typography.bodyFont"
-                      render={({ field }) => (
-                        <TextField.Root {...field} placeholder="e.g., Inter" />
-                      )}
+                      render={({ field }) => <Input {...field} placeholder="e.g., Inter" />}
                     />
-                  </Flex>
-                </Card>
-                <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">
-                      Accent font
-                    </Text>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Accent font</span>
                     <Controller
                       control={form.control}
                       name="typography.accentFont"
                       render={({ field }) => (
-                        <TextField.Root {...field} placeholder="Optional accent font" />
+                        <Input {...field} placeholder="Optional accent font" />
                       )}
                     />
-                  </Flex>
-                </Card>
-                <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">
-                      Usage guidance
-                    </Text>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">Usage guidance</span>
                     <Controller
                       control={form.control}
                       name="typography.usageGuidelines"
                       render={({ field }) => (
-                        <TextArea {...field} rows={2} placeholder="Hierarchy, weights, or pairing notes." />
+                        <Textarea
+                          {...field}
+                          rows={2}
+                          placeholder="Hierarchy, weights, or pairing notes."
+                        />
                       )}
                     />
-                  </Flex>
-                </Card>
-              </Grid>
+                  </div>
+                </div>
+              </div>
               <BrandGuidelineTagsSection
                 title="Typography"
                 name="tags.typography"
                 control={form.control}
                 helper="3-5 tags describing the typographic tone."
               />
-            </Flex>
-          </Tabs.Content>
+            </div>
+          </TabsContent>
 
-          <Tabs.Content value="stationery">
-            <Flex direction="column" gap="4" className="pt-3">
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Stationery overview
-                  </Text>
+          <TabsContent value="stationery">
+            <div className="flex flex-col gap-4 pt-3">
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Stationery overview</span>
                   <Controller
                     control={form.control}
                     name="stationery.overview"
                     render={({ field }) => (
-                      <TextArea {...field} rows={3} placeholder="Packaging, print, or collateral guidance." />
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Packaging, print, or collateral guidance."
+                      />
                     )}
                   />
-                </Flex>
-              </Card>
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Applications
-                  </Text>
+                </div>
+              </div>
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Applications</span>
                   <Controller
                     control={form.control}
                     name="stationery.applications"
                     render={({ field }) => (
-                      <TextArea {...field} rows={2} placeholder="Business cards, envelopes, decks, etc." />
+                      <Textarea
+                        {...field}
+                        rows={2}
+                        placeholder="Business cards, envelopes, decks, etc."
+                      />
                     )}
                   />
-                </Flex>
-              </Card>
+                </div>
+              </div>
               <BrandGuidelineTagsSection
                 title="Stationery"
                 name="tags.stationery"
                 control={form.control}
                 helper="3-5 tags for print and collateral style."
               />
-            </Flex>
-          </Tabs.Content>
+            </div>
+          </TabsContent>
 
-          <Tabs.Content value="styleDesign">
-            <Flex direction="column" gap="4" className="pt-3">
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Visual direction
-                  </Text>
+          <TabsContent value="styleDesign">
+            <div className="flex flex-col gap-4 pt-3">
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Visual direction</span>
                   <Controller
                     control={form.control}
                     name="styleDesign.visualDirection"
                     render={({ field }) => (
-                      <TextArea {...field} rows={3} placeholder="Core visual principles and layout direction." />
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Core visual principles and layout direction."
+                      />
                     )}
                   />
-                </Flex>
-              </Card>
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Imagery guidance
-                  </Text>
+                </div>
+              </div>
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Imagery guidance</span>
                   <Controller
                     control={form.control}
                     name="styleDesign.imageryGuidance"
                     render={({ field }) => (
-                      <TextArea {...field} rows={2} placeholder="Photography, illustration, or texture guidance." />
+                      <Textarea
+                        {...field}
+                        rows={2}
+                        placeholder="Photography, illustration, or texture guidance."
+                      />
                     )}
                   />
-                </Flex>
-              </Card>
+                </div>
+              </div>
               <BrandGuidelineTagsSection
                 title="Style Design"
                 name="tags.style_design"
                 control={form.control}
                 helper="3-5 tags that define the overall aesthetic."
               />
-            </Flex>
-          </Tabs.Content>
+            </div>
+          </TabsContent>
 
-          <Tabs.Content value="verbalIdentity">
-            <Flex direction="column" gap="4" className="pt-3">
-              <Grid columns={{ initial: "1", md: "2" }} gap="3">
+          <TabsContent value="verbalIdentity">
+            <div className="flex flex-col gap-4 pt-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {VERBAL_IDENTITY_FIELDS.map((fieldDef) => (
-                  <Card
+                  <div
                     key={fieldDef.name}
-                    variant="surface"
-                    className="border border-[var(--glass-border)] p-3"
+                    className="rounded-lg border border-[var(--glass-border)] p-3"
                   >
-                    <Flex direction="column" gap="2">
-                      <Text size="2" color="gray">
-                        {fieldDef.label}
-                      </Text>
+                    <div className="flex flex-col gap-2">
+                      <span className="text-sm text-muted-foreground">{fieldDef.label}</span>
                       <Controller
                         control={form.control}
                         name={fieldDef.name}
                         render={({ field }) => (
-                          <TextArea
+                          <Textarea
                             {...field}
-                            value={typeof field.value === "string" ? field.value : ""}
+                            value={typeof field.value === 'string' ? field.value : ''}
                             rows={3}
                             placeholder={fieldDef.label}
                           />
                         )}
                       />
-                    </Flex>
-                  </Card>
+                    </div>
+                  </div>
                 ))}
-              </Grid>
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Tone of voice
-                  </Text>
+              </div>
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Tone of voice</span>
                   <Controller
                     control={form.control}
                     name="verbalIdentity.toneOfVoice"
                     render={({ field }) => (
-                      <TextArea {...field} rows={3} placeholder="Define tone, cadence, and vocabulary." />
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Define tone, cadence, and vocabulary."
+                      />
                     )}
                   />
-                </Flex>
-              </Card>
-              <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">
-                    Channel guidelines
-                  </Text>
+                </div>
+              </div>
+              <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-muted-foreground">Channel guidelines</span>
                   <Controller
                     control={form.control}
                     name="verbalIdentity.channelGuidelines"
                     render={({ field }) => (
-                      <TextArea
+                      <Textarea
                         {...field}
                         rows={3}
                         placeholder="How we do content on X, Instagram, Stories, etc."
                       />
                     )}
                   />
-                </Flex>
-              </Card>
+                </div>
+              </div>
               <BrandGuidelineTagsSection
                 title="Verbal Identity"
                 name="tags.verbal_identity"
                 control={form.control}
                 helper="3-5 tags that summarize voice and messaging."
               />
-            </Flex>
-          </Tabs.Content>
-        </Tabs.Root>
+            </div>
+          </TabsContent>
+        </Tabs>
 
-        <Flex align="center" justify="end" gap="2">
-          <Button type="button" variant="soft" onClick={handleSaveDraft} disabled={isSaving}>
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={handleSaveDraft} disabled={isSaving}>
             <Pencil2Icon /> Save draft
           </Button>
           <Button type="button" onClick={handleApprove} disabled={isSaving}>
             <CheckIcon /> Approve
           </Button>
-        </Flex>
-      </Flex>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

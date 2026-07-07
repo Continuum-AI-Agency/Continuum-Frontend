@@ -7,13 +7,15 @@
 import type { PortfolioListItem } from '@continuum/contracts';
 
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BudgetByObjectiveChart } from '../charts/BudgetByObjectiveChart';
 import { formatCurrency } from '../format';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
 type OptimizerOverviewProps = {
   portfolios: PortfolioListItem[];
   pendingCount: number;
+  currency?: string | null;
   onOpenActions: () => void;
   onSelectPortfolio: (portfolioId: string) => void;
 };
@@ -33,6 +35,7 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub: str
 export function OptimizerOverview({
   portfolios,
   pendingCount,
+  currency,
   onOpenActions,
   onSelectPortfolio,
 }: OptimizerOverviewProps) {
@@ -47,7 +50,7 @@ export function OptimizerOverview({
           value={String(portfolios.length)}
           sub={`${adsetTotal} ad sets`}
         />
-        <KpiCard label="Daily budget" value={formatCurrency(dailyTotal)} sub="total" />
+        <KpiCard label="Daily budget" value={formatCurrency(dailyTotal, currency)} sub="total" />
         <button
           type="button"
           onClick={onOpenActions}
@@ -56,6 +59,17 @@ export function OptimizerOverview({
           <KpiCard label="Pending actions" value={String(pendingCount)} sub="awaiting approval" />
         </button>
       </div>
+
+      {portfolios.length > 0 ? (
+        <Card className="gap-0 rounded-xl py-0 shadow-none">
+          <CardHeader className="border-b border-border/70 p-4">
+            <CardTitle className="text-sm">Budget by objective</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <BudgetByObjectiveChart portfolios={portfolios} currency={currency} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div>
         <div className="mb-2 flex items-center justify-between">
@@ -71,6 +85,7 @@ export function OptimizerOverview({
             <PortfolioRowCard
               key={portfolio.id}
               portfolio={portfolio}
+              currency={currency}
               onSelect={() => onSelectPortfolio(portfolio.id)}
             />
           ))}

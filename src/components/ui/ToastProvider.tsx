@@ -1,11 +1,17 @@
-"use client";
+'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import * as Toast from "@radix-ui/react-toast";
-import { AnimatePresence, motion } from "motion/react";
-import { CheckCircledIcon, Cross2Icon, ExclamationTriangleIcon, InfoCircledIcon } from "@radix-ui/react-icons";
+import {
+  CheckCircledIcon,
+  Cross2Icon,
+  ExclamationTriangleIcon,
+  InfoCircledIcon,
+} from '@radix-ui/react-icons';
+import * as Toast from '@radix-ui/react-toast';
+import { AnimatePresence, motion } from 'motion/react';
+import type React from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
-export const TOAST_VARIANTS = ["success", "info", "warning", "error"] as const;
+export const TOAST_VARIANTS = ['success', 'info', 'warning', 'error'] as const;
 
 type ToastVariant = (typeof TOAST_VARIANTS)[number];
 
@@ -34,38 +40,40 @@ type ToastVisual = {
   subtext: string;
 };
 
+const TOAST_SURFACE = 'bg-popover/95 border-border';
+
 const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
   success: {
-    icon: <CheckCircledIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />,
-    accent: "bg-emerald-500",
-    ring: "focus-visible:ring-emerald-500",
-    bg: "bg-white/95 dark:bg-slate-900/90 border-emerald-100 dark:border-emerald-900/60",
-    text: "text-emerald-900 dark:text-emerald-50",
-    subtext: "text-emerald-700 dark:text-emerald-200",
+    icon: <CheckCircledIcon className="h-5 w-5 text-success" />,
+    accent: 'bg-success',
+    ring: 'focus-visible:ring-success',
+    bg: TOAST_SURFACE,
+    text: 'text-foreground',
+    subtext: 'text-muted-foreground',
   },
   info: {
-    icon: <InfoCircledIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />,
-    accent: "bg-indigo-500",
-    ring: "focus-visible:ring-indigo-500",
-    bg: "bg-white/95 dark:bg-slate-900/90 border-indigo-100 dark:border-indigo-900/60",
-    text: "text-indigo-900 dark:text-indigo-50",
-    subtext: "text-indigo-700 dark:text-indigo-200",
+    icon: <InfoCircledIcon className="h-5 w-5 text-primary" />,
+    accent: 'bg-primary',
+    ring: 'focus-visible:ring-primary',
+    bg: TOAST_SURFACE,
+    text: 'text-foreground',
+    subtext: 'text-muted-foreground',
   },
   warning: {
-    icon: <ExclamationTriangleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />,
-    accent: "bg-amber-500",
-    ring: "focus-visible:ring-amber-500",
-    bg: "bg-white/95 dark:bg-slate-900/90 border-amber-100 dark:border-amber-900/60",
-    text: "text-amber-900 dark:text-amber-50",
-    subtext: "text-amber-700 dark:text-amber-200",
+    icon: <ExclamationTriangleIcon className="h-5 w-5 text-warning" />,
+    accent: 'bg-warning',
+    ring: 'focus-visible:ring-warning',
+    bg: TOAST_SURFACE,
+    text: 'text-foreground',
+    subtext: 'text-muted-foreground',
   },
   error: {
-    icon: <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400" />,
-    accent: "bg-red-500",
-    ring: "focus-visible:ring-red-500",
-    bg: "bg-white/95 dark:bg-slate-900/90 border-red-100 dark:border-red-900/60",
-    text: "text-red-900 dark:text-red-50",
-    subtext: "text-red-700 dark:text-red-200",
+    icon: <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />,
+    accent: 'bg-destructive',
+    ring: 'focus-visible:ring-destructive',
+    bg: TOAST_SURFACE,
+    text: 'text-foreground',
+    subtext: 'text-muted-foreground',
   },
 };
 
@@ -74,7 +82,7 @@ export class ToastError extends Error {
 
   constructor(options: ToastOptions, cause?: unknown) {
     super(options.description ?? options.title);
-    this.name = "ToastError";
+    this.name = 'ToastError';
     this.options = options;
     if (cause !== undefined) {
       (this as { cause?: unknown }).cause = cause;
@@ -103,7 +111,7 @@ export function useToastContext(): ToastContextValue | null {
 
 export function useToast(): ToastContextValue {
   const ctx = useToastContext();
-  if (!ctx) throw new Error("useToast must be used within ToastProvider");
+  if (!ctx) throw new Error('useToast must be used within ToastProvider');
   return ctx;
 }
 
@@ -112,7 +120,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const show = useCallback((options: ToastOptions) => {
     const id = Math.random().toString(36).slice(2);
-    const item: ToastItem = { id, durationMs: 5000, variant: "success", ...options };
+    const item: ToastItem = { id, durationMs: 5000, variant: 'success', ...options };
     setToasts((prev) => {
       if (options.dedupeKey && prev.some((t) => t.dedupeKey === options.dedupeKey)) {
         return prev;
@@ -134,7 +142,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <Toast.Viewport className="fixed bottom-4 right-4 z-[9999] flex w-[360px] max-w-[90vw] flex-col gap-4 outline-none">
           <AnimatePresence initial={false}>
             {toasts.map((toast) => {
-              const variant = toast.variant ?? "success";
+              const variant = toast.variant ?? 'success';
               const paletteItem = TOAST_PALETTE[variant];
               const durationSeconds = (toast.durationMs ?? 5000) / 1000;
 
@@ -151,17 +159,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     initial={{ opacity: 0, y: 10, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                    transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                    className={`relative overflow-hidden rounded-xl border px-4 py-4 shadow-xl backdrop-blur ${paletteItem.bg}`}
+                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                    className={`relative overflow-hidden rounded-xl border px-4 py-4 shadow-lg backdrop-blur ${paletteItem.bg}`}
                   >
                     <div className="flex items-start gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                         {paletteItem.icon}
                       </div>
                       <div className="flex-1 space-y-2">
-                        <Toast.Title className={`text-sm font-semibold leading-5 ${paletteItem.text}`}>{toast.title}</Toast.Title>
+                        <Toast.Title
+                          className={`text-sm font-semibold leading-5 ${paletteItem.text}`}
+                        >
+                          {toast.title}
+                        </Toast.Title>
                         {toast.description ? (
-                          <Toast.Description className={`text-xs leading-relaxed ${paletteItem.subtext}`}>{toast.description}</Toast.Description>
+                          <Toast.Description
+                            className={`text-xs leading-relaxed ${paletteItem.subtext}`}
+                          >
+                            {toast.description}
+                          </Toast.Description>
                         ) : null}
                         {toast.action ? (
                           <Toast.Action altText={toast.action.label} asChild>
@@ -182,7 +198,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       <Toast.Close asChild>
                         <button
                           type="button"
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs text-gray-500 transition hover:bg-black/5 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring}`}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring}`}
                           aria-label="Dismiss toast"
                         >
                           <Cross2Icon className="h-4 w-4" />
@@ -191,11 +207,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {isPersistent ? null : (
-                      <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-black/5 dark:bg-white/5">
+                      <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-muted">
                         <motion.div
-                          initial={{ width: "100%" }}
+                          initial={{ width: '100%' }}
                           animate={{ width: 0 }}
-                          transition={{ duration: durationSeconds, ease: "linear" }}
+                          transition={{ duration: durationSeconds, ease: 'linear' }}
                           className={`${paletteItem.accent} h-full`}
                         />
                       </div>

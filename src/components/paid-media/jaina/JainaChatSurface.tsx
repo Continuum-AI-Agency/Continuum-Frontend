@@ -1,8 +1,5 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Box, Button, TextArea } from "@radix-ui/themes";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   DownloadIcon,
   Edit2Icon,
@@ -12,33 +9,30 @@ import {
   SaveIcon,
   Trash2Icon,
   XIcon,
-} from "lucide-react";
-
-import dynamic from "next/dynamic";
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 const AnimatedShaderBackground = dynamic(
-  () => import("@/components/ui/animated-shader-background").then((mod) => mod.AnimatedShaderBackground),
-  { ssr: false }
+  () =>
+    import('@/components/ui/animated-shader-background').then(
+      (mod) => mod.AnimatedShaderBackground,
+    ),
+  { ssr: false },
 );
-import { useToast } from "@/components/ui/ToastProvider";
-import { useJainaChatStream } from "@/hooks/useJainaChatStream";
-import {
-  useJainaRunStatusRealtime,
-  isTerminalRunStatus,
-  type JainaRunStatusRow,
-} from "@/hooks/useJainaRunStatusRealtime";
-import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
-import { PromptInput } from "@/components/ai-elements/prompt-input";
-import type { Attachment } from "@/components/ai-elements/attachments";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useCampaignAI } from '@/CampaignCanvas/hooks/useCampaignAI';
+import type { Attachment } from '@/components/ai-elements/attachments';
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
+import { PromptInput } from '@/components/ai-elements/prompt-input';
 import {
   Queue,
   QueueItem,
+  QueueItemAction,
   QueueItemActions,
   QueueItemContent,
   QueueItemIndicator,
@@ -47,23 +41,49 @@ import {
   QueueSectionContent,
   QueueSectionLabel,
   QueueSectionTrigger,
-  QueueItemAction,
-} from "@/components/ai-elements/queue";
-import { cn } from "@/lib/utils";
-import type { JainaChatMessage } from "./types";
+} from '@/components/ai-elements/queue';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useJainaChatStream } from '@/hooks/useJainaChatStream';
 import {
-  enqueueMessage,
-  removeQueuedMessage,
-  shouldQueueSubmission,
-  updateQueuedMessageContent,
-  type QueuedJainaMessage,
-} from "./queueing";
-
-import { JainaHeader } from "./components/JainaHeader";
-import { JainaEmptyState } from "./components/JainaEmptyState";
-import { JainaMessageItem } from "./components/JainaMessageItem";
-import type { PlanFeedbackPayload } from "./components/PlanSection";
-import { JainaConversationSidebar } from "./components/JainaConversationSidebar";
+  isTerminalRunStatus,
+  type JainaRunStatusRow,
+  useJainaRunStatusRealtime,
+} from '@/hooks/useJainaRunStatusRealtime';
+import type {
+  AgentMentionProvider,
+  AgentMentionReference,
+  AgentMentionSuggestion,
+} from '@/lib/agent-references';
+import { http } from '@/lib/api/http';
+import { extractCampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
+import type { CampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
+import {
+  createConversationSessionResponseSchema,
+  type JainaConversationMessage,
+  type JainaConversationRun,
+  type JainaConversationSession,
+  jainaConversationListResponseSchema,
+  jainaConversationRunsHydrationResponseSchema,
+  mapConversationCreateResponse,
+} from '@/lib/jaina/conversations';
+import {
+  frontendCheckpointReportSchema,
+  type JainaPlanAction,
+  reportAssemblySchema,
+} from '@/lib/jaina/schemas';
+import type { JainaStreamState } from '@/lib/jaina/stream';
+import { isPersistedResultStub, parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
+import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
+import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
+import { JainaConversationSidebar } from './components/JainaConversationSidebar';
+import { JainaEmptyState } from './components/JainaEmptyState';
+import { JainaHeader } from './components/JainaHeader';
+import { JainaMessageItem } from './components/JainaMessageItem';
+import type { PlanFeedbackPayload } from './components/PlanSection';
 import {
   extractRenderableFallbackFromStructuredContent,
   getFinalThought,
@@ -72,44 +92,18 @@ import {
   isLikelyStructuredJsonContent,
   isStreamingPlaceholderMessage,
   resolveReportSignal,
-} from "./jainaUtils";
+} from './jainaUtils';
+import { parsePersistedReportV2Value, parsePersistedReportValue } from './persistedReport';
 import {
-  parsePersistedReportV2Value,
-  parsePersistedReportValue,
-} from "./persistedReport";
-import {
-  isPersistedResultStub,
-  parsePersistedResultWrapper,
-} from "@/lib/jaina/unwrapping";
-import type { JainaStreamState } from "@/lib/jaina/stream";
-import type { CampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
-import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
-import { extractCampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  usePaidMediaPerformanceStore,
-} from "@/lib/paid-media/performance-store";
-import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
-import type {
-  AgentMentionProvider,
-  AgentMentionReference,
-  AgentMentionSuggestion,
-} from "@/lib/agent-references";
-import {
-  createConversationSessionResponseSchema,
-  jainaConversationListResponseSchema,
-  jainaConversationRunsHydrationResponseSchema,
-  type JainaConversationRun,
-  mapConversationCreateResponse,
-  type JainaConversationMessage,
-  type JainaConversationSession,
-} from "@/lib/jaina/conversations";
-import { frontendCheckpointReportSchema, reportAssemblySchema, type JainaPlanAction } from "@/lib/jaina/schemas";
-import { useJainaConversationSidebarStore } from "@/lib/jaina/conversation-sidebar-store";
-import { http } from "@/lib/api/http";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+  enqueueMessage,
+  type QueuedJainaMessage,
+  removeQueuedMessage,
+  shouldQueueSubmission,
+  updateQueuedMessageContent,
+} from './queueing';
+import type { JainaChatMessage } from './types';
 
-export { parsePersistedResultWrapper } from "@/lib/jaina/unwrapping";
+export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 
 function ConversationSkeleton() {
   return (
@@ -146,7 +140,7 @@ type JainaChatSurfaceProps = {
   className?: string;
 };
 
-type ReportArtifactJobStatus = "pending" | "running" | "done" | "failed";
+type ReportArtifactJobStatus = 'pending' | 'running' | 'done' | 'failed';
 
 type ReportArtifactJobTracker = {
   jobId: string;
@@ -168,7 +162,7 @@ type JainaMentionAdSet = {
 
 function matchesJainaMentionQuery(
   query: string,
-  values: Array<string | null | undefined>
+  values: Array<string | null | undefined>,
 ): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
@@ -178,26 +172,26 @@ function matchesJainaMentionQuery(
 function formatMetricHint(campaign: CampaignPerformanceRow): string | undefined {
   const spend = campaign.metrics?.spend;
   const roas = campaign.metrics?.roas;
-  if (typeof spend !== "number" && typeof roas !== "number") return undefined;
+  if (typeof spend !== 'number' && typeof roas !== 'number') return undefined;
   const parts: string[] = [];
-  if (typeof spend === "number") {
+  if (typeof spend === 'number') {
     parts.push(`$${Math.round(spend).toLocaleString()} spend`);
   }
-  if (typeof roas === "number") {
+  if (typeof roas === 'number') {
     parts.push(`${roas.toFixed(2)} ROAS`);
   }
-  return parts.join(" · ");
+  return parts.join(' · ');
 }
 
 function createCampaignReference(
   campaign: CampaignPerformanceRow,
-  adAccountId: string
+  adAccountId: string,
 ): AgentMentionReference {
   return {
     id: campaign.id,
-    type: "campaign",
+    type: 'campaign',
     label: campaign.name,
-    source: "jaina",
+    source: 'jaina',
     metadata: {
       campaignId: campaign.id,
       adAccountId,
@@ -210,59 +204,59 @@ function createCampaignReference(
 function createCampaignSuggestion(
   campaign: CampaignPerformanceRow,
   adAccountId: string,
-  options?: { children?: boolean }
+  options?: { children?: boolean },
 ): AgentMentionSuggestion {
   const metricHint = formatMetricHint(campaign);
   return {
-    key: `${options?.children ? "campaign-adsets" : "campaign"}:${campaign.id}`,
+    key: `${options?.children ? 'campaign-adsets' : 'campaign'}:${campaign.id}`,
     label: options?.children ? `Ad sets in ${campaign.name}` : campaign.name,
-    type: "campaign",
-    source: "jaina",
-    group: options?.children ? "Ad Sets" : "Campaigns",
-    description: [campaign.status, campaign.objective, metricHint].filter(Boolean).join(" · "),
-    badge: options?.children ? "choose" : "campaign",
+    type: 'campaign',
+    source: 'jaina',
+    group: options?.children ? 'Ad Sets' : 'Campaigns',
+    description: [campaign.status, campaign.objective, metricHint].filter(Boolean).join(' · '),
+    badge: options?.children ? 'choose' : 'campaign',
     reference: createCampaignReference(campaign, adAccountId),
-    ...(options?.children ? { childrenLabel: "Choose an ad set" } : {}),
+    ...(options?.children ? { childrenLabel: 'Choose an ad set' } : {}),
   };
 }
 
 function normalizeIdentity(value: string | null | undefined): string {
-  return (value ?? "").trim().toLowerCase();
+  return (value ?? '').trim().toLowerCase();
 }
 
 function createJainaSessionId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
   return `jaina-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function createQueuedMessageId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
   return `queued-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function normalizeSessionTitle(value: string | null | undefined): string | null {
-  const trimmed = (value ?? "").trim();
+  const trimmed = (value ?? '').trim();
   if (!trimmed) return null;
-  if (trimmed.toLowerCase() === "execution plan") return null;
+  if (trimmed.toLowerCase() === 'execution plan') return null;
   return trimmed;
 }
 
-function resolveReportSummaryForMessage(report: JainaChatMessage["report"] | undefined): string {
-  if (!report) return "";
+function resolveReportSummaryForMessage(report: JainaChatMessage['report'] | undefined): string {
+  if (!report) return '';
   const summary = getReportSummary(report).trim();
   const isUnavailableSummary = /synthesis summary unavailable/i.test(summary);
   if (!isUnavailableSummary) return summary;
-  if ("type" in report) return summary;
+  if ('type' in report) return summary;
 
   const v1 = frontendCheckpointReportSchema.safeParse(report);
   if (!v1.success) return summary;
 
   const firstSectionSummary = v1.data.sections.find((section) =>
-    Boolean(section.summary?.trim())
+    Boolean(section.summary?.trim()),
   )?.summary;
   if (firstSectionSummary) return firstSectionSummary;
 
@@ -280,11 +274,11 @@ type RenderableContentSources = {
   sessionTitle?: string;
   pendingClarification?: { question: string } | null;
   responseText: string;
-  report?: JainaChatMessage["report"] | null;
-  reportV2?: JainaChatMessage["reportV2"] | null;
+  report?: JainaChatMessage['report'] | null;
+  reportV2?: JainaChatMessage['reportV2'] | null;
   latestCheckpointSummary?: string;
-  checkpointSummarySource?: "synthesis" | "tool_fallback" | "default_unavailable" | null;
-  plan?: JainaChatMessage["plan"] | null;
+  checkpointSummarySource?: 'synthesis' | 'tool_fallback' | 'default_unavailable' | null;
+  plan?: JainaChatMessage['plan'] | null;
   progress: Parameters<typeof getFinalThought>[0];
 };
 
@@ -293,7 +287,7 @@ function pickRenderableContent(sources: RenderableContentSources): string {
   if (clarification) return clarification;
 
   const safeText = isLikelyStructuredJsonContent(sources.responseText)
-    ? (extractRenderableFallbackFromStructuredContent(sources.responseText) ?? "").trim()
+    ? (extractRenderableFallbackFromStructuredContent(sources.responseText) ?? '').trim()
     : sources.responseText.trim();
   if (safeText) return safeText;
 
@@ -304,9 +298,9 @@ function pickRenderableContent(sources: RenderableContentSources): string {
   if (reportSummary) return reportSummary;
 
   const checkpointSummary =
-    sources.checkpointSummarySource !== "default_unavailable"
-      ? (sources.latestCheckpointSummary ?? "").trim()
-      : "";
+    sources.checkpointSummarySource !== 'default_unavailable'
+      ? (sources.latestCheckpointSummary ?? '').trim()
+      : '';
   if (checkpointSummary) return checkpointSummary;
 
   const planTitle = sources.plan?.title?.trim();
@@ -318,18 +312,15 @@ function pickRenderableContent(sources: RenderableContentSources): string {
   const sessionTitle = sources.sessionTitle?.trim();
   if (sessionTitle) return sessionTitle;
 
-  return "";
+  return '';
 }
 
-async function readErrorMessage(
-  response: Response,
-  fallback: string
-): Promise<string> {
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   const detail = await response.text().catch(() => fallback);
   if (!detail) return fallback;
   try {
     const parsed = JSON.parse(detail) as { error?: unknown };
-    if (typeof parsed.error === "string" && parsed.error.length > 0) {
+    if (typeof parsed.error === 'string' && parsed.error.length > 0) {
       return parsed.error;
     }
   } catch {
@@ -339,26 +330,26 @@ async function readErrorMessage(
 }
 
 function asPlainRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
 function getNestedRecord(
   record: Record<string, unknown>,
-  key: "data" | "job"
+  key: 'data' | 'job',
 ): Record<string, unknown> | null {
   return asPlainRecord(record[key]);
 }
 
 function getStringFromRecords(
   records: Array<Record<string, unknown> | null>,
-  keys: string[]
+  keys: string[],
 ): string | undefined {
   for (const record of records) {
     if (!record) continue;
     for (const key of keys) {
       const value = record[key];
-      if (typeof value === "string" && value.trim().length > 0) {
+      if (typeof value === 'string' && value.trim().length > 0) {
         return value.trim();
       }
     }
@@ -366,31 +357,26 @@ function getStringFromRecords(
   return undefined;
 }
 
-function normalizeReportArtifactJobStatus(
-  value: unknown
-): ReportArtifactJobStatus {
-  const status = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (["done", "completed", "complete", "ready", "success", "succeeded"].includes(status)) {
-    return "done";
+function normalizeReportArtifactJobStatus(value: unknown): ReportArtifactJobStatus {
+  const status = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (['done', 'completed', 'complete', 'ready', 'success', 'succeeded'].includes(status)) {
+    return 'done';
   }
-  if (["failed", "failure", "error", "errored"].includes(status)) return "failed";
-  if (["running", "processing", "in_progress", "generating"].includes(status)) {
-    return "running";
+  if (['failed', 'failure', 'error', 'errored'].includes(status)) return 'failed';
+  if (['running', 'processing', 'in_progress', 'generating'].includes(status)) {
+    return 'running';
   }
-  return "pending";
+  return 'pending';
 }
 
-function resolveReportArtifactEndpoint(
-  endpoint: string | undefined,
-  fallback: string
-): string {
+function resolveReportArtifactEndpoint(endpoint: string | undefined, fallback: string): string {
   const candidate = endpoint?.trim();
-  if (candidate?.startsWith("/api/agents/jaina/")) return candidate;
+  if (candidate?.startsWith('/api/agents/jaina/')) return candidate;
   return fallback;
 }
 
 function buildReportArtifactJobTracker(
-  job: NonNullable<ReturnType<typeof createReportArtifactJobFromEvent>>
+  job: NonNullable<ReturnType<typeof createReportArtifactJobFromEvent>>,
 ): ReportArtifactJobTracker {
   return {
     jobId: job.jobId,
@@ -398,18 +384,16 @@ function buildReportArtifactJobTracker(
     reportModel: job.reportModel,
     statusEndpoint: resolveReportArtifactEndpoint(
       job.statusEndpoint,
-      `/api/agents/jaina/report-artifacts/jobs/${job.jobId}`
+      `/api/agents/jaina/report-artifacts/jobs/${job.jobId}`,
     ),
     fileUrlEndpoint: resolveReportArtifactEndpoint(
       job.fileUrlEndpoint,
-      `/api/agents/jaina/report-artifacts/jobs/${job.jobId}/file-url`
+      `/api/agents/jaina/report-artifacts/jobs/${job.jobId}/file-url`,
     ),
   };
 }
 
-function createReportArtifactJobFromEvent(
-  job: JainaStreamState["reportArtifactJob"]
-): {
+function createReportArtifactJobFromEvent(job: JainaStreamState['reportArtifactJob']): {
   jobId: string;
   status: ReportArtifactJobStatus;
   reportModel?: string;
@@ -426,17 +410,15 @@ function createReportArtifactJobFromEvent(
   };
 }
 
-function extractReportArtifactJobStatus(
-  payload: unknown
-): { status: ReportArtifactJobStatus; error?: string } {
+function extractReportArtifactJobStatus(payload: unknown): {
+  status: ReportArtifactJobStatus;
+  error?: string;
+} {
   const root = asPlainRecord(payload) ?? {};
-  const data = getNestedRecord(root, "data");
-  const job = getNestedRecord(root, "job");
-  const status = getStringFromRecords([root, data, job], ["status", "state"]);
-  const error = getStringFromRecords(
-    [root, data, job],
-    ["error", "error_message", "message"]
-  );
+  const data = getNestedRecord(root, 'data');
+  const job = getNestedRecord(root, 'job');
+  const status = getStringFromRecords([root, data, job], ['status', 'state']);
+  const error = getStringFromRecords([root, data, job], ['error', 'error_message', 'message']);
   return {
     status: normalizeReportArtifactJobStatus(status),
     error,
@@ -445,17 +427,14 @@ function extractReportArtifactJobStatus(
 
 function extractReportArtifactFileUrl(payload: unknown): string | undefined {
   const root = asPlainRecord(payload) ?? {};
-  const data = getNestedRecord(root, "data");
-  const job = getNestedRecord(root, "job");
-  return getStringFromRecords(
-    [root, data, job],
-    ["url", "file_url", "signed_url", "download_url"]
-  );
+  const data = getNestedRecord(root, 'data');
+  const job = getNestedRecord(root, 'job');
+  return getStringFromRecords([root, data, job], ['url', 'file_url', 'signed_url', 'download_url']);
 }
 
 function parsePersistedReport(
-  message: JainaConversationMessage
-): JainaChatMessage["report"] | undefined {
+  message: JainaConversationMessage,
+): JainaChatMessage['report'] | undefined {
   return parsePersistedReportValue({
     report: message.report,
     content: message.content,
@@ -464,8 +443,8 @@ function parsePersistedReport(
 }
 
 function parsePersistedReportV2(
-  message: JainaConversationMessage
-): JainaChatMessage["reportV2"] | undefined {
+  message: JainaConversationMessage,
+): JainaChatMessage['reportV2'] | undefined {
   return parsePersistedReportV2Value({
     report: message.report,
     content: message.content,
@@ -474,22 +453,22 @@ function parsePersistedReportV2(
 }
 
 function parsePersistedReportAssembly(
-  message: JainaConversationMessage
-): JainaChatMessage["reportAssembly"] | undefined {
+  message: JainaConversationMessage,
+): JainaChatMessage['reportAssembly'] | undefined {
   const parsed = reportAssemblySchema.safeParse(message.reportAssembly);
   return parsed.success ? parsed.data : undefined;
 }
 
 function parseReportAssemblyFromUnknown(
   value: unknown,
-  depth = 0
-): JainaChatMessage["reportAssembly"] | undefined {
+  depth = 0,
+): JainaChatMessage['reportAssembly'] | undefined {
   if (depth > 5 || value == null) return undefined;
 
   const direct = reportAssemblySchema.safeParse(value);
   if (direct.success) return direct.data;
 
-  if (typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
 
   const candidates = [
@@ -514,9 +493,9 @@ function parseReportAssemblyFromUnknown(
 }
 
 function deriveObjectivesFromReport(
-  report: JainaChatMessage["report"] | undefined
-): JainaChatMessage["objectives"] | undefined {
-  if (!report || ("type" in report && report.type === "direct_answer")) {
+  report: JainaChatMessage['report'] | undefined,
+): JainaChatMessage['objectives'] | undefined {
+  if (!report || ('type' in report && report.type === 'direct_answer')) {
     return undefined;
   }
 
@@ -533,7 +512,7 @@ function deriveObjectivesFromReport(
   }
 
   const objectives = parsedReport.data.execution_objectives
-    .filter((objective) => typeof objective?.id === "string" && objective.id.trim().length > 0)
+    .filter((objective) => typeof objective?.id === 'string' && objective.id.trim().length > 0)
     .map((objective) => ({
       id: objective.id,
       title: objective.title || objective.id,
@@ -546,17 +525,17 @@ function deriveObjectivesFromReport(
 
 function hydrateMessagesWithConversationRuns(
   messages: JainaChatMessage[],
-  runs: JainaConversationRun[]
+  runs: JainaConversationRun[],
 ): { messages: JainaChatMessage[]; changed: boolean } {
   type HydratedRunPayload = {
-    report: JainaChatMessage["report"] | undefined;
-    reportV2: JainaChatMessage["reportV2"] | undefined;
-    reportAssembly: JainaChatMessage["reportAssembly"] | undefined;
-    objectives: JainaChatMessage["objectives"] | undefined;
+    report: JainaChatMessage['report'] | undefined;
+    reportV2: JainaChatMessage['reportV2'] | undefined;
+    reportAssembly: JainaChatMessage['reportAssembly'] | undefined;
+    objectives: JainaChatMessage['objectives'] | undefined;
   };
 
   const hydrateableAssistantCount = messages.reduce((count, message) => {
-    if (message.role !== "assistant" || message.reportV2) {
+    if (message.role !== 'assistant' || message.reportV2) {
       return count;
     }
     return count + 1;
@@ -569,11 +548,11 @@ function hydrateMessagesWithConversationRuns(
     .map((run) => {
       const reportV2 = parsePersistedReportV2Value({
         report: run.resultPayload,
-        content: typeof run.resultPayload === "string" ? run.resultPayload : "",
+        content: typeof run.resultPayload === 'string' ? run.resultPayload : '',
       });
       const report = parsePersistedReportValue({
         report: run.resultPayload,
-        content: typeof run.resultPayload === "string" ? run.resultPayload : "",
+        content: typeof run.resultPayload === 'string' ? run.resultPayload : '',
       });
       if (!report && !reportV2) return null;
 
@@ -587,9 +566,7 @@ function hydrateMessagesWithConversationRuns(
         objectives,
       };
     })
-    .filter(
-      (value): value is HydratedRunPayload => value !== null
-    );
+    .filter((value): value is HydratedRunPayload => value !== null);
 
   if (hydratedPayloads.length === 0) {
     return { messages, changed: false };
@@ -601,11 +578,7 @@ function hydrateMessagesWithConversationRuns(
 
   for (let index = nextMessages.length - 1; index >= 0; index -= 1) {
     const message = nextMessages[index];
-    if (
-      !message ||
-      message.role !== "assistant" ||
-      message.reportV2
-    ) {
+    if (!message || message.role !== 'assistant' || message.reportV2) {
       continue;
     }
 
@@ -620,18 +593,16 @@ function hydrateMessagesWithConversationRuns(
       ...(payload.reportAssembly && !message.reportAssembly
         ? { reportAssembly: payload.reportAssembly }
         : {}),
-      ...(payload.objectives && !message.objectives
-        ? { objectives: payload.objectives }
-        : {}),
-      ...(typeof message.renderAsReport === "boolean"
+      ...(payload.objectives && !message.objectives ? { objectives: payload.objectives } : {}),
+      ...(typeof message.renderAsReport === 'boolean'
         ? {}
         : {
             renderAsReport:
               Boolean(payload.reportV2) ||
               Boolean(
                 payload.report &&
-                  !("type" in payload.report && payload.report.type === "direct_answer") &&
-                  hasReportContent(payload.report)
+                  !('type' in payload.report && payload.report.type === 'direct_answer') &&
+                  hasReportContent(payload.report),
               ),
           }),
     };
@@ -642,41 +613,49 @@ function hydrateMessagesWithConversationRuns(
 }
 
 function normalizePersistedObjectiveStatus(
-  value: unknown
-): "pending" | "in_progress" | "completed" | "failed" {
-  if (value === "pending" || value === "in_progress" || value === "completed" || value === "failed") {
+  value: unknown,
+): 'pending' | 'in_progress' | 'completed' | 'failed' {
+  if (
+    value === 'pending' ||
+    value === 'in_progress' ||
+    value === 'completed' ||
+    value === 'failed'
+  ) {
     return value;
   }
-  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (
-    normalized === "in_progress" ||
-    normalized === "in-progress" ||
-    normalized === "running" ||
-    normalized === "active"
+    normalized === 'in_progress' ||
+    normalized === 'in-progress' ||
+    normalized === 'running' ||
+    normalized === 'active'
   ) {
-    return "in_progress";
+    return 'in_progress';
   }
   if (
-    normalized === "completed" ||
-    normalized === "complete" ||
-    normalized === "done" ||
-    normalized === "success"
+    normalized === 'completed' ||
+    normalized === 'complete' ||
+    normalized === 'done' ||
+    normalized === 'success'
   ) {
-    return "completed";
+    return 'completed';
   }
   if (
-    normalized === "failed" ||
-    normalized === "error" ||
-    normalized === "errored" ||
-    normalized === "cancelled" ||
-    normalized === "canceled"
+    normalized === 'failed' ||
+    normalized === 'error' ||
+    normalized === 'errored' ||
+    normalized === 'cancelled' ||
+    normalized === 'canceled'
   ) {
-    return "failed";
+    return 'failed';
   }
-  return "pending";
+  return 'pending';
 }
 
-const messageObjectiveStatusRank: Record<"pending" | "in_progress" | "completed" | "failed", number> = {
+const messageObjectiveStatusRank: Record<
+  'pending' | 'in_progress' | 'completed' | 'failed',
+  number
+> = {
   pending: 0,
   in_progress: 1,
   failed: 2,
@@ -684,13 +663,13 @@ const messageObjectiveStatusRank: Record<"pending" | "in_progress" | "completed"
 };
 
 function mergeMessageObjectives(
-  persistedObjectives: JainaChatMessage["objectives"],
-  localObjectives: JainaChatMessage["objectives"]
-): JainaChatMessage["objectives"] | undefined {
+  persistedObjectives: JainaChatMessage['objectives'],
+  localObjectives: JainaChatMessage['objectives'],
+): JainaChatMessage['objectives'] | undefined {
   if (!localObjectives || localObjectives.length === 0) return persistedObjectives;
   if (!persistedObjectives || persistedObjectives.length === 0) return localObjectives;
 
-  const byId = new Map<string, NonNullable<JainaChatMessage["objectives"]>[number]>();
+  const byId = new Map<string, NonNullable<JainaChatMessage['objectives']>[number]>();
   const titleToId = new Map<string, string>();
 
   for (const objective of persistedObjectives) {
@@ -702,7 +681,7 @@ function mergeMessageObjectives(
     const titleKey = localObjective.title.trim().toLowerCase();
     const targetId = byId.has(localObjective.id)
       ? localObjective.id
-      : titleToId.get(titleKey) ?? localObjective.id;
+      : (titleToId.get(titleKey) ?? localObjective.id);
     const persistedObjective = byId.get(targetId);
 
     if (!persistedObjective) {
@@ -713,8 +692,7 @@ function mergeMessageObjectives(
 
     const localRank = messageObjectiveStatusRank[localObjective.status];
     const persistedRank = messageObjectiveStatusRank[persistedObjective.status];
-    const status =
-      localRank >= persistedRank ? localObjective.status : persistedObjective.status;
+    const status = localRank >= persistedRank ? localObjective.status : persistedObjective.status;
 
     byId.set(targetId, {
       ...persistedObjective,
@@ -730,22 +708,22 @@ function mergeMessageObjectives(
 }
 
 function objectivesChanged(
-  previous: JainaChatMessage["objectives"],
-  next: JainaChatMessage["objectives"]
+  previous: JainaChatMessage['objectives'],
+  next: JainaChatMessage['objectives'],
 ): boolean {
   return JSON.stringify(previous ?? []) !== JSON.stringify(next ?? []);
 }
 
 function deriveObjectivesFromPersistedSources(input: {
   message: JainaConversationMessage;
-  report: JainaChatMessage["report"] | undefined;
-}): JainaChatMessage["objectives"] | undefined {
+  report: JainaChatMessage['report'] | undefined;
+}): JainaChatMessage['objectives'] | undefined {
   if (Array.isArray(input.message.objectives) && input.message.objectives.length > 0) {
-    return input.message.objectives as JainaChatMessage["objectives"];
+    return input.message.objectives as JainaChatMessage['objectives'];
   }
 
   const report = input.report;
-  if (!report || ("type" in report && report.type === "direct_answer")) {
+  if (!report || ('type' in report && report.type === 'direct_answer')) {
     return undefined;
   }
 
@@ -762,7 +740,7 @@ function deriveObjectivesFromPersistedSources(input: {
   }
 
   const objectives = parsedReport.data.execution_objectives
-    .filter((objective) => typeof objective?.id === "string" && objective.id.trim().length > 0)
+    .filter((objective) => typeof objective?.id === 'string' && objective.id.trim().length > 0)
     .map((objective) => ({
       id: objective.id,
       title: objective.title || objective.id,
@@ -775,7 +753,7 @@ function deriveObjectivesFromPersistedSources(input: {
 
 function mapConversationMessageToChatMessage(
   message: JainaConversationMessage,
-  sessionTitle?: string
+  sessionTitle?: string,
 ): JainaChatMessage {
   const persistedReport = parsePersistedReport(message);
   const persistedReportV2 = parsePersistedReportV2(message);
@@ -789,11 +767,11 @@ function mapConversationMessageToChatMessage(
     : null;
   const content =
     unwrappedResult !== null
-      ? unwrappedResult.text ?? ""
+      ? (unwrappedResult.text ?? '')
       : persistedReport &&
-        (isFallbackCheckpointMessage(message.content) ||
-          isPersistedErrorMessage(message.content) ||
-          isLikelyStructuredJsonContent(message.content))
+          (isFallbackCheckpointMessage(message.content) ||
+            isPersistedErrorMessage(message.content) ||
+            isLikelyStructuredJsonContent(message.content))
         ? resolveReportSummaryForMessage(persistedReport) || message.content
         : message.content;
   const persistedPlan = unwrappedResult?.plan;
@@ -807,30 +785,28 @@ function mapConversationMessageToChatMessage(
     ...(persistedReportV2 ? { reportV2: persistedReportV2 } : {}),
     ...(persistedReportAssembly ? { reportAssembly: persistedReportAssembly } : {}),
     ...(persistedPlan ? { plan: persistedPlan } : {}),
-    ...(typeof message.reportAssemblyHtml === "string"
+    ...(typeof message.reportAssemblyHtml === 'string'
       ? { reportAssemblyHtml: message.reportAssemblyHtml }
       : {}),
-    ...(typeof message.finalThought === "string"
-      ? { finalThought: message.finalThought }
-      : {}),
-    ...(typeof message.renderAsReport === "boolean"
+    ...(typeof message.finalThought === 'string' ? { finalThought: message.finalThought } : {}),
+    ...(typeof message.renderAsReport === 'boolean'
       ? { renderAsReport: message.renderAsReport }
       : {}),
     ...(Array.isArray(message.reasoning)
-      ? { reasoning: message.reasoning as JainaChatMessage["reasoning"] }
+      ? { reasoning: message.reasoning as JainaChatMessage['reasoning'] }
       : {}),
     ...(Array.isArray(message.toolCalls)
-      ? { toolCalls: message.toolCalls as JainaChatMessage["toolCalls"] }
+      ? { toolCalls: message.toolCalls as JainaChatMessage['toolCalls'] }
       : {}),
     ...(Array.isArray(message.toolResults)
-      ? { toolResults: message.toolResults as JainaChatMessage["toolResults"] }
+      ? { toolResults: message.toolResults as JainaChatMessage['toolResults'] }
       : {}),
-    ...(message.artifacts && typeof message.artifacts === "object"
-      ? { artifacts: message.artifacts as JainaChatMessage["artifacts"] }
+    ...(message.artifacts && typeof message.artifacts === 'object'
+      ? { artifacts: message.artifacts as JainaChatMessage['artifacts'] }
       : {}),
     ...(message.pendingClarification &&
-    typeof message.pendingClarification === "object" &&
-    typeof message.pendingClarification.question === "string"
+    typeof message.pendingClarification === 'object' &&
+    typeof message.pendingClarification.question === 'string'
       ? {
           pendingClarification: {
             id: message.pendingClarification.id,
@@ -840,10 +816,10 @@ function mapConversationMessageToChatMessage(
       : {}),
     ...(persistedObjectives ? { objectives: persistedObjectives } : {}),
     ...(message.metadata ? { metadata: message.metadata } : {}),
-    ...(message.role === "assistant"
+    ...(message.role === 'assistant'
       ? {
-          status: "done",
-          title: "Jaina Analyst",
+          status: 'done',
+          title: 'Jaina Analyst',
         }
       : {}),
   };
@@ -857,25 +833,25 @@ function isPersistedErrorMessage(content: string): boolean {
   const normalized = content.trim().toLowerCase();
   if (!normalized) return false;
   return (
-    normalized === "stream error" ||
-    normalized.startsWith("jaina error") ||
-    normalized.startsWith("malformed ") ||
-    normalized.startsWith("invalid ") ||
-    normalized.includes("failed to parse jaina stream event json")
+    normalized === 'stream error' ||
+    normalized.startsWith('jaina error') ||
+    normalized.startsWith('malformed ') ||
+    normalized.startsWith('invalid ') ||
+    normalized.includes('failed to parse jaina stream event json')
   );
 }
 
 function findPendingPlanId(messages: JainaChatMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const plan = messages[i].plan;
-    if (plan?.status === "awaiting_approval") return plan.id;
+    if (plan?.status === 'awaiting_approval') return plan.id;
   }
   return null;
 }
 
 export function mergePersistedMessagesWithLocal(
   persistedMessages: JainaChatMessage[],
-  localMessages: JainaChatMessage[]
+  localMessages: JainaChatMessage[],
 ): JainaChatMessage[] {
   if (persistedMessages.length === 0 || localMessages.length === 0) {
     return persistedMessages;
@@ -888,7 +864,7 @@ export function mergePersistedMessagesWithLocal(
   // disappeared as soon as any refreshConversationSnapshot resolved, because the DB
   // hadn't written the new messages yet. Then the Realtime broadcast (which fires
   // when the backend finishes) caused a second overwrite with just plain text.
-  const pendingLocal = localMessages.filter((msg) => !msg.id.startsWith("persisted-"));
+  const pendingLocal = localMessages.filter((msg) => !msg.id.startsWith('persisted-'));
 
   if (pendingLocal.length > 0) {
     // Dedup: if the last pending user message content already matches the last
@@ -896,14 +872,12 @@ export function mergePersistedMessagesWithLocal(
     // We also require the pending assistant to be present in persisted history.
     // Without this guard, a user-first DB write can cause us to drop the local
     // assistant (including reasoning/tool traces) on refresh.
-    const lastPendingUser = [...pendingLocal].reverse().find((m) => m.role === "user");
-    const lastPendingAssistant = [...pendingLocal].reverse().find(
-      (m) => m.role === "assistant"
-    );
-    const lastPersistedUser = [...persistedMessages].reverse().find((m) => m.role === "user");
+    const lastPendingUser = [...pendingLocal].reverse().find((m) => m.role === 'user');
+    const lastPendingAssistant = [...pendingLocal].reverse().find((m) => m.role === 'assistant');
+    const lastPersistedUser = [...persistedMessages].reverse().find((m) => m.role === 'user');
     const lastPersistedAssistant = [...persistedMessages]
       .reverse()
-      .find((m) => m.role === "assistant");
+      .find((m) => m.role === 'assistant');
     const localAssistantHasRichState = Boolean(
       lastPendingAssistant &&
         (lastPendingAssistant.plan ||
@@ -913,14 +887,14 @@ export function mergePersistedMessagesWithLocal(
           (lastPendingAssistant.reasoning?.length ?? 0) > 0 ||
           (lastPendingAssistant.toolCalls?.length ?? 0) > 0 ||
           (lastPendingAssistant.toolResults?.length ?? 0) > 0 ||
-          (lastPendingAssistant.objectives?.length ?? 0) > 0)
+          (lastPendingAssistant.objectives?.length ?? 0) > 0),
     );
     const persistedAssistantHasMeaningfulContent = Boolean(
       lastPersistedAssistant &&
         lastPersistedAssistant.content.trim().length > 0 &&
         !isFallbackCheckpointMessage(lastPersistedAssistant.content) &&
         !isPersistedErrorMessage(lastPersistedAssistant.content) &&
-        !isPersistedResultStub(lastPersistedAssistant.content)
+        !isPersistedResultStub(lastPersistedAssistant.content),
     );
     const userAlreadySynced =
       lastPendingUser &&
@@ -935,9 +909,8 @@ export function mergePersistedMessagesWithLocal(
             (lastPendingAssistant.report && lastPersistedAssistant.report) ||
             (lastPendingAssistant.reportV2 && lastPersistedAssistant.reportV2) ||
             (lastPendingAssistant.content.trim().length > 0 &&
-              lastPendingAssistant.content.trim() ===
-                lastPersistedAssistant.content.trim()) ||
-            (!localAssistantHasRichState && persistedAssistantHasMeaningfulContent))
+              lastPendingAssistant.content.trim() === lastPersistedAssistant.content.trim()) ||
+            (!localAssistantHasRichState && persistedAssistantHasMeaningfulContent)),
       );
     const alreadySynced = Boolean(userAlreadySynced && assistantAlreadySynced);
 
@@ -946,7 +919,7 @@ export function mergePersistedMessagesWithLocal(
       // history (without touching it — the last persisted assistant belongs to a
       // previous exchange, not this one) plus the pending local pair.
       const pendingToAppend = userAlreadySynced
-        ? pendingLocal.filter((message) => message.role !== "user")
+        ? pendingLocal.filter((message) => message.role !== 'user')
         : pendingLocal;
       return [...persistedMessages, ...pendingToAppend];
     }
@@ -962,7 +935,7 @@ export function mergePersistedMessagesWithLocal(
 
   let persistedAssistantIndex = -1;
   for (let index = persistedMessages.length - 1; index >= 0; index -= 1) {
-    if (persistedMessages[index]?.role === "assistant") {
+    if (persistedMessages[index]?.role === 'assistant') {
       persistedAssistantIndex = index;
       break;
     }
@@ -974,7 +947,7 @@ export function mergePersistedMessagesWithLocal(
   let localAssistant: JainaChatMessage | null = null;
   for (let index = localMessages.length - 1; index >= 0; index -= 1) {
     const candidate = localMessages[index];
-    if (candidate?.role !== "assistant") continue;
+    if (candidate?.role !== 'assistant') continue;
     const candidateHasRichState =
       Boolean(candidate.plan) ||
       Boolean(candidate.report) ||
@@ -984,10 +957,7 @@ export function mergePersistedMessagesWithLocal(
       (candidate.toolCalls?.length ?? 0) > 0 ||
       (candidate.toolResults?.length ?? 0) > 0 ||
       (candidate.objectives?.length ?? 0) > 0;
-    if (
-      candidateHasRichState ||
-      !isFallbackCheckpointMessage(candidate.content)
-    ) {
+    if (candidateHasRichState || !isFallbackCheckpointMessage(candidate.content)) {
       localAssistant = candidate;
       break;
     }
@@ -1004,13 +974,13 @@ export function mergePersistedMessagesWithLocal(
   // This guards the race where the backend saved real text content but hadn't
   // yet written the report JSON when the snapshot resolved.
   const persistedLacksReport =
-    !persistedAssistant.report && !persistedAssistant.reportV2 && !persistedAssistant.reportAssembly;
+    !persistedAssistant.report &&
+    !persistedAssistant.reportV2 &&
+    !persistedAssistant.reportAssembly;
   const localHasReport = Boolean(
-    localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly
+    localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly,
   );
-  const localHasRicherReportV2 = Boolean(
-    localAssistant.reportV2 && !persistedAssistant.reportV2
-  );
+  const localHasRicherReportV2 = Boolean(localAssistant.reportV2 && !persistedAssistant.reportV2);
   const persistedPlanOnly =
     Boolean(persistedAssistant.plan) &&
     !persistedAssistant.report &&
@@ -1030,12 +1000,9 @@ export function mergePersistedMessagesWithLocal(
   const shouldPreserveLocalTrace = persistedTraceCount === 0 && localTraceCount > 0;
   const mergedObjectives = mergeMessageObjectives(
     persistedAssistant.objectives,
-    localAssistant.objectives
+    localAssistant.objectives,
   );
-  const hasObjectiveUpgrade = objectivesChanged(
-    persistedAssistant.objectives,
-    mergedObjectives
-  );
+  const hasObjectiveUpgrade = objectivesChanged(persistedAssistant.objectives, mergedObjectives);
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
     !isPersistedErrorMessage(persistedAssistant.content) &&
@@ -1069,8 +1036,7 @@ export function mergePersistedMessagesWithLocal(
     report: localAssistant.report ?? persistedAssistant.report,
     reportV2: localAssistant.reportV2 ?? persistedAssistant.reportV2,
     reportAssembly: localAssistant.reportAssembly ?? persistedAssistant.reportAssembly,
-    reportAssemblyHtml:
-      localAssistant.reportAssemblyHtml ?? persistedAssistant.reportAssemblyHtml,
+    reportAssemblyHtml: localAssistant.reportAssemblyHtml ?? persistedAssistant.reportAssemblyHtml,
     artifacts: localAssistant.artifacts ?? persistedAssistant.artifacts,
     pendingClarification:
       localAssistant.pendingClarification ?? persistedAssistant.pendingClarification,
@@ -1080,7 +1046,7 @@ export function mergePersistedMessagesWithLocal(
 }
 
 function sortConversationSessions(
-  sessions: JainaConversationSession[]
+  sessions: JainaConversationSession[],
 ): JainaConversationSession[] {
   const sorted = [...sessions];
   sorted.sort((a, b) => {
@@ -1094,10 +1060,10 @@ function sortConversationSessions(
 
 function upsertConversationSession(
   sessions: JainaConversationSession[],
-  nextSession: JainaConversationSession
+  nextSession: JainaConversationSession,
 ): JainaConversationSession[] {
   const existingIndex = sessions.findIndex(
-    (session) => session.sessionId === nextSession.sessionId
+    (session) => session.sessionId === nextSession.sessionId,
   );
   if (existingIndex === -1) {
     return sortConversationSessions([nextSession, ...sessions]);
@@ -1121,21 +1087,22 @@ export function JainaChatSurface({
   const { show } = useToast();
   const { processAIAction } = useCampaignAI();
   const loadCampaignPerformance = usePaidMediaPerformanceStore(
-    (store) => store.loadCampaignPerformance
+    (store) => store.loadCampaignPerformance,
   );
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
   const prefersReducedMotion = useReducedMotion();
 
   const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
-  const isStreaming = state.status === "streaming" || state.status === "starting";
+  const isStreaming = state.status === 'streaming' || state.status === 'starting';
 
   const [isJainaProMode, setIsJainaProMode] = React.useState(false);
-  const [reportArtifactJob, setReportArtifactJob] =
-    React.useState<ReportArtifactJobTracker | null>(null);
-  const [isReportArtifactDownloading, setIsReportArtifactDownloading] =
-    React.useState(false);
-  const [pendingReportArtifactResponseId, setPendingReportArtifactResponseId] =
-    React.useState<string | null>(null);
+  const [reportArtifactJob, setReportArtifactJob] = React.useState<ReportArtifactJobTracker | null>(
+    null,
+  );
+  const [isReportArtifactDownloading, setIsReportArtifactDownloading] = React.useState(false);
+  const [pendingReportArtifactResponseId, setPendingReportArtifactResponseId] = React.useState<
+    string | null
+  >(null);
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const pendingClarificationId = state.pendingClarification?.id;
 
@@ -1143,11 +1110,9 @@ export function JainaChatSurface({
   const [conversationSessions, setConversationSessions] = React.useState<
     JainaConversationSession[]
   >([]);
-  const [sessionTitleById, setSessionTitleById] = React.useState<
-    Record<string, string>
-  >({});
-  const [shaderState, setShaderState] = React.useState<"visible" | "sweeping" | "hidden">(
-    "visible"
+  const [sessionTitleById, setSessionTitleById] = React.useState<Record<string, string>>({});
+  const [shaderState, setShaderState] = React.useState<'visible' | 'sweeping' | 'hidden'>(
+    'visible',
   );
   const [shaderReady, setShaderReady] = React.useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
@@ -1155,13 +1120,11 @@ export function JainaChatSurface({
   const [deletingSessionId, setDeletingSessionId] = React.useState<string | null>(null);
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(null);
   const [generatingSessionIds, setGeneratingSessionIds] = React.useState<Set<string>>(
-    () => new Set()
+    () => new Set(),
   );
   const [queuedMessages, setQueuedMessages] = React.useState<QueuedJainaMessage[]>([]);
-  const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(
-    null
-  );
-  const [queueEditDraft, setQueueEditDraft] = React.useState("");
+  const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(null);
+  const [queueEditDraft, setQueueEditDraft] = React.useState('');
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
   const processedCanvasEnvelopeKeysRef = React.useRef<Set<string>>(new Set());
   const processedReportArtifactJobIdsRef = React.useRef<Set<string>>(new Set());
@@ -1183,35 +1146,29 @@ export function JainaChatSurface({
           {
             brandId: brandProfileId,
             adAccountId,
-            platform: "meta",
-            range: { preset: "last_7d" },
+            platform: 'meta',
+            range: { preset: 'last_7d' },
           },
-          { force: false }
+          { force: false },
         ).catch(() => [] as CampaignPerformanceRow[]);
 
         const filteredCampaigns = campaigns
           .filter((campaign) =>
-            matchesJainaMentionQuery(query, [
-              campaign.name,
-              campaign.status,
-              campaign.objective,
-            ])
+            matchesJainaMentionQuery(query, [campaign.name, campaign.status, campaign.objective]),
           )
           .slice(0, 8);
 
         return [
+          ...filteredCampaigns.map((campaign) => createCampaignSuggestion(campaign, adAccountId)),
           ...filteredCampaigns.map((campaign) =>
-            createCampaignSuggestion(campaign, adAccountId)
-          ),
-          ...filteredCampaigns.map((campaign) =>
-            createCampaignSuggestion(campaign, adAccountId, { children: true })
+            createCampaignSuggestion(campaign, adAccountId, { children: true }),
           ),
         ];
       },
       getChildSuggestions: async (parent) => {
         if (!adAccountId || !parent.reference) return [];
         const campaignId =
-          typeof parent.reference.metadata?.campaignId === "string"
+          typeof parent.reference.metadata?.campaignId === 'string'
             ? parent.reference.metadata.campaignId
             : parent.reference.id;
         const campaignName = parent.reference.label;
@@ -1222,30 +1179,30 @@ export function JainaChatSurface({
             .invoke(
               `paid-media-reporting/adsets?brandId=${brandProfileId}&adAccountId=${adAccountId}&campaignId=${campaignId}`,
               {
-                method: "POST",
+                method: 'POST',
                 body: {
                   brandId: brandProfileId,
                   adAccountId,
                   campaignId,
                 },
-              }
+              },
             )
             .then(({ data, error }) => {
               if (error) throw new Error(error.message);
               const rows = Array.isArray((data as { adsets?: unknown[] } | null)?.adsets)
-                ? ((data as { adsets: unknown[] }).adsets)
+                ? (data as { adsets: unknown[] }).adsets
                 : [];
               return rows
                 .map((row): JainaMentionAdSet | null => {
-                  if (!row || typeof row !== "object") return null;
+                  if (!row || typeof row !== 'object') return null;
                   const record = row as Record<string, unknown>;
-                  const id = typeof record.id === "string" ? record.id : null;
-                  const name = typeof record.name === "string" ? record.name : null;
+                  const id = typeof record.id === 'string' ? record.id : null;
+                  const name = typeof record.name === 'string' ? record.name : null;
                   if (!id || !name) return null;
                   return {
                     id,
                     name,
-                    status: typeof record.status === "string" ? record.status : undefined,
+                    status: typeof record.status === 'string' ? record.status : undefined,
                   };
                 })
                 .filter((row): row is JainaMentionAdSet => row !== null);
@@ -1259,16 +1216,16 @@ export function JainaChatSurface({
         return adSets.slice(0, 20).map((adSet) => ({
           key: `adset:${campaignId}:${adSet.id}`,
           label: adSet.name,
-          type: "adset" as const,
-          source: "jaina" as const,
-          group: "Ad Sets",
-          description: [campaignName, adSet.status].filter(Boolean).join(" · "),
-          badge: "adset",
+          type: 'adset' as const,
+          source: 'jaina' as const,
+          group: 'Ad Sets',
+          description: [campaignName, adSet.status].filter(Boolean).join(' · '),
+          badge: 'adset',
           reference: {
             id: adSet.id,
-            type: "adset" as const,
+            type: 'adset' as const,
             label: adSet.name,
-            source: "jaina" as const,
+            source: 'jaina' as const,
             metadata: {
               adsetId: adSet.id,
               campaignId,
@@ -1280,28 +1237,27 @@ export function JainaChatSurface({
         }));
       },
     }),
-    [adAccountId, brandProfileId, loadCampaignPerformance, supabase]
+    [adAccountId, brandProfileId, loadCampaignPerformance, supabase],
   );
 
   const setConversationSessionsWithCache = React.useCallback(
     (next: React.SetStateAction<JainaConversationSession[]>) => {
       setConversationSessions((previous) => {
         const resolved =
-          typeof next === "function"
+          typeof next === 'function'
             ? (next as (sessions: JainaConversationSession[]) => JainaConversationSession[])(
-                previous
+                previous,
               )
             : next;
         if (adAccountId) {
-          useJainaConversationSidebarStore.getState().setSessions(
-            { brandProfileId, adAccountId },
-            resolved
-          );
+          useJainaConversationSidebarStore
+            .getState()
+            .setSessions({ brandProfileId, adAccountId }, resolved);
         }
         return resolved;
       });
     },
-    [adAccountId, brandProfileId]
+    [adAccountId, brandProfileId],
   );
 
   const getFreshConversationSessionsFromCache = React.useCallback(() => {
@@ -1334,7 +1290,7 @@ export function JainaChatSurface({
 
   React.useEffect(() => {
     if (!reportArtifactJob) return;
-    if (reportArtifactJob.status === "done" || reportArtifactJob.status === "failed") {
+    if (reportArtifactJob.status === 'done' || reportArtifactJob.status === 'failed') {
       return;
     }
 
@@ -1345,16 +1301,16 @@ export function JainaChatSurface({
       try {
         const payload = await http.request<Record<string, unknown>>({
           path: reportArtifactJob.statusEndpoint,
-          cache: "no-store",
+          cache: 'no-store',
         });
         if (cancelled) return;
 
         const next = extractReportArtifactJobStatus(payload);
 
-        if (next.status === "done") {
+        if (next.status === 'done') {
           const filePayload = await http.request<Record<string, unknown>>({
             path: reportArtifactJob.fileUrlEndpoint,
-            cache: "no-store",
+            cache: 'no-store',
           });
           if (cancelled) return;
           const fileUrl = extractReportArtifactFileUrl(filePayload);
@@ -1363,10 +1319,10 @@ export function JainaChatSurface({
               ? {
                   ...previous,
                   fileUrl,
-                  status: "done",
+                  status: 'done',
                   error: next.error ?? previous.error,
                 }
-              : previous
+              : previous,
           );
           return;
         }
@@ -1378,19 +1334,16 @@ export function JainaChatSurface({
                 status: next.status,
                 error: next.error ?? previous.error,
               }
-            : previous
+            : previous,
         );
 
-        if (next.status === "failed") return;
+        if (next.status === 'failed') return;
         timer = window.setTimeout(pollJob, REPORT_ARTIFACT_POLL_INTERVAL_MS);
       } catch (error) {
         if (cancelled) return;
-        const message =
-          error instanceof Error ? error.message : "Unable to refresh report job.";
+        const message = error instanceof Error ? error.message : 'Unable to refresh report job.';
         setReportArtifactJob((previous) =>
-          previous?.jobId === reportArtifactJob.jobId
-            ? { ...previous, error: message }
-            : previous
+          previous?.jobId === reportArtifactJob.jobId ? { ...previous, error: message } : previous,
         );
         timer = window.setTimeout(pollJob, REPORT_ARTIFACT_POLL_INTERVAL_MS);
       }
@@ -1404,10 +1357,10 @@ export function JainaChatSurface({
   }, [reportArtifactJob]);
 
   React.useEffect(() => {
-    if (shaderState !== "sweeping") return;
+    if (shaderState !== 'sweeping') return;
     const timeoutMs = prefersReducedMotion ? 80 : 820;
     const timer = window.setTimeout(() => {
-      setShaderState("hidden");
+      setShaderState('hidden');
     }, timeoutMs);
     return () => window.clearTimeout(timer);
   }, [prefersReducedMotion, shaderState]);
@@ -1417,30 +1370,30 @@ export function JainaChatSurface({
       id: string,
       update:
         | Partial<JainaChatMessage>
-        | ((message: JainaChatMessage) => Partial<JainaChatMessage>)
+        | ((message: JainaChatMessage) => Partial<JainaChatMessage>),
     ) => {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === id
             ? {
                 ...msg,
-                ...(typeof update === "function" ? update(msg) : update),
+                ...(typeof update === 'function' ? update(msg) : update),
               }
-            : msg
-        )
+            : msg,
+        ),
       );
     },
-    []
+    [],
   );
 
   const handleReportArtifactAction = React.useCallback(async () => {
-    if (reportArtifactJob?.status === "failed") {
+    if (reportArtifactJob?.status === 'failed') {
       setReportArtifactJob(null);
       setIsJainaProMode(true);
       return;
     }
 
-    if (!reportArtifactJob || reportArtifactJob.status !== "done") {
+    if (!reportArtifactJob || reportArtifactJob.status !== 'done') {
       setIsJainaProMode((previous) => !previous);
       return;
     }
@@ -1452,28 +1405,24 @@ export function JainaChatSurface({
         extractReportArtifactFileUrl(
           await http.request<Record<string, unknown>>({
             path: reportArtifactJob.fileUrlEndpoint,
-            cache: "no-store",
-          })
+            cache: 'no-store',
+          }),
         );
 
       if (!fileUrl) {
-        throw new Error("Report file URL is not available yet.");
+        throw new Error('Report file URL is not available yet.');
       }
 
       setReportArtifactJob((previous) =>
-        previous?.jobId === reportArtifactJob.jobId
-          ? { ...previous, fileUrl }
-          : previous
+        previous?.jobId === reportArtifactJob.jobId ? { ...previous, fileUrl } : previous,
       );
-      window.open(fileUrl, "_blank");
+      window.open(fileUrl, '_blank');
     } catch (error) {
       show({
-        title: "Report unavailable",
+        title: 'Report unavailable',
         description:
-          error instanceof Error
-            ? error.message
-            : "Unable to open the generated report.",
-        variant: "error",
+          error instanceof Error ? error.message : 'Unable to open the generated report.',
+        variant: 'error',
       });
     } finally {
       setIsReportArtifactDownloading(false);
@@ -1487,106 +1436,97 @@ export function JainaChatSurface({
       const searchParams = new URLSearchParams({
         brandId: brandProfileId,
         adAccountId,
-        sessionsLimit: "40",
-        messagesLimit: "300",
+        sessionsLimit: '40',
+        messagesLimit: '300',
       });
 
       if (targetSessionId) {
-        searchParams.set("sessionId", targetSessionId);
+        searchParams.set('sessionId', targetSessionId);
       }
 
       const response = await fetch(
         `/api/agents/jaina/chat/conversations?${searchParams.toString()}`,
         {
-          method: "GET",
-          cache: "no-store",
-        }
+          method: 'GET',
+          cache: 'no-store',
+        },
       );
 
       if (!response.ok) {
-        const detail = await response
-          .text()
-          .catch(() => "Failed to load conversation history.");
-        throw new Error(detail || "Failed to load conversation history.");
+        const detail = await response.text().catch(() => 'Failed to load conversation history.');
+        throw new Error(detail || 'Failed to load conversation history.');
       }
 
       const payload = await response.json().catch(() => null);
       const parsed = jainaConversationListResponseSchema.safeParse(payload);
       if (!parsed.success) {
-        throw new Error("Invalid conversation history payload.");
+        throw new Error('Invalid conversation history payload.');
       }
 
       return parsed.data;
     },
-    [adAccountId, brandProfileId]
+    [adAccountId, brandProfileId],
   );
 
   const hydrateConversationMessagesFromRuns = React.useCallback(
-    async (input: {
-      targetSessionId: string;
-      baseMessages: JainaChatMessage[];
-    }) => {
+    async (input: { targetSessionId: string; baseMessages: JainaChatMessage[] }) => {
       if (!adAccountId) return;
-      if (!input.baseMessages.some(
-        (message) =>
-          message.role === "assistant" &&
-          !message.report &&
-          !message.reportV2 &&
-          !message.reportAssembly
-      )) {
+      if (
+        !input.baseMessages.some(
+          (message) =>
+            message.role === 'assistant' &&
+            !message.report &&
+            !message.reportV2 &&
+            !message.reportAssembly,
+        )
+      ) {
         return;
       }
 
       try {
         const searchParams = new URLSearchParams({
           brandId: brandProfileId,
-          limit: "300",
+          limit: '300',
         });
         if (adAccountId) {
-          searchParams.set("adAccountId", adAccountId);
+          searchParams.set('adAccountId', adAccountId);
         }
 
         const response = await fetch(
           `/api/agents/jaina/chat/conversations/${encodeURIComponent(
-            input.targetSessionId
+            input.targetSessionId,
           )}/runs?${searchParams.toString()}`,
           {
-            method: "GET",
-            cache: "no-store",
-          }
+            method: 'GET',
+            cache: 'no-store',
+          },
         );
         if (!response.ok) return;
 
         const payload = await response.json().catch(() => null);
-        const parsed =
-          jainaConversationRunsHydrationResponseSchema.safeParse(payload);
+        const parsed = jainaConversationRunsHydrationResponseSchema.safeParse(payload);
         if (!parsed.success) return;
 
-        const hydrated = hydrateMessagesWithConversationRuns(
-          input.baseMessages,
-          parsed.data.runs
-        );
+        const hydrated = hydrateMessagesWithConversationRuns(input.baseMessages, parsed.data.runs);
         if (!hydrated.changed) return;
         if (activeSessionIdRef.current !== input.targetSessionId) return;
 
-        setMessages((previous) =>
-          mergePersistedMessagesWithLocal(hydrated.messages, previous)
-        );
+        setMessages((previous) => mergePersistedMessagesWithLocal(hydrated.messages, previous));
       } catch {
         // Best-effort lazy hydration; ignore failures to avoid interrupting chat load.
       }
     },
-    [adAccountId, brandProfileId]
+    [adAccountId, brandProfileId],
   );
 
   const ensureConversationSession = React.useCallback(
     async (preferredSessionId?: string) => {
       if (!adAccountId) return null;
 
-      const response = await fetch("/api/agents/jaina/chat/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
+      const response = await fetch('/api/agents/jaina/chat/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({
           context: {
             adAccountId,
@@ -1597,16 +1537,14 @@ export function JainaChatSurface({
       });
 
       if (!response.ok) {
-        const detail = await response
-          .text()
-          .catch(() => "Failed to create conversation session.");
-        throw new Error(detail || "Failed to create conversation session.");
+        const detail = await response.text().catch(() => 'Failed to create conversation session.');
+        throw new Error(detail || 'Failed to create conversation session.');
       }
 
       const payload = await response.json().catch(() => null);
       const parsed = createConversationSessionResponseSchema.safeParse(payload);
       if (!parsed.success) {
-        throw new Error("Invalid conversation session response.");
+        throw new Error('Invalid conversation session response.');
       }
 
       const mapped = mapConversationCreateResponse(parsed.data);
@@ -1624,7 +1562,7 @@ export function JainaChatSurface({
           lastMessageAt: null,
           createdAt: now,
           updatedAt: now,
-        })
+        }),
       );
 
       if (normalizedSessionTitle) {
@@ -1636,7 +1574,7 @@ export function JainaChatSurface({
 
       return mapped;
     },
-    [adAccountId, brandProfileId, setConversationSessionsWithCache]
+    [adAccountId, brandProfileId, setConversationSessionsWithCache],
   );
 
   const loadConversationSession = React.useCallback(
@@ -1655,7 +1593,7 @@ export function JainaChatSurface({
         setActiveResponseId(null);
         setQueuedMessages([]);
         setEditingQueueMessageId(null);
-        setQueueEditDraft("");
+        setQueueEditDraft('');
         queueDispatchInFlightRef.current = false;
         setSessionId(targetSessionId);
         setConversationSessionsWithCache(sortConversationSessions(payload.sessions));
@@ -1669,14 +1607,15 @@ export function JainaChatSurface({
           }
           return next;
         });
-        const sessionTitleForTarget = normalizeSessionTitle(
-          payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null
-        ) ?? undefined;
+        const sessionTitleForTarget =
+          normalizeSessionTitle(
+            payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null,
+          ) ?? undefined;
         const mappedMessages = (payload.messages ?? []).map((msg) =>
-          mapConversationMessageToChatMessage(msg, sessionTitleForTarget)
+          mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
         );
         setMessages(mappedMessages);
-        setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
+        setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
         void hydrateConversationMessagesFromRuns({
           targetSessionId,
           baseMessages: mappedMessages,
@@ -1684,13 +1623,11 @@ export function JainaChatSurface({
       } catch (error) {
         if (!options?.silent) {
           const message =
-            error instanceof Error
-              ? error.message
-              : "Unable to load conversation history.";
+            error instanceof Error ? error.message : 'Unable to load conversation history.';
           show({
-            title: "History unavailable",
+            title: 'History unavailable',
             description: message,
-            variant: "error",
+            variant: 'error',
           });
         }
       } finally {
@@ -1704,7 +1641,7 @@ export function JainaChatSurface({
       reset,
       setConversationSessionsWithCache,
       show,
-    ]
+    ],
   );
 
   const refreshConversationSnapshot = React.useCallback(
@@ -1725,16 +1662,15 @@ export function JainaChatSurface({
           return next;
         });
         if (payload.messages) {
-          const sessionTitleForTarget = normalizeSessionTitle(
-            payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null
-          ) ?? undefined;
+          const sessionTitleForTarget =
+            normalizeSessionTitle(
+              payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null,
+            ) ?? undefined;
           const mappedMessages = payload.messages.map((msg) =>
-            mapConversationMessageToChatMessage(msg, sessionTitleForTarget)
+            mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
           );
-          setMessages((previous) =>
-            mergePersistedMessagesWithLocal(mappedMessages, previous)
-          );
-          setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
+          setMessages((previous) => mergePersistedMessagesWithLocal(mappedMessages, previous));
+          setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
           void hydrateConversationMessagesFromRuns({
             targetSessionId,
             baseMessages: mappedMessages,
@@ -1749,28 +1685,28 @@ export function JainaChatSurface({
       fetchConversationHistory,
       hydrateConversationMessagesFromRuns,
       setConversationSessionsWithCache,
-    ]
+    ],
   );
 
   React.useEffect(() => {
     if (!activeResponseId) return;
 
-      if (state.plan) {
-        updateMessage(activeResponseId, {
-          plan: state.plan,
-        });
+    if (state.plan) {
+      updateMessage(activeResponseId, {
+        plan: state.plan,
+      });
 
-        const sessionTitle = normalizeSessionTitle(state.plan.title);
-        if (sessionTitle) {
-          setSessionTitleById((previous) => {
-            if (previous[sessionId] === sessionTitle) return previous;
-            return { ...previous, [sessionId]: sessionTitle };
-          });
-        }
+      const sessionTitle = normalizeSessionTitle(state.plan.title);
+      if (sessionTitle) {
+        setSessionTitleById((previous) => {
+          if (previous[sessionId] === sessionTitle) return previous;
+          return { ...previous, [sessionId]: sessionTitle };
+        });
       }
+    }
 
     if (
-      state.status === "streaming" &&
+      state.status === 'streaming' &&
       (state.responseText ||
         state.objectives.length > 0 ||
         state.plan ||
@@ -1799,7 +1735,7 @@ export function JainaChatSurface({
       });
     }
 
-    if (state.status === "complete") {
+    if (state.status === 'complete') {
       const completedResponseId = activeResponseId;
       const finalThought = getFinalThought(state.progress);
       const content = pickRenderableContent({
@@ -1816,10 +1752,10 @@ export function JainaChatSurface({
 
       const hasClarificationRequest = Boolean(state.pendingClarification);
       const reportType =
-        state.report && typeof state.report === "object" && "type" in state.report
+        state.report && typeof state.report === 'object' && 'type' in state.report
           ? (state.report as { type?: unknown }).type
           : undefined;
-      const isDirectAnswer = reportType === "direct_answer";
+      const isDirectAnswer = reportType === 'direct_answer';
       const hasReportSignal = resolveReportSignal(state.progress, state.stateDeltas);
       const reportHasContent = hasReportContent(state.report);
       const renderAsReport = !!(
@@ -1827,11 +1763,11 @@ export function JainaChatSurface({
         state.report &&
         !isDirectAnswer &&
         reportHasContent &&
-        (hasReportSignal || state.finalContentKind === "report")
+        (hasReportSignal || state.finalContentKind === 'report')
       );
 
       updateMessage(completedResponseId, {
-        status: "done",
+        status: 'done',
         content,
         report: state.report ?? undefined,
         reportV2: state.reportV2 ?? undefined,
@@ -1853,21 +1789,21 @@ export function JainaChatSurface({
       void refreshConversationSnapshot(sessionId);
 
       setPendingReportArtifactResponseId((current) =>
-        current === completedResponseId ? null : current
+        current === completedResponseId ? null : current,
       );
       setActiveResponseId(null);
     }
-    if (state.status === "error" && state.error) {
+    if (state.status === 'error' && state.error) {
       const failedResponseId = activeResponseId;
       const reportHasContent = hasReportContent(state.report);
       const safeResponseText = isLikelyStructuredJsonContent(state.responseText)
-        ? extractRenderableFallbackFromStructuredContent(state.responseText) || ""
+        ? extractRenderableFallbackFromStructuredContent(state.responseText) || ''
         : state.responseText;
       const reportSummary = resolveReportSummaryForMessage(state.report ?? undefined);
       const checkpointSummary =
-        state.checkpointSummarySource !== "default_unavailable"
-          ? state.latestCheckpointSummary?.trim() ?? ""
-          : "";
+        state.checkpointSummarySource !== 'default_unavailable'
+          ? (state.latestCheckpointSummary?.trim() ?? '')
+          : '';
       const finalThought = getFinalThought(state.progress);
       const derivedErrorContent =
         reportSummary ||
@@ -1875,16 +1811,16 @@ export function JainaChatSurface({
         safeResponseText ||
         state.pendingClarification?.question ||
         finalThought ||
-        "";
+        '';
       updateMessage(failedResponseId, (previousMessage) => ({
-        status: "error",
+        status: 'error',
         content:
           derivedErrorContent ||
           (!isStreamingPlaceholderMessage(previousMessage.content) &&
           previousMessage.content.trim().length > 0
             ? previousMessage.content
             : state.error || previousMessage.content),
-        title: "Jaina error",
+        title: 'Jaina error',
         report: state.report ?? undefined,
         reportV2: state.reportV2 ?? undefined,
         reportAssembly: state.reportAssembly ?? undefined,
@@ -1903,7 +1839,7 @@ export function JainaChatSurface({
       void refreshConversationSnapshot(sessionId);
 
       setPendingReportArtifactResponseId((current) =>
-        current === failedResponseId ? null : current
+        current === failedResponseId ? null : current,
       );
       setActiveResponseId(null);
     }
@@ -1951,7 +1887,7 @@ export function JainaChatSurface({
     (row: JainaRunStatusRow) => {
       setGeneratingSessionIds((previous) => {
         const next = new Set(previous);
-        if (row.status === "running" || row.status === "pending") {
+        if (row.status === 'running' || row.status === 'pending') {
           next.add(row.sessionId);
         } else {
           next.delete(row.sessionId);
@@ -1963,27 +1899,23 @@ export function JainaChatSurface({
 
       const isActiveRun = Boolean(row.runId) && row.runId === activeRunIdRef.current;
       const responseId = activeResponseIdRef.current;
-      if (
-        !isActiveRun ||
-        !responseId ||
-        persistedAssistantResponseIdsRef.current.has(responseId)
-      ) {
+      if (!isActiveRun || !responseId || persistedAssistantResponseIdsRef.current.has(responseId)) {
         return;
       }
 
       persistedAssistantResponseIdsRef.current.add(responseId);
-      if (row.status === "failed") {
+      if (row.status === 'failed') {
         updateMessage(responseId, {
-          status: "error",
-          title: "Jaina error",
-          content: row.errorMessage || "Jaina run failed.",
+          status: 'error',
+          title: 'Jaina error',
+          content: row.errorMessage || 'Jaina run failed.',
         });
       }
       void refreshConversationSnapshot(activeSessionIdRef.current);
       setActiveResponseId(null);
       cancel();
     },
-    [cancel, refreshConversationSnapshot, updateMessage]
+    [cancel, refreshConversationSnapshot, updateMessage],
   );
 
   useJainaRunStatusRealtime({
@@ -2001,9 +1933,7 @@ export function JainaChatSurface({
   React.useEffect(() => {
     if (state.toolResults.length === 0 && state.canvasActions.length === 0) return;
 
-    const envelopesToApply: Array<
-      ReturnType<typeof extractCampaignCanvasActionsEnvelope>
-    > = [];
+    const envelopesToApply: Array<ReturnType<typeof extractCampaignCanvasActionsEnvelope>> = [];
 
     for (const toolResult of state.toolResults) {
       if (processedToolResultIdsRef.current.has(toolResult.id)) {
@@ -2052,9 +1982,9 @@ export function JainaChatSurface({
         normalizedEnvelopeUserId === normalizedSessionUserId;
       if (!hasUserMatch) {
         console.warn(
-          "Applying canvas action envelope despite userId mismatch",
+          'Applying canvas action envelope despite userId mismatch',
           envelope.userId,
-          userId
+          userId,
         );
       }
 
@@ -2066,9 +1996,9 @@ export function JainaChatSurface({
       }
 
       show({
-        title: "Canvas updated by Jaina",
+        title: 'Canvas updated by Jaina',
         description: `${envelope.actions.length} change(s) applied to this session.`,
-        variant: "success",
+        variant: 'success',
       });
     }
   }, [
@@ -2087,7 +2017,7 @@ export function JainaChatSurface({
     async function bootstrapHistory() {
       if (!adAccountId) {
         setConversationSessions([]);
-        setShaderState("visible");
+        setShaderState('visible');
         return;
       }
 
@@ -2096,7 +2026,7 @@ export function JainaChatSurface({
       setActiveResponseId(null);
       setQueuedMessages([]);
       setEditingQueueMessageId(null);
-      setQueueEditDraft("");
+      setQueueEditDraft('');
       setIsJainaProMode(false);
       setPendingReportArtifactResponseId(null);
       setReportArtifactJob(null);
@@ -2131,16 +2061,14 @@ export function JainaChatSurface({
           setSessionId(createJainaSessionId());
           setMessages([]);
           setQueuedMessages([]);
-          setShaderState("visible");
+          setShaderState('visible');
           return;
         }
 
         setSessionId(mostRecentSessionId);
         const conversationPayload = await fetchConversationHistory(mostRecentSessionId);
         if (!conversationPayload || cancelled) return;
-        setConversationSessionsWithCache(
-          sortConversationSessions(conversationPayload.sessions)
-        );
+        setConversationSessionsWithCache(sortConversationSessions(conversationPayload.sessions));
         setSessionTitleById((previous) => {
           const next = { ...previous };
           for (const session of conversationPayload.sessions) {
@@ -2151,14 +2079,16 @@ export function JainaChatSurface({
           }
           return next;
         });
-        const sessionTitleForTarget = normalizeSessionTitle(
-          conversationPayload.sessions?.find((s) => s.sessionId === mostRecentSessionId)?.title ?? null
-        ) ?? undefined;
+        const sessionTitleForTarget =
+          normalizeSessionTitle(
+            conversationPayload.sessions?.find((s) => s.sessionId === mostRecentSessionId)?.title ??
+              null,
+          ) ?? undefined;
         const mappedMessages = (conversationPayload.messages ?? []).map((msg) =>
-          mapConversationMessageToChatMessage(msg, sessionTitleForTarget)
+          mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
         );
         setMessages(mappedMessages);
-        setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
+        setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
         void hydrateConversationMessagesFromRuns({
           targetSessionId: mostRecentSessionId,
           baseMessages: mappedMessages,
@@ -2166,17 +2096,15 @@ export function JainaChatSurface({
       } catch (error) {
         if (cancelled) return;
         const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to load conversation history.";
+          error instanceof Error ? error.message : 'Unable to load conversation history.';
         show({
-          title: "History unavailable",
+          title: 'History unavailable',
           description: message,
-          variant: "error",
+          variant: 'error',
         });
         setSessionId(createJainaSessionId());
         setQueuedMessages([]);
-        setShaderState("visible");
+        setShaderState('visible');
       } finally {
         if (!cancelled) {
           setIsHistoryLoading(false);
@@ -2211,29 +2139,26 @@ export function JainaChatSurface({
 
     channel
       .on(
-        "broadcast",
-        { event: "conversation_updated" },
+        'broadcast',
+        { event: 'conversation_updated' },
         ({ payload }: { payload: Record<string, unknown> }) => {
           if (streamBusyRef.current) return;
 
-          const payloadSessionId =
-            typeof payload.sessionId === "string" ? payload.sessionId : null;
+          const payloadSessionId = typeof payload.sessionId === 'string' ? payload.sessionId : null;
           const currentSessionId = activeSessionIdRef.current;
 
           if (payloadSessionId && payloadSessionId !== currentSessionId) {
             void fetchConversationHistory()
               .then((history) => {
                 if (!history) return;
-                setConversationSessionsWithCache(
-                  sortConversationSessions(history.sessions)
-                );
+                setConversationSessionsWithCache(sortConversationSessions(history.sessions));
               })
               .catch(() => {});
             return;
           }
 
           void refreshConversationSnapshot(currentSessionId);
-        }
+        },
       )
       .subscribe();
 
@@ -2270,9 +2195,9 @@ export function JainaChatSurface({
 
       if (!adAccountId) {
         show({
-          title: "Select an ad account",
-          description: "Jaina needs an ad account context.",
-          variant: "warning",
+          title: 'Select an ad account',
+          description: 'Jaina needs an ad account context.',
+          variant: 'warning',
         });
         return false;
       }
@@ -2290,20 +2215,18 @@ export function JainaChatSurface({
         }
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to initialize conversation session.";
+          error instanceof Error ? error.message : 'Unable to initialize conversation session.';
         show({
-          title: "Conversation setup failed",
+          title: 'Conversation setup failed',
           description: message,
-          variant: "error",
+          variant: 'error',
         });
         return false;
       }
 
       const userMessage: JainaChatMessage = {
         id: `user-${Date.now()}`,
-        role: "user",
+        role: 'user',
         content: query,
         createdAt: now,
         ...(input.references && input.references.length > 0
@@ -2313,23 +2236,23 @@ export function JainaChatSurface({
 
       const assistantMessage: JainaChatMessage = {
         id: `assistant-${Date.now()}`,
-        role: "assistant",
+        role: 'assistant',
         content: input.clarificationId
-          ? "Processing your clarification…"
-          : "Thinking through your request…",
+          ? 'Processing your clarification…'
+          : 'Thinking through your request…',
         createdAt: now,
-        status: "streaming",
-        title: "Jaina Analyst",
+        status: 'streaming',
+        title: 'Jaina Analyst',
       };
 
-      if (shaderState === "visible") {
-        setShaderState("sweeping");
+      if (shaderState === 'visible') {
+        setShaderState('sweeping');
       }
 
       setMessages((prev) =>
         input.silentUserMessage
           ? [...prev, assistantMessage]
-          : [...prev, userMessage, assistantMessage]
+          : [...prev, userMessage, assistantMessage],
       );
       setConversationSessionsWithCache((previous) =>
         upsertConversationSession(previous, {
@@ -2337,12 +2260,12 @@ export function JainaChatSurface({
           brandId: brandProfileId,
           adAccountId,
           title: normalizeSessionTitle(sessionTitleById[activeSessionId]) ?? null,
-          lastMessageRole: "user",
+          lastMessageRole: 'user',
           lastMessagePreview: query,
           lastMessageAt: now,
           createdAt: now,
           updatedAt: now,
-        })
+        }),
       );
       setActiveResponseId(assistantMessage.id);
       if (input.forceReportArtifact) {
@@ -2370,9 +2293,9 @@ export function JainaChatSurface({
             setPendingReportArtifactResponseId(null);
           }
           show({
-            title: "Request failed",
+            title: 'Request failed',
             description: result.error,
-            variant: "error",
+            variant: 'error',
           });
         }
       });
@@ -2391,7 +2314,7 @@ export function JainaChatSurface({
       start,
       setConversationSessionsWithCache,
       userId,
-    ]
+    ],
   );
 
   const queueMessageForLater = React.useCallback(
@@ -2412,22 +2335,16 @@ export function JainaChatSurface({
         ...(input.references && input.references.length > 0
           ? { references: input.references }
           : {}),
-        ...(input.forceReportArtifact
-          ? { forceReportArtifact: input.forceReportArtifact }
-          : {}),
+        ...(input.forceReportArtifact ? { forceReportArtifact: input.forceReportArtifact } : {}),
         ...(input.clarificationId ? { clarificationId: input.clarificationId } : {}),
       };
       setQueuedMessages((previous) => enqueueMessage(previous, queuedMessage));
     },
-    []
+    [],
   );
 
   const handleSubmit = React.useCallback(
-    async (
-      query: string,
-      attachments?: Attachment[],
-      references: AgentMentionReference[] = []
-    ) => {
+    async (query: string, attachments?: Attachment[], references: AgentMentionReference[] = []) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) return;
 
@@ -2447,7 +2364,7 @@ export function JainaChatSurface({
         ...(pendingPlanId
           ? {
               planAction: {
-                type: "refine" as const,
+                type: 'refine' as const,
                 plan_id: pendingPlanId,
                 edits: normalizedQuery,
               },
@@ -2480,7 +2397,7 @@ export function JainaChatSurface({
       isStreaming,
       messages,
       pendingClarificationId,
-    ]
+    ],
   );
 
   const handleQueueEditStart = React.useCallback((message: QueuedJainaMessage) => {
@@ -2490,7 +2407,7 @@ export function JainaChatSurface({
 
   const handleQueueEditCancel = React.useCallback(() => {
     setEditingQueueMessageId(null);
-    setQueueEditDraft("");
+    setQueueEditDraft('');
   }, []);
 
   const handleQueueEditSave = React.useCallback(() => {
@@ -2499,23 +2416,21 @@ export function JainaChatSurface({
     if (!trimmedDraft) return;
 
     setQueuedMessages((previous) =>
-      updateQueuedMessageContent(previous, editingQueueMessageId, trimmedDraft)
+      updateQueuedMessageContent(previous, editingQueueMessageId, trimmedDraft),
     );
     setEditingQueueMessageId(null);
-    setQueueEditDraft("");
+    setQueueEditDraft('');
   }, [editingQueueMessageId, queueEditDraft]);
 
   const handleQueueRemove = React.useCallback(
     (queueMessageId: string) => {
-      setQueuedMessages((previous) =>
-        removeQueuedMessage(previous, queueMessageId)
-      );
+      setQueuedMessages((previous) => removeQueuedMessage(previous, queueMessageId));
       if (editingQueueMessageId === queueMessageId) {
         setEditingQueueMessageId(null);
-        setQueueEditDraft("");
+        setQueueEditDraft('');
       }
     },
-    [editingQueueMessageId]
+    [editingQueueMessageId],
   );
 
   React.useEffect(() => {
@@ -2539,12 +2454,10 @@ export function JainaChatSurface({
       });
 
       if (started) {
-        setQueuedMessages((previous) =>
-          removeQueuedMessage(previous, nextQueuedMessage.id)
-        );
+        setQueuedMessages((previous) => removeQueuedMessage(previous, nextQueuedMessage.id));
         if (editingQueueMessageId === nextQueuedMessage.id) {
           setEditingQueueMessageId(null);
-          setQueueEditDraft("");
+          setQueueEditDraft('');
         }
       }
 
@@ -2569,13 +2482,13 @@ export function JainaChatSurface({
     setActiveResponseId(null);
     setQueuedMessages([]);
     setEditingQueueMessageId(null);
-    setQueueEditDraft("");
+    setQueueEditDraft('');
     setIsJainaProMode(false);
     setPendingReportArtifactResponseId(null);
     setReportArtifactJob(null);
     queueDispatchInFlightRef.current = false;
     setSessionId(createJainaSessionId());
-    setShaderState("visible");
+    setShaderState('visible');
     processedToolResultIdsRef.current.clear();
     processedCanvasEnvelopeKeysRef.current.clear();
     processedReportArtifactJobIdsRef.current.clear();
@@ -2587,15 +2500,15 @@ export function JainaChatSurface({
       if (targetSessionId === sessionId) return;
       if (isStreaming) {
         show({
-          title: "Stop current response first",
-          description: "Finish or stop the current stream before switching chats.",
-          variant: "warning",
+          title: 'Stop current response first',
+          description: 'Finish or stop the current stream before switching chats.',
+          variant: 'warning',
         });
         return;
       }
       await loadConversationSession(targetSessionId);
     },
-    [isStreaming, loadConversationSession, sessionId, show]
+    [isStreaming, loadConversationSession, sessionId, show],
   );
 
   const handleDeleteConversation = React.useCallback(
@@ -2603,9 +2516,9 @@ export function JainaChatSurface({
       if (!adAccountId) return;
       if (isStreaming && targetSessionId === sessionId) {
         show({
-          title: "Stop current response first",
-          description: "Finish or stop the current stream before deleting this chat.",
-          variant: "warning",
+          title: 'Stop current response first',
+          description: 'Finish or stop the current stream before deleting this chat.',
+          variant: 'warning',
         });
         return;
       }
@@ -2615,23 +2528,20 @@ export function JainaChatSurface({
         const response = await fetch(
           `/api/agents/jaina/chat/conversations/${encodeURIComponent(targetSessionId)}`,
           {
-            method: "DELETE",
-            cache: "no-store",
-          }
+            method: 'DELETE',
+            cache: 'no-store',
+          },
         );
 
         if (!response.ok) {
-          const detail = await readErrorMessage(
-            response,
-            "Failed to delete conversation."
-          );
+          const detail = await readErrorMessage(response, 'Failed to delete conversation.');
           throw new Error(detail);
         }
 
         const remainingSessions = sortConversationSessions(
           conversationSessions.filter(
-            (conversationSession) => conversationSession.sessionId !== targetSessionId
-          )
+            (conversationSession) => conversationSession.sessionId !== targetSessionId,
+          ),
         );
         setConversationSessionsWithCache(remainingSessions);
         setSessionTitleById((previous) => {
@@ -2650,13 +2560,13 @@ export function JainaChatSurface({
             setActiveResponseId(null);
             setQueuedMessages([]);
             setEditingQueueMessageId(null);
-            setQueueEditDraft("");
+            setQueueEditDraft('');
             setIsJainaProMode(false);
             setPendingReportArtifactResponseId(null);
             setReportArtifactJob(null);
             queueDispatchInFlightRef.current = false;
             setSessionId(createJainaSessionId());
-            setShaderState("visible");
+            setShaderState('visible');
             processedToolResultIdsRef.current.clear();
             processedCanvasEnvelopeKeysRef.current.clear();
             processedReportArtifactJobIdsRef.current.clear();
@@ -2665,22 +2575,19 @@ export function JainaChatSurface({
         }
 
         show({
-          title: "Conversation deleted",
-          description: "This chat and its associated run history were removed.",
-          variant: "success",
+          title: 'Conversation deleted',
+          description: 'This chat and its associated run history were removed.',
+          variant: 'success',
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to delete conversation.";
+        const message = error instanceof Error ? error.message : 'Failed to delete conversation.';
         show({
-          title: "Delete failed",
+          title: 'Delete failed',
           description: message,
-          variant: "error",
+          variant: 'error',
         });
       } finally {
-        setDeletingSessionId((current) =>
-          current === targetSessionId ? null : current
-        );
+        setDeletingSessionId((current) => (current === targetSessionId ? null : current));
       }
     },
     [
@@ -2692,22 +2599,22 @@ export function JainaChatSurface({
       sessionId,
       setConversationSessionsWithCache,
       show,
-    ]
+    ],
   );
 
   React.useEffect(() => {
-    if (prefersReducedMotion || shaderState === "hidden") {
+    if (prefersReducedMotion || shaderState === 'hidden') {
       setShaderReady(false);
       return;
     }
 
     const idleHandle =
-      typeof requestIdleCallback === "function"
+      typeof requestIdleCallback === 'function'
         ? requestIdleCallback(() => setShaderReady(true), { timeout: 1200 })
         : setTimeout(() => setShaderReady(true), 800);
 
     return () => {
-      if (typeof cancelIdleCallback === "function") {
+      if (typeof cancelIdleCallback === 'function') {
         cancelIdleCallback(idleHandle as number);
       } else {
         clearTimeout(idleHandle as ReturnType<typeof setTimeout>);
@@ -2718,24 +2625,24 @@ export function JainaChatSurface({
   const handlePlanFeedback = React.useCallback(
     async (payload: PlanFeedbackPayload) => {
       const nextStatus =
-        payload.type === "approve"
-          ? "approved"
-          : payload.type === "abandon"
-            ? "rejected"
-            : "awaiting_approval";
+        payload.type === 'approve'
+          ? 'approved'
+          : payload.type === 'abandon'
+            ? 'rejected'
+            : 'awaiting_approval';
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.plan && msg.plan.id === payload.planId
             ? { ...msg, plan: { ...msg.plan, status: nextStatus } }
-            : msg
-        )
+            : msg,
+        ),
       );
 
-      const queryByType: Record<PlanFeedbackPayload["type"], string> = {
-        approve: "approved",
-        abandon: "abandoned",
-        refine: "refine plan",
+      const queryByType: Record<PlanFeedbackPayload['type'], string> = {
+        approve: 'approved',
+        abandon: 'abandoned',
+        refine: 'refine plan',
       };
 
       await dispatchMessage({
@@ -2744,12 +2651,12 @@ export function JainaChatSurface({
         planAction: {
           type: payload.type,
           plan_id: payload.planId,
-          ...(payload.type === "refine" ? { edits: payload.edits } : {}),
+          ...(payload.type === 'refine' ? { edits: payload.edits } : {}),
         },
-        silentUserMessage: payload.type !== "refine",
+        silentUserMessage: payload.type !== 'refine',
       });
     },
-    [dispatchMessage]
+    [dispatchMessage],
   );
 
   const handleClearMemory = React.useCallback(async () => {
@@ -2757,34 +2664,32 @@ export function JainaChatSurface({
     try {
       await clearMemory(adAccountId);
       show({
-        title: "Memory cleared",
-        description: "Jaina will start fresh for this ad account.",
-        variant: "success",
+        title: 'Memory cleared',
+        description: 'Jaina will start fresh for this ad account.',
+        variant: 'success',
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to clear memory.";
-      show({ title: "Clear failed", description: message, variant: "error" });
+      const message = error instanceof Error ? error.message : 'Unable to clear memory.';
+      show({ title: 'Clear failed', description: message, variant: 'error' });
     }
   }, [clearMemory, adAccountId, show]);
 
   const handleFocusInput = React.useCallback(() => {
-    const textarea = promptInputWrapperRef.current?.querySelector("textarea");
+    const textarea = promptInputWrapperRef.current?.querySelector('textarea');
     textarea?.focus();
-    textarea?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    textarea?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, []);
 
   React.useEffect(() => {
     if (pendingClarificationId) {
-      const textarea = promptInputWrapperRef.current?.querySelector("textarea");
+      const textarea = promptInputWrapperRef.current?.querySelector('textarea');
       textarea?.focus();
     }
   }, [pendingClarificationId]);
 
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
   const isQueueStreaming = isStreaming || Boolean(activeResponseId);
-  const canStartQueuedNow =
-    !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
+  const canStartQueuedNow = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
   const hasPendingReportArtifactRequest =
     Boolean(pendingReportArtifactResponseId) &&
     Boolean(activeResponseId) &&
@@ -2792,40 +2697,40 @@ export function JainaChatSurface({
     isStreaming &&
     !reportArtifactJob;
   const reportArtifactStatusLabel =
-    reportArtifactJob?.status === "done"
-      ? "Ready"
-      : reportArtifactJob?.status === "failed"
-        ? "Failed"
-        : reportArtifactJob?.status === "running"
-          ? "Generating"
-          : reportArtifactJob?.status === "pending"
-            ? "Queued"
+    reportArtifactJob?.status === 'done'
+      ? 'Ready'
+      : reportArtifactJob?.status === 'failed'
+        ? 'Failed'
+        : reportArtifactJob?.status === 'running'
+          ? 'Generating'
+          : reportArtifactJob?.status === 'pending'
+            ? 'Queued'
             : hasPendingReportArtifactRequest
-              ? "Starting"
+              ? 'Starting'
               : isJainaProMode
-                ? "Pro on"
-                : "Pro";
+                ? 'Pro on'
+                : 'Pro';
   const reportArtifactTooltip =
-    reportArtifactJob?.status === "done"
-      ? "Open generated Jaina Pro report"
-      : reportArtifactJob?.status === "failed"
-        ? reportArtifactJob.error ?? "Jaina Pro report failed"
+    reportArtifactJob?.status === 'done'
+      ? 'Open generated Jaina Pro report'
+      : reportArtifactJob?.status === 'failed'
+        ? (reportArtifactJob.error ?? 'Jaina Pro report failed')
         : reportArtifactJob
           ? `Jaina Pro report ${reportArtifactJob.status}`
-          : "Create a Jaina Pro report from this analysis";
+          : 'Create a Jaina Pro report from this analysis';
   const reportArtifactButtonDisabled =
     isInputDisabled ||
     hasPendingReportArtifactRequest ||
-    reportArtifactJob?.status === "pending" ||
-    reportArtifactJob?.status === "running" ||
+    reportArtifactJob?.status === 'pending' ||
+    reportArtifactJob?.status === 'running' ||
     isReportArtifactDownloading;
   const ReportArtifactButtonIcon =
     hasPendingReportArtifactRequest ||
-    reportArtifactJob?.status === "pending" ||
-    reportArtifactJob?.status === "running" ||
+    reportArtifactJob?.status === 'pending' ||
+    reportArtifactJob?.status === 'running' ||
     isReportArtifactDownloading
       ? Loader2Icon
-      : reportArtifactJob?.status === "done"
+      : reportArtifactJob?.status === 'done'
         ? DownloadIcon
         : FileTextIcon;
 
@@ -2836,24 +2741,24 @@ export function JainaChatSurface({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-border/60 bg-background/70 backdrop-blur-xl",
-        className
+        'relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-border/60 bg-background/70 backdrop-blur-xl',
+        className,
       )}
     >
       <div className="pointer-events-none absolute inset-0 bg-background/80" />
       <AnimatePresence initial={false}>
-        {shaderState !== "hidden" ? (
+        {shaderState !== 'hidden' ? (
           <motion.div
             key={shaderState}
             className="pointer-events-none absolute inset-0 z-0 origin-left"
             initial={{ opacity: 0.68, scaleX: 1, x: 0 }}
             animate={
-              shaderState === "sweeping"
+              shaderState === 'sweeping'
                 ? { opacity: 0, scaleX: 0.02, x: 96 }
                 : { opacity: 0.68, scaleX: 1, x: 0 }
             }
             transition={
-              shaderState === "sweeping"
+              shaderState === 'sweeping'
                 ? {
                     duration: prefersReducedMotion ? 0.12 : 0.82,
                     ease: [0.16, 1, 0.3, 1],
@@ -2874,7 +2779,7 @@ export function JainaChatSurface({
         onClearMemory={handleClearMemory}
         onClearConversation={handleClearConversation}
         onStop={cancel}
-        isStreaming={state.status === "streaming"}
+        isStreaming={state.status === 'streaming'}
       />
 
       <div className="relative z-0 flex min-h-0 flex-1 flex-col md:flex-row">
@@ -2897,9 +2802,7 @@ export function JainaChatSurface({
           <div className="min-h-0 flex-1 overflow-hidden">
             <Conversation>
               <ConversationContent>
-                {isConversationSwitching ? (
-                  <ConversationSkeleton />
-                ) : null}
+                {isConversationSwitching ? <ConversationSkeleton /> : null}
 
                 {!isConversationSwitching && messages.length === 0 && (
                   <JainaEmptyState
@@ -2911,8 +2814,11 @@ export function JainaChatSurface({
                 <AnimatePresence mode="popLayout">
                   {messages.map((message, index) => {
                     const precedingUserMessage =
-                      message.role === "assistant"
-                        ? [...messages].slice(0, index).reverse().find((m) => m.role === "user")
+                      message.role === 'assistant'
+                        ? [...messages]
+                            .slice(0, index)
+                            .reverse()
+                            .find((m) => m.role === 'user')
                         : undefined;
                     return (
                       <JainaMessageItem
@@ -2937,18 +2843,15 @@ export function JainaChatSurface({
           </div>
 
           <div ref={promptInputWrapperRef} className="shrink-0">
-            <Box px="2" py="2" className="sm:px-3">
+            <div className="px-2 py-2 sm:px-3">
               {queuedMessages.length > 0 ? (
                 <div className="mx-auto mb-2 w-full max-w-[1600px] px-1 sm:px-2">
                   <Queue className="border-border/70 bg-card/80 shadow-none">
                     <QueueSection defaultOpen>
                       <QueueSectionTrigger>
-                        <QueueSectionLabel
-                          count={queuedMessages.length}
-                          label="queued messages"
-                        />
+                        <QueueSectionLabel count={queuedMessages.length} label="queued messages" />
                         <span className="text-xs text-muted-foreground">
-                          {isQueueStreaming ? "waiting for current response" : "next will send now"}
+                          {isQueueStreaming ? 'waiting for current response' : 'next will send now'}
                         </span>
                       </QueueSectionTrigger>
                       <QueueSectionContent className="pt-2">
@@ -2961,8 +2864,7 @@ export function JainaChatSurface({
                                   <QueueItemIndicator completed={false} />
                                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                                     {isEditing ? (
-                                      <TextArea
-                                        size="2"
+                                      <Textarea
                                         value={queueEditDraft}
                                         onChange={(event) => setQueueEditDraft(event.target.value)}
                                         className="min-h-[74px] resize-none"
@@ -2973,9 +2875,9 @@ export function JainaChatSurface({
                                     )}
                                     <div className="text-xs text-muted-foreground/90">
                                       #{index + 1} in queue
-                                      {queuedMessage.canvas ? " • plan mode" : ""}
-                                      {queuedMessage.forceReportArtifact ? " • Jaina Pro" : ""}
-                                      {queuedMessage.clarificationId ? " • clarification" : ""}
+                                      {queuedMessage.canvas ? ' • plan mode' : ''}
+                                      {queuedMessage.forceReportArtifact ? ' • Jaina Pro' : ''}
+                                      {queuedMessage.clarificationId ? ' • clarification' : ''}
                                     </div>
                                   </div>
                                   <QueueItemActions>
@@ -3013,10 +2915,7 @@ export function JainaChatSurface({
                                                 });
                                                 if (started) {
                                                   setQueuedMessages((previous) =>
-                                                    removeQueuedMessage(
-                                                      previous,
-                                                      queuedMessage.id
-                                                    )
+                                                    removeQueuedMessage(previous, queuedMessage.id),
                                                   );
                                                 }
                                                 queueDispatchInFlightRef.current = false;
@@ -3053,60 +2952,59 @@ export function JainaChatSurface({
               ) : null}
 
               <div data-tour-id="paid-jaina-chat" className="w-full">
-              <PromptInput
-                onSubmit={(value, attachments, references) =>
-                  handleSubmit(value, attachments, references)
-                }
-                disabled={isInputDisabled}
-                ariaLabel="Message Jaina"
-                mentionProvider={jainaMentionProvider}
-                mentionSource="jaina"
-                placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}
-                actions={
-                  <TooltipProvider delayDuration={180}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="1"
-                          variant={
-                            isJainaProMode || reportArtifactJob ? "solid" : "soft"
-                          }
-                          color={
-                            reportArtifactJob?.status === "failed"
-                              ? "red"
-                              : isJainaProMode || reportArtifactJob
-                                ? "violet"
-                                : "gray"
-                          }
-                          disabled={reportArtifactButtonDisabled}
-                          aria-pressed={isJainaProMode}
-                          aria-label={reportArtifactTooltip}
-                          onClick={handleReportArtifactAction}
-                          className="gap-1.5"
-                        >
-                          <ReportArtifactButtonIcon
-                            className={cn(
-                              "size-3.5",
-                              (hasPendingReportArtifactRequest ||
-                                reportArtifactJob?.status === "pending" ||
-                                reportArtifactJob?.status === "running" ||
-                                isReportArtifactDownloading) &&
-                                "animate-spin"
-                            )}
-                          />
-                          {reportArtifactStatusLabel}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        {reportArtifactTooltip}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                }
-              />
+                <PromptInput
+                  onSubmit={(value, attachments, references) =>
+                    handleSubmit(value, attachments, references)
+                  }
+                  disabled={isInputDisabled}
+                  ariaLabel="Message Jaina"
+                  mentionProvider={jainaMentionProvider}
+                  mentionSource="jaina"
+                  placeholder={
+                    pendingClarificationId ? "Reply to Jaina's question…" : 'Ask Jaina anything…'
+                  }
+                  actions={
+                    <TooltipProvider delayDuration={180}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={
+                              reportArtifactJob?.status === 'failed'
+                                ? 'destructive'
+                                : isJainaProMode || reportArtifactJob
+                                  ? 'default'
+                                  : 'secondary'
+                            }
+                            disabled={reportArtifactButtonDisabled}
+                            aria-pressed={isJainaProMode}
+                            aria-label={reportArtifactTooltip}
+                            onClick={handleReportArtifactAction}
+                            className="gap-1.5"
+                          >
+                            <ReportArtifactButtonIcon
+                              className={cn(
+                                'size-3.5',
+                                (hasPendingReportArtifactRequest ||
+                                  reportArtifactJob?.status === 'pending' ||
+                                  reportArtifactJob?.status === 'running' ||
+                                  isReportArtifactDownloading) &&
+                                  'animate-spin',
+                              )}
+                            />
+                            {reportArtifactStatusLabel}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {reportArtifactTooltip}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  }
+                />
               </div>
-            </Box>
+            </div>
           </div>
         </div>
       </div>

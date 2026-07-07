@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import React from "react";
-import { PlusIcon } from "@radix-ui/react-icons";
-import { Loader2Icon, Trash2Icon } from "lucide-react";
-import { Button, Text } from "@radix-ui/themes";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import type { JainaConversationSession } from "@/lib/jaina/conversations";
+import { PlusIcon } from '@radix-ui/react-icons';
+import { Loader2Icon, Trash2Icon } from 'lucide-react';
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import type { JainaConversationSession } from '@/lib/jaina/conversations';
+import { cn } from '@/lib/utils';
 
 type JainaConversationSidebarProps = {
   sessions: JainaConversationSession[];
@@ -22,20 +22,20 @@ type JainaConversationSidebarProps = {
 };
 
 function formatSessionTimestamp(value: string | null): string {
-  if (!value) return "No activity";
+  if (!value) return 'No activity';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No activity";
+  if (Number.isNaN(date.getTime())) return 'No activity';
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   }).format(date);
 }
 
 function getSessionTitle(
   session: JainaConversationSession,
-  sessionTitleById?: Record<string, string>
+  sessionTitleById?: Record<string, string>,
 ): string {
   const overrideTitle = sessionTitleById?.[session.sessionId]?.trim();
   if (overrideTitle) {
@@ -47,7 +47,7 @@ function getSessionTitle(
   if (session.lastMessagePreview && session.lastMessagePreview.length > 0) {
     return session.lastMessagePreview;
   }
-  return "New conversation";
+  return 'New conversation';
 }
 
 export function JainaConversationSidebar({
@@ -65,13 +65,11 @@ export function JainaConversationSidebar({
   return (
     <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-72 md:border-b-0 md:border-r">
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-        <Text size="2" weight="medium" className="tracking-tight">
-          Conversations
-        </Text>
+        <span className="text-sm font-medium tracking-tight">Conversations</span>
         <Button
           type="button"
-          size="1"
-          variant="soft"
+          size="sm"
+          variant="secondary"
           onClick={onCreateConversation}
           disabled={isInteractionDisabled}
           className="gap-1"
@@ -85,15 +83,13 @@ export function JainaConversationSidebar({
       <ScrollArea className="max-h-44 md:max-h-none md:flex-1 md:min-h-0">
         <div className="flex gap-2 p-2 md:flex-col">
           {isLoading && sessions.length === 0 ? (
-            <Text size="1" className="px-2 py-3 text-muted-foreground">
-              Loading conversations…
-            </Text>
+            <span className="text-xs px-2 py-3 text-muted-foreground">Loading conversations…</span>
           ) : null}
 
           {!isLoading && sessions.length === 0 ? (
-            <Text size="1" className="px-2 py-3 text-muted-foreground">
+            <span className="text-xs px-2 py-3 text-muted-foreground">
               Start a chat to create your first conversation.
-            </Text>
+            </span>
           ) : null}
 
           {sessions.map((session) => {
@@ -104,11 +100,11 @@ export function JainaConversationSidebar({
               <div
                 key={session.sessionId}
                 className={cn(
-                  "flex min-w-[220px] items-start gap-1 rounded-md border text-left transition-colors md:min-w-0",
+                  'flex min-w-[220px] items-start gap-1 rounded-md border text-left transition-colors md:min-w-0',
                   isActive
-                    ? "border-primary/70 bg-primary/10"
-                    : "border-border/60 bg-background/40 hover:border-border hover:bg-background/70",
-                  isInteractionDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                    ? 'border-primary/70 bg-primary/10'
+                    : 'border-border/60 bg-background/40 hover:border-border hover:bg-background/70',
+                  isInteractionDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                 )}
               >
                 <button
@@ -116,35 +112,27 @@ export function JainaConversationSidebar({
                   onClick={() => onSelectConversation(session.sessionId)}
                   disabled={isInteractionDisabled || isActive || isDeleting}
                   className={cn(
-                    "flex flex-1 flex-col items-start gap-1 px-3 py-2 text-left",
-                    isInteractionDisabled || isDeleting
-                      ? "cursor-not-allowed"
-                      : "cursor-pointer"
+                    'flex flex-1 flex-col items-start gap-1 px-3 py-2 text-left',
+                    isInteractionDisabled || isDeleting ? 'cursor-not-allowed' : 'cursor-pointer',
                   )}
                 >
-                  <Text
-                    size="1"
-                    weight="medium"
-                    className="line-clamp-2 w-full text-primary"
-                  >
+                  <span className="text-xs font-medium line-clamp-2 w-full text-primary">
                     {getSessionTitle(session, sessionTitleById)}
-                  </Text>
+                  </span>
                   <div className="flex w-full items-center justify-between gap-2">
                     {isGenerating ? (
                       <span className="inline-flex items-center gap-1 text-primary">
                         <Loader2Icon className="size-3 animate-spin" />
-                        <Text size="1" className="uppercase tracking-wide">
-                          Working
-                        </Text>
+                        <span className="text-xs uppercase tracking-wide">Working</span>
                       </span>
                     ) : (
-                      <Text size="1" className="uppercase tracking-wide text-muted-foreground">
-                        {session.lastMessageRole ?? "session"}
-                      </Text>
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {session.lastMessageRole ?? 'session'}
+                      </span>
                     )}
-                    <Text size="1" className="text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatSessionTimestamp(session.lastMessageAt)}
-                    </Text>
+                    </span>
                   </div>
                 </button>
                 <button
@@ -153,10 +141,10 @@ export function JainaConversationSidebar({
                   disabled={isInteractionDisabled || isDeleting}
                   aria-label={`Delete conversation ${getSessionTitle(session, sessionTitleById)}`}
                   className={cn(
-                    "mr-1 mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors",
+                    'mr-1 mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors',
                     isInteractionDisabled || isDeleting
-                      ? "cursor-not-allowed opacity-50"
-                      : "cursor-pointer hover:bg-destructive/10 hover:text-destructive"
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'cursor-pointer hover:bg-destructive/10 hover:text-destructive',
                   )}
                 >
                   {isDeleting ? (

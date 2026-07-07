@@ -1,39 +1,42 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Card, ScrollArea, Text, Flex, Badge } from "@radix-ui/themes";
-import Image from "next/image";
-
-import { useToast } from "@/components/ui/ToastProvider";
-import { useImageSseStream } from "@/hooks/useImageSseStream";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { chatImageRequestSchema, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
+import Image from 'next/image';
+import React from 'react';
+import { ImageMarkupDialog } from '@/components/ai-studio/markup/ImageMarkupDialog';
+import { Pill } from '@/components/kibo-ui/pill';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useImageSseStream } from '@/hooks/useImageSseStream';
+import { type BrandStyle, fetchBrandStyle } from '@/lib/ai-studio/brandStyle.server';
 import {
-  IMAGE_REFERENCE_MAX_BYTES,
   estimateBase64DecodedBytes,
   formatMiB,
-} from "@/lib/ai-studio/referenceDrop";
-import type {
-  ChatImageHistoryItem,
-  ChatImageRequestPayload,
-  RefImage,
-  SupportedModel,
-  SupportedBackendModel,
-  BackendChatImageRequestPayload,
-} from "@/lib/types/chatImage";
-import { getApiUrl } from "@/lib/api/config";
-import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
-import { fetchBrandStyle, type BrandStyle } from "@/lib/ai-studio/brandStyle.server";
+  IMAGE_REFERENCE_MAX_BYTES,
+} from '@/lib/ai-studio/referenceDrop';
+import { getApiUrl } from '@/lib/api/config';
+import {
+  chatImageRequestSchema,
+  getAspectsForModel,
+  getMediumForModel,
+} from '@/lib/schemas/chatImageRequest';
 import type {
   PromptTemplate,
   PromptTemplateCreateInput,
   PromptTemplateUpdateInput,
-} from "@/lib/schemas/promptTemplates";
-
-import { ChatPanel } from "./ChatPanel";
-import { PreviewPane } from "./PreviewPane";
-import { ReferenceDock } from "./ReferenceDock";
-import { ImageMarkupDialog } from "@/components/ai-studio/markup/ImageMarkupDialog";
+} from '@/lib/schemas/promptTemplates';
+import { readServerSentEvents } from '@/lib/sse/readServerSentEvents';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type {
+  BackendChatImageRequestPayload,
+  ChatImageHistoryItem,
+  ChatImageRequestPayload,
+  RefImage,
+  SupportedBackendModel,
+  SupportedModel,
+} from '@/lib/types/chatImage';
+import { ChatPanel } from './ChatPanel';
+import { PreviewPane } from './PreviewPane';
+import { ReferenceDock } from './ReferenceDock';
 
 type ChatSurfaceProps = {
   brandProfileId: string;
@@ -41,7 +44,9 @@ type ChatSurfaceProps = {
   initialHistory?: ChatImageHistoryItem[];
   promptTemplates?: PromptTemplate[];
   templatesLoading?: boolean;
-  onCreatePromptTemplate?: (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => Promise<void>;
+  onCreatePromptTemplate?: (
+    input: Omit<PromptTemplateCreateInput, 'brandProfileId'>,
+  ) => Promise<void>;
   onUpdatePromptTemplate?: (input: PromptTemplateUpdateInput) => Promise<void>;
   onDeletePromptTemplate?: (id: string) => Promise<void>;
 };
@@ -52,7 +57,7 @@ type ChatFormValues = {
   aspectRatio?: string;
   durationSeconds?: number;
   resolution?: string;
-  imageSize?: "1K" | "2K" | "4K";
+  imageSize?: '1K' | '2K' | '4K';
   negativePrompt?: string;
   seed?: number;
   cfgScale?: number;
@@ -74,98 +79,117 @@ export function ChatSurface({
   const supabase = createSupabaseBrowserClient();
   const supabaseAuth = supabase.auth;
 
-  const [activeModel, setActiveModel] = React.useState<SupportedModel>("nano-banana");
+  const [activeModel, setActiveModel] = React.useState<SupportedModel>('nano-banana');
   const [refs, setRefs] = React.useState<RefImage[]>([]);
   const [firstFrame, setFirstFrame] = React.useState<RefImage | undefined>(undefined);
   const [lastFrame, setLastFrame] = React.useState<RefImage | undefined>(undefined);
   const [history, setHistory] = React.useState<ChatImageHistoryItem[]>(initialHistory ?? []);
   const [continueFrom, setContinueFrom] = React.useState<{ data: string; mime_type: string }[]>([]);
   const [resetNext, setResetNext] = React.useState(false);
-  const [conversationTurns, setConversationTurns] = React.useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [previewMarkup, setPreviewMarkup] = React.useState<{ base64: string; mime: string } | null>(null);
+  const [conversationTurns, setConversationTurns] = React.useState<
+    { role: 'user' | 'assistant'; content: string }[]
+  >([]);
+  const [previewMarkup, setPreviewMarkup] = React.useState<{ base64: string; mime: string } | null>(
+    null,
+  );
   const [isEnriching, setIsEnriching] = React.useState(false);
   const [enrichedPrompt, setEnrichedPrompt] = React.useState<string | null>(null);
-  const [brandStyle, setBrandStyle] = React.useState<BrandStyle>({ colors: [], typography: { primary: null, secondary: null } });
+  const [brandStyle, setBrandStyle] = React.useState<BrandStyle>({
+    colors: [],
+    typography: { primary: null, secondary: null },
+  });
 
   React.useEffect(() => {
-    fetchBrandStyle(brandProfileId).then(setBrandStyle).catch(() => {});
+    fetchBrandStyle(brandProfileId)
+      .then(setBrandStyle)
+      .catch(() => {});
   }, [brandProfileId]);
 
-  const handleEnrich = React.useCallback(async (currentPrompt: string) => {
-    if (!currentPrompt || isEnriching) return;
-    setIsEnriching(true);
-    setEnrichedPrompt("");
+  const handleEnrich = React.useCallback(
+    async (currentPrompt: string) => {
+      if (!currentPrompt || isEnriching) return;
+      setIsEnriching(true);
+      setEnrichedPrompt('');
 
-    try {
-      const { data: { session } } = await supabaseAuth.getSession();
-      if (!session?.access_token) {
-        throw new Error("No authentication session found");
-      }
+      try {
+        const {
+          data: { session },
+        } = await supabaseAuth.getSession();
+        if (!session?.access_token) {
+          throw new Error('No authentication session found');
+        }
 
-      const response = await fetch(getApiUrl("/api/ai-studio/enrich"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({ prompt: currentPrompt, brandId: brandProfileId }),
-      });
+        const response = await fetch(getApiUrl('/api/ai-studio/enrich'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            Accept: 'text/event-stream',
+          },
+          body: JSON.stringify({ prompt: currentPrompt, brandId: brandProfileId }),
+        });
 
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
 
-      let accumulated = "";
-      let streamError: string | undefined;
+        let accumulated = '';
+        let streamError: string | undefined;
 
-      await readServerSentEvents({
-        reader,
-        onEvent: (eventName, data) => {
-          const payload = data.trimStart();
+        await readServerSentEvents({
+          reader,
+          onEvent: (eventName, data) => {
+            const payload = data.trimStart();
 
-          if (eventName === "delta" || eventName === "message" || eventName === "text") {
-            try {
-              const parsed = JSON.parse(payload) as { delta?: string; text?: string };
-              const chunk = parsed.delta ?? parsed.text ?? "";
-              if (chunk.length > 0) {
-                accumulated += chunk;
-                setEnrichedPrompt(accumulated);
+            if (eventName === 'delta' || eventName === 'message' || eventName === 'text') {
+              try {
+                const parsed = JSON.parse(payload) as { delta?: string; text?: string };
+                const chunk = parsed.delta ?? parsed.text ?? '';
+                if (chunk.length > 0) {
+                  accumulated += chunk;
+                  setEnrichedPrompt(accumulated);
+                }
+              } catch {
+                // ignore non-json keepalive payloads
               }
-            } catch {
-              // ignore non-json keepalive payloads
+              return;
             }
-            return;
-          }
 
-          if (eventName === "error") {
-            try {
-              const parsed = JSON.parse(payload) as { message?: string; error?: string };
-              streamError = parsed.message || parsed.error || payload || "Prompt enrichment failed";
-            } catch {
-              streamError = payload || "Prompt enrichment failed";
+            if (eventName === 'error') {
+              try {
+                const parsed = JSON.parse(payload) as { message?: string; error?: string };
+                streamError =
+                  parsed.message || parsed.error || payload || 'Prompt enrichment failed';
+              } catch {
+                streamError = payload || 'Prompt enrichment failed';
+              }
             }
-          }
-        },
-      });
+          },
+        });
 
-      if (streamError) {
-        throw new Error(streamError);
-      }
-      if (!accumulated.trim()) {
-        throw new Error("Prompt enrichment returned empty output");
-      }
+        if (streamError) {
+          throw new Error(streamError);
+        }
+        if (!accumulated.trim()) {
+          throw new Error('Prompt enrichment returned empty output');
+        }
 
-      show({ title: "Aligned to brand", description: "Your prompt has been enhanced with brand context.", variant: "success" });
-    } catch (err) {
-      show({ title: "Enrichment failed", description: String(err), variant: "error" });
-    } finally {
-      setIsEnriching(false);
-    }
-  }, [isEnriching, show, supabaseAuth]);
+        show({
+          title: 'Aligned to brand',
+          description: 'Your prompt has been enhanced with brand context.',
+          variant: 'success',
+        });
+      } catch (err) {
+        show({ title: 'Enrichment failed', description: String(err), variant: 'error' });
+      } finally {
+        setIsEnriching(false);
+      }
+    },
+    [isEnriching, show, supabaseAuth],
+  );
 
   // Compute if any references are attached
   const hasAnyReferences = React.useMemo(() => {
@@ -176,16 +200,17 @@ export function ChatSurface({
     async (form: ChatFormValues) => {
       setActiveModel(form.model);
       const medium = getMediumForModel(form.model);
-      const isNano = form.model === "nano-banana";
+      const isNano = form.model === 'nano-banana';
       if (isNano && (firstFrame || lastFrame)) {
         show({
-          title: "Video inputs not supported",
-          description: "Nano Banana only generates images. Remove first/last frame, or pick a video model.",
-          variant: "error",
+          title: 'Video inputs not supported',
+          description:
+            'Nano Banana only generates images. Remove first/last frame, or pick a video model.',
+          variant: 'error',
         });
         return;
       }
-      const aspectRatio = form.aspectRatio ?? "1:1";
+      const aspectRatio = form.aspectRatio ?? '1:1';
 
       const payload: ChatImageRequestPayload = {
         brandProfileId,
@@ -193,29 +218,36 @@ export function ChatSurface({
         medium,
         prompt: form.prompt,
         aspectRatio,
-        resolution: form.model === "nano-banana" ? form.resolution || "1024x1024" : medium === "video" ? form.resolution || "720p" : undefined,
-        imageSize: form.model === "gemini-3-pro-image-preview" ? form.imageSize || "1K" : undefined,
-        durationSeconds: medium === "video" ? (form.durationSeconds as 4 | 6 | 8 | undefined) ?? 8 : undefined,
+        resolution:
+          form.model === 'nano-banana'
+            ? form.resolution || '1024x1024'
+            : medium === 'video'
+              ? form.resolution || '720p'
+              : undefined,
+        imageSize: form.model === 'gemini-3-pro-image-preview' ? form.imageSize || '1K' : undefined,
+        durationSeconds:
+          medium === 'video' ? ((form.durationSeconds as 4 | 6 | 8 | undefined) ?? 8) : undefined,
         negativePrompt: form.negativePrompt || undefined,
         seed: isNano ? undefined : form.seed || undefined,
         cfgScale: isNano ? undefined : form.cfgScale || undefined,
         steps: isNano ? undefined : form.steps || undefined,
         refs: refs.length ? refs : undefined,
-        firstFrame: medium === "video" ? firstFrame : undefined,
-        lastFrame: medium === "video" ? lastFrame : undefined,
+        firstFrame: medium === 'video' ? firstFrame : undefined,
+        lastFrame: medium === 'video' ? lastFrame : undefined,
       };
 
       const apiModel: SupportedBackendModel =
-        payload.medium === "video"
-          ? payload.model === "veo-3-1-fast"
-            ? "veo-3.1-fast-generate-preview"
-            : "veo-3.1-generate-preview"
-          : payload.model === "nano-banana"
-            ? "gemini-2.5-flash-image"
+        payload.medium === 'video'
+          ? payload.model === 'veo-3-1-fast'
+            ? 'veo-3.1-fast-generate-preview'
+            : 'veo-3.1-generate-preview'
+          : payload.model === 'nano-banana'
+            ? 'gemini-2.5-flash-image'
             : payload.model;
 
-      const userTurn = { role: "user" as const, content: form.prompt };
-      const nextConversationTurns = form.model === "gemini-3-pro-image-preview" ? [...conversationTurns, userTurn] : [];
+      const userTurn = { role: 'user' as const, content: form.prompt };
+      const nextConversationTurns =
+        form.model === 'gemini-3-pro-image-preview' ? [...conversationTurns, userTurn] : [];
 
       const apiPayload: BackendChatImageRequestPayload = {
         brand_id: payload.brandProfileId,
@@ -224,39 +256,53 @@ export function ChatSurface({
         prompt: payload.prompt,
         aspect_ratio: payload.aspectRatio,
         resolution:
-          payload.model === "nano-banana"
-            ? payload.resolution ?? "1024x1024"
-            : payload.medium === "video"
-              ? payload.resolution ?? "720p"
+          payload.model === 'nano-banana'
+            ? (payload.resolution ?? '1024x1024')
+            : payload.medium === 'video'
+              ? (payload.resolution ?? '720p')
               : undefined,
         duration_seconds:
-          payload.medium === "video"
-            ? (String((payload.durationSeconds as 4 | 6 | 8 | undefined) ?? 8) as "4" | "6" | "8")
+          payload.medium === 'video'
+            ? (String((payload.durationSeconds as 4 | 6 | 8 | undefined) ?? 8) as '4' | '6' | '8')
             : undefined,
-        image_size: payload.model === "gemini-3-pro-image-preview" ? payload.imageSize ?? "1K" : undefined,
-        reference_images: payload.refs?.map((r) => ({
-          data: r.base64,
-          mime_type: r.mime,
-          filename: r.name,
-          weight: r.weight,
-          referenceType: r.referenceType,
-        })) ?? undefined,
+        image_size:
+          payload.model === 'gemini-3-pro-image-preview' ? (payload.imageSize ?? '1K') : undefined,
+        reference_images:
+          payload.refs?.map((r) => ({
+            data: r.base64,
+            mime_type: r.mime,
+            filename: r.name,
+            weight: r.weight,
+            referenceType: r.referenceType,
+          })) ?? undefined,
         first_frame:
-          payload.medium === "video" && payload.firstFrame
-            ? { data: payload.firstFrame.base64, mime_type: payload.firstFrame.mime, filename: payload.firstFrame.name }
+          payload.medium === 'video' && payload.firstFrame
+            ? {
+                data: payload.firstFrame.base64,
+                mime_type: payload.firstFrame.mime,
+                filename: payload.firstFrame.name,
+              }
             : undefined,
         last_frame:
-          payload.medium === "video" && payload.lastFrame
-            ? { data: payload.lastFrame.base64, mime_type: payload.lastFrame.mime, filename: payload.lastFrame.name }
+          payload.medium === 'video' && payload.lastFrame
+            ? {
+                data: payload.lastFrame.base64,
+                mime_type: payload.lastFrame.mime,
+                filename: payload.lastFrame.name,
+              }
             : undefined,
         negative_prompt: payload.negativePrompt || undefined,
         seed: payload.seed,
         cfg_scale: payload.cfgScale,
         steps: payload.steps,
         continue_from:
-          payload.model === "gemini-3-pro-image-preview" && continueFrom.length ? continueFrom : undefined,
+          payload.model === 'gemini-3-pro-image-preview' && continueFrom.length
+            ? continueFrom
+            : undefined,
         history:
-          payload.model === "gemini-3-pro-image-preview" && nextConversationTurns.length ? nextConversationTurns : undefined,
+          payload.model === 'gemini-3-pro-image-preview' && nextConversationTurns.length
+            ? nextConversationTurns
+            : undefined,
         reset: resetNext || undefined,
       } satisfies Record<string, unknown>;
 
@@ -270,26 +316,30 @@ export function ChatSurface({
       };
 
       for (const ref of payload.refs ?? []) {
-        checkBase64(`Reference image${ref.name ? ` (${ref.name})` : ""}`, ref.base64, IMAGE_REFERENCE_MAX_BYTES);
+        checkBase64(
+          `Reference image${ref.name ? ` (${ref.name})` : ''}`,
+          ref.base64,
+          IMAGE_REFERENCE_MAX_BYTES,
+        );
       }
-      if (payload.medium === "video") {
-        checkBase64("First frame", payload.firstFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
-        checkBase64("Last frame", payload.lastFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
+      if (payload.medium === 'video') {
+        checkBase64('First frame', payload.firstFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
+        checkBase64('Last frame', payload.lastFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
       }
 
       if (attachmentIssues.length > 0) {
         show({
-          title: "Attachment too large",
-          description: attachmentIssues.slice(0, 2).join(" • "),
-          variant: "error",
+          title: 'Attachment too large',
+          description: attachmentIssues.slice(0, 2).join(' • '),
+          variant: 'error',
         });
         return;
       }
 
       const parsed = chatImageRequestSchema.safeParse({ ...payload });
       if (!parsed.success) {
-        const message = parsed.error.message ?? "Invalid input";
-        show({ title: "Fix form issues", description: message, variant: "error" });
+        const message = parsed.error.message ?? 'Invalid input';
+        show({ title: 'Fix form issues', description: message, variant: 'error' });
         return;
       }
 
@@ -301,33 +351,55 @@ export function ChatSurface({
         prompt: payload.prompt,
         aspectRatio: payload.aspectRatio,
         createdAt: new Date().toISOString(),
-        thumbBase64: payload.refs?.[0]?.base64 ?? "",
+        thumbBase64: payload.refs?.[0]?.base64 ?? '',
       };
       setHistory((prev) => [optimistic, ...prev]);
 
-      show({ title: "Generating", description: `${medium === "video" ? "Video" : "Image"} request started`, variant: "warning" });
+      show({
+        title: 'Generating',
+        description: `${medium === 'video' ? 'Video' : 'Image'} request started`,
+        variant: 'warning',
+      });
       const result = await start(apiPayload, {
-        initUrl: payload.medium === "video" ? getApiUrl("/ai-studio/generate-video") : getApiUrl("/ai-studio/generate"),
-        expectedMedia: payload.medium === "video" ? "video" : "image",
+        initUrl:
+          payload.medium === 'video'
+            ? getApiUrl('/ai-studio/generate-video')
+            : getApiUrl('/ai-studio/generate'),
+        expectedMedia: payload.medium === 'video' ? 'video' : 'image',
       });
       if (result.error) {
         reset();
-        show({ title: "Generation failed", description: result.error, variant: "error" });
+        show({ title: 'Generation failed', description: result.error, variant: 'error' });
         return;
       }
       setResetNext(false);
       if (streamState.posterBase64) {
-        setContinueFrom([{ data: streamState.posterBase64, mime_type: "image/png" }]);
+        setContinueFrom([{ data: streamState.posterBase64, mime_type: 'image/png' }]);
       }
       if (result.jobId) {
-        setHistory((prev) => [{ ...optimistic, id: result.jobId }, ...prev.slice(1)] as ChatImageHistoryItem[]);
+        setHistory(
+          (prev) =>
+            [{ ...optimistic, id: result.jobId }, ...prev.slice(1)] as ChatImageHistoryItem[],
+        );
       }
 
-      if (payload.model === "gemini-3-pro-image-preview") {
+      if (payload.model === 'gemini-3-pro-image-preview') {
         setConversationTurns(nextConversationTurns);
       }
     },
-    [brandProfileId, refs, firstFrame, lastFrame, show, start, continueFrom, streamState.posterBase64, resetNext, reset, conversationTurns]
+    [
+      brandProfileId,
+      refs,
+      firstFrame,
+      lastFrame,
+      show,
+      start,
+      continueFrom,
+      streamState.posterBase64,
+      resetNext,
+      reset,
+      conversationTurns,
+    ],
   );
 
   const handleSelectHistory = React.useCallback((item: ChatImageHistoryItem) => {
@@ -339,7 +411,7 @@ export function ChatSurface({
   }, []);
 
   React.useEffect(() => {
-    if (streamState.status !== "done" || !streamState.currentBase64) return;
+    if (streamState.status !== 'done' || !streamState.currentBase64) return;
     // attach thumb/full to latest entry
     setHistory((prev) => {
       if (prev.length === 0) return prev;
@@ -353,34 +425,36 @@ export function ChatSurface({
       return [updated, ...rest];
     });
     if (streamState.currentBase64) {
-      setContinueFrom([{ data: streamState.currentBase64, mime_type: "image/png" }]);
+      setContinueFrom([{ data: streamState.currentBase64, mime_type: 'image/png' }]);
     }
-    show({ title: "Generation complete", variant: "success" });
+    show({ title: 'Generation complete', variant: 'success' });
   }, [streamState.status, streamState.currentBase64, streamState.posterBase64, show]);
 
   const handleReset = React.useCallback(() => {
     reset();
-    if (activeModel === "gemini-3-pro-image-preview") {
+    if (activeModel === 'gemini-3-pro-image-preview') {
       setContinueFrom([]);
       setResetNext(true);
       setConversationTurns([]);
     }
-    show({ title: "Stream reset", variant: "warning" });
+    show({ title: 'Stream reset', variant: 'warning' });
   }, [reset, show, activeModel]);
 
   React.useEffect(() => {
-    if (streamState.status === "error" && streamState.error) {
-      show({ title: "Stream error", description: streamState.error, variant: "error" });
+    if (streamState.status === 'error' && streamState.error) {
+      show({ title: 'Stream error', description: streamState.error, variant: 'error' });
     }
   }, [streamState.status, streamState.error, show]);
 
   React.useEffect(() => {
-    const lastEvent = streamState.lastEvent as { event?: string; message?: string; text?: string } | undefined;
-    if (!lastEvent || activeModel !== "gemini-3-pro-image-preview") return;
-    if (lastEvent.event === "text" || lastEvent.event === "conversation_append") {
-      const content = (lastEvent.message ?? lastEvent.text ?? "").trim();
+    const lastEvent = streamState.lastEvent as
+      | { event?: string; message?: string; text?: string }
+      | undefined;
+    if (!lastEvent || activeModel !== 'gemini-3-pro-image-preview') return;
+    if (lastEvent.event === 'text' || lastEvent.event === 'conversation_append') {
+      const content = (lastEvent.message ?? lastEvent.text ?? '').trim();
       if (!content) return;
-      setConversationTurns((prev) => [...prev, { role: "assistant", content }]);
+      setConversationTurns((prev) => [...prev, { role: 'assistant', content }]);
     }
   }, [streamState.lastEvent, activeModel]);
 
@@ -388,23 +462,22 @@ export function ChatSurface({
     if (streamState.videoUrl) return;
     const base64 = streamState.currentBase64 ?? streamState.posterBase64;
     if (!base64) return;
-    setPreviewMarkup({ base64, mime: "image/png" });
+    setPreviewMarkup({ base64, mime: 'image/png' });
   }, [streamState.currentBase64, streamState.posterBase64, streamState.videoUrl]);
 
   return (
     <div
       className="relative ml-[var(--ai-chat-shell-offset)] flex h-full min-h-[var(--ai-chat-shell-min-height)] flex-col gap-[var(--app-shell-gap)]"
-      style={{ color: "var(--gray-12)" }}
+      style={{ color: 'var(--gray-12)' }}
     >
       <div className="flex min-h-[var(--ai-chat-row-min-height)] flex-1 gap-[var(--app-shell-gap)]">
-        <Card
-          size="3"
-          className="w-full basis-[40%] max-w-2xl min-w-[var(--ai-chat-panel-min-width)] space-y-4 overflow-auto pb-4 pr-1"
-          style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--gray-6)" }}
+        <div
+          className="w-full basis-[40%] max-w-2xl min-w-[var(--ai-chat-panel-min-width)] space-y-4 overflow-auto rounded-xl p-6 pb-4 pr-1"
+          style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--gray-6)' }}
         >
           <ChatPanel
-            disabled={streamState.status === "starting"}
-            isStreaming={streamState.status === "streaming"}
+            disabled={streamState.status === 'starting'}
+            isStreaming={streamState.status === 'streaming'}
             isEnriching={isEnriching}
             onEnrich={handleEnrich}
             enrichedValue={enrichedPrompt}
@@ -422,7 +495,10 @@ export function ChatSurface({
               hasLast: Boolean(lastFrame),
             }}
             promptTemplates={
-              promptTemplates && onCreatePromptTemplate && onUpdatePromptTemplate && onDeletePromptTemplate
+              promptTemplates &&
+              onCreatePromptTemplate &&
+              onUpdatePromptTemplate &&
+              onDeletePromptTemplate
                 ? {
                     templates: promptTemplates,
                     isLoading: templatesLoading ?? false,
@@ -436,7 +512,7 @@ export function ChatSurface({
           <ReferenceDock
             mode={getMediumForModel(activeModel)}
             model={activeModel}
-            maxRefs={getMediumForModel(activeModel) === "video" ? 3 : 14}
+            maxRefs={getMediumForModel(activeModel) === 'video' ? 3 : 14}
             refs={refs}
             firstFrame={firstFrame}
             lastFrame={lastFrame}
@@ -444,22 +520,23 @@ export function ChatSurface({
             onChangeFirstFrame={setFirstFrame}
             onChangeLastFrame={setLastFrame}
           />
-        </Card>
+        </div>
 
-        <Card
-          size="3"
-          className="flex min-w-[var(--ai-chat-preview-min-width)] flex-1 overflow-hidden shadow-2xl"
-          style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--gray-6)" }}
+        <div
+          className="flex min-w-[var(--ai-chat-preview-min-width)] flex-1 overflow-hidden rounded-xl p-6 shadow-2xl"
+          style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--gray-6)' }}
         >
           <PreviewPane
             brandName={brandName}
             streamState={streamState}
             onCancel={cancel}
             onReset={handleReset}
-            canMarkup={Boolean((streamState.currentBase64 ?? streamState.posterBase64) && !streamState.videoUrl)}
+            canMarkup={Boolean(
+              (streamState.currentBase64 ?? streamState.posterBase64) && !streamState.videoUrl,
+            )}
             onMarkup={handleOpenPreviewMarkup}
           />
-        </Card>
+        </div>
       </div>
 
       <HistoryPanel history={history} onSelectHistory={handleSelectHistory} />
@@ -473,22 +550,30 @@ export function ChatSurface({
           maxBytes={IMAGE_REFERENCE_MAX_BYTES}
           onClose={() => setPreviewMarkup(null)}
           onSave={(result) => {
-            const maxRefs = getMediumForModel(activeModel) === "video" ? 3 : 14;
+            const maxRefs = getMediumForModel(activeModel) === 'video' ? 3 : 14;
             if (refs.length >= maxRefs) {
-              show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
+              show({
+                title: 'Reference limit',
+                description: `Max ${maxRefs} reference images`,
+                variant: 'error',
+              });
               return;
             }
             const nextRef: RefImage = {
               id: `markup-${Date.now()}`,
-              name: "preview-markup.png",
-              path: "preview-markup.png",
+              name: 'preview-markup.png',
+              path: 'preview-markup.png',
               mime: result.composited.mime,
               base64: result.composited.base64,
               markupLayer: result.markupLayer.base64,
-              referenceType: getMediumForModel(activeModel) === "video" ? "asset" : undefined,
+              referenceType: getMediumForModel(activeModel) === 'video' ? 'asset' : undefined,
             };
             setRefs((prev) => prev.concat(nextRef));
-            show({ title: "Markup saved", description: "Added to reference images.", variant: "success" });
+            show({
+              title: 'Markup saved',
+              description: 'Added to reference images.',
+              variant: 'success',
+            });
             setPreviewMarkup(null);
           }}
         />
@@ -497,30 +582,36 @@ export function ChatSurface({
   );
 }
 
-function HistoryPanel({ history, onSelectHistory }: { history: ChatImageHistoryItem[]; onSelectHistory: (item: ChatImageHistoryItem) => void }) {
+function HistoryPanel({
+  history,
+  onSelectHistory,
+}: {
+  history: ChatImageHistoryItem[];
+  onSelectHistory: (item: ChatImageHistoryItem) => void;
+}) {
   return (
-    <Card
-      size="3"
-      className="shadow-xl"
-      style={{ backgroundColor: "var(--color-panel)", border: "1px solid var(--gray-6)" }}
+    <div
+      className="rounded-xl p-6 shadow-xl"
+      style={{ backgroundColor: 'var(--color-panel)', border: '1px solid var(--gray-6)' }}
     >
       <div className="flex items-center justify-between pb-2">
-        <Text weight="medium">History (this session)</Text>
-        <Badge color="gray">{history.length}</Badge>
+        <span className="font-medium">History (this session)</span>
+        <Pill variant="muted">{history.length}</Pill>
       </div>
-      <ScrollArea type="always" scrollbars="vertical" className="max-h-[220px] pr-1">
+      <ScrollArea type="always" className="max-h-[220px] pr-1">
         {history.length === 0 ? (
-          <Text size="1" color="gray">No generations yet.</Text>
+          <span className="text-xs text-gray-400">No generations yet.</span>
         ) : (
-          <Flex gap="2" wrap="wrap">
+          <div className="flex flex-wrap gap-2">
             {history.map((item) => (
               <button
+                type="button"
                 key={item.id}
                 onClick={() => onSelectHistory(item)}
                 draggable
                 onDragStart={(e) => {
                   const payload = {
-                    type: "asset_drop",
+                    type: 'asset_drop',
                     payload: {
                       path: item.id,
                       publicUrl: item.posterBase64
@@ -528,15 +619,21 @@ function HistoryPanel({ history, onSelectHistory }: { history: ChatImageHistoryI
                         : item.thumbBase64
                           ? `data:image/png;base64,${item.thumbBase64}`
                           : undefined,
-                      mimeType: item.medium === "video" ? "video/mp4" : "image/png",
+                      mimeType: item.medium === 'video' ? 'video/mp4' : 'image/png',
                     },
                   };
-                  e.dataTransfer.setData("application/reactflow-node-data", JSON.stringify(payload));
-                  e.dataTransfer.setData("application/vnd.continuum.asset", JSON.stringify({
-                    name: item.prompt.slice(0, 32),
-                    path: item.id,
-                    contentType: item.medium === "video" ? "video/mp4" : "image/png",
-                  }));
+                  e.dataTransfer.setData(
+                    'application/reactflow-node-data',
+                    JSON.stringify(payload),
+                  );
+                  e.dataTransfer.setData(
+                    'application/vnd.continuum.asset',
+                    JSON.stringify({
+                      name: item.prompt.slice(0, 32),
+                      path: item.id,
+                      contentType: item.medium === 'video' ? 'video/mp4' : 'image/png',
+                    }),
+                  );
                 }}
                 className="group relative h-24 w-24 overflow-hidden rounded-lg border border-white/15 bg-white/5 transition hover:-translate-y-1 hover:border-white/30"
               >
@@ -568,16 +665,20 @@ function HistoryPanel({ history, onSelectHistory }: { history: ChatImageHistoryI
                     className="object-cover"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-xs text-gray-400">No thumb</div>
+                  <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                    No thumb
+                  </div>
                 )}
                 <span className="absolute left-1 top-1 rounded bg-slate-900/70 px-1 text-2xs uppercase text-gray-200">
-                  {item.model === "nano-banana" || item.model === "gemini-3-pro-image-preview" ? "Image" : "Video"}
+                  {item.model === 'nano-banana' || item.model === 'gemini-3-pro-image-preview'
+                    ? 'Image'
+                    : 'Video'}
                 </span>
               </button>
             ))}
-          </Flex>
+          </div>
         )}
       </ScrollArea>
-    </Card>
+    </div>
   );
 }

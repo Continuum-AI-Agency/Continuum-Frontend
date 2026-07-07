@@ -1,19 +1,17 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import { Fragment } from "react"
+import { DragHandleHorizontalIcon } from '@radix-ui/react-icons';
+import { useQuery } from '@tanstack/react-query';
 import {
+  type ColumnDef,
+  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type ColumnFiltersState,
   type SortingState,
-} from "@tanstack/react-table"
-import { DragHandleHorizontalIcon } from "@radix-ui/react-icons"
-import { useQuery } from "@tanstack/react-query"
+  useReactTable,
+} from '@tanstack/react-table';
 import {
   Activity,
   ArrowUpDown,
@@ -24,10 +22,12 @@ import {
   Loader2,
   MessageCircle,
   MoreHorizontal,
-} from "lucide-react"
+} from 'lucide-react';
+import * as React from 'react';
+import { Fragment } from 'react';
 
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,78 +35,75 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from '@/components/ui/dropdown-menu';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Input } from '@/components/ui/input';
 import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
-import { fetchInsightCitations } from "@/lib/brand-insights/citations"
-import type { Trend, TrendInsightKind, TrendPlatformRecommendation } from "@/lib/organic/trends"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { fetchInsightCitations } from '@/lib/brand-insights/citations';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { Trend, TrendInsightKind, TrendPlatformRecommendation } from '@/lib/organic/trends';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
+import { cn } from '@/lib/utils';
 
 interface TrendsDataTableProps {
-  data: Trend[]
-  selectedTrendIds: string[]
-  onToggleTrend: (id: string) => void
-  activePlatforms: OrganicPlatformKey[]
-  showMomentumFilter?: boolean
-  allowDrag?: boolean
-  allowSelect?: boolean
-  allowActions?: boolean
-  brandProfileId?: string
+  data: Trend[];
+  selectedTrendIds: string[];
+  onToggleTrend: (id: string) => void;
+  activePlatforms: OrganicPlatformKey[];
+  showMomentumFilter?: boolean;
+  allowDrag?: boolean;
+  allowSelect?: boolean;
+  allowActions?: boolean;
+  brandProfileId?: string;
 }
 
-const MOMENTUM_DOT_TONE: Record<Trend["momentum"], string> = {
-  rising: "bg-emerald-500",
-  stable: "bg-sky-500",
-  cooling: "bg-amber-500",
-}
+const MOMENTUM_DOT_TONE: Record<Trend['momentum'], string> = {
+  rising: 'bg-emerald-500',
+  stable: 'bg-sky-500',
+  cooling: 'bg-amber-500',
+};
 
 const PLATFORM_SHORT: Record<string, string> = {
-  instagram: "IG",
-  linkedin: "LI",
-  facebook: "FB",
-  tiktok: "TK",
-  youtube: "YT",
-  twitter: "TW",
-  x: "X",
-}
+  instagram: 'IG',
+  linkedin: 'LI',
+  facebook: 'FB',
+  tiktok: 'TK',
+  youtube: 'YT',
+  twitter: 'TW',
+  x: 'X',
+};
 
-const FILTERED_TAG_NOISE = new Set(["evidence_scored", "canonicalized"])
+const FILTERED_TAG_NOISE = new Set(['evidence_scored', 'canonicalized']);
 
 function formatConfidence(value: number | undefined): string | null {
-  if (typeof value !== "number" || Number.isNaN(value)) return null
-  const clamped = Math.max(0, Math.min(1, value))
-  return `${Math.round(clamped * 100)}%`
+  if (typeof value !== 'number' || Number.isNaN(value)) return null;
+  const clamped = Math.max(0, Math.min(1, value));
+  return `${Math.round(clamped * 100)}%`;
 }
 
 function shortHost(url?: string): string | null {
-  if (!url) return null
+  if (!url) return null;
   try {
-    const parsed = new URL(url)
-    return parsed.hostname.replace(/^www\./, "")
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, '');
   } catch {
-    return null
+    return null;
   }
 }
 
 function formatRelativeDate(value?: string): string | null {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  const diffMs = Date.now() - date.getTime()
-  const days = Math.round(diffMs / (1000 * 60 * 60 * 24))
-  if (days <= 0) return "today"
-  if (days === 1) return "1d ago"
-  if (days < 30) return `${days}d ago`
-  const months = Math.round(days / 30)
-  if (months < 12) return `${months}mo ago`
-  return date.toLocaleDateString(undefined, { month: "short", year: "numeric" })
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return formatRelativeTime(date);
 }
 
 function CitationsList({
@@ -115,54 +112,51 @@ function CitationsList({
   insightId,
   enabled,
 }: {
-  brandProfileId: string
-  kind: TrendInsightKind
-  insightId: string
-  enabled: boolean
+  brandProfileId: string;
+  kind: TrendInsightKind;
+  insightId: string;
+  enabled: boolean;
 }) {
   const query = useQuery({
-    queryKey: ["insight-citations", brandProfileId, kind, insightId],
-    queryFn: () =>
-      fetchInsightCitations({ brandId: brandProfileId, insightType: kind, insightId }),
+    queryKey: ['insight-citations', brandProfileId, kind, insightId],
+    queryFn: () => fetchInsightCitations({ brandId: brandProfileId, insightType: kind, insightId }),
     enabled,
     staleTime: 5 * 60 * 1000,
-  })
+  });
 
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" /> Loading source signals…
       </div>
-    )
+    );
   }
 
   if (query.isError) {
     return (
-      <p className="px-1 py-2 text-xs text-muted-foreground">
-        Could not load source signals.
-      </p>
-    )
+      <p className="px-1 py-2 text-xs text-muted-foreground">Could not load source signals.</p>
+    );
   }
 
-  const citations = query.data ?? []
+  const citations = query.data ?? [];
   if (citations.length === 0) {
     return (
       <p className="px-1 py-2 text-xs text-muted-foreground">
         No source signals — likely a synthesis-only insight.
       </p>
-    )
+    );
   }
 
   return (
     <ul className="flex flex-col divide-y divide-border/40">
       {citations.map((citation) => {
-        const host = shortHost(citation.sourceUrl)
-        const relative = formatRelativeDate(citation.publishedAt)
+        const host = shortHost(citation.sourceUrl);
+        const relative = formatRelativeDate(citation.publishedAt);
         return (
           <li key={citation.id} className="flex flex-col gap-1 px-1 py-1.5">
             <div className="flex items-start justify-between gap-2">
               <p className="line-clamp-2 text-xs text-foreground">
-                {citation.signalTitle ?? citation.rationale ?? host ?? "Untitled signal"}
+                {citation.signalTitle ?? citation.rationale ?? host ?? 'Untitled signal'}
               </p>
               {citation.sourceUrl ? (
                 <a
@@ -177,16 +171,18 @@ function CitationsList({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-muted-foreground">
-              {citation.platform ? <span className="uppercase tracking-wide">{citation.platform}</span> : null}
+              {citation.platform ? (
+                <span className="uppercase tracking-wide">{citation.platform}</span>
+              ) : null}
               {host ? <span>{host}</span> : null}
               {relative ? <span>{relative}</span> : null}
-              {typeof citation.likeCount === "number" ? (
+              {typeof citation.likeCount === 'number' ? (
                 <span className="inline-flex items-center gap-1">
                   <Heart className="h-2.5 w-2.5" />
                   <span className="tabular-nums">{citation.likeCount}</span>
                 </span>
               ) : null}
-              {typeof citation.commentsCount === "number" ? (
+              {typeof citation.commentsCount === 'number' ? (
                 <span className="inline-flex items-center gap-1">
                   <MessageCircle className="h-2.5 w-2.5" />
                   <span className="tabular-nums">{citation.commentsCount}</span>
@@ -194,18 +190,18 @@ function CitationsList({
               ) : null}
             </div>
           </li>
-        )
+        );
       })}
     </ul>
-  )
+  );
 }
 
 function RecommendationsList({
   recommendations,
   fallback,
 }: {
-  recommendations: TrendPlatformRecommendation[] | undefined
-  fallback?: string[]
+  recommendations: TrendPlatformRecommendation[] | undefined;
+  fallback?: string[];
 }) {
   if (recommendations && recommendations.length > 0) {
     return (
@@ -219,20 +215,18 @@ function RecommendationsList({
           </Fragment>
         ))}
       </dl>
-    )
+    );
   }
 
   if (fallback && fallback.length > 0) {
-    return (
-      <p className="text-xs text-foreground">Recommended: {fallback.join(", ")}</p>
-    )
+    return <p className="text-xs text-foreground">Recommended: {fallback.join(', ')}</p>;
   }
 
   return (
     <p className="px-1 py-2 text-xs text-muted-foreground">
       No platform recommendations were captured.
     </p>
-  )
+  );
 }
 
 export function TrendsDataTable({
@@ -246,38 +240,38 @@ export function TrendsDataTable({
   allowActions = false,
   brandProfileId,
 }: TrendsDataTableProps) {
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [momentumFilter, setMomentumFilter] = React.useState<string>("all")
-  const [expandedId, setExpandedId] = React.useState<string | undefined>(undefined)
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [momentumFilter, setMomentumFilter] = React.useState<string>('all');
+  const [expandedId, setExpandedId] = React.useState<string | undefined>(undefined);
 
   const filteredData = React.useMemo(() => {
-    if (momentumFilter === "all") return data
-    return data.filter((item) => item.momentum === momentumFilter)
-  }, [data, momentumFilter])
+    if (momentumFilter === 'all') return data;
+    return data.filter((item) => item.momentum === momentumFilter);
+  }, [data, momentumFilter]);
 
   const columns = React.useMemo<ColumnDef<Trend>[]>(() => {
-    const cols: ColumnDef<Trend>[] = []
+    const cols: ColumnDef<Trend>[] = [];
 
     if (allowDrag) {
       cols.push({
-        id: "drag",
+        id: 'drag',
         header: () => <span className="sr-only">Drag</span>,
         size: 40,
         cell: ({ row }) => {
-          const trend = row.original
+          const trend = row.original;
           const handleDragStart = (e: React.DragEvent) => {
-            const seedType = trend.tags.includes("question")
-              ? "question"
-              : trend.tags.includes("event")
-                ? "event"
-                : "trend"
+            const seedType = trend.tags.includes('question')
+              ? 'question'
+              : trend.tags.includes('event')
+                ? 'event'
+                : 'trend';
             e.dataTransfer.setData(
-              "application/json",
-              JSON.stringify({ type: seedType, trendId: trend.id, title: trend.title })
-            )
-            e.dataTransfer.effectAllowed = "copy"
-          }
+              'application/json',
+              JSON.stringify({ type: seedType, trendId: trend.id, title: trend.title }),
+            );
+            e.dataTransfer.effectAllowed = 'copy';
+          };
           return (
             <div
               draggable
@@ -287,14 +281,14 @@ export function TrendsDataTable({
             >
               <DragHandleHorizontalIcon className="text-muted-foreground opacity-50" />
             </div>
-          )
+          );
         },
-      })
+      });
     }
 
     if (allowSelect) {
       cols.push({
-        id: "select",
+        id: 'select',
         header: () => <span className="sr-only">Select</span>,
         size: 40,
         cell: ({ row }) => (
@@ -306,20 +300,20 @@ export function TrendsDataTable({
             />
           </div>
         ),
-      })
+      });
     }
 
     cols.push(
       {
-        accessorKey: "title",
+        accessorKey: 'title',
         header: ({ column }) => (
           <Button
             variant="ghost"
             size="sm"
             className="-ml-3 h-7 text-xs font-medium text-muted-foreground"
             onClick={(e) => {
-              e.stopPropagation()
-              column.toggleSorting(column.getIsSorted() === "asc")
+              e.stopPropagation();
+              column.toggleSorting(column.getIsSorted() === 'asc');
             }}
           >
             Trend
@@ -327,19 +321,19 @@ export function TrendsDataTable({
           </Button>
         ),
         cell: ({ row }) => {
-          const trend = row.original
-          const meta = trend.meta
-          const confidenceLabel = formatConfidence(meta?.confidence)
-          const sourceHost = shortHost(meta?.sourceUrl)
-          const recommendations = meta?.platformRecommendations ?? []
+          const trend = row.original;
+          const meta = trend.meta;
+          const confidenceLabel = formatConfidence(meta?.confidence);
+          const sourceHost = shortHost(meta?.sourceUrl);
+          const recommendations = meta?.platformRecommendations ?? [];
           const hoverHasContent = Boolean(
-            meta?.relevanceToBrand || recommendations.length > 0 || meta?.source || sourceHost
-          )
+            meta?.relevanceToBrand || recommendations.length > 0 || meta?.source || sourceHost,
+          );
           const titleNode = (
             <div className="font-medium text-sm truncate" title={trend.title}>
               {trend.title}
             </div>
-          )
+          );
           return (
             <div className="min-w-0 space-y-0.5">
               {hoverHasContent ? (
@@ -397,7 +391,7 @@ export function TrendsDataTable({
                     conf <span className="font-medium text-foreground">{confidenceLabel}</span>
                   </span>
                 ) : null}
-                {typeof meta?.sourceSignalCount === "number" && meta.sourceSignalCount > 0 ? (
+                {typeof meta?.sourceSignalCount === 'number' && meta.sourceSignalCount > 0 ? (
                   <span className="inline-flex items-center gap-1">
                     <Activity className="h-2.5 w-2.5" />
                     <span className="tabular-nums">{meta.sourceSignalCount}</span>
@@ -406,25 +400,25 @@ export function TrendsDataTable({
                 {meta?.niche ? <span className="tracking-wide">{meta.niche}</span> : null}
               </div>
             </div>
-          )
+          );
         },
       },
       {
-        accessorKey: "momentum",
-        header: "Momentum",
+        accessorKey: 'momentum',
+        header: 'Momentum',
         cell: ({ row }) => {
-          const momentum = row.getValue("momentum") as Trend["momentum"]
+          const momentum = row.getValue('momentum') as Trend['momentum'];
           return (
             <span className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground">
-              <span className={cn("h-1.5 w-1.5 rounded-full", MOMENTUM_DOT_TONE[momentum])} />
+              <span className={cn('h-1.5 w-1.5 rounded-full', MOMENTUM_DOT_TONE[momentum])} />
               {momentum}
             </span>
-          )
+          );
         },
       },
       {
-        id: "platforms",
-        header: "Platforms",
+        id: 'platforms',
+        header: 'Platforms',
         cell: ({ row }) => (
           <div className="flex flex-wrap items-center gap-2 text-2xs font-medium uppercase tracking-wide">
             {row.original.platforms.map((p) => (
@@ -432,8 +426,8 @@ export function TrendsDataTable({
                 key={p}
                 className={cn(
                   activePlatforms.includes(p as OrganicPlatformKey)
-                    ? "text-brand-primary"
-                    : "text-muted-foreground/60"
+                    ? 'text-brand-primary'
+                    : 'text-muted-foreground/60',
                 )}
               >
                 {PLATFORM_SHORT[p] ?? p.slice(0, 2).toUpperCase()}
@@ -441,12 +435,12 @@ export function TrendsDataTable({
             ))}
           </div>
         ),
-      }
-    )
+      },
+    );
 
     if (allowActions) {
       cols.push({
-        id: "actions",
+        id: 'actions',
         header: () => <span className="sr-only">Actions</span>,
         size: 50,
         cell: ({ row }) => (
@@ -463,7 +457,7 @@ export function TrendsDataTable({
                   className="text-xs"
                   onClick={() => onToggleTrend(row.original.id)}
                 >
-                  {selectedTrendIds.includes(row.original.id) ? "Remove from plan" : "Add to plan"}
+                  {selectedTrendIds.includes(row.original.id) ? 'Remove from plan' : 'Add to plan'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive text-xs">Ignore</DropdownMenuItem>
@@ -471,29 +465,29 @@ export function TrendsDataTable({
             </DropdownMenu>
           </div>
         ),
-      })
+      });
     }
 
     cols.push({
-      id: "expand",
+      id: 'expand',
       header: () => <span className="sr-only">Expand</span>,
       size: 40,
       cell: ({ row }) => (
         <ChevronDown
           className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform duration-200",
-            expandedId === row.id && "rotate-180"
+            'h-4 w-4 text-muted-foreground transition-transform duration-200',
+            expandedId === row.id && 'rotate-180',
           )}
         />
       ),
-    })
+    });
 
     return cols.filter((col) => {
-      if (col.id === "momentum" || ("accessorKey" in col && col.accessorKey === "momentum")) {
-        return showMomentumFilter
+      if (col.id === 'momentum' || ('accessorKey' in col && col.accessorKey === 'momentum')) {
+        return showMomentumFilter;
       }
-      return true
-    })
+      return true;
+    });
   }, [
     selectedTrendIds,
     onToggleTrend,
@@ -503,7 +497,7 @@ export function TrendsDataTable({
     allowSelect,
     allowActions,
     expandedId,
-  ])
+  ]);
 
   const table = useReactTable({
     data: filteredData,
@@ -514,15 +508,15 @@ export function TrendsDataTable({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     state: { sorting, columnFilters },
-  })
+  });
 
   return (
     <div className="flex flex-col h-full space-y-2">
       <div className="flex items-center gap-2 px-1 shrink-0">
         <Input
           placeholder="Filter trends…"
-          value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-          onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+          value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
+          onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
           className="h-7 text-xs bg-muted/50 border-border/60 flex-1"
         />
         {showMomentumFilter && (
@@ -534,17 +528,17 @@ export function TrendsDataTable({
                 className="h-7 px-2 text-3xs uppercase font-semibold"
               >
                 <Filter className="mr-1 h-3 w-3" />
-                {momentumFilter === "all" ? "All" : momentumFilter}
+                {momentumFilter === 'all' ? 'All' : momentumFilter}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {["all", "rising", "stable", "cooling"].map((value) => (
+              {['all', 'rising', 'stable', 'cooling'].map((value) => (
                 <DropdownMenuItem
                   key={value}
                   className="text-xs capitalize"
                   onClick={() => setMomentumFilter(value)}
                 >
-                  {value === "all" ? "All momentum" : value}
+                  {value === 'all' ? 'All momentum' : value}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -577,7 +571,7 @@ export function TrendsDataTable({
                   <Fragment key={row.id}>
                     <TableRow
                       data-state={
-                        selectedTrendIds.includes(row.original.id) ? "selected" : undefined
+                        selectedTrendIds.includes(row.original.id) ? 'selected' : undefined
                       }
                       onClick={() =>
                         setExpandedId((prev) => (prev === row.id ? undefined : row.id))
@@ -594,11 +588,11 @@ export function TrendsDataTable({
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
                         <TableCell colSpan={columns.length} className="px-4 pb-4 pt-2">
                           {(() => {
-                            const trend = row.original
-                            const meta = trend.meta
+                            const trend = row.original;
+                            const meta = trend.meta;
                             const visibleTags = (meta?.analysisTags ?? trend.tags).filter(
-                              (tag) => !FILTERED_TAG_NOISE.has(tag)
-                            )
+                              (tag) => !FILTERED_TAG_NOISE.has(tag),
+                            );
                             return (
                               <Tabs defaultValue="why" className="w-full">
                                 <TabsList className="h-7 gap-1 bg-transparent p-0">
@@ -612,12 +606,17 @@ export function TrendsDataTable({
                                     Distribution
                                   </TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="why" className="mt-2 space-y-1.5 text-xs leading-relaxed">
+                                <TabsContent
+                                  value="why"
+                                  className="mt-2 space-y-1.5 text-xs leading-relaxed"
+                                >
                                   <p className="text-foreground">{trend.summary}</p>
-                                  {meta?.relevanceToBrand && meta.relevanceToBrand !== trend.summary ? (
+                                  {meta?.relevanceToBrand &&
+                                  meta.relevanceToBrand !== trend.summary ? (
                                     <p className="text-foreground">{meta.relevanceToBrand}</p>
                                   ) : null}
-                                  {meta?.whyRelevant && meta.whyRelevant !== meta.relevanceToBrand ? (
+                                  {meta?.whyRelevant &&
+                                  meta.whyRelevant !== meta.relevanceToBrand ? (
                                     <p className="text-foreground">{meta.whyRelevant}</p>
                                   ) : null}
                                   {meta?.opportunity ? (
@@ -633,7 +632,7 @@ export function TrendsDataTable({
                                       {visibleTags
                                         .slice(0, 6)
                                         .map((tag) => `#${tag}`)
-                                        .join("  ·  ")}
+                                        .join('  ·  ')}
                                     </p>
                                   ) : null}
                                 </TabsContent>
@@ -641,7 +640,7 @@ export function TrendsDataTable({
                                   {brandProfileId ? (
                                     <CitationsList
                                       brandProfileId={brandProfileId}
-                                      kind={meta?.kind ?? "trend"}
+                                      kind={meta?.kind ?? 'trend'}
                                       insightId={trend.id}
                                       enabled={expandedId === row.id}
                                     />
@@ -658,7 +657,7 @@ export function TrendsDataTable({
                                   />
                                 </TabsContent>
                               </Tabs>
-                            )
+                            );
                           })()}
                         </TableCell>
                       </TableRow>
@@ -671,7 +670,7 @@ export function TrendsDataTable({
                     colSpan={columns.length}
                     className="h-16 text-center text-xs text-muted-foreground"
                   >
-                    {data.length === 0 ? "No trends yet." : "No trends match your filters."}
+                    {data.length === 0 ? 'No trends yet.' : 'No trends match your filters.'}
                   </TableCell>
                 </TableRow>
               )}
@@ -680,5 +679,5 @@ export function TrendsDataTable({
         </div>
       </div>
     </div>
-  )
+  );
 }

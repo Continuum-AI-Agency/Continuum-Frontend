@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Card, Flex, Text, Box, Button, Heading, ScrollArea } from "@radix-ui/themes";
-import { Cross2Icon, ActivityLogIcon } from "@radix-ui/react-icons";
-import { cn } from "@/lib/utils";
-import type { StreamEvent } from "./types";
-import { StreamEventItem } from "./StreamEventItem";
+import { ActivityLogIcon, Cross2Icon } from '@radix-ui/react-icons';
+import * as React from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { StreamEventItem } from './StreamEventItem';
+import type { StreamEvent } from './types';
 
 interface EventStreamPanelProps {
   events: StreamEvent[];
@@ -44,30 +44,24 @@ export function EventStreamPanel({
   const hasEvents = events.length > 0;
 
   return (
-    <Card
+    <div
       data-testid="event-stream-panel"
-      className={cn("overflow-hidden", className)}
+      className={cn('overflow-hidden rounded-lg border bg-card', className)}
     >
-      <Flex direction="column">
-        <Flex
-          align="center"
-          justify="between"
-          className="px-4 py-3 border-b border-border"
-        >
-          <Flex align="center" gap="2">
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2">
             <ActivityLogIcon className="w-4 h-4 text-muted-foreground" />
-            <Heading size="3">Generation Stream</Heading>
+            <h3 className="text-base font-semibold">Generation Stream</h3>
             {hasEvents && (
-              <Text size="1" color="gray" className="tabular-nums">
-                ({events.length})
-              </Text>
+              <span className="text-xs text-muted-foreground tabular-nums">({events.length})</span>
             )}
-          </Flex>
+          </div>
 
           {hasEvents && onClear && (
             <Button
               variant="ghost"
-              size="1"
+              size="sm"
               onClick={onClear}
               className="text-muted-foreground hover:text-foreground"
             >
@@ -75,16 +69,12 @@ export function EventStreamPanel({
               Clear
             </Button>
           )}
-        </Flex>
+        </div>
 
-        <Box className="max-h-[400px]">
+        <div>
           {hasEvents ? (
-            <ScrollArea
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="h-full"
-            >
-              <Flex direction="column" className="p-2 gap-1">
+            <div ref={scrollRef} onScroll={handleScroll} className="max-h-[400px] overflow-y-auto">
+              <div className="flex flex-col p-2 gap-1">
                 {events.map((event) => (
                   <StreamEventItem
                     key={event.id}
@@ -92,26 +82,19 @@ export function EventStreamPanel({
                     onPlacementSelect={onPlacementSelect}
                   />
                 ))}
-              </Flex>
-            </ScrollArea>
+              </div>
+            </div>
           ) : (
-            <Flex
-              direction="column"
-              align="center"
-              justify="center"
-              className="py-12 px-4 text-center"
-            >
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <ActivityLogIcon className="w-8 h-8 text-muted-foreground/50 mb-3" />
-              <Text size="2" color="gray">
-                Start generation to see events
-              </Text>
-              <Text size="1" color="gray" className="mt-1">
+              <span className="text-sm text-muted-foreground">Start generation to see events</span>
+              <span className="mt-1 text-xs text-muted-foreground">
                 Progress updates and placements will appear here
-              </Text>
-            </Flex>
+              </span>
+            </div>
           )}
-        </Box>
-      </Flex>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

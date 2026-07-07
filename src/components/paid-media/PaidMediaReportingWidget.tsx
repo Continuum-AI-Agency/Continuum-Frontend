@@ -1,33 +1,29 @@
-"use client";
+'use client';
 
-import { ArrowDownIcon, ArrowUpIcon, PieChartIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { PieChartIcon, ReloadIcon } from '@radix-ui/react-icons';
+import React, { useCallback, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
-  Badge,
-  Box,
-  Card,
-  Flex,
-  Grid,
-  Heading,
-  IconButton,
-  Select,
-  Text,
-  Callout,
-} from "@radix-ui/themes";
-import { useState, useCallback } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import React from "react";
-import { Bar, BarChart, CartesianGrid, XAxis, LineChart, Line, YAxis } from "recharts";
-
-import {
+  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import type { PaidMetricsResponse } from "@/lib/schemas/paidMetrics";
-import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
+} from '@/components/ui/chart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
 
 type Props = {
   brandId: string;
@@ -37,14 +33,14 @@ type Props = {
   onSelectedMetricChange?: (metric: PaidPerformanceMetricKey) => void;
 };
 
-type ViewMode = "overview" | "trends";
+type ViewMode = 'overview' | 'trends';
 
-type Platform = "meta" | "google-ads" | "dv360";
+type Platform = 'meta' | 'google-ads' | 'dv360';
 
 const platforms = [
-  { id: "meta" as Platform, name: "Meta", active: true },
-  { id: "google-ads" as Platform, name: "Google Ads", active: true },
-  { id: "dv360" as Platform, name: "DV360", active: false },
+  { id: 'meta' as Platform, name: 'Meta', active: true },
+  { id: 'google-ads' as Platform, name: 'Google Ads', active: true },
+  { id: 'dv360' as Platform, name: 'DV360', active: false },
 ];
 
 type AdAccount = {
@@ -67,99 +63,104 @@ type IntegrationAccountCandidate = {
 };
 
 type LoadState =
-  | { status: "idle" }
-  | { status: "loading-ad-accounts" }
-  | { status: "loading-campaigns" }
-  | { status: "loading-metrics" }
-  | { status: "error"; message: string }
-  | { status: "success"; data: PaidMetricsResponse };
+  | { status: 'idle' }
+  | { status: 'loading-ad-accounts' }
+  | { status: 'loading-campaigns' }
+  | { status: 'loading-metrics' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; data: PaidMetricsResponse };
 
-export type PaidPerformanceMetricKey = keyof PaidMetricsResponse["metrics"];
+export type PaidPerformanceMetricKey = keyof PaidMetricsResponse['metrics'];
 type MetricKey = PaidPerformanceMetricKey;
 
 type MetricCard = {
   key: MetricKey;
   label: string;
   value: number;
-  format: "currency" | "number" | "percent";
+  format: 'currency' | 'number' | 'percent';
 };
 
 const METRIC_LABELS: Record<MetricKey, string> = {
-  spend: "Spend",
-  roas: "ROAS",
-  impressions: "Impressions",
-  clicks: "Clicks",
-  ctr: "CTR",
-  cpc: "CPC",
-  cpa: "CPA",
+  spend: 'Spend',
+  roas: 'ROAS',
+  impressions: 'Impressions',
+  clicks: 'Clicks',
+  ctr: 'CTR',
+  cpc: 'CPC',
+  cpa: 'CPA',
   // GA4 sessions/conversions merged into the paid trend line by date (brand/
   // property-level, same regardless of the selected campaign — see
   // paid-media-metrics/README.md).
-  gaSessions: "GA Sessions",
-  gaConversions: "GA Conversions",
+  gaSessions: 'GA Sessions',
+  gaConversions: 'GA Conversions',
 };
 
-type PaidMetricsTrendRow = PaidMetricsResponse["trends"][number];
+type PaidMetricsTrendRow = PaidMetricsResponse['trends'][number];
 
 // Pure per-day value for the currently expanded metric-card's trend chart.
 // Direct metrics (spend, roas, GA4 sessions/conversions) come straight off
 // the merged trend row; derived metrics (ctr, cpc) are computed from clicks/
 // impressions/spend for that day. Extracted from the chart's useMemo so it is
 // independently testable without mounting recharts.
-export function deriveMetricTrendValue(day: PaidMetricsTrendRow, key: PaidPerformanceMetricKey): number {
-  if (key === "spend") return day.spend;
-  if (key === "roas") return day.roas;
-  if (key === "impressions") return day.impressions || 0;
-  if (key === "clicks") return day.clicks || 0;
-  if (key === "ctr") return day.clicks && day.impressions ? (day.clicks / day.impressions) * 100 : 0;
-  if (key === "cpc") return day.clicks && day.spend ? day.spend / day.clicks : 0;
+export function deriveMetricTrendValue(
+  day: PaidMetricsTrendRow,
+  key: PaidPerformanceMetricKey,
+): number {
+  if (key === 'spend') return day.spend;
+  if (key === 'roas') return day.roas;
+  if (key === 'impressions') return day.impressions || 0;
+  if (key === 'clicks') return day.clicks || 0;
+  if (key === 'ctr')
+    return day.clicks && day.impressions ? (day.clicks / day.impressions) * 100 : 0;
+  if (key === 'cpc') return day.clicks && day.spend ? day.spend / day.clicks : 0;
   // GA4 metrics: already a daily value merged in by date, no derivation.
-  if (key === "gaSessions") return day.gaSessions || 0;
-  if (key === "gaConversions") return day.gaConversions || 0;
+  if (key === 'gaSessions') return day.gaSessions || 0;
+  if (key === 'gaConversions') return day.gaConversions || 0;
   return 0;
 }
 
-function formatValue(value: number, type: "currency" | "number" | "percent") {
-  if (type === "currency") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-  if (type === "percent") return `${value.toFixed(2)}%`;
+function formatValue(value: number, type: 'currency' | 'number' | 'percent') {
+  if (type === 'currency')
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+  if (type === 'percent') return `${value.toFixed(2)}%`;
   return new Intl.NumberFormat().format(value);
 }
 
 function formatPercent(value?: number) {
   if (value === undefined) return null;
   const rounded = Math.abs(value).toFixed(1);
-  return `${value >= 0 ? "+" : "-"}${rounded}%`;
+  return `${value >= 0 ? '+' : '-'}${rounded}%`;
 }
 
 function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
   const { trends, range } = data;
 
   const chartConfig = {
-    spend: { label: "Spend", color: "var(--color-primary)" },
-    roas: { label: "ROAS", color: "var(--color-secondary)" },
+    spend: { label: 'Spend', color: 'var(--color-primary)' },
+    roas: { label: 'ROAS', color: 'var(--color-secondary)' },
   } satisfies ChartConfig;
 
   const trendChartConfig = {
     ...chartConfig,
-    spend: { ...chartConfig.spend, color: "var(--chart-1)" },
-    roas: { ...chartConfig.roas, color: "var(--chart-2)" },
+    spend: { ...chartConfig.spend, color: 'var(--chart-1)' },
+    roas: { ...chartConfig.roas, color: 'var(--chart-2)' },
   };
 
   return (
-    <Box pt="4">
-      <Flex align="center" justify="between" mb="3">
-        <Box>
-          <Heading size="4">Daily Performance Trends</Heading>
-          <Text size="2" color="gray">
+    <div className="pt-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h4 className="text-lg font-semibold">Daily Performance Trends</h4>
+          <span className="text-sm text-muted-foreground">
             {range.since} → {range.until}
-          </Text>
-        </Box>
-      </Flex>
+          </span>
+        </div>
+      </div>
 
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4">
-        <Card variant="surface" className="border border-subtle bg-surface">
-          <Box p="3">
-            <Text size="2" color="gray" mb="2">Daily Spend</Text>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-subtle bg-surface">
+          <div className="p-3">
+            <p className="mb-2 text-sm text-muted-foreground">Daily Spend</p>
             <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trends}>
                 <CartesianGrid vertical={false} />
@@ -167,13 +168,22 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                   dataKey="date"
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  tickFormatter={(value) =>
+                    new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  }
                 />
                 <YAxis tickLine={false} axisLine={false} />
                 <ChartTooltip
-                  content={<ChartTooltipContent
-                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                  />}
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(label) =>
+                        new Date(label).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      }
+                    />
+                  }
                 />
                 <Line
                   type="monotone"
@@ -185,12 +195,12 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                 />
               </LineChart>
             </ChartContainer>
-          </Box>
-        </Card>
+          </div>
+        </div>
 
-        <Card variant="surface" className="border border-subtle bg-surface">
-          <Box p="3">
-            <Text size="2" color="gray" mb="2">Return on Ad Spend (ROAS)</Text>
+        <div className="rounded-lg border border-subtle bg-surface">
+          <div className="p-3">
+            <p className="mb-2 text-sm text-muted-foreground">Return on Ad Spend (ROAS)</p>
             <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trends}>
                 <CartesianGrid vertical={false} />
@@ -198,13 +208,22 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                   dataKey="date"
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  tickFormatter={(value) =>
+                    new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  }
                 />
                 <YAxis tickLine={false} axisLine={false} />
                 <ChartTooltip
-                  content={<ChartTooltipContent
-                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                  />}
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(label) =>
+                        new Date(label).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      }
+                    />
+                  }
                 />
                 <Line
                   type="monotone"
@@ -216,61 +235,66 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                 />
               </LineChart>
             </ChartContainer>
-          </Box>
-        </Card>
-      </Grid>
-    </Box>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function PaidReportingLoadingSkeleton({ viewMode, message }: { viewMode: ViewMode; message: string }) {
-  if (viewMode === "trends") {
+function PaidReportingLoadingSkeleton({
+  viewMode,
+  message,
+}: {
+  viewMode: ViewMode;
+  message: string;
+}) {
+  if (viewMode === 'trends') {
     return (
-      <Flex direction="column" gap="3">
+      <div className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card variant="surface" className="border border-subtle bg-surface">
-            <Box p="3">
+          <div className="rounded-lg border border-subtle bg-surface">
+            <div className="p-3">
               <Skeleton className="mb-3 h-4 w-40" />
               <Skeleton className="h-[200px] w-full" />
-            </Box>
-          </Card>
-          <Card variant="surface" className="border border-subtle bg-surface">
-            <Box p="3">
+            </div>
+          </div>
+          <div className="rounded-lg border border-subtle bg-surface">
+            <div className="p-3">
               <Skeleton className="mb-3 h-4 w-44" />
               <Skeleton className="h-[200px] w-full" />
-            </Box>
-          </Card>
+            </div>
+          </div>
         </div>
-        <Text size="2" color="gray" align="center">
-          {message}
-        </Text>
-      </Flex>
+        <p className="text-center text-sm text-muted-foreground">{message}</p>
+      </div>
     );
   }
 
   return (
-    <Flex direction="column" gap="3">
-      <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {Array.from({ length: 6 }).map((_, index) => (
-          <Card key={`paid-metric-skeleton-${index}`} variant="surface" className="border border-subtle bg-surface">
-            <Box p="3">
+          <div
+            key={`paid-metric-skeleton-${index}`}
+            className="rounded-lg border border-subtle bg-surface"
+          >
+            <div className="p-3">
               <Skeleton className="mb-2 h-3 w-16" />
               <Skeleton className="mb-2 h-6 w-20" />
               <Skeleton className="h-3 w-12" />
-            </Box>
-          </Card>
+            </div>
+          </div>
         ))}
-      </Grid>
-      <Card variant="surface" className="border border-subtle bg-surface">
-        <Box p="3">
+      </div>
+      <div className="rounded-lg border border-subtle bg-surface">
+        <div className="p-3">
           <Skeleton className="mb-3 h-4 w-52" />
           <Skeleton className="h-[220px] w-full" />
-        </Box>
-      </Card>
-      <Text size="2" color="gray" align="center">
-        {message}
-      </Text>
-    </Flex>
+        </div>
+      </div>
+      <p className="text-center text-sm text-muted-foreground">{message}</p>
+    </div>
   );
 }
 
@@ -281,10 +305,10 @@ export function PaidMediaReportingWidget({
   selectedMetric,
   onSelectedMetricChange,
 }: Props) {
-  const [platform, setPlatform] = useState<Platform>("meta");
-  const [viewMode, setViewMode] = React.useState<ViewMode>("overview");
-  const [state, setState] = React.useState<LoadState>({ status: "idle" });
-  const [internalExpandedMetric, setInternalExpandedMetric] = React.useState<MetricKey>("spend");
+  const [platform, setPlatform] = useState<Platform>('meta');
+  const [viewMode, setViewMode] = React.useState<ViewMode>('overview');
+  const [state, setState] = React.useState<LoadState>({ status: 'idle' });
+  const [internalExpandedMetric, setInternalExpandedMetric] = React.useState<MetricKey>('spend');
 
   // Ad account and campaign selection state
   const [selectedAdAccount, setSelectedAdAccount] = useState<string | null>(accountId || null);
@@ -296,20 +320,20 @@ export function PaidMediaReportingWidget({
 
   const adAccounts = React.useMemo(() => {
     if (!integrations) return [];
-    
+
     let platformAccounts: IntegrationAccountCandidate[] = [];
-    if (platform === "meta") {
+    if (platform === 'meta') {
       platformAccounts = integrations.facebook?.accounts ?? [];
-    } else if (platform === "google-ads") {
+    } else if (platform === 'google-ads') {
       platformAccounts = integrations.googleAds?.accounts ?? [];
-    } else if (platform === "dv360") {
+    } else if (platform === 'dv360') {
       platformAccounts = integrations.dv360?.accounts ?? [];
     }
-    
+
     return platformAccounts
       .map((acc) => ({
-        id: acc.externalAccountId ?? acc.integrationAccountId ?? "",
-        name: acc.name ?? "Unnamed account",
+        id: acc.externalAccountId ?? acc.integrationAccountId ?? '',
+        name: acc.name ?? 'Unnamed account',
       }))
       .filter((acc) => acc.id.length > 0);
   }, [integrations, platform]);
@@ -323,108 +347,131 @@ export function PaidMediaReportingWidget({
   }, [selectedAdAccount, adAccounts, onAccountChange]);
 
   // Fetch campaigns for selected ad account
-  const fetchCampaigns = useCallback(async (adAccountId: string) => {
-    setState({ status: "loading-campaigns" });
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
+  const fetchCampaigns = useCallback(
+    async (adAccountId: string) => {
+      setState({ status: 'loading-campaigns' });
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (!session?.access_token) {
-        throw new Error("No authentication token available");
-      }
+        if (!session?.access_token) {
+          throw new Error('No authentication token available');
+        }
 
-      const url = `/api/campaigns?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}&platform=${platform}`;
-      console.log("Fetching campaigns from:", url);
+        const url = `/api/campaigns?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}&platform=${platform}`;
+        console.log('Fetching campaigns from:', url);
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-       if (!response.ok) {
-         const errorText = await response.text();
-         console.error("Campaigns API error:", response.status, response.statusText, errorText);
-
-         // Try to parse JSON error response
-         let parsedError = null;
-         try {
-           parsedError = JSON.parse(errorText);
-         } catch {
-           // Not JSON, use raw text
-         }
-
-         // Handle different error scenarios
-         if (response.status === 404) {
-           throw new Error("Campaigns not found. This ad account may not have active campaigns or the account configuration may be incorrect.");
-         } else if (response.status === 500 && parsedError?.error) {
-           // Extract nested error message from edge function
-           const nestedError = parsedError.error;
-           if (nestedError.includes("404")) {
-             throw new Error("Unable to retrieve campaign data. The ad account may not be properly connected or campaigns may not exist.");
-           } else {
-             throw new Error("Server error occurred while fetching campaigns. Please try again later.");
-           }
-         } else if (response.status === 401 || response.status === 403) {
-           throw new Error(parsedError?.error ?? "Authentication failed. Please reconfigure your ad account connection.");
-         } else {
-           throw new Error(`Failed to fetch campaigns: ${response.status} ${response.statusText}`);
-         }
-       }
-      const data = await response.json();
-      setCampaigns(data.campaigns || []);
-
-      // Auto-select first campaign if none selected
-      if (!selectedCampaign && data.campaigns?.length > 0) {
-        setSelectedCampaign(data.campaigns[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching campaigns:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to load campaigns";
-
-      // Check if it's an access token issue
-      if (errorMessage.toLowerCase().includes("account not configured") || errorMessage.toLowerCase().includes("access token missing")) {
-        const platformName = platforms.find(p => p.id === platform)?.name || "selected";
-        setState({
-          status: "error",
-          message: `This ${platformName} account needs to be reconnected. Please contact support or reconfigure your integration.`
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
         });
-      } else {
-        setState({ status: "error", message: errorMessage });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Campaigns API error:', response.status, response.statusText, errorText);
+
+          // Try to parse JSON error response
+          let parsedError = null;
+          try {
+            parsedError = JSON.parse(errorText);
+          } catch {
+            // Not JSON, use raw text
+          }
+
+          // Handle different error scenarios
+          if (response.status === 404) {
+            throw new Error(
+              'Campaigns not found. This ad account may not have active campaigns or the account configuration may be incorrect.',
+            );
+          } else if (response.status === 500 && parsedError?.error) {
+            // Extract nested error message from edge function
+            const nestedError = parsedError.error;
+            if (nestedError.includes('404')) {
+              throw new Error(
+                'Unable to retrieve campaign data. The ad account may not be properly connected or campaigns may not exist.',
+              );
+            } else {
+              throw new Error(
+                'Server error occurred while fetching campaigns. Please try again later.',
+              );
+            }
+          } else if (response.status === 401 || response.status === 403) {
+            throw new Error(
+              parsedError?.error ??
+                'Authentication failed. Please reconfigure your ad account connection.',
+            );
+          } else {
+            throw new Error(`Failed to fetch campaigns: ${response.status} ${response.statusText}`);
+          }
+        }
+        const data = await response.json();
+        setCampaigns(data.campaigns || []);
+
+        // Auto-select first campaign if none selected
+        if (!selectedCampaign && data.campaigns?.length > 0) {
+          setSelectedCampaign(data.campaigns[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching campaigns:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load campaigns';
+
+        // Check if it's an access token issue
+        if (
+          errorMessage.toLowerCase().includes('account not configured') ||
+          errorMessage.toLowerCase().includes('access token missing')
+        ) {
+          const platformName = platforms.find((p) => p.id === platform)?.name || 'selected';
+          setState({
+            status: 'error',
+            message: `This ${platformName} account needs to be reconnected. Please contact support or reconfigure your integration.`,
+          });
+        } else {
+          setState({ status: 'error', message: errorMessage });
+        }
       }
-    }
-  }, [brandId, platform, selectedCampaign]);
+    },
+    [brandId, platform, selectedCampaign],
+  );
 
   // Fetch metrics for selected campaign
-  const fetchMetrics = useCallback(async (campaignId: string) => {
-    if (!selectedAdAccount) return;
+  const fetchMetrics = useCallback(
+    async (campaignId: string) => {
+      if (!selectedAdAccount) return;
 
-    setState({ status: "loading-metrics" });
-    try {
-      const response = await fetch("/api/paid-metrics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brandId,
-          platform,
-          accountId: selectedAdAccount,
-          campaignId,
-          range: { preset: "last_7d" },
-        }),
-      });
+      setState({ status: 'loading-metrics' });
+      try {
+        const response = await fetch('/api/paid-metrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brandId,
+            platform,
+            accountId: selectedAdAccount,
+            campaignId,
+            range: { preset: 'last_7d' },
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch metrics");
+        if (!response.ok) {
+          throw new Error('Failed to fetch metrics');
+        }
+
+        const data = await response.json();
+        setState({ status: 'success', data });
+      } catch (error) {
+        console.error('Error fetching metrics:', error);
+        setState({
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Failed to load metrics',
+        });
       }
-
-      const data = await response.json();
-      setState({ status: "success", data });
-    } catch (error) {
-      console.error("Error fetching metrics:", error);
-      setState({ status: "error", message: error instanceof Error ? error.message : "Failed to load metrics" });
-    }
-  }, [brandId, platform, selectedAdAccount]);
+    },
+    [brandId, platform, selectedAdAccount],
+  );
 
   // Load campaigns when ad account changes
   React.useEffect(() => {
@@ -456,179 +503,186 @@ export function PaidMediaReportingWidget({
       }
       onSelectedMetricChange?.(metric);
     },
-    [onSelectedMetricChange, selectedMetric]
+    [onSelectedMetricChange, selectedMetric],
   );
 
   return (
-    <Card data-tour-id="dashboard-paid-metrics" variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
-      <Box p="4" className="flex-1 flex flex-col min-h-0">
-        <Flex direction="column" gap="3" className="shrink-0">
-          <Flex align="center" justify="between" gap="3" wrap="wrap">
-            <Flex align="center" gap="2">
-              <Badge color="blue" variant="soft" radius="full">
+    <div
+      data-tour-id="dashboard-paid-metrics"
+      className="flex h-full flex-col rounded-lg border border-subtle bg-surface"
+    >
+      <div className="flex min-h-0 flex-1 flex-col p-4">
+        <div className="flex shrink-0 flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Pill variant="teal">
                 <PieChartIcon />
-              </Badge>
-              <Box>
-                <Text weight="medium">Paid Media Performance</Text>
-                <Text color="gray" size="2">
-                  {selectedCampaign ? "Campaign view" : "Select campaign"} · {viewMode}
-                </Text>
-              </Box>
-            </Flex>
+              </Pill>
+              <div>
+                <span className="font-medium">Paid Media Performance</span>
+                <span className="block text-sm text-muted-foreground">
+                  {selectedCampaign ? 'Campaign view' : 'Select campaign'} · {viewMode}
+                </span>
+              </div>
+            </div>
 
-            <Flex align="center" gap="2">
-              <Select.Root value={platform} onValueChange={(value: Platform) => setPlatform(value)}>
-                <Select.Trigger variant="surface" radius="large" style={{ width: "180px" }}>
-                  {platforms.find(p => p.id === platform)?.name}
-                </Select.Trigger>
-                <Select.Content>
-                  {platforms.map(platformOption => (
-                    <Select.Item
+            <div className="flex items-center gap-2">
+              <Select value={platform} onValueChange={(value) => setPlatform(value as Platform)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select platform" />
+                </SelectTrigger>
+                <SelectContent>
+                  {platforms.map((platformOption) => (
+                    <SelectItem
                       key={platformOption.id}
                       value={platformOption.id}
                       disabled={!platformOption.active}
                     >
                       {platformOption.name}
-                      {!platformOption.active && " (Coming Soon)"}
-                    </Select.Item>
+                      {!platformOption.active && ' (Coming Soon)'}
+                    </SelectItem>
                   ))}
-                </Select.Content>
-              </Select.Root>
+                </SelectContent>
+              </Select>
 
-              <Select.Root value={viewMode} onValueChange={(value: ViewMode) => setViewMode(value)}>
-                <Select.Trigger variant="surface" radius="large" style={{ width: "120px" }}>
-                  {viewMode === "overview" ? "Overview" : "Trends"}
-                </Select.Trigger>
-                <Select.Content>
-                  <Select.Item value="overview">Overview</Select.Item>
-                  <Select.Item value="trends">Trends</Select.Item>
-                </Select.Content>
-              </Select.Root>
+              <Select value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="overview">Overview</SelectItem>
+                  <SelectItem value="trends">Trends</SelectItem>
+                </SelectContent>
+              </Select>
 
-              <IconButton
-                variant="surface"
-                radius="large"
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={handleRefresh}
-                disabled={state.status.startsWith("loading") || (!selectedAdAccount && !selectedCampaign)}
+                disabled={
+                  state.status.startsWith('loading') || (!selectedAdAccount && !selectedCampaign)
+                }
                 title="Refresh data"
               >
-                <ReloadIcon className={state.status.startsWith("loading") ? "animate-spin" : ""} />
-              </IconButton>
-            </Flex>
-          </Flex>
+                <ReloadIcon className={state.status.startsWith('loading') ? 'animate-spin' : ''} />
+              </Button>
+            </div>
+          </div>
 
-          <Flex align="center" gap="2" wrap="wrap">
-            <Select.Root
-              value={selectedAdAccount || ""}
-              onValueChange={(id) => { setSelectedAdAccount(id); onAccountChange?.(id); }}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={selectedAdAccount || ''}
+              onValueChange={(id) => {
+                setSelectedAdAccount(id);
+                onAccountChange?.(id);
+              }}
               disabled={adAccounts.length === 0}
             >
-              <Select.Trigger variant="surface" radius="large" style={{ minWidth: "200px" }}>
-                {adAccounts.length === 0
-                  ? "No Ad Accounts Available"
-                  : selectedAdAccount
-                    ? adAccounts.find(acc => acc.id === selectedAdAccount)?.name || selectedAdAccount
-                    : "Select Ad Account"
-                }
-              </Select.Trigger>
-              <Select.Content>
+              <SelectTrigger className="min-w-[200px]">
+                <SelectValue
+                  placeholder={
+                    adAccounts.length === 0 ? 'No Ad Accounts Available' : 'Select Ad Account'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
                 {adAccounts.length === 0 ? (
-                  <Select.Item value="no-accounts" disabled>
+                  <SelectItem value="no-accounts" disabled>
                     No ad accounts available
-                  </Select.Item>
+                  </SelectItem>
                 ) : (
-                  adAccounts.map(account => (
-                    <Select.Item key={account.id} value={account.id}>
+                  adAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
                       {account.name}
-                    </Select.Item>
+                    </SelectItem>
                   ))
                 )}
-              </Select.Content>
-            </Select.Root>
+              </SelectContent>
+            </Select>
 
-            <Select.Root
-              value={selectedCampaign || ""}
+            <Select
+              value={selectedCampaign || ''}
               onValueChange={setSelectedCampaign}
               disabled={campaigns.length === 0}
             >
-              <Select.Trigger variant="surface" radius="large" style={{ minWidth: "200px" }}>
-                {campaigns.length === 0
-                  ? "No Campaigns Available"
-                  : selectedCampaign
-                    ? campaigns.find(camp => camp.id === selectedCampaign)?.name || selectedCampaign
-                    : "Select Campaign"
-                }
-              </Select.Trigger>
-              <Select.Content>
+              <SelectTrigger className="min-w-[200px]">
+                <SelectValue
+                  placeholder={
+                    campaigns.length === 0 ? 'No Campaigns Available' : 'Select Campaign'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
                 {campaigns.length === 0 ? (
-                  <Select.Item value="no-campaigns" disabled>
+                  <SelectItem value="no-campaigns" disabled>
                     No campaigns available
-                  </Select.Item>
+                  </SelectItem>
                 ) : (
-                  campaigns.map(campaign => (
-                    <Select.Item key={campaign.id} value={campaign.id}>
+                  campaigns.map((campaign) => (
+                    <SelectItem key={campaign.id} value={campaign.id}>
                       {campaign.name}
-                    </Select.Item>
+                    </SelectItem>
                   ))
                 )}
-              </Select.Content>
-            </Select.Root>
-          </Flex>
-        </Flex>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-        <Box pt="4" className="flex-1 min-h-0 overflow-y-auto">
-          {state.status === "error" ? (
-            <Callout.Root color="red" variant="surface">
-              <Callout.Text>{state.message}</Callout.Text>
-            </Callout.Root>
-          ) : (isLoadingAccounts ||
-               state.status === "loading-campaigns" ||
-               state.status === "loading-metrics") ? (
+        <div className="min-h-0 flex-1 overflow-y-auto pt-4">
+          {state.status === 'error' ? (
+            <Alert variant="destructive">
+              <AlertDescription>{state.message}</AlertDescription>
+            </Alert>
+          ) : isLoadingAccounts ||
+            state.status === 'loading-campaigns' ||
+            state.status === 'loading-metrics' ? (
             <PaidReportingLoadingSkeleton
               viewMode={viewMode}
               message={
                 isLoadingAccounts
-                  ? "Loading ad accounts..."
-                  : state.status === "loading-campaigns"
-                    ? "Loading campaigns..."
-                    : "Loading metrics..."
+                  ? 'Loading ad accounts...'
+                  : state.status === 'loading-campaigns'
+                    ? 'Loading campaigns...'
+                    : 'Loading metrics...'
               }
             />
           ) : adAccounts.length === 0 ? (
-           <Flex direction="column" align="center" justify="center" gap="3" className="h-full min-h-[200px]">
-               <Text size="3" color="gray" align="center">
-                 No Ad Accounts Available
-               </Text>
-               <Text size="2" color="gray" align="center">
-                 Connect an ad account to load paid metrics.
-               </Text>
-             </Flex>
-           ) : !selectedCampaign ? (
-             <Flex direction="column" align="center" justify="center" gap="3" className="h-full min-h-[200px]">
-               <Text size="3" color="gray" align="center">
-                 {selectedAdAccount && campaigns.length === 0 ? "No Campaigns Available" : "Select a Campaign"}
-               </Text>
-               <Text size="2" color="gray" align="center">
-                 {selectedAdAccount && campaigns.length === 0
-                   ? "No active campaigns in this account."
-                   : "Pick a campaign to load metrics."
-                 }
-               </Text>
-             </Flex>
-           ) : state.status === "success" ? (
-             viewMode === "overview" ? (
-               <MetricsPanel
-                 data={state.data}
-                 expandedMetric={expandedMetric}
-                 onMetricSelect={handleMetricSelect}
-               />
-             ) : (
-               <PaidTrendsPanel data={state.data} />
-             )
-           ) : null}
-        </Box>
-      </Box>
-    </Card>
+            <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3">
+              <p className="text-center text-base text-muted-foreground">
+                No Ad Accounts Available
+              </p>
+              <p className="text-center text-sm text-muted-foreground">
+                Connect an ad account to load paid metrics.
+              </p>
+            </div>
+          ) : !selectedCampaign ? (
+            <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3">
+              <p className="text-center text-base text-muted-foreground">
+                {selectedAdAccount && campaigns.length === 0
+                  ? 'No Campaigns Available'
+                  : 'Select a Campaign'}
+              </p>
+              <p className="text-center text-sm text-muted-foreground">
+                {selectedAdAccount && campaigns.length === 0
+                  ? 'No active campaigns in this account.'
+                  : 'Pick a campaign to load metrics.'}
+              </p>
+            </div>
+          ) : state.status === 'success' ? (
+            viewMode === 'overview' ? (
+              <MetricsPanel
+                data={state.data}
+                expandedMetric={expandedMetric}
+                onMetricSelect={handleMetricSelect}
+              />
+            ) : (
+              <PaidTrendsPanel data={state.data} />
+            )
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -648,54 +702,66 @@ export function MetricsPanel({
   const { metrics, comparison, range, trends } = data;
 
   const metricCards: MetricCard[] = [
-    { key: "spend", label: "Spend", value: metrics.spend, format: "currency" },
-    { key: "roas", label: "ROAS", value: metrics.roas, format: "number" },
-    { key: "ctr", label: "CTR", value: metrics.ctr, format: "percent" },
-    { key: "cpc", label: "CPC", value: metrics.cpc, format: "currency" },
-    { key: "impressions", label: "Impressions", value: metrics.impressions, format: "number" },
-    { key: "clicks", label: "Clicks", value: metrics.clicks, format: "number" },
-    { key: "gaSessions", label: "GA Sessions", value: metrics.gaSessions, format: "number" },
-    { key: "gaConversions", label: "GA Conversions", value: metrics.gaConversions, format: "number" },
+    { key: 'spend', label: 'Spend', value: metrics.spend, format: 'currency' },
+    { key: 'roas', label: 'ROAS', value: metrics.roas, format: 'number' },
+    { key: 'ctr', label: 'CTR', value: metrics.ctr, format: 'percent' },
+    { key: 'cpc', label: 'CPC', value: metrics.cpc, format: 'currency' },
+    { key: 'impressions', label: 'Impressions', value: metrics.impressions, format: 'number' },
+    { key: 'clicks', label: 'Clicks', value: metrics.clicks, format: 'number' },
+    { key: 'gaSessions', label: 'GA Sessions', value: metrics.gaSessions, format: 'number' },
+    {
+      key: 'gaConversions',
+      label: 'GA Conversions',
+      value: metrics.gaConversions,
+      format: 'number',
+    },
   ];
 
   const expandedKey = expandedMetric;
-  const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
-  
+  const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : '';
+
   // Calculate trend data for the selected metric
   const chartData = React.useMemo(() => {
     if (!trends) return [];
-    return trends.map(day => ({
+    return trends.map((day) => ({
       date: day.date,
       value: deriveMetricTrendValue(day, expandedKey),
     }));
   }, [trends, expandedKey]);
 
   const metricColorMap: Record<string, string> = {
-    spend: "var(--chart-1)",
-    roas: "var(--chart-2)",
-    impressions: "var(--chart-3)",
-    clicks: "var(--chart-4)",
-    ctr: "var(--chart-5)",
-    cpc: "var(--chart-1)",
-    gaSessions: "var(--chart-2)",
-    gaConversions: "var(--chart-3)",
+    spend: 'var(--chart-1)',
+    roas: 'var(--chart-2)',
+    impressions: 'var(--chart-3)',
+    clicks: 'var(--chart-4)',
+    ctr: 'var(--chart-5)',
+    cpc: 'var(--chart-1)',
+    gaSessions: 'var(--chart-2)',
+    gaConversions: 'var(--chart-3)',
   };
 
-  const activeColor = metricColorMap[expandedKey as string] || "var(--color-primary)";
+  const activeColor = metricColorMap[expandedKey as string] || 'var(--color-primary)';
 
   const mainChartConfig = {
     value: { label: expandedLabel, color: activeColor },
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="4" className="h-full min-h-0">
-      <Box className="w-full shrink-0">
-        <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="w-full shrink-0">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {metricCards.map((item) => {
             const delta = comparison?.[item.key]?.percentageChange;
             const formattedDelta = formatPercent(delta);
             const isActive = expandedKey === item.key;
-            const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
+            const deltaToneClass =
+              delta === undefined
+                ? 'text-muted-foreground'
+                : delta > 0
+                  ? 'text-success'
+                  : delta < 0
+                    ? 'text-destructive'
+                    : 'text-muted-foreground';
 
             return (
               <button
@@ -705,72 +771,98 @@ export function MetricsPanel({
                 className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 aria-pressed={isActive}
               >
-                <Card
-                  variant="surface"
+                <div
                   className={cn(
-                    "border border-subtle bg-surface transition-[background-color,box-shadow] hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden",
-                    isActive && "ring-1 ring-primary bg-accent/10"
+                    'flex min-h-[64px] flex-col items-center justify-center overflow-hidden rounded-lg border border-subtle bg-surface transition-[background-color,box-shadow] hover:bg-accent/5 cursor-pointer',
+                    isActive && 'ring-1 ring-primary bg-accent/10',
                   )}
                 >
-                  <Box p="2" className="w-full">
-                    <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                      <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "0.66rem" }}>{item.label}</Text>
-                      <Heading weight="bold" className="truncate w-full leading-tight tabular-nums" style={{ fontSize: "0.8rem" }}>{formatValue(item.value, item.format)}</Heading>
+                  <div className="w-full p-2">
+                    <div className="flex w-full flex-col items-center justify-center gap-0 text-center">
+                      <span
+                        className="w-full truncate font-medium leading-none text-muted-foreground"
+                        style={{ fontSize: '0.66rem' }}
+                      >
+                        {item.label}
+                      </span>
+                      <div
+                        className="w-full truncate font-semibold leading-tight tabular-nums"
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        {formatValue(item.value, item.format)}
+                      </div>
                       {formattedDelta ? (
-                        <Text color={deltaTone} weight="bold" className="leading-none tabular-nums" style={{ fontSize: "0.66rem" }}>
+                        <span
+                          className={cn('font-semibold leading-none tabular-nums', deltaToneClass)}
+                          style={{ fontSize: '0.66rem' }}
+                        >
                           {formattedDelta}
-                        </Text>
+                        </span>
                       ) : (
-                        <Box className="h-2" />
+                        <div className="h-2" />
                       )}
-                    </Flex>
-                  </Box>
-                </Card>
+                    </div>
+                  </div>
+                </div>
               </button>
             );
           })}
-        </Grid>
-      </Box>
+        </div>
+      </div>
 
-      <Box className="w-full h-full min-h-[200px] mt-2">
-        <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
-          <Box p="3" className="flex-1 flex flex-col min-h-0">
-            <Flex align="center" justify="between" gap="2" mb="2">
-              <Box>
-                <Heading size="3">{expandedLabel} Trend</Heading>
-                <Text color="gray" size="1">{range.since} → {range.until}</Text>
-              </Box>
-            </Flex>
+      <div className="mt-2 h-full min-h-[200px] w-full">
+        <div className="flex h-full flex-col rounded-lg border border-subtle bg-surface">
+          <div className="flex min-h-0 flex-1 flex-col p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-semibold">{expandedLabel} Trend</h3>
+                <span className="text-xs text-muted-foreground">
+                  {range.since} → {range.until}
+                </span>
+              </div>
+            </div>
 
-            <Box className="flex-1 min-h-0 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
               <ChartContainer config={mainChartConfig} className="h-[250px] w-full aspect-auto">
                 <LineChart data={chartData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    tickLine={false} 
-                    axisLine={false} 
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) =>
+                      new Date(value).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    }
                     minTickGap={30}
                   />
-                  <YAxis 
-                    tickLine={false} 
-                    axisLine={false} 
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
                     domain={['auto', 'auto']}
                     width={40}
                     tickFormatter={(value) => {
-                       if (typeof value !== 'number') return String(value);
-                       if (expandedKey === 'ctr' || expandedKey === 'roas') return value.toFixed(1);
-                       if (expandedKey === 'spend' || expandedKey === 'cpc') {
-                          return `$${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`;
-                       }
-                       return value >= 1000 ? (value/1000).toFixed(1) + 'k' : String(value);
+                      if (typeof value !== 'number') return String(value);
+                      if (expandedKey === 'ctr' || expandedKey === 'roas') return value.toFixed(1);
+                      if (expandedKey === 'spend' || expandedKey === 'cpc') {
+                        return `$${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`;
+                      }
+                      return value >= 1000 ? (value / 1000).toFixed(1) + 'k' : String(value);
                     }}
                   />
                   <ChartTooltip
-                    content={<ChartTooltipContent
-                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                    />}
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(label) =>
+                          new Date(label).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                          })
+                        }
+                      />
+                    }
                   />
                   <Line
                     type="monotone"
@@ -783,10 +875,10 @@ export function MetricsPanel({
                   />
                 </LineChart>
               </ChartContainer>
-            </Box>
-          </Box>
-        </Card>
-      </Box>
-    </Flex>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,43 +1,46 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
+import { useEffect, useState, useTransition } from 'react';
+import { createMagicLinkAction, revokeInviteAction } from '@/app/(post-auth)/settings/actions';
+import { Pill } from '@/components/kibo-ui/pill';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
-  Box,
-  Badge,
-  Button,
-  Callout,
-  Flex,
-  Grid,
-  Heading,
   Select,
-  Table,
-  Text,
-  TextArea,
-  TextField,
-} from "@radix-ui/themes";
-import type { BrandInvite, BrandRole } from "@/lib/onboarding/state";
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
-  createMagicLinkAction,
-  revokeInviteAction,
-} from "@/app/(post-auth)/settings/actions";
-import { useToast } from "@/components/ui/ToastProvider";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import type { BrandInvite, BrandRole } from '@/lib/onboarding/state';
 
 type BrandInvitesSectionProps = {
   invites: BrandInvite[];
   canEdit: boolean;
 };
 
-const INVITE_ROLES: BrandRole[] = ["admin", "operator", "viewer"];
+const INVITE_ROLES: BrandRole[] = ['admin', 'operator', 'viewer'];
 
 export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionProps) {
   const router = useRouter();
   const { show } = useToast();
   const { activeBrandId } = useActiveBrandContext();
   const [isPending, startTransition] = useTransition();
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<BrandRole>("operator");
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<BrandRole>('operator');
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -45,41 +48,45 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
     setMounted(true);
   }, []);
 
-  const formatDate = (value: string) => (mounted ? new Date(value).toLocaleString() : "—");
+  const formatDate = (value: string) => (mounted ? new Date(value).toLocaleString() : '—');
 
   const handleCreateMagicLink = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = inviteEmail.trim();
     if (!trimmed) {
-      show({ title: "Email required", description: "Add an email to send an invite.", variant: "error" });
+      show({
+        title: 'Email required',
+        description: 'Add an email to send an invite.',
+        variant: 'error',
+      });
       return;
     }
     startTransition(async () => {
       try {
         const result = await createMagicLinkAction(activeBrandId, trimmed, inviteRole);
         setGeneratedLink(result.link);
-        setInviteEmail("");
+        setInviteEmail('');
         if (result.warning) {
-          show({ title: "Invite ready", description: result.warning, variant: "warning" });
+          show({ title: 'Invite ready', description: result.warning, variant: 'warning' });
         } else if (result.emailSent) {
           show({
-            title: result.resent ? "Magic link resent" : "Magic link sent",
+            title: result.resent ? 'Magic link resent' : 'Magic link sent',
             description: `Invite emailed to ${trimmed}.`,
-            variant: "success",
+            variant: 'success',
           });
         } else {
           show({
-            title: "Invite ready",
-            description: "Invite link created. Share it manually.",
-            variant: "warning",
+            title: 'Invite ready',
+            description: 'Invite link created. Share it manually.',
+            variant: 'warning',
           });
         }
         router.refresh();
       } catch (error) {
         show({
-          title: "Invite failed",
-          description: error instanceof Error ? error.message : "Unable to create invite.",
-          variant: "error",
+          title: 'Invite failed',
+          description: error instanceof Error ? error.message : 'Unable to create invite.',
+          variant: 'error',
         });
       }
     });
@@ -89,92 +96,96 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
     startTransition(async () => {
       try {
         await revokeInviteAction(activeBrandId, inviteId);
-        show({ title: "Invite revoked", description: "This invite link is no longer valid.", variant: "success" });
+        show({
+          title: 'Invite revoked',
+          description: 'This invite link is no longer valid.',
+          variant: 'success',
+        });
         router.refresh();
       } catch (error) {
         show({
-          title: "Revoke failed",
-          description: error instanceof Error ? error.message : "Unable to revoke invite.",
-          variant: "error",
+          title: 'Revoke failed',
+          description: error instanceof Error ? error.message : 'Unable to revoke invite.',
+          variant: 'error',
         });
       }
     });
   };
 
   return (
-    <Flex direction="column" gap="4">
+    <div className="flex flex-col gap-4">
       {canEdit ? (
         <form onSubmit={handleCreateMagicLink}>
-          <Flex direction="column" gap="3">
-            <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3" align="end">
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">Email</Text>
-                <TextField.Root
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 md:grid-cols-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Email</span>
+                <Input
                   placeholder="teammate@example.com"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />
-              </Flex>
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">Role</Text>
-                <Select.Root value={inviteRole} onValueChange={(value) => setInviteRole(value as BrandRole)}>
-                  <Select.Trigger placeholder="Role" />
-                  <Select.Content>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Role</span>
+                <Select
+                  value={inviteRole}
+                  onValueChange={(value) => setInviteRole(value as BrandRole)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent>
                     {INVITE_ROLES.map((role) => (
-                      <Select.Item key={role} value={role}>
+                      <SelectItem key={role} value={role}>
                         {role.charAt(0).toUpperCase() + role.slice(1)}
-                      </Select.Item>
+                      </SelectItem>
                     ))}
-                  </Select.Content>
-                </Select.Root>
-              </Flex>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button type="submit" disabled={isPending} className="min-h-10 w-full md:w-auto">
                 Generate magic link
               </Button>
-            </Grid>
+            </div>
             {generatedLink ? (
-              <Flex direction="column" gap="2">
-                <Callout.Root color="green">
-                  <Callout.Text>Invite link generated. Share it directly with your teammate.</Callout.Text>
-                </Callout.Root>
-                <TextArea readOnly value={generatedLink} className="font-mono text-sm" />
-              </Flex>
+              <div className="flex flex-col gap-2">
+                <Alert className="border-success/30 bg-success/10">
+                  <AlertDescription className="text-success">
+                    Invite link generated. Share it directly with your teammate.
+                  </AlertDescription>
+                </Alert>
+                <Textarea readOnly value={generatedLink} className="font-mono text-sm" />
+              </div>
             ) : null}
-          </Flex>
+          </div>
         </form>
       ) : null}
 
-      <Box>
-        <Heading size="3" mb="2">Pending invites</Heading>
+      <div>
+        <h3 className="mb-2 text-base font-semibold">Pending invites</h3>
         {invites.length === 0 ? (
-          <Text color="gray">No pending invitations.</Text>
+          <p className="text-sm text-muted-foreground">No pending invitations.</p>
         ) : (
           <>
             <div className="space-y-2 md:hidden">
               {invites.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="rounded-lg border border-border/60 bg-card/20 p-3"
-                >
+                <div key={invite.id} className="rounded-lg border border-border/60 bg-card/20 p-3">
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <Text as="p" size="2" weight="medium" className="break-all">
-                        {invite.email}
-                      </Text>
-                      <Text as="p" size="1" color="gray" className="mt-1">
+                      <p className="break-all text-sm font-medium">{invite.email}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Created {formatDate(invite.createdAt)}
-                      </Text>
+                      </p>
                     </div>
-                    <Badge variant="soft">{invite.role}</Badge>
+                    <Pill>{invite.role}</Pill>
                   </div>
                   {canEdit ? (
                     <Button
-                      size="2"
                       variant="ghost"
-                      color="red"
                       onClick={() => handleRevoke(invite.id)}
                       disabled={isPending}
-                      className="mt-3 min-h-10"
+                      className="mt-3 min-h-10 text-destructive hover:text-destructive"
                     >
                       Revoke
                     </Button>
@@ -183,42 +194,42 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
               ))}
             </div>
             <div className="hidden overflow-x-auto md:block">
-              <Table.Root className="min-w-[40rem]">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
+              <Table className="min-w-[40rem]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {invites.map((invite) => (
-                    <Table.Row key={invite.id}>
-                      <Table.Cell>{invite.email}</Table.Cell>
-                      <Table.Cell>{invite.role}</Table.Cell>
-                      <Table.Cell>{formatDate(invite.createdAt)}</Table.Cell>
-                      <Table.Cell className="text-right">
+                    <TableRow key={invite.id}>
+                      <TableCell>{invite.email}</TableCell>
+                      <TableCell>{invite.role}</TableCell>
+                      <TableCell>{formatDate(invite.createdAt)}</TableCell>
+                      <TableCell className="text-right">
                         {canEdit ? (
                           <Button
-                            size="1"
+                            size="sm"
                             variant="ghost"
-                            color="red"
                             onClick={() => handleRevoke(invite.id)}
                             disabled={isPending}
+                            className="text-destructive hover:text-destructive"
                           >
                             Revoke
                           </Button>
                         ) : null}
-                      </Table.Cell>
-                    </Table.Row>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </Table.Body>
-              </Table.Root>
+                </TableBody>
+              </Table>
             </div>
           </>
         )}
-      </Box>
-    </Flex>
+      </div>
+    </div>
   );
 }

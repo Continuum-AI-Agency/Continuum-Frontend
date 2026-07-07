@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Card, Flex, Heading, Separator, Text } from "@radix-ui/themes";
-import type { ReactElement } from "react";
+import type { ReactElement } from 'react';
+import { Separator } from '@/components/ui/separator';
 
 type ComingSoonPrimitiveProps = {
   title: string;
@@ -11,19 +11,18 @@ type ComingSoonPrimitiveProps = {
 
 export function ComingSoonPrimitive({ title, summary, icon }: ComingSoonPrimitiveProps) {
   return (
-    <Card className="glass-panel">
-      <Flex direction="column" gap="3">
-        <Flex align="center" gap="2">
+    <div className="glass-panel rounded-lg p-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
           {icon}
-          <Heading size="4" className="text-white">
-            {title}
-          </Heading>
-        </Flex>
-        <Text color="gray">{summary}</Text>
-        <Separator size="4" />
-        <Text color="gray">Add requirements and sample assets here to keep the build aligned.</Text>
-      </Flex>
-    </Card>
+          <h4 className="text-lg font-semibold text-white">{title}</h4>
+        </div>
+        <span className="text-muted-foreground">{summary}</span>
+        <Separator />
+        <span className="text-muted-foreground">
+          Add requirements and sample assets here to keep the build aligned.
+        </span>
+      </div>
+    </div>
   );
 }
-

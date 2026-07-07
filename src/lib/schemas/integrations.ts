@@ -36,6 +36,15 @@ export const metaResyncResponseSchema = z.object({
   failed: z.array(z.string()),
 });
 
+export const linkedinSyncResponseSchema = integrationSyncResponseBase.extend({
+  state: z.string().min(1),
+});
+
+export const linkedinResyncResponseSchema = z.object({
+  updated: z.array(z.string()),
+  failed: z.array(z.string()),
+});
+
 export const xSyncResponseSchema = integrationSyncResponseBase.extend({
   state: z.string().min(1),
 });
@@ -50,6 +59,8 @@ export type GoogleSyncResponse = z.infer<typeof googleSyncResponseSchema>;
 export type GoogleDrivePickerResponse = z.infer<typeof googleDrivePickerResponseSchema>;
 export type TikTokSyncResponse = z.infer<typeof tiktokSyncResponseSchema>;
 export type TikTokResyncResponse = z.infer<typeof tiktokResyncResponseSchema>;
+export type LinkedInSyncResponse = z.infer<typeof linkedinSyncResponseSchema>;
+export type LinkedInResyncResponse = z.infer<typeof linkedinResyncResponseSchema>;
 export type XSyncResponse = z.infer<typeof xSyncResponseSchema>;
 export type XResyncResponse = z.infer<typeof xResyncResponseSchema>;
 export type MetaResyncResponse = z.infer<typeof metaResyncResponseSchema>;

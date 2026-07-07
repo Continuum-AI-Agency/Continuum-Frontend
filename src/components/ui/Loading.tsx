@@ -1,8 +1,6 @@
-"use client";
+'use client';
 
-import React from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Card } from "@radix-ui/themes";
+import { AnimatePresence, motion } from 'motion/react';
 
 export function Spinner({ size = 24 }: { size?: number }) {
   const radius = size / 2;
@@ -11,7 +9,8 @@ export function Spinner({ size = 24 }: { size?: number }) {
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className="animate-spin text-violet-600"
+      className="animate-spin text-primary"
+      aria-hidden="true"
     >
       <circle
         cx={radius}
@@ -28,11 +27,11 @@ export function Spinner({ size = 24 }: { size?: number }) {
   );
 }
 
-export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
-  return <div className={`rounded-md bg-gray-200 dark:bg-gray-800 animate-pulse ${className}`} />;
+export function Skeleton({ className = 'h-4 w-full' }: { className?: string }) {
+  return <div className={`rounded-md bg-muted animate-pulse ${className}`} />;
 }
 
-export function LoadingOverlay({ show, label = "Loading..." }: { show: boolean; label?: string }) {
+export function LoadingOverlay({ show, label = 'Loading...' }: { show: boolean; label?: string }) {
   return (
     <AnimatePresence>
       {show && (
@@ -42,16 +41,14 @@ export function LoadingOverlay({ show, label = "Loading..." }: { show: boolean; 
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 grid place-items-center bg-black/30 backdrop-blur-sm"
         >
-          <Card>
+          <div className="rounded-lg border bg-card shadow-lg">
             <div className="flex items-center gap-3 p-4">
               <Spinner />
               <span className="text-sm">{label}</span>
             </div>
-          </Card>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
   );
 }
-
-

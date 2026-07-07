@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import { useCallback, useMemo, useRef } from "react";
-import { Button, Text } from "@radix-ui/themes";
-import { FileDownIcon } from "lucide-react";
-import type { CheckpointReportV2, ExecutionObjective } from "@/lib/jaina/schemas";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
-import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { useToast } from "@/components/ui/ToastProvider";
-import { cn } from "@/lib/utils";
-import { downloadJainaReportV2Pdf } from "../reportExport";
-import { BlockRenderer } from "../blocks/BlockRenderer";
-import { MediaMapProvider } from "../blocks/mediaText";
+import { FileDownIcon } from 'lucide-react';
+import { useCallback, useMemo, useRef } from 'react';
+import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import { Button } from '@/components/ui/button';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import { useToast } from '@/components/ui/ToastProvider';
+import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
+import { BlockRenderer } from '../blocks/BlockRenderer';
+import { MediaMapProvider } from '../blocks/mediaText';
+import { downloadJainaReportV2Pdf } from '../reportExport';
 
-const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective["status"], string> = {
-  completed: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  failed: "bg-red-500/15 text-red-600 dark:text-red-400",
-  in_progress: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  blocked: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  deferred: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
-  partial: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  pending: "bg-muted text-muted-foreground",
+const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
+  completed: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  failed: 'bg-red-500/15 text-red-600 dark:text-red-400',
+  in_progress: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  blocked: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  deferred: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400',
+  partial: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+  pending: 'bg-muted text-muted-foreground',
 };
 
 // Supplementary report context (reasoning, objectives, sources). These ride along
@@ -46,11 +46,11 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
               <li key={objective.id} className="flex items-start gap-2 text-xs">
                 <span
                   className={cn(
-                    "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium capitalize",
+                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium capitalize',
                     OBJECTIVE_STATUS_STYLE[objective.status],
                   )}
                 >
-                  {objective.status.replace("_", " ")}
+                  {objective.status.replace('_', ' ')}
                 </span>
                 <span className="min-w-0 flex-1 leading-snug text-muted-foreground">
                   {objective.title}
@@ -76,7 +76,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
 
       {sources.length > 0 ? (
         <div className="text-xs text-muted-foreground/70">
-          <span className="font-medium">Sources:</span> {sources.join(", ")}
+          <span className="font-medium">Sources:</span> {sources.join(', ')}
         </div>
       ) : null}
     </div>
@@ -89,11 +89,7 @@ type JainaReportV2Props = {
   onSuggestionClick?: (query: string) => void;
 };
 
-export function JainaReportV2({
-  report,
-  isStreaming,
-  onSuggestionClick,
-}: JainaReportV2Props) {
+export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaReportV2Props) {
   const { show } = useToast();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const sortedBlocks = useMemo(
@@ -109,9 +105,9 @@ export function JainaReportV2({
       await downloadJainaReportV2Pdf({ exportNode: reportRef.current });
     } catch {
       show({
-        title: "Export failed",
-        description: "Unable to generate the report PDF right now.",
-        variant: "error",
+        title: 'Export failed',
+        description: 'Unable to generate the report PDF right now.',
+        variant: 'error',
       });
     }
   }, [show]);
@@ -123,16 +119,12 @@ export function JainaReportV2({
           <SafeMarkdown
             content={report.executive_summary}
             className="text-sm leading-relaxed text-muted-foreground"
-            mode={isStreaming ? "streaming" : "static"}
+            mode={isStreaming ? 'streaming' : 'static'}
           />
         ) : null}
 
         {sortedBlocks.map((block) => (
-          <BlockRenderer
-            key={block.block_id}
-            block={block}
-            isStreaming={isStreaming}
-          />
+          <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
         ))}
 
         {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
@@ -153,14 +145,13 @@ export function JainaReportV2({
       ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-        <Text size="1" className="text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           Export a PDF of this report exactly as shown.
-        </Text>
+        </span>
         <Button
           type="button"
-          size="1"
-          variant="surface"
-          color="gray"
+          size="sm"
+          variant="outline"
           onClick={handlePdfExport}
           disabled={isStreaming}
           aria-label="Export report as PDF"
@@ -174,9 +165,5 @@ export function JainaReportV2({
 
   if (!hasMedia) return content;
 
-  return (
-    <MediaMapProvider mediaMap={report.media_map}>
-      {content}
-    </MediaMapProvider>
-  );
+  return <MediaMapProvider mediaMap={report.media_map}>{content}</MediaMapProvider>;
 }

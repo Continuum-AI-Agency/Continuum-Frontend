@@ -1,9 +1,10 @@
-import { Badge, Box, Flex, Heading, Separator, Text } from "@radix-ui/themes";
-import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon } from "@radix-ui/react-icons";
+import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon } from '@radix-ui/react-icons';
 
-import { GlassPanel } from "@/components/ui/GlassPanel";
-import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
-import { BrandQuestionsList } from "./BrandQuestionsList";
+import { Pill } from '@/components/kibo-ui/pill';
+import { GlassPanel } from '@/components/ui/GlassPanel';
+import { Separator } from '@/components/ui/separator';
+import type { BrandInsightsQuestionsByNiche } from '@/lib/schemas/brandInsights';
+import { BrandQuestionsList } from './BrandQuestionsList';
 
 type BrandQuestionsPanelProps = {
   questionsByNiche: BrandInsightsQuestionsByNiche;
@@ -17,10 +18,10 @@ function formatDate(value?: string) {
   if (!value) return undefined;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
 }
 
@@ -40,62 +41,52 @@ export function BrandQuestionsPanel({
   const weekLabel = formatDate(weekStartDate);
   const generatedLabel = formatDate(generatedAt ?? questionsByNiche.generatedAt);
   const panelStatus = status ?? questionsByNiche.status;
-  const totalQuestions = questionsByNiche.summary?.totalQuestions ?? countQuestions(questionsByNiche);
+  const totalQuestions =
+    questionsByNiche.summary?.totalQuestions ?? countQuestions(questionsByNiche);
 
   return (
     <GlassPanel className="p-[var(--card-pad)] space-y-4">
-      <Flex justify="between" align="start" wrap="wrap" gap="3">
-        <Box className="space-y-1">
-          <Flex align="center" gap="2">
-            <ReaderIcon className="h-4 w-4 text-[var(--accent-11)]" />
-            <Text size="1" color="gray">
-              Brand Insights · Questions
-            </Text>
-          </Flex>
-          <Heading size="5" className="text-white">
-            Audience questions
-          </Heading>
-          <Text size="2" color="gray">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <ReaderIcon className="h-4 w-4 text-primary" aria-hidden="true" />
+            <span className="text-xs text-muted-foreground">Brand Insights · Questions</span>
+          </div>
+          <h3 className="text-xl font-semibold text-foreground">Audience questions</h3>
+          <span className="block text-sm text-muted-foreground">
             Common questions and prompts surfaced from your niche and social data.
-          </Text>
-        </Box>
+          </span>
+        </div>
 
-        <Flex align="center" wrap="wrap" gap="2" justify="end">
-          {typeof totalQuestions === "number" && totalQuestions > 0 && (
-            <Badge color="teal" variant="surface">
-              {totalQuestions} questions
-            </Badge>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {typeof totalQuestions === 'number' && totalQuestions > 0 && (
+            <Pill variant="teal">{totalQuestions} questions</Pill>
           )}
           {country && (
-            <Badge color="gray" variant="surface">
-              <GlobeIcon className="mr-1 h-3.5 w-3.5" />
+            <Pill variant="muted">
+              <GlobeIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               {country}
-            </Badge>
+            </Pill>
           )}
           {weekLabel && (
-            <Badge color="indigo" variant="surface">
-              <CalendarIcon className="mr-1 h-3.5 w-3.5" />
+            <Pill variant="violet">
+              <CalendarIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               Week of {weekLabel}
-            </Badge>
+            </Pill>
           )}
           {generatedLabel && (
-            <Badge color="green" variant="surface">
-              <ClockIcon className="mr-1 h-3.5 w-3.5" />
+            <Pill variant="success">
+              <ClockIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               Updated {generatedLabel}
-            </Badge>
+            </Pill>
           )}
-          {panelStatus && (
-            <Badge color="amber" variant="surface">
-              {panelStatus}
-            </Badge>
-          )}
-        </Flex>
-      </Flex>
+          {panelStatus && <Pill variant="warning">{panelStatus}</Pill>}
+        </div>
+      </div>
 
-      <Separator size="4" />
+      <Separator />
 
       <BrandQuestionsList questionsByNiche={questionsByNiche.questionsByNiche} />
     </GlassPanel>
   );
 }
-

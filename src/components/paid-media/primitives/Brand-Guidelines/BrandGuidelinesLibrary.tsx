@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { Badge, Box, Button, Card, Flex, Heading, Text } from "@radix-ui/themes";
-import { PlusIcon } from "@radix-ui/react-icons";
+import { PlusIcon } from '@radix-ui/react-icons';
+import { Pill, type PillProps } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import type { BrandGuidelineStatus, BrandGuidelineSummary } from '@/lib/schemas/brandGuidelines';
 
-import type { BrandGuidelineStatus, BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
-
-const STATUS_COLOR: Record<BrandGuidelineStatus, "gray" | "amber" | "green" | "red"> = {
-  draft: "gray",
-  review: "amber",
-  approved: "green",
-  archived: "red",
+const STATUS_PILL_VARIANT: Record<BrandGuidelineStatus, PillProps['variant']> = {
+  draft: 'muted',
+  review: 'warning',
+  approved: 'success',
+  archived: 'destructive',
 };
 
 type BrandGuidelinesLibraryProps = {
@@ -28,31 +28,27 @@ export function BrandGuidelinesLibrary({
   isLoading = false,
 }: BrandGuidelinesLibraryProps) {
   return (
-    <Card className="glass-panel h-full">
-      <Flex direction="column" gap="3">
-        <Flex align="center" justify="between" gap="2">
-          <Heading size="4" className="text-white">
-            Guidelines library
-          </Heading>
-          <Button size="1" onClick={onCreateNew}>
+    <div className="glass-panel h-full rounded-lg p-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-lg font-semibold text-white">Guidelines library</h4>
+          <Button size="sm" onClick={onCreateNew}>
             <PlusIcon /> New
           </Button>
-        </Flex>
-        <Text color="gray" size="2">
+        </div>
+        <span className="text-sm text-muted-foreground">
           Purpose-driven brand guideline sets. Create one for each seasonal or campaign need.
-        </Text>
+        </span>
         {isLoading ? (
-          <Text size="2" color="gray">
-            Loading guidelines...
-          </Text>
+          <span className="text-sm text-muted-foreground">Loading guidelines...</span>
         ) : guidelines.length === 0 ? (
-          <Box className="rounded-md border border-dashed border-[var(--glass-border)] p-4">
-            <Text size="2" color="gray">
+          <div className="rounded-md border border-dashed border-[var(--glass-border)] p-4">
+            <span className="text-sm text-muted-foreground">
               No guidelines yet. Create a new guideline to get started.
-            </Text>
-          </Box>
+            </span>
+          </div>
         ) : (
-          <Flex direction="column" gap="2">
+          <div className="flex flex-col gap-2">
             {guidelines.map((guideline) => {
               const isActive = guideline.id === activeId;
               return (
@@ -62,32 +58,28 @@ export function BrandGuidelinesLibrary({
                   onClick={() => onSelect(guideline.id)}
                   className={`w-full rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
                     isActive
-                      ? "border-brand-primary/60 bg-brand-primary/10"
-                      : "border-[var(--glass-border)] hover:border-brand-primary/40"
+                      ? 'border-brand-primary/60 bg-brand-primary/10'
+                      : 'border-[var(--glass-border)] hover:border-brand-primary/40'
                   }`}
                 >
-                  <Flex align="center" justify="between">
-                    <Text weight="medium" className="text-white">
-                      {guideline.purpose}
-                    </Text>
-                    <Badge color={STATUS_COLOR[guideline.status]} radius="full" variant="surface">
-                      {guideline.status}
-                    </Badge>
-                  </Flex>
-                  <Flex align="center" justify="between">
-                    <Text size="1" color="gray">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-white">{guideline.purpose}</span>
+                    <Pill variant={STATUS_PILL_VARIANT[guideline.status]}>{guideline.status}</Pill>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
                       Version {guideline.version}
-                    </Text>
-                    <Text size="1" color="gray">
+                    </span>
+                    <span className="text-xs text-muted-foreground">
                       Updated {new Date(guideline.updatedAt).toLocaleDateString()}
-                    </Text>
-                  </Flex>
+                    </span>
+                  </div>
                 </button>
               );
             })}
-          </Flex>
+          </div>
         )}
-      </Flex>
-    </Card>
+      </div>
+    </div>
   );
 }

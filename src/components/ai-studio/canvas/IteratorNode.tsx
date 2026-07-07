@@ -1,12 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
-"use client";
+'use client';
 
-import React from "react";
-import { Handle, Position } from "@xyflow/react";
-import { Badge, Button, Text } from "@radix-ui/themes";
-import { PlayIcon, StopIcon } from "@radix-ui/react-icons";
+import { PlayIcon, StopIcon } from '@radix-ui/react-icons';
+import { Handle, Position } from '@xyflow/react';
+import React from 'react';
 
-import type { IteratorNodeData } from "@/lib/ai-studio/nodeTypes";
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import type { IteratorNodeData } from '@/lib/ai-studio/nodeTypes';
 
 type IteratorNodeProps = {
   id: string;
@@ -20,20 +21,22 @@ export function IteratorNode({ id: nodeId, data, selected }: IteratorNodeProps) 
   const progress = totalItems > 0 ? Math.round((currentIndex / totalItems) * 100) : 0;
 
   const handleIterate = () => {
-    window.dispatchEvent(new CustomEvent("node:iterate", { detail: { id: nodeId } }));
+    window.dispatchEvent(new CustomEvent('node:iterate', { detail: { id: nodeId } }));
   };
 
   const handleReset = () => {
-    window.dispatchEvent(new CustomEvent("node:reset-iterator", { detail: { id: nodeId } }));
+    window.dispatchEvent(new CustomEvent('node:reset-iterator', { detail: { id: nodeId } }));
   };
 
   return (
-    <div className={`relative w-64 rounded-xl border ${selected ? "border-orange-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
+    <div
+      className={`relative w-64 rounded-xl border ${selected ? 'border-orange-400' : 'border-white/10'} bg-slate-900/90 p-3 shadow-lg`}
+    >
       <div className="flex items-center justify-between">
-        <Text className="text-gray-200">Iterator</Text>
-        <Badge size="1" variant="soft" color="orange">
+        <span className="text-gray-200">Iterator</span>
+        <Pill variant="warning">
           {currentIndex}/{totalItems}
-        </Badge>
+        </Pill>
       </div>
 
       <div className="mt-2">
@@ -43,16 +46,14 @@ export function IteratorNode({ id: nodeId, data, selected }: IteratorNodeProps) 
             style={{ width: `${progress}%` }}
           />
         </div>
-        <Text size="1" color="gray" className="mt-1">
-          {progress}% complete
-        </Text>
+        <span className="mt-1 block text-xs text-gray-300">{progress}% complete</span>
       </div>
 
       <div className="mt-3 flex gap-2">
-        <Button size="2" variant="outline" onClick={handleIterate} className="flex-1">
+        <Button variant="outline" onClick={handleIterate} className="flex-1">
           <PlayIcon /> Iterate
         </Button>
-        <Button size="2" variant="ghost" onClick={handleReset}>
+        <Button variant="ghost" onClick={handleReset}>
           <StopIcon />
         </Button>
       </div>

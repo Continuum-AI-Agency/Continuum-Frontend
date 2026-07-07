@@ -1,5 +1,5 @@
-import { Mail } from "lucide-react";
-import { Button } from "@radix-ui/themes";
+import { Mail } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface EmailSentProps {
   email: string;
@@ -15,12 +15,9 @@ export function EmailSent({ email, onResend, isResending }: EmailSentProps) {
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold text-white">
-          Check your email
-        </h2>
+        <h2 className="text-2xl font-bold text-white">Check your email</h2>
         <p className="text-gray-400 max-w-md">
-          We sent a magic link to{" "}
-          <span className="font-semibold text-white">{email}</span>
+          We sent a magic link to <span className="font-semibold text-white">{email}</span>
         </p>
       </div>
 
@@ -29,10 +26,9 @@ export function EmailSent({ email, onResend, isResending }: EmailSentProps) {
           onClick={onResend}
           disabled={isResending}
           variant="ghost"
-          size="2"
           className="text-white hover:text-gray-200 transition-colors"
         >
-          {isResending ? "Sending..." : "Resend email"}
+          {isResending ? 'Sending...' : 'Resend email'}
         </Button>
       )}
 

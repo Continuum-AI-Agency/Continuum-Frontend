@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Card, Flex, Heading, Text } from '@radix-ui/themes';
 import React from 'react';
+import { AudienceChoroplethMap } from '@/components/organic/AudienceChoroplethMap';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
   Map,
@@ -265,6 +265,16 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
     [countryEntries],
   );
 
+  const countryChoroplethData = React.useMemo(
+    () =>
+      countryEntries.map((entry) => ({
+        alpha2: entry.key,
+        label: resolveCountryLabel(entry.label || entry.key),
+        value: entry.value,
+      })),
+    [countryEntries],
+  );
+
   const cityPoints = React.useMemo<LocationPoint[]>(
     () =>
       cityEntries
@@ -338,13 +348,13 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
   );
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface">
+    <div className="rounded-lg border border-subtle bg-surface">
       <SectionHeader
         title="Audience Location"
         meta={
-          <Text size="1" color="gray">
+          <span className="text-xs text-muted-foreground">
             Followers by {viewMode} ({timeframeLabel(timeframe)})
-          </Text>
+          </span>
         }
         action={
           <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
@@ -381,16 +391,22 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           </div>
         }
       />
-      <Box p="3">
+      <div className="p-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative h-[clamp(240px,48svh,560px)] sm:h-[clamp(280px,52svh,580px)] overflow-hidden rounded-lg border border-subtle">
-            {renderPoints.length === 0 ? (
+            {countryLayerVisible ? (
+              countryChoroplethData.length === 0 ? (
+                <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
+                  <span className="text-sm text-muted-foreground">
+                    Country breakdown unavailable.
+                  </span>
+                </div>
+              ) : (
+                <AudienceChoroplethMap data={countryChoroplethData} className="bg-card" />
+              )
+            ) : renderPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
-                <Text size="2" color="gray">
-                  {viewMode === 'country'
-                    ? 'Country breakdown unavailable.'
-                    : 'City breakdown unavailable.'}
-                </Text>
+                <span className="text-sm text-muted-foreground">City breakdown unavailable.</span>
               </div>
             ) : (
               <Map
@@ -439,12 +455,10 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                         className="min-w-[170px] rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-white shadow-xl backdrop-blur-md"
                       >
                         <div className="space-y-1">
-                          <Text as="div" size="1" weight="bold" className="text-white">
-                            {point.label}
-                          </Text>
-                          <Text as="div" size="1" className="text-zinc-300">
+                          <div className="text-xs font-semibold text-white">{point.label}</div>
+                          <div className="text-xs text-zinc-300">
                             {point.value.toLocaleString()} people
-                          </Text>
+                          </div>
                         </div>
                       </MarkerTooltip>
                     </MapMarker>
@@ -455,61 +469,83 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
             )}
 
             <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
-              <Flex gap="2" align="center">
-                <Text size="1">High</Text>
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                <Text size="1">Medium</Text>
-                <span className="h-2.5 w-2.5 rounded-full bg-teal-400" />
-                <Text size="1">Low</Text>
-                <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
-              </Flex>
+              {countryLayerVisible ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Fewer</span>
+                  <span
+                    className="h-2.5 w-2.5 rounded-sm"
+                    style={{ backgroundColor: 'var(--chart-scale-02)' }}
+                  />
+                  <span
+                    className="h-2.5 w-2.5 rounded-sm"
+                    style={{ backgroundColor: 'var(--chart-scale-03)' }}
+                  />
+                  <span
+                    className="h-2.5 w-2.5 rounded-sm"
+                    style={{ backgroundColor: 'var(--chart-scale-04)' }}
+                  />
+                  <span
+                    className="h-2.5 w-2.5 rounded-sm"
+                    style={{ backgroundColor: 'var(--chart-scale-05)' }}
+                  />
+                  <span className="text-xs text-muted-foreground">More followers</span>
+                </div>
+              ) : (
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs">High</span>
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  <span className="text-xs">Medium</span>
+                  <span className="h-2.5 w-2.5 rounded-full bg-teal-400" />
+                  <span className="text-xs">Low</span>
+                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+                </div>
+              )}
             </div>
 
             {mode === 'country' && cityPoints.length > 0 ? (
               <div className="pointer-events-none absolute right-3 top-3 hidden rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur sm:block">
-                <Text size="1" color="gray">
+                <span className="text-xs text-muted-foreground">
                   {autoCityMode
                     ? selectedCountryCode
                       ? `City layer: ${selectedCountryCode} (zoom ${mapZoom.toFixed(1)}x)`
                       : `City view active (zoom ${mapZoom.toFixed(1)}x)`
                     : `Country layer active. Click a country dot or zoom to ${cityZoomThreshold.toFixed(1)}x.`}
-                </Text>
+                </span>
               </div>
             ) : null}
           </div>
 
           <div className="rounded-lg border border-subtle bg-white/70 p-3">
-            <Heading size="2" mb="2">
+            <h3 className="mb-2 text-sm font-semibold">
               Top {viewMode === 'country' ? 'countries' : 'cities'}
-            </Heading>
+            </h3>
             <div className="space-y-2 overflow-y-auto pr-1 xl:max-h-[clamp(180px,40svh,360px)]">
               {topEntries.length === 0 ? (
-                <Text size="2" color="gray">
-                  No entries available.
-                </Text>
+                <span className="text-sm text-muted-foreground">No entries available.</span>
               ) : (
                 topEntries.map((entry, index) => (
-                  <Flex key={`${viewMode}-${entry.key}-${index}`} justify="between" align="center">
-                    <Text size="2" color="gray" className="truncate pr-2">
+                  <div
+                    key={`${viewMode}-${entry.key}-${index}`}
+                    className="flex justify-between items-center"
+                  >
+                    <span className="truncate pr-2 text-sm text-muted-foreground">
                       {viewMode === 'country'
                         ? resolveCountryLabel(entry.label || entry.key)
                         : entry.label}
-                    </Text>
-                    <Text size="2" weight="medium">
-                      {entry.value.toLocaleString()}
-                    </Text>
-                  </Flex>
+                    </span>
+                    <span className="text-sm font-medium">{entry.value.toLocaleString()}</span>
+                  </div>
                 ))
               )}
             </div>
             {viewMode === 'city' && activeEntries.length > renderPoints.length ? (
-              <Text size="1" color="gray" mt="3">
+              <span className="mt-3 block text-xs text-muted-foreground">
                 Mapped {renderPoints.length}/{activeEntries.length} cities with known coordinates.
-              </Text>
+              </span>
             ) : null}
           </div>
         </div>
-      </Box>
+      </div>
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -526,6 +562,6 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
       `,
         }}
       />
-    </Card>
+    </div>
   );
 }

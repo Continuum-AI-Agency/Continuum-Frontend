@@ -1,15 +1,14 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Flex, Heading, Text } from "@radix-ui/themes";
-import { RocketIcon } from "@radix-ui/react-icons";
-import { motion } from "motion/react";
-import { Attachment } from "@/components/ai-elements/attachments";
+import { RocketIcon } from '@radix-ui/react-icons';
+import { motion } from 'motion/react';
+import React from 'react';
+import type { Attachment } from '@/components/ai-elements/attachments';
 
-import { Suggestion } from "@/components/ai-elements/suggestion";
-import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
+import { Suggestion } from '@/components/ai-elements/suggestion';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 
-import { JainaSetupConcierge } from "./JainaSetupConcierge";
+import { JainaSetupConcierge } from './JainaSetupConcierge';
 
 type JainaEmptyStateProps = {
   adAccountId: string | null;
@@ -25,9 +24,9 @@ export function JainaEmptyState({
   onExampleClick,
 }: JainaEmptyStateProps) {
   const prompts = [
-    "Give me a 7-day campaign health brief with risks and opportunities.",
-    "Which creatives are winning on ROAS and which should be paused?",
-    "Recommend budget reallocations for this week by campaign.",
+    'Give me a 7-day campaign health brief with risks and opportunities.',
+    'Which creatives are winning on ROAS and which should be paused?',
+    'Recommend budget reallocations for this week by campaign.',
   ];
 
   if (!adAccountId) {
@@ -41,21 +40,17 @@ export function JainaEmptyState({
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <RocketIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
         <div className="space-y-1">
-          <Heading size="3" className="tracking-tight">Select an Ad Account</Heading>
-          <Text color="gray" size="2">
+          <h3 className="text-base font-semibold tracking-tight">Select an Ad Account</h3>
+          <span className="text-sm text-muted-foreground">
             Choose an ad account above to start analyzing with Jaina.
-          </Text>
+          </span>
         </div>
       </div>
     );
   }
 
   return (
-    <Flex
-      direction="column"
-      gap="4"
-      className="mt-12 items-center justify-center text-center"
-    >
+    <div className="flex flex-col gap-4 mt-12 items-center justify-center text-center">
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -72,18 +67,15 @@ export function JainaEmptyState({
         transition={{ delay: 0.08, duration: 0.3 }}
         className="space-y-3 px-4"
       >
-        <Text
-          size="1"
-          className="inline-flex rounded-full border border-border/70 bg-card/70 px-3 py-1 uppercase tracking-wide text-muted-foreground"
-        >
+        <span className="text-xs inline-flex rounded-full border border-border/70 bg-card/70 px-3 py-1 uppercase tracking-wide text-muted-foreground">
           Paid Media Analyst
-        </Text>
-        <Heading size="3" className="tracking-tight font-semibold text-foreground">
+        </span>
+        <h3 className="text-base tracking-tight font-semibold text-foreground">
           Ask Jaina for a decision-ready performance brief.
-        </Heading>
-        <Text size="2" color="gray" className="mx-auto block max-w-2xl">
+        </h3>
+        <span className="text-sm text-muted-foreground mx-auto block max-w-2xl">
           Get clear reads on spend efficiency, creative performance, and where to move budget next.
-        </Text>
+        </span>
       </motion.div>
 
       <div className="mt-6 w-full max-w-3xl px-4">
@@ -104,6 +96,6 @@ export function JainaEmptyState({
           ))}
         </div>
       </div>
-    </Flex>
+    </div>
   );
 }

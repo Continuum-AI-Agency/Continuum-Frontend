@@ -1,16 +1,45 @@
-"use client";
+'use client';
 
-import React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField, Tooltip } from "@radix-ui/themes";
-import { ExclamationTriangleIcon, MagicWandIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
-import { MODEL_CATALOG, CHAT_PANEL_MODEL_IDS, getStatusBadgeLabel, isModelSelectable } from "@continuum/contracts";
-import type { ChatPanelModelId } from "@continuum/contracts";
-import { getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
-import type { PromptTemplate, PromptTemplateCreateInput, PromptTemplateUpdateInput } from "@/lib/schemas/promptTemplates";
-import { PromptTemplatePicker } from "./PromptTemplatePicker";
-import { z } from "zod";
+import type { ChatPanelModelId } from '@continuum/contracts';
+import {
+  CHAT_PANEL_MODEL_IDS,
+  getStatusBadgeLabel,
+  isModelSelectable,
+  MODEL_CATALOG,
+} from '@continuum/contracts';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  ExclamationTriangleIcon,
+  MagicWandIcon,
+  MixerVerticalIcon,
+  PaperPlaneIcon,
+  StopIcon,
+} from '@radix-ui/react-icons';
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { getAspectsForModel, getMediumForModel } from '@/lib/schemas/chatImageRequest';
+import type {
+  PromptTemplate,
+  PromptTemplateCreateInput,
+  PromptTemplateUpdateInput,
+} from '@/lib/schemas/promptTemplates';
+import { PromptTemplatePicker } from './PromptTemplatePicker';
 
 type ChatPanelModel = ChatPanelModelId;
 
@@ -20,7 +49,7 @@ type FormValues = {
   aspectRatio?: string;
   durationSeconds?: number;
   resolution?: string;
-  imageSize?: "1K" | "2K" | "4K";
+  imageSize?: '1K' | '2K' | '4K';
   negativePrompt?: string;
   seed?: number;
   cfgScale?: number;
@@ -29,11 +58,11 @@ type FormValues = {
 
 const chatPanelFormSchema = z.object({
   model: z.enum(CHAT_PANEL_MODEL_IDS),
-  prompt: z.string().min(1, "Prompt is required"),
+  prompt: z.string().min(1, 'Prompt is required'),
   aspectRatio: z.string().optional(),
   durationSeconds: z.number().optional(),
   resolution: z.string().optional(),
-  imageSize: z.enum(["1K", "2K", "4K"]).optional(),
+  imageSize: z.enum(['1K', '2K', '4K']).optional(),
   negativePrompt: z.string().optional(),
   seed: z.number().optional(),
   cfgScale: z.number().optional(),
@@ -58,7 +87,7 @@ type ChatPanelProps = {
   promptTemplates?: {
     templates: PromptTemplate[];
     isLoading: boolean;
-    onCreate: (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => Promise<void>;
+    onCreate: (input: Omit<PromptTemplateCreateInput, 'brandProfileId'>) => Promise<void>;
     onUpdate: (input: PromptTemplateUpdateInput) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
   };
@@ -66,20 +95,20 @@ type ChatPanelProps = {
 
 const MODEL_OPTIONS = MODEL_CATALOG.filter(
   (m): m is (typeof MODEL_CATALOG)[number] & { id: ChatPanelModel } =>
-    (CHAT_PANEL_MODEL_IDS as readonly string[]).includes(m.id)
+    (CHAT_PANEL_MODEL_IDS as readonly string[]).includes(m.id),
 );
 
 const NANO_RES_OPTIONS = [
-  { value: "1024x1024", label: "1024 x 1024 (1:1)" },
-  { value: "1344x768", label: "1344 x 768 (16:9)" },
-  { value: "768x1344", label: "768 x 1344 (9:16)" },
-  { value: "1248x832", label: "1248 x 832 (3:2)" },
-  { value: "832x1248", label: "832 x 1248 (2:3)" },
-  { value: "1184x864", label: "1184 x 864 (4:3)" },
-  { value: "864x1184", label: "864 x 1184 (3:4)" },
-  { value: "1152x896", label: "1152 x 896 (5:4)" },
-  { value: "896x1152", label: "896 x 1152 (4:5)" },
-  { value: "1536x672", label: "1536 x 672 (21:9)" },
+  { value: '1024x1024', label: '1024 x 1024 (1:1)' },
+  { value: '1344x768', label: '1344 x 768 (16:9)' },
+  { value: '768x1344', label: '768 x 1344 (9:16)' },
+  { value: '1248x832', label: '1248 x 832 (3:2)' },
+  { value: '832x1248', label: '832 x 1248 (2:3)' },
+  { value: '1184x864', label: '1184 x 864 (4:3)' },
+  { value: '864x1184', label: '864 x 1184 (3:4)' },
+  { value: '1152x896', label: '1152 x 896 (5:4)' },
+  { value: '896x1152', label: '896 x 1152 (4:5)' },
+  { value: '1536x672', label: '1536 x 672 (21:9)' },
 ];
 
 export function ChatPanel({
@@ -104,124 +133,127 @@ export function ChatPanel({
   const form = useForm<FormValues>({
     resolver: zodResolver(chatPanelFormSchema),
     defaultValues: {
-      model: "nano-banana",
-      prompt: "",
-      aspectRatio: getAspectsForModel("nano-banana")[0] ?? "1:1",
-      resolution: "1024x1024",
+      model: 'nano-banana',
+      prompt: '',
+      aspectRatio: getAspectsForModel('nano-banana')[0] ?? '1:1',
+      resolution: '1024x1024',
       durationSeconds: 8,
-      imageSize: "1K",
+      imageSize: '1K',
     },
-    mode: "onSubmit",
+    mode: 'onSubmit',
   });
 
-  const model = form.watch("model");
+  const model = form.watch('model');
   const medium = mediumForModel(model);
-  const aspectOptions = React.useMemo(() => getAspectsForModel(model, hasAnyReferences), [getAspectsForModel, model, hasAnyReferences]);
+  const aspectOptions = React.useMemo(
+    () => getAspectsForModel(model, hasAnyReferences),
+    [getAspectsForModel, model, hasAnyReferences],
+  );
 
   React.useEffect(() => {
     onModelChange?.(model);
     // reset aspect if current is not allowed
-    const currentAspect = form.getValues("aspectRatio") ?? "";
+    const currentAspect = form.getValues('aspectRatio') ?? '';
     if (!aspectOptions.includes(currentAspect)) {
-      form.setValue("aspectRatio", aspectOptions[0] ?? "1:1");
+      form.setValue('aspectRatio', aspectOptions[0] ?? '1:1');
     }
-    if (model === "nano-banana") {
-      const current = form.getValues("resolution");
-      form.setValue("resolution", current || "1024x1024");
-      form.setValue("imageSize", undefined);
-    } else if (model === "gemini-3-pro-image-preview") {
-      form.setValue("resolution", "");
-      form.setValue("imageSize", form.getValues("imageSize") || "1K");
+    if (model === 'nano-banana') {
+      const current = form.getValues('resolution');
+      form.setValue('resolution', current || '1024x1024');
+      form.setValue('imageSize', undefined);
+    } else if (model === 'gemini-3-pro-image-preview') {
+      form.setValue('resolution', '');
+      form.setValue('imageSize', form.getValues('imageSize') || '1K');
     } else {
-      const current = form.getValues("resolution");
-      const allowedVideoResolutions = ["720p", "1080p"];
-      const nextResolution = allowedVideoResolutions.includes(current ?? "") ? current : "720p";
-      form.setValue("resolution", nextResolution);
-      form.setValue("imageSize", undefined);
-      if (!form.getValues("durationSeconds")) form.setValue("durationSeconds", 8);
+      const current = form.getValues('resolution');
+      const allowedVideoResolutions = ['720p', '1080p'];
+      const nextResolution = allowedVideoResolutions.includes(current ?? '') ? current : '720p';
+      form.setValue('resolution', nextResolution);
+      form.setValue('imageSize', undefined);
+      if (!form.getValues('durationSeconds')) form.setValue('durationSeconds', 8);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, aspectOptions, medium]);
 
   React.useEffect(() => {
     if (enrichedValue) {
-      form.setValue("prompt", enrichedValue);
+      form.setValue('prompt', enrichedValue);
     }
   }, [enrichedValue, form]);
 
   const handleSubmit = form.handleSubmit(
     (values) => onSubmit(values),
     (errors) => {
-      const firstError = Object.values(errors).find(err => err?.message);
+      const firstError = Object.values(errors).find((err) => err?.message);
       if (firstError?.message) {
-        form.setError("prompt", { message: firstError.message });
+        form.setError('prompt', { message: firstError.message });
       }
-    }
+    },
   );
 
   return (
-    <Card
-      size="3"
-      variant="surface"
-      className="shadow-2xl"
+    <div
+      className="rounded-xl p-6 shadow-2xl"
       style={{
-        backgroundColor: "var(--color-surface)",
-        border: "1px solid var(--gray-6)",
-        color: "var(--gray-12)",
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--gray-6)',
+        color: 'var(--gray-12)',
       }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="space-y-0.5">
-          <Text weight="medium">Generate</Text>
-          <Text size="1" color="gray">Model-aware controls with advanced tucked away.</Text>
+          <span className="font-medium">Generate</span>
+          <span className="block text-xs text-gray-400">
+            Model-aware controls with advanced tucked away.
+          </span>
         </div>
-        <Badge variant="soft" size="2">{medium === "image" ? "Image" : "Video"}</Badge>
+        <Pill variant="muted">{medium === 'image' ? 'Image' : 'Video'}</Pill>
       </div>
 
-      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit(e);
+        }}
+      >
         <div className="space-y-1">
-          <Text size="1" color="gray">Model</Text>
-            <Select.Root
+          <span className="block text-xs text-gray-400">Model</span>
+          <Select
             value={model}
-            onValueChange={(value) => form.setValue("model", value as ChatPanelModel)}
+            onValueChange={(value) => form.setValue('model', value as ChatPanelModel)}
             disabled={disabled || isStreaming}
           >
-            <Select.Trigger className="w-full" />
-            <Select.Content>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a model" />
+            </SelectTrigger>
+            <SelectContent>
               {MODEL_OPTIONS.map((option) => {
-                const badgeLabel = getStatusBadgeLabel(option.status)
-                const selectable = isModelSelectable(option.status)
+                const badgeLabel = getStatusBadgeLabel(option.status);
+                const selectable = isModelSelectable(option.status);
                 return (
-                  <Select.Item
-                    key={option.id}
-                    value={option.id}
-                    disabled={!selectable}
-                  >
-                    <Flex align="center" gap="2">
+                  <SelectItem key={option.id} value={option.id} disabled={!selectable}>
+                    <div className="flex items-center gap-2">
                       <span>{option.label}</span>
                       {badgeLabel ? (
-                        <Badge
-                          size="1"
-                          variant="soft"
-                          color={option.status === "beta" ? "blue" : "gray"}
-                        >
+                        <Pill variant={option.status === 'beta' ? 'teal' : 'muted'}>
                           {badgeLabel}
-                        </Badge>
+                        </Pill>
                       ) : null}
-                    </Flex>
-                  </Select.Item>
-                )
+                    </div>
+                  </SelectItem>
+                );
               })}
-            </Select.Content>
-          </Select.Root>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-1">
-          <Text size="1" color="gray">Prompt</Text>
+          <span className="block text-xs text-gray-400">Prompt</span>
           <div className="relative">
-            <TextArea
-              value={form.watch("prompt")}
-              onChange={(e) => form.setValue("prompt", e.target.value)}
+            <Textarea
+              value={form.watch('prompt')}
+              onChange={(e) => form.setValue('prompt', e.target.value)}
               placeholder="Describe what you want to see"
               rows={6}
               className="min-h-[clamp(240px,60dvh,500px)] pr-10"
@@ -229,34 +261,41 @@ export function ChatPanel({
             />
             <div className="absolute right-2 top-2 flex flex-col gap-2">
               {onEnrich && (
-                <Tooltip content="Align to Brand — rewrites your prompt using your brand's colors, typography, and voice">
-                  <Button
-                    size="1"
-                    variant="ghost"
-                    color="gray"
-                    type="button"
-                    aria-label="Align to Brand"
-                    disabled={disabled || isStreaming || isEnriching || !form.watch("prompt")}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onEnrich(form.getValues("prompt"));
-                    }}
-                    style={brandAccent ? { color: brandAccent, fontFamily: brandFont } : { fontFamily: brandFont }}
-                  >
-                    {isEnriching ? (
-                      <div className="animate-spin">◌</div>
-                    ) : (
-                      <MagicWandIcon />
-                    )}
-                  </Button>
-                </Tooltip>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        type="button"
+                        aria-label="Align to Brand"
+                        disabled={disabled || isStreaming || isEnriching || !form.watch('prompt')}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onEnrich(form.getValues('prompt'));
+                        }}
+                        style={
+                          brandAccent
+                            ? { color: brandAccent, fontFamily: brandFont }
+                            : { fontFamily: brandFont }
+                        }
+                      >
+                        {isEnriching ? <div className="animate-spin">◌</div> : <MagicWandIcon />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Align to Brand — rewrites your prompt using your brand's colors, typography,
+                      and voice
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               {promptTemplates ? (
                 <PromptTemplatePicker
                   templates={promptTemplates.templates}
                   isLoading={promptTemplates.isLoading}
-                  currentPrompt={form.watch("prompt")}
-                  onSelect={(template) => form.setValue("prompt", template.prompt)}
+                  currentPrompt={form.watch('prompt')}
+                  onSelect={(template) => form.setValue('prompt', template.prompt)}
                   onCreate={promptTemplates.onCreate}
                   onUpdate={promptTemplates.onUpdate}
                   onDelete={promptTemplates.onDelete}
@@ -265,174 +304,206 @@ export function ChatPanel({
             </div>
           </div>
           {form.formState.errors.prompt ? (
-            <Text size="1" color="red" className="block">
+            <span className="block text-xs text-destructive">
               {form.formState.errors.prompt.message}
-            </Text>
+            </span>
           ) : null}
         </div>
 
-        {model === "nano-banana" ? (
+        {model === 'nano-banana' ? (
           <div className="space-y-1">
-            <Text size="1" color="gray">Resolution</Text>
-            <Select.Root
-              value={form.watch("resolution") ?? "1024x1024"}
-              onValueChange={(value) => form.setValue("resolution", value)}
+            <span className="block text-xs text-gray-400">Resolution</span>
+            <Select
+              value={form.watch('resolution') ?? '1024x1024'}
+              onValueChange={(value) => form.setValue('resolution', value)}
               disabled={disabled || isStreaming}
             >
-              <Select.Trigger className="w-full" />
-              <Select.Content>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select resolution" />
+              </SelectTrigger>
+              <SelectContent>
                 {NANO_RES_OPTIONS.map((opt) => (
-                  <Select.Item key={opt.value} value={opt.value}>
+                  <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
-                  </Select.Item>
+                  </SelectItem>
                 ))}
-              </Select.Content>
-            </Select.Root>
+              </SelectContent>
+            </Select>
           </div>
-        ) : medium === "video" ? (
+        ) : medium === 'video' ? (
           <div className="space-y-1">
-            <Text size="1" color="gray">Resolution</Text>
-            <Select.Root
-              value={form.watch("resolution") ?? "720p"}
-              onValueChange={(value) => form.setValue("resolution", value)}
+            <span className="block text-xs text-gray-400">Resolution</span>
+            <Select
+              value={form.watch('resolution') ?? '720p'}
+              onValueChange={(value) => form.setValue('resolution', value)}
               disabled={disabled || isStreaming}
             >
-              <Select.Trigger className="w-full" />
-              <Select.Content>
-                <Select.Item value="720p">720p</Select.Item>
-                <Select.Item value="1080p">1080p</Select.Item>
-              </Select.Content>
-            </Select.Root>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select resolution" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
 
         <div className="space-y-1">
-          <Text size="1" color="gray">Aspect ratio</Text>
-          <Flex gap="2" wrap="wrap">
-        {aspectOptions.map((ratio) => (
-          <Button
-            key={ratio}
-            size="1"
-            variant={form.watch("aspectRatio") === ratio ? "solid" : "surface"}
-            onClick={(e) => {
-              e.preventDefault();
-              form.setValue("aspectRatio", ratio);
-            }}
-            disabled={disabled || isStreaming}
-          >
-            {ratio}
-          </Button>
-        ))}
-      </Flex>
-    </div>
+          <span className="block text-xs text-gray-400">Aspect ratio</span>
+          <div className="flex flex-wrap gap-2">
+            {aspectOptions.map((ratio) => (
+              <Button
+                key={ratio}
+                size="sm"
+                variant={form.watch('aspectRatio') === ratio ? 'default' : 'outline'}
+                onClick={(e) => {
+                  e.preventDefault();
+                  form.setValue('aspectRatio', ratio);
+                }}
+                disabled={disabled || isStreaming}
+              >
+                {ratio}
+              </Button>
+            ))}
+          </div>
+        </div>
 
-        {model === "gemini-3-pro-image-preview" ? (
+        {model === 'gemini-3-pro-image-preview' ? (
           <div className="space-y-1">
-            <Text size="1" color="gray">Image size</Text>
-            <Flex gap="2" wrap="wrap">
-              {(["1K", "2K", "4K"] as const).map((size) => (
+            <span className="block text-xs text-gray-400">Image size</span>
+            <div className="flex flex-wrap gap-2">
+              {(['1K', '2K', '4K'] as const).map((size) => (
                 <Button
                   key={size}
-                  size="1"
-                  variant={form.watch("imageSize") === size ? "solid" : "surface"}
+                  size="sm"
+                  variant={form.watch('imageSize') === size ? 'default' : 'outline'}
                   onClick={(e) => {
                     e.preventDefault();
-                    form.setValue("imageSize", size);
+                    form.setValue('imageSize', size);
                   }}
                   disabled={disabled || isStreaming}
                 >
                   {size}
                 </Button>
               ))}
-            </Flex>
+            </div>
           </div>
         ) : null}
 
-        {medium === "video" ? (
+        {medium === 'video' ? (
           <div className="space-y-1">
-            <Flex align="center" justify="between">
-              <Text size="1" color="gray">Duration (seconds)</Text>
-              <Text size="1" color="gray">Default 8s</Text>
-            </Flex>
-            <RadioGroup.Root
-              value={String(form.watch("durationSeconds") ?? "8")}
-              onValueChange={(value) => form.setValue("durationSeconds", Number(value) as 4 | 6 | 8)}
-              className="flex gap-2"
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">Duration (seconds)</span>
+              <span className="text-xs text-gray-400">Default 8s</span>
+            </div>
+            <RadioGroup
+              value={String(form.watch('durationSeconds') ?? '8')}
+              onValueChange={(value) =>
+                form.setValue('durationSeconds', Number(value) as 4 | 6 | 8)
+              }
+              className="flex gap-4"
               disabled={disabled || isStreaming}
             >
               {([4, 6, 8] as const).map((d) => (
-                <RadioGroup.Item key={d} value={String(d)}>{d}</RadioGroup.Item>
+                <label
+                  key={d}
+                  htmlFor={`duration-${d}`}
+                  className="flex items-center gap-1.5 text-sm"
+                >
+                  <RadioGroupItem id={`duration-${d}`} value={String(d)} />
+                  {d}
+                </label>
               ))}
-            </RadioGroup.Root>
+            </RadioGroup>
           </div>
         ) : null}
 
-        <Separator my="2" className="border-white/10" />
+        <Separator className="my-2 bg-white/10" />
 
-        <details className="rounded-lg border border-white/10 bg-white/5 p-3 transition hover:border-white/20" open={false}>
+        <details
+          className="rounded-lg border border-white/10 bg-white/5 p-3 transition hover:border-white/20"
+          open={false}
+        >
           <summary className="flex cursor-pointer items-center gap-2 text-sm text-gray-200">
             <MixerVerticalIcon /> Advanced
           </summary>
           <div className="mt-3 space-y-3">
             <div className="space-y-1">
-              <Text size="1" color="gray">Negative prompt</Text>
-              <TextArea
-                value={form.watch("negativePrompt") ?? ""}
-                onChange={(e) => form.setValue("negativePrompt", e.target.value || undefined)}
+              <span className="block text-xs text-gray-400">Negative prompt</span>
+              <Textarea
+                value={form.watch('negativePrompt') ?? ''}
+                onChange={(e) => form.setValue('negativePrompt', e.target.value || undefined)}
                 rows={2}
                 className="min-h-[72px]"
                 disabled={disabled || isStreaming}
               />
             </div>
-            {model !== "nano-banana" ? (
+            {model !== 'nano-banana' ? (
               <div className="grid grid-cols-3 gap-2">
-                <TextField.Root
+                <Input
                   type="number"
                   placeholder="Seed"
-                  value={form.watch("seed") ?? ""}
-                  onChange={(e) => form.setValue("seed", e.target.value ? Number(e.target.value) : undefined)}
+                  value={form.watch('seed') ?? ''}
+                  onChange={(e) =>
+                    form.setValue('seed', e.target.value ? Number(e.target.value) : undefined)
+                  }
                   disabled={disabled || isStreaming}
                 />
-                <TextField.Root
+                <Input
                   type="number"
                   placeholder="CFG"
-                  value={form.watch("cfgScale") ?? ""}
-                  onChange={(e) => form.setValue("cfgScale", e.target.value ? Number(e.target.value) : undefined)}
+                  value={form.watch('cfgScale') ?? ''}
+                  onChange={(e) =>
+                    form.setValue('cfgScale', e.target.value ? Number(e.target.value) : undefined)
+                  }
                   disabled={disabled || isStreaming}
                 />
-                <TextField.Root
+                <Input
                   type="number"
                   placeholder="Steps"
-                  value={form.watch("steps") ?? ""}
-                  onChange={(e) => form.setValue("steps", e.target.value ? Number(e.target.value) : undefined)}
+                  value={form.watch('steps') ?? ''}
+                  onChange={(e) =>
+                    form.setValue('steps', e.target.value ? Number(e.target.value) : undefined)
+                  }
                   disabled={disabled || isStreaming}
                 />
               </div>
             ) : (
-              <Text size="1" color="gray">Advanced knobs not required for Nano Banana.</Text>
+              <span className="block text-xs text-gray-400">
+                Advanced knobs not required for Nano Banana.
+              </span>
             )}
           </div>
         </details>
 
-        <Callout.Root color="gray" variant="soft">
-          <Callout.Icon>
-            <ExclamationTriangleIcon />
-          </Callout.Icon>
-          <Callout.Text>
-            {refsSummary?.refCount ? `${refsSummary.refCount} reference image${refsSummary.refCount === 1 ? "" : "s"} attached.` : "No reference images attached."}
-            {medium === "video" ? ` ${refsSummary?.hasFirst ? "First frame set." : ""} ${refsSummary?.hasLast ? "Last frame set." : ""}` : ""}
-          </Callout.Text>
-        </Callout.Root>
+        <Alert className="border-white/10 bg-white/5">
+          <ExclamationTriangleIcon />
+          <AlertDescription className="text-gray-300">
+            {refsSummary?.refCount
+              ? `${refsSummary.refCount} reference image${refsSummary.refCount === 1 ? '' : 's'} attached.`
+              : 'No reference images attached.'}
+            {medium === 'video'
+              ? ` ${refsSummary?.hasFirst ? 'First frame set.' : ''} ${refsSummary?.hasLast ? 'Last frame set.' : ''}`
+              : ''}
+          </AlertDescription>
+        </Alert>
 
-        <Flex gap="2">
+        <div className="flex gap-2">
           <Button type="submit" className="flex-1" disabled={disabled || isStreaming}>
-            <PaperPlaneIcon /> {isStreaming ? "Streaming" : "Generate"}
+            <PaperPlaneIcon /> {isStreaming ? 'Streaming' : 'Generate'}
           </Button>
-          <Button type="button" variant="outline" color="red" onClick={onCancel} disabled={!isStreaming}>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-destructive text-destructive hover:text-destructive"
+            onClick={onCancel}
+            disabled={!isStreaming}
+          >
             <StopIcon /> Cancel
           </Button>
-        </Flex>
+        </div>
       </form>
-    </Card>
+    </div>
   );
 }

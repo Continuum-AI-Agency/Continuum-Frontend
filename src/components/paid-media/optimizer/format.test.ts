@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { deriveCpa, formatCpa, formatCurrency, humanize } from './format';
+import { currencySymbol, deriveCpa, formatCpa, formatCurrency, humanize } from './format';
 
 describe('formatCurrency', () => {
   it('formats whole-dollar USD', () => {
@@ -9,6 +9,24 @@ describe('formatCurrency', () => {
   it('returns a dash for null/NaN', () => {
     expect(formatCurrency(null)).toBe('—');
     expect(formatCurrency(Number.NaN)).toBe('—');
+  });
+  it('labels the account currency (a JPY account never reads as USD)', () => {
+    expect(formatCurrency(4200, 'JPY')).toBe('¥4,200');
+  });
+  it('falls back to USD for a null/blank/malformed currency code', () => {
+    expect(formatCurrency(4200, null)).toBe('$4,200');
+    expect(formatCurrency(4200, '')).toBe('$4,200');
+    expect(formatCurrency(4200, 'not-a-code')).toBe('$4,200');
+  });
+});
+
+describe('currencySymbol', () => {
+  it('returns the currency prefix for an input adornment', () => {
+    expect(currencySymbol('USD')).toBe('$');
+    expect(currencySymbol('JPY')).toBe('¥');
+  });
+  it('falls back to the USD symbol for a missing code', () => {
+    expect(currencySymbol(null)).toBe('$');
   });
 });
 

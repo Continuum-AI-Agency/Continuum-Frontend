@@ -1,109 +1,149 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Box, Card, Flex, Text } from "@radix-ui/themes";
-import type {
-  OrganicAwarenessBlock,
-  OrganicAwarenessReportPayload,
-} from "@continuum/contracts";
+// AI-Awareness report: a compact, self-describing block array (summary / top posts
+// / content-type / narrative) rendered flat inside one card. Top-post rows link to
+// the live post with a hover preview (see AwarenessTopPostRow), content-type bars
+// carry share % + a breakdown tooltip, and the summary tiles surface their
+// period-over-period delta so the section reads as signal, not a wall of numbers.
 
-import { hookRateTextColor } from "@/lib/organic/hook-rate-color";
-import { cn } from "@/lib/utils";
+import type { OrganicAwarenessBlock, OrganicAwarenessReportPayload } from '@continuum/contracts';
+import * as React from 'react';
 
-type TopPost = {
-  id: string;
-  mediaProductType: string | null;
-  hookRate: number | null;
-  views: number | null;
-  reach: number | null;
-};
+import { PillDelta } from '@/components/kibo-ui/pill';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { AwarenessTopPostRow } from './awareness/AwarenessTopPostRow';
+import type { AwarenessContentTypeRow, AwarenessTopPost } from './awareness/types';
 
-type ContentTypeRow = {
-  contentType: string;
-  posts?: number;
-  reach?: number;
-  views?: number;
-  engagement?: number;
-};
+const nf = new Intl.NumberFormat('en-US');
 
-const nf = new Intl.NumberFormat("en-US");
+type Comparison = Record<string, { percentageChange?: number } | undefined> | null | undefined;
+
+function deltaFor(comparison: Comparison, keys: string[]): number | null {
+  if (!comparison) return null;
+  for (const key of keys) {
+    const change = comparison[key]?.percentageChange;
+    if (typeof change === 'number' && Number.isFinite(change)) return change;
+  }
+  return null;
+}
+
+function SummaryDelta({ delta }: { delta: number | null }) {
+  if (delta === null) return null;
+  return (
+    <span
+      className={cn(
+        'mt-0.5 flex items-center gap-0.5 text-3xs tabular-nums leading-none',
+        delta > 0 ? 'text-success' : delta < 0 ? 'text-destructive' : 'text-muted-foreground',
+      )}
+    >
+      <PillDelta delta={delta} />
+      {Math.abs(delta).toFixed(1)}%
+    </span>
+  );
+}
 
 function SummaryBlock({ data }: { data: Record<string, unknown> }) {
-  const metrics: Array<{ label: string; value: number }> = [
-    { label: "Reach", value: Number(data.reach ?? 0) },
-    { label: "Views", value: Number(data.views ?? 0) },
-    { label: "Engagement", value: Number(data.engagement ?? 0) },
-    { label: "Comments", value: Number(data.comments ?? 0) },
+  const comparison = data.comparison as Comparison;
+  const metrics: Array<{ label: string; value: number; delta: number | null }> = [
+    { label: 'Reach', value: Number(data.reach ?? 0), delta: deltaFor(comparison, ['reach']) },
+    { label: 'Views', value: Number(data.views ?? 0), delta: deltaFor(comparison, ['views']) },
+    {
+      label: 'Engagement',
+      value: Number(data.engagement ?? 0),
+      delta: deltaFor(comparison, ['totalInteractions', 'engagement', 'accountsEngaged']),
+    },
+    {
+      label: 'Comments',
+      value: Number(data.comments ?? 0),
+      delta: deltaFor(comparison, ['comments']),
+    },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {metrics.map((metric) => (
         <div key={metric.label} className="rounded-lg bg-muted/40 px-3 py-2">
-          <Text size="5" weight="bold" className="block tabular-nums tracking-tight">
+          <span className="block text-xl font-semibold tabular-nums tracking-tight leading-tight">
             {nf.format(metric.value)}
-          </Text>
-          <Text size="1" color="gray" className="leading-none">
-            {metric.label}
-          </Text>
+          </span>
+          <span className="block text-xs text-muted-foreground leading-none">{metric.label}</span>
+          <SummaryDelta delta={metric.delta} />
         </div>
       ))}
     </div>
   );
 }
 
-function TopPostsBlock({ posts }: { posts: TopPost[] }) {
+function TopPostsBlock({ posts }: { posts: AwarenessTopPost[] }) {
   if (posts.length === 0) {
-    return <Text size="1" color="gray">No reel hook rates available for this window yet.</Text>;
+    return (
+      <span className="text-xs text-muted-foreground">
+        No reel hook rates available for this window yet.
+      </span>
+    );
   }
   return (
-    <ul className="divide-y divide-border/60">
+    <div className="flex flex-col divide-y divide-border/40">
       {posts.map((post, index) => (
-        <li key={post.id || index} className="flex items-center justify-between gap-3 py-2">
-          <Flex align="center" gap="2" className="min-w-0">
-            <Text size="1" color="gray" className="w-4 shrink-0 tabular-nums">
-              {index + 1}
-            </Text>
-            <span className="truncate text-xs capitalize">
-              {(post.mediaProductType ?? "post").toLowerCase()}
-            </span>
-          </Flex>
-          <Flex align="center" gap="4" className="shrink-0">
-            <Text size="1" color="gray" className="tabular-nums">
-              {post.views !== null ? `${nf.format(post.views)} views` : "—"}
-            </Text>
-            <span
-              className={cn("text-xs font-semibold tabular-nums", post.hookRate === null && "text-muted-foreground")}
-              style={post.hookRate !== null ? { color: hookRateTextColor(post.hookRate) } : undefined}
-            >
-              {post.hookRate !== null ? `${post.hookRate.toFixed(1)}% hook` : "no hook data"}
-            </span>
-          </Flex>
-        </li>
+        <AwarenessTopPostRow key={post.id || index} post={post} rank={index + 1} />
       ))}
-    </ul>
+    </div>
   );
 }
 
-function ContentTypeBlock({ rows }: { rows: ContentTypeRow[] }) {
+function contentTypeTooltip(row: AwarenessContentTypeRow): string {
+  const parts: string[] = [];
+  if (typeof row.posts === 'number')
+    parts.push(`${row.posts} ${row.posts === 1 ? 'post' : 'posts'}`);
+  if (typeof row.reach === 'number') parts.push(`reach ${nf.format(row.reach)}`);
+  if (typeof row.engagement === 'number') parts.push(`eng ${nf.format(row.engagement)}`);
+  if (typeof row.comments === 'number') parts.push(`${nf.format(row.comments)} comments`);
+  return parts.join(' · ') || 'No breakdown available';
+}
+
+function ContentTypeBlock({ rows }: { rows: AwarenessContentTypeRow[] }) {
   const withViews = rows.filter((row) => (row.views ?? 0) > 0);
   if (withViews.length === 0) {
-    return <Text size="1" color="gray">No content-type performance for this window.</Text>;
+    return (
+      <span className="text-xs text-muted-foreground">
+        No content-type performance for this window.
+      </span>
+    );
   }
+  const total = withViews.reduce((sum, row) => sum + (row.views ?? 0), 0);
   const max = Math.max(...withViews.map((row) => row.views ?? 0), 1);
   return (
-    <ul className="space-y-1.5">
-      {withViews.map((row) => (
-        <li key={row.contentType} className="flex items-center gap-2">
-          <span className="w-24 shrink-0 truncate text-xs capitalize">{row.contentType}</span>
-          <span
-            className="h-2 rounded-full bg-accent/70"
-            style={{ width: `${((row.views ?? 0) / max) * 100}%` }}
-          />
-          <Text size="1" color="gray" className="tabular-nums">
-            {nf.format(row.views ?? 0)}
-          </Text>
-        </li>
-      ))}
+    <ul className="space-y-2">
+      {withViews.map((row) => {
+        const views = row.views ?? 0;
+        const share = total > 0 ? Math.round((views / total) * 100) : 0;
+        return (
+          <li key={row.contentType}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex cursor-default items-center gap-3">
+                  <span className="w-16 shrink-0 truncate text-xs font-medium capitalize">
+                    {row.contentType}
+                  </span>
+                  <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-full bg-accent/70"
+                      style={{ width: `${(views / max) * 100}%` }}
+                    />
+                  </span>
+                  <span className="w-14 shrink-0 text-right text-xs tabular-nums">
+                    {nf.format(views)}
+                  </span>
+                  <span className="w-8 shrink-0 text-right text-2xs text-muted-foreground tabular-nums">
+                    {share}%
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>{contentTypeTooltip(row)}</TooltipContent>
+            </Tooltip>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -115,34 +155,33 @@ function NarrativeBlock({ lines }: { lines: string[] }) {
       {lines.map((line, index) => (
         <li key={index} className="flex gap-2">
           <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent/70" />
-          <Text size="2" className="leading-snug">
-            {line}
-          </Text>
+          <span className="text-sm leading-snug">{line}</span>
         </li>
       ))}
     </ul>
   );
 }
 
-function AwarenessBlockCard({ block }: { block: OrganicAwarenessBlock }) {
+function AwarenessSection({ block }: { block: OrganicAwarenessBlock }) {
   const data = (block.data ?? {}) as Record<string, unknown>;
+  const body =
+    block.category === 'summary' ? (
+      <SummaryBlock data={data} />
+    ) : block.category === 'top_posts' ? (
+      <TopPostsBlock posts={(block.data as AwarenessTopPost[]) ?? []} />
+    ) : block.category === 'content_type' ? (
+      <ContentTypeBlock rows={(block.data as AwarenessContentTypeRow[]) ?? []} />
+    ) : block.category === 'narrative' ? (
+      <NarrativeBlock lines={(block.data as string[]) ?? []} />
+    ) : null;
+  if (!body) return null;
   return (
-    <Card variant="surface" className="border border-subtle bg-surface/95">
-      <Box px="3" py="3">
-        <Text size="2" weight="medium" className="mb-2 block">
-          {block.title}
-        </Text>
-        {block.category === "summary" ? (
-          <SummaryBlock data={data} />
-        ) : block.category === "top_posts" ? (
-          <TopPostsBlock posts={(block.data as TopPost[]) ?? []} />
-        ) : block.category === "content_type" ? (
-          <ContentTypeBlock rows={(block.data as ContentTypeRow[]) ?? []} />
-        ) : block.category === "narrative" ? (
-          <NarrativeBlock lines={(block.data as string[]) ?? []} />
-        ) : null}
-      </Box>
-    </Card>
+    <section className="py-3 first:pt-0 last:pb-0">
+      <span className="mb-2 block text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+        {block.title}
+      </span>
+      {body}
+    </section>
   );
 }
 
@@ -159,33 +198,31 @@ export function OrganicAwarenessReportView({
 
   if (!report) {
     return (
-      <Card variant="surface" className="border border-dashed border-subtle bg-surface/60">
-        <Box px="4" py="6">
-          <Text size="2" weight="medium" className="block">
+      <div className="rounded-lg border border-dashed border-subtle bg-surface/60">
+        <div className="px-4 py-6">
+          <span className="block text-sm font-medium">
             AI-Awareness report builds with your data
-          </Text>
-          <Text size="1" color="gray" className="mt-1 block">
-            Once analytics run for this account, the flash-lite agents summarize what changed —
-            top hooks, content-type shifts, and the week&apos;s momentum.
-          </Text>
-        </Box>
-      </Card>
+          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Once analytics run for this account, the flash-lite agents summarize what changed — top
+            hooks, content-type shifts, and the week&apos;s momentum.
+          </span>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface/95">
-      <Box px="4" py="3">
-        <Flex align="center" justify="between" gap="3">
-          <Box>
-            <Text size="2" weight="bold" className="block">
-              AI-Awareness
-            </Text>
-            <Text size="1" color="gray">
+    <div className="rounded-lg border border-subtle bg-surface/95">
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <span className="block text-sm font-semibold">AI-Awareness</span>
+            <span className="text-xs text-muted-foreground">
               {report.windowStart} – {report.windowEnd}
-            </Text>
-          </Box>
-          <Flex align="center" gap="2">
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
             {onRefresh ? (
               <button
                 type="button"
@@ -193,7 +230,7 @@ export function OrganicAwarenessReportView({
                 disabled={isRefreshing}
                 className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isRefreshing ? "Refreshing…" : "Refresh"}
+                {isRefreshing ? 'Refreshing…' : 'Refresh'}
               </button>
             ) : null}
             <button
@@ -202,19 +239,21 @@ export function OrganicAwarenessReportView({
               className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
               aria-expanded={open}
             >
-              {open ? "Hide" : "Show"}
+              {open ? 'Hide' : 'Show'}
             </button>
-          </Flex>
-        </Flex>
+          </div>
+        </div>
 
         {open ? (
-          <div className="mt-3 grid gap-3">
-            {report.blocks.map((block, index) => (
-              <AwarenessBlockCard key={`${block.category}-${index}`} block={block} />
-            ))}
-          </div>
+          <TooltipProvider delayDuration={200}>
+            <div className="mt-3 divide-y divide-subtle/60">
+              {report.blocks.map((block, index) => (
+                <AwarenessSection key={`${block.category}-${index}`} block={block} />
+              ))}
+            </div>
+          </TooltipProvider>
         ) : null}
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }

@@ -21,6 +21,7 @@ type MetricIntegrationSummary = {
   facebook: IntegrationSummaryPlatform;
   tiktok: IntegrationSummaryPlatform;
   youtube: IntegrationSummaryPlatform;
+  linkedin?: IntegrationSummaryPlatform;
 };
 
 type OrganicMetricAccountsByPlatform = {
@@ -28,6 +29,7 @@ type OrganicMetricAccountsByPlatform = {
   facebook: OrganicMetricAccountOption[];
   tiktok: OrganicMetricAccountOption[];
   youtube: OrganicMetricAccountOption[];
+  linkedin: OrganicMetricAccountOption[];
 };
 
 function dedupeByIntegrationAccountId(
@@ -72,11 +74,11 @@ export function toMetricAccountOptions(
 }
 
 function fromIntegrationSummary(
-  platform: IntegrationSummaryPlatform,
+  platform: IntegrationSummaryPlatform | undefined,
   fallbackLabel: string
 ): OrganicMetricAccountOption[] {
   return dedupeByIntegrationAccountId(
-    (platform.accounts ?? [])
+    (platform?.accounts ?? [])
       .map((account) => ({
         integrationAccountId: account.integrationAccountId,
         name: account.name || fallbackLabel,
@@ -106,6 +108,9 @@ export function deriveMetricAccountsByPlatform(params: {
   const summaryYouTube = params.integrationSummary
     ? fromIntegrationSummary(params.integrationSummary.youtube, "YouTube channel")
     : [];
+  const summaryLinkedIn = params.integrationSummary
+    ? fromIntegrationSummary(params.integrationSummary.linkedin, "LinkedIn organization")
+    : [];
 
   return {
     instagram:
@@ -125,5 +130,6 @@ export function deriveMetricAccountsByPlatform(params: {
     // YouTube is connected via Google OAuth (no onboarding-connection lane), so it
     // is sourced from the integration summary only.
     youtube: summaryYouTube,
+    linkedin: summaryLinkedIn,
   };
 }

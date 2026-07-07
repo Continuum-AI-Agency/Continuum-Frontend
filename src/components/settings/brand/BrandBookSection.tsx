@@ -1,9 +1,8 @@
-import { Text } from "@radix-ui/themes";
-import type { BrandBookResponse } from "@continuum/contracts";
+import type { BrandBookResponse } from '@continuum/contracts';
 
-import { BrandBookEmptyState } from "./BrandBookEmptyState";
-import { BrandBookView } from "./BrandBookView";
-import type { BrandBookGenerationPayload } from "./brandBookGeneration";
+import { BrandBookEmptyState } from './BrandBookEmptyState';
+import { BrandBookView } from './BrandBookView';
+import type { BrandBookGenerationPayload } from './brandBookGeneration';
 
 export type BrandBookGeneration = {
   brandId: string;
@@ -33,10 +32,10 @@ export function BrandBookSection({
       );
     }
     return (
-      <Text color="gray">
+      <p className="text-sm text-muted-foreground">
         Your Brand Book is assembling from your onboarding, guidelines, and documents. Check back in
         a moment.
-      </Text>
+      </p>
     );
   }
 
@@ -44,7 +43,7 @@ export function BrandBookSection({
     brandBook.brand_tokens?.brand_name ??
     brandBook.composite?.brand_profile?.brand_name ??
     generation?.brandName ??
-    "Your Brand Book";
+    'Your Brand Book';
 
   return <BrandBookView brandBook={brandBook} brandName={brandName} />;
 }

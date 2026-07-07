@@ -1,16 +1,15 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
-import { motion } from "motion/react";
-import { Box, Text } from "@radix-ui/themes";
+import { motion } from 'motion/react';
+import { useMemo } from 'react';
 
 const points = [
-  { x: 12, y: 140, label: "Baseline" },
-  { x: 72, y: 118, label: "Unified" },
-  { x: 132, y: 96, label: "Automate" },
-  { x: 192, y: 70, label: "Optimize" },
-  { x: 252, y: 46, label: "Alerting" },
-  { x: 312, y: 28, label: "Continuum" },
+  { x: 12, y: 140, label: 'Baseline' },
+  { x: 72, y: 118, label: 'Unified' },
+  { x: 132, y: 96, label: 'Automate' },
+  { x: 192, y: 70, label: 'Optimize' },
+  { x: 252, y: 46, label: 'Alerting' },
+  { x: 312, y: 28, label: 'Continuum' },
 ];
 
 const glowGradient = `radial-gradient(circle at 60% 20%, rgba(90, 72, 249, 0.45), transparent 55%),
@@ -25,21 +24,21 @@ export function KpiGraph() {
       const prev = points[index - 1];
       const controlX = (prev.x + point.x) / 2;
       return `${acc} C ${controlX} ${prev.y}, ${controlX} ${point.y}, ${point.x} ${point.y}`;
-    }, "");
+    }, '');
   }, []);
 
   return (
-    <Box className="rounded-3xl border border-white/30 bg-slate-950/70 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10" style={{ backgroundImage: glowGradient }}>
+    <div
+      className="rounded-3xl border border-white/30 bg-slate-950/70 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10"
+      style={{ backgroundImage: glowGradient }}
+    >
       <div className="flex items-center justify-between">
-        <Text size="2" color="gray" className="uppercase tracking-[0.35em] text-slate-300">
-          Kpi lift
-        </Text>
-        <Text size="2" color="gray" className="text-slate-400">
-          Up and to the right
-        </Text>
+        <span className="uppercase tracking-[0.35em] text-slate-300 text-sm">Kpi lift</span>
+        <span className="text-slate-400 text-sm">Up and to the right</span>
       </div>
       <div className="relative mt-4 h-48 w-full">
         <motion.svg
+          aria-hidden="true"
           viewBox="0 0 324 180"
           className="h-full w-full overflow-visible"
           initial="hidden"
@@ -69,7 +68,7 @@ export function KpiGraph() {
             fill="url(#graphFill)"
             initial={{ opacity: 0, pathLength: 0 }}
             animate={{ opacity: 1, pathLength: 1 }}
-            transition={{ duration: 1.8, ease: "easeOut" }}
+            transition={{ duration: 1.8, ease: 'easeOut' }}
           />
 
           <motion.path
@@ -81,7 +80,7 @@ export function KpiGraph() {
             filter="url(#glow)"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1.8, ease: "easeInOut" }}
+            transition={{ duration: 1.8, ease: 'easeInOut' }}
           />
 
           {points.map((point, index) => (
@@ -89,7 +88,12 @@ export function KpiGraph() {
               key={point.label}
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.6 + index * 0.12, type: "spring", stiffness: 280, damping: 18 }}
+              transition={{
+                delay: 0.6 + index * 0.12,
+                type: 'spring',
+                stiffness: 280,
+                damping: 18,
+              }}
             >
               <circle cx={point.x} cy={point.y} r={5} fill="rgba(255, 255, 255, 0.95)" />
               <circle cx={point.x} cy={point.y} r={10} fill="rgba(90, 72, 249, 0.25)" />
@@ -115,7 +119,7 @@ export function KpiGraph() {
           <p className="text-slate-400">Paid + organic alignment</p>
         </div>
       </div>
-    </Box>
+    </div>
   );
 }
 

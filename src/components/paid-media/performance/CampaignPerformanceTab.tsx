@@ -23,12 +23,13 @@ import {
   usePaidMediaPerformanceStore,
 } from "@/lib/paid-media/performance-store";
 import type { PaidMetricsRange } from "@/lib/schemas/paidMetrics";
-import type { CampaignPerformanceMetricKey } from "@/lib/paid-media/performance-types";
+import type { CampaignPerformanceMetricKey, PaidMediaPlatform } from "@/lib/paid-media/performance-types";
 import { cn } from "@/lib/utils";
 
 type CampaignPerformanceTabProps = {
   brandId: string;
   adAccountId: string | null;
+  platform: PaidMediaPlatform;
 };
 
 type RangePreset = "last_7d" | "last_14d" | "last_30d";
@@ -45,7 +46,7 @@ function toRange(preset: RangePreset): PaidMetricsRange {
   return { preset };
 }
 
-export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerformanceTabProps) {
+export function CampaignPerformanceTab({ brandId, adAccountId, platform }: CampaignPerformanceTabProps) {
   const [rangePreset, setRangePreset] = React.useState<RangePreset>("last_14d");
   const [selectedMetric, setSelectedMetric] = React.useState<CampaignPerformanceMetricKey>("roas");
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | null>(null);
@@ -55,10 +56,10 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
     return makeCampaignPerformanceKey({
       brandId,
       adAccountId,
-      platform: "meta",
+      platform,
       range,
     });
-  }, [adAccountId, brandId, range]);
+  }, [adAccountId, brandId, platform, range]);
   const budgetKey = React.useMemo(() => {
     if (!adAccountId) return null;
     return makeBudgetPacingKey({ brandId, adAccountId });
@@ -79,13 +80,13 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
         {
           brandId,
           adAccountId,
-          platform: "meta",
+          platform,
           range,
         },
         { force }
       );
     },
-    [adAccountId, brandId, loadCampaignPerformance, range]
+    [adAccountId, brandId, loadCampaignPerformance, platform, range]
   );
 
   React.useEffect(() => {
@@ -121,7 +122,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
       void persistCampaignInsightsSnapshot({
         brandId,
         adAccountId,
-        platform: "meta",
+        platform,
         rangePreset,
         peerSetSize: campaigns.length,
         insights,
@@ -134,7 +135,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
     }, 2000);
 
     return () => window.clearTimeout(handle);
-  }, [adAccountId, brandId, campaignEntry?.status, campaigns.length, insights, rangePreset]);
+  }, [adAccountId, brandId, campaignEntry?.status, campaigns.length, insights, platform, rangePreset]);
 
   if (!adAccountId) {
     return (

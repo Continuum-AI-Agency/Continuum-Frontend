@@ -1,55 +1,55 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Text } from "@radix-ui/themes";
-import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle2Icon } from "lucide-react";
-import { Message } from "@/components/ai-elements/message";
-import { MentionifiedText } from "@/components/ai-elements/mentionified-text";
-import { Checkpoint, CheckpointIcon } from "@/components/ai-elements/checkpoint";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
+import { CheckCircle2Icon } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import * as React from 'react';
+import { Checkpoint, CheckpointIcon } from '@/components/ai-elements/checkpoint';
+import { MentionifiedText } from '@/components/ai-elements/mentionified-text';
+import { Message } from '@/components/ai-elements/message';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
+  type CreativeArtifact,
   frontendCheckpointReportSchema,
   hasReportContent,
-  type CreativeArtifact,
   type ToolResultEventData,
-} from "@/lib/jaina/schemas";
-import type { JainaStreamState } from "@/lib/jaina/stream";
+} from '@/lib/jaina/schemas';
+import type { JainaStreamState } from '@/lib/jaina/stream';
 import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
   isStreamingPlaceholderMessage,
   normalizeJainaMarkdownTables,
-} from "../jainaUtils";
-import type { JainaChatMessage } from "../types";
-import { ObjectivesQueue } from "./ObjectivesQueue";
-import { LatestJainaThought, ThinkingWindow } from "./ThinkingWindow";
-import { SparkleSpinner } from "./SparkleSpinner";
-import { deriveLiveStatusLabel } from "./thinkingUtils";
-import { PlanSection, type PlanFeedbackPayload } from "./PlanSection";
-import { ClarificationBanner } from "./ClarificationBanner";
-import { MessageActionBar } from "./MessageActionBar";
-import { CreativesSection } from "./CreativesSection";
-import { JainaInlineReport } from "./JainaInlineReport";
-import { JainaReportV2 } from "./JainaReportV2";
-import { WorkerInsightsPanel } from "./WorkerInsightsPanel";
+} from '../jainaUtils';
+import type { JainaChatMessage } from '../types';
+import { ClarificationBanner } from './ClarificationBanner';
+import { CreativesSection } from './CreativesSection';
+import { JainaInlineReport } from './JainaInlineReport';
+import { JainaReportV2 } from './JainaReportV2';
+import { MessageActionBar } from './MessageActionBar';
+import { ObjectivesQueue } from './ObjectivesQueue';
+import { type PlanFeedbackPayload, PlanSection } from './PlanSection';
+import { SparkleSpinner } from './SparkleSpinner';
+import { LatestJainaThought, ThinkingWindow } from './ThinkingWindow';
+import { deriveLiveStatusLabel } from './thinkingUtils';
+import { WorkerInsightsPanel } from './WorkerInsightsPanel';
 
 function makeCreativeArtifact(details: Record<string, unknown>): CreativeArtifact | null {
   const imageUrl = details.image_url ? String(details.image_url) : null;
   const thumbUrl = details.thumbnail_url ? String(details.thumbnail_url) : null;
   const url = imageUrl || thumbUrl;
   if (!url) return null;
-  const objectType = typeof details.object_type === "string" ? details.object_type.toUpperCase() : null;
+  const objectType =
+    typeof details.object_type === 'string' ? details.object_type.toUpperCase() : null;
   return {
     id: String(details.id || `creative-${Date.now()}`),
-    type: "creative",
+    type: 'creative',
     url,
     thumbnail_url: thumbUrl ?? undefined,
     post_copy: details.body ? String(details.body) : undefined,
     headline: details.title ? String(details.title) : undefined,
     description: details.name ? String(details.name) : undefined,
     call_to_action: details.call_to_action_type ? String(details.call_to_action_type) : undefined,
-    format: objectType === "VIDEO" ? "video" : objectType === "PHOTO" ? "image" : undefined,
+    format: objectType === 'VIDEO' ? 'video' : objectType === 'PHOTO' ? 'image' : undefined,
   };
 }
 
@@ -61,7 +61,10 @@ function extractCreativesFromToolResult(toolResult: ToolResultEventData): Creati
   const results = output.results;
   if (Array.isArray(results)) {
     return results
-      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && r.ok !== false && !!r.creative_details)
+      .filter(
+        (r): r is Record<string, unknown> =>
+          !!r && typeof r === 'object' && r.ok !== false && !!r.creative_details,
+      )
       .map((r) => makeCreativeArtifact(r.creative_details as Record<string, unknown>))
       .filter((c): c is CreativeArtifact => c !== null);
   }
@@ -79,7 +82,10 @@ function extractCreativesFromToolResult(toolResult: ToolResultEventData): Creati
 function isLikelyStructuredJsonMessage(content: string): boolean {
   const trimmed = content.trim();
   if (!trimmed) return false;
-  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+  if (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
     return true;
   }
   return (
@@ -120,7 +126,7 @@ export function JainaMessageItem({
   const plan = message.plan;
 
   const structuredReport = React.useMemo(() => {
-    if (!report || ("type" in report && report.type === "direct_answer")) return null;
+    if (!report || ('type' in report && report.type === 'direct_answer')) return null;
     const parsed = frontendCheckpointReportSchema.safeParse(report);
     return parsed.success ? parsed.data : null;
   }, [report]);
@@ -128,40 +134,42 @@ export function JainaMessageItem({
   const shouldRenderInlineReport = Boolean(structuredReport && hasReportContent(structuredReport));
   const isStructuredJsonContent = isLikelyStructuredJsonMessage(message.content);
   const hasStructuredChild = Boolean(
-    shouldRenderInlineReport || reportV2 || plan || message.pendingClarification
+    shouldRenderInlineReport || reportV2 || plan || message.pendingClarification,
   );
   const shouldHideMarkdownContent = isStructuredJsonContent && hasStructuredChild;
   const trimmedContent = message.content.trim();
 
   // Suppress SafeMarkdown when it would just repeat the report's executive summary
   const isRedundantReportContent = Boolean(
-    trimmedContent &&
-    reportV2?.executive_summary?.trim() === trimmedContent
+    trimmedContent && reportV2?.executive_summary?.trim() === trimmedContent,
   );
 
-  const hasRenderableContent = trimmedContent.length > 0 && !shouldHideMarkdownContent && !isRedundantReportContent;
+  const hasRenderableContent =
+    trimmedContent.length > 0 && !shouldHideMarkdownContent && !isRedundantReportContent;
 
   const structuredFallbackContent = React.useMemo(() => {
     if (shouldRenderInlineReport || reportV2) return null;
     return (
       extractRenderableFallbackFromReport(report ?? null) ??
-      (isStructuredJsonContent ? extractRenderableFallbackFromStructuredContent(message.content) : null)
+      (isStructuredJsonContent
+        ? extractRenderableFallbackFromStructuredContent(message.content)
+        : null)
     );
   }, [isStructuredJsonContent, message.content, report, reportV2, shouldRenderInlineReport]);
 
   const liveStatusLabel = React.useMemo(
-    () => (isStreaming ? deriveLiveStatusLabel(reasoning ?? []) ?? "Working" : null),
-    [isStreaming, reasoning]
+    () => (isStreaming ? (deriveLiveStatusLabel(reasoning ?? []) ?? 'Working') : null),
+    [isStreaming, reasoning],
   );
 
   const showLiveStatus =
     isStreaming &&
-    message.role === "assistant" &&
-    (state.status === "starting" || state.status === "streaming");
+    message.role === 'assistant' &&
+    (state.status === 'starting' || state.status === 'streaming');
 
   const showStaticFallback =
     !isStreaming &&
-    message.role === "assistant" &&
+    message.role === 'assistant' &&
     !hasRenderableContent &&
     !structuredFallbackContent &&
     !hasStructuredChild;
@@ -177,7 +185,7 @@ export function JainaMessageItem({
     if (!toolResults) return [];
     return toolResults.filter(
       (r): r is ToolResultEventData & { output: Record<string, unknown> } =>
-        r.name === "spawn_worker" && r.ok && !!r.output
+        r.name === 'spawn_worker' && r.ok && !!r.output,
     );
   }, [toolResults]);
 
@@ -189,8 +197,10 @@ export function JainaMessageItem({
         transition={{ duration: 0.25 }}
         className="group w-full space-y-4"
       >
-        {message.role === "user" ? (
-          <Text size="2" className="font-medium whitespace-pre-wrap"><MentionifiedText text={message.content} references={message.metadata?.references} /></Text>
+        {message.role === 'user' ? (
+          <span className="text-sm font-medium whitespace-pre-wrap">
+            <MentionifiedText text={message.content} references={message.metadata?.references} />
+          </span>
         ) : (
           <>
             {hasRenderableContent ? (
@@ -198,7 +208,7 @@ export function JainaMessageItem({
                 <SafeMarkdown
                   content={normalizeJainaMarkdownTables(message.content)}
                   className="text-base leading-7 text-foreground"
-                  mode={isStreaming ? "streaming" : "static"}
+                  mode={isStreaming ? 'streaming' : 'static'}
                   isAnimating={isStreaming}
                 />
                 {isStreaming && isStreamingPlaceholderMessage(message.content) ? (
@@ -206,7 +216,7 @@ export function JainaMessageItem({
                     aria-hidden="true"
                     className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] rounded-sm bg-primary"
                     animate={{ opacity: [1, 0, 1] }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
                   />
                 ) : null}
               </div>
@@ -226,9 +236,7 @@ export function JainaMessageItem({
             ) : null}
 
             {showStaticFallback ? (
-              <Text size="2" className="text-muted-foreground">
-                Response complete.
-              </Text>
+              <span className="text-sm text-muted-foreground">Response complete.</span>
             ) : null}
 
             {structuredFallbackContent ? (
@@ -328,7 +336,7 @@ export function JainaMessageItem({
               <WorkerInsightsPanel results={spawnWorkerResults} />
             ) : null}
 
-            {!isStreaming && message.status === "done" && (reportV2 || shouldRenderInlineReport) ? (
+            {!isStreaming && message.status === 'done' && (reportV2 || shouldRenderInlineReport) ? (
               <Checkpoint className="pt-1">
                 <CheckpointIcon>
                   <motion.div
@@ -336,7 +344,10 @@ export function JainaMessageItem({
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    <CheckCircle2Icon className="size-4 text-emerald-500 shrink-0" aria-hidden="true" />
+                    <CheckCircle2Icon
+                      className="size-4 text-emerald-500 shrink-0"
+                      aria-hidden="true"
+                    />
                   </motion.div>
                 </CheckpointIcon>
                 <motion.span
@@ -350,7 +361,7 @@ export function JainaMessageItem({
               </Checkpoint>
             ) : null}
 
-            {!isStreaming && message.status === "done" ? (
+            {!isStreaming && message.status === 'done' ? (
               <MessageActionBar content={message.content} onRegenerate={onRegenerate} />
             ) : null}
           </>

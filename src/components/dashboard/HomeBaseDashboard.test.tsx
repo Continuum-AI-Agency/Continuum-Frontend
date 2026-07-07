@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
-import { Theme } from "@radix-ui/themes";
-
-import type { BrandBookResponse } from "@continuum/contracts";
+import { afterEach, describe, expect, it, mock } from 'bun:test';
+import type { BrandBookResponse } from '@continuum/contracts';
+import { cleanup, render } from '@testing-library/react';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -10,19 +8,19 @@ Object.assign(global.window, {
   TypeError: globalThis.TypeError,
 });
 
-mock.module("@/components/providers/ActiveBrandProvider", () => ({
-  useActiveBrandContext: () => ({ activeBrandId: "brand-1" }),
+mock.module('@/components/providers/ActiveBrandProvider', () => ({
+  useActiveBrandContext: () => ({ activeBrandId: 'brand-1' }),
 }));
 
-import { HomeBaseDashboard } from "./HomeBaseDashboard";
-import { deriveDashboardSetup } from "./first-run/setupState";
+import { deriveDashboardSetup } from './first-run/setupState';
+import { HomeBaseDashboard } from './HomeBaseDashboard';
 
 function readyBook(): BrandBookResponse {
   return {
-    brand_id: "brand-1",
-    status: "ready",
+    brand_id: 'brand-1',
+    status: 'ready',
     present: true,
-    refreshed_at: "2026-07-01T00:00:00.000Z",
+    refreshed_at: '2026-07-01T00:00:00.000Z',
     assembled: { report: { readiness: { overall_score: 80, findings: [] } } },
   } as unknown as BrandBookResponse;
 }
@@ -47,92 +45,82 @@ const completeSetup = deriveDashboardSetup({
 
 afterEach(() => cleanup());
 
-describe("HomeBaseDashboard", () => {
-  it("renders the organic view with its title and active slot", () => {
+describe('HomeBaseDashboard', () => {
+  it('renders the organic view with its title and active slot', () => {
     const { container } = render(
-      <Theme>
-        <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />
-      </Theme>,
+      <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />,
     );
 
-    expect(container.textContent).toContain("Social metrics & Trend signals");
+    expect(container.textContent).toContain('Social metrics & Trend signals');
     const panel = container.querySelector('[data-dashboard-panel="organic"]');
-    expect(panel?.textContent).toContain("Organic slot");
+    expect(panel?.textContent).toContain('Organic slot');
   });
 
-  it("renders the paid view with its title and active slot", () => {
+  it('renders the paid view with its title and active slot', () => {
     const { container } = render(
-      <Theme>
-        <HomeBaseDashboard activeView="paid" activeViewSlot={<div>Paid slot</div>} />
-      </Theme>,
+      <HomeBaseDashboard activeView="paid" activeViewSlot={<div>Paid slot</div>} />,
     );
 
-    expect(container.textContent).toContain("Performance & DCO actions");
+    expect(container.textContent).toContain('Performance & DCO actions');
     const panel = container.querySelector('[data-dashboard-panel="paid"]');
-    expect(panel?.textContent).toContain("Paid slot");
+    expect(panel?.textContent).toContain('Paid slot');
   });
 
-  it("shows mode microcopy near the toggle for the active view", () => {
+  it('shows mode microcopy near the toggle for the active view', () => {
     const { container } = render(
-      <Theme>
-        <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />
-      </Theme>,
+      <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />,
     );
 
-    expect(container.textContent).toContain("Social performance, audience insights, and trend signals.");
+    expect(container.textContent).toContain(
+      'Social performance, audience insights, and trend signals.',
+    );
   });
 
-  it("replaces empty modules with the first-run setup when no account is connected", () => {
+  it('replaces empty modules with the first-run setup when no account is connected', () => {
     const { container } = render(
-      <Theme>
-        <HomeBaseDashboard
-          activeView="organic"
-          activeViewSlot={<div>Organic slot</div>}
-          setup={incompleteNoData}
-        />
-      </Theme>,
+      <HomeBaseDashboard
+        activeView="organic"
+        activeViewSlot={<div>Organic slot</div>}
+        setup={incompleteNoData}
+      />,
     );
 
     expect(container.querySelector('[data-testid="dashboard-first-run"]')).not.toBeNull();
-    expect(container.textContent).toContain("Set up your workspace");
-    expect(container.textContent).toContain("Get started");
+    expect(container.textContent).toContain('Set up your workspace');
+    expect(container.textContent).toContain('Get started');
     // No live data + no mode toggle when there is nothing to show.
     expect(container.querySelector('[data-dashboard-panel="organic"]')).toBeNull();
     expect(container.querySelector('nav[aria-label="Dashboard workspace"]')).toBeNull();
   });
 
-  it("leads the live data with first-run guidance when setup is partial", () => {
+  it('leads the live data with first-run guidance when setup is partial', () => {
     const { container } = render(
-      <Theme>
-        <HomeBaseDashboard
-          activeView="organic"
-          activeViewSlot={<div>Organic slot</div>}
-          setup={incompleteWithData}
-        />
-      </Theme>,
+      <HomeBaseDashboard
+        activeView="organic"
+        activeViewSlot={<div>Organic slot</div>}
+        setup={incompleteWithData}
+      />,
     );
 
     expect(container.querySelector('[data-testid="dashboard-first-run"]')).not.toBeNull();
-    expect(container.textContent).toContain("Your live data");
+    expect(container.textContent).toContain('Your live data');
     const panel = container.querySelector('[data-dashboard-panel="organic"]');
-    expect(panel?.textContent).toContain("Organic slot");
+    expect(panel?.textContent).toContain('Organic slot');
     // The mode toggle is present because there is data to switch between.
     expect(container.querySelector('nav[aria-label="Dashboard workspace"]')).not.toBeNull();
   });
 
-  it("drops the first-run surface once setup is complete", () => {
+  it('drops the first-run surface once setup is complete', () => {
     const { container } = render(
-      <Theme>
-        <HomeBaseDashboard
-          activeView="organic"
-          activeViewSlot={<div>Organic slot</div>}
-          setup={completeSetup}
-        />
-      </Theme>,
+      <HomeBaseDashboard
+        activeView="organic"
+        activeViewSlot={<div>Organic slot</div>}
+        setup={completeSetup}
+      />,
     );
 
     expect(container.querySelector('[data-testid="dashboard-first-run"]')).toBeNull();
     const panel = container.querySelector('[data-dashboard-panel="organic"]');
-    expect(panel?.textContent).toContain("Organic slot");
+    expect(panel?.textContent).toContain('Organic slot');
   });
 });

@@ -1,26 +1,27 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Card, Flex, Text, Box, Badge } from "@radix-ui/themes";
-import { CheckIcon, Cross2Icon, ReloadIcon } from "@radix-ui/react-icons";
-import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
-import type { GridStatus } from "@/lib/organic/store";
+import { CheckIcon, Cross2Icon, ReloadIcon } from '@radix-ui/react-icons';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Progress } from '@/components/ui/progress';
+import type { GridStatus } from '@/lib/organic/store';
+import { cn } from '@/lib/utils';
 
-const stageColors: Record<string, string> = {
-  analyzing: "blue",
-  optimizing: "amber",
-  drafting: "violet",
-  matching: "cyan",
-  finalizing: "emerald",
+type StageVariant = 'teal' | 'warning' | 'violet' | 'success';
+
+const stageVariants: Record<string, StageVariant> = {
+  analyzing: 'teal',
+  optimizing: 'warning',
+  drafting: 'violet',
+  matching: 'teal',
+  finalizing: 'success',
 };
 
 const stageLabels: Record<string, string> = {
-  analyzing: "Analyzing",
-  optimizing: "Optimizing",
-  drafting: "Drafting",
-  matching: "Matching",
-  finalizing: "Finalizing",
+  analyzing: 'Analyzing',
+  optimizing: 'Optimizing',
+  drafting: 'Drafting',
+  matching: 'Matching',
+  finalizing: 'Finalizing',
 };
 
 interface GenerationProgressPanelProps {
@@ -38,116 +39,91 @@ export function GenerationProgressPanel({
   stage,
   error,
 }: GenerationProgressPanelProps) {
-  if (status === "idle") {
+  if (status === 'idle') {
     return null;
   }
 
-  const isError = status === "error" || error;
-  const isComplete = status === "complete";
-  const isCompleteWithErrors = status === "complete_with_errors";
-  const stageColor = stage ? stageColors[stage] : "gray";
-  const stageLabel = stage ? stageLabels[stage] : "Processing";
+  const isError = status === 'error' || error;
+  const isComplete = status === 'complete';
+  const isCompleteWithErrors = status === 'complete_with_errors';
+  const stageVariant: StageVariant | 'muted' = stage ? (stageVariants[stage] ?? 'muted') : 'muted';
+  const stageLabel = stage ? stageLabels[stage] : 'Processing';
 
   return (
-    <Card data-testid="generation-progress-panel">
-      <Box p="4">
-        <Flex direction="column" gap="4">
-          <Flex align="center" justify="between">
-            <Flex align="center" gap="3">
+    <div
+      data-testid="generation-progress-panel"
+      className="rounded-lg border bg-card text-card-foreground"
+    >
+      <div className="p-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
               {isError ? (
-                <Box
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full",
-                    "bg-red-100 text-red-600"
-                  )}
-                >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                   <Cross2Icon className="w-4 h-4" />
-                </Box>
+                </div>
               ) : isComplete ? (
-                <Box
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full",
-                    "bg-emerald-100 text-emerald-600"
-                  )}
-                >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-success">
                   <CheckIcon className="w-4 h-4" />
-                </Box>
+                </div>
               ) : isCompleteWithErrors ? (
-                <Box
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full",
-                    "bg-amber-100 text-amber-600"
-                  )}
-                >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/10 text-warning">
                   <Cross2Icon className="w-4 h-4" />
-                </Box>
+                </div>
               ) : (
-                <Box
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full",
-                    "bg-amber-100 text-amber-600 animate-spin"
-                  )}
-                >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/10 text-warning animate-spin">
                   <ReloadIcon className="w-4 h-4" />
-                </Box>
+                </div>
               )}
 
-              <Flex direction="column" gap="1">
-                <Text weight="bold" size="3">
+              <div className="flex flex-col gap-1">
+                <span className="text-base font-semibold">
                   {isError
-                    ? "Generation Failed"
+                    ? 'Generation Failed'
                     : isComplete
-                    ? "Generation Complete"
-                    : isCompleteWithErrors
-                    ? "Generation Complete with Failures"
-                    : "Generating Content"}
-                </Text>
+                      ? 'Generation Complete'
+                      : isCompleteWithErrors
+                        ? 'Generation Complete with Failures'
+                        : 'Generating Content'}
+                </span>
                 {!isError && !isComplete && !isCompleteWithErrors && stage && (
-                  <Badge color={stageColor as any} size="1">
+                  <Pill variant={stageVariant} className="w-fit">
                     {stageLabel}
-                  </Badge>
+                  </Pill>
                 )}
-              </Flex>
-            </Flex>
+              </div>
+            </div>
 
             {!isError && (
-              <Text weight="bold" size="5" color="gray">
-                {percent}%
-              </Text>
+              <span className="text-xl font-semibold text-muted-foreground">{percent}%</span>
             )}
-          </Flex>
+          </div>
 
           {!isError && (
             <Progress
               value={percent}
               data-testid="generation-progress-bar"
               className={cn(
-                isComplete && "[&>div]:bg-emerald-500",
-                isCompleteWithErrors && "[&>div]:bg-amber-500",
-                isError && "[&>div]:bg-red-500"
+                isComplete && '[&>div]:bg-success',
+                isCompleteWithErrors && '[&>div]:bg-warning',
+                isError && '[&>div]:bg-destructive',
               )}
             />
           )}
 
-          {message && !isError && (
-            <Text size="2" color="gray">
-              {message}
-            </Text>
-          )}
+          {message && !isError && <span className="text-sm text-muted-foreground">{message}</span>}
 
           {isError && error && (
-            <Box
-              className="p-3 rounded-md bg-red-50 border border-red-200"
+            <div
+              className="p-3 rounded-md bg-destructive/10 border border-destructive/30"
               role="alert"
               aria-live="assertive"
             >
-              <Text size="2" color="red">
-                {error}
-              </Text>
-            </Box>
+              <span className="text-sm text-destructive">{error}</span>
+            </div>
           )}
-        </Flex>
-      </Box>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

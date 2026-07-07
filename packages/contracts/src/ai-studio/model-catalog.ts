@@ -59,6 +59,13 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     status: 'available',
   },
   {
+    id: 'gemini-omni-flash',
+    label: 'Gemini Omni Flash (Video)',
+    provider: 'google',
+    medium: 'video',
+    status: 'beta',
+  },
+  {
     id: 'sora-2',
     label: 'Sora 2 (Video)',
     provider: 'openai',

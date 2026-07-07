@@ -19,6 +19,7 @@ import {
 import {
   assignBrandIntegrationAccount,
   startGoogleSync,
+  startLinkedInSync,
   startMetaSync,
   startTikTokSync,
   startXSync,
@@ -56,7 +57,7 @@ export type AssignerHeaderState = {
   clearing: boolean;
 };
 
-type ProviderGroup = "meta" | "google" | "tiktok" | "x";
+type ProviderGroup = "meta" | "google" | "tiktok" | "linkedin" | "x";
 
 const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
   meta: "meta",
@@ -69,6 +70,7 @@ const META_GOOGLE_TIKTOK: Record<string, ProviderGroup> = {
   googleAnalytics: "google",
   google: "google",
   tiktok: "tiktok",
+  linkedin: "linkedin",
   x: "x",
 };
 
@@ -76,6 +78,7 @@ const SYNC_LABEL_BY_GROUP: Record<ProviderGroup, string> = {
   meta: "Meta",
   google: "Google",
   tiktok: "TikTok",
+  linkedin: "LinkedIn",
   x: "X",
 };
 
@@ -373,15 +376,15 @@ export function BrandAssetAssigner({ brandId, onTrack, renderHeader, footer, cla
       markSyncing(tabId, true);
       try {
         const callbackUrl = buildOAuthCallbackUrl(group, brandId);
-        const startFn =
-          group === "meta"
-            ? startMetaSync
-            : group === "tiktok"
-              ? startTikTokSync
-              : group === "x"
-                ? startXSync
-                : startGoogleSync;
-        const { url } = await startFn(callbackUrl);
+        const { url } = group === "meta"
+          ? await startMetaSync(callbackUrl)
+          : group === "tiktok"
+            ? await startTikTokSync(callbackUrl)
+            : group === "linkedin"
+              ? await startLinkedInSync(callbackUrl, { mode: tabId === "linkedin" ? "organic" : "paid" })
+            : group === "x"
+              ? await startXSync(callbackUrl)
+              : await startGoogleSync(callbackUrl);
 
         onTrack?.("oauth_started", { provider: group });
 

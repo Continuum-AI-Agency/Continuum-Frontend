@@ -1,19 +1,18 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Heading, Text } from "@radix-ui/themes";
-import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
-import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
-import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
+import React from 'react';
+import { CreativeLibrarySidebar } from '@/components/creative-assets/CreativeLibrarySidebar';
+import { BrandSwitcherMenu } from '@/components/navigation/BrandSwitcherMenu';
 import {
   buildAiStudioStorageKey,
-  plannerAiStudioHandoffSchema,
   type PlannerAiStudioHandoff,
-} from "@/lib/organic/ai-studio-bridge";
+  plannerAiStudioHandoffSchema,
+} from '@/lib/organic/ai-studio-bridge';
 
 const StudioCanvas = dynamic(
-  () => import("@/StudioCanvas/components/StudioCanvas").then((mod) => mod.StudioCanvas),
+  () => import('@/StudioCanvas/components/StudioCanvas').then((mod) => mod.StudioCanvas),
   { ssr: false },
 );
 
@@ -24,7 +23,7 @@ type AIStudioClientProps = {
 };
 
 function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null;
 
   const raw = window.localStorage.getItem(buildAiStudioStorageKey(draftId));
   if (!raw) return null;
@@ -43,12 +42,14 @@ export default function AIStudioClient({
   initialRoomId,
 }: AIStudioClientProps) {
   const searchParams = useSearchParams();
-  const source = searchParams.get("source");
-  const draftId = searchParams.get("draftId");
-  const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(null);
+  const source = searchParams.get('source');
+  const draftId = searchParams.get('draftId');
+  const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(
+    null,
+  );
 
   React.useEffect(() => {
-    if (source !== "organic-planner" || !draftId) {
+    if (source !== 'organic-planner' || !draftId) {
       setOrganicPlannerSeed(null);
       return;
     }
@@ -63,21 +64,24 @@ export default function AIStudioClient({
       <main
         className="relative z-[1] flex min-h-0 flex-1 flex-col"
         style={{
-          gap: "var(--app-shell-gap-compact)",
-          padding: "var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)",
+          gap: 'var(--app-shell-gap-compact)',
+          padding: 'var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)',
         }}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-baseline gap-3">
-            <Heading size="3" className="font-semibold text-white">AI Studio</Heading>
-            <Text color="gray" size="2">Build flows for {brandName}</Text>
+            <h1 className="text-base font-semibold text-white">AI Studio</h1>
+            <span className="text-sm text-gray-400">Build flows for {brandName}</span>
           </div>
           <div className="flex items-center gap-3">
             <BrandSwitcherMenu />
           </div>
         </div>
 
-        <div data-tour-id="studio-canvas" className="flex-1 min-h-0 w-full overflow-hidden rounded-lg border border-white/10">
+        <div
+          data-tour-id="studio-canvas"
+          className="flex-1 min-h-0 w-full overflow-hidden rounded-lg border border-white/10"
+        >
           <div className="h-full w-full">
             <StudioCanvas
               brandProfileId={brandProfileId}

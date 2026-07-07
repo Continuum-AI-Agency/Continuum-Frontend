@@ -8,9 +8,17 @@
 // Backend builds them from unknown DB jsonb and the Frontend narrows on read
 // (see the "contracts wire DTOs stay loose" rule).
 
-import { OptimizationObjectiveSchema } from '@continuum/optimization-engine/schemas';
+import {
+  FreezeReasonSchema,
+  OptimizationObjectiveSchema,
+} from '@continuum/optimization-engine/schemas';
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
+
+/** Why an ad set was HELD (budget left unchanged on purpose) this cycle — mirrors
+ *  the engine FreezeReason. Surfaced so the FE renders a labeled "Held" state
+ *  instead of a misleading $0.00 change. */
+export type FreezeReason = z.infer<typeof FreezeReasonSchema>;
 
 /** Per-portfolio autonomy dial. `recommend` proposes; `autopilot` auto-applies
  *  budget within the engine's guardrails. Pauses always need approval in both. */
@@ -158,6 +166,9 @@ export const CycleItemDiagnosticsSchema = z
   .object({
     score3d: z.number().optional(),
     score7d: z.number().optional(),
+    // When present, the ad set was HELD (budget unchanged on purpose) — the FE
+    // renders a labeled "Held" state instead of a $0.00 change.
+    freezeReason: FreezeReasonSchema.optional(),
     ci: z
       .object({
         cpa: z.number().optional(),
@@ -402,3 +413,24 @@ export const OptimizerStatusSchema = z.object({
   adset_count: z.number().int().nonnegative(),
 });
 export type OptimizerStatus = z.infer<typeof OptimizerStatusSchema>;
+
+/** One row of the optimizer activity log for the in-app log page
+ *  (optimizer_list_logs). DB-derived read model: `id` may arrive as bigint number
+ *  or string, and `fields` is arbitrary per-event context — kept loose; the FE
+ *  narrows on read (see "contracts wire DTOs stay loose"). */
+export const OptimizerLogRowSchema = z.object({
+  id: z.coerce.number().int(),
+  portfolio_id: z.string().uuid().nullable(),
+  portfolio_name: z.string().nullable(),
+  ts: z.string(), // ISO timestamptz
+  level: z.enum(['info', 'warn', 'error']),
+  event: z.string(),
+  fields: z.record(z.string(), z.unknown()).default({}),
+});
+export type OptimizerLogRow = z.infer<typeof OptimizerLogRowSchema>;
+
+/** The optimizer log-page response envelope (edge optimizer-status ?view=logs). */
+export const OptimizerLogsResponseSchema = z.object({
+  logs: z.array(OptimizerLogRowSchema),
+});
+export type OptimizerLogsResponse = z.infer<typeof OptimizerLogsResponseSchema>;

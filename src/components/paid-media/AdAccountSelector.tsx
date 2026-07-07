@@ -48,6 +48,7 @@ export function AdAccountSelector({
   initialTimelineAccounts,
 }: AdAccountSelectorProps) {
   const isGoogleAds = platform === "google-ads";
+  const isLinkedIn = platform === "linkedin";
   const { integrations, isLoading, isError, refresh } = useBrandIntegrations(brandId);
   const [open, setOpen] = React.useState(false);
   const [timedOut, setTimedOut] = React.useState(false);
@@ -79,6 +80,10 @@ export function AdAccountSelector({
       pushIntegrationAccounts(integrations?.googleAds?.accounts);
       return merged;
     }
+    if (isLinkedIn) {
+      pushIntegrationAccounts(integrations?.linkedin?.accounts);
+      return merged;
+    }
 
     timelineAccounts.forEach((account) => {
       if (seen.has(account.id)) return;
@@ -88,14 +93,15 @@ export function AdAccountSelector({
     pushIntegrationAccounts(integrations?.facebook?.accounts);
 
     return merged;
-  }, [integrations, timelineAccounts, isGoogleAds]);
+  }, [integrations, timelineAccounts, isGoogleAds, isLinkedIn]);
 
   const initialAccountsUsedRef = React.useRef(hasInitialAccounts);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadNonce is a manual re-run signal for the Retry action; it is intentionally not read in the effect body.
   React.useEffect(() => {
-    // Google Ads has no timeline endpoint — accounts come from integrations only.
-    if (isGoogleAds) {
+    // Non-Meta paid platforms have no timeline endpoint — accounts come from
+    // the brand integration summary.
+    if (isGoogleAds || isLinkedIn) {
       initialAccountsUsedRef.current = false;
       setTimelineAccounts([]);
       setTimelineAccountsLoaded(true);
@@ -149,7 +155,7 @@ export function AdAccountSelector({
     return () => {
       isCancelled = true;
     };
-  }, [brandId, isGoogleAds, reloadNonce]);
+  }, [brandId, isGoogleAds, isLinkedIn, reloadNonce]);
 
   // Auto-select first account if none selected
   React.useEffect(() => {

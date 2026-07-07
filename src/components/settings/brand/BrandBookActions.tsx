@@ -1,13 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@radix-ui/themes";
-
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useToast } from "@/components/ui/ToastProvider";
-import { deepenBrandBook } from "@/lib/api/brandBook.client";
-import { useBrandMdDirtyOptional } from "./BrandMdDirtyContext";
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useTransition } from 'react';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { deepenBrandBook } from '@/lib/api/brandBook.client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useBrandMdDirtyOptional } from './BrandMdDirtyContext';
 
 /**
  * Brand Book interactivity: a "Deepen analysis" trigger + a realtime listener
@@ -34,11 +33,11 @@ export function BrandBookActions({ brandId }: { brandId: string }) {
     const channel = supabase
       .channel(`brand_book_${brandId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "UPDATE",
-          schema: "brand_profiles",
-          table: "brand_report_composites",
+          event: 'UPDATE',
+          schema: 'brand_profiles',
+          table: 'brand_report_composites',
           filter: `brand_profile_id=eq.${brandId}`,
         },
         () => {
@@ -64,25 +63,25 @@ export function BrandBookActions({ brandId }: { brandId: string }) {
         const res = await deepenBrandBook(brandId);
         show({
           title:
-            res.status === "already_running"
-              ? "Deep analysis already running"
-              : "Deep analysis started",
-          description: "The deeper sections of your Brand Book will fill in shortly.",
-          variant: "success",
+            res.status === 'already_running'
+              ? 'Deep analysis already running'
+              : 'Deep analysis started',
+          description: 'The deeper sections of your Brand Book will fill in shortly.',
+          variant: 'success',
         });
       } catch (e) {
         show({
           title: "Couldn't start deep analysis",
-          description: e instanceof Error ? e.message : "Please try again.",
-          variant: "error",
+          description: e instanceof Error ? e.message : 'Please try again.',
+          variant: 'error',
         });
       }
     });
   };
 
   return (
-    <Button onClick={handleDeepen} disabled={isPending} variant="soft" size="2">
-      {isPending ? "Starting…" : "Deepen analysis"}
+    <Button onClick={handleDeepen} disabled={isPending} variant="secondary">
+      {isPending ? 'Starting…' : 'Deepen analysis'}
     </Button>
   );
 }

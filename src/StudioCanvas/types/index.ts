@@ -1,13 +1,13 @@
 import type { BrandBookPieceKind } from '@continuum/contracts';
-import {
-  type Connection,
-  type Edge,
-  type EdgeChange,
-  type Node,
-  type NodeChange,
-  type OnConnect,
-  type OnEdgesChange,
-  type OnNodesChange,
+import type {
+  Connection,
+  Edge,
+  EdgeChange,
+  Node,
+  NodeChange,
+  OnConnect,
+  OnEdgesChange,
+  OnNodesChange,
 } from '@xyflow/react';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
@@ -326,10 +326,50 @@ export interface PublishToPlannerNodeData extends BaseNodeData {
   publishedAt?: string;
 }
 
+// One clip in an Omni node's variation micro-library. The first is the
+// 'Original' generate; each subsequent one is an edit branched from the then-
+// active variation (its interactionId threads the next edit's
+// previous_interaction_id). Durable coords let the whole library re-sign on load.
+export interface OmniVariation {
+  id: string;
+  label: string;
+  instruction?: string;
+  videoUrl?: string;
+  storagePath?: string;
+  bucket?: string;
+  interactionId?: string;
+  parentInteractionId?: string;
+  status: 'pending' | 'done' | 'error';
+  error?: string;
+  createdAt: number;
+}
+
+// Gemini Omni Flash node: generate a clip, then conversationally edit it into
+// variations. Unlike VideoGen (handle-wired, single output), the editing is
+// in-node and the output is a selectable micro-library. The durable generated*
+// fields MIRROR the active variation so setNodeOutput / rehydrateWorkflowMedia /
+// downstream video consumers work unchanged.
+export interface OmniGenNodeData extends BaseNodeData {
+  model: 'gemini-omni-flash';
+  prompt: string;
+  aspectRatio?: '16:9' | '9:16';
+  skillIds?: string[];
+  brandBookPieces?: BrandBookPieceKind[];
+  variations?: OmniVariation[];
+  activeVariationId?: string;
+  previousInteractionId?: string;
+  isChatOpen?: boolean;
+  generatedVideo?: string | Blob;
+  generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
+}
+
 export type StudioNodeData =
   | StringNodeData
   | NanoGenNodeData
   | VideoGenNodeData
+  | OmniGenNodeData
   | ExtendVideoNodeData
   | VideoEditorNodeData
   | TimelineEditorNodeData

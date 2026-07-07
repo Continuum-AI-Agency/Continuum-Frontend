@@ -57,6 +57,7 @@ const STATUS_ICON_CLASS: Record<PaidSetupStepStatus, string> = {
 const PLATFORM_SWITCH_OPTIONS: { value: PaidMediaPlatform; label: string }[] = [
   { value: "meta", label: "Meta Ads" },
   { value: "google-ads", label: "Google Ads" },
+  { value: "linkedin", label: "LinkedIn Ads" },
 ];
 
 function StepCta({

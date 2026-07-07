@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  instagramOrganicMetricsResponseSchema,
+  organicMetricsResponseSchema,
   type OrganicDateRangePreset,
   type OrganicAnalyticsScope,
   type OrganicPlatform,
@@ -11,7 +11,7 @@ import type { IntegrationErrorCode } from "@continuum/contracts";
 export type OrganicAnalyticsRequest = {
   brandId: string;
   integrationAccountId: string;
-  platform: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok" | "youtube">;
+  platform: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin">;
   range: {
     preset: OrganicDateRangePreset;
     custom?: { from: string; to: string };
@@ -46,5 +46,5 @@ export async function fetchOrganicAnalytics(request: OrganicAnalyticsRequest) {
   }
 
   const json = (await response.json()) as unknown;
-  return instagramOrganicMetricsResponseSchema.parse(json);
+  return organicMetricsResponseSchema.parse(json);
 }

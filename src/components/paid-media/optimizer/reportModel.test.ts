@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'bun:test';
 
-import { confidenceBand, parseReport, recommendationLabel } from './reportModel';
+import { confidenceBand, freezeLabel, parseReport, recommendationLabel } from './reportModel';
+
+describe('freezeLabel', () => {
+  it('returns null when the item was not held (budget actually moved)', () => {
+    expect(freezeLabel(null)).toBeNull();
+    expect(freezeLabel(undefined)).toBeNull();
+  });
+  it('labels each freeze reason as a distinct Held state', () => {
+    expect(freezeLabel('no_conversions')?.label).toBe('Held · no conversion signal');
+    expect(freezeLabel('missing_window')?.label).toBe('Held · incomplete data');
+    expect(freezeLabel('unsupported_budget')?.label).toBe('Held · CBO/lifetime');
+  });
+  it('falls back to a generic Held for an unknown loose reason', () => {
+    expect(freezeLabel('some_future_reason')?.label).toBe('Held');
+  });
+});
 
 describe('parseReport', () => {
   it('returns null for a null report', () => {

@@ -1,35 +1,44 @@
-"use client";
+'use client';
 
+import type { IntegrationErrorCode } from '@continuum/contracts';
+import { Flag } from 'lucide-react';
+import React from 'react';
+import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { Pill } from '@/components/kibo-ui/pill';
+import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
+import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
 import {
-  Badge,
-  Box,
-  Card,
-  Flex,
-  Grid,
-  Heading,
-  Select,
-  Text,
-} from "@radix-ui/themes";
-import React from "react";
-import { CartesianGrid, XAxis, LineChart, Line, YAxis, PieChart, Pie, Cell } from "recharts";
-
+  buildPostActivityDays,
+  renderPostActivityReferenceLines,
+} from '@/components/organic/PostActivityMarkers';
 import {
+  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import { Flag } from "lucide-react";
-import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
-import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicTrendPoint, OrganicPost } from "@/lib/schemas/organicMetrics";
-import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
-import type { IntegrationErrorCode } from "@continuum/contracts";
-import { cn } from "@/lib/utils";
-import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
-import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
-import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
-import { Switch } from "@/components/ui/switch";
-import { buildPostActivityDays, renderPostActivityReferenceLines } from "@/components/organic/PostActivityMarkers";
+} from '@/components/ui/chart';
+import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
+import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
+import type {
+  MetricComparison,
+  OrganicDateRangePreset,
+  OrganicMetricsResponse,
+  OrganicPlatform,
+  OrganicPost,
+  OrganicTrendPoint,
+} from '@/lib/schemas/organicMetrics';
+import { cn } from '@/lib/utils';
 
 export type InstagramAccountOption = {
   integrationAccountId: string;
@@ -46,17 +55,17 @@ type Props = {
 };
 
 // Platforms this widget can fetch real organic metrics for; others show a placeholder.
-const SUPPORTED_WIDGET_PLATFORMS: ReadonlySet<OrganicPlatform> = new Set(["instagram", "youtube"]);
+const SUPPORTED_WIDGET_PLATFORMS: ReadonlySet<OrganicPlatform> = new Set(['instagram', 'youtube']);
 
 type LoadState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }
-  | { status: "success"; data: OrganicMetricsResponse };
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }
+  | { status: 'success'; data: OrganicMetricsResponse };
 
-const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
+const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = 'last_7d';
 
-type MetricKey = keyof OrganicMetricsResponse["metrics"];
+type MetricKey = keyof OrganicMetricsResponse['metrics'];
 
 type MetricCard = {
   key: MetricKey;
@@ -65,38 +74,40 @@ type MetricCard = {
 };
 
 const METRIC_LABELS: Record<string, string> = {
-  reach: "Reach",
-  views: "Views",
-  newFollowers: "New followers",
-  accountsEngaged: "Accounts engaged",
-  reelsViews: "Reels views",
-  postViews: "Post views",
-  storiesViews: "Stories views",
-  profileVisitsYesterday: "Profile visits",
-  nonFollowerReach: "Non-follower reach",
-  followerReach: "Follower reach",
-  likes: "Likes",
-  comments: "Comments",
-  replies: "Replies",
-  shares: "Shares",
-  saved: "Saved",
-  totalInteractions: "Total interactions",
-  subscribers: "Subscribers",
-  impressions: "Impressions",
+  reach: 'Reach',
+  views: 'Views',
+  newFollowers: 'New followers',
+  accountsEngaged: 'Accounts engaged',
+  reelsViews: 'Reels views',
+  postViews: 'Post views',
+  storiesViews: 'Stories views',
+  profileVisitsYesterday: 'Profile visits',
+  nonFollowerReach: 'Non-follower reach',
+  followerReach: 'Follower reach',
+  likes: 'Likes',
+  comments: 'Comments',
+  replies: 'Replies',
+  shares: 'Shares',
+  saved: 'Saved',
+  totalInteractions: 'Total interactions',
+  subscribers: 'Subscribers',
+  impressions: 'Impressions',
 };
 
 function formatCompact(value: number) {
-  return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(
+    value,
+  );
 }
 
 function rangeLabel(preset: OrganicDateRangePreset) {
-  return preset.replaceAll("_", " ");
+  return preset.replaceAll('_', ' ');
 }
 
 function formatPercent(value?: number) {
   if (value === undefined) return null;
   const rounded = Math.abs(value).toFixed(1);
-  return `${value >= 0 ? "+" : "-"}${rounded}%`;
+  return `${value >= 0 ? '+' : '-'}${rounded}%`;
 }
 
 // Maps the response's real per-day trend points to a single-series dataset for
@@ -111,19 +122,23 @@ function buildDailySeries(
   const series = trends
     .map((point) => {
       const value = (point as Record<string, unknown>)[metricKey];
-      return typeof value === "number" ? { date: point.date, value } : null;
+      return typeof value === 'number' ? { date: point.date, value } : null;
     })
     .filter((entry): entry is { date: string; value: number } => entry !== null);
   return series.length > 0 ? series : null;
 }
 
-function InteractionBreakdownCharts({ breakdowns }: { breakdowns: Record<string, Record<string, number>> }) {
+function InteractionBreakdownCharts({
+  breakdowns,
+}: {
+  breakdowns: Record<string, Record<string, number>>;
+}) {
   const interactionMetrics = ['likes', 'comments', 'shares', 'saved'];
 
   return (
-    <Box pt="4">
-      <Heading size="4" mb="3">Interaction Breakdown by Content Type</Heading>
-      <Grid columns={{ initial: "1", sm: "2", lg: "4" }} gap="3">
+    <div className="pt-4">
+      <h3 className="mb-3 text-lg font-semibold">Interaction Breakdown by Content Type</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {interactionMetrics.map((metric) => {
           const metricData = breakdowns[metric];
           if (!metricData || Object.keys(metricData).length === 0) return null;
@@ -135,9 +150,11 @@ function InteractionBreakdownCharts({ breakdowns }: { breakdowns: Record<string,
           }));
 
           return (
-            <Card variant="surface" className="border border-subtle bg-surface" key={metric}>
-              <Box p="3">
-                <Text size="2" color="gray" mb="2">{METRIC_LABELS[metric]}</Text>
+            <div className="rounded-lg border border-subtle bg-surface" key={metric}>
+              <div className="p-3">
+                <span className="mb-2 block text-sm text-muted-foreground">
+                  {METRIC_LABELS[metric]}
+                </span>
                 <ChartContainer config={{}} className="aspect-square h-[120px] w-full">
                   <PieChart>
                     <Pie
@@ -155,37 +172,45 @@ function InteractionBreakdownCharts({ breakdowns }: { breakdowns: Record<string,
                     <ChartTooltip content={<ChartTooltipContent />} />
                   </PieChart>
                 </ChartContainer>
-              </Box>
-            </Card>
+              </div>
+            </div>
           );
         })}
-      </Grid>
-    </Box>
+      </div>
+    </div>
   );
 }
 
 function getColorForType(type: string): string {
   switch (type.toUpperCase()) {
-    case 'REEL': return 'var(--color-primary)';
-    case 'POST': return 'var(--color-secondary)';
-    case 'STORY': return 'var(--color-accent)';
-    default: return 'var(--color-muted)';
+    case 'REEL':
+      return 'var(--color-primary)';
+    case 'POST':
+      return 'var(--color-secondary)';
+    case 'STORY':
+      return 'var(--color-accent)';
+    default:
+      return 'var(--color-muted)';
   }
 }
 
-export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAccounts = [], initialPlatform = "instagram", className }: Props) {
+export function InstagramOrganicReportingWidget({
+  brandId,
+  accounts,
+  youtubeAccounts = [],
+  initialPlatform = 'instagram',
+  className,
+}: Props) {
   const [platform, setPlatform] = React.useState<OrganicPlatform>(initialPlatform);
   const { getSelection, setSelection } = useAccountSelectionStore();
-  const platformAccounts = platform === "youtube" ? youtubeAccounts : accounts;
+  const platformAccounts = platform === 'youtube' ? youtubeAccounts : accounts;
   const isSupportedPlatform = SUPPORTED_WIDGET_PLATFORMS.has(platform);
-  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(
-    () => {
-      const stored = useAccountSelectionStore.getState().getSelection(brandId, initialPlatform);
-      const isValid = stored !== null && accounts.some((a) => a.integrationAccountId === stored);
-      return isValid ? stored : (accounts[0]?.integrationAccountId ?? null);
-    }
-  );
-  const [state, setState] = React.useState<LoadState>({ status: "idle" });
+  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(() => {
+    const stored = useAccountSelectionStore.getState().getSelection(brandId, initialPlatform);
+    const isValid = stored !== null && accounts.some((a) => a.integrationAccountId === stored);
+    return isValid ? stored : (accounts[0]?.integrationAccountId ?? null);
+  });
+  const [state, setState] = React.useState<LoadState>({ status: 'idle' });
   const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
   const [posts, setPosts] = React.useState<OrganicPost[]>([]);
   const [showFlags, setShowFlags] = React.useState(true);
@@ -194,19 +219,18 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
   // platform keeps its own remembered selection and its own account list).
   React.useEffect(() => {
     const stored = getSelection(brandId, platform);
-    const isValid = stored !== null && platformAccounts.some((a) => a.integrationAccountId === stored);
+    const isValid =
+      stored !== null && platformAccounts.some((a) => a.integrationAccountId === stored);
     setSelectedAccountId(isValid ? stored : (platformAccounts[0]?.integrationAccountId ?? null));
-    setState({ status: "idle" });
+    setState({ status: 'idle' });
     setExpandedMetric(null);
     setPosts([]);
   }, [brandId, platform, platformAccounts, getSelection]);
 
-  const selectedAccount = platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
-
   React.useEffect(() => {
     if (selectedAccountId === null || !isSupportedPlatform) {
       if (!isSupportedPlatform) {
-        setState({ status: "idle" });
+        setState({ status: 'idle' });
       }
       return;
     }
@@ -214,23 +238,24 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
     let cancelled = false;
 
     async function run() {
-      setState({ status: "loading" });
+      setState({ status: 'loading' });
       try {
         const data = await fetchOrganicAnalytics({
           brandId,
           integrationAccountId: accountId,
-          platform: platform as "instagram" | "youtube",
+          platform: platform as 'instagram' | 'youtube',
           range: { preset: DEFAULT_RANGE_PRESET },
-          scope: "kpis",
+          scope: 'kpis',
         });
         if (cancelled) return;
-        setState({ status: "success", data });
+        setState({ status: 'success', data });
       } catch (error) {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
+        const message =
+          error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
-        setState({ status: "error", message, errorCode, retryAfter });
+        setState({ status: 'error', message, errorCode, retryAfter });
       }
     }
 
@@ -244,7 +269,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
   // KPI/trend chart renders immediately and markers fill in a moment later.
   // Instagram-only for now; failures are silent (markers just don't appear).
   React.useEffect(() => {
-    if (selectedAccountId === null || platform !== "instagram") {
+    if (selectedAccountId === null || platform !== 'instagram') {
       setPosts([]);
       return;
     }
@@ -256,9 +281,9 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
         const data = await fetchOrganicAnalytics({
           brandId,
           integrationAccountId: accountId,
-          platform: "instagram",
+          platform: 'instagram',
           range: { preset: DEFAULT_RANGE_PRESET },
-          scope: "posts",
+          scope: 'posts',
           postsLimit: 25,
         });
         if (cancelled) return;
@@ -276,50 +301,58 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
   }, [brandId, selectedAccountId, platform]);
 
   return (
-    <Card data-tour-id="dashboard-organic-metrics" variant="surface" className={cn("border border-subtle bg-surface flex flex-col gap-0 overflow-hidden py-0", className)}>
+    <div
+      data-tour-id="dashboard-organic-metrics"
+      className={cn(
+        'flex flex-col gap-0 overflow-hidden rounded-lg border border-subtle bg-surface py-0',
+        className,
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
-            <Select.Trigger variant="ghost" className="p-0 h-auto">
-              <Badge color="gray" variant="soft" radius="full">
-                <PlatformIcon platform={platform === "x" ? "threads" : platform} />
-              </Badge>
-            </Select.Trigger>
-            <Select.Content position="popper">
-              <Select.Item value="instagram">
-                <Flex align="center" gap="2">
+          <Select value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
+            <SelectTrigger className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0">
+              <Pill variant="muted">
+                <PlatformIcon platform={platform === 'x' ? 'threads' : platform} />
+              </Pill>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="instagram">
+                <span className="flex items-center gap-2">
                   <PlatformIcon platform="instagram" />
-                  <Text>Instagram</Text>
-                </Flex>
-              </Select.Item>
-              <Select.Item value="youtube">
-                <Flex align="center" gap="2">
+                  <span>Instagram</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="youtube">
+                <span className="flex items-center gap-2">
                   <PlatformIcon platform="youtube" />
-                  <Text>YouTube</Text>
-                </Flex>
-              </Select.Item>
-              <Select.Item value="x" disabled>
-                <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                  <span>YouTube</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="x" disabled>
+                <span className="flex items-center gap-2">
                   <PlatformIcon platform="threads" />
-                  <Text>X</Text>
-                </Flex>
-              </Select.Item>
-              <Select.Item value="tiktok" disabled>
-                <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                  <span>X</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="tiktok" disabled>
+                <span className="flex items-center gap-2">
                   <PlatformIcon platform="tiktok" />
-                  <Text>TikTok</Text>
-                </Flex>
-              </Select.Item>
-            </Select.Content>
-          </Select.Root>
-          <h3 className="truncate text-xs font-semibold capitalize sm:text-sm">{platform} reporting</h3>
+                  <span>TikTok</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <h3 className="truncate text-xs font-semibold capitalize sm:text-sm">
+            {platform} reporting
+          </h3>
           <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground sm:inline-block">
             {rangeLabel(DEFAULT_RANGE_PRESET)}
           </span>
         </div>
 
         <div className="flex items-center gap-1">
-          {platform === "instagram" && posts.length > 0 ? (
+          {platform === 'instagram' && posts.length > 0 ? (
             <label
               htmlFor="ig-reporting-post-flags"
               className="flex cursor-pointer select-none items-center gap-1 rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground"
@@ -335,72 +368,82 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
             </label>
           ) : null}
           <div data-tour-id="dashboard-account-selector" className="inline-flex">
-            <Select.Root
-              value={selectedAccountId ?? ""}
+            <Select
+              value={selectedAccountId ?? ''}
               onValueChange={(value) => {
                 setSelectedAccountId(value);
                 setSelection(brandId, platform, value);
               }}
             >
-              <Select.Trigger variant="surface" radius="medium" className="h-7 text-xs">
-                {selectedAccount?.name ?? `Select ${platform} account`}
-              </Select.Trigger>
-              <Select.Content position="popper" variant="solid" highContrast>
-                <Select.Group>
-                  <Select.Label>{platform} accounts</Select.Label>
+              <SelectTrigger size="sm" className="h-7 text-xs">
+                <SelectValue placeholder={`Select ${platform} account`} />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectGroup>
+                  <SelectLabel>{platform} accounts</SelectLabel>
                   {platformAccounts.map((account) => (
-                    <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
+                    <SelectItem
+                      key={account.integrationAccountId}
+                      value={account.integrationAccountId}
+                    >
                       {account.name}
-                    </Select.Item>
+                    </SelectItem>
                   ))}
-                </Select.Group>
-              </Select.Content>
-            </Select.Root>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
 
-      <Box p="2" className="min-h-0 flex flex-col">
-        <Box pt="0" className="min-h-0">
+      <div className="flex min-h-0 flex-col p-2">
+        <div className="min-h-0 pt-0">
           {!isSupportedPlatform ? (
-             <Box py="8">
-                <Flex direction="column" align="center" justify="center" gap="3">
-                  <PlatformIcon platform={platform === "x" ? "threads" : platform} size={48} className="opacity-20" />
-                  <Heading size="4" color="gray">{platform} Support Coming Soon</Heading>
-                  <Text color="gray" size="2" align="center" style={{ maxWidth: 300 }}>
-                    We&apos;re currently working on integrating {platform} organic metrics into your dashboard.
-                  </Text>
-                </Flex>
-             </Box>
+            <div className="py-8">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <PlatformIcon
+                  platform={platform === 'x' ? 'threads' : platform}
+                  size={48}
+                  className="opacity-20"
+                />
+                <h3 className="text-lg font-semibold text-muted-foreground">
+                  {platform} Support Coming Soon
+                </h3>
+                <span className="block max-w-[300px] text-center text-sm text-muted-foreground">
+                  We&apos;re currently working on integrating {platform} organic metrics into your
+                  dashboard.
+                </span>
+              </div>
+            </div>
           ) : platformAccounts.length === 0 ? (
-            <Text color="gray" size="2">
+            <span className="text-sm text-muted-foreground">
               No {platform} accounts are linked to this brand profile.
-            </Text>
-          ) : state.status === "error" ? (
+            </span>
+          ) : state.status === 'error' ? (
             <IntegrationErrorBanner
               errorCode={state.errorCode}
               message={state.message}
               platform={platform}
               retryAfter={state.retryAfter}
             />
-          ) : state.status === "loading" ? (
+          ) : state.status === 'loading' ? (
             <OrganicMetricsWidgetSkeleton />
-           ) : state.status === "success" ? (
-             <MetricsPanel
-               data={state.data}
-               posts={posts}
-               showFlags={showFlags}
-               expandedMetric={expandedMetric}
-               onMetricSelect={setExpandedMetric}
-             />
-           ) : (
-            <Text color="gray" size="2">
+          ) : state.status === 'success' ? (
+            <MetricsPanel
+              data={state.data}
+              posts={posts}
+              showFlags={showFlags}
+              expandedMetric={expandedMetric}
+              onMetricSelect={setExpandedMetric}
+            />
+          ) : (
+            <span className="text-sm text-muted-foreground">
               Select a {platform} account to view organic reporting.
-            </Text>
+            </span>
           )}
-        </Box>
-      </Box>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -416,8 +459,10 @@ function MiniBars({ values, active }: { values: number[]; active?: boolean }) {
         <span
           key={index}
           className={cn(
-            "min-w-[2px] flex-1 rounded-[1px]",
-            active ? "bg-[var(--primary)]" : "bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
+            'min-w-[2px] flex-1 rounded-[1px]',
+            active
+              ? 'bg-[var(--primary)]'
+              : 'bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]',
           )}
           style={{ height: `${Math.max(8, (value / max) * 100)}%` }}
         />
@@ -445,15 +490,37 @@ function MetricsPanel({
 
   const metricCards: MetricCard[] = [];
 
-  if (metrics.views !== undefined) metricCards.push({ key: "views", label: METRIC_LABELS.views, value: metrics.views });
-  if (metrics.reach !== undefined) metricCards.push({ key: "reach", label: METRIC_LABELS.reach, value: metrics.reach });
-  if (metrics.newFollowers !== undefined) metricCards.push({ key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers });
-  if (metrics.accountsEngaged !== undefined) metricCards.push({ key: "accountsEngaged", label: METRIC_LABELS.accountsEngaged, value: metrics.accountsEngaged });
-  if (metrics.reelsViews !== undefined) metricCards.push({ key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews });
-  if (metrics.postViews !== undefined) metricCards.push({ key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews });
+  if (metrics.views !== undefined)
+    metricCards.push({ key: 'views', label: METRIC_LABELS.views, value: metrics.views });
+  if (metrics.reach !== undefined)
+    metricCards.push({ key: 'reach', label: METRIC_LABELS.reach, value: metrics.reach });
+  if (metrics.newFollowers !== undefined)
+    metricCards.push({
+      key: 'newFollowers',
+      label: METRIC_LABELS.newFollowers,
+      value: metrics.newFollowers,
+    });
+  if (metrics.accountsEngaged !== undefined)
+    metricCards.push({
+      key: 'accountsEngaged',
+      label: METRIC_LABELS.accountsEngaged,
+      value: metrics.accountsEngaged,
+    });
+  if (metrics.reelsViews !== undefined)
+    metricCards.push({
+      key: 'reelsViews',
+      label: METRIC_LABELS.reelsViews,
+      value: metrics.reelsViews,
+    });
+  if (metrics.postViews !== undefined)
+    metricCards.push({
+      key: 'postViews',
+      label: METRIC_LABELS.postViews,
+      value: metrics.postViews,
+    });
 
-  const expandedKey = expandedMetric ?? "views";
-  const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
+  const expandedKey = expandedMetric ?? 'views';
+  const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : '';
 
   const chartData = React.useMemo(
     () => buildDailySeries(data.trends, expandedKey),
@@ -473,26 +540,28 @@ function MetricsPanel({
   const chartConfig = {
     value: {
       label: expandedLabel,
-      color: "var(--color-primary)",
+      color: 'var(--color-primary)',
     },
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="2" className="min-h-0">
-      <Grid columns={{ initial: "1", lg: "1" }} gap="2" className="min-h-0">
-        <Box className="w-full">
-          <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="1.5">
+    <div className="flex min-h-0 flex-col gap-2">
+      <div className="grid min-h-0 grid-cols-1 gap-2">
+        <div className="w-full">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
             {metricCards.map((item) => {
               const delta = comparison?.[item.key]?.percentageChange;
               const formattedDelta = formatPercent(delta ?? undefined);
               const isActive = expandedKey === item.key;
               const deltaClass =
                 delta === undefined || delta === 0
-                  ? "text-muted-foreground"
+                  ? 'text-muted-foreground'
                   : delta > 0
-                    ? "text-emerald-500"
-                    : "text-red-500";
-              const seriesValues = (buildDailySeries(data.trends, item.key) ?? []).map((point) => point.value);
+                    ? 'text-emerald-500'
+                    : 'text-red-500';
+              const seriesValues = (buildDailySeries(data.trends, item.key) ?? []).map(
+                (point) => point.value,
+              );
 
               return (
                 <button
@@ -501,10 +570,10 @@ function MetricsPanel({
                   onClick={() => onMetricSelect(item.key)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group/kpi flex h-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+                    'group/kpi flex h-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
                     isActive
-                      ? "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]"
-                      : "border-border/70 bg-card",
+                      ? 'border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]'
+                      : 'border-border/70 bg-card',
                   )}
                 >
                   <span className="truncate font-mono text-2xs uppercase tracking-wide text-muted-foreground">
@@ -515,38 +584,45 @@ function MetricsPanel({
                       {formatCompact(item.value)}
                     </span>
                     {formattedDelta ? (
-                      <span className={cn("font-mono text-2xs tabular-nums", deltaClass)}>{formattedDelta}</span>
+                      <span className={cn('font-mono text-2xs tabular-nums', deltaClass)}>
+                        {formattedDelta}
+                      </span>
                     ) : null}
                   </div>
                   <MiniBars values={seriesValues} active={isActive} />
                 </button>
               );
             })}
-          </Grid>
-        </Box>
+          </div>
+        </div>
 
-        <Box className="w-full min-h-[280px]">
-          <Card variant="surface" className="border border-subtle bg-surface flex flex-col">
-            <Box p="3" className="flex-1 flex flex-col min-h-0">
-              <Flex align="center" justify="between" gap="2" mb="2">
-                <Box>
-                  <Heading size="3">{expandedLabel} Trend</Heading>
-                  <Text color="gray" size="1">
+        <div className="min-h-[280px] w-full">
+          <div className="flex flex-col rounded-lg border border-subtle bg-surface">
+            <div className="flex min-h-0 flex-1 flex-col p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-semibold">{expandedLabel} Trend</h3>
+                  <span className="text-xs text-muted-foreground">
                     {range.since} → {range.until} ({rangeLabel(range.preset)})
-                  </Text>
-                </Box>
-              </Flex>
+                  </span>
+                </div>
+              </div>
 
-              <Box className="flex-1 min-h-0 overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 {chartData ? (
-                  <ChartContainer config={chartConfig} className="h-[250px] w-full aspect-auto">
+                  <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
                     <LineChart data={chartData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" />
                       <XAxis
                         dataKey="date"
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        tickFormatter={(value) =>
+                          new Date(value).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        }
                         minTickGap={30}
                       />
                       <YAxis
@@ -555,19 +631,28 @@ function MetricsPanel({
                         domain={['auto', 'auto']}
                         width={40}
                         tickFormatter={(value) => {
-                           if (typeof value !== 'number') return String(value);
-                           return value >= 1000 ? (value/1000).toFixed(1) + 'k' : String(value);
+                          if (typeof value !== 'number') return String(value);
+                          return value >= 1000 ? (value / 1000).toFixed(1) + 'k' : String(value);
                         }}
                       />
-                      <ChartTooltip content={<ChartTooltipContent
-                        labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                      />} />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            labelFormatter={(label) =>
+                              new Date(label).toLocaleDateString('en-US', {
+                                month: 'long',
+                                day: 'numeric',
+                              })
+                            }
+                          />
+                        }
+                      />
                       <Line
                         type="monotone"
                         dataKey="value"
                         stroke="var(--color-primary)"
                         strokeWidth={2}
-                        dot={{ r: 4, fill: "var(--color-primary)" }}
+                        dot={{ r: 4, fill: 'var(--color-primary)' }}
                         activeDot={{ r: 6 }}
                         animationDuration={500}
                       />
@@ -575,19 +660,19 @@ function MetricsPanel({
                     </LineChart>
                   </ChartContainer>
                 ) : (
-                  <Flex align="center" justify="center" className="h-[250px]">
-                    <Text color="gray" size="2" align="center">
+                  <div className="flex h-[250px] items-center justify-center">
+                    <span className="text-center text-sm text-muted-foreground">
                       Daily breakdown unavailable for {expandedLabel}.
-                    </Text>
-                  </Flex>
+                    </span>
+                  </div>
                 )}
-              </Box>
-            </Box>
-          </Card>
-        </Box>
-      </Grid>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {interactionBreakdowns && <InteractionBreakdownCharts breakdowns={interactionBreakdowns} />}
-    </Flex>
+    </div>
   );
 }

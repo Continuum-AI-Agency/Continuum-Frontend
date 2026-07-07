@@ -98,7 +98,7 @@ Frontend response interpreters that parse Backend agent outputs (NDJSON stream f
 
 * **Style Guide Adherence:** All design decisions, spacing, color palettes, and typographic rules must **strictly adhere** to the guidelines set in the `styleguide.md` document.
 * **Tailwind Preference:** We prioritize **Tailwind CSS 4 utility classes**. Custom CSS must be minimal and only used when utilities are insufficient.
-* **Radix UI for Foundation:** All interactive primitives (buttons, menus, dialogs) must be built using **Radix UI components** (`@radix-ui/themes`, `@radix-ui/react-icons`) to ensure default, high-quality accessibility (ARIA, focus management, keyboard support).
+* **shadcn + registry for Foundation:** All interactive primitives (buttons, menus, dialogs, badges/pills) come from shadcn `ui/*` and the vetted registries (`@kibo-ui`, `@bklit`/BasedKit, `@supabase`) — all built on Radix **primitives** (`@radix-ui/react-*`) + `@radix-ui/react-icons` for accessibility (ARIA, focus, keyboard). **`@radix-ui/themes` has been removed — do not reintroduce it.** Status/label pills use the canonical `@/components/kibo-ui/pill` (`Pill` + `PillIndicator`/`PillDelta`…); layout/typography use raw Tailwind, not `@radix-ui/themes` `Flex`/`Box`/`Text`.
 * **Framer Motion:** Use **Framer Motion variants** for defined animation states. Complex animations must be lazy-loaded.
 
 ### Forms
@@ -135,7 +135,7 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 
 * **Purpose:** MCP tools are for reference and guidance only; they must not mutate production data or state.
 * **Supabase MCP (Read-Only):** Use it for looking up schemas, tables, migrations, and query behavior to inform frontend work. Do not run write operations or migrations unless explicitly requested and approved. This is the only MCP server configured in the repo's `.mcp.json`.
-* **Radix-first UI:** Prefer Radix primitives over custom equivalents unless a clear gap exists. When adapting vetted component patterns (e.g. shadcn recipes), fit them to our styleguide and Radix-first foundations.
+* **shadcn + registry first:** Prefer shadcn `ui/*` and registry components (Kibo/BasedKit/Supabase, built on `@radix-ui/react-*` primitives) over custom equivalents or the removed `@radix-ui/themes`. Fit registry recipes to `docs/styleguide.md`.
 * **Document Gaps:** If MCP data is missing or unclear, state assumptions and ask for clarification rather than guessing.
 
 ## 7. Tests

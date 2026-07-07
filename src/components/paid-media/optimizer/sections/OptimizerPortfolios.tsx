@@ -1,9 +1,10 @@
 'use client';
 
 // Portfolios sub-view — a master list of portfolios and, for the selected one,
-// its latest cycle detail: run confidence, reallocation summary, per-ad-set CPA
-// with Poisson confidence intervals (the P1 CI feature), and pending pause
-// recommendations. Mirrors the Portfolios tab of the reference-ui-preview spec.
+// its latest cycle detail: CPA trend, run confidence + reallocation flow, per-
+// ad-set CPA with Poisson confidence intervals (the P1 CI feature) + HELD states,
+// the audience × angle matrix, and pending recommendations. Mirrors the
+// Portfolios tab of the reference-ui-preview spec.
 
 import type { CycleItemRow, PortfolioListItem } from '@continuum/contracts';
 import { RefreshCwIcon } from 'lucide-react';
@@ -12,15 +13,25 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { AngleMatrix } from '../charts/AngleMatrix';
+import { ConfidenceGauge } from '../charts/ConfidenceGauge';
+import { CpaTrendChart } from '../charts/CpaTrendChart';
+import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { formatCurrency } from '../format';
 import { confidenceBand, parseReport, recommendationLabel } from '../reportModel';
-import { useOptimizerMutations, useOptimizerPerformance } from '../useOptimizerData';
+import {
+  useOptimizerAngleMatrix,
+  useOptimizerCpaSeries,
+  useOptimizerMutations,
+  useOptimizerPerformance,
+} from '../useOptimizerData';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
 type OptimizerPortfoliosProps = {
   portfolios: PortfolioListItem[];
   selectedPortfolioId: string | null;
+  currency?: string | null;
   onSelectPortfolio: (portfolioId: string) => void;
 };
 
@@ -31,9 +42,12 @@ function ciCpa(item: CycleItemRow): number | null {
 export function OptimizerPortfolios({
   portfolios,
   selectedPortfolioId,
+  currency,
   onSelectPortfolio,
 }: OptimizerPortfoliosProps) {
   const performanceQuery = useOptimizerPerformance(selectedPortfolioId);
+  const cpaSeriesQuery = useOptimizerCpaSeries(selectedPortfolioId);
+  const angleMatrixQuery = useOptimizerAngleMatrix(selectedPortfolioId);
   const { run } = useOptimizerMutations('', null);
 
   const report = parseReport(performanceQuery.data);
@@ -44,6 +58,7 @@ export function OptimizerPortfolios({
   const confidenceScore = latestRun?.confidence?.score;
 
   const maxCiCpa = items.reduce((max, item) => Math.max(max, ciCpa(item) ?? 0), 0) || 1;
+  const runUnreachable = run.isError || (run.isSuccess && run.data == null && !run.isPending);
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
@@ -52,6 +67,7 @@ export function OptimizerPortfolios({
           <PortfolioRowCard
             key={portfolio.id}
             portfolio={portfolio}
+            currency={currency}
             selected={portfolio.id === selectedPortfolioId}
             onSelect={() => onSelectPortfolio(portfolio.id)}
           />
@@ -66,6 +82,12 @@ export function OptimizerPortfolios({
           </>
         ) : (
           <>
+            {performanceQuery.isError ? (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
+                Live cycle report is unavailable — the optimizer service is offline. Charts below
+                show only what&rsquo;s cached.
+              </div>
+            ) : null}
             <Card className="gap-0 rounded-xl py-0 shadow-none">
               <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-border/70 p-4">
                 <CardTitle className="text-sm">Latest cycle</CardTitle>
@@ -90,15 +112,39 @@ export function OptimizerPortfolios({
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-4 text-xs text-muted-foreground">
+              <CardContent className="space-y-1 p-4 text-xs text-muted-foreground">
                 {latestRun ? (
                   <span>
                     mode {latestRun.mode} · conservation {latestRun.conserved ? '✓ exact' : '—'} ·
-                    allocated {formatCurrency(latestRun.allocated_total ?? null)}
+                    allocated {formatCurrency(latestRun.allocated_total ?? null, currency)}
                   </span>
                 ) : (
                   <span>No cycle has run yet. Use “Run now” to score this portfolio.</span>
                 )}
+                {runUnreachable ? (
+                  <p className="text-amber-600 dark:text-amber-400">
+                    Optimizer service not live yet — scheduled cycles will populate this shortly.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0 rounded-xl py-0 shadow-none">
+              <CardHeader className="border-b border-border/70 p-4">
+                <CardTitle className="text-sm">CPA trend</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                <CpaTrendChart series={cpaSeriesQuery.data} currency={currency} />
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0 rounded-xl py-0 shadow-none">
+              <CardHeader className="border-b border-border/70 p-4">
+                <CardTitle className="text-sm">Reallocation</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4">
+                <ConfidenceGauge confidence={latestRun?.confidence ?? null} />
+                <ReallocationFlow items={items} currency={currency} />
               </CardContent>
             </Card>
 
@@ -116,9 +162,26 @@ export function OptimizerPortfolios({
                   </p>
                 ) : (
                   items.map((item) => (
-                    <CpaConfidenceBar key={item.adset_id} item={item} maxCpa={maxCiCpa} />
+                    <CpaConfidenceBar
+                      key={item.adset_id}
+                      item={item}
+                      maxCpa={maxCiCpa}
+                      currency={currency}
+                    />
                   ))
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0 rounded-xl py-0 shadow-none">
+              <CardHeader className="border-b border-border/70 p-4">
+                <CardTitle className="text-sm">Audience × angle</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  CPA per audience and creative angle.
+                </p>
+              </CardHeader>
+              <CardContent className="p-4">
+                <AngleMatrix cells={angleMatrixQuery.data} currency={currency} />
               </CardContent>
             </Card>
 

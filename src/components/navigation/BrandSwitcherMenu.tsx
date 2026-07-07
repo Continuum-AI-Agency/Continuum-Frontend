@@ -1,39 +1,42 @@
-"use client";
+'use client';
 
-import React from "react";
-import {
-  Button,
-  DropdownMenu,
-  Switch,
-  Text,
-  TextField,
-  Box,
-  ScrollArea,
-} from "@radix-ui/themes";
 import {
   AlertTriangle,
   CircleCheck,
   Loader2,
   LogOut,
-  Settings,
-  Plug,
   Moon,
+  Plug,
   PlusCircle,
   Search,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
-import { useTheme } from "@/components/theme-provider";
-import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useSwitchBrand } from "@/hooks/useSwitchBrand";
-import { useInfiniteUserBrands } from "@/hooks/useInfiniteUserBrands";
-import { BrandAvatar } from "@/components/brand/BrandAvatar";
+  Settings,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import React from 'react';
+import { createBrandProfileAction } from '@/app/(post-auth)/settings/actions';
+import { BrandAvatar } from '@/components/brand/BrandAvatar';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { useTheme } from '@/components/theme-provider';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/hooks/useAuth';
+import { useInfiniteUserBrands } from '@/hooks/useInfiniteUserBrands';
+import { useSwitchBrand } from '@/hooks/useSwitchBrand';
 import {
   getActiveBrandLabel,
   getBrandMenuItemLabel,
   isAdminUser,
-} from "@/lib/brands/brand-switcher-utils";
+} from '@/lib/brands/brand-switcher-utils';
+import { cn } from '@/lib/utils';
 
 type BrandSwitcherMenuProps = {
   triggerId?: string;
@@ -42,18 +45,13 @@ type BrandSwitcherMenuProps = {
 export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const router = useRouter();
   const { logout, isPending } = useAuth();
-  const {
-    activeBrandId,
-    brandSummaries,
-    isSwitching,
-    switchingToBrandId,
-    user,
-  } = useActiveBrandContext();
+  const { activeBrandId, brandSummaries, isSwitching, switchingToBrandId, user } =
+    useActiveBrandContext();
   const switchBrand = useSwitchBrand();
   const { appearance, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
-  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   // Ticket #162: active-integration badge data. brandSummaries is the
   // server-provided list (no integration status); this bulk-fetches it
@@ -64,22 +62,23 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
     userEmail: user?.email,
   });
   const hasActiveIntegrationByBrandId = React.useMemo(
-    () => new Map(brandsWithIntegrationStatus.map((brand) => [brand.id, brand.hasActiveIntegration ?? false])),
-    [brandsWithIntegrationStatus]
+    () =>
+      new Map(
+        brandsWithIntegrationStatus.map((brand) => [brand.id, brand.hasActiveIntegration ?? false]),
+      ),
+    [brandsWithIntegrationStatus],
   );
 
   const isAdmin = isAdminUser(user);
 
   React.useEffect(() => {
     if (!menuOpen) {
-      setSearchQuery("");
+      setSearchQuery('');
     }
   }, [menuOpen]);
 
   const filteredBrands = brandSummaries.filter((brand) =>
-    getBrandMenuItemLabel(brand)
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
+    getBrandMenuItemLabel(brand).toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
@@ -87,12 +86,11 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const activeBrandLogo = activeBrand?.logoUrl ?? null;
 
   return (
-    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
-      <DropdownMenu.Trigger>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenuTrigger asChild>
         <Button
           id={triggerId}
           variant="outline"
-          size="2"
           disabled={isSwitching}
           className="rounded-full border-[var(--border)] text-[var(--sidebar-foreground)] shadow-sm hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)]"
         >
@@ -108,42 +106,38 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
           )}
           {activeBrandLabel}
         </Button>
-      </DropdownMenu.Trigger>
+      </DropdownMenuTrigger>
 
-      <DropdownMenu.Content
+      <DropdownMenuContent
         align="end"
         className="min-w-[260px] border"
         style={{
-          backgroundColor: "var(--popover)",
-          color: "var(--popover-foreground)",
-          borderColor: "var(--border)",
+          backgroundColor: 'var(--popover)',
+          color: 'var(--popover-foreground)',
+          borderColor: 'var(--border)',
         }}
       >
-        <Box p="2" pb="2">
-          <TextField.Root
-            placeholder="Search brands..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.stopPropagation()}
-            size="2"
-            className="text-[var(--popover-foreground)]"
-          >
-            <TextField.Slot>
-              <Search className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_60%,transparent)]" />
-            </TextField.Slot>
-          </TextField.Root>
-        </Box>
+        <div className="p-2 pb-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_60%,transparent)]" />
+            <Input
+              placeholder="Search brands..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              inputSize="md"
+              className="pl-8 text-[var(--popover-foreground)]"
+            />
+          </div>
+        </div>
 
-        <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: "200px" }}>
+        <ScrollArea className="max-h-[200px]">
           {filteredBrands.length === 0 ? (
-            <Box p="2">
-              <Text
-                size="2"
-                className="pl-2 text-[color-mix(in_srgb,var(--popover-foreground)_64%,transparent)]"
-              >
+            <div className="p-2">
+              <span className="pl-2 text-sm text-[color-mix(in_srgb,var(--popover-foreground)_64%,transparent)]">
                 No brands found
-              </Text>
-            </Box>
+              </span>
+            </div>
           ) : (
             filteredBrands.map((brand) => {
               const isActiveRow = brand.id === activeBrandId;
@@ -154,7 +148,7 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
               // positives before the bulk status fetch resolves).
               const hasActiveIntegration = hasActiveIntegrationByBrandId.get(brand.id);
               return (
-                <DropdownMenu.Item
+                <DropdownMenuItem
                   key={brand.id}
                   disabled={isSwitching}
                   onSelect={(event) => {
@@ -169,7 +163,9 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                 >
                   <div className="flex items-center gap-2">
                     <BrandAvatar name={label} logoUrl={brand.logoUrl ?? null} size="sm" />
-                    <Text weight={isActiveRow ? "bold" : "regular"}>{label}</Text>
+                    <span className={cn('text-sm', isActiveRow ? 'font-semibold' : 'font-normal')}>
+                      {label}
+                    </span>
                   </div>
                   {isRowSwitching ? (
                     <Loader2
@@ -179,20 +175,23 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                   ) : isActiveRow ? (
                     <BadgeIndicator />
                   ) : !brand.completed ? (
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Onboarding incomplete" />
+                    <AlertTriangle
+                      className="h-3.5 w-3.5 shrink-0 text-warning"
+                      aria-label="Onboarding incomplete"
+                    />
                   ) : hasActiveIntegration === false ? (
                     <AlertTriangle
-                      className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                      className="h-3.5 w-3.5 shrink-0 text-warning"
                       aria-label="No active integration connected"
                     />
                   ) : null}
-                </DropdownMenu.Item>
+                </DropdownMenuItem>
               );
             })
           )}
         </ScrollArea>
 
-        <DropdownMenu.Item
+        <DropdownMenuItem
           disabled={isCreating}
           onSelect={(event) => {
             event.preventDefault();
@@ -204,65 +203,63 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         >
           <PlusCircle className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
           New brand profile
-        </DropdownMenu.Item>
+        </DropdownMenuItem>
 
-        <DropdownMenu.Separator />
+        <DropdownMenuSeparator />
 
-        <DropdownMenu.Item
+        <DropdownMenuItem
           className="flex w-full items-center justify-between text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={(event) => event.preventDefault()}
         >
           <div className="flex items-center gap-2">
             <Moon className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
-            <Text>Dark mode</Text>
+            <span>Dark mode</span>
           </div>
           <Switch
-            checked={appearance === "dark"}
+            checked={appearance === 'dark'}
             onCheckedChange={toggle}
-            size="1"
             aria-label="Toggle dark mode"
           />
-        </DropdownMenu.Item>
+        </DropdownMenuItem>
 
-        <DropdownMenu.Item
+        <DropdownMenuItem
           className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={() => {
             setMenuOpen(false);
-            router.push("/settings");
+            router.push('/settings');
           }}
         >
           <Settings className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
           Settings
-        </DropdownMenu.Item>
+        </DropdownMenuItem>
 
-        <DropdownMenu.Item
+        <DropdownMenuItem
           className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={() => {
             setMenuOpen(false);
-            router.push("/settings?section=integrations");
+            router.push('/settings?section=integrations');
           }}
         >
           <Plug className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
           Integrations
-        </DropdownMenu.Item>
+        </DropdownMenuItem>
 
         {isAdmin ? (
-          <DropdownMenu.Item
+          <DropdownMenuItem
             className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
             onSelect={() => {
               setMenuOpen(false);
-              router.push("/admin");
+              router.push('/admin');
             }}
           >
             <CircleCheck className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
             Admin
-          </DropdownMenu.Item>
+          </DropdownMenuItem>
         ) : null}
 
-        <DropdownMenu.Separator />
+        <DropdownMenuSeparator />
 
-        <DropdownMenu.Item
-          color="red"
+        <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
             logout();
@@ -271,18 +268,13 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
           className="flex items-center gap-2 text-[var(--destructive)] data-[highlighted]:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)] data-[highlighted]:text-[var(--destructive)]"
         >
           <LogOut className="h-4 w-4 stroke-[1.8]" />
-          {isPending ? "Signing out..." : "Sign out"}
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+          {isPending ? 'Signing out...' : 'Sign out'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function BadgeIndicator() {
-  return (
-    <span
-      className="inline-flex h-2 w-2 rounded-full bg-violet-500"
-      aria-hidden="true"
-    />
-  );
+  return <span className="inline-flex h-2 w-2 rounded-full bg-primary" aria-hidden="true" />;
 }

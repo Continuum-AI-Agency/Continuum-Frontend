@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     // Call the Supabase edge function
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}`,
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}${platform ? `&platform=${encodeURIComponent(platform)}` : ""}`,
       {
         headers: {
           'Content-Type': 'application/json',

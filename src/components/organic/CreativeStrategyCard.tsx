@@ -2,113 +2,53 @@
 
 // "What's Working" — the brand's data-derived winning angles/hooks, mined from its
 // own top-performing posts and ads and grounded in measured performance + audience.
-// Reads the materialized creative_strategy_reports row (RLS) via useCreativeStrategyReport
-// and mirrors the OrganicAwarenessReportView card idiom (Radix surface + collapse +
-// dashed placeholder while assembling).
+// Reads the materialized creative_strategy_reports row (RLS) via
+// useCreativeStrategyReport and renders the insights as a sortable data table
+// (CreativeStrategyTable) whose top-creative thumbnails carry their real metric,
+// a hover preview, and click-through to the live post. Keeps the section chrome
+// (header, audience subtitle, hook/angle leaderboards, collapse, dashed
+// placeholder while assembling).
 
-import type {
-  CreativeAudience,
-  CreativeInsight,
-  CreativeLeaderboardEntry,
-} from '@continuum/contracts';
-import { Box, Card, Flex, Text } from '@radix-ui/themes';
+import type { CreativeLeaderboardEntry } from '@continuum/contracts';
 import * as React from 'react';
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCreativeStrategyReport } from '@/hooks/useCreativeStrategyReport';
+import { audienceLine } from '@/lib/organic/creative-strategy-rows';
 import { cn } from '@/lib/utils';
+import { CreativeStrategyTable } from './creative-strategy/CreativeStrategyTable';
 
-const MAX_INSIGHTS = 6;
-
-function audienceLine(audience: CreativeAudience | null | undefined): string | null {
-  if (!audience) return null;
-  if (audience.note) return audience.note;
-  const seg = audience.segments[0];
-  return seg ? `${seg.label}${seg.sharePct !== null ? ` (${seg.sharePct}%)` : ''}` : null;
+function leaderboardMetricLine(entry: CreativeLeaderboardEntry): string {
+  const base = `${entry.count} ${entry.count === 1 ? 'creative' : 'creatives'}`;
+  if (entry.metricName && entry.avgMetric !== null) {
+    const formatted =
+      Math.abs(entry.avgMetric) < 1 ? entry.avgMetric.toFixed(3) : entry.avgMetric.toFixed(2);
+    return `${base} · avg ${entry.metricName.replace(/_/g, ' ')} ${formatted}`;
+  }
+  return base;
 }
 
 function Leaderboard({ title, entries }: { title: string; entries: CreativeLeaderboardEntry[] }) {
   if (entries.length === 0) return null;
   return (
-    <Box>
-      <Text size="1" color="gray" className="mb-1 block uppercase tracking-wide">
+    <div>
+      <span className="mb-1 block text-xs text-muted-foreground uppercase tracking-wide">
         {title}
-      </Text>
-      <Flex gap="2" wrap="wrap">
+      </span>
+      <div className="flex gap-2 flex-wrap">
         {entries.map((entry) => (
-          <span
-            key={`${title}-${entry.label}`}
-            className="rounded-full border border-subtle bg-muted/40 px-2 py-0.5 text-xs"
-          >
-            {entry.label}
-            <span className="ml-1 text-muted-foreground tabular-nums">{entry.count}</span>
-          </span>
+          <Tooltip key={`${title}-${entry.label}`}>
+            <TooltipTrigger asChild>
+              <span className="cursor-default rounded-full border border-subtle bg-muted/40 px-2 py-0.5 text-xs">
+                {entry.label}
+                <span className="ml-1 text-muted-foreground tabular-nums">{entry.count}</span>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{leaderboardMetricLine(entry)}</TooltipContent>
+          </Tooltip>
         ))}
-      </Flex>
-    </Box>
-  );
-}
-
-function ExemplarThumbs({ insight }: { insight: CreativeInsight }) {
-  const urls = insight.exemplars
-    .map((exemplar) => exemplar.thumbnailRef)
-    .filter((url): url is string => typeof url === 'string' && url.startsWith('http'))
-    .slice(0, 4);
-  if (urls.length === 0) return null;
-  return (
-    <Flex gap="1" className="mt-2">
-      {urls.map((url, index) => (
-        // biome-ignore lint/performance/noImgElement: transient signed thumbnails, not Next-optimizable
-        <img
-          key={`${insight.id}-thumb-${index}`}
-          src={url}
-          alt=""
-          className="h-10 w-10 rounded-md border border-subtle object-cover"
-          loading="lazy"
-        />
-      ))}
-    </Flex>
-  );
-}
-
-function InsightRow({ insight }: { insight: CreativeInsight }) {
-  const audience = audienceLine(insight.audience);
-  return (
-    <Card variant="surface" className="border border-subtle bg-surface/95">
-      <Box px="3" py="3">
-        <Flex align="center" justify="between" gap="2" className="mb-1">
-          <Flex align="center" gap="2" className="min-w-0">
-            <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-              {insight.kind}
-            </span>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {insight.surface}
-            </span>
-          </Flex>
-          <Text size="1" color="gray" className="shrink-0 tabular-nums">
-            {Math.round(insight.confidence * 100)}%
-          </Text>
-        </Flex>
-        <Text size="2" weight="bold" className="block leading-snug">
-          {insight.label}
-        </Text>
-        <Text size="2" color="gray" className="mt-0.5 block leading-snug">
-          {insight.recommendation}
-        </Text>
-        <Flex gap="3" wrap="wrap" className="mt-1.5">
-          {insight.performanceSummary ? (
-            <Text size="1" color="gray" className="tabular-nums">
-              {insight.performanceSummary}
-            </Text>
-          ) : null}
-          {audience ? (
-            <Text size="1" className="text-accent">
-              {audience}
-            </Text>
-          ) : null}
-        </Flex>
-        <ExemplarThumbs insight={insight} />
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -118,16 +58,12 @@ function EmptyCard({ status }: { status: string }) {
       ? 'We could not find enough top posts or ads to mine yet. As your content performs, winning angles will appear here.'
       : 'Your winning angles are assembling. The flash-lite agents analyze your top posts and ads to surface the hooks and angles that work — and who they resonate with.';
   return (
-    <Card variant="surface" className="border border-dashed border-subtle bg-surface/60">
-      <Box px="4" py="6">
-        <Text size="2" weight="medium" className="block">
-          What&apos;s Working — your winning angles
-        </Text>
-        <Text size="1" color="gray" className="mt-1 block">
-          {message}
-        </Text>
-      </Box>
-    </Card>
+    <div className="rounded-lg border border-dashed border-subtle bg-surface/60">
+      <div className="px-4 py-6">
+        <span className="block text-sm font-medium">What&apos;s Working — your winning angles</span>
+        <span className="mt-1 block text-xs text-muted-foreground">{message}</span>
+      </div>
+    </div>
   );
 }
 
@@ -143,18 +79,16 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
   const sources = report.sourceCounts;
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface/95">
-      <Box px="4" py="3">
-        <Flex align="center" justify="between" gap="3">
-          <Box className="min-w-0">
-            <Text size="2" weight="bold" className="block">
-              What&apos;s Working
-            </Text>
-            <Text size="1" color="gray">
+    <div className="rounded-lg border border-subtle bg-surface/95">
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <span className="block text-sm font-semibold">What&apos;s Working</span>
+            <span className="text-xs text-muted-foreground">
               from your top {sources.topOrganicPosts} posts + {sources.topAds} ads
               {audience ? ` · audience ${audience}` : ''}
-            </Text>
-          </Box>
+            </span>
+          </div>
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
@@ -166,27 +100,25 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
           >
             {open ? 'Hide' : 'Show'}
           </button>
-        </Flex>
+        </div>
 
         {open ? (
-          <div className="mt-3 grid gap-3">
-            <Flex gap="4" wrap="wrap">
-              <Leaderboard title="Top hooks" entries={report.hookLeaderboard} />
-              <Leaderboard title="Top angles" entries={report.angleLeaderboard} />
-            </Flex>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {report.insights.slice(0, MAX_INSIGHTS).map((insight) => (
-                <InsightRow key={insight.id} insight={insight} />
-              ))}
+          <TooltipProvider delayDuration={200}>
+            <div className="mt-3 grid gap-3">
+              <div className="flex gap-4 flex-wrap">
+                <Leaderboard title="Top hooks" entries={report.hookLeaderboard} />
+                <Leaderboard title="Top angles" entries={report.angleLeaderboard} />
+              </div>
+              <CreativeStrategyTable insights={report.insights} />
+              {refreshedAt ? (
+                <span className="block text-right text-xs text-muted-foreground">
+                  Updated {new Date(refreshedAt).toLocaleDateString()}
+                </span>
+              ) : null}
             </div>
-            {refreshedAt ? (
-              <Text size="1" color="gray" className="block text-right">
-                Updated {new Date(refreshedAt).toLocaleDateString()}
-              </Text>
-            ) : null}
-          </div>
+          </TooltipProvider>
         ) : null}
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }

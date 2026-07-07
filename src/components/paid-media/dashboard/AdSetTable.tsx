@@ -72,6 +72,7 @@ export type AdSetAdsLoadState = {
 type AdSetTableProps = {
   adSets: AdSet[];
   isLoading?: boolean;
+  segmentLabel?: string;
   adsByAdSet?: Record<string, AdSetAdsLoadState>;
   onAdSetToggle?: (adSetId: string, expanded: boolean) => void;
 };
@@ -109,7 +110,7 @@ function getStatusColor(status: string): "default" | "secondary" | "destructive"
   }
 }
 
-export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdSetTableProps) {
+export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByAdSet, onAdSetToggle }: AdSetTableProps) {
   const [sortField, setSortField] = React.useState<SortField>("spend");
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc");
   const [expandedAdSetId, setExpandedAdSetId] = React.useState<string | null>(null);
@@ -192,7 +193,7 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
   }
 
   if (adSets.length === 0) {
-    return <div className="py-8 text-center text-muted-foreground">No ad sets found for this campaign.</div>;
+    return <div className="py-8 text-center text-muted-foreground">No {segmentLabel} found for this campaign.</div>;
   }
 
   return (
@@ -202,14 +203,19 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
           <TableRow>
             <TableHead className="w-10" />
             <TableHead>
-              <button onClick={() => handleSort("name")} className="font-medium hover:underline focus:outline-none">
-                Ad Set Name
+              <button
+                type="button"
+                onClick={() => handleSort("name")}
+                className="font-medium hover:underline focus:outline-none"
+              >
+                {segmentLabel === "segments" ? "Segment Name" : "Ad Set Name"}
                 <SortIcon field="name" />
               </button>
             </TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">
               <button
+                type="button"
                 onClick={() => handleSort("spend")}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
@@ -219,6 +225,7 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
             </TableHead>
             <TableHead className="text-right">
               <button
+                type="button"
                 onClick={() => handleSort("roas")}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
@@ -228,6 +235,7 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
             </TableHead>
             <TableHead className="text-right">
               <button
+                type="button"
                 onClick={() => handleSort("ctr")}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
@@ -237,6 +245,7 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
             </TableHead>
             <TableHead className="text-right">
               <button
+                type="button"
                 onClick={() => handleSort("impressions")}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
@@ -246,6 +255,7 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
             </TableHead>
             <TableHead className="text-right">
               <button
+                type="button"
                 onClick={() => handleSort("clicks")}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >

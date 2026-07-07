@@ -1,19 +1,27 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { ReloadIcon } from "@radix-ui/react-icons";
-import { Callout, IconButton, Text } from "@radix-ui/themes";
-import { useShallow } from "zustand/react/shallow";
-import { Skeleton } from "@/components/ui/skeleton";
-import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
-import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
-import { BudgetPacingChart, type BudgetPacingTrendMode, type RangeOption } from "./BudgetPacingChart";
-import { BudgetPacingSummaryStrip, type BudgetPacingSummaryCardKey } from "./BudgetPacingSummaryStrip";
-import { BudgetPacingTable } from "./BudgetPacingTable";
+import { ReloadIcon } from '@radix-ui/react-icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import type { PaidPerformanceMetricKey } from '@/components/paid-media/PaidMediaReportingWidget';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   makeBudgetPacingKey,
   usePaidMediaPerformanceStore,
-} from "@/lib/paid-media/performance-store";
+} from '@/lib/paid-media/performance-store';
+import type { BudgetPacingResponse } from '@/lib/schemas/budgetPacing';
+import {
+  BudgetPacingChart,
+  type BudgetPacingTrendMode,
+  type RangeOption,
+} from './BudgetPacingChart';
+import {
+  type BudgetPacingSummaryCardKey,
+  BudgetPacingSummaryStrip,
+} from './BudgetPacingSummaryStrip';
+import { BudgetPacingTable } from './BudgetPacingTable';
 
 type Props = {
   brandId: string;
@@ -22,22 +30,22 @@ type Props = {
 };
 
 type LoadState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "success"; data: BudgetPacingResponse };
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; data: BudgetPacingResponse };
 
 function mapMetricToSummaryCard(metric?: PaidPerformanceMetricKey): BudgetPacingSummaryCardKey {
-  if (metric === "roas" || metric === "ctr") return "pace";
-  if (metric === "impressions") return "budget";
-  if (metric === "clicks") return "spend";
-  if (metric === "cpc" || metric === "cpa") return "spend";
-  return "spend";
+  if (metric === 'roas' || metric === 'ctr') return 'pace';
+  if (metric === 'impressions') return 'budget';
+  if (metric === 'clicks') return 'spend';
+  if (metric === 'cpc' || metric === 'cpa') return 'spend';
+  return 'spend';
 }
 
 function mapMetricToTrendMode(metric?: PaidPerformanceMetricKey): BudgetPacingTrendMode {
-  if (metric === "roas" || metric === "ctr") return "pace";
-  return "spend";
+  if (metric === 'roas' || metric === 'ctr') return 'pace';
+  return 'spend';
 }
 
 function BudgetPacingLoadingSkeleton() {
@@ -56,7 +64,7 @@ function BudgetPacingLoadingSkeleton() {
 
 export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric }: Props) {
   const [focusKey, setFocusKey] = useState<string | null>(null);
-  const [selectedRange, setSelectedRange] = useState<RangeOption>("7d");
+  const [selectedRange, setSelectedRange] = useState<RangeOption>('7d');
   const summaryCard = mapMetricToSummaryCard(selectedMetric);
   const trendMode = mapMetricToTrendMode(selectedMetric);
   const cacheKey = useMemo(() => {
@@ -68,16 +76,17 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
     useShallow((store) => ({
       entry: cacheKey ? store.budgetPacing[cacheKey] : undefined,
       loadBudgetPacing: store.loadBudgetPacing,
-    }))
+    })),
   );
 
   const state: LoadState = useMemo(() => {
-    if (!selectedAccountId) return { status: "idle" };
-    if (!entry) return { status: "idle" };
-    if (entry.status === "loading") return { status: "loading" };
-    if (entry.status === "error") return { status: "error", message: entry.error ?? "Failed to load budget pacing" };
-    if (entry.status === "success" && entry.data) return { status: "success", data: entry.data };
-    return { status: "idle" };
+    if (!selectedAccountId) return { status: 'idle' };
+    if (!entry) return { status: 'idle' };
+    if (entry.status === 'loading') return { status: 'loading' };
+    if (entry.status === 'error')
+      return { status: 'error', message: entry.error ?? 'Failed to load budget pacing' };
+    if (entry.status === 'success' && entry.data) return { status: 'success', data: entry.data };
+    return { status: 'idle' };
   }, [entry, selectedAccountId]);
 
   const fetchPacing = useCallback(
@@ -85,7 +94,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
       setFocusKey(null);
       await loadBudgetPacing({ brandId, adAccountId: accountId }, { force }).catch(() => undefined);
     },
-    [brandId, loadBudgetPacing]
+    [brandId, loadBudgetPacing],
   );
 
   useEffect(() => {
@@ -104,27 +113,29 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
             Spend vs target · {selectedRange}
           </span>
         </div>
-        <IconButton
+        <Button
           variant="ghost"
-          size="1"
-          disabled={state.status === "loading" || !selectedAccountId}
-          onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId, true); }}
+          size="icon-sm"
+          disabled={state.status === 'loading' || !selectedAccountId}
+          onClick={() => {
+            if (selectedAccountId) fetchPacing(selectedAccountId, true);
+          }}
           aria-label="Refresh pacing"
         >
-          <ReloadIcon className={state.status === "loading" ? "animate-spin" : undefined} />
-        </IconButton>
+          <ReloadIcon className={state.status === 'loading' ? 'animate-spin' : undefined} />
+        </Button>
       </div>
 
       <div className="min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-        {state.status === "loading" && <BudgetPacingLoadingSkeleton />}
+        {state.status === 'loading' && <BudgetPacingLoadingSkeleton />}
 
-        {state.status === "error" && (
-          <Callout.Root color="red" size="1">
-            <Callout.Text>{state.message}</Callout.Text>
-          </Callout.Root>
+        {state.status === 'error' && (
+          <Alert variant="destructive">
+            <AlertDescription>{state.message}</AlertDescription>
+          </Alert>
         )}
 
-        {state.status === "success" && (
+        {state.status === 'success' && (
           <div className="grid min-h-full min-w-0 gap-1.5 xl:grid-rows-[auto_minmax(220px,0.9fr)_minmax(220px,1fr)]">
             <BudgetPacingSummaryStrip data={state.data} activeKey={summaryCard} />
             <BudgetPacingChart
@@ -143,10 +154,8 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
           </div>
         )}
 
-        {state.status === "idle" && !selectedAccountId && (
-          <Text size="2" color="gray" align="center" as="p" className="py-8">
-            No ad account selected.
-          </Text>
+        {state.status === 'idle' && !selectedAccountId && (
+          <p className="py-8 text-center text-sm text-muted-foreground">No ad account selected.</p>
         )}
       </div>
     </section>

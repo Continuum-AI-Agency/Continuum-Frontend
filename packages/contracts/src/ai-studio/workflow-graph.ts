@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Canonical AI Studio canvas graph rules — node-type vocabulary, handle
 // compatibility, connection limits, and media↔handle compatibility. Ported from
@@ -7,20 +7,21 @@ import { z } from "zod";
 // accepts and the Frontend delegates to one source of truth.
 
 export const STUDIO_NODE_TYPES = [
-  "string",
-  "nanoGen",
-  "videoGen",
-  "veoDirector",
-  "veoFast",
-  "extendVideo",
-  "videoEditor",
-  "timelineEditor",
-  "publishToPlanner",
-  "image",
-  "video",
-  "audio",
-  "document",
-  "videoDecode",
+  'string',
+  'nanoGen',
+  'videoGen',
+  'veoDirector',
+  'veoFast',
+  'extendVideo',
+  'videoEditor',
+  'timelineEditor',
+  'publishToPlanner',
+  'omniGen',
+  'image',
+  'video',
+  'audio',
+  'document',
+  'videoDecode',
 ] as const;
 
 export type StudioNodeType = (typeof STUDIO_NODE_TYPES)[number];
@@ -40,7 +41,7 @@ export interface GraphEdgeLike {
   sourceHandle?: string | null;
   targetHandle?: string | null;
 }
-export type GraphConnectionLike = Omit<GraphEdgeLike, "id">;
+export type GraphConnectionLike = Omit<GraphEdgeLike, 'id'>;
 
 const recordSchema = z.record(z.string(), z.unknown());
 
@@ -80,116 +81,153 @@ export type StudioWorkflowGraph = z.infer<typeof studioWorkflowGraphSchema>;
 // ---------------------------------------------------------------------------
 
 export const VIDEO_GENERATOR_MODELS = [
-  "kling-omni",
-  "pixverse-v6",
-  "seedance-2.0",
-  "veo-3.1-fast",
-  "veo-3.1-lite",
-  "veo-3.1",
+  'kling-omni',
+  'pixverse-v6',
+  'seedance-2.0',
+  'veo-3.1-fast',
+  'veo-3.1-lite',
+  'veo-3.1',
 ] as const;
 export type VideoGeneratorModel = (typeof VIDEO_GENERATOR_MODELS)[number];
 
-export const DEFAULT_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = "veo-3.1-fast";
+export const DEFAULT_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = 'veo-3.1-fast';
 
 export const VIDEO_GENERATOR_MODEL_LABELS: Record<VideoGeneratorModel, string> = {
-  "veo-3.1": "Veo 3.1",
-  "veo-3.1-fast": "Veo 3.1 Fast",
-  "veo-3.1-lite": "Veo 3.1 Lite",
-  "kling-omni": "Kling Omni",
-  "pixverse-v6": "Pixverse V6",
-  "seedance-2.0": "Seedance 2.0",
+  'veo-3.1': 'Veo 3.1',
+  'veo-3.1-fast': 'Veo 3.1 Fast',
+  'veo-3.1-lite': 'Veo 3.1 Lite',
+  'kling-omni': 'Kling Omni',
+  'pixverse-v6': 'Pixverse V6',
+  'seedance-2.0': 'Seedance 2.0',
 };
 
-const VIDEO_GENERATOR_NODE_TYPES = new Set(["videoGen", "veoDirector", "veoFast"]);
+const VIDEO_GENERATOR_NODE_TYPES = new Set(['videoGen', 'veoDirector', 'veoFast']);
 
-export const VIDEO_IMAGE_REFERENCE_HANDLES = ["ref-image", "ref-images"] as const;
-export const VIDEO_FRAME_HANDLES = ["first-frame", "last-frame"] as const;
-export const VIDEO_REFERENCE_VIDEO_HANDLE = "ref-video" as const;
+export const VIDEO_IMAGE_REFERENCE_HANDLES = ['ref-image', 'ref-images'] as const;
+export const VIDEO_FRAME_HANDLES = ['first-frame', 'last-frame'] as const;
+export const VIDEO_REFERENCE_VIDEO_HANDLE = 'ref-video' as const;
 
-export type VideoGeneratorNodeType = "videoGen" | "veoDirector" | "veoFast";
+export type VideoGeneratorNodeType = 'videoGen' | 'veoDirector' | 'veoFast';
 
 const isVideoGeneratorModel = (value: unknown): value is VideoGeneratorModel =>
-  typeof value === "string" && (VIDEO_GENERATOR_MODELS as readonly string[]).includes(value);
+  typeof value === 'string' && (VIDEO_GENERATOR_MODELS as readonly string[]).includes(value);
 
 export const isVideoGeneratorNodeType = (nodeType?: string): nodeType is VideoGeneratorNodeType =>
-  typeof nodeType === "string" && VIDEO_GENERATOR_NODE_TYPES.has(nodeType);
+  typeof nodeType === 'string' && VIDEO_GENERATOR_NODE_TYPES.has(nodeType);
 
-export function resolveVideoGeneratorModel(node: { type?: string; data?: Record<string, unknown> }): VideoGeneratorModel {
+export function resolveVideoGeneratorModel(node: {
+  type?: string;
+  data?: Record<string, unknown>;
+}): VideoGeneratorModel {
   const model = node.data?.model;
   if (isVideoGeneratorModel(model)) return model;
-  if (node.type === "veoFast") return "veo-3.1-fast";
-  if (node.type === "veoDirector") return "veo-3.1";
+  if (node.type === 'veoFast') return 'veo-3.1-fast';
+  if (node.type === 'veoDirector') return 'veo-3.1';
   return DEFAULT_VIDEO_GENERATOR_MODEL;
 }
 
-export function getVideoGeneratorReferenceMode(model: VideoGeneratorModel): "images" | "frames" | "omni" {
-  if (model === "veo-3.1-fast" || model === "veo-3.1-lite") return "frames";
-  if (model === "kling-omni") return "omni";
-  return "images";
+export function getVideoGeneratorReferenceMode(
+  model: VideoGeneratorModel,
+): 'images' | 'frames' | 'omni' {
+  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') return 'frames';
+  if (model === 'kling-omni') return 'omni';
+  return 'images';
 }
 
 export function supportsVideoGeneratorFrameInputs(model: VideoGeneratorModel): boolean {
-  return model === "veo-3.1-fast" || model === "veo-3.1-lite" || model === "seedance-2.0";
+  return model === 'veo-3.1-fast' || model === 'veo-3.1-lite' || model === 'seedance-2.0';
 }
 
 export function supportsVideoGeneratorReferenceVideo(model: VideoGeneratorModel): boolean {
-  return model === "kling-omni" || model === "seedance-2.0";
+  return model === 'kling-omni' || model === 'seedance-2.0';
 }
 
 export function supportsVideoGeneratorReferenceImages(model: VideoGeneratorModel): boolean {
-  return model !== "veo-3.1-fast" && model !== "veo-3.1-lite";
+  return model !== 'veo-3.1-fast' && model !== 'veo-3.1-lite';
 }
 
 export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): string[] {
-  if (model === "veo-3.1-fast" || model === "veo-3.1-lite") {
-    return ["prompt-in", "prompt", "negative", ...VIDEO_FRAME_HANDLES];
+  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
+    return ['prompt-in', 'prompt', 'negative', ...VIDEO_FRAME_HANDLES];
   }
-  if (model === "kling-omni") {
-    return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES, VIDEO_REFERENCE_VIDEO_HANDLE];
+  if (model === 'kling-omni') {
+    return [
+      'prompt-in',
+      'prompt',
+      'negative',
+      ...VIDEO_IMAGE_REFERENCE_HANDLES,
+      VIDEO_REFERENCE_VIDEO_HANDLE,
+    ];
   }
-  if (model === "pixverse-v6") {
-    return ["prompt-in", "prompt", "negative", VIDEO_IMAGE_REFERENCE_HANDLES[0]];
+  if (model === 'pixverse-v6') {
+    return ['prompt-in', 'prompt', 'negative', VIDEO_IMAGE_REFERENCE_HANDLES[0]];
   }
-  if (model === "seedance-2.0") {
-    return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES, ...VIDEO_FRAME_HANDLES, VIDEO_REFERENCE_VIDEO_HANDLE];
+  if (model === 'seedance-2.0') {
+    return [
+      'prompt-in',
+      'prompt',
+      'negative',
+      ...VIDEO_IMAGE_REFERENCE_HANDLES,
+      ...VIDEO_FRAME_HANDLES,
+      VIDEO_REFERENCE_VIDEO_HANDLE,
+    ];
   }
-  return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES];
+  return ['prompt-in', 'prompt', 'negative', ...VIDEO_IMAGE_REFERENCE_HANDLES];
 }
 
-export function getVideoGeneratorImageLimit(model: VideoGeneratorModel, hasReferenceVideo: boolean): number | undefined {
-  if (model === "veo-3.1") return 3;
-  if (model === "kling-omni") return hasReferenceVideo ? 4 : 7;
-  if (model === "pixverse-v6") return 1;
-  if (model === "seedance-2.0") return 9;
+export function getVideoGeneratorImageLimit(
+  model: VideoGeneratorModel,
+  hasReferenceVideo: boolean,
+): number | undefined {
+  if (model === 'veo-3.1') return 3;
+  if (model === 'kling-omni') return hasReferenceVideo ? 4 : 7;
+  if (model === 'pixverse-v6') return 1;
+  if (model === 'seedance-2.0') return 9;
   return undefined;
 }
 
 export function getVideoGeneratorBackendModel(model: VideoGeneratorModel): string {
-  if (model === "veo-3.1-fast") return "veo-3.1-fast-generate-preview";
-  if (model === "veo-3.1-lite") return "veo-3.1-lite-generate-preview";
-  if (model === "kling-omni") return "kling-omni";
-  if (model === "pixverse-v6") return "pixverse-v6";
-  if (model === "seedance-2.0") return "seedance-2.0";
-  return "veo-3.1-generate-preview";
+  if (model === 'veo-3.1-fast') return 'veo-3.1-fast-generate-preview';
+  if (model === 'veo-3.1-lite') return 'veo-3.1-lite-generate-preview';
+  if (model === 'kling-omni') return 'kling-omni';
+  if (model === 'pixverse-v6') return 'pixverse-v6';
+  if (model === 'seedance-2.0') return 'seedance-2.0';
+  return 'veo-3.1-generate-preview';
 }
 
 // ---------------------------------------------------------------------------
 // Single-text-input guards
 // ---------------------------------------------------------------------------
 
-const TEXT_INPUT_HANDLES = new Set(["prompt", "prompt-in", "trigger", "negative", "input", "audio", "video"]);
+const TEXT_INPUT_HANDLES = new Set([
+  'prompt',
+  'prompt-in',
+  'trigger',
+  'negative',
+  'input',
+  'audio',
+  'video',
+]);
 
 export function isTextInputHandle(handleId?: string | null): boolean {
   if (!handleId) return false;
   return TEXT_INPUT_HANDLES.has(handleId);
 }
 
-export function hasExistingTargetConnection(edges: GraphEdgeLike[], targetId: string, targetHandle?: string | null): boolean {
+export function hasExistingTargetConnection(
+  edges: GraphEdgeLike[],
+  targetId: string,
+  targetHandle?: string | null,
+): boolean {
   if (!targetHandle) return false;
   return edges.some((edge) => edge.target === targetId && edge.targetHandle === targetHandle);
 }
 
-export function canAcceptSingleTextInput(edges: GraphEdgeLike[], targetId: string, targetHandle?: string | null): boolean {
+export function canAcceptSingleTextInput(
+  edges: GraphEdgeLike[],
+  targetId: string,
+  targetHandle?: string | null,
+): boolean {
   if (!isTextInputHandle(targetHandle)) return true;
   return !hasExistingTargetConnection(edges, targetId, targetHandle);
 }
@@ -204,23 +242,25 @@ const FRAME_HANDLE_SET = new Set<string>(VIDEO_FRAME_HANDLES);
 const isVideoGeneratorNode = (node: GraphNodeLike): boolean => isVideoGeneratorNodeType(node.type);
 
 const isVideoProducingSource = (node: GraphNodeLike): boolean =>
-  node.type === "video" ||
-  node.type === "extendVideo" ||
-  node.type === "videoEditor" ||
-  node.type === "timelineEditor" ||
+  node.type === 'video' ||
+  node.type === 'extendVideo' ||
+  node.type === 'videoEditor' ||
+  node.type === 'timelineEditor' ||
+  node.type === 'omniGen' ||
   isVideoGeneratorNodeType(node.type);
 
-const isTextProducingSource = (node: GraphNodeLike): boolean => node.type === "string" || node.type === "videoDecode";
+const isTextProducingSource = (node: GraphNodeLike): boolean =>
+  node.type === 'string' || node.type === 'videoDecode';
 
 export const isClipSlotHandle = (handleId?: string | null): boolean =>
-  typeof handleId === "string" && handleId.startsWith("clip-");
+  typeof handleId === 'string' && handleId.startsWith('clip-');
 
 // Timeline Editor (timelineEditor) input pool: a single multi-connection target
 // handle `media-in` that accepts many video-producing sources and/or images.
 // Connected inputs form a pool the editor's timeline places clips from — each
 // placement references its source node. Distinct from the Video Splicer's
 // per-slot `clip-<slotId>` vocabulary so both nodes coexist.
-export const TIMELINE_MEDIA_INPUT_HANDLE = "media-in";
+export const TIMELINE_MEDIA_INPUT_HANDLE = 'media-in';
 export const TIMELINE_MEDIA_POOL_LIMIT = 20;
 export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
   handleId === TIMELINE_MEDIA_INPUT_HANDLE;
@@ -228,78 +268,98 @@ export const isTimelineMediaHandle = (handleId?: string | null): boolean =>
 // Publish-to-Planner sink node: a single video-producing input it attaches to an
 // organic Planner draft. One video in, no source output (terminal node), so it is
 // deliberately absent from isVideoProducingSource.
-export const PUBLISH_VIDEO_INPUT_HANDLE = "video-in";
+export const PUBLISH_VIDEO_INPUT_HANDLE = 'video-in';
 export const isPublishVideoHandle = (handleId?: string | null): boolean =>
   handleId === PUBLISH_VIDEO_INPUT_HANDLE;
 
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
-  typeof handleId === "string" && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
+  typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
 
-const isFrameHandle = (handleId?: string | null): boolean => typeof handleId === "string" && FRAME_HANDLE_SET.has(handleId);
+const isFrameHandle = (handleId?: string | null): boolean =>
+  typeof handleId === 'string' && FRAME_HANDLE_SET.has(handleId);
 
-const getEdgeCountForTargetHandles = (edges: GraphEdgeLike[], targetId: string, targetHandles: readonly string[]): number =>
-  edges.filter((edge) => edge.target === targetId && targetHandles.includes(edge.targetHandle ?? "")).length;
+const getEdgeCountForTargetHandles = (
+  edges: GraphEdgeLike[],
+  targetId: string,
+  targetHandles: readonly string[],
+): number =>
+  edges.filter(
+    (edge) => edge.target === targetId && targetHandles.includes(edge.targetHandle ?? ''),
+  ).length;
 
-const getEdgeCountForTargetHandle = (edges: GraphEdgeLike[], targetId: string, targetHandle: string): number =>
+const getEdgeCountForTargetHandle = (
+  edges: GraphEdgeLike[],
+  targetId: string,
+  targetHandle: string,
+): number =>
   edges.filter((edge) => edge.target === targetId && edge.targetHandle === targetHandle).length;
 
 const getCountedHandles = (node: GraphNodeLike, targetHandle: string): readonly string[] => {
-  if (node.type === "nanoGen" && isImageReferenceHandle(targetHandle)) return VIDEO_IMAGE_REFERENCE_HANDLES;
-  if (isVideoGeneratorNode(node) && isImageReferenceHandle(targetHandle)) return VIDEO_IMAGE_REFERENCE_HANDLES;
+  if (node.type === 'nanoGen' && isImageReferenceHandle(targetHandle))
+    return VIDEO_IMAGE_REFERENCE_HANDLES;
+  if (isVideoGeneratorNode(node) && isImageReferenceHandle(targetHandle))
+    return VIDEO_IMAGE_REFERENCE_HANDLES;
   return [targetHandle];
 };
 
 export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
   switch (node.type) {
-    case "string":
-    case "videoDecode":
-      return ["text"];
-    case "image":
-      return ["image"];
-    case "video":
-      return ["video"];
-    case "audio":
-      return ["audio"];
-    case "document":
-      return ["document"];
-    case "nanoGen":
-      return ["image"];
-    case "extendVideo":
-    case "videoEditor":
-    case "timelineEditor":
-      return ["video"];
+    case 'string':
+    case 'videoDecode':
+      return ['text'];
+    case 'image':
+      return ['image'];
+    case 'video':
+      return ['video'];
+    case 'audio':
+      return ['audio'];
+    case 'document':
+      return ['document'];
+    case 'nanoGen':
+      return ['image'];
+    case 'extendVideo':
+    case 'videoEditor':
+    case 'timelineEditor':
+      return ['video'];
+    case 'omniGen':
+      return ['video'];
     default:
-      return isVideoGeneratorNode(node) ? ["video"] : [];
+      return isVideoGeneratorNode(node) ? ['video'] : [];
   }
 };
 
 export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
   switch (node.type) {
-    case "nanoGen":
-      return ["prompt", ...VIDEO_IMAGE_REFERENCE_HANDLES, "trigger"];
-    case "extendVideo":
-      return ["prompt", "video"];
-    case "videoEditor": {
-      const slots = (node.data as { clipSlots?: Array<{ id?: string }> } | undefined)?.clipSlots ?? [];
+    case 'nanoGen':
+      return ['prompt', ...VIDEO_IMAGE_REFERENCE_HANDLES, 'trigger'];
+    case 'extendVideo':
+      return ['prompt', 'video'];
+    case 'videoEditor': {
+      const slots =
+        (node.data as { clipSlots?: Array<{ id?: string }> } | undefined)?.clipSlots ?? [];
       return slots
-        .map((slot) => (typeof slot?.id === "string" ? `clip-${slot.id}` : null))
+        .map((slot) => (typeof slot?.id === 'string' ? `clip-${slot.id}` : null))
         .filter((handle): handle is string => Boolean(handle));
     }
-    case "timelineEditor":
+    case 'timelineEditor':
       return [TIMELINE_MEDIA_INPUT_HANDLE];
-    case "publishToPlanner":
+    case 'publishToPlanner':
       return [PUBLISH_VIDEO_INPUT_HANDLE];
-    case "string":
-      return ["image", "audio", "document", "video"];
-    case "videoDecode":
-      return ["video"];
-    case "image":
-    case "video":
-    case "audio":
-    case "document":
+    case 'omniGen':
+      return ['prompt-in', 'prompt', 'ref-images'];
+    case 'string':
+      return ['image', 'audio', 'document', 'video'];
+    case 'videoDecode':
+      return ['video'];
+    case 'image':
+    case 'video':
+    case 'audio':
+    case 'document':
       return [];
     default:
-      return isVideoGeneratorNode(node) ? getVideoGeneratorTargetHandles(resolveVideoGeneratorModel(node)) : [];
+      return isVideoGeneratorNode(node)
+        ? getVideoGeneratorTargetHandles(resolveVideoGeneratorModel(node))
+        : [];
   }
 };
 
@@ -308,35 +368,42 @@ export function getTargetHandleConnectionLimit(
   targetHandle: string,
   edges: GraphEdgeLike[],
 ): number | undefined {
-  if (node.type === "nanoGen" && isImageReferenceHandle(targetHandle)) {
+  if (node.type === 'nanoGen' && isImageReferenceHandle(targetHandle)) {
     const configured = (node.data as { maxReferenceImages?: unknown })?.maxReferenceImages;
-    const limit = typeof configured === "number" ? Math.floor(configured) : undefined;
+    const limit = typeof configured === 'number' ? Math.floor(configured) : undefined;
     if (limit !== undefined && Number.isFinite(limit) && limit > 0) return limit;
     return 14;
   }
 
-  if (node.type === "extendVideo" && targetHandle === "video") return 1;
-  if (node.type === "videoDecode" && targetHandle === "video") return 1;
-  if (node.type === "videoEditor" && isClipSlotHandle(targetHandle)) return 1;
-  if (node.type === "timelineEditor" && isTimelineMediaHandle(targetHandle)) return TIMELINE_MEDIA_POOL_LIMIT;
-  if (node.type === "publishToPlanner" && isPublishVideoHandle(targetHandle)) return 1;
+  if (node.type === 'extendVideo' && targetHandle === 'video') return 1;
+  if (node.type === 'videoDecode' && targetHandle === 'video') return 1;
+  if (node.type === 'videoEditor' && isClipSlotHandle(targetHandle)) return 1;
+  if (node.type === 'timelineEditor' && isTimelineMediaHandle(targetHandle))
+    return TIMELINE_MEDIA_POOL_LIMIT;
+  if (node.type === 'publishToPlanner' && isPublishVideoHandle(targetHandle)) return 1;
+  if (node.type === 'omniGen' && isImageReferenceHandle(targetHandle)) return 3;
 
   if (!isVideoGeneratorNode(node)) return undefined;
 
   const model = resolveVideoGeneratorModel(node);
-  if (model === "veo-3.1-fast" || model === "veo-3.1-lite") {
-    return targetHandle === "first-frame" || targetHandle === "last-frame" ? 1 : undefined;
+  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
+    return targetHandle === 'first-frame' || targetHandle === 'last-frame' ? 1 : undefined;
   }
-  if (model === "veo-3.1") {
+  if (model === 'veo-3.1') {
     return isImageReferenceHandle(targetHandle) ? 3 : undefined;
   }
-  if (model === "kling-omni") {
+  if (model === 'kling-omni') {
     if (targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE) {
-      const currentImageCount = getEdgeCountForTargetHandles(edges, node.id, VIDEO_IMAGE_REFERENCE_HANDLES);
+      const currentImageCount = getEdgeCountForTargetHandles(
+        edges,
+        node.id,
+        VIDEO_IMAGE_REFERENCE_HANDLES,
+      );
       return currentImageCount > 4 ? 0 : 1;
     }
     if (isImageReferenceHandle(targetHandle)) {
-      const hasReferenceVideo = getEdgeCountForTargetHandle(edges, node.id, VIDEO_REFERENCE_VIDEO_HANDLE) > 0;
+      const hasReferenceVideo =
+        getEdgeCountForTargetHandle(edges, node.id, VIDEO_REFERENCE_VIDEO_HANDLE) > 0;
       return getVideoGeneratorImageLimit(model, hasReferenceVideo);
     }
   }
@@ -352,74 +419,94 @@ export function isValidConnection(
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const sourceNode = nodeById.get(connection.source);
   const targetNode = nodeById.get(connection.target);
-  const targetHandle = connection.targetHandle ?? "";
+  const targetHandle = connection.targetHandle ?? '';
 
   if (!sourceNode || !targetNode) return false;
 
-  if (isTextProducingSource(sourceNode) && ["prompt", "prompt-in", "negative"].includes(targetHandle)) {
+  if (
+    isTextProducingSource(sourceNode) &&
+    ['prompt', 'prompt-in', 'negative'].includes(targetHandle)
+  ) {
     return !hasExistingTargetConnection(edges, connection.target, targetHandle);
   }
 
-  if (targetNode.type === "string") {
+  if (targetNode.type === 'string') {
     const handle = targetHandle;
     if (!canAcceptSingleTextInput(edges, connection.target, handle)) return false;
-    if (handle === "image" && (sourceNode.type === "image" || sourceNode.type === "nanoGen")) return true;
-    if (handle === "audio" && sourceNode.type === "audio") return true;
-    if (handle === "video" && sourceNode.type === "video") return true;
-    if (handle === "document" && sourceNode.type === "document") return true;
+    if (handle === 'image' && (sourceNode.type === 'image' || sourceNode.type === 'nanoGen'))
+      return true;
+    if (handle === 'audio' && sourceNode.type === 'audio') return true;
+    if (handle === 'video' && sourceNode.type === 'video') return true;
+    if (handle === 'document' && sourceNode.type === 'document') return true;
     return false;
   }
 
-  if (targetNode.type === "nanoGen") {
+  if (targetNode.type === 'nanoGen') {
     if (isImageReferenceHandle(targetHandle)) {
-      if (sourceNode.type !== "image" && sourceNode.type !== "nanoGen") return false;
-    } else if (targetHandle === "prompt") {
+      if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+    } else if (targetHandle === 'prompt') {
       if (!isTextProducingSource(sourceNode)) return false;
     } else {
       return false;
     }
-  } else if (targetNode.type === "extendVideo") {
-    if (targetHandle === "video") {
+  } else if (targetNode.type === 'extendVideo') {
+    if (targetHandle === 'video') {
       if (!isVideoProducingSource(sourceNode)) return false;
-    } else if (targetHandle === "prompt") {
+    } else if (targetHandle === 'prompt') {
       if (!isTextProducingSource(sourceNode)) return false;
     } else {
       return false;
     }
-  } else if (targetNode.type === "videoEditor") {
+  } else if (targetNode.type === 'videoEditor') {
     if (!isClipSlotHandle(targetHandle)) return false;
     if (!isVideoProducingSource(sourceNode)) return false;
-  } else if (targetNode.type === "timelineEditor") {
+  } else if (targetNode.type === 'timelineEditor') {
     if (!isTimelineMediaHandle(targetHandle)) return false;
-    const isImageSource = sourceNode.type === "image" || sourceNode.type === "nanoGen";
+    const isImageSource = sourceNode.type === 'image' || sourceNode.type === 'nanoGen';
     if (!isVideoProducingSource(sourceNode) && !isImageSource) return false;
-  } else if (targetNode.type === "videoDecode") {
-    if (targetHandle !== "video") return false;
+  } else if (targetNode.type === 'videoDecode') {
+    if (targetHandle !== 'video') return false;
     if (!isVideoProducingSource(sourceNode)) return false;
-  } else if (targetNode.type === "publishToPlanner") {
+  } else if (targetNode.type === 'publishToPlanner') {
     if (!isPublishVideoHandle(targetHandle)) return false;
     if (!isVideoProducingSource(sourceNode)) return false;
+  } else if (targetNode.type === 'omniGen') {
+    if (targetHandle === 'prompt' || targetHandle === 'prompt-in') {
+      if (!isTextProducingSource(sourceNode)) return false;
+    } else if (isImageReferenceHandle(targetHandle)) {
+      if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+    } else {
+      return false;
+    }
   } else if (isVideoGeneratorNode(targetNode)) {
     const model = resolveVideoGeneratorModel(targetNode);
     if (isTextProducingSource(sourceNode)) {
-      if (!["prompt", "prompt-in", "negative"].includes(targetHandle)) return false;
-    } else if (sourceNode.type === "image" || sourceNode.type === "nanoGen") {
-      if (model === "veo-3.1-fast" || model === "veo-3.1-lite") {
+      if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
+    } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
+      if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
         if (!isFrameHandle(targetHandle)) return false;
       } else if (!isImageReferenceHandle(targetHandle)) {
         return false;
       }
-    } else if (sourceNode.type === "video" || isVideoGeneratorNode(sourceNode) || sourceNode.type === "extendVideo") {
-      if (!(model === "kling-omni" && targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE)) return false;
+    } else if (
+      sourceNode.type === 'video' ||
+      isVideoGeneratorNode(sourceNode) ||
+      sourceNode.type === 'extendVideo'
+    ) {
+      if (!(model === 'kling-omni' && targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE)) return false;
     } else {
       return false;
     }
   } else if (isTextProducingSource(sourceNode)) {
-    if (!["prompt", "prompt-in", "negative"].includes(targetHandle)) return false;
-  } else if (sourceNode.type === "image" || sourceNode.type === "nanoGen") {
+    if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
+  } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
     if (!isImageReferenceHandle(targetHandle)) return false;
-    if (targetNode.type === "image" || targetNode.type === "video") return false;
-  } else if (sourceNode.type === "video" || sourceNode.type === "extendVideo" || isVideoGeneratorNode(sourceNode)) {
+    if (targetNode.type === 'image' || targetNode.type === 'video') return false;
+  } else if (
+    sourceNode.type === 'video' ||
+    sourceNode.type === 'extendVideo' ||
+    isVideoGeneratorNode(sourceNode)
+  ) {
     return false;
   }
 
@@ -429,7 +516,11 @@ export function isValidConnection(
   if (limit !== undefined) {
     if (limit <= 0) return false;
     const countedHandles = getCountedHandles(targetNode, targetHandle);
-    const existingConnections = getEdgeCountForTargetHandles(edges, connection.target, countedHandles);
+    const existingConnections = getEdgeCountForTargetHandles(
+      edges,
+      connection.target,
+      countedHandles,
+    );
     if (existingConnections >= limit) return false;
   }
 
@@ -440,21 +531,29 @@ export function isValidConnection(
 // Media kind ↔ handle compatibility (for attach_media)
 // ---------------------------------------------------------------------------
 
-export type WorkflowMediaKind = "image" | "video" | "audio" | "document";
+export type WorkflowMediaKind = 'image' | 'video' | 'audio' | 'document';
 
-const IMAGE_MEDIA_HANDLES = new Set<string>([...VIDEO_IMAGE_REFERENCE_HANDLES, ...VIDEO_FRAME_HANDLES, "image"]);
-const VIDEO_MEDIA_HANDLES = new Set<string>([VIDEO_REFERENCE_VIDEO_HANDLE, "video"]);
+const IMAGE_MEDIA_HANDLES = new Set<string>([
+  ...VIDEO_IMAGE_REFERENCE_HANDLES,
+  ...VIDEO_FRAME_HANDLES,
+  'image',
+]);
+const VIDEO_MEDIA_HANDLES = new Set<string>([VIDEO_REFERENCE_VIDEO_HANDLE, 'video']);
 
 export function mediaKindForHandle(handle?: string | null): WorkflowMediaKind | undefined {
   if (!handle) return undefined;
-  if (IMAGE_MEDIA_HANDLES.has(handle)) return "image";
-  if (VIDEO_MEDIA_HANDLES.has(handle)) return "video";
-  if (handle === "audio") return "audio";
-  if (handle === "document") return "document";
+  if (IMAGE_MEDIA_HANDLES.has(handle)) return 'image';
+  if (VIDEO_MEDIA_HANDLES.has(handle)) return 'video';
+  if (handle === 'audio') return 'audio';
+  if (handle === 'document') return 'document';
   return undefined;
 }
 
-export function isMediaKindCompatibleWithHandle(kind: WorkflowMediaKind, node: GraphNodeLike, targetHandle: string): boolean {
+export function isMediaKindCompatibleWithHandle(
+  kind: WorkflowMediaKind,
+  node: GraphNodeLike,
+  targetHandle: string,
+): boolean {
   if (!getAllowedTargetHandles(node).includes(targetHandle)) return false;
   return mediaKindForHandle(targetHandle) === kind;
 }
@@ -486,62 +585,83 @@ export function createNodeData(
 
 function baseNodeData(type: StudioNodeType): NodeCreationResult {
   switch (type) {
-    case "nanoGen":
+    case 'nanoGen':
       return {
-        data: { model: "nano-banana-2", imageSize: "512px", positivePrompt: "", aspectRatio: "16:9" },
+        data: {
+          model: 'nano-banana-2',
+          imageSize: '512px',
+          positivePrompt: '',
+          aspectRatio: '16:9',
+        },
         style: { width: 400, height: 225 },
       };
-    case "videoGen":
-    case "veoDirector":
-    case "veoFast": {
-      const model = type === "veoDirector" ? "veo-3.1" : type === "veoFast" ? "veo-3.1-fast" : DEFAULT_VIDEO_GENERATOR_MODEL;
+    case 'videoGen':
+    case 'veoDirector':
+    case 'veoFast': {
+      const model =
+        type === 'veoDirector'
+          ? 'veo-3.1'
+          : type === 'veoFast'
+            ? 'veo-3.1-fast'
+            : DEFAULT_VIDEO_GENERATOR_MODEL;
       return {
-        data: { model, prompt: "", negativePrompt: "", enhancePrompt: false, referenceMode: getVideoGeneratorReferenceMode(model) },
+        data: {
+          model,
+          prompt: '',
+          negativePrompt: '',
+          enhancePrompt: false,
+          referenceMode: getVideoGeneratorReferenceMode(model),
+        },
         style: { width: 512, height: 288 },
       };
     }
-    case "extendVideo":
-      return { data: { prompt: "" }, style: { width: 360, height: 200 } };
-    case "videoEditor":
+    case 'extendVideo':
+      return { data: { prompt: '' }, style: { width: 360, height: 200 } };
+    case 'videoEditor':
       return {
         data: {
           clipSlots: [
             { id: newSlotId(1), order: 0 },
             { id: newSlotId(2), order: 1 },
           ],
-          outputFormat: "mp4",
-          videoCodec: "avc",
-          audioCodec: "aac",
+          outputFormat: 'mp4',
+          videoCodec: 'avc',
+          audioCodec: 'aac',
         },
         style: { width: 380, height: 460 },
       };
-    case "timelineEditor":
+    case 'timelineEditor':
       return {
         data: {
           items: [],
-          outputFormat: "mp4",
-          videoCodec: "avc",
-          audioCodec: "aac",
+          outputFormat: 'mp4',
+          videoCodec: 'avc',
+          audioCodec: 'aac',
           committed: false,
         },
         style: { width: 320, height: 260 },
       };
-    case "publishToPlanner":
+    case 'publishToPlanner':
       return {
-        data: { clientKey: newSlotId(1), status: "draft" },
+        data: { clientKey: newSlotId(1), status: 'draft' },
         style: { width: 300, height: 220 },
       };
-    case "string":
-      return { data: { value: "" } };
-    case "videoDecode":
-      return { data: { value: "" }, style: { width: 360, height: 320 } };
-    case "image":
-      return { data: { aspectRatio: "1:1" }, style: { width: 192, height: 192 } };
-    case "audio":
+    case 'omniGen':
+      return {
+        data: { model: 'gemini-omni-flash', prompt: '', aspectRatio: '16:9', variations: [] },
+        style: { width: 512, height: 360 },
+      };
+    case 'string':
+      return { data: { value: '' } };
+    case 'videoDecode':
+      return { data: { value: '' }, style: { width: 360, height: 320 } };
+    case 'image':
+      return { data: { aspectRatio: '1:1' }, style: { width: 192, height: 192 } };
+    case 'audio':
       return { data: {}, style: { width: 192, height: 100 } };
-    case "document":
+    case 'document':
       return { data: { documents: [] }, style: { width: 200, height: 200 } };
-    case "video":
+    case 'video':
       return { data: {}, style: { width: 192, height: 192 } };
   }
 }

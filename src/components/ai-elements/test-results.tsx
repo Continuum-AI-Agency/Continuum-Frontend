@@ -1,13 +1,14 @@
-"use client";
+'use client';
 
-import { Badge, Box, Card, Flex, Text } from "@radix-ui/themes";
-import { CheckCircledIcon, CrossCircledIcon, CircleIcon } from "@radix-ui/react-icons";
-import { Spinner } from "@/components/ui/Loading";
+import { CheckCircledIcon, CircleIcon, CrossCircledIcon } from '@radix-ui/react-icons';
+
+import { Pill } from '@/components/kibo-ui/pill';
+import { Spinner } from '@/components/ui/Loading';
 
 export type TestResult = {
   id: string;
   name: string;
-  status: "pass" | "fail" | "running" | "pending";
+  status: 'pass' | 'fail' | 'running' | 'pending';
   duration?: string;
   error?: string;
 };
@@ -17,72 +18,65 @@ type TestResultsProps = {
   title?: string;
 };
 
-export function TestResults({ results, title = "Test Results" }: TestResultsProps) {
-  const passing = results.filter((r) => r.status === "pass").length;
-  const failing = results.filter((r) => r.status === "fail").length;
+export function TestResults({ results, title = 'Test Results' }: TestResultsProps) {
+  const passing = results.filter((r) => r.status === 'pass').length;
+  const failing = results.filter((r) => r.status === 'fail').length;
   const total = results.length;
 
   return (
-    <Card className="w-full border border-white/10 bg-white/5 p-0 overflow-hidden">
-      <Box className="border-b border-white/10 bg-white/5 px-4 py-3">
-        <Flex align="center" justify="between">
-          <Text size="2" weight="medium" className="text-secondary">
-            {title}
-          </Text>
-          <Flex gap="2">
-            {passing > 0 && (
-              <Badge color="green" variant="soft" size="1">
-                {passing} passed
-              </Badge>
-            )}
-            {failing > 0 && (
-              <Badge color="red" variant="soft" size="1">
-                {failing} failed
-              </Badge>
-            )}
-            <Badge color="gray" variant="surface" size="1">
-              {total} total
-            </Badge>
-          </Flex>
-        </Flex>
-      </Box>
-      <div className="divide-y divide-white/5">
+    <div className="w-full overflow-hidden rounded-lg border bg-muted/40">
+      <div className="border-b bg-muted/40 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-secondary">{title}</span>
+          <div className="flex gap-2">
+            {passing > 0 && <Pill variant="success">{passing} passed</Pill>}
+            {failing > 0 && <Pill variant="destructive">{failing} failed</Pill>}
+            <Pill variant="muted">{total} total</Pill>
+          </div>
+        </div>
+      </div>
+      <div className="divide-y divide-border">
         {results.map((result) => (
-          <Flex key={result.id} align="center" justify="between" className="px-4 py-3 hover:bg-white/5 transition-colors">
-            <Flex align="center" gap="3">
+          <div
+            key={result.id}
+            className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted/40"
+          >
+            <div className="flex items-center gap-3">
               <StatusIcon status={result.status} />
-              <Box>
-                <Text as="div" size="2" className={result.status === "fail" ? "text-red-400" : "text-white"}>
+              <div>
+                <div
+                  className={
+                    result.status === 'fail'
+                      ? 'text-sm text-destructive'
+                      : 'text-sm text-foreground'
+                  }
+                >
                   {result.name}
-                </Text>
+                </div>
                 {result.error && (
-                  <Text as="div" size="1" color="red" className="mt-0.5">
-                    {result.error}
-                  </Text>
+                  <div className="mt-0.5 text-xs text-destructive">{result.error}</div>
                 )}
-              </Box>
-            </Flex>
+              </div>
+            </div>
             {result.duration && (
-              <Text size="1" color="gray">
-                {result.duration}
-              </Text>
+              <span className="text-xs text-muted-foreground">{result.duration}</span>
             )}
-          </Flex>
+          </div>
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
-function StatusIcon({ status }: { status: TestResult["status"] }) {
+function StatusIcon({ status }: { status: TestResult['status'] }) {
   switch (status) {
-    case "pass":
-      return <CheckCircledIcon className="text-green-400 h-4 w-4" />;
-    case "fail":
-      return <CrossCircledIcon className="text-red-400 h-4 w-4" />;
-    case "running":
+    case 'pass':
+      return <CheckCircledIcon className="h-4 w-4 text-success" aria-hidden="true" />;
+    case 'fail':
+      return <CrossCircledIcon className="h-4 w-4 text-destructive" aria-hidden="true" />;
+    case 'running':
       return <Spinner size={16} />;
     default:
-      return <CircleIcon className="text-gray-600 h-4 w-4" />;
+      return <CircleIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   }
 }

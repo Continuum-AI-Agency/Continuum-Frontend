@@ -1,19 +1,13 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import {
-  Box,
-  Button,
-  Callout,
-  Flex,
-  Grid,
-  Text,
-  TextField,
-} from "@radix-ui/themes";
-import { renameBrandProfileAction } from "@/app/(post-auth)/settings/actions";
-import { useToast } from "@/components/ui/ToastProvider";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { SettingsLogoUploader } from "../SettingsLogoUploader";
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { renameBrandProfileAction } from '@/app/(post-auth)/settings/actions';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/ToastProvider';
+import { SettingsLogoUploader } from '../SettingsLogoUploader';
 
 type BrandProfileMeta = {
   id: string;
@@ -61,7 +55,7 @@ export function BrandIdentitySection({
     event.preventDefault();
     const trimmed = brandName.trim();
     if (!trimmed) {
-      show({ title: "Name required", description: "Enter a brand name.", variant: "error" });
+      show({ title: 'Name required', description: 'Enter a brand name.', variant: 'error' });
       return;
     }
     startTransition(async () => {
@@ -69,33 +63,33 @@ export function BrandIdentitySection({
         await renameBrandProfileAction(activeBrandId, trimmed);
         setBrandName(trimmed);
         updateBrandName(activeBrandId, trimmed);
-        show({ title: "Brand updated", description: "Brand name saved.", variant: "success" });
+        show({ title: 'Brand updated', description: 'Brand name saved.', variant: 'success' });
       } catch (error) {
         show({
-          title: "Rename failed",
-          description: error instanceof Error ? error.message : "Unable to rename brand.",
-          variant: "error",
+          title: 'Rename failed',
+          description: error instanceof Error ? error.message : 'Unable to rename brand.',
+          variant: 'error',
         });
       }
     });
   };
 
   return (
-    <Flex direction="column" gap="6">
+    <div className="flex flex-col gap-8">
       <form onSubmit={handleRename}>
-        <Flex align="start" gap="6" wrap="wrap">
+        <div className="flex flex-wrap items-start gap-8">
           <SettingsLogoUploader
             brandId={activeBrandId}
             brandName={brandName}
             initialLogoPath={logoPath}
             disabled={!canEdit}
           />
-          <Flex direction="column" gap="3" className="flex-1">
-            <Text size="1" color="gray" weight="medium">
+          <div className="flex flex-1 flex-col gap-3">
+            <span className="text-xs font-medium text-muted-foreground">
               BRAND ID: {activeBrandId}
-            </Text>
-            <Flex align="center" gap="3" wrap="wrap">
-              <TextField.Root
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <Input
                 value={brandName}
                 onChange={(event) => setBrandName(event.target.value)}
                 placeholder="Brand name"
@@ -105,33 +99,33 @@ export function BrandIdentitySection({
               <Button type="submit" disabled={isPending || !canEdit}>
                 Save name
               </Button>
-            </Flex>
+            </div>
             {profile ? (
-              <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-                <Detail label="Created" value={dates?.createdAt ?? "—"} />
-                <Detail label="Last updated" value={dates?.updatedAt ?? "—"} />
-              </Grid>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Detail label="Created" value={dates?.createdAt ?? '—'} />
+                <Detail label="Last updated" value={dates?.updatedAt ?? '—'} />
+              </div>
             ) : null}
-          </Flex>
-        </Flex>
+          </div>
+        </div>
       </form>
 
       {!canEdit ? (
-        <Callout.Root color="amber">
-          <Callout.Text>
+        <Alert className="border-warning/30 bg-warning/10">
+          <AlertDescription className="text-warning">
             Only brand owners or admins can edit this brand profile.
-          </Callout.Text>
-        </Callout.Root>
+          </AlertDescription>
+        </Alert>
       ) : null}
-    </Flex>
+    </div>
   );
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <Box>
-      <Text size="1" color="gray">{label}</Text>
-      <Text>{value}</Text>
-    </Box>
+    <div>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm">{value}</span>
+    </div>
   );
 }

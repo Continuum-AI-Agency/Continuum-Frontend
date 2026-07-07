@@ -1,21 +1,31 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Copy, Check, ImageOff, Loader2, Play, Scissors } from "lucide-react";
-import Image from "next/image";
-import type { MediaAsset } from "@continuum/contracts";
-import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle";
-import { cn } from "@/lib/utils";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { SOURCE_LABEL } from "@/lib/media/filters";
-import { MediaBoundingBoxes } from "./MediaBoundingBoxes";
-import { useGenerateClips } from "./hooks/useGenerateClips";
-import { useClipQualityPreference } from "./hooks/useClipQualityPreference";
-import { useClipCaptionPreference } from "./hooks/useClipCaptionPreference";
-import { ClipProgressStrip } from "./ClipProgressStrip";
-import { ClipQualityToggle } from "./ClipQualityToggle";
-import { ClipCaptionToggle } from "./ClipCaptionToggle";
+import type { MediaAsset } from '@continuum/contracts';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  ImageOff,
+  Layers,
+  Loader2,
+  Play,
+  Scissors,
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import Image from 'next/image';
+import { useEffect, useRef, useState } from 'react';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { SOURCE_LABEL } from '@/lib/media/filters';
+import { cn } from '@/lib/utils';
+import { ClipCaptionToggle } from './ClipCaptionToggle';
+import { ClipProgressStrip } from './ClipProgressStrip';
+import { ClipQualityToggle } from './ClipQualityToggle';
+import { useClipCaptionPreference } from './hooks/useClipCaptionPreference';
+import { useClipQualityPreference } from './hooks/useClipQualityPreference';
+import { useGenerateClips } from './hooks/useGenerateClips';
+import { MediaBoundingBoxes } from './MediaBoundingBoxes';
 
 type Props = {
   asset: MediaAsset;
@@ -25,18 +35,18 @@ type Props = {
 };
 
 function formatBytes(bytes: number): string {
-  if (!bytes) return "—";
-  const units = ["B", "KB", "MB", "GB"];
+  if (!bytes) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
 }
 
 const BADGE_BASE =
-  "absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs";
+  'absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs';
 
 // Matches MediaGrid column breakpoints: 2-col mobile → 3-col sm → 4-col lg → 5-col xl
 const IMAGE_SIZES =
-  "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw";
+  '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw';
 
 // Defers assigning src to the video element until the card is near the viewport,
 // preventing preload="metadata" range requests for every off-screen video card.
@@ -49,7 +59,7 @@ function useLazyVideoSrc(src: string | null | undefined, immediate: boolean) {
       ([e]) => {
         if (e?.isIntersecting) setActive(true);
       },
-      { rootMargin: "200px" },
+      { rootMargin: '200px' },
     );
     ob.observe(ref.current);
     return () => ob.disconnect();
@@ -57,32 +67,32 @@ function useLazyVideoSrc(src: string | null | undefined, immediate: boolean) {
   return { ref, activeSrc: active && src ? src : undefined };
 }
 
-function StatusBadge({ status }: { status: MediaAsset["status"] }) {
+function StatusBadge({ status }: { status: MediaAsset['status'] }) {
   const reduceMotion = useReducedMotion();
-  if (status === "ready") return null;
+  if (status === 'ready') return null;
 
   const content =
-    status === "analyzing" ? (
-      <span className={cn(BADGE_BASE, "bg-black/60 text-white backdrop-blur-sm")}>
+    status === 'analyzing' ? (
+      <span className={cn(BADGE_BASE, 'bg-black/60 text-white backdrop-blur-sm')}>
         <Loader2 className="size-2.5 animate-spin" />
         Analyzing
       </span>
-    ) : status === "skipped_free" ? (
-      <span className={cn(BADGE_BASE, "bg-amber-900/80 text-amber-200")}>Upgrade to analyze</span>
-    ) : status === "error" ? (
-      <span className={cn(BADGE_BASE, "bg-red-900/80 text-red-200")}>Error</span>
+    ) : status === 'skipped_free' ? (
+      <span className={cn(BADGE_BASE, 'bg-amber-900/80 text-amber-200')}>Upgrade to analyze</span>
+    ) : status === 'error' ? (
+      <span className={cn(BADGE_BASE, 'bg-red-900/80 text-red-200')}>Error</span>
     ) : (
-      <span className={cn(BADGE_BASE, "bg-black/60 text-white")}>{status}</span>
+      <span className={cn(BADGE_BASE, 'bg-black/60 text-white')}>{status}</span>
     );
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={status}
-        initial={reduceMotion ? false : { opacity: 0, scale: 0.25, filter: "blur(4px)" }}
-        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-        exit={{ opacity: 0, scale: 0.25, filter: "blur(4px)" }}
-        transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+        initial={reduceMotion ? false : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
+        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+        exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
+        transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
       >
         {content}
       </motion.div>
@@ -110,7 +120,7 @@ function Thumbnail({
     );
   }
 
-  if (asset.kind === "video") {
+  if (asset.kind === 'video') {
     return (
       <>
         <video
@@ -151,6 +161,86 @@ function Thumbnail({
   );
 }
 
+// A grouped, saved carousel (e.g. a competitor post): pages through its slides in
+// place. The count badge doubles as position ("k / N"); prev/next surface on hover.
+function CarouselThumbnail({
+  slides,
+  priority,
+  alt,
+}: {
+  slides: NonNullable<MediaAsset['carousel']>['slides'];
+  priority: boolean;
+  alt: string;
+}) {
+  const [index, setIndex] = useState(0);
+  const [mediaError, setMediaError] = useState(false);
+  const slide = slides[index] ?? slides[0];
+
+  const page = (delta: number) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMediaError(false);
+    setIndex((prev) => (prev + delta + slides.length) % slides.length);
+  };
+
+  return (
+    <>
+      {slide?.signedUrl && !mediaError ? (
+        slide.kind === 'video' ? (
+          <video
+            key={slide.slideIndex}
+            src={slide.signedUrl}
+            className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+            muted
+            playsInline
+            preload="metadata"
+            onError={() => setMediaError(true)}
+          />
+        ) : (
+          <Image
+            key={slide.slideIndex}
+            src={slide.signedUrl}
+            alt={`${alt} — slide ${index + 1}`}
+            fill
+            sizes={IMAGE_SIZES}
+            priority={priority && index === 0}
+            className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+            onError={() => setMediaError(true)}
+          />
+        )
+      ) : (
+        <div className="flex size-full items-center justify-center bg-muted">
+          <ImageOff className="size-8 text-muted-foreground/40" />
+        </div>
+      )}
+
+      <span
+        className={cn(BADGE_BASE, 'left-auto right-1.5 bg-black/60 text-white backdrop-blur-sm')}
+      >
+        <Layers className="size-2.5" />
+        {index + 1}/{slides.length}
+      </span>
+
+      <button
+        type="button"
+        aria-label="Previous slide"
+        onClick={page(-1)}
+        className="absolute left-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+      >
+        <ChevronLeft className="size-4" />
+      </button>
+      <button
+        type="button"
+        aria-label="Next slide"
+        onClick={page(1)}
+        className="absolute right-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+      >
+        <ChevronRight className="size-4" />
+      </button>
+    </>
+  );
+}
+
 function CopyDescriptionButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -176,7 +266,13 @@ function CopyDescriptionButton({ text }: { text: string }) {
 
 // Detail surfaces on hover (in context), not in a takeover modal. Data-only:
 // no per-asset actions live here.
-function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; formattedDate: string }) {
+function MediaCardHoverDetail({
+  asset,
+  formattedDate,
+}: {
+  asset: MediaAsset;
+  formattedDate: string;
+}) {
   const dimensions = asset.width && asset.height ? `${asset.width} × ${asset.height}` : null;
   const tags = asset.tags ?? [];
   const objects = asset.detectedObjects ?? [];
@@ -185,7 +281,7 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
     <HoverCardContent side="right" align="start" className="w-80">
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-          {asset.signedUrl && asset.kind === "image" ? (
+          {asset.signedUrl && asset.kind === 'image' ? (
             <Image
               src={asset.signedUrl}
               alt={asset.title ?? asset.fileName}
@@ -193,8 +289,14 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
               sizes="320px"
               className="object-contain"
             />
-          ) : asset.signedUrl && asset.kind === "video" ? (
-            <video src={asset.signedUrl} muted playsInline preload="metadata" className="h-full w-full object-contain" />
+          ) : asset.signedUrl && asset.kind === 'video' ? (
+            <video
+              src={asset.signedUrl}
+              muted
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-contain"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <ImageOff className="size-6" />
@@ -223,7 +325,10 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
         {tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 8).map((tag) => (
-              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground">
+              <span
+                key={tag}
+                className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground"
+              >
                 {tag}
               </span>
             ))}
@@ -238,7 +343,7 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
                 className="rounded-md border border-border/60 px-1.5 py-0.5 text-2xs text-muted-foreground"
               >
                 {obj.label}
-                {typeof obj.confidence === "number" ? ` ${Math.round(obj.confidence * 100)}%` : ""}
+                {typeof obj.confidence === 'number' ? ` ${Math.round(obj.confidence * 100)}%` : ''}
               </span>
             ))}
           </div>
@@ -263,7 +368,13 @@ function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; for
   );
 }
 
-function GenerateClipsButton({ onGenerate, disabled }: { onGenerate: () => void; disabled: boolean }) {
+function GenerateClipsButton({
+  onGenerate,
+  disabled,
+}: {
+  onGenerate: () => void;
+  disabled: boolean;
+}) {
   return (
     <button
       type="button"
@@ -288,11 +399,11 @@ export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyl
   const { captionsEnabled, setCaptionsEnabled } = useClipCaptionPreference();
   const priority = (index ?? Infinity) < 10;
   const formattedDate = new Date(asset.createdAt).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
-  const canGenerateClips = asset.kind === "video" && asset.status === "ready";
+  const canGenerateClips = asset.kind === 'video' && asset.status === 'ready';
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
 
   return (
@@ -300,14 +411,22 @@ export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyl
       <HoverCardTrigger asChild>
         <motion.div
           className={cn(
-            "group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card",
-            "transition-[border-color] hover:border-foreground/20",
+            'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
+            'transition-[border-color] hover:border-foreground/20',
           )}
           whileHover={reduceMotion ? undefined : { y: -2 }}
-          transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+          transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
         >
           <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-            <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} priority={priority} />
+            {asset.carousel && asset.carousel.slideCount > 1 ? (
+              <CarouselThumbnail
+                slides={asset.carousel.slides}
+                priority={priority}
+                alt={asset.title ?? asset.fileName}
+              />
+            ) : (
+              <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} priority={priority} />
+            )}
             <StatusBadge status={asset.status} />
           </div>
 
@@ -329,10 +448,20 @@ export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyl
               <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
               {canGenerateClips && !activeProgress && (
                 <div className="flex items-center gap-1.5">
-                  <ClipCaptionToggle value={captionsEnabled} onChange={setCaptionsEnabled} disabled={isGenerating} />
-                  <ClipQualityToggle value={quality} onChange={setQuality} disabled={isGenerating} />
+                  <ClipCaptionToggle
+                    value={captionsEnabled}
+                    onChange={setCaptionsEnabled}
+                    disabled={isGenerating}
+                  />
+                  <ClipQualityToggle
+                    value={quality}
+                    onChange={setQuality}
+                    disabled={isGenerating}
+                  />
                   <GenerateClipsButton
-                    onGenerate={() => void generate(asset, { quality, captionsEnabled, captionStyle })}
+                    onGenerate={() =>
+                      void generate(asset, { quality, captionsEnabled, captionStyle })
+                    }
                     disabled={isGenerating}
                   />
                 </div>

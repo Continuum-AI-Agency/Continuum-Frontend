@@ -1,12 +1,12 @@
 'use client';
 
-import { Badge, Box, Flex, Text } from '@radix-ui/themes';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import {
   setPulseRecipientAction,
   updatePulseOptInAction,
 } from '@/app/(post-auth)/settings/actions';
+import { Pill } from '@/components/kibo-ui/pill';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
 import { formatMemberEmail } from '@/lib/brands/memberDisplay';
@@ -74,59 +74,45 @@ export function BrandPulseSection({
   };
 
   return (
-    <Box className="space-y-4">
-      <Flex
-        align="center"
-        justify="between"
-        gap="3"
-        className="rounded-lg border border-border/60 bg-card/20 p-3"
-      >
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/20 p-3">
         <div className="min-w-0">
-          <Text as="p" size="2" weight="medium">
-            Send the Continuum Pulse
-          </Text>
-          <Text as="p" size="1" color="gray">
+          <p className="text-sm font-medium">Send the Continuum Pulse</p>
+          <p className="text-xs text-muted-foreground">
             The weekly performance + trends digest, plus the first one after onboarding.
-          </Text>
+          </p>
         </div>
         <Switch checked={optIn} disabled={!canEdit || isPending} onCheckedChange={handleOptIn} />
-      </Flex>
+      </div>
 
       <div className={optIn ? undefined : 'pointer-events-none opacity-50'}>
-        <Text as="p" size="1" color="gray" className="mb-2 block">
+        <p className="mb-2 block text-xs text-muted-foreground">
           Recipients — the owner always receives it. Tag other members to include them.
-        </Text>
+        </p>
         <div className="space-y-2">
           {recipients.map((member) => {
             const isOwner = ownerUserId ? member.userId === ownerUserId : member.role === 'owner';
             const checked = isOwner || member.receivesEmailReport;
             return (
-              <Flex
+              <div
                 key={member.userId}
-                align="center"
-                justify="between"
-                gap="3"
-                className="rounded-lg border border-border/60 bg-card/10 p-2.5"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/10 p-2.5"
               >
-                <Flex align="center" gap="2" className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{formatMemberEmail(member.email)}</span>
-                  <Badge variant="soft">{member.role}</Badge>
-                  {isOwner ? (
-                    <Badge color="gray" variant="surface">
-                      always
-                    </Badge>
-                  ) : null}
-                </Flex>
+                  <Pill>{member.role}</Pill>
+                  {isOwner ? <Pill variant="muted">always</Pill> : null}
+                </div>
                 <Switch
                   checked={checked}
                   disabled={!canEdit || isOwner || isPending}
                   onCheckedChange={(next) => handleRecipient(member.userId, member.email, next)}
                 />
-              </Flex>
+              </div>
             );
           })}
         </div>
       </div>
-    </Box>
+    </div>
   );
 }

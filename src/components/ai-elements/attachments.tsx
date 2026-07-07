@@ -1,7 +1,8 @@
-"use client";
+'use client';
 
-import { Box, Card, Flex, IconButton, Text } from "@radix-ui/themes";
-import { Cross2Icon, FileIcon } from "@radix-ui/react-icons";
+import { Cross2Icon, FileIcon } from '@radix-ui/react-icons';
+
+import { Button } from '@/components/ui/button';
 
 export type Attachment = {
   id: string;
@@ -20,42 +21,40 @@ export function Attachments({ files, onRemove }: AttachmentsProps) {
   if (!files.length) return null;
 
   return (
-    <Flex gap="3" wrap="wrap">
+    <div className="flex flex-wrap gap-3">
       {files.map((file) => (
-        <Card key={file.id} className="relative overflow-hidden border border-white/10 bg-white/5 pr-8 transition-colors hover:bg-white/10">
-          <Flex align="center" gap="3">
-            <Box className="rounded bg-indigo-500/20 p-2 text-indigo-400">
-              <FileIcon width={18} height={18} />
-            </Box>
-            <Box>
-              <Text as="div" size="2" weight="medium" className="line-clamp-1 max-w-[150px] text-white">
+        <div
+          key={file.id}
+          className="relative overflow-hidden rounded-lg border bg-muted/40 p-3 pr-8 transition-colors hover:bg-muted/60"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded bg-primary/10 p-2 text-primary">
+              <FileIcon width={18} height={18} aria-hidden="true" />
+            </div>
+            <div>
+              <div className="line-clamp-1 max-w-[150px] text-sm font-medium text-foreground">
                 {file.name}
-              </Text>
-              {file.size && (
-                <Text as="div" size="1" color="gray">
-                  {file.size}
-                </Text>
-              )}
-            </Box>
-          </Flex>
+              </div>
+              {file.size && <div className="text-xs text-muted-foreground">{file.size}</div>}
+            </div>
+          </div>
           {onRemove && (
             <div className="absolute right-1 top-1/2 -translate-y-1/2">
-              <IconButton 
-                variant="ghost" 
-                color="gray" 
-                size="1" 
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove(file.id);
                 }}
                 aria-label={`Remove ${file.name}`}
               >
-                <Cross2Icon />
-              </IconButton>
+                <Cross2Icon aria-hidden="true" />
+              </Button>
             </div>
           )}
-        </Card>
+        </div>
       ))}
-    </Flex>
+    </div>
   );
 }

@@ -1,61 +1,46 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Flex,
-  Grid,
-  Heading,
-  Text,
-  TextArea,
-  TextField,
-  Switch,
-} from "@radix-ui/themes";
-import {
-  Controller,
   type Control,
+  Controller,
   type FieldErrors,
-  useForm,
   type UseFormReturn,
-} from "react-hook-form";
-import { z } from "zod";
-
-import { useToast } from "@/components/ui/ToastProvider";
-import { setLocalStorageJSON } from "@/lib/storage";
-import { storageKeyOrganicPlan } from "@/lib/storage-keys";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  ORGANIC_PLATFORM_KEYS,
-  type OrganicPlatformKey,
-} from "@/lib/organic/platforms";
-import type { CreativeAssetDragPayload } from "@/lib/creative-assets/drag";
-import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
+  useForm,
+} from 'react-hook-form';
+import { z } from 'zod';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Textarea } from '@/components/ui/textarea';
+import type { CreativeAssetDragPayload } from '@/lib/creative-assets/drag';
+import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
+import { ORGANIC_PLATFORM_KEYS, type OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { PromptDefinition, PromptFormValue } from '@/lib/organic/prompts';
+import { promptFormValueSchema, toPromptFormValue } from '@/lib/organic/prompts';
+import { isFutureLocalDateTime } from '@/lib/organic/scheduling';
+import type { Trend } from '@/lib/organic/trends';
 import type {
   ContentGridRow,
   DailyDetailsRequestPayload,
   DetailedPostTemplate,
   GenerationRequestPayload,
   WeeklyGrid,
-} from "@/lib/organic/types";
-import {
-  detailedPostTemplateSchema,
-  weeklyGridSchema,
-} from "@/lib/organic/types";
-import { parseWeeklyGridPayload } from "@/lib/organic/weekly-grid";
-import { isFutureLocalDateTime } from "@/lib/organic/scheduling";
-import { WeeklyGridEditor } from "./WeeklyGridEditor";
-import { DailyTemplatesPanel } from "./DailyTemplatesPanel";
-import { PromptSelector } from "./PromptSelector";
-import { TrendSelector } from "./TrendSelector";
-import type { PostingState } from "./types";
-import type { PromptDefinition, PromptFormValue } from "@/lib/organic/prompts";
-import { promptFormValueSchema, toPromptFormValue } from "@/lib/organic/prompts";
-import { useOrganicPromptLibrary, type PromptInput } from "@/lib/organic/usePromptLibrary";
-import { type Trend } from "@/lib/organic/trends";
+} from '@/lib/organic/types';
+import { detailedPostTemplateSchema, weeklyGridSchema } from '@/lib/organic/types';
+import { type PromptInput, useOrganicPromptLibrary } from '@/lib/organic/usePromptLibrary';
+import { parseWeeklyGridPayload } from '@/lib/organic/weekly-grid';
+import { setLocalStorageJSON } from '@/lib/storage';
+import { storageKeyOrganicPlan } from '@/lib/storage-keys';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { DailyTemplatesPanel } from './DailyTemplatesPanel';
+import { PromptSelector } from './PromptSelector';
+import { TrendSelector } from './TrendSelector';
+import type { PostingState } from './types';
+import { WeeklyGridEditor } from './WeeklyGridEditor';
 
 type OrganicPlatformAccount = {
   platform: OrganicPlatformKey;
@@ -90,7 +75,6 @@ type DailyState = {
   isGeneratingDetails: boolean;
 };
 
-
 type GridActions = {
   submit: (payload: GenerationRequestPayload) => Promise<void>;
   reset: () => void;
@@ -119,18 +103,18 @@ const DAILY_INITIAL_STATE: DailyState = {
 };
 
 type GridAction =
-  | { type: "reset" }
-  | { type: "start" }
-  | { type: "progress"; status: string; message?: string | null }
-  | { type: "complete"; grid: WeeklyGrid }
-  | { type: "error"; message: string }
-  | { type: "setGrid"; grid: WeeklyGrid };
+  | { type: 'reset' }
+  | { type: 'start' }
+  | { type: 'progress'; status: string; message?: string | null }
+  | { type: 'complete'; grid: WeeklyGrid }
+  | { type: 'error'; message: string }
+  | { type: 'setGrid'; grid: WeeklyGrid };
 
 function gridReducer(state: GridState, action: GridAction): GridState {
   switch (action.type) {
-    case "reset":
+    case 'reset':
       return GRID_INITIAL_STATE;
-    case "start":
+    case 'start':
       return {
         ...state,
         progress: [],
@@ -138,7 +122,7 @@ function gridReducer(state: GridState, action: GridAction): GridState {
         weeklyGrid: null,
         isGeneratingGrid: true,
       };
-    case "progress":
+    case 'progress':
       return {
         ...state,
         progress: [
@@ -150,19 +134,19 @@ function gridReducer(state: GridState, action: GridAction): GridState {
           },
         ],
       };
-    case "complete":
+    case 'complete':
       return {
         ...state,
         weeklyGrid: action.grid,
         isGeneratingGrid: false,
       };
-    case "error":
+    case 'error':
       return {
         ...state,
         isGeneratingGrid: false,
         gridError: action.message,
       };
-    case "setGrid":
+    case 'setGrid':
       return {
         ...state,
         weeklyGrid: action.grid,
@@ -173,42 +157,42 @@ function gridReducer(state: GridState, action: GridAction): GridState {
 }
 
 type DailyAction =
-  | { type: "reset" }
-  | { type: "start" }
-  | { type: "append"; template: DetailedPostTemplate }
-  | { type: "ready"; dayPlatform: string; ready: boolean }
-  | { type: "schedule"; dayPlatform: string; scheduledAt: string }
-  | { type: "attach"; dayPlatform: string; url: string }
-  | { type: "finish" }
-  | { type: "error" };
+  | { type: 'reset' }
+  | { type: 'start' }
+  | { type: 'append'; template: DetailedPostTemplate }
+  | { type: 'ready'; dayPlatform: string; ready: boolean }
+  | { type: 'schedule'; dayPlatform: string; scheduledAt: string }
+  | { type: 'attach'; dayPlatform: string; url: string }
+  | { type: 'finish' }
+  | { type: 'error' };
 
 function dailyReducer(state: DailyState, action: DailyAction): DailyState {
   switch (action.type) {
-    case "reset":
+    case 'reset':
       return DAILY_INITIAL_STATE;
-    case "start":
+    case 'start':
       return {
         dailyTemplates: [],
         postingState: {},
         isGeneratingDetails: true,
       };
-    case "append":
+    case 'append':
       return {
         ...state,
         dailyTemplates: [...state.dailyTemplates, action.template],
       };
-    case "ready":
+    case 'ready':
       return {
         ...state,
         postingState: {
           ...state.postingState,
           [action.dayPlatform]: {
             ready: action.ready,
-            scheduledAt: state.postingState[action.dayPlatform]?.scheduledAt ?? "",
+            scheduledAt: state.postingState[action.dayPlatform]?.scheduledAt ?? '',
           },
         },
       };
-    case "schedule":
+    case 'schedule':
       return {
         ...state,
         postingState: {
@@ -219,7 +203,7 @@ function dailyReducer(state: DailyState, action: DailyAction): DailyState {
           },
         },
       };
-    case "attach":
+    case 'attach':
       return {
         ...state,
         dailyTemplates: state.dailyTemplates.map((template) =>
@@ -229,15 +213,15 @@ function dailyReducer(state: DailyState, action: DailyAction): DailyState {
                 media_url: action.url,
                 media_urls: [action.url],
               }
-            : template
+            : template,
         ),
       };
-    case "finish":
+    case 'finish':
       return {
         ...state,
         isGeneratingDetails: false,
       };
-    case "error":
+    case 'error':
       return {
         ...state,
         dailyTemplates: [],
@@ -248,43 +232,37 @@ function dailyReducer(state: DailyState, action: DailyAction): DailyState {
   }
 }
 
-const LANGUAGE_VALUES = [
-  "English",
-  "Spanish",
-  "French",
-  "German",
-  "Portuguese",
-] as const;
+const LANGUAGE_VALUES = ['English', 'Spanish', 'French', 'German', 'Portuguese'] as const;
 
 type SupportedLanguage = (typeof LANGUAGE_VALUES)[number];
 
-const LANGUAGE_OPTIONS: Array<{ value: SupportedLanguage; label: string }> =
-  LANGUAGE_VALUES.map((value) => ({ value, label: value }));
+const LANGUAGE_OPTIONS: Array<{ value: SupportedLanguage; label: string }> = LANGUAGE_VALUES.map(
+  (value) => ({ value, label: value }),
+);
 
 const PROMPT_PRESETS = [
   {
-    id: "seasonal",
-    label: "Seasonal Moment",
-    prompt:
-      "Plan a week of posts celebrating an upcoming seasonal event for our brand.",
+    id: 'seasonal',
+    label: 'Seasonal Moment',
+    prompt: 'Plan a week of posts celebrating an upcoming seasonal event for our brand.',
   },
   {
-    id: "product-launch",
-    label: "Product Launch",
+    id: 'product-launch',
+    label: 'Product Launch',
     prompt:
-      "Create a 7-day organic content plan that builds excitement for a new product launch with daily teasers.",
+      'Create a 7-day organic content plan that builds excitement for a new product launch with daily teasers.',
   },
   {
-    id: "community",
-    label: "Community Spotlight",
+    id: 'community',
+    label: 'Community Spotlight',
     prompt:
-      "Generate a weekly plan highlighting community stories, user-generated content, and engagement prompts.",
+      'Generate a weekly plan highlighting community stories, user-generated content, and engagement prompts.',
   },
   {
-    id: "educational",
-    label: "Educational Series",
+    id: 'educational',
+    label: 'Educational Series',
     prompt:
-      "Design a week of educational posts that share tips, how-tos, and thought leadership aligned to our brand.",
+      'Design a week of educational posts that share tips, how-tos, and thought leadership aligned to our brand.',
   },
 ] as const;
 
@@ -303,7 +281,7 @@ const formSchema = z
       .optional()
       .refine(
         (value) => (value ? value.length <= 600 : true),
-        "Additional context must be under 600 characters."
+        'Additional context must be under 600 characters.',
       ),
     platforms: z.object(
       ORGANIC_PLATFORM_KEYS.reduce(
@@ -311,21 +289,19 @@ const formSchema = z
           shape[key] = platformFieldSchema;
           return shape;
         },
-        {} as Record<OrganicPlatformKey, typeof platformFieldSchema>
-      )
+        {} as Record<OrganicPlatformKey, typeof platformFieldSchema>,
+      ),
     ),
     selectedTrendIds: z.array(z.string()).max(5).default([]),
     prompt: promptFormValueSchema,
   })
   .superRefine((value, ctx) => {
-    const selected = Object.entries(value.platforms).filter(
-      ([, config]) => config.enabled
-    );
+    const selected = Object.entries(value.platforms).filter(([, config]) => config.enabled);
     if (selected.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["platforms"],
-        message: "Select at least one platform.",
+        path: ['platforms'],
+        message: 'Select at least one platform.',
       });
       return;
     }
@@ -333,8 +309,8 @@ const formSchema = z
       if (!config.accountId || config.accountId.trim().length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["platforms", platform, "accountId"],
-          message: "Account id is required when enabled.",
+          path: ['platforms', platform, 'accountId'],
+          message: 'Account id is required when enabled.',
         });
       }
     }
@@ -357,7 +333,7 @@ export function OrganicExperience({
       platformAccounts
         .filter((account) => account.connected && account.accountId)
         .map((account) => account.platform),
-    [platformAccounts]
+    [platformAccounts],
   );
 
   const { form, applyPromptPreset, resetForm } = useOrganicForm(platformAccounts, defaultPrompt);
@@ -390,20 +366,17 @@ export function OrganicExperience({
       await submitGrid(payload);
       resetDetails();
     },
-    [resetDetails, submitGrid]
+    [resetDetails, submitGrid],
   );
 
   const handleGenerateDetails = useCallback(async () => {
     if (!grid.state.weeklyGrid) return;
-    const payload = buildDailyDetailsPayload(
-      form.getValues(),
-      grid.state.weeklyGrid
-    );
+    const payload = buildDailyDetailsPayload(form.getValues(), grid.state.weeklyGrid);
     if (!payload) {
       show({
-        title: "Select platforms",
-        description: "Enable at least one platform to generate templates.",
-        variant: "warning",
+        title: 'Select platforms',
+        description: 'Enable at least one platform to generate templates.',
+        variant: 'warning',
       });
       return;
     }
@@ -416,7 +389,7 @@ export function OrganicExperience({
     resetForm();
   }, [resetForm, resetDetails, resetGrid]);
 
-  const language = form.watch("language");
+  const language = form.watch('language');
 
   const handleAssetDrop = useCallback(
     async (payload: CreativeAssetDragPayload, template: DetailedPostTemplate) => {
@@ -424,19 +397,19 @@ export function OrganicExperience({
         const signedUrl = await createSignedAssetUrl(payload.path, 300);
         attachMediaToTemplate(template.day_platform, signedUrl);
         show({
-          title: "Asset attached",
+          title: 'Asset attached',
           description: `${payload.name} linked to ${template.day_platform}.`,
-          variant: "success",
+          variant: 'success',
         });
       } catch (error) {
         show({
-          title: "Failed to attach asset",
-          description: (error as Error)?.message ?? "Could not create access link.",
-          variant: "error",
+          title: 'Failed to attach asset',
+          description: (error as Error)?.message ?? 'Could not create access link.',
+          variant: 'error',
         });
       }
     },
-    [attachMediaToTemplate, show]
+    [attachMediaToTemplate, show],
   );
 
   const handleStartGridEditing = useCallback(() => {
@@ -460,17 +433,18 @@ export function OrganicExperience({
         current.map((row, rowIndex) => {
           if (rowIndex !== index) return row;
           const next: ContentGridRow = { ...row };
-          if (key === "num_slides") {
+          if (key === 'num_slides') {
             const trimmed = value.trim();
-            next.num_slides = trimmed.length === 0 || Number.isNaN(Number(trimmed)) ? undefined : Number(trimmed);
+            next.num_slides =
+              trimmed.length === 0 || Number.isNaN(Number(trimmed)) ? undefined : Number(trimmed);
             return next;
           }
           (next as Record<string, unknown>)[key as string] = value;
           return next;
-        })
+        }),
       );
     },
-    []
+    [],
   );
 
   const handleSaveGridEdits = useCallback(() => {
@@ -480,12 +454,12 @@ export function OrganicExperience({
       setServerGrid(parsed);
       setDraftGrid(parsed.grid.map((row) => ({ ...row })));
       setIsEditingGrid(false);
-      show({ title: "Grid updated", variant: "success" });
+      show({ title: 'Grid updated', variant: 'success' });
     } catch (error) {
       show({
-        title: "Invalid grid edits",
-        description: (error as Error)?.message ?? "Please review your changes.",
-        variant: "error",
+        title: 'Invalid grid edits',
+        description: (error as Error)?.message ?? 'Please review your changes.',
+        variant: 'error',
       });
     }
   }, [draftGrid, grid.state.weeklyGrid, setServerGrid, show]);
@@ -508,9 +482,9 @@ export function OrganicExperience({
       // ignore storage failures
     }
     try {
-      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
+      const link = document.createElement('a');
       link.href = url;
       link.download = `continuum-organic-plan-${new Date().toISOString()}.json`;
       document.body.appendChild(link);
@@ -520,12 +494,12 @@ export function OrganicExperience({
     } catch {
       // ignore download failures
     }
-    show({ title: "Plan saved", description: "JSON exported to your device.", variant: "success" });
+    show({ title: 'Plan saved', description: 'JSON exported to your device.', variant: 'success' });
   }, [brandProfileId, details.state.dailyTemplates, form, grid.state.weeklyGrid, show]);
 
   return (
-    <Flex direction="column" gap="6" align="start">
-      <Flex direction="column" gap="5" className="flex-1">
+    <div className="flex flex-col gap-6 items-start">
+      <div className="flex flex-col gap-5 flex-1">
         <HeroCard brandName={brandName} />
 
         <GenerationForm
@@ -574,14 +548,14 @@ export function OrganicExperience({
             onAssetDrop={handleAssetDrop}
           />
         )}
-      </Flex>
-    </Flex>
+      </div>
+    </div>
   );
 }
 
 function useOrganicForm(
   platformAccounts: OrganicPlatformAccount[],
-  defaultPrompt: PromptFormValue
+  defaultPrompt: PromptFormValue,
 ): {
   form: UseFormReturn<FormInputValues, unknown, FormValues>;
   applyPromptPreset: (prompt: string) => void;
@@ -594,13 +568,13 @@ function useOrganicForm(
 
   const applyPromptPreset = useCallback(
     (prompt: string) => {
-      form.setValue("userPrompt", prompt, {
+      form.setValue('userPrompt', prompt, {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
       });
     },
-    [form]
+    [form],
   );
 
   const resetForm = useCallback(() => {
@@ -610,7 +584,7 @@ function useOrganicForm(
   return { form, applyPromptPreset, resetForm };
 }
 
-function useGridGeneration(show: ReturnType<typeof useToast>["show"]): {
+function useGridGeneration(show: ReturnType<typeof useToast>['show']): {
   state: GridState;
   actions: GridActions;
 } {
@@ -625,103 +599,101 @@ function useGridGeneration(show: ReturnType<typeof useToast>["show"]): {
   useEffect(() => () => cleanupStream(), [cleanupStream]);
 
   const appendProgress = useCallback((status: string, message?: string | null) => {
-    dispatch({ type: "progress", status, message });
+    dispatch({ type: 'progress', status, message });
   }, []);
 
   const handleComplete = useCallback(
     (grid: WeeklyGrid) => {
       cleanupStream();
-      dispatch({ type: "complete", grid });
-      appendProgress("complete", "Weekly grid ready.");
+      dispatch({ type: 'complete', grid });
+      appendProgress('complete', 'Weekly grid ready.');
       show({
-        title: "Content plan ready",
-        description: "Review the seven-day plan before generating post details.",
-        variant: "success",
+        title: 'Content plan ready',
+        description: 'Review the seven-day plan before generating post details.',
+        variant: 'success',
       });
     },
-    [appendProgress, cleanupStream, show]
+    [appendProgress, cleanupStream, show],
   );
 
   const handleError = useCallback(
     (message: string) => {
       cleanupStream();
-      dispatch({ type: "error", message });
-      appendProgress("error", message);
-      show({ title: "Generation failed", description: message, variant: "error" });
+      dispatch({ type: 'error', message });
+      appendProgress('error', message);
+      show({ title: 'Generation failed', description: message, variant: 'error' });
     },
-    [appendProgress, cleanupStream, show]
+    [appendProgress, cleanupStream, show],
   );
 
   const startStream = useCallback(
     (jobId: string) => {
       cleanupStream();
       const source = new EventSource(
-        `/api/organic/generate-grid/events?job_id=${encodeURIComponent(jobId)}`
+        `/api/organic/generate-grid/events?job_id=${encodeURIComponent(jobId)}`,
       );
       eventSourceRef.current = source;
 
-      source.addEventListener("progress", (event) => {
+      source.addEventListener('progress', (event) => {
         const payload = safeJson((event as MessageEvent).data);
         const message =
           (payload as { message?: string; detail?: string })?.message ??
           (payload as { detail?: string })?.detail ??
           null;
-        const status = (payload as { status?: string })?.status ?? "progress";
+        const status = (payload as { status?: string })?.status ?? 'progress';
         appendProgress(status, message);
       });
 
-      source.addEventListener("complete", (event) => {
+      source.addEventListener('complete', (event) => {
         const payload = safeJson((event as MessageEvent).data);
         const parsed = parseWeeklyGridPayload(payload);
         if (parsed) {
           handleComplete(parsed);
         } else {
-          handleError("Received an invalid grid from the generation service.");
+          handleError('Received an invalid grid from the generation service.');
         }
       });
 
-      source.addEventListener("error", (event) => {
+      source.addEventListener('error', (event) => {
         const payload = safeJson((event as MessageEvent).data);
         const message =
           (payload as { message?: string })?.message ??
           (payload as { error?: string })?.error ??
           (payload as { detail?: string })?.detail ??
-          "An internal error occurred during content generation.";
+          'An internal error occurred during content generation.';
         handleError(message);
       });
 
       source.onerror = () => {
-        handleError("The generation stream closed unexpectedly.");
+        handleError('The generation stream closed unexpectedly.');
       };
     },
-    [appendProgress, cleanupStream, handleComplete, handleError]
+    [appendProgress, cleanupStream, handleComplete, handleError],
   );
 
   const submit = useCallback(
     async (payload: GenerationRequestPayload) => {
-      dispatch({ type: "start" });
+      dispatch({ type: 'start' });
       try {
         const jobId = await queueGridJob(payload);
-        appendProgress("queued", "Queued content generation job.");
+        appendProgress('queued', 'Queued content generation job.');
         startStream(jobId);
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to start the organic content job.";
+          error instanceof Error ? error.message : 'Unable to start the organic content job.';
         handleError(message);
       }
     },
-    [appendProgress, handleError, startStream]
+    [appendProgress, handleError, startStream],
   );
 
   const reset = useCallback(() => {
     cleanupStream();
-    dispatch({ type: "reset" });
+    dispatch({ type: 'reset' });
   }, [cleanupStream]);
 
   const setGrid = useCallback((grid: WeeklyGrid) => {
-    dispatch({ type: "setGrid", grid });
+    dispatch({ type: 'setGrid', grid });
   }, []);
 
   return {
@@ -730,7 +702,7 @@ function useGridGeneration(show: ReturnType<typeof useToast>["show"]): {
   };
 }
 
-function useDailyDetails(show: ReturnType<typeof useToast>["show"]): {
+function useDailyDetails(show: ReturnType<typeof useToast>['show']): {
   state: DailyState;
   actions: DailyActions;
 } {
@@ -740,32 +712,32 @@ function useDailyDetails(show: ReturnType<typeof useToast>["show"]): {
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    dispatch({ type: "reset" });
+    dispatch({ type: 'reset' });
   }, []);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const togglePostReady = useCallback((dayPlatform: string, ready: boolean) => {
-    dispatch({ type: "ready", dayPlatform, ready });
+    dispatch({ type: 'ready', dayPlatform, ready });
   }, []);
 
   const updateSchedule = useCallback(
     (dayPlatform: string, scheduledAt: string) => {
       if (scheduledAt && !isFutureLocalDateTime(scheduledAt)) {
         show({
-          title: "Invalid schedule time",
-          description: "Pick a future local date and time.",
-          variant: "warning",
+          title: 'Invalid schedule time',
+          description: 'Pick a future local date and time.',
+          variant: 'warning',
         });
         return;
       }
-      dispatch({ type: "schedule", dayPlatform, scheduledAt });
+      dispatch({ type: 'schedule', dayPlatform, scheduledAt });
     },
-    [show]
+    [show],
   );
 
   const attachMedia = useCallback((dayPlatform: string, url: string) => {
-    dispatch({ type: "attach", dayPlatform, url });
+    dispatch({ type: 'attach', dayPlatform, url });
   }, []);
 
   const generateDetails = useCallback(
@@ -773,33 +745,31 @@ function useDailyDetails(show: ReturnType<typeof useToast>["show"]): {
       reset();
       const controller = new AbortController();
       abortRef.current = controller;
-      dispatch({ type: "start" });
+      dispatch({ type: 'start' });
       try {
         await requestDailyTemplates(payload, controller.signal, (template) => {
-          dispatch({ type: "append", template });
+          dispatch({ type: 'append', template });
         });
         show({
-          title: "Post templates ready",
-          description: "Review each day’s scripts, captions, and hashtags.",
-          variant: "success",
+          title: 'Post templates ready',
+          description: 'Review each day’s scripts, captions, and hashtags.',
+          variant: 'success',
         });
       } catch (error) {
         if (controller.signal.aborted) return;
         const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to generate detailed content.";
+          error instanceof Error ? error.message : 'Failed to generate detailed content.';
         show({
-          title: "Template generation failed",
+          title: 'Template generation failed',
           description: message,
-          variant: "error",
+          variant: 'error',
         });
-        dispatch({ type: "error" });
+        dispatch({ type: 'error' });
       } finally {
-        dispatch({ type: "finish" });
+        dispatch({ type: 'finish' });
       }
     },
-    [reset, show]
+    [reset, show],
   );
 
   return {
@@ -852,11 +822,11 @@ function GenerationForm({
   } = form;
 
   useEffect(() => {
-    const current = getValues("prompt");
+    const current = getValues('prompt');
     if (!prompts.some((prompt) => prompt.id === current?.id)) {
       const fallback = prompts[0];
       if (fallback) {
-        setValue("prompt", toPromptFormValue(fallback));
+        setValue('prompt', toPromptFormValue(fallback));
       }
     }
   }, [getValues, prompts, setValue]);
@@ -864,52 +834,48 @@ function GenerationForm({
   const trendTypes = useMemo(
     () => [
       {
-        id: "trends",
-        label: "Trends",
+        id: 'trends',
+        label: 'Trends',
         groups: [
           {
-            id: "general",
-            title: "General",
+            id: 'general',
+            title: 'General',
             trends: trends,
           },
         ],
       },
     ],
-    [trends]
+    [trends],
   );
 
   return (
-    <Card>
-      <Box p="4">
+    <div className="rounded-lg border bg-card text-card-foreground">
+      <div className="p-4">
         <form onSubmit={handleSubmit(onSubmit)}>
-          <Grid columns={{ initial: "1", xl: "2" }} gap="5">
-            <Flex direction="column" gap="4">
-              <Box>
-                <Heading size="4" mb="2">
-                  Content focus (optional)
-                </Heading>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2 className="mb-2 text-lg font-semibold">Content focus (optional)</h2>
                 <Controller
                   name="userPrompt"
                   control={control}
                   render={({ field }) => (
-                    <TextArea
+                    <Textarea
                       {...field}
                       rows={4}
                       placeholder="Optional: share a weekly focus, launch theme, or creative note."
                     />
                   )}
                 />
-              </Box>
+              </div>
               <PromptPresetList onSelect={onPromptPreset} />
-              <Box>
-                <Heading size="4" mb="2">
-                  Additional Context
-                </Heading>
+              <div>
+                <h2 className="mb-2 text-lg font-semibold">Additional Context</h2>
                 <Controller
                   name="generationPrompt"
                   control={control}
                   render={({ field }) => (
-                    <TextArea
+                    <Textarea
                       {...field}
                       rows={3}
                       placeholder="Optional: share extra notes, brand guardrails, or hero products."
@@ -917,25 +883,21 @@ function GenerationForm({
                   )}
                 />
                 {errors.generationPrompt?.message && (
-                  <Text size="1" color="red">
+                  <span className="text-xs text-destructive">
                     {errors.generationPrompt.message}
-                  </Text>
+                  </span>
                 )}
-              </Box>
-              <Box>
-                <Heading size="4" mb="2">
-                  Language
-                </Heading>
+              </div>
+              <div>
+                <h2 className="mb-2 text-lg font-semibold">Language</h2>
                 <Controller
                   name="language"
                   control={control}
                   render={({ field }) => (
                     <select
                       value={field.value}
-                      onChange={(event) =>
-                        field.onChange(event.target.value as SupportedLanguage)
-                      }
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-950"
+                      onChange={(event) => field.onChange(event.target.value as SupportedLanguage)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       {LANGUAGE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -945,7 +907,7 @@ function GenerationForm({
                     </select>
                   )}
                 />
-              </Box>
+              </div>
               <Controller
                 name="prompt"
                 control={control}
@@ -970,67 +932,64 @@ function GenerationForm({
                   />
                 )}
               />
-            </Flex>
-            <Flex direction="column" gap="4">
-              <Box>
-                <Heading size="4" mb="3">
-                  Target Platforms
-                </Heading>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2 className="mb-3 text-lg font-semibold">Target Platforms</h2>
                 <PlatformSelector
                   control={control}
                   errors={errors}
                   platformAccounts={platformAccounts}
                 />
-              </Box>
-                <Controller
-                  name="selectedTrendIds"
-                  control={control}
-                  render={({ field }) => (
-                    <TrendSelector
-                      trendTypes={trendTypes}
-                      trends={trends}
-                      selectedTrendIds={field.value ?? []}
-                      activePlatforms={activePlatforms}
-                      maxSelections={maxTrendSelections}
-                      onToggleTrend={(trendId) => {
-                        const set = new Set(field.value ?? []);
-                        if (set.has(trendId)) {
-                          set.delete(trendId);
-                        } else {
-                          if (typeof maxTrendSelections === "number" && set.size >= maxTrendSelections) {
-                            return;
-                          }
-                          set.add(trendId);
+              </div>
+              <Controller
+                name="selectedTrendIds"
+                control={control}
+                render={({ field }) => (
+                  <TrendSelector
+                    trendTypes={trendTypes}
+                    trends={trends}
+                    selectedTrendIds={field.value ?? []}
+                    activePlatforms={activePlatforms}
+                    maxSelections={maxTrendSelections}
+                    onToggleTrend={(trendId) => {
+                      const set = new Set(field.value ?? []);
+                      if (set.has(trendId)) {
+                        set.delete(trendId);
+                      } else {
+                        if (
+                          typeof maxTrendSelections === 'number' &&
+                          set.size >= maxTrendSelections
+                        ) {
+                          return;
                         }
-                        field.onChange(Array.from(set));
-                      }}
-                    />
-                  )}
-                />
-            </Flex>
-          </Grid>
+                        set.add(trendId);
+                      }
+                      field.onChange(Array.from(set));
+                    }}
+                  />
+                )}
+              />
+            </div>
+          </div>
 
           {gridError && (
-            <Card mt="4" size="1" style={{ borderColor: "var(--red-8)" }}>
-              <Box p="3">
-                <Text color="red" size="2" weight="medium">
-                  {gridError}
-                </Text>
-              </Box>
-            </Card>
+            <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3">
+              <span className="text-sm font-medium text-destructive">{gridError}</span>
+            </div>
           )}
 
-          <Flex gap="3" justify="end" mt="5">
-            <Button type="button" variant="soft" color="gray" onClick={onReset}>
+          <div className="flex gap-3 justify-end mt-5">
+            <Button type="button" variant="secondary" onClick={onReset}>
               Reset
             </Button>
             <Button type="submit" disabled={isGeneratingGrid}>
-              {isGeneratingGrid ? "Generating…" : "Generate Weekly Grid"}
+              {isGeneratingGrid ? 'Generating…' : 'Generate Weekly Grid'}
             </Button>
-          </Flex>
+          </div>
         </form>
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1040,34 +999,32 @@ type PlatformSelectorProps = {
   platformAccounts: OrganicPlatformAccount[];
 };
 
-function PlatformSelector({
-  control,
-  errors,
-  platformAccounts,
-}: PlatformSelectorProps) {
+function PlatformSelector({ control, errors, platformAccounts }: PlatformSelectorProps) {
   return (
-    <Flex direction="column" gap="3">
+    <div className="flex flex-col gap-3">
       {platformAccounts.map((account) => {
         const accountErrors =
-          errors.platforms && typeof errors.platforms === "object"
+          errors.platforms && typeof errors.platforms === 'object'
             ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ((errors.platforms as any)[account.platform]?.accountId as {
-                message?: string;
-              } | undefined)
+              ((errors.platforms as any)[account.platform]?.accountId as
+                | {
+                    message?: string;
+                  }
+                | undefined)
             : undefined;
 
         return (
-          <Card key={account.platform}>
-            <Box p="3">
-              <Flex align="center" justify="between" mb="3">
-                <Flex direction="column" gap="1">
-                  <Text weight="medium">{account.label}</Text>
-                  <Text size="1" color="gray">
+          <div key={account.platform} className="rounded-lg border bg-card text-card-foreground">
+            <div className="p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">{account.label}</span>
+                  <span className="text-xs text-muted-foreground">
                     {account.connected
-                      ? "Connected account ready for generation."
-                      : "Connect this account in onboarding to enable generation."}
-                  </Text>
-                </Flex>
+                      ? 'Connected account ready for generation.'
+                      : 'Connect this account in onboarding to enable generation.'}
+                  </span>
+                </div>
                 <Controller
                   name={`platforms.${account.platform}.enabled`}
                   control={control}
@@ -1076,16 +1033,15 @@ function PlatformSelector({
                       checked={field.value}
                       onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                       disabled={!account.connected}
-                      color="violet"
                     />
                   )}
                 />
-              </Flex>
+              </div>
               <Controller
                 name={`platforms.${account.platform}.accountId`}
                 control={control}
                 render={({ field }) => (
-                  <TextField.Root
+                  <Input
                     {...field}
                     placeholder="Account ID"
                     disabled={!account.connected}
@@ -1094,117 +1050,108 @@ function PlatformSelector({
                 )}
               />
               {accountErrors?.message && (
-                <Text size="1" color="red">
-                  {accountErrors.message}
-                </Text>
+                <span className="text-xs text-destructive">{accountErrors.message}</span>
               )}
-            </Box>
-          </Card>
+            </div>
+          </div>
         );
       })}
-    </Flex>
+    </div>
   );
 }
 
-function PromptPresetList({
-  onSelect,
-}: {
-  onSelect: (prompt: string) => void;
-}) {
+function PromptPresetList({ onSelect }: { onSelect: (prompt: string) => void }) {
   return (
-    <Flex direction="column" gap="2">
-      <Text size="2" weight="medium">
-        Jump-start with a preset
-      </Text>
-      <Flex gap="2" wrap="wrap">
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium">Jump-start with a preset</span>
+      <div className="flex gap-2 flex-wrap">
         {PROMPT_PRESETS.map((preset) => (
           <Button
             key={preset.id}
-            variant="soft"
-            size="1"
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={() => onSelect(preset.prompt)}
           >
             {preset.label}
           </Button>
         ))}
-      </Flex>
-    </Flex>
+      </div>
+    </div>
   );
 }
 
 function ProgressTimeline({ entries }: { entries: ProgressEntry[] }) {
   if (entries.length === 0) return null;
   return (
-    <Card>
-      <Box p="4">
-        <Heading size="4" mb="3">
-          Generation Progress
-        </Heading>
-        <Flex direction="column" gap="2">
+    <div className="rounded-lg border bg-card text-card-foreground">
+      <div className="p-4">
+        <h2 className="mb-3 text-lg font-semibold">Generation Progress</h2>
+        <div className="flex flex-col gap-2">
           {entries.map((entry, index) => (
-            <Flex key={`${entry.status}-${entry.at}-${index}`} align="center" gap="3">
-              <Badge color={badgeColor(entry.status)}>{entry.status}</Badge>
-              <Text size="2">{entry.message ?? "Processing…"}</Text>
-              <Text size="1" color="gray">
+            <div key={`${entry.status}-${entry.at}-${index}`} className="flex items-center gap-3">
+              <Pill variant={badgeVariant(entry.status)}>{entry.status}</Pill>
+              <span className="text-sm">{entry.message ?? 'Processing…'}</span>
+              <span className="text-xs text-muted-foreground">
                 {new Date(entry.at).toLocaleTimeString()}
-              </Text>
-            </Flex>
+              </span>
+            </div>
           ))}
-        </Flex>
-      </Box>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }
 
 function HeroCard({ brandName }: { brandName: string }) {
   return (
-    <Card>
-      <Box p="4">
-        <Heading size="5">{brandName || "Organic Command Center"}</Heading>
-        <Text color="gray" size="2">
+    <div className="rounded-lg border bg-card text-card-foreground">
+      <div className="p-4">
+        <h2 className="text-xl font-semibold">{brandName || 'Organic Command Center'}</h2>
+        <span className="text-sm text-muted-foreground">
           Generate cohesive, on-brand content across every channel in a single flow.
-        </Text>
-      </Box>
-    </Card>
+        </span>
+      </div>
+    </div>
   );
 }
 
 function EmptyState() {
   return (
-    <Card>
-      <Box p="4">
-        <Heading size="4">Your content plan will appear here</Heading>
-        <Text color="gray">
+    <div className="rounded-lg border bg-card text-card-foreground">
+      <div className="p-4">
+        <h2 className="text-lg font-semibold">Your content plan will appear here</h2>
+        <span className="text-muted-foreground">
           Configure your platforms and prompt above to create a seven-day organic content plan.
-        </Text>
-      </Box>
-    </Card>
+        </span>
+      </div>
+    </div>
   );
 }
 
 function buildGenerationPayload(values: FormValues): GenerationRequestPayload {
-  const platformAccountIds = Object.entries(values.platforms).reduce<
-    Record<string, string>
-  >((acc, [key, config]) => {
-    if (config.enabled && config.accountId) {
-      acc[key] = config.accountId.trim();
-    }
-    return acc;
-  }, {});
+  const platformAccountIds = Object.entries(values.platforms).reduce<Record<string, string>>(
+    (acc, [key, config]) => {
+      if (config.enabled && config.accountId) {
+        acc[key] = config.accountId.trim();
+      }
+      return acc;
+    },
+    {},
+  );
   const normalizedPrompt = {
     id: values.prompt.id,
     name: values.prompt.name,
     description: values.prompt.description?.trim() || undefined,
     content: values.prompt.content.trim(),
     source: values.prompt.source,
-  } as GenerationRequestPayload["prompt"];
+  } as GenerationRequestPayload['prompt'];
   const resolvedUserPrompt = values.userPrompt?.trim() || values.prompt.content.trim();
   return {
     language: values.language,
     userPrompt: resolvedUserPrompt,
     generationPrompt: values.generationPrompt?.trim() || undefined,
-    platformAccountIds: platformAccountIds as GenerationRequestPayload["platformAccountIds"],
+    platformAccountIds: platformAccountIds as GenerationRequestPayload['platformAccountIds'],
     selectedTrendIds: values.selectedTrendIds ?? [],
     prompt: normalizedPrompt,
   };
@@ -1212,22 +1159,22 @@ function buildGenerationPayload(values: FormValues): GenerationRequestPayload {
 
 function buildDailyDetailsPayload(
   values: FormInputValues,
-  weeklyGrid: WeeklyGrid
+  weeklyGrid: WeeklyGrid,
 ): DailyDetailsRequestPayload | null {
-  const platformAccountIds = Object.entries(values.platforms).reduce<
-    Record<string, string>
-  >((acc, [key, config]) => {
-    if (config.enabled && config.accountId) {
-      acc[key] = config.accountId.trim();
-    }
-    return acc;
-  }, {});
+  const platformAccountIds = Object.entries(values.platforms).reduce<Record<string, string>>(
+    (acc, [key, config]) => {
+      if (config.enabled && config.accountId) {
+        acc[key] = config.accountId.trim();
+      }
+      return acc;
+    },
+    {},
+  );
   if (Object.keys(platformAccountIds).length === 0) {
     return null;
   }
   return {
-    platformAccountIds:
-      platformAccountIds as DailyDetailsRequestPayload["platformAccountIds"],
+    platformAccountIds: platformAccountIds as DailyDetailsRequestPayload['platformAccountIds'],
     weeklyGrid,
     language: values.language,
     selectedTrendIds: values.selectedTrendIds ?? [],
@@ -1236,17 +1183,17 @@ function buildDailyDetailsPayload(
 
 async function streamDetailedTemplates(
   response: Response,
-  onTemplate: (template: DetailedPostTemplate) => void
+  onTemplate: (template: DetailedPostTemplate) => void,
 ) {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
@@ -1265,34 +1212,35 @@ async function streamDetailedTemplates(
   }
 }
 
-
-function useCopyCaption(show: ReturnType<typeof useToast>["show"]) {
+function useCopyCaption(show: ReturnType<typeof useToast>['show']) {
   return useCallback(
     (caption: string) => {
       navigator.clipboard
         .writeText(caption)
-        .then(() => show({ title: "Caption copied", variant: "success" }))
+        .then(() => show({ title: 'Caption copied', variant: 'success' }))
         .catch(() =>
           show({
-            title: "Copy failed",
-            description: "Your browser blocked clipboard access.",
-            variant: "error",
-          })
+            title: 'Copy failed',
+            description: 'Your browser blocked clipboard access.',
+            variant: 'error',
+          }),
         );
     },
-    [show]
+    [show],
   );
 }
 
 async function queueGridJob(payload: GenerationRequestPayload): Promise<string> {
   const supabase = createSupabaseBrowserClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   const token = session?.access_token;
 
-  const response = await fetch("/api/organic/generate-grid", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
+  const response = await fetch('/api/organic/generate-grid', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
@@ -1301,15 +1249,13 @@ async function queueGridJob(payload: GenerationRequestPayload): Promise<string> 
   if (!response.ok) {
     const data = await safeParseJson(response);
     const message =
-      typeof data?.error === "string"
-        ? data.error
-        : "Failed to queue organic content generation.";
+      typeof data?.error === 'string' ? data.error : 'Failed to queue organic content generation.';
     throw new Error(message);
   }
 
   const parsed = (await response.json()) as { jobId?: string };
   if (!parsed?.jobId) {
-    throw new Error("Generation service did not return a job identifier.");
+    throw new Error('Generation service did not return a job identifier.');
   }
 
   return parsed.jobId;
@@ -1318,16 +1264,18 @@ async function queueGridJob(payload: GenerationRequestPayload): Promise<string> 
 async function requestDailyTemplates(
   payload: DailyDetailsRequestPayload,
   signal: AbortSignal,
-  onTemplate: (template: DetailedPostTemplate) => void
+  onTemplate: (template: DetailedPostTemplate) => void,
 ) {
   const supabase = createSupabaseBrowserClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   const token = session?.access_token;
 
-  const response = await fetch("/api/organic/generate-daily-details-stream", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
+  const response = await fetch('/api/organic/generate-daily-details-stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     signal,
@@ -1337,9 +1285,7 @@ async function requestDailyTemplates(
   if (!response.ok || !response.body) {
     const data = await safeParseJson(response);
     const message =
-      typeof data?.error === "string"
-        ? data.error
-        : "Failed to generate detailed post templates.";
+      typeof data?.error === 'string' ? data.error : 'Failed to generate detailed post templates.';
     throw new Error(message);
   }
 
@@ -1348,7 +1294,7 @@ async function requestDailyTemplates(
 
 function makeDefaultValues(
   platformAccounts: OrganicPlatformAccount[],
-  defaultPrompt: PromptFormValue
+  defaultPrompt: PromptFormValue,
 ): FormInputValues {
   const platformDefaults = ORGANIC_PLATFORM_KEYS.reduce(
     (acc, key) => {
@@ -1356,16 +1302,16 @@ function makeDefaultValues(
       const hasAccountId = Boolean(account?.accountId);
       acc[key] = {
         enabled: Boolean(account?.connected && hasAccountId),
-        accountId: account?.accountId ?? "",
+        accountId: account?.accountId ?? '',
       };
       return acc;
     },
-    {} as Record<OrganicPlatformKey, z.infer<typeof platformFieldSchema>>
+    {} as Record<OrganicPlatformKey, z.infer<typeof platformFieldSchema>>,
   );
   return {
-    language: "English",
-    userPrompt: "",
-    generationPrompt: "",
+    language: 'English',
+    userPrompt: '',
+    generationPrompt: '',
     selectedTrendIds: [],
     prompt: { ...defaultPrompt },
     platforms: platformDefaults,
@@ -1388,9 +1334,9 @@ function safeJson(value: string) {
   }
 }
 
-function badgeColor(status: string) {
-  if (status === "complete") return "green";
-  if (status === "error") return "red";
-  if (status === "queued" || status === "started") return "blue";
-  return "gray";
+function badgeVariant(status: string): 'success' | 'destructive' | 'teal' | 'muted' {
+  if (status === 'complete') return 'success';
+  if (status === 'error') return 'destructive';
+  if (status === 'queued' || status === 'started') return 'teal';
+  return 'muted';
 }

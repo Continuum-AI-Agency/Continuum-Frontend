@@ -43,10 +43,11 @@ export async function fetchCampaignPerformanceRows(
   const campaignsFunction =
     params.platform === "google-ads" ? "fetch-google-ads-campaigns" : "paid-media-reporting/campaigns";
   const { data, error } = await supabase.functions.invoke(
-    `${campaignsFunction}?brandId=${params.brandId}&adAccountId=${params.adAccountId}`,
+    `${campaignsFunction}?brandId=${params.brandId}&adAccountId=${params.adAccountId}&platform=${params.platform}`,
     {
       method: "POST",
       body: {
+        platform: params.platform,
         brandId: params.brandId,
         adAccountId: params.adAccountId,
       },

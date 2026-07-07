@@ -1,28 +1,29 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Badge, Button, Card, Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
-import Image from "next/image";
-import { ImageIcon, Pencil2Icon, ReloadIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
-import { useDropzone, type FileRejection, type FileError } from "react-dropzone";
-import type { RefImage, SupportedModel } from "@/lib/types/chatImage";
-
-import { Dropzone, DropzoneEmptyState } from "@/components/dropzone";
-import { useToast } from "@/components/ui/ToastProvider";
-import { ImageMarkupDialog } from "@/components/ai-studio/markup/ImageMarkupDialog";
-import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
-import { applyMarkupToRef, revertRefToOriginal } from "@/lib/ai-studio/referenceEdits";
+import { ImageIcon, Pencil2Icon, ReloadIcon, TrashIcon, UploadIcon } from '@radix-ui/react-icons';
+import Image from 'next/image';
+import React from 'react';
+import { type FileError, type FileRejection, useDropzone } from 'react-dropzone';
+import { ImageMarkupDialog } from '@/components/ai-studio/markup/ImageMarkupDialog';
+import { Dropzone, DropzoneEmptyState } from '@/components/dropzone';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
-  IMAGE_REFERENCE_MAX_BYTES,
   formatMiB,
+  IMAGE_REFERENCE_MAX_BYTES,
   inferMimeTypeFromPath,
   parseReferenceDropPayload,
   resolveReferenceMimeType,
-} from "@/lib/ai-studio/referenceDrop";
-import { resolveDroppedBase64 } from "@/lib/ai-studio/referenceDropClient";
+} from '@/lib/ai-studio/referenceDrop';
+import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
+import { applyMarkupToRef, revertRefToOriginal } from '@/lib/ai-studio/referenceEdits';
+import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
+import type { RefImage, SupportedModel } from '@/lib/types/chatImage';
 
 type ReferenceDockProps = {
-  mode: "image" | "video";
+  mode: 'image' | 'video';
   model?: SupportedModel;
   maxRefs: number;
   refs: RefImage[];
@@ -33,8 +34,8 @@ type ReferenceDockProps = {
   onChangeLastFrame?: (ref?: RefImage) => void;
 };
 
-const RF_DRAG_MIME = "application/reactflow-node-data";
-const TEXT_MIME = "text/plain";
+const RF_DRAG_MIME = 'application/reactflow-node-data';
+const TEXT_MIME = 'text/plain';
 
 export type LocalFile = File & { preview?: string; errors: readonly FileError[] };
 
@@ -55,7 +56,7 @@ export type DZReturn = ReturnType<typeof useDropzone> & {
 const useLocalDropzone = (
   opts: { maxFiles: number; allowedMimeTypes: string[]; maxFileSize: number },
   onAcceptUpload: (files: File[]) => Promise<void>,
-  onReject?: (rejected: FileRejection[]) => void
+  onReject?: (rejected: FileRejection[]) => void,
 ): DZReturn => {
   const [files, setFiles] = React.useState<LocalFile[]>([]);
   const [errors, setErrors] = React.useState<{ name: string; message: string }[]>([]);
@@ -68,7 +69,10 @@ const useLocalDropzone = (
     maxFiles: opts.maxFiles,
     maxSize: opts.maxFileSize,
     multiple: opts.maxFiles !== 1,
-    accept: opts.allowedMimeTypes.reduce<Record<string, string[]>>((acc, type) => ({ ...acc, [type]: [] }), {}),
+    accept: opts.allowedMimeTypes.reduce<Record<string, string[]>>(
+      (acc, type) => ({ ...acc, [type]: [] }),
+      {},
+    ),
     onDrop: (accepted, rejected) => {
       if (rejected.length > 0) {
         onReject?.(rejected);
@@ -86,8 +90,8 @@ const useLocalDropzone = (
         } catch (error) {
           setErrors([
             {
-              name: accepted[0]?.name ?? "file",
-              message: error instanceof Error ? error.message : "Failed to process file",
+              name: accepted[0]?.name ?? 'file',
+              message: error instanceof Error ? error.message : 'Failed to process file',
             },
           ]);
         } finally {
@@ -139,55 +143,64 @@ export function ReferenceDock({
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
 
-  const supportsRefImages = mode === "image" || model === "veo-3-1";
-  const supportsFrames = model === "veo-3-1-fast";
+  const supportsRefImages = mode === 'image' || model === 'veo-3-1';
+  const supportsFrames = model === 'veo-3-1-fast';
 
   const [markupState, setMarkupState] = React.useState<{
-    target: "ref" | "first" | "last";
+    target: 'ref' | 'first' | 'last';
     refId?: string;
     sourceBase64: string;
     sourceMime: string;
     title: string;
   } | null>(null);
-  const hasCreativeAssetPayload = React.useCallback((types: DataTransfer["types"]) => {
+  const hasCreativeAssetPayload = React.useCallback((types: DataTransfer['types']) => {
     const list = Array.from(types ?? []);
     return list.includes(CREATIVE_ASSET_DRAG_TYPE) || list.includes(RF_DRAG_MIME);
   }, []);
 
   const resolveDropSlot = React.useCallback((target: EventTarget | null) => {
     if (!(target instanceof HTMLElement)) return undefined;
-    const slot = target.closest<HTMLElement>("[data-reference-drop-slot]")?.dataset.referenceDropSlot;
-    return slot === "first" || slot === "last" ? slot : undefined;
+    const slot = target.closest<HTMLElement>('[data-reference-drop-slot]')?.dataset
+      .referenceDropSlot;
+    return slot === 'first' || slot === 'last' ? slot : undefined;
   }, []);
 
-  const fileToBase64 = React.useCallback((file: File) => new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  }), []);
+  const fileToBase64 = React.useCallback(
+    (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '');
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      }),
+    [],
+  );
 
   const enforceMaxAttachmentBytes = React.useCallback(
     (opts: { label: string; sizeBytes: number; maxBytes: number }) => {
       if (opts.sizeBytes <= opts.maxBytes) return true;
       show({
-        title: "Attachment too large",
+        title: 'Attachment too large',
         description: `${opts.label} is ${formatMiB(opts.sizeBytes)} (max ${formatMiB(opts.maxBytes)}).`,
-        variant: "error",
+        variant: 'error',
       });
       return false;
     },
-    [show]
+    [show],
   );
 
   const handleLocalFiles = React.useCallback(
-    async (files: FileList | File[] | null, slot?: "first" | "last") => {
+    async (files: FileList | File[] | null, slot?: 'first' | 'last') => {
       if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
       const fileArray = Array.isArray(files) ? files : Array.from(files);
       const remaining = Math.max(0, maxRefs - refs.length);
       const maxToProcess = slot ? 1 : remaining;
       if (maxToProcess === 0) {
-        show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
+        show({
+          title: 'Reference limit',
+          description: `Max ${maxRefs} reference images`,
+          variant: 'error',
+        });
         return;
       }
 
@@ -195,16 +208,21 @@ export function ReferenceDock({
       const nextRefs: RefImage[] = [];
 
       for (const file of slice) {
-        const mime = file.type || inferMimeTypeFromPath(file.name) || "application/octet-stream";
-        const isImage = mime.startsWith("image/");
+        const mime = file.type || inferMimeTypeFromPath(file.name) || 'application/octet-stream';
+        const isImage = mime.startsWith('image/');
 
         if (!isImage) {
-          show({ title: "Unsupported", description: "Only image references are supported", variant: "error" });
+          show({
+            title: 'Unsupported',
+            description: 'Only image references are supported',
+            variant: 'error',
+          });
           continue;
         }
         if (
           !enforceMaxAttachmentBytes({
-            label: slot === "first" ? "First frame" : slot === "last" ? "Last frame" : "Reference image",
+            label:
+              slot === 'first' ? 'First frame' : slot === 'last' ? 'Last frame' : 'Reference image',
             sizeBytes: file.size,
             maxBytes: IMAGE_REFERENCE_MAX_BYTES,
           })
@@ -220,14 +238,14 @@ export function ReferenceDock({
           path: file.name,
           mime,
           base64,
-          referenceType: mode === "video" ? "asset" : undefined,
+          referenceType: mode === 'video' ? 'asset' : undefined,
         };
 
-        if (slot === "first") {
+        if (slot === 'first') {
           onChangeFirstFrame?.(ref);
           return;
         }
-        if (slot === "last") {
+        if (slot === 'last') {
           onChangeLastFrame?.(ref);
           return;
         }
@@ -238,7 +256,17 @@ export function ReferenceDock({
         onChangeRefs([...refs, ...nextRefs]);
       }
     },
-    [enforceMaxAttachmentBytes, fileToBase64, maxRefs, mode, onChangeFirstFrame, onChangeLastFrame, onChangeRefs, refs, show]
+    [
+      enforceMaxAttachmentBytes,
+      fileToBase64,
+      maxRefs,
+      mode,
+      onChangeFirstFrame,
+      onChangeLastFrame,
+      onChangeRefs,
+      refs,
+      show,
+    ],
   );
 
   const rejectDropzoneFiles = React.useCallback(
@@ -246,18 +274,18 @@ export function ReferenceDock({
       const message = rejected
         .flatMap((rej) => rej.errors.map((e) => `${rej.file.name}: ${e.message}`))
         .slice(0, 3)
-        .join(" • ");
+        .join(' • ');
       show({
-        title: "File rejected",
-        description: message || "Unsupported file",
-        variant: "error",
+        title: 'File rejected',
+        description: message || 'Unsupported file',
+        variant: 'error',
       });
     },
-    [show]
+    [show],
   );
 
   const handleDrop = React.useCallback(
-    async (event: React.DragEvent<HTMLDivElement>, slot?: "first" | "last") => {
+    async (event: React.DragEvent<HTMLDivElement>, slot?: 'first' | 'last') => {
       event.preventDefault();
       setIsDragging(false);
 
@@ -274,14 +302,22 @@ export function ReferenceDock({
           dataTransfer.getData(TEXT_MIME);
         if (!rawPayload) {
           if (!dataTransfer.files || dataTransfer.files.length === 0) {
-            show({ title: "Drop ignored", description: "No asset data detected in drop.", variant: "warning" });
+            show({
+              title: 'Drop ignored',
+              description: 'No asset data detected in drop.',
+              variant: 'warning',
+            });
           }
           return;
         }
 
         const parsed = parseReferenceDropPayload(rawPayload);
         if (!parsed) {
-          show({ title: "Drop failed", description: "Unrecognized drop payload", variant: "error" });
+          show({
+            title: 'Drop failed',
+            description: 'Unrecognized drop payload',
+            variant: 'error',
+          });
           return;
         }
 
@@ -289,93 +325,123 @@ export function ReferenceDock({
         const isImage = /^image\//i.test(resolvedMime);
 
         if (!isImage) {
-          show({ title: "Unsupported", description: "Only image references are supported", variant: "error" });
+          show({
+            title: 'Unsupported',
+            description: 'Only image references are supported',
+            variant: 'error',
+          });
           return;
         }
 
-        if (parsed.kind === "remote" && typeof parsed.sizeBytes === "number") {
+        if (parsed.kind === 'remote' && typeof parsed.sizeBytes === 'number') {
           const maxBytes = IMAGE_REFERENCE_MAX_BYTES;
-          const label = slot === "first" ? "First frame" : slot === "last" ? "Last frame" : "Reference image";
+          const label =
+            slot === 'first' ? 'First frame' : slot === 'last' ? 'Last frame' : 'Reference image';
           if (!enforceMaxAttachmentBytes({ label, sizeBytes: parsed.sizeBytes, maxBytes })) {
             return;
           }
         }
 
         const maxBytes = IMAGE_REFERENCE_MAX_BYTES;
-        const label = slot === "first" ? "First frame" : slot === "last" ? "Last frame" : "Reference image";
+        const label =
+          slot === 'first' ? 'First frame' : slot === 'last' ? 'Last frame' : 'Reference image';
         const { base64, sourceName, byteLength } = await resolveDroppedBase64(parsed, maxBytes);
-        if (typeof byteLength === "number" && !enforceMaxAttachmentBytes({ label, sizeBytes: byteLength, maxBytes })) {
+        if (
+          typeof byteLength === 'number' &&
+          !enforceMaxAttachmentBytes({ label, sizeBytes: byteLength, maxBytes })
+        ) {
           return;
         }
 
         if (refs.length >= maxRefs && !slot) {
-          show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
+          show({
+            title: 'Reference limit',
+            description: `Max ${maxRefs} reference images`,
+            variant: 'error',
+          });
           return;
         }
 
         const ref: RefImage = {
-          id: `${sourceName ?? "ref"}-${Date.now()}`,
+          id: `${sourceName ?? 'ref'}-${Date.now()}`,
           name: sourceName,
-          path: parsed.kind === "remote" ? (parsed.path ?? parsed.publicUrl ?? "") : "data-url",
+          path: parsed.kind === 'remote' ? (parsed.path ?? parsed.publicUrl ?? '') : 'data-url',
           mime: resolvedMime,
           base64,
-          referenceType: mode === "video" ? "asset" : undefined,
+          referenceType: mode === 'video' ? 'asset' : undefined,
         };
 
-        if (slot === "first") {
+        if (slot === 'first') {
           onChangeFirstFrame?.(ref);
-        } else if (slot === "last") {
+        } else if (slot === 'last') {
           onChangeLastFrame?.(ref);
         } else {
           onChangeRefs([...refs, ref]);
         }
       } catch (error) {
         console.error(error);
-        show({ title: "Failed to add reference", description: error instanceof Error ? error.message : "Unknown error", variant: "error" });
+        show({
+          title: 'Failed to add reference',
+          description: error instanceof Error ? error.message : 'Unknown error',
+          variant: 'error',
+        });
       }
     },
-    [enforceMaxAttachmentBytes, handleLocalFiles, refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, show]
+    [
+      enforceMaxAttachmentBytes,
+      handleLocalFiles,
+      refs,
+      maxRefs,
+      mode,
+      onChangeRefs,
+      onChangeFirstFrame,
+      onChangeLastFrame,
+      show,
+    ],
   );
 
-  const openMarkup = React.useCallback((opts: { target: "ref" | "first" | "last"; ref?: RefImage }) => {
-    if (!opts.ref) return;
-    setMarkupState({
-      target: opts.target,
-      refId: opts.ref.id,
-      sourceBase64: opts.ref.base64,
-      sourceMime: opts.ref.mime,
-      title: `Edit ${opts.ref.name ?? "reference"}`,
-    });
-  }, []);
+  const openMarkup = React.useCallback(
+    (opts: { target: 'ref' | 'first' | 'last'; ref?: RefImage }) => {
+      if (!opts.ref) return;
+      setMarkupState({
+        target: opts.target,
+        refId: opts.ref.id,
+        sourceBase64: opts.ref.base64,
+        sourceMime: opts.ref.mime,
+        title: `Edit ${opts.ref.name ?? 'reference'}`,
+      });
+    },
+    [],
+  );
 
   const refsDropzone = useLocalDropzone(
-    { maxFiles: maxRefs, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
+    { maxFiles: maxRefs, allowedMimeTypes: ['image/*'], maxFileSize: Number.POSITIVE_INFINITY },
     async (files) => handleLocalFiles(files, undefined),
-    rejectDropzoneFiles
+    rejectDropzoneFiles,
   );
   const firstDropzone = useLocalDropzone(
-    { maxFiles: 1, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
-    async (files) => handleLocalFiles(files, "first"),
-    rejectDropzoneFiles
+    { maxFiles: 1, allowedMimeTypes: ['image/*'], maxFileSize: Number.POSITIVE_INFINITY },
+    async (files) => handleLocalFiles(files, 'first'),
+    rejectDropzoneFiles,
   );
   const lastDropzone = useLocalDropzone(
-    { maxFiles: 1, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
-    async (files) => handleLocalFiles(files, "last"),
-    rejectDropzoneFiles
+    { maxFiles: 1, allowedMimeTypes: ['image/*'], maxFileSize: Number.POSITIVE_INFINITY },
+    async (files) => handleLocalFiles(files, 'last'),
+    rejectDropzoneFiles,
   );
 
   return (
     <>
-      <Card
-        size="3"
-        className={`p-4 shadow-xl transition min-h-[220px] max-h-[520px] overflow-hidden flex flex-col gap-3 ${isDragging ? "ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]" : ""}`}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: creative-asset drag-and-drop dock, not a click surface; the keyboard-accessible path is the upload dropzone within */}
+      <div
+        className={`flex max-h-[520px] min-h-[220px] flex-col gap-3 overflow-hidden rounded-xl p-4 shadow-xl transition ${isDragging ? 'ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]' : ''}`}
         style={{
-          backgroundColor: "var(--color-surface)",
-          border: `1px solid var(--gray-6)`
+          backgroundColor: 'var(--color-surface)',
+          border: `1px solid var(--gray-6)`,
         }}
         onDragOver={(e) => {
           const types = Array.from(e.dataTransfer.types ?? []);
-          if (!types.includes("Files") && !hasCreativeAssetPayload(e.dataTransfer.types)) return;
+          if (!types.includes('Files') && !hasCreativeAssetPayload(e.dataTransfer.types)) return;
           e.preventDefault();
           setIsDragging(true);
         }}
@@ -387,50 +453,55 @@ export function ReferenceDock({
           void handleDrop(e, slot);
         }}
       >
-        <Flex justify="between" align="center" className="mb-2">
-          <Flex gap="2" align="center">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <ImageIcon />
-            <Text weight="medium">References</Text>
-          </Flex>
-          <Badge variant="soft" color="gray" size="2">{refs.length}</Badge>
-        </Flex>
+            <span className="font-medium">References</span>
+          </div>
+          <Pill variant="muted">{refs.length}</Pill>
+        </div>
 
         {supportsRefImages ? (
           <div>
-            <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden">
-              <ScrollArea type="always" scrollbars="both" className="mb-3 max-h-44 pr-2">
-                <Flex gap="2" wrap="wrap">
+            <Dropzone
+              {...refsDropzone}
+              className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden"
+            >
+              <ScrollArea type="always" className="mb-3 max-h-44 pr-2">
+                <div className="flex flex-wrap gap-2">
                   {refs.map((ref) => (
                     <RefChip
                       key={ref.id}
                       refImage={ref}
-                      allowReferenceType={mode === "video"}
-                      onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
-                    onEdit={() => openMarkup({ target: "ref", ref })}
-                    onRevert={
-                      ref.originalBase64
-                        ? () =>
-                            onChangeRefs(
-                              refs.map((r) =>
-                                r.id === ref.id
-                                  ? revertRefToOriginal(r)
-                                  : r
+                      allowReferenceType={mode === 'video'}
+                      onTypeChange={(type) =>
+                        onChangeRefs(
+                          refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)),
+                        )
+                      }
+                      onEdit={() => openMarkup({ target: 'ref', ref })}
+                      onRevert={
+                        ref.originalBase64
+                          ? () =>
+                              onChangeRefs(
+                                refs.map((r) => (r.id === ref.id ? revertRefToOriginal(r) : r)),
                               )
-                            )
-                        : undefined
-                    }
-                    onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
-                  />
-                ))}
-                  {refs.length === 0 ? <Text size="1" color="gray">Drop or upload images.</Text> : null}
-                </Flex>
+                          : undefined
+                      }
+                      onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
+                    />
+                  ))}
+                  {refs.length === 0 ? (
+                    <span className="text-xs text-gray-400">Drop or upload images.</span>
+                  ) : null}
+                </div>
               </ScrollArea>
               <DropzoneEmptyState />
             </Dropzone>
           </div>
         ) : null}
 
-        {mode === "video" ? (
+        {mode === 'video' ? (
           <div className="grid grid-cols-2 gap-3">
             {supportsFrames ? (
               <>
@@ -441,11 +512,10 @@ export function ReferenceDock({
                   onClear={() => onChangeFirstFrame?.()}
                   onRevert={
                     firstFrame?.originalBase64
-                      ? () =>
-                          onChangeFirstFrame?.(revertRefToOriginal(firstFrame))
+                      ? () => onChangeFirstFrame?.(revertRefToOriginal(firstFrame))
                       : undefined
                   }
-                  onEdit={() => openMarkup({ target: "first", ref: firstFrame })}
+                  onEdit={() => openMarkup({ target: 'first', ref: firstFrame })}
                   dropSlot="first"
                 />
                 <FrameTile
@@ -455,11 +525,10 @@ export function ReferenceDock({
                   onClear={() => onChangeLastFrame?.()}
                   onRevert={
                     lastFrame?.originalBase64
-                      ? () =>
-                          onChangeLastFrame?.(revertRefToOriginal(lastFrame))
+                      ? () => onChangeLastFrame?.(revertRefToOriginal(lastFrame))
                       : undefined
                   }
-                  onEdit={() => openMarkup({ target: "last", ref: lastFrame })}
+                  onEdit={() => openMarkup({ target: 'last', ref: lastFrame })}
                   dropSlot="last"
                 />
               </>
@@ -467,11 +536,13 @@ export function ReferenceDock({
           </div>
         ) : null}
 
-        <Flex gap="2" className="mt-3" align="center">
+        <div className="mt-3 flex items-center gap-2">
           <UploadIcon />
-          <Text size="1" color="gray">Drag from Creative Library to seed your generation.</Text>
-        </Flex>
-      </Card>
+          <span className="text-xs text-gray-400">
+            Drag from Creative Library to seed your generation.
+          </span>
+        </div>
+      </div>
 
       {markupState ? (
         <ImageMarkupDialog
@@ -482,23 +553,31 @@ export function ReferenceDock({
           maxBytes={IMAGE_REFERENCE_MAX_BYTES}
           onClose={() => setMarkupState(null)}
           onSave={(result) => {
-            if (markupState.target === "ref" && markupState.refId) {
+            if (markupState.target === 'ref' && markupState.refId) {
               onChangeRefs(
-                refs.map((r) =>
-                  r.id === markupState.refId
-                    ? applyMarkupToRef(r, result)
-                    : r
-                )
+                refs.map((r) => (r.id === markupState.refId ? applyMarkupToRef(r, result) : r)),
               );
-              show({ title: "Markup saved", description: "Reference updated.", variant: "success" });
+              show({
+                title: 'Markup saved',
+                description: 'Reference updated.',
+                variant: 'success',
+              });
             }
-            if (markupState.target === "first" && firstFrame) {
+            if (markupState.target === 'first' && firstFrame) {
               onChangeFirstFrame?.(applyMarkupToRef(firstFrame, result));
-              show({ title: "Markup saved", description: "First frame updated.", variant: "success" });
+              show({
+                title: 'Markup saved',
+                description: 'First frame updated.',
+                variant: 'success',
+              });
             }
-            if (markupState.target === "last" && lastFrame) {
+            if (markupState.target === 'last' && lastFrame) {
               onChangeLastFrame?.(applyMarkupToRef(lastFrame, result));
-              show({ title: "Markup saved", description: "Last frame updated.", variant: "success" });
+              show({
+                title: 'Markup saved',
+                description: 'Last frame updated.',
+                variant: 'success',
+              });
             }
             setMarkupState(null);
           }}
@@ -521,7 +600,7 @@ function RefChip({
   onEdit?: () => void;
   onRevert?: () => void;
   allowReferenceType?: boolean;
-  onTypeChange?: (type: "asset" | "style") => void;
+  onTypeChange?: (type: 'asset' | 'style') => void;
 }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-2 py-1 backdrop-blur max-w-full">
@@ -533,35 +612,38 @@ function RefChip({
         unoptimized
         className="h-10 w-10 sm:h-12 sm:w-12 rounded-md object-cover"
       />
-      <Text size="1" className="truncate max-w-[140px] sm:max-w-[180px]">{refImage.name ?? "ref"}</Text>
-      {refImage.originalBase64 ? (
-        <Badge size="1" variant="soft" color="amber">
-          edited
-        </Badge>
-      ) : null}
+      <span className="text-xs truncate max-w-[140px] sm:max-w-[180px]">
+        {refImage.name ?? 'ref'}
+      </span>
+      {refImage.originalBase64 ? <Pill variant="warning">edited</Pill> : null}
       {allowReferenceType ? (
         <select
           className="rounded border border-white/15 bg-slate-900/80 text-xs"
-          value={refImage.referenceType ?? "asset"}
-          onChange={(e) => onTypeChange?.(e.target.value as "asset" | "style")}
+          value={refImage.referenceType ?? 'asset'}
+          onChange={(e) => onTypeChange?.(e.target.value as 'asset' | 'style')}
         >
           <option value="asset">asset</option>
           <option value="style">style</option>
         </select>
       ) : null}
       {onRevert ? (
-        <IconButton size="1" variant="ghost" color="gray" onClick={onRevert}>
+        <Button size="icon-sm" variant="ghost" onClick={onRevert}>
           <ReloadIcon />
-        </IconButton>
+        </Button>
       ) : null}
       {onEdit ? (
-        <IconButton size="1" variant="ghost" color="gray" onClick={onEdit}>
+        <Button size="icon-sm" variant="ghost" onClick={onEdit}>
           <Pencil2Icon />
-        </IconButton>
+        </Button>
       ) : null}
-      <IconButton size="1" variant="ghost" color="red" onClick={onRemove}>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        className="text-destructive hover:text-destructive"
+        onClick={onRemove}
+      >
         <TrashIcon />
-      </IconButton>
+      </Button>
     </div>
   );
 }
@@ -593,14 +675,14 @@ function FrameTile({
     maxFiles: number;
     allowedMimeTypes: string[];
   };
-  dropSlot: "first" | "last";
+  dropSlot: 'first' | 'last';
 }) {
   return (
     <div
       data-reference-drop-slot={dropSlot}
       className="flex min-h-[128px] flex-col justify-between rounded-lg border border-dashed border-white/20 bg-white/5 p-2 backdrop-blur transition hover:border-white/40"
     >
-      <Text size="2" weight="medium">{label}</Text>
+      <span className="text-sm font-medium">{label}</span>
       {refImage ? (
         <div className="relative h-full min-h-[140px]">
           <Image
@@ -612,26 +694,36 @@ function FrameTile({
             className="rounded-md object-contain"
           />
           {refImage.originalBase64 ? (
-            <Badge size="1" variant="soft" color="amber" className="absolute left-1 top-1">
+            <Pill variant="warning" className="absolute left-1 top-1">
               edited
-            </Badge>
+            </Pill>
           ) : null}
           <div className="absolute right-1 top-1 flex items-center gap-1">
             {onRevert ? (
-              <IconButton size="1" variant="surface" onClick={onRevert}>
+              <Button size="icon-sm" variant="outline" onClick={onRevert}>
                 <ReloadIcon />
-              </IconButton>
+              </Button>
             ) : null}
             {onEdit ? (
-              <IconButton size="1" variant="surface" onClick={onEdit}>
+              <Button size="icon-sm" variant="outline" onClick={onEdit}>
                 <Pencil2Icon />
-              </IconButton>
+              </Button>
             ) : null}
-            <Button size="1" color="red" variant="surface" onClick={onClear}>Clear</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-destructive text-destructive hover:text-destructive"
+              onClick={onClear}
+            >
+              Clear
+            </Button>
           </div>
         </div>
       ) : (
-        <Dropzone {...dropzoneProps} className="h-full w-full rounded-md border border-dashed border-white/15 bg-white/5 text-white min-h-[140px]">
+        <Dropzone
+          {...dropzoneProps}
+          className="h-full w-full rounded-md border border-dashed border-white/15 bg-white/5 text-white min-h-[140px]"
+        >
           <DropzoneEmptyState />
         </Dropzone>
       )}

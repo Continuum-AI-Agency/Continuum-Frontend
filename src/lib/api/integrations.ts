@@ -9,6 +9,8 @@ import {
   googleDrivePickerResponseSchema,
   tiktokSyncResponseSchema,
   tiktokResyncResponseSchema,
+  linkedinSyncResponseSchema,
+  linkedinResyncResponseSchema,
   xSyncResponseSchema,
   xResyncResponseSchema,
   selectableAssetsResponseSchema,
@@ -25,6 +27,8 @@ import {
   type GoogleDrivePickerResponse,
   type TikTokSyncResponse,
   type TikTokResyncResponse,
+  type LinkedInSyncResponse,
+  type LinkedInResyncResponse,
   type XSyncResponse,
   type XResyncResponse,
 } from "@/lib/schemas/integrations";
@@ -142,6 +146,43 @@ export async function deauthorizeTikTok(platformUserId: string): Promise<void> {
   });
 }
 
+export type LinkedInSyncMode = "paid" | "organic";
+
+export async function startLinkedInSync(
+  callbackUrl: string,
+  options?: { mode?: LinkedInSyncMode }
+): Promise<LinkedInSyncResponse> {
+  const params: Record<string, string> = { callback_url: callbackUrl };
+  if (options?.mode) {
+    params.mode = options.mode;
+  }
+  return http.request({
+    path: buildSyncPath("/integrations/linkedin/sync", params),
+    method: "GET",
+    schema: linkedinSyncResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export async function resyncLinkedIn(platformUserId?: string): Promise<LinkedInResyncResponse> {
+  return http.request({
+    path: "/integrations/linkedin/resync",
+    method: "POST",
+    body: platformUserId ? { platform_user_id: platformUserId } : {},
+    schema: linkedinResyncResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export async function deauthorizeLinkedIn(platformUserId?: string): Promise<void> {
+  await http.request({
+    path: "/integrations/linkedin/deauthorize",
+    method: "POST",
+    body: platformUserId ? { platform_user_id: platformUserId } : {},
+    cache: "no-store",
+  });
+}
+
 export async function startXSync(callbackUrl: string): Promise<XSyncResponse> {
   return http.request({
     path: buildSyncPath("/integrations/x/sync", { callback_url: callbackUrl }),
@@ -246,6 +287,27 @@ export function useResyncTikTok() {
 export function useDeauthorizeTikTok() {
   return useMutation({
     mutationFn: (platformUserId: string) => deauthorizeTikTok(platformUserId),
+  });
+}
+
+export function useStartLinkedInSync() {
+  return useMutation({
+    mutationFn: (input: string | { callbackUrl: string; mode?: LinkedInSyncMode }) => {
+      if (typeof input === "string") return startLinkedInSync(input);
+      return startLinkedInSync(input.callbackUrl, { mode: input.mode });
+    },
+  });
+}
+
+export function useResyncLinkedIn() {
+  return useMutation({
+    mutationFn: (platformUserId?: string) => resyncLinkedIn(platformUserId),
+  });
+}
+
+export function useDeauthorizeLinkedIn() {
+  return useMutation({
+    mutationFn: (platformUserId?: string) => deauthorizeLinkedIn(platformUserId),
   });
 }
 
@@ -498,6 +560,32 @@ export async function fetchUserTikTokAccountIds(): Promise<string[]> {
 
   if (error) {
     console.error("[fetchUserTikTokAccountIds] query failed", error);
+    return [];
+  }
+  return (data ?? []).map((row: { id: string }) => row.id);
+}
+
+export async function fetchUserLinkedInAccountIds(options?: {
+  type?: "linkedin_ad_account" | "linkedin_organization";
+}): Promise<string[]> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  let query = supabase
+    .schema("brand_profiles")
+    .from("integration_accounts_assets")
+    .select("id, user_integrations!inner(user_id, provider)")
+    .eq("user_integrations.user_id", user.id)
+    .eq("user_integrations.provider", "linkedin");
+  if (options?.type) {
+    query = query.eq("type", options.type);
+  }
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("[fetchUserLinkedInAccountIds] query failed", error);
     return [];
   }
   return (data ?? []).map((row: { id: string }) => row.id);

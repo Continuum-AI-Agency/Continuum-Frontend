@@ -1,13 +1,15 @@
-"use client";
+'use client';
 
-import { useState, useTransition } from "react";
-import { Button, Callout, Flex, Text, TextField } from "@radix-ui/themes";
-import { PlusIcon, TrashIcon } from "@radix-ui/react-icons";
-import type { AdNamingSchemaConfig } from "@continuum/contracts";
-import { updateBrandAdNamingSchemaAction } from "@/app/(post-auth)/settings/actions";
-import { useToast } from "@/components/ui/ToastProvider";
+import type { AdNamingSchemaConfig } from '@continuum/contracts';
+import { PlusIcon, TrashIcon } from '@radix-ui/react-icons';
+import { useState, useTransition } from 'react';
+import { updateBrandAdNamingSchemaAction } from '@/app/(post-auth)/settings/actions';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/ToastProvider';
 
-type AdNamingPlatform = "meta" | "google" | "all";
+type AdNamingPlatform = 'meta' | 'google' | 'all';
 
 type BrandAdNamingSectionProps = {
   brandId: string;
@@ -27,13 +29,13 @@ function makeFieldItem(value: string): FieldItem {
 
 export function BrandAdNamingSection({
   brandId,
-  platform = "meta",
+  platform = 'meta',
   initial,
   canEdit,
 }: BrandAdNamingSectionProps) {
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [delimiter, setDelimiter] = useState(initial?.delimiter ?? "|");
+  const [delimiter, setDelimiter] = useState(initial?.delimiter ?? '|');
   const [items, setItems] = useState<FieldItem[]>(() => (initial?.fields ?? []).map(makeFieldItem));
 
   const cleanedFields = items.map((item) => item.value.trim()).filter((value) => value.length > 0);
@@ -41,21 +43,33 @@ export function BrandAdNamingSection({
 
   const updateItem = (id: string, value: string) =>
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, value } : item)));
-  const addItem = () => setItems((prev) => [...prev, makeFieldItem("")]);
+  const addItem = () => setItems((prev) => [...prev, makeFieldItem('')]);
   const removeItem = (id: string) => setItems((prev) => prev.filter((item) => item.id !== id));
 
   const handleSave = () => {
     const trimmedDelimiter = delimiter.trim();
     if (!trimmedDelimiter) {
-      show({ title: "Delimiter required", description: "Enter a delimiter such as | or _.", variant: "error" });
+      show({
+        title: 'Delimiter required',
+        description: 'Enter a delimiter such as | or _.',
+        variant: 'error',
+      });
       return;
     }
     if (cleanedFields.length === 0) {
-      show({ title: "Fields required", description: "Add at least one naming field.", variant: "error" });
+      show({
+        title: 'Fields required',
+        description: 'Add at least one naming field.',
+        variant: 'error',
+      });
       return;
     }
     if (new Set(cleanedFields).size !== cleanedFields.length) {
-      show({ title: "Duplicate fields", description: "Each naming field must be unique.", variant: "error" });
+      show({
+        title: 'Duplicate fields',
+        description: 'Each naming field must be unique.',
+        variant: 'error',
+      });
       return;
     }
     startTransition(async () => {
@@ -67,59 +81,53 @@ export function BrandAdNamingSection({
           fields: cleanedFields,
         });
         show({
-          title: "Naming convention saved",
-          description: "Your ad naming taxonomy was updated.",
-          variant: "success",
+          title: 'Naming convention saved',
+          description: 'Your ad naming taxonomy was updated.',
+          variant: 'success',
         });
       } catch (error) {
         show({
-          title: "Save failed",
-          description: error instanceof Error ? error.message : "Unable to save naming convention.",
-          variant: "error",
+          title: 'Save failed',
+          description: error instanceof Error ? error.message : 'Unable to save naming convention.',
+          variant: 'error',
         });
       }
     });
   };
 
   return (
-    <Flex direction="column" gap="4">
-      <Text size="2" color="gray">
-        Declare how you name ads on this platform — a delimiter plus an ordered list of field labels.
-        Paid-media rows are parsed against it so insights can read an ad by its named parts.
-      </Text>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Declare how you name ads on this platform — a delimiter plus an ordered list of field
+        labels. Paid-media rows are parsed against it so insights can read an ad by its named parts.
+      </p>
 
-      <Flex direction="column" gap="1" className="max-w-[160px]">
-        <Text size="1" color="gray" weight="medium">
-          Delimiter
-        </Text>
-        <TextField.Root
+      <div className="flex max-w-[160px] flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">Delimiter</span>
+        <Input
           value={delimiter}
           onChange={(event) => setDelimiter(event.target.value)}
           placeholder="|"
           disabled={!canEdit}
         />
-      </Flex>
+      </div>
 
-      <Flex direction="column" gap="2">
-        <Flex align="center" justify="between">
-          <Text size="1" color="gray" weight="medium">
-            Fields (in order)
-          </Text>
-          <Button type="button" size="1" variant="soft" onClick={addItem} disabled={!canEdit}>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted-foreground">Fields (in order)</span>
+          <Button type="button" size="sm" variant="secondary" onClick={addItem} disabled={!canEdit}>
             <PlusIcon /> Add field
           </Button>
-        </Flex>
+        </div>
         {items.length === 0 ? (
-          <Text size="2" color="gray">
+          <p className="text-sm text-muted-foreground">
             No fields yet. Add labels like funnel, format, audience.
-          </Text>
+          </p>
         ) : (
           items.map((item, index) => (
-            <Flex key={item.id} align="center" gap="2">
-              <Text size="1" color="gray" className="w-5 tabular-nums">
-                {index + 1}
-              </Text>
-              <TextField.Root
+            <div key={item.id} className="flex items-center gap-2">
+              <span className="w-5 text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+              <Input
                 value={item.value}
                 onChange={(event) => updateItem(item.id, event.target.value)}
                 placeholder="Field label"
@@ -128,39 +136,37 @@ export function BrandAdNamingSection({
               />
               <Button
                 type="button"
-                size="1"
+                size="sm"
                 variant="ghost"
-                color="red"
                 onClick={() => removeItem(item.id)}
                 disabled={!canEdit}
+                className="text-destructive hover:text-destructive"
               >
                 <TrashIcon /> Remove
               </Button>
-            </Flex>
+            </div>
           ))
         )}
-      </Flex>
+      </div>
 
-      <Flex direction="column" gap="1">
-        <Text size="1" color="gray" weight="medium">
-          Preview
-        </Text>
-        <Text size="2" color="gray" className="font-mono">
-          {preview || "—"}
-        </Text>
-      </Flex>
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">Preview</span>
+        <span className="font-mono text-sm text-muted-foreground">{preview || '—'}</span>
+      </div>
 
-      <Flex>
+      <div className="flex">
         <Button type="button" onClick={handleSave} disabled={isPending || !canEdit}>
           Save naming convention
         </Button>
-      </Flex>
+      </div>
 
       {!canEdit ? (
-        <Callout.Root color="amber">
-          <Callout.Text>Only brand owners or admins can edit the ad naming convention.</Callout.Text>
-        </Callout.Root>
+        <Alert className="border-warning/30 bg-warning/10">
+          <AlertDescription className="text-warning">
+            Only brand owners or admins can edit the ad naming convention.
+          </AlertDescription>
+        </Alert>
       ) : null}
-    </Flex>
+    </div>
   );
 }

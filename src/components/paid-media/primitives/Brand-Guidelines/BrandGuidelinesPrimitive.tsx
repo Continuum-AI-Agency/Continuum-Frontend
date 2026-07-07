@@ -1,13 +1,15 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { Box, Callout, Flex, Text } from "@radix-ui/themes";
-import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
-
-import type { BrandGuidelineDetail, BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
-import { listBrandGuidelinesAction, fetchBrandGuidelineAction } from "@/lib/actions/brandGuidelines";
-import { BrandGuidelinesEditor } from "@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesEditor";
-import { BrandGuidelinesLibrary } from "@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesLibrary";
+import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { BrandGuidelinesEditor } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesEditor';
+import { BrandGuidelinesLibrary } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesLibrary';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  fetchBrandGuidelineAction,
+  listBrandGuidelinesAction,
+} from '@/lib/actions/brandGuidelines';
+import type { BrandGuidelineDetail, BrandGuidelineSummary } from '@/lib/schemas/brandGuidelines';
 
 const EMPTY_LIST: BrandGuidelineSummary[] = [];
 
@@ -16,19 +18,25 @@ type BrandGuidelinesPrimitiveProps = {
   initialGuidelines?: BrandGuidelineSummary[];
 };
 
-export function BrandGuidelinesPrimitive({ brandId, initialGuidelines }: BrandGuidelinesPrimitiveProps) {
+export function BrandGuidelinesPrimitive({
+  brandId,
+  initialGuidelines,
+}: BrandGuidelinesPrimitiveProps) {
   const [guidelines, setGuidelines] = useState<BrandGuidelineSummary[]>(
-    initialGuidelines ?? EMPTY_LIST
+    initialGuidelines ?? EMPTY_LIST,
   );
   const [activeGuidelineId, setActiveGuidelineId] = useState<string | null>(
-    initialGuidelines?.[0]?.id ?? null
+    initialGuidelines?.[0]?.id ?? null,
   );
   const [activeGuideline, setActiveGuideline] = useState<BrandGuidelineDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hasInitialGuidelines = useMemo(() => Boolean(initialGuidelines?.length), [initialGuidelines]);
+  const hasInitialGuidelines = useMemo(
+    () => Boolean(initialGuidelines?.length),
+    [initialGuidelines],
+  );
 
   useEffect(() => {
     if (hasInitialGuidelines) return;
@@ -46,7 +54,7 @@ export function BrandGuidelinesPrimitive({ brandId, initialGuidelines }: BrandGu
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Unable to load brand guidelines.");
+        setError(err instanceof Error ? err.message : 'Unable to load brand guidelines.');
       })
       .finally(() => {
         if (!mounted) return;
@@ -74,7 +82,7 @@ export function BrandGuidelinesPrimitive({ brandId, initialGuidelines }: BrandGu
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Unable to load brand guideline.");
+        setError(err instanceof Error ? err.message : 'Unable to load brand guideline.');
       })
       .finally(() => {
         if (!mounted) return;
@@ -121,21 +129,17 @@ export function BrandGuidelinesPrimitive({ brandId, initialGuidelines }: BrandGu
         />
       </div>
       <div className="lg:col-span-8">
-        <Flex direction="column" gap="3">
+        <div className="flex flex-col gap-3">
           {error ? (
-            <Callout.Root color="red">
-              <Callout.Icon>
-                <ExclamationTriangleIcon />
-              </Callout.Icon>
-              <Callout.Text>{error}</Callout.Text>
-            </Callout.Root>
+            <Alert variant="destructive">
+              <ExclamationTriangleIcon />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           ) : null}
           {isLoadingDetail && activeGuidelineId ? (
-            <Box className="glass-panel p-6">
-              <Text size="2" color="gray">
-                Loading guideline details...
-              </Text>
-            </Box>
+            <div className="glass-panel rounded-lg p-6">
+              <span className="text-sm text-muted-foreground">Loading guideline details...</span>
+            </div>
           ) : (
             <BrandGuidelinesEditor
               brandId={brandId}
@@ -143,7 +147,7 @@ export function BrandGuidelinesPrimitive({ brandId, initialGuidelines }: BrandGu
               onSaved={handleSaved}
             />
           )}
-        </Flex>
+        </div>
       </div>
     </div>
   );

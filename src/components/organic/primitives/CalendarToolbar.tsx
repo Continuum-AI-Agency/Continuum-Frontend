@@ -1,7 +1,5 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import { useRouter } from "next/navigation"
 import {
   CheckIcon,
   Cross2Icon,
@@ -10,26 +8,15 @@ import {
   PlusIcon,
   RocketIcon,
   TrashIcon,
-} from "@radix-ui/react-icons"
-import { CalendarIcon, RefreshCw } from "lucide-react"
-import {
-  endOfMonth,
-  endOfWeek,
-  format,
-  parseISO,
-  startOfMonth,
-  startOfWeek,
-} from "date-fns"
-import type { DateRange } from "react-day-picker"
-
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useCalendarStore } from "@/lib/organic/store"
-import type { CalendarDateRange } from "@/lib/organic/store"
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
+} from '@radix-ui/react-icons';
+import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
+import { CalendarIcon, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import * as React from 'react';
+import type { DateRange } from 'react-day-picker';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -37,37 +24,47 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu"
-import { DisabledControl } from "../DisabledControl"
+} from '@/components/ui/context-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Progress } from '@/components/ui/progress';
+import type { CalendarDateRange } from '@/lib/organic/store';
+import { useCalendarStore } from '@/lib/organic/store';
+import { cn } from '@/lib/utils';
+import { DisabledControl } from '../DisabledControl';
 import {
   describeAddPlaceholderBlock,
   describeClearBlock,
   describeGenerateBlock,
-} from "../disabledReasons"
+} from '../disabledReasons';
+import { AddPostMenu } from './AddPostMenu';
+import type { CreatePostOptions } from './planner-platforms';
 
-const WEEK_OPTS = { weekStartsOn: 1 } as const // Monday-started, matches the planner
+const WEEK_OPTS = { weekStartsOn: 1 } as const; // Monday-started, matches the planner
 
 function toDayId(date: Date): string {
-  return format(date, "yyyy-MM-dd")
+  return format(date, 'yyyy-MM-dd');
 }
 
-function presetRange(preset: "week" | "month"): CalendarDateRange {
-  const today = new Date()
-  if (preset === "week") {
-    return { from: toDayId(startOfWeek(today, WEEK_OPTS)), to: toDayId(endOfWeek(today, WEEK_OPTS)) }
+function presetRange(preset: 'week' | 'month'): CalendarDateRange {
+  const today = new Date();
+  if (preset === 'week') {
+    return {
+      from: toDayId(startOfWeek(today, WEEK_OPTS)),
+      to: toDayId(endOfWeek(today, WEEK_OPTS)),
+    };
   }
-  return { from: toDayId(startOfMonth(today)), to: toDayId(endOfMonth(today)) }
+  return { from: toDayId(startOfMonth(today)), to: toDayId(endOfMonth(today)) };
 }
 
 function rangesEqual(a: CalendarDateRange | null, b: CalendarDateRange): boolean {
-  return a !== null && a.from === b.from && a.to === b.to
+  return a !== null && a.from === b.from && a.to === b.to;
 }
 
 function formatRangeLabel(range: CalendarDateRange): string {
-  const from = parseISO(range.from)
-  const to = parseISO(range.to)
-  const fmt = (d: Date) => format(d, "MMM d")
-  return range.from === range.to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`
+  const from = parseISO(range.from);
+  const to = parseISO(range.to);
+  const fmt = (d: Date) => format(d, 'MMM d');
+  return range.from === range.to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
 }
 
 /**
@@ -78,61 +75,61 @@ function TimeframeSelector({
   dateRange,
   onDateRangeChange,
 }: {
-  dateRange: CalendarDateRange | null
-  onDateRangeChange: (range: CalendarDateRange | null) => void
+  dateRange: CalendarDateRange | null;
+  onDateRangeChange: (range: CalendarDateRange | null) => void;
 }) {
-  const [customOpen, setCustomOpen] = React.useState(false)
+  const [customOpen, setCustomOpen] = React.useState(false);
 
-  const activePreset: "all" | "week" | "month" | "custom" = !dateRange
-    ? "all"
-    : rangesEqual(dateRange, presetRange("week"))
-      ? "week"
-      : rangesEqual(dateRange, presetRange("month"))
-        ? "month"
-        : "custom"
+  const activePreset: 'all' | 'week' | 'month' | 'custom' = !dateRange
+    ? 'all'
+    : rangesEqual(dateRange, presetRange('week'))
+      ? 'week'
+      : rangesEqual(dateRange, presetRange('month'))
+        ? 'month'
+        : 'custom';
 
   const calendarSelection: DateRange | undefined = dateRange
     ? { from: parseISO(dateRange.from), to: parseISO(dateRange.to) }
-    : undefined
+    : undefined;
 
   const handleCustomSelect = (range: DateRange | undefined) => {
     if (!range?.from) {
-      onDateRangeChange(null)
-      return
+      onDateRangeChange(null);
+      return;
     }
-    onDateRangeChange({ from: toDayId(range.from), to: toDayId(range.to ?? range.from) })
-  }
+    onDateRangeChange({ from: toDayId(range.from), to: toDayId(range.to ?? range.from) });
+  };
 
-  const presetButton = (key: "all" | "week" | "month", label: string) => (
+  const presetButton = (key: 'all' | 'week' | 'month', label: string) => (
     <Button
       type="button"
       size="sm"
-      variant={activePreset === key ? "secondary" : "ghost"}
+      variant={activePreset === key ? 'secondary' : 'ghost'}
       aria-pressed={activePreset === key}
       className="h-7 rounded px-2 text-xs"
-      onClick={() => onDateRangeChange(key === "all" ? null : presetRange(key))}
+      onClick={() => onDateRangeChange(key === 'all' ? null : presetRange(key))}
     >
       {label}
     </Button>
-  )
+  );
 
   return (
     <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/35 p-0.5">
-      {presetButton("all", "All")}
-      {presetButton("week", "Week")}
-      {presetButton("month", "Month")}
+      {presetButton('all', 'All')}
+      {presetButton('week', 'Week')}
+      {presetButton('month', 'Month')}
       <Popover open={customOpen} onOpenChange={setCustomOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
             size="sm"
-            variant={activePreset === "custom" ? "secondary" : "ghost"}
-            aria-pressed={activePreset === "custom"}
-            className={cn("h-7 gap-1.5 rounded px-2 text-xs font-normal")}
+            variant={activePreset === 'custom' ? 'secondary' : 'ghost'}
+            aria-pressed={activePreset === 'custom'}
+            className={cn('h-7 gap-1.5 rounded px-2 text-xs font-normal')}
           >
             <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
-              {activePreset === "custom" && dateRange ? formatRangeLabel(dateRange) : "Custom"}
+              {activePreset === 'custom' && dateRange ? formatRangeLabel(dateRange) : 'Custom'}
             </span>
           </Button>
         </PopoverTrigger>
@@ -148,32 +145,32 @@ function TimeframeSelector({
         </PopoverContent>
       </Popover>
     </div>
-  )
+  );
 }
 
 type CalendarToolbarProps = {
-  viewMode: "week" | "month" | "list"
-  onViewModeChange: (mode: "week" | "month" | "list") => void
-  dateRange: CalendarDateRange | null
-  onDateRangeChange: (range: CalendarDateRange | null) => void
-  selectedTrendCount: number
-  maxTrendSelections?: number
-  seededDraftCount: number
-  isGenerating: boolean
-  onOpenTrends: () => void
-  onAddPlaceholder: () => void
-  onGenerate: () => void
-  onClear: () => void
-  draftsCount: number
-  slotProgress: { completed: number; total: number; failed: number } | null
-  gridProgress: { percent: number; message?: string; stage?: string }
-  gridStatus: string
-  gridError: string | null
-  onRetryGeneration?: () => void
-  postedContentCount?: number
-  isFetchingPostedContent?: boolean
-  onFetchPostedContent?: () => void
-}
+  viewMode: 'week' | 'month' | 'list';
+  onViewModeChange: (mode: 'week' | 'month' | 'list') => void;
+  dateRange: CalendarDateRange | null;
+  onDateRangeChange: (range: CalendarDateRange | null) => void;
+  selectedTrendCount: number;
+  maxTrendSelections?: number;
+  seededDraftCount: number;
+  isGenerating: boolean;
+  onOpenTrends: () => void;
+  onCreatePost: (options: CreatePostOptions) => void;
+  onGenerate: () => void;
+  onClear: () => void;
+  draftsCount: number;
+  slotProgress: { completed: number; total: number; failed: number } | null;
+  gridProgress: { percent: number; message?: string; stage?: string };
+  gridStatus: string;
+  gridError: string | null;
+  onRetryGeneration?: () => void;
+  postedContentCount?: number;
+  isFetchingPostedContent?: boolean;
+  onFetchPostedContent?: () => void;
+};
 
 export function CalendarToolbar({
   viewMode,
@@ -185,7 +182,7 @@ export function CalendarToolbar({
   seededDraftCount,
   isGenerating,
   onOpenTrends,
-  onAddPlaceholder,
+  onCreatePost,
   onGenerate,
   onClear,
   draftsCount,
@@ -198,15 +195,14 @@ export function CalendarToolbar({
   isFetchingPostedContent = false,
   onFetchPostedContent,
 }: CalendarToolbarProps) {
-  const router = useRouter()
-  const showPlanned = useCalendarStore((state) => state.showPlanned)
-  const setShowPlanned = useCalendarStore((state) => state.setShowPlanned)
+  const router = useRouter();
+  const showPlanned = useCalendarStore((state) => state.showPlanned);
+  const setShowPlanned = useCalendarStore((state) => state.setShowPlanned);
 
-  const addHint = describeAddPlaceholderBlock({ isGenerating })
-  const generateHint = describeGenerateBlock({ isGenerating, seededDraftCount })
-  const clearHint = describeClearBlock({ isGenerating, draftsCount })
-  const showPlanningNote =
-    !isGenerating && draftsCount === 0 && seededDraftCount === 0
+  const addHint = describeAddPlaceholderBlock({ isGenerating });
+  const generateHint = describeGenerateBlock({ isGenerating, seededDraftCount });
+  const clearHint = describeClearBlock({ isGenerating, draftsCount });
+  const showPlanningNote = !isGenerating && draftsCount === 0 && seededDraftCount === 0;
 
   return (
     <ContextMenu>
@@ -215,34 +211,35 @@ export function CalendarToolbar({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center rounded-md border border-border bg-muted/35 p-0.5">
-                {(["week", "month", "list"] as const).map((mode) => (
+                {(['week', 'month', 'list'] as const).map((mode) => (
                   <Button
                     key={mode}
                     type="button"
                     size="sm"
-                    variant={viewMode === mode ? "secondary" : "ghost"}
-                    data-tour-id={mode === "list" ? "organic-list-view" : undefined}
-                    className={viewMode === mode
-                      ? "h-7 rounded px-2.5 text-xs"
-                      : "h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                    variant={viewMode === mode ? 'secondary' : 'ghost'}
+                    data-tour-id={mode === 'list' ? 'organic-list-view' : undefined}
+                    className={
+                      viewMode === mode
+                        ? 'h-7 rounded px-2.5 text-xs'
+                        : 'h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground'
                     }
                     aria-pressed={viewMode === mode}
                     onClick={() => {
-                      onViewModeChange(mode)
-                      const next = new URLSearchParams(window.location.search)
-                      next.set("view", mode)
-                      router.replace(`?${next.toString()}`, { scroll: false })
+                      onViewModeChange(mode);
+                      const next = new URLSearchParams(window.location.search);
+                      next.set('view', mode);
+                      router.replace(`?${next.toString()}`, { scroll: false });
                     }}
                   >
-                    {mode === "week" ? "Week" : mode === "month" ? "Month" : "List"}
+                    {mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : 'List'}
                   </Button>
                 ))}
               </div>
-              {viewMode !== "list" ? (
+              {viewMode !== 'list' ? (
                 <Button
                   type="button"
                   size="sm"
-                  variant={showPlanned ? "secondary" : "ghost"}
+                  variant={showPlanned ? 'secondary' : 'ghost'}
                   aria-pressed={showPlanned}
                   className="h-7 rounded px-2.5 text-xs"
                   onClick={() => setShowPlanned(!showPlanned)}
@@ -255,10 +252,7 @@ export function CalendarToolbar({
               )}
               <Badge variant="outline" className="text-2xs uppercase tracking-wide">
                 {selectedTrendCount}
-                {typeof maxTrendSelections === "number"
-                  ? `/${maxTrendSelections}`
-                  : ""}{" "}
-                trends
+                {typeof maxTrendSelections === 'number' ? `/${maxTrendSelections}` : ''} trends
               </Badge>
               <Badge variant="outline" className="text-2xs uppercase tracking-wide">
                 {seededDraftCount} placeholders
@@ -280,7 +274,11 @@ export function CalendarToolbar({
                   onClick={onFetchPostedContent}
                   title="Fetch third-party posted content"
                 >
-                  <RefreshCw className={isFetchingPostedContent ? "mr-1 h-3.5 w-3.5 animate-spin" : "mr-1 h-3.5 w-3.5"} />
+                  <RefreshCw
+                    className={
+                      isFetchingPostedContent ? 'mr-1 h-3.5 w-3.5 animate-spin' : 'mr-1 h-3.5 w-3.5'
+                    }
+                  />
                   Posts
                 </Button>
               ) : null}
@@ -294,18 +292,25 @@ export function CalendarToolbar({
                 <LightningBoltIcon className="mr-1 h-3.5 w-3.5" />
                 Trends
               </Button>
-              <DisabledControl hint={addHint}>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="Add placeholder"
-                  disabled={isGenerating}
-                  onClick={onAddPlaceholder}
-                >
-                  <PlusIcon className={isGenerating ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
-                </Button>
-              </DisabledControl>
+              {isGenerating ? (
+                <DisabledControl hint={addHint}>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    aria-label="Add post"
+                    disabled
+                  >
+                    <PlusIcon className="h-3.5 w-3.5 animate-pulse" />
+                  </Button>
+                </DisabledControl>
+              ) : (
+                <AddPostMenu onCreatePost={onCreatePost} align="end">
+                  <Button type="button" size="icon-sm" variant="outline" aria-label="Add post">
+                    <PlusIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </AddPostMenu>
+              )}
               <DisabledControl hint={generateHint}>
                 <Button
                   type="button"
@@ -339,10 +344,9 @@ export function CalendarToolbar({
 
           {showPlanningNote ? (
             <div className="mt-2 rounded-md bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground text-pretty">
-              <span className="font-medium text-foreground">Planning mode</span>{" "}
-              — no account needed. Add a placeholder or open Trends to sketch a
-              week, or ask the agent to draft ideas. AI drafts pull from your
-              Brand Book; publishing needs a connected account.
+              <span className="font-medium text-foreground">Planning mode</span> — no account
+              needed. Add a placeholder or open Trends to sketch a week, or ask the agent to draft
+              ideas. AI drafts pull from your Brand Book; publishing needs a connected account.
             </div>
           ) : null}
 
@@ -351,7 +355,7 @@ export function CalendarToolbar({
               <div className="space-y-0.5">
                 <p className="text-xs font-medium text-muted-foreground">
                   {slotProgress.completed}/{slotProgress.total} completed
-                  {slotProgress.failed > 0 ? ` • ${slotProgress.failed} failed` : ""}
+                  {slotProgress.failed > 0 ? ` • ${slotProgress.failed} failed` : ''}
                 </p>
                 {gridProgress.stage ? (
                   <p className="text-2xs uppercase tracking-wide text-muted-foreground/70">
@@ -369,29 +373,38 @@ export function CalendarToolbar({
           ) : null}
 
           {/* Grid status banners */}
-          {gridStatus === "complete" && (
+          {gridStatus === 'complete' && (
             <div className="mt-2 flex items-center gap-2 rounded-md bg-emerald-500/5 px-3 py-1.5 text-xs text-emerald-600 dark:text-emerald-400">
               <CheckIcon className="h-3.5 w-3.5" />
               All {slotProgress?.total ?? 0} posts generated
             </div>
           )}
-          {gridStatus === "complete_with_errors" && (
+          {gridStatus === 'complete_with_errors' && (
             <div className="mt-2 flex items-center gap-2 rounded-md bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
               <ExclamationTriangleIcon className="h-3.5 w-3.5" />
-              {slotProgress?.completed ?? 0} of {slotProgress?.total ?? 0} generated. {slotProgress?.failed ?? 0} failed
+              {slotProgress?.completed ?? 0} of {slotProgress?.total ?? 0} generated.{' '}
+              {slotProgress?.failed ?? 0} failed
               {onRetryGeneration && (
-                <button type="button" onClick={onRetryGeneration} className="ml-1 underline underline-offset-2 hover:text-amber-700">
+                <button
+                  type="button"
+                  onClick={onRetryGeneration}
+                  className="ml-1 underline underline-offset-2 hover:text-amber-700"
+                >
                   — retry
                 </button>
               )}
             </div>
           )}
-          {gridStatus === "error" && gridError && (
+          {gridStatus === 'error' && gridError && (
             <div className="mt-2 flex items-center gap-2 rounded-md bg-red-500/5 px-3 py-1.5 text-xs text-red-600 dark:text-red-400">
               <Cross2Icon className="h-3.5 w-3.5" />
               Generation failed: {gridError}
               {onRetryGeneration && (
-                <button type="button" onClick={onRetryGeneration} className="ml-1 underline underline-offset-2 hover:text-red-700">
+                <button
+                  type="button"
+                  onClick={onRetryGeneration}
+                  className="ml-1 underline underline-offset-2 hover:text-red-700"
+                >
                   — retry
                 </button>
               )}
@@ -402,24 +415,20 @@ export function CalendarToolbar({
       <ContextMenuContent>
         <ContextMenuLabel>Weekly Actions</ContextMenuLabel>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={onAddPlaceholder}>
-          Plus
-        </ContextMenuItem>
         <ContextMenuItem
-          disabled={seededDraftCount === 0}
-          onSelect={onGenerate}
+          onSelect={() => onCreatePost({ status: 'draft', mode: 'manual', format: 'Post' })}
         >
+          New post
+        </ContextMenuItem>
+        <ContextMenuItem disabled={seededDraftCount === 0} onSelect={onGenerate}>
           Generate placeholders
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem
-          className="text-destructive focus:text-destructive"
-          onSelect={onClear}
-        >
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClear}>
           <TrashIcon className="mr-2 h-3.5 w-3.5" />
           Clear current week
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
-  )
+  );
 }

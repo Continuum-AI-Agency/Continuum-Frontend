@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { MagnifyingGlassIcon, ReloadIcon } from "@radix-ui/react-icons";
-import { AnimatePresence, motion } from "motion/react";
-
-import { Badge } from "@/components/ui/badge";
-import { CreativeSwapComparison } from "@/components/dco/CreativeSwapComparison";
-import { Button } from "@/components/ui/button";
+import { MagnifyingGlassIcon, ReloadIcon } from '@radix-ui/react-icons';
+import { AnimatePresence, motion } from 'motion/react';
+import * as React from 'react';
+import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
+import { EmptyState, ErrorRetryState } from '@/components/shared/state';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -15,16 +15,16 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@/components/ui/command";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -32,11 +32,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { EmptyState, ErrorRetryState } from "@/components/shared/state";
-import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
-import type { ActionLog, ActionStatus, ScopeType } from "@/lib/types/dco";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/table';
+import { useDCOActionLogs } from '@/hooks/useDCOActionLogs';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
+import type { ActionLog, ActionStatus, ScopeType } from '@/lib/types/dco';
+import { cn } from '@/lib/utils';
 
 type DCOActionAlertsBoxProps = {
   brandId: string;
@@ -46,10 +46,10 @@ type DCOActionAlertsBoxProps = {
   onRefresh?: () => void;
 };
 
-type SortMode = "newest" | "oldest" | "severity" | "action";
-type StatusFilter = "all" | ActionStatus;
-type ScopeFilter = "all" | ScopeType;
-type QuickView = "all" | "attention" | "pending" | "successful" | "campaign" | "adset";
+type SortMode = 'newest' | 'oldest' | 'severity' | 'action';
+type StatusFilter = 'all' | ActionStatus;
+type ScopeFilter = 'all' | ScopeType;
+type QuickView = 'all' | 'attention' | 'pending' | 'successful' | 'campaign' | 'adset';
 
 const STATUS_ORDER: Record<ActionStatus, number> = {
   FAILED: 0,
@@ -61,35 +61,35 @@ const STATUS_ORDER: Record<ActionStatus, number> = {
 };
 
 const QUICK_VIEW_LABEL: Record<QuickView, string> = {
-  all: "All events",
-  attention: "Needs attention",
-  pending: "Pending",
-  successful: "Successful",
-  campaign: "Campaign scope",
-  adset: "Ad set scope",
+  all: 'All events',
+  attention: 'Needs attention',
+  pending: 'Pending',
+  successful: 'Successful',
+  campaign: 'Campaign scope',
+  adset: 'Ad set scope',
 };
 
-const CREATIVE_SWITCH_ACTION_TYPES = new Set<ActionLog["actionType"]>([
-  "SWITCH_CREATIVE",
-  "CREATIVE_SWITCH_EXTERNAL",
+const CREATIVE_SWITCH_ACTION_TYPES = new Set<ActionLog['actionType']>([
+  'SWITCH_CREATIVE',
+  'CREATIVE_SWITCH_EXTERNAL',
 ]);
 
 const CREATIVE_SWAP_BEFORE_KEYS = [
-  "original_creative_url",
-  "before_creative_url",
-  "previous_creative_url",
-  "old_creative_url",
-  "originalCreativeUrl",
-  "beforeCreativeUrl",
+  'original_creative_url',
+  'before_creative_url',
+  'previous_creative_url',
+  'old_creative_url',
+  'originalCreativeUrl',
+  'beforeCreativeUrl',
 ];
 
 const CREATIVE_SWAP_AFTER_KEYS = [
-  "new_creative_url",
-  "after_creative_url",
-  "replacement_creative_url",
-  "updated_creative_url",
-  "newCreativeUrl",
-  "afterCreativeUrl",
+  'new_creative_url',
+  'after_creative_url',
+  'replacement_creative_url',
+  'updated_creative_url',
+  'newCreativeUrl',
+  'afterCreativeUrl',
 ];
 
 type CreativeSwapUrls = {
@@ -97,31 +97,12 @@ type CreativeSwapUrls = {
   after: string;
 };
 
-function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const diffMs = Date.now() - date.getTime();
-  const minutes = Math.floor(diffMs / 60000);
-
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function formatTimestamp(isoString: string): string {
-  return new Date(isoString).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+  return new Date(isoString).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -138,20 +119,20 @@ function summarizeAction(log: ActionLog): string {
   return `${log.actionType} applied on ${log.scopeType.toLowerCase()} scope`;
 }
 
-function badgeVariantForStatus(status: ActionStatus): "destructive" | "secondary" | "outline" {
-  if (status === "FAILED" || status === "REJECTED") return "destructive";
-  if (status === "PENDING") return "outline";
-  return "secondary";
+function badgeVariantForStatus(status: ActionStatus): 'destructive' | 'secondary' | 'outline' {
+  if (status === 'FAILED' || status === 'REJECTED') return 'destructive';
+  if (status === 'PENDING') return 'outline';
+  return 'secondary';
 }
 
 function readSwapUrlFromRecord(
   record: Record<string, unknown> | null | undefined,
-  keys: string[]
+  keys: string[],
 ): string | null {
   if (!record) return null;
   for (const key of keys) {
     const value = record[key];
-    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === 'string' && value.length > 0) return value;
   }
   return null;
 }
@@ -177,12 +158,14 @@ function extractCreativeSwapUrls(log: ActionLog): CreativeSwapUrls | null {
 }
 
 function matchesQuickView(log: ActionLog, view: QuickView): boolean {
-  if (view === "all") return true;
-  if (view === "attention") return log.status === "FAILED" || log.status === "PENDING" || log.status === "REJECTED";
-  if (view === "pending") return log.status === "PENDING";
-  if (view === "successful") return log.status === "SUCCESS" || log.status === "APPROVED" || log.status === "EXECUTED";
-  if (view === "campaign") return log.scopeType === "CAMPAIGN";
-  if (view === "adset") return log.scopeType === "ADSET" || log.scopeType === "AD";
+  if (view === 'all') return true;
+  if (view === 'attention')
+    return log.status === 'FAILED' || log.status === 'PENDING' || log.status === 'REJECTED';
+  if (view === 'pending') return log.status === 'PENDING';
+  if (view === 'successful')
+    return log.status === 'SUCCESS' || log.status === 'APPROVED' || log.status === 'EXECUTED';
+  if (view === 'campaign') return log.scopeType === 'CAMPAIGN';
+  if (view === 'adset') return log.scopeType === 'ADSET' || log.scopeType === 'AD';
   return true;
 }
 
@@ -193,23 +176,15 @@ export function DCOActionAlertsBox({
   className,
   onRefresh,
 }: DCOActionAlertsBoxProps) {
-  const [search, setSearch] = React.useState("");
+  const [search, setSearch] = React.useState('');
   const [commandOpen, setCommandOpen] = React.useState(false);
-  const [sortMode, setSortMode] = React.useState<SortMode>("newest");
-  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
-  const [scopeFilter, setScopeFilter] = React.useState<ScopeFilter>("all");
-  const [quickView, setQuickView] = React.useState<QuickView>("all");
+  const [sortMode, setSortMode] = React.useState<SortMode>('newest');
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
+  const [scopeFilter, setScopeFilter] = React.useState<ScopeFilter>('all');
+  const [quickView, setQuickView] = React.useState<QuickView>('all');
   const [hoveredRowId, setHoveredRowId] = React.useState<string | null>(null);
 
-  const {
-    logs,
-    isLoading,
-    error,
-    pagination,
-    setFilters,
-    refresh,
-    goToPage,
-  } = useDCOActionLogs({
+  const { logs, isLoading, error, pagination, setFilters, refresh, goToPage } = useDCOActionLogs({
     brandId,
     metaAccountId,
     initialPageSize: 80,
@@ -228,34 +203,34 @@ export function DCOActionAlertsBox({
 
     const base = logs.filter((log) => {
       if (!matchesQuickView(log, quickView)) return false;
-      if (statusFilter !== "all" && log.status !== statusFilter) return false;
-      if (scopeFilter !== "all" && log.scopeType !== scopeFilter) return false;
+      if (statusFilter !== 'all' && log.status !== statusFilter) return false;
+      if (scopeFilter !== 'all' && log.scopeType !== scopeFilter) return false;
       if (!normalizedSearch) return true;
 
       const haystack = [
         log.actionType,
         log.status,
         log.scopeType,
-        log.metaCampaignId ?? "",
-        log.metaAdsetId ?? "",
-        log.decisionNote ?? "",
-        log.error ?? "",
+        log.metaCampaignId ?? '',
+        log.metaAdsetId ?? '',
+        log.decisionNote ?? '',
+        log.error ?? '',
         summarizeAction(log),
       ]
-        .join(" ")
+        .join(' ')
         .toLowerCase();
 
       return haystack.includes(normalizedSearch);
     });
 
     return base.sort((left, right) => {
-      if (sortMode === "newest") {
+      if (sortMode === 'newest') {
         return new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime();
       }
-      if (sortMode === "oldest") {
+      if (sortMode === 'oldest') {
         return new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime();
       }
-      if (sortMode === "action") {
+      if (sortMode === 'action') {
         return left.actionType.localeCompare(right.actionType);
       }
 
@@ -268,10 +243,10 @@ export function DCOActionAlertsBox({
   const commandRows = React.useMemo(() => filteredLogs.slice(0, 8), [filteredLogs]);
 
   const contextLabel = campaignId
-    ? "Campaign context"
+    ? 'Campaign context'
     : metaAccountId
-      ? "Account context"
-      : "Brand context";
+      ? 'Account context'
+      : 'Brand context';
 
   const handleRefresh = React.useCallback(() => {
     refresh();
@@ -279,7 +254,12 @@ export function DCOActionAlertsBox({
   }, [onRefresh, refresh]);
 
   return (
-    <div className={cn("grid h-[min(72vh,680px)] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2", className)}>
+    <div
+      className={cn(
+        'grid h-[min(72vh,680px)] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2',
+        className,
+      )}
+    >
       <aside className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/10 p-2">
         <span className="rounded border border-border/70 bg-background px-2 py-1 text-xs text-muted-foreground">
           {contextLabel}
@@ -292,10 +272,10 @@ export function DCOActionAlertsBox({
               type="button"
               onClick={() => setQuickView(view)}
               className={cn(
-                "h-7 rounded-md px-2 text-left text-xs transition-colors",
+                'h-7 rounded-md px-2 text-left text-xs transition-colors',
                 quickView === view
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {QUICK_VIEW_LABEL[view]}
@@ -304,7 +284,10 @@ export function DCOActionAlertsBox({
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+          >
             <SelectTrigger className="h-8 w-[8.5rem] text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
@@ -319,7 +302,10 @@ export function DCOActionAlertsBox({
             </SelectContent>
           </Select>
 
-          <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
+          <Select
+            value={scopeFilter}
+            onValueChange={(value) => setScopeFilter(value as ScopeFilter)}
+          >
             <SelectTrigger className="h-8 w-[8rem] text-xs">
               <SelectValue placeholder="Scope" />
             </SelectTrigger>
@@ -364,7 +350,7 @@ export function DCOActionAlertsBox({
               disabled={isLoading}
               aria-label="Refresh alerts"
             >
-              <ReloadIcon className={cn("h-4 w-4", isLoading ? "animate-spin" : undefined)} />
+              <ReloadIcon className={cn('h-4 w-4', isLoading ? 'animate-spin' : undefined)} />
             </Button>
           </div>
 
@@ -377,19 +363,30 @@ export function DCOActionAlertsBox({
               placeholder="Command search: action, campaign, ad set, status..."
             />
             {commandOpen ? (
-              <CommandList className="max-h-[140px]" onMouseDown={(event) => event.preventDefault()}>
+              <CommandList
+                className="max-h-[140px]"
+                onMouseDown={(event) => event.preventDefault()}
+              >
                 <CommandGroup heading="Quick commands">
-                  <CommandItem onSelect={() => setStatusFilter("FAILED")}>Show failed only</CommandItem>
-                  <CommandItem onSelect={() => setStatusFilter("PENDING")}>Show pending only</CommandItem>
-                  <CommandItem onSelect={() => setQuickView("campaign")}>Limit to campaign scope</CommandItem>
-                  <CommandItem onSelect={() => setQuickView("adset")}>Limit to ad set scope</CommandItem>
+                  <CommandItem onSelect={() => setStatusFilter('FAILED')}>
+                    Show failed only
+                  </CommandItem>
+                  <CommandItem onSelect={() => setStatusFilter('PENDING')}>
+                    Show pending only
+                  </CommandItem>
+                  <CommandItem onSelect={() => setQuickView('campaign')}>
+                    Limit to campaign scope
+                  </CommandItem>
+                  <CommandItem onSelect={() => setQuickView('adset')}>
+                    Limit to ad set scope
+                  </CommandItem>
                 </CommandGroup>
                 <CommandSeparator />
                 <CommandGroup heading="Matching actions">
                   {commandRows.map((log) => (
                     <CommandItem
                       key={`alert-command-${log.id}`}
-                      onSelect={() => setSearch(`${log.actionType} ${log.metaCampaignId ?? ""}`)}
+                      onSelect={() => setSearch(`${log.actionType} ${log.metaCampaignId ?? ''}`)}
                     >
                       <MagnifyingGlassIcon className="h-3.5 w-3.5" />
                       <span className="truncate">{log.actionType}</span>
@@ -465,8 +462,8 @@ export function DCOActionAlertsBox({
                           <TableCell className="font-medium">{log.actionType}</TableCell>
                           <TableCell>{log.scopeType}</TableCell>
                           <TableCell className="text-muted-foreground">
-                            <div>Campaign: {log.metaCampaignId ?? "--"}</div>
-                            <div>Ad set: {log.metaAdsetId ?? "--"}</div>
+                            <div>Campaign: {log.metaCampaignId ?? '--'}</div>
+                            <div>Ad set: {log.metaAdsetId ?? '--'}</div>
                           </TableCell>
                           <TableCell className="max-w-[360px] whitespace-normal text-foreground">
                             <div>{summarizeAction(log)}</div>
@@ -487,7 +484,7 @@ export function DCOActionAlertsBox({
                               <TableCell colSpan={6} className="p-0">
                                 <motion.div
                                   initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: "auto" }}
+                                  animate={{ opacity: 1, height: 'auto' }}
                                   exit={{ opacity: 0, height: 0 }}
                                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                                   className="overflow-hidden"
@@ -529,7 +526,9 @@ export function DCOActionAlertsBox({
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs"
-            onClick={() => goToPage(Math.min(Math.max(1, pagination.totalPages), pagination.page + 1))}
+            onClick={() =>
+              goToPage(Math.min(Math.max(1, pagination.totalPages), pagination.page + 1))
+            }
             disabled={!pagination.hasNextPage || isLoading}
           >
             Next

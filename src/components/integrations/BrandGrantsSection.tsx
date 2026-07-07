@@ -1,40 +1,28 @@
-import { fetchBrandIntegrationGrants } from "@/lib/integrations/grants";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { RevokeGrantButton } from "@/components/integrations/RevokeGrantButton";
-import { GlassPanel } from "@/components/ui/GlassPanel";
+import { RevokeGrantButton } from '@/components/integrations/RevokeGrantButton';
+import { GlassPanel } from '@/components/ui/GlassPanel';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { fetchBrandIntegrationGrants } from '@/lib/integrations/grants';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 
 const PROVIDER_LABEL: Record<string, string> = {
-  meta: "Meta (Facebook & Instagram)",
-  google: "Google",
-  google_ads: "Google Ads",
-  googleAds: "Google Ads",
-  youtube: "YouTube",
-  tiktok: "TikTok",
-  linkedin: "LinkedIn",
-  threads: "Threads",
-  amazon: "Amazon Ads",
-  amazonAds: "Amazon Ads",
-  dv360: "Display & Video 360",
-  googleAnalytics: "Google Analytics",
+  meta: 'Meta (Facebook & Instagram)',
+  google: 'Google',
+  google_ads: 'Google Ads',
+  googleAds: 'Google Ads',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  threads: 'Threads',
+  amazon: 'Amazon Ads',
+  amazonAds: 'Amazon Ads',
+  dv360: 'Display & Video 360',
+  googleAnalytics: 'Google Analytics',
 };
 
 function formatProvider(provider: string): string {
   return (
-    PROVIDER_LABEL[provider] ??
-    provider.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    PROVIDER_LABEL[provider] ?? provider.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   );
-}
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  const diffMs = Date.now() - then;
-  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  if (days < 1) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 30) return `${days} days ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString();
 }
 
 type BrandGrantsSectionProps = {
@@ -54,7 +42,8 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
           <h3 className="text-base font-semibold text-foreground">Granted integrations</h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          No integrations have been granted to this brand yet. Share a personal connection below to get started.
+          No integrations have been granted to this brand yet. Share a personal connection below to
+          get started.
         </p>
       </GlassPanel>
     );
@@ -62,7 +51,7 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
 
   const callerId = user?.id ?? null;
   const isOwner = (permissions ?? []).some(
-    (p) => p.brand_profile_id === brandProfileId && p.role === "owner",
+    (p) => p.brand_profile_id === brandProfileId && p.role === 'owner',
   );
 
   return (
@@ -79,7 +68,7 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
           const label = formatProvider(grant.provider);
           const isCallerGranter = callerId !== null && callerId === grant.grantedBy;
           const canRevoke = isCallerGranter || isOwner;
-          const inheritedLabel = isCallerGranter ? "Granted by you" : "Inherited from a teammate";
+          const inheritedLabel = isCallerGranter ? 'Granted by you' : 'Inherited from a teammate';
 
           return (
             <li
@@ -89,7 +78,7 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-foreground">{label}</span>
                 <span className="text-xs text-muted-foreground">
-                  {inheritedLabel} · {formatRelative(grant.grantedAt)}
+                  {inheritedLabel} · {formatRelativeTime(grant.grantedAt)}
                 </span>
               </div>
               {canRevoke ? (

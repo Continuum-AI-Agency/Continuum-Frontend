@@ -1,18 +1,21 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import Image from "next/image";
 import {
-  CopyIcon,
   CheckIcon,
+  CopyIcon,
   Cross2Icon,
   ImageIcon,
   LightningBoltIcon,
   Pencil1Icon,
   QuestionMarkCircledIcon,
   TrashIcon,
-} from "@radix-ui/react-icons";
-
+} from '@radix-ui/react-icons';
+import { GalleryHorizontalEnd } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
+import Image from 'next/image';
+import * as React from 'react';
+import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
+import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,68 +23,54 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import { MediaStagePill, resolveDraftMediaStage } from "./DraftLifecycle";
-import type { OrganicCalendarDraft } from "./types";
-import { PlatformBadge, StatusDot } from "./DraftCardBadges";
-import { DraftHoverCardContent } from "./DraftHoverCardContent";
-import { DuplicateDayPicker } from "./DuplicateDayPicker";
-import { cardVariants } from "./draft-card-styles";
-import { useCalendarStore } from "@/lib/organic/store";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
-import { isValidTimeLabel, normalizeTimeLabel } from "@/lib/organic/scheduling";
-import { useReducedMotion } from "motion/react";
-import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
-import { useProgressAnimation } from "@/components/organic/hooks/useProgressAnimation";
-import { useOpenDraftInAiStudio } from "./AiStudioHandoffContext";
+} from '@/components/ui/context-menu';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
+import { useCalendarStore } from '@/lib/organic/store';
+import { cn } from '@/lib/utils';
+import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
+import { PlatformBadge, StatusDot } from './DraftCardBadges';
+import { DraftHoverCardContent } from './DraftHoverCardContent';
+import { MediaStagePill, resolveDraftMediaStage } from './DraftLifecycle';
+import { DuplicateDayPicker } from './DuplicateDayPicker';
+import { cardVariants } from './draft-card-styles';
+import type { OrganicCalendarDraft } from './types';
 
-const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "facebook", "linkedin"];
-const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
+const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ['instagram', 'facebook', 'linkedin'];
+const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
 const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
-  instagram: "Instagram",
-  facebook: "Facebook",
-  linkedin: "LinkedIn",
-  tiktok: "TikTok",
-  youtube: "YouTube",
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
 };
 
 // Left-border accent colors per platform / status
 const PLATFORM_ACCENT: Record<string, string> = {
-  instagram: "#E1306C",
-  linkedin: "#0A66C2",
-  facebook: "#1877F2",
-  tiktok: "#69C9D0",
-  youtube: "#FF0000",
-  twitter: "#1DA1F2",
+  instagram: '#E1306C',
+  linkedin: '#0A66C2',
+  facebook: '#1877F2',
+  tiktok: '#69C9D0',
+  youtube: '#FF0000',
+  twitter: '#1DA1F2',
 };
 
-function resolveAccentColor(
-  draft: OrganicCalendarDraft,
-  platform: string
-): string {
-  if (draft.status === "published") return "#10B981"; // emerald-500
-  if (draft.status === "failed") return "#EF4444";    // red-500
-  if (draft.status === "streaming") return "#5A48F9"; // brand-primary
-  return PLATFORM_ACCENT[platform] ?? "#5A48F9";
+function resolveAccentColor(draft: OrganicCalendarDraft, platform: string): string {
+  if (draft.status === 'published') return '#10B981'; // emerald-500
+  if (draft.status === 'failed') return '#EF4444'; // red-500
+  if (draft.status === 'streaming') return '#5A48F9'; // brand-primary
+  return PLATFORM_ACCENT[platform] ?? '#5A48F9';
 }
 
 function hasTextValue(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 export function CalendarDraftCard({
@@ -107,15 +96,15 @@ export function CalendarDraftCard({
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
-  const platform = (draft.platforms[0] || "instagram") as
-    | "instagram"
-    | "linkedin"
-    | "facebook"
-    | "tiktok"
-    | "youtube"
-    | "twitter";
-  const isStreaming = draft.status === "streaming";
-  const isFailed = draft.status === "failed";
+  const platform = (draft.platforms[0] || 'instagram') as
+    | 'instagram'
+    | 'linkedin'
+    | 'facebook'
+    | 'tiktok'
+    | 'youtube'
+    | 'twitter';
+  const isStreaming = draft.status === 'streaming';
+  const isFailed = draft.status === 'failed';
   const isAssignedToDay = draft.dateLabel.trim().length > 0;
   const hasValidTimeLabel = isValidTimeLabel(draft.timeLabel);
   const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;
@@ -127,39 +116,46 @@ export function CalendarDraftCard({
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
   const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
-  const { publish, isPublishing } = usePublishDraft()
+  const { publish, isPublishing } = usePublishDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const openInStudio = useOpenDraftInAiStudio();
   const canPublishToInstagram =
-    draft.platforms.includes("instagram") &&
-    draft.status !== "published" &&
-    draft.status !== "streaming";
+    draft.platforms.includes('instagram') &&
+    draft.status !== 'published' &&
+    draft.status !== 'streaming';
 
   const accentColor = resolveAccentColor(draft, platform);
   // Enrichment state is the authoritative backend media_stage (with a derived
   // fallback for ephemeral stream drafts) — the single source the card and the
   // editor share, never re-classified ad-hoc per surface.
   const realizedMediaCount = draft.publishingAssets?.length ?? 0;
+  // A carousel is either declared by format or evidenced by multiple slides — so
+  // the affordance shows even before any media is realized.
+  const isCarousel = isCarouselFormat(draft.format) || (draft.slideCount ?? 0) > 1;
+  const carouselSlideCount = resolveCarouselSlideCount({
+    slideCount: draft.slideCount,
+    realizedMediaCount,
+  });
   const storyboardFrames =
     draft.mediaSuggestion?.storyboard?.filter((frame) => hasTextValue(frame?.storageUrl)) ?? [];
   const mediaStage = resolveDraftMediaStage(draft);
-  const isMediaGenerating = mediaStage === "realizing";
-  const hasRealizedMedia = mediaStage === "realized";
-  const isStoryboardReady = mediaStage === "storyboard_ready";
+  const isMediaGenerating = mediaStage === 'realizing';
+  const hasRealizedMedia = mediaStage === 'realized';
+  const isStoryboardReady = mediaStage === 'storyboard_ready';
   // A text-only draft awaiting enrichment — but not while a status already
   // telegraphs its own state (streaming/placeholder/published).
   const isTextOnlyDraft =
-    mediaStage === "text_only" &&
-    draft.status !== "streaming" &&
-    draft.status !== "placeholder" &&
-    draft.status !== "published";
-  const showHoverPreview = draft.status !== "streaming" && draft.status !== "placeholder";
+    mediaStage === 'text_only' &&
+    draft.status !== 'streaming' &&
+    draft.status !== 'placeholder' &&
+    draft.status !== 'published';
+  const showHoverPreview = draft.status !== 'streaming' && draft.status !== 'placeholder';
 
   const focusEditor = React.useCallback(
     (draftId: string) => {
       onSelect(draftId);
     },
-    [onSelect]
+    [onSelect],
   );
 
   const applyQuickEdit = React.useCallback(
@@ -167,7 +163,7 @@ export function CalendarDraftCard({
       updateDraft(draft.id, updater);
       focusEditor(draft.id);
     },
-    [draft.id, focusEditor, updateDraft]
+    [draft.id, focusEditor, updateDraft],
   );
 
   const clearFailure = React.useCallback(() => {
@@ -177,7 +173,7 @@ export function CalendarDraftCard({
     }
     applyQuickEdit((currentDraft) => ({
       ...currentDraft,
-      status: currentDraft.seedTrendId ? "placeholder" : "draft",
+      status: currentDraft.seedTrendId ? 'placeholder' : 'draft',
       generationError: undefined,
     }));
   }, [applyQuickEdit, draft.id, onClearFailure]);
@@ -185,7 +181,7 @@ export function CalendarDraftCard({
   const applyCustomTime = React.useCallback(() => {
     const normalized = normalizeTimeLabel(pendingTime.trim());
     if (!normalized) {
-      setTimeError("Use format like 9:00 AM or 14:00");
+      setTimeError('Use format like 9:00 AM or 14:00');
       return;
     }
     setTimeError(null);
@@ -216,28 +212,33 @@ export function CalendarDraftCard({
               onMouseLeave={() => onMouseLeave?.()}
               aria-pressed={isSelected || isMultiSelected}
               className={cn(
-                "group",
+                'group',
                 cardVariants({
                   selected: isSelected,
                   multiSelected: isMultiSelected,
                   streaming: isStreaming,
                   failed: isFailed,
-                  platformHover: isSelected ? "none" : platform,
+                  platformHover: isSelected ? 'none' : platform,
                 }),
-                draft.status === "placeholder" && "border-dashed border-muted-foreground/30 bg-muted/20"
+                draft.status === 'placeholder' &&
+                  'border-dashed border-muted-foreground/30 bg-muted/20',
               )}
             >
               {/* Top-edge status strip */}
-              {(isStreaming || isFailed || draft.status === "scheduled" || draft.status === "published") && (
+              {(isStreaming ||
+                isFailed ||
+                draft.status === 'scheduled' ||
+                draft.status === 'published') && (
                 <div
                   className={cn(
-                    "absolute top-0 left-0 right-0 h-0.5",
-                    isStreaming && "bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer",
-                    isFailed && "bg-red-500",
-                    draft.status === "scheduled" && "bg-primary/60",
-                    draft.status === "published" && "bg-emerald-500"
+                    'absolute top-0 left-0 right-0 h-0.5',
+                    isStreaming &&
+                      'bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer',
+                    isFailed && 'bg-red-500',
+                    draft.status === 'scheduled' && 'bg-primary/60',
+                    draft.status === 'published' && 'bg-emerald-500',
                   )}
-                  style={isStreaming ? { backgroundSize: "200% 100%" } : undefined}
+                  style={isStreaming ? { backgroundSize: '200% 100%' } : undefined}
                   aria-hidden
                 />
               )}
@@ -246,15 +247,15 @@ export function CalendarDraftCard({
               {isStreaming && !reduceMotion && (
                 <div
                   className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent animate-shimmer"
-                  style={{ backgroundSize: "200% 100%" }}
+                  style={{ backgroundSize: '200% 100%' }}
                 />
               )}
 
               {/* Platform accent left bar */}
               <div
                 className={cn(
-                  "absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg",
-                  isStreaming && "animate-pulse"
+                  'absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg',
+                  isStreaming && 'animate-pulse',
                 )}
                 style={{ backgroundColor: accentColor }}
                 aria-hidden
@@ -271,6 +272,8 @@ export function CalendarDraftCard({
                       <TooltipProvider>
                         <Tooltip delayDuration={0}>
                           <TooltipTrigger asChild>
+                            {/* biome-ignore lint/a11y/noStaticElementInteractions: tooltip target (help affordance), not a control */}
+                            {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the card button from activating; the tooltip opens on hover/focus */}
                             <div
                               className="p-0.5 -m-0.5 cursor-help"
                               onClick={(e) => e.stopPropagation()}
@@ -295,18 +298,19 @@ export function CalendarDraftCard({
                         <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
                       </div>
                     )}
-                    {onRegenerate && draft.status !== "streaming" && (
+                    {onRegenerate && draft.status !== 'streaming' && (
+                      // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
                       <span
                         role="button"
                         tabIndex={0}
-                        aria-label={isFailed ? "Retry failed draft" : "Regenerate draft"}
+                        aria-label={isFailed ? 'Retry failed draft' : 'Regenerate draft'}
                         className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           onRegenerate(draft.id);
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
+                          if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             onRegenerate(draft.id);
                           }
@@ -322,8 +326,8 @@ export function CalendarDraftCard({
                 {/* Title */}
                 <p
                   className={cn(
-                    "text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif",
-                    isStreaming && "animate-pulse opacity-70"
+                    'text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif',
+                    isStreaming && 'animate-pulse opacity-70',
                   )}
                 >
                   {draft.creativeIdea || draft.title}
@@ -332,7 +336,9 @@ export function CalendarDraftCard({
                 {/* Inline streaming status */}
                 {isStreaming && (
                   <p className="mt-0.5 text-2xs text-brand-primary/80 font-medium">
-                    {draft.generationStage ? `Generating · ${draft.generationStage}` : "Generating..."}
+                    {draft.generationStage
+                      ? `Generating · ${draft.generationStage}`
+                      : 'Generating...'}
                   </p>
                 )}
 
@@ -341,14 +347,14 @@ export function CalendarDraftCard({
                   {draft.captionPreview}
                 </p>
 
-                {draft.status === "placeholder" && (
+                {draft.status === 'placeholder' && (
                   <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
                     Awaiting generation
                   </p>
                 )}
 
                 {/* Generation progress */}
-                {typeof displayProgress === "number" ? (
+                {typeof displayProgress === 'number' ? (
                   <div className="mt-3 space-y-1.5">
                     <div className="flex items-center justify-between text-2xs font-bold uppercase tracking-tighter text-muted-foreground">
                       <span className="text-primary animate-pulse">GENERATING</span>
@@ -369,6 +375,7 @@ export function CalendarDraftCard({
                     </p>
                     <div className="mt-2 flex items-center gap-2">
                       {onRegenerate ? (
+                        // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
                         <span
                           role="button"
                           tabIndex={0}
@@ -378,7 +385,7 @@ export function CalendarDraftCard({
                             onRegenerate(draft.id);
                           }}
                           onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
+                            if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
                               event.stopPropagation();
                               onRegenerate(draft.id);
@@ -389,6 +396,7 @@ export function CalendarDraftCard({
                           Retry
                         </span>
                       ) : null}
+                      {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
                       <span
                         role="button"
                         tabIndex={0}
@@ -398,7 +406,7 @@ export function CalendarDraftCard({
                           clearFailure();
                         }}
                         onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
+                          if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
                             event.stopPropagation();
                             clearFailure();
@@ -418,8 +426,11 @@ export function CalendarDraftCard({
                     state, never a fake "has media" affordance. */}
                 {isMediaGenerating ? (
                   <p className="mt-1.5 flex items-center gap-1 text-2xs font-medium text-primary/80">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
-                    {draft.generationStage ?? "Generating media…"}
+                    <span
+                      className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
+                      aria-hidden
+                    />
+                    {draft.generationStage ?? 'Generating media…'}
                   </p>
                 ) : isStoryboardReady ? (
                   <div className="mt-2 space-y-1">
@@ -449,7 +460,7 @@ export function CalendarDraftCard({
                       </div>
                     )}
                   </div>
-                ) : mediaStage === "failed" ? (
+                ) : mediaStage === 'failed' ? (
                   <p className="mt-1.5">
                     <MediaStagePill mediaStage="failed" />
                   </p>
@@ -465,12 +476,24 @@ export function CalendarDraftCard({
                     {draft.platforms.map((p) => (
                       <PlatformBadge key={p} platform={p} />
                     ))}
-                    {hasRealizedMedia && (
+                    {isCarousel ? (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/70 ml-0.5"
+                        title={
+                          carouselSlideCount > 1
+                            ? `Carousel · ${carouselSlideCount} slides`
+                            : 'Carousel'
+                        }
+                      >
+                        <GalleryHorizontalEnd className="h-2.5 w-2.5" />
+                        {carouselSlideCount > 1 ? carouselSlideCount : null}
+                      </span>
+                    ) : hasRealizedMedia ? (
                       <span className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/60 ml-0.5">
                         <ImageIcon className="h-2.5 w-2.5" />
                         {realizedMediaCount > 1 ? realizedMediaCount : null}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <span className="text-2xs text-muted-foreground/70 font-bold uppercase tracking-widest">
                     {draft.format}
@@ -483,160 +506,162 @@ export function CalendarDraftCard({
 
         {/* Context menu */}
         <ContextMenuContent className="w-56">
-            <ContextMenuLabel>Quick Edit</ContextMenuLabel>
-            <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
-              <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
-              Open in editor
+          <ContextMenuLabel>Quick Edit</ContextMenuLabel>
+          <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
+            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+            Open in editor
+          </ContextMenuItem>
+          {draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
+            <ContextMenuItem onSelect={() => setDuplicatePickerOpen(true)}>
+              <CopyIcon className="mr-2 h-3.5 w-3.5" />
+              Duplicate...
             </ContextMenuItem>
-            {draft.status !== "streaming" && draft.status !== "placeholder" ? (
-              <ContextMenuItem onSelect={() => setDuplicatePickerOpen(true)}>
-                <CopyIcon className="mr-2 h-3.5 w-3.5" />
-                Duplicate...
-              </ContextMenuItem>
-            ) : null}
-            <ContextMenuSeparator />
-            {QUICK_PLATFORM_OPTIONS.map((option) => (
-              <ContextMenuItem
-                key={option}
-                onSelect={() =>
-                  applyQuickEdit((currentDraft) => ({
-                    ...currentDraft,
-                    platforms: [option],
-                  }))
-                }
-              >
-                Platform: {QUICK_PLATFORM_LABELS[option]}
-              </ContextMenuItem>
-            ))}
-            {QUICK_TIME_OPTIONS.map((time) => (
-              <ContextMenuItem
-                key={time}
-                onSelect={() =>
-                  applyQuickEdit((currentDraft) => ({
-                    ...currentDraft,
-                    timeLabel: time,
-                  }))
-                }
-              >
-                Time: {time}
-              </ContextMenuItem>
-            ))}
+          ) : null}
+          <ContextMenuSeparator />
+          {QUICK_PLATFORM_OPTIONS.map((option) => (
             <ContextMenuItem
-              onSelect={() => {
-                setPendingTime(draft.timeLabel);
-                setTimePickerOpen(true);
-              }}
-            >
-              Time: Custom...
-            </ContextMenuItem>
-            <ContextMenuItem
-              disabled={!canMarkScheduled}
-              onSelect={() =>
-                canMarkScheduled &&
-                applyQuickEdit((currentDraft) => ({
-                  ...currentDraft,
-                  status: "scheduled",
-                }))
-              }
-            >
-              Approve & Schedule
-            </ContextMenuItem>
-            <ContextMenuItem
+              key={option}
               onSelect={() =>
                 applyQuickEdit((currentDraft) => ({
                   ...currentDraft,
-                  status: "draft",
+                  platforms: [option],
                 }))
               }
             >
-              Move back to draft
+              Platform: {QUICK_PLATFORM_LABELS[option]}
             </ContextMenuItem>
-            <ContextMenuSeparator />
-            {onRegenerate ? (
-              <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
-                <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
-                {isFailed ? "Retry generation" : "Regenerate"}
-              </ContextMenuItem>
-            ) : null}
-            {isFailed ? (
-              <ContextMenuItem onSelect={clearFailure}>
-                <Cross2Icon className="mr-2 h-3.5 w-3.5" />
-                Clear failure
-              </ContextMenuItem>
-            ) : null}
-            {canPublishToInstagram ? (
-              <ContextMenuItem
-                disabled={isPublishing}
-                onSelect={() => publish(draft)}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="mr-2 h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <line x1="22" y1="2" x2="11" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
-                {isPublishing ? "Publishing…" : "Publish to Instagram"}
-              </ContextMenuItem>
-            ) : null}
-            {openInStudio && draft.status !== "streaming" && draft.status !== "placeholder" ? (
-              <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
-                Open in AI Studio
-              </ContextMenuItem>
-            ) : null}
+          ))}
+          {QUICK_TIME_OPTIONS.map((time) => (
             <ContextMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => bulkDeleteDrafts([draft.id])}
+              key={time}
+              onSelect={() =>
+                applyQuickEdit((currentDraft) => ({
+                  ...currentDraft,
+                  timeLabel: time,
+                }))
+              }
             >
-              <TrashIcon className="mr-2 h-3.5 w-3.5" />
-              Delete draft
+              Time: {time}
             </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
+          ))}
+          <ContextMenuItem
+            onSelect={() => {
+              setPendingTime(draft.timeLabel);
+              setTimePickerOpen(true);
+            }}
+          >
+            Time: Custom...
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={!canMarkScheduled}
+            onSelect={() =>
+              canMarkScheduled &&
+              applyQuickEdit((currentDraft) => ({
+                ...currentDraft,
+                status: 'scheduled',
+              }))
+            }
+          >
+            Approve & Schedule
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() =>
+              applyQuickEdit((currentDraft) => ({
+                ...currentDraft,
+                status: 'draft',
+              }))
+            }
+          >
+            Move back to draft
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          {onRegenerate ? (
+            <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
+              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+              {isFailed ? 'Retry generation' : 'Regenerate'}
+            </ContextMenuItem>
+          ) : null}
+          {isFailed ? (
+            <ContextMenuItem onSelect={clearFailure}>
+              <Cross2Icon className="mr-2 h-3.5 w-3.5" />
+              Clear failure
+            </ContextMenuItem>
+          ) : null}
+          {canPublishToInstagram ? (
+            <ContextMenuItem disabled={isPublishing} onSelect={() => publish(draft)}>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="mr-2 h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+              {isPublishing ? 'Publishing…' : 'Publish to Instagram'}
+            </ContextMenuItem>
+          ) : null}
+          {openInStudio && draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
+            <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
+              Open in AI Studio
+            </ContextMenuItem>
+          ) : null}
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onSelect={() => bulkDeleteDrafts([draft.id])}
+          >
+            <TrashIcon className="mr-2 h-3.5 w-3.5" />
+            Delete draft
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
-        {/* Time picker popover */}
-        <PopoverContent side="top" align="start" className="w-56 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Set posting time
-          </p>
-          <Input
-            value={pendingTime}
-            onChange={(e) => {
-              setPendingTime(e.target.value);
+      {/* Time picker popover */}
+      <PopoverContent side="top" align="start" className="w-56 p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Set posting time
+        </p>
+        <Input
+          value={pendingTime}
+          onChange={(e) => {
+            setPendingTime(e.target.value);
+            setTimeError(null);
+          }}
+          placeholder="e.g. 11:15 AM"
+          className="h-8 text-xs"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') applyCustomTime();
+            if (e.key === 'Escape') {
+              setTimePickerOpen(false);
+              setTimeError(null);
+            }
+          }}
+          autoFocus
+        />
+        {timeError && <p className="mt-1 text-2xs text-destructive">{timeError}</p>}
+        <div className="mt-2 flex gap-1.5">
+          <button
+            type="button"
+            onClick={applyCustomTime}
+            className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTimePickerOpen(false);
               setTimeError(null);
             }}
-            placeholder="e.g. 11:15 AM"
-            className="h-8 text-xs"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") applyCustomTime();
-              if (e.key === "Escape") { setTimePickerOpen(false); setTimeError(null); }
-            }}
-            autoFocus
-          />
-          {timeError && (
-            <p className="mt-1 text-2xs text-destructive">{timeError}</p>
-          )}
-          <div className="mt-2 flex gap-1.5">
-            <button
-              type="button"
-              onClick={applyCustomTime}
-              className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Set
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTimePickerOpen(false); setTimeError(null); }}
-              className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
-            >
-              Cancel
-            </button>
-          </div>
-        </PopoverContent>
-      </Popover>
+            className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 
   const cardWithHover = showHoverPreview ? (
@@ -648,28 +673,24 @@ export function CalendarDraftCard({
         className="p-0 border-none bg-transparent shadow-none"
         avoidCollisions
       >
-        <DraftHoverCardContent
-          draft={draft}
-          onEdit={focusEditor}
-          onRegenerate={onRegenerate}
-        />
+        <DraftHoverCardContent draft={draft} onEdit={focusEditor} onRegenerate={onRegenerate} />
       </HoverCardContent>
     </HoverCard>
-  ) : triggerButton;
+  ) : (
+    triggerButton
+  );
 
   return (
     <Popover open={duplicatePickerOpen} onOpenChange={setDuplicatePickerOpen}>
-      <PopoverAnchor asChild>
-        {cardWithHover}
-      </PopoverAnchor>
+      <PopoverAnchor asChild>{cardWithHover}</PopoverAnchor>
       <PopoverContent side="right" align="start" className="w-auto p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Duplicate to...
         </p>
         <DuplicateDayPicker
           onSelect={(dayId) => {
-            duplicateDraft(draft.id, dayId)
-            setDuplicatePickerOpen(false)
+            duplicateDraft(draft.id, dayId);
+            setDuplicatePickerOpen(false);
           }}
           onCancel={() => setDuplicatePickerOpen(false)}
         />

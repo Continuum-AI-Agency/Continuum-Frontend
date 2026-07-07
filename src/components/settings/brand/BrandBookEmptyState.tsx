@@ -1,20 +1,17 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button, Heading, Text } from "@radix-ui/themes";
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useToast } from "@/components/ui/ToastProvider";
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { PreviewRateLimitedError, runOnboardingPreview } from '@/lib/onboarding/agentClient';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
-  PreviewRateLimitedError,
-  runOnboardingPreview,
-} from "@/lib/onboarding/agentClient";
-import {
+  type BrandBookGenerationPayload,
   brandBookGenerationStatus,
   canGenerateBrandBook,
-  type BrandBookGenerationPayload,
-} from "./brandBookGeneration";
+} from './brandBookGeneration';
 
 /**
  * Shown when a brand has no brand_report_composite yet (the `get-brand-book` read
@@ -44,11 +41,11 @@ export function BrandBookEmptyState({
     const channel = supabase
       .channel(`brand_book_generate_${brandId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "brand_profiles",
-          table: "brand_report_composites",
+          event: '*',
+          schema: 'brand_profiles',
+          table: 'brand_report_composites',
           filter: `brand_profile_id=eq.${brandId}`,
         },
         () => {
@@ -76,7 +73,7 @@ export function BrandBookEmptyState({
         title: "Can't generate yet",
         description:
           "We couldn't assemble this brand's profile. Finish onboarding first, then try again.",
-        variant: "error",
+        variant: 'error',
       });
       return;
     }
@@ -84,7 +81,7 @@ export function BrandBookEmptyState({
     const controller = new AbortController();
     abortRef.current = controller;
     setIsGenerating(true);
-    setStatusLine("Starting analysis…");
+    setStatusLine('Starting analysis…');
 
     try {
       await runOnboardingPreview({
@@ -96,9 +93,9 @@ export function BrandBookEmptyState({
         },
       });
       show({
-        title: "Brand Book generated",
-        description: "Your brand report is ready.",
-        variant: "success",
+        title: 'Brand Book generated',
+        description: 'Your brand report is ready.',
+        variant: 'success',
       });
       router.refresh();
     } catch (error) {
@@ -108,11 +105,11 @@ export function BrandBookEmptyState({
           ? `Too many runs right now — try again in ${error.retryAfterSeconds}s.`
           : error instanceof Error
             ? error.message
-            : "Please try again.";
+            : 'Please try again.';
       show({
         title: "Couldn't generate Brand Book",
         description,
-        variant: "error",
+        variant: 'error',
       });
       setIsGenerating(false);
       setStatusLine(null);
@@ -120,34 +117,29 @@ export function BrandBookEmptyState({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border border-white/10 bg-white/[0.02] px-5 py-6">
+    <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 px-5 py-6">
       <div className="space-y-1">
-        <Heading size="3" className="text-white">
-          No Brand Book yet
-        </Heading>
-        <Text color="gray" size="2" as="p">
-          Continuum hasn&rsquo;t generated a brand report for {brandName} yet. Run the
-          analysis to build your living brand identity — voice, audience, strategy,
-          readiness, and more.
-        </Text>
+        <h3 className="text-base font-semibold text-foreground">No Brand Book yet</h3>
+        <p className="text-sm text-muted-foreground">
+          Continuum hasn&rsquo;t generated a brand report for {brandName} yet. Run the analysis to
+          build your living brand identity — voice, audience, strategy, readiness, and more.
+        </p>
       </div>
 
       <div className="flex items-center gap-3">
-        <Button onClick={handleGenerate} disabled={isGenerating} size="2">
-          {isGenerating ? "Generating…" : "Generate Brand Book"}
+        <Button onClick={handleGenerate} disabled={isGenerating}>
+          {isGenerating ? 'Generating…' : 'Generate Brand Book'}
         </Button>
         {isGenerating && statusLine ? (
-          <Text color="gray" size="1">
-            {statusLine}
-          </Text>
+          <span className="text-xs text-muted-foreground">{statusLine}</span>
         ) : null}
       </div>
 
       {isGenerating ? (
-        <Text color="gray" size="1" as="p">
-          This runs the full brand analysis and can take a few minutes. Keep this page
-          open while it works.
-        </Text>
+        <p className="text-xs text-muted-foreground">
+          This runs the full brand analysis and can take a few minutes. Keep this page open while it
+          works.
+        </p>
       ) : null}
     </div>
   );

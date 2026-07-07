@@ -10,6 +10,7 @@ import {
   getSelectableAssetsFlatList,
   mergeSelectableAssetsWithBrandSummary,
 } from "@/lib/integrations/selectableAssets";
+import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
@@ -265,6 +266,38 @@ describe("selectable assets schemas", () => {
     expect(flat.some((asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222")).toBe(true);
     expect(
       merged.providers.meta?.assets?.some(
+        (asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222"
+      )
+    ).toBe(true);
+  });
+
+  test("mergeSelectableAssetsWithBrandSummary groups LinkedIn brand accounts under linkedin provider", () => {
+    const response: SelectableAssetsResponse = selectableAssetsResponseSchema.parse({
+      synced_at: null,
+      stale: false,
+      providers: { linkedin: { assets: [] } },
+    });
+
+    const summary = createEmptyBrandSummary();
+    summary.linkedin.accounts.push({
+      assignmentId: "aaaa1111-1111-4111-8111-111111111111",
+      integrationAccountId: "bbbb2222-2222-4222-8222-222222222222",
+      name: "Acme LinkedIn",
+      alias: null,
+      externalAccountId: "urn-li-org-123",
+      status: "active",
+      linkedAt: null,
+      providerIntegrationId: "cccc3333-3333-4333-8333-333333333333",
+      type: "linkedin_organization",
+      settings: null,
+    });
+
+    const merged = mergeSelectableAssetsWithBrandSummary(response, summary);
+
+    expect(mapIntegrationTypeToPlatformKey("linkedin_ad_account")).toBe("linkedin");
+    expect(mapIntegrationTypeToPlatformKey("linkedin_organization")).toBe("linkedin");
+    expect(
+      merged.providers.linkedin?.assets?.some(
         (asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222"
       )
     ).toBe(true);

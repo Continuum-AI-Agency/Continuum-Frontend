@@ -1,22 +1,18 @@
-"use client";
+'use client';
 
-import Image from "next/image";
-import { Images } from "lucide-react";
-import { Badge } from "@radix-ui/themes";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import type { MediaSearchResultsFrame } from "@continuum/contracts";
+import type { MediaSearchResultsFrame } from '@continuum/contracts';
+import { Images } from 'lucide-react';
+import Image from 'next/image';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
-type SearchResultItem = MediaSearchResultsFrame["data"]["items"][number];
+type SearchResultItem = MediaSearchResultsFrame['data']['items'][number];
 
 function SimilarityBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const color = pct >= 80 ? "green" : pct >= 60 ? "blue" : "gray";
-  return (
-    <Badge variant="soft" color={color} size="1">
-      {pct}% match
-    </Badge>
-  );
+  const variant = pct >= 80 ? 'success' : pct >= 60 ? 'teal' : 'muted';
+  return <Pill variant={variant}>{pct}% match</Pill>;
 }
 
 function MediaThumbnail({ item }: { item: SearchResultItem }) {
@@ -26,7 +22,7 @@ function MediaThumbnail({ item }: { item: SearchResultItem }) {
       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
         <Image
           src={url}
-          alt={item.asset.title ?? "Media asset"}
+          alt={item.asset.title ?? 'Media asset'}
           fill
           className="object-cover"
           sizes="64px"
@@ -73,9 +69,9 @@ function MediaResultRow({
         {item.asset.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {item.asset.tags.slice(0, 4).map((tag) => (
-              <Badge key={tag} variant="outline" size="1" color="gray">
+              <Pill key={tag} variant="muted">
                 {tag}
-              </Badge>
+              </Pill>
             ))}
           </div>
         )}
@@ -112,9 +108,7 @@ export function MediaLibrarySearchResults({
           <Images className="h-3.5 w-3.5 text-blue-500" />
           <span className="text-sm font-medium text-foreground">Media library</span>
           {query && (
-            <span className="truncate text-xs text-muted-foreground">
-              &ldquo;{query}&rdquo;
-            </span>
+            <span className="truncate text-xs text-muted-foreground">&ldquo;{query}&rdquo;</span>
           )}
         </div>
 

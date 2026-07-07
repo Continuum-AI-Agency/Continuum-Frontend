@@ -1,108 +1,96 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import dynamic from "next/dynamic"
-import { Cross2Icon } from "@radix-ui/react-icons"
-import { AnimatePresence, motion } from "motion/react"
-import { useShallow } from "zustand/react/shallow"
-import { DEFAULT_REEL_VIDEO_BATCH_MAX } from "@continuum/contracts"
-
-import { useCalendarStore } from "@/lib/organic/store"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
-import type {
-  OrganicCalendarDay,
-  OrganicCalendarDraft,
-  OrganicCreationStep,
-  OrganicEditorSlide,
-  OrganicTrendType,
-  OrganicPlatformTag,
-} from "./types"
-import type { Trend } from "@/lib/organic/trends"
-import { CalendarDndContext } from "./CalendarDndContext"
-import { TimeGridCanvas } from "./TimeGridCanvas"
-import { CalendarDraftCard } from "./CalendarDraftCard"
+import { DEFAULT_REEL_VIDEO_BATCH_MAX } from '@continuum/contracts';
+import { Cross2Icon } from '@radix-ui/react-icons';
+import { AnimatePresence, motion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
+import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
+import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
+import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { useCalendarStore } from '@/lib/organic/store';
+import type { Trend } from '@/lib/organic/trends';
+import { getLocalStorageJSON } from '@/lib/storage';
+import { useAiStudioHandoff } from '../hooks/useAiStudioHandoff';
+import { useCalendarDnD } from '../hooks/useCalendarDnD';
+import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
+import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
+import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
+import { useCalendarSelection } from '../hooks/useCalendarSelection';
+import { useDraftGeneration } from '../hooks/useDraftGeneration';
+import { AiPostComposer } from './AiPostComposer';
+import { AiStudioHandoffProvider } from './AiStudioHandoffContext';
+import { BulkActionToolbar } from './BulkActionToolbar';
+import { CalendarDndContext } from './CalendarDndContext';
+import { CalendarDraftCard } from './CalendarDraftCard';
+import { CalendarToolbar } from './CalendarToolbar';
 import {
-  UNSCHEDULED_DAY_ID,
   buildWeekDays,
   formatDayId,
   formatWeekHeading,
   formatWeekRange,
   sliceWeekDays,
   startOfWeek,
-} from "./calendar-utils"
-import { useCalendarSelection } from "../hooks/useCalendarSelection"
-import { useCalendarDnD } from "../hooks/useCalendarDnD"
-import { useDraftGeneration } from "../hooks/useDraftGeneration"
-import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistence"
-import { useCalendarRealtimeSync } from "../hooks/useCalendarRealtimeSync"
-import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
-import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
-import { BulkActionToolbar } from "./BulkActionToolbar"
-import { useGenerateDraftMedia } from "@/components/organic/hooks/useGenerateDraftMedia"
-import { OrganicCreativesPicker } from "./OrganicCreativesPicker"
-import { OrganicDraftPreview } from "./OrganicDraftPreview"
-import { Button } from "@/components/ui/button"
+  UNSCHEDULED_DAY_ID,
+} from './calendar-utils';
+import { OrganicCreativesPicker } from './OrganicCreativesPicker';
+import { OrganicDraftPreview } from './OrganicDraftPreview';
 import {
   buildPlannerPlatforms,
+  type CreatePostFormat,
   type CreatePostMode,
   type PlannerPlatformKey,
-} from "./planner-platforms"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { AiPostComposer } from "./AiPostComposer"
-import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
-import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge"
-import { getLocalStorageJSON } from "@/lib/storage"
-import { CalendarToolbar } from "./CalendarToolbar"
-import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import type { CalendarPostAccountsByPlatform } from "@/lib/organic/calendar-posts"
-import { evaluateDraftReadiness } from "@/lib/organic/draftReadiness"
+} from './planner-platforms';
+import { TimeGridCanvas } from './TimeGridCanvas';
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicCreationStep,
+  OrganicEditorSlide,
+  OrganicPlatformTag,
+  OrganicTrendType,
+} from './types';
 
-const OrganicMonthlyCalendar = dynamic(
-  () => import("./OrganicMonthlyCalendar").then((m) => m.OrganicMonthlyCalendar)
-)
-const OrganicListView = dynamic(
-  () => import("./OrganicListView").then((m) => m.OrganicListView)
-)
-const OrganicTrendsDrawer = dynamic(
-  () => import("./OrganicTrendsDrawer").then((m) => m.OrganicTrendsDrawer)
-)
+const OrganicMonthlyCalendar = dynamic(() =>
+  import('./OrganicMonthlyCalendar').then((m) => m.OrganicMonthlyCalendar),
+);
+const OrganicListView = dynamic(() => import('./OrganicListView').then((m) => m.OrganicListView));
+const OrganicTrendsDrawer = dynamic(() =>
+  import('./OrganicTrendsDrawer').then((m) => m.OrganicTrendsDrawer),
+);
 
 type OrganicCalendarWorkspaceClientProps = {
-  days: OrganicCalendarDay[]
-  steps: OrganicCreationStep[]
-  editorSlides: OrganicEditorSlide[]
-  trendTypes: OrganicTrendType[]
-  trends?: Trend[]
-  activePlatforms?: OrganicPlatformKey[]
-  platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>
-  maxTrendSelections?: number
-  brandProfileId?: string
-  brandName?: string
-  userId?: string
-  instagramAccountId?: string
-  initialWeekStart?: string | null
-  initialSelectedDraftId?: string | null
-  initialView?: "week" | "month" | "list"
-  postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform
-}
+  days: OrganicCalendarDay[];
+  steps: OrganicCreationStep[];
+  editorSlides: OrganicEditorSlide[];
+  trendTypes: OrganicTrendType[];
+  trends?: Trend[];
+  activePlatforms?: OrganicPlatformKey[];
+  platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
+  maxTrendSelections?: number;
+  brandProfileId?: string;
+  brandName?: string;
+  userId?: string;
+  instagramAccountId?: string;
+  initialWeekStart?: string | null;
+  initialSelectedDraftId?: string | null;
+  initialView?: 'week' | 'month' | 'list';
+  postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform;
+};
 
-const NOOP_STRING = (_id: string) => {}
+const NOOP_STRING = (_id: string) => {};
 
 function isSchedulablePlannerPlatform(
-  platform: PlannerPlatformKey | undefined
+  platform: PlannerPlatformKey | undefined,
 ): platform is OrganicPlatformTag {
-  return platform === "instagram" || platform === "linkedin"
+  return platform === 'instagram' || platform === 'linkedin';
 }
 
 export function OrganicCalendarWorkspaceClient({
@@ -171,107 +159,101 @@ export function OrganicCalendarWorkspaceClient({
       gridError: state.gridError,
       dateRange: state.dateRange,
       setDateRange: state.setDateRange,
-    }))
-  )
+    })),
+  );
 
   React.useEffect(() => {
-    const igAccountId = instagramAccountId ?? platformAccountIds.instagram ?? null
-    setAccountContext({ igAccountId, brandId: brandProfileId ?? null })
-  }, [instagramAccountId, platformAccountIds, brandProfileId, setAccountContext])
+    const igAccountId = instagramAccountId ?? platformAccountIds.instagram ?? null;
+    setAccountContext({ igAccountId, brandId: brandProfileId ?? null });
+  }, [instagramAccountId, platformAccountIds, brandProfileId, setAccountContext]);
 
-  const {
-    selectedId,
-    selectedIds,
-    handleSelect,
-    clearAll,
-    handleKeyDown,
-  } = useCalendarSelection(calendarDays)
+  const { selectedId, selectedIds, handleSelect, clearAll, handleKeyDown } =
+    useCalendarSelection(calendarDays);
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
       ...trends,
-      ...trendTypes.flatMap((trendType) =>
-        trendType.groups.flatMap((group) => group.trends)
-      ),
-    ]
+      ...trendTypes.flatMap((trendType) => trendType.groups.flatMap((group) => group.trends)),
+    ];
 
-    const deduped = new Map<string, Trend>()
+    const deduped = new Map<string, Trend>();
     merged.forEach((item) => {
       if (!deduped.has(item.id)) {
-        deduped.set(item.id, item)
+        deduped.set(item.id, item);
       }
-    })
+    });
 
-    return Array.from(deduped.values())
-  }, [trendTypes, trends])
+    return Array.from(deduped.values());
+  }, [trendTypes, trends]);
 
   const resolvedInitialWeekStart = React.useMemo(() => {
     if (initialWeekStart) {
-      const parsed = new Date(initialWeekStart)
+      const parsed = new Date(initialWeekStart);
       if (!Number.isNaN(parsed.getTime())) {
-        return startOfWeek(parsed)
+        return startOfWeek(parsed);
       }
     }
     if (persistedWeekStartId) {
-      const parsed = new Date(persistedWeekStartId)
+      const parsed = new Date(persistedWeekStartId);
       if (!Number.isNaN(parsed.getTime())) {
-        return startOfWeek(parsed)
+        return startOfWeek(parsed);
       }
     }
-    return startOfWeek(new Date())
-  }, [initialWeekStart, persistedWeekStartId])
-  const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart)
-  const [monthAnchorDate, setMonthAnchorDate] = React.useState<Date>(resolvedInitialWeekStart)
-  const [localGridViewMode, setLocalGridViewMode] = React.useState<"day" | "week">("week")
-  const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false)
+    return startOfWeek(new Date());
+  }, [initialWeekStart, persistedWeekStartId]);
+  const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart);
+  const [monthAnchorDate, setMonthAnchorDate] = React.useState<Date>(resolvedInitialWeekStart);
+  const [localGridViewMode, setLocalGridViewMode] = React.useState<'day' | 'week'>('week');
+  const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false);
 
   // Apply initialView from URL search param on mount (once)
   React.useEffect(() => {
-    if (initialView) setViewMode(initialView)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (initialView) setViewMode(initialView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Re-seed the visible week when the URL-derived week prop changes (e.g. returning
   // from AI Studio with ?weekStartId=...). `weekStart` is local state seeded once,
   // so without this a back-nav would paint the wrong/default week. Keyed on the prop
   // only, so manual week navigation (which changes state, not the prop) is untouched.
   React.useEffect(() => {
-    if (!initialWeekStart) return
-    const parsed = new Date(initialWeekStart)
-    if (Number.isNaN(parsed.getTime())) return
-    setWeekStart(startOfWeek(parsed))
-    setMonthAnchorDate(startOfWeek(parsed))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialWeekStart])
-  const weekStartId = formatDayId(weekStart)
+    if (!initialWeekStart) return;
+    const parsed = new Date(initialWeekStart);
+    if (Number.isNaN(parsed.getTime())) return;
+    setWeekStart(startOfWeek(parsed));
+    setMonthAnchorDate(startOfWeek(parsed));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialWeekStart]);
+  const weekStartId = formatDayId(weekStart);
 
-  const { refetch: refetchCalendarDrafts, isHydrated: isCalendarHydrated } = useCalendarDraftPersistence({
-    brandProfileId,
-    calendarDays,
-    setCalendarDays,
-    updateDraftById,
-    platformAccountIds,
-  })
+  const { refetch: refetchCalendarDrafts, isHydrated: isCalendarHydrated } =
+    useCalendarDraftPersistence({
+      brandProfileId,
+      calendarDays,
+      setCalendarDays,
+      updateDraftById,
+      platformAccountIds,
+    });
 
   // Server-authoritative freshness: subscribe to Realtime draft writes for this
   // brand so out-of-band agent drafts (chat tools, Stage-2 blueprint worker) hit
   // the planner instantly via the same nonce-refetch path below.
-  useCalendarRealtimeSync({ brandProfileId })
+  useCalendarRealtimeSync({ brandProfileId });
 
   // Reconcile against the backend when agent-side work completes (bulk run done,
   // single draft ready) so en-masse generated drafts appear without a manual reload.
-  const calendarRefetchNonce = useCalendarStore((state) => state.calendarRefetchNonce)
+  const calendarRefetchNonce = useCalendarStore((state) => state.calendarRefetchNonce);
   React.useEffect(() => {
-    if (calendarRefetchNonce === 0) return
+    if (calendarRefetchNonce === 0) return;
     // Debounce so a burst of completions (a bulk run's per-item signals) coalesces
     // into a single reconcile.
     const timer = setTimeout(() => {
       void refetchCalendarDrafts().catch(() => {
         // Best-effort reconcile; the local store remains usable.
-      })
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [calendarRefetchNonce, refetchCalendarDrafts])
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [calendarRefetchNonce, refetchCalendarDrafts]);
 
   const postedContentAccounts = React.useMemo<CalendarPostAccountsByPlatform>(
     () => ({
@@ -279,9 +261,10 @@ export function OrganicCalendarWorkspaceClient({
       facebook: postedContentAccountsByPlatform?.facebook ?? [],
       tiktok: postedContentAccountsByPlatform?.tiktok ?? [],
       youtube: postedContentAccountsByPlatform?.youtube ?? [],
+      linkedin: postedContentAccountsByPlatform?.linkedin ?? [],
     }),
-    [postedContentAccountsByPlatform]
-  )
+    [postedContentAccountsByPlatform],
+  );
 
   const {
     posts: postedContent,
@@ -293,66 +276,63 @@ export function OrganicCalendarWorkspaceClient({
     weekStart,
     monthAnchorDate,
     accountsByPlatform: postedContentAccounts,
-  })
+  });
 
   React.useEffect(() => {
-    setPersistedWeekStartId(weekStartId)
-  }, [setPersistedWeekStartId, weekStartId])
+    setPersistedWeekStartId(weekStartId);
+  }, [setPersistedWeekStartId, weekStartId]);
 
   // Pre-fetch placeholder: seed a week scaffold so the grid paints before the
   // fetch-all refetch hydrates the full loaded-day set. Once drafts load (or for a
   // brand with none, the visible-month scaffold), this no longer fires.
   React.useEffect(() => {
-    if (calendarDays.length > 0) return
-    setCalendarDays(initialDays.length > 0 ? initialDays : buildWeekDays(weekStart))
-  }, [calendarDays.length, initialDays, setCalendarDays, weekStart])
+    if (calendarDays.length > 0) return;
+    setCalendarDays(initialDays.length > 0 ? initialDays : buildWeekDays(weekStart));
+  }, [calendarDays.length, initialDays, setCalendarDays, weekStart]);
 
   // Week navigation is now a pure cursor move over already-loaded data — no per-week
   // fetch or cache swap. The week grid re-slices the loaded set for the new week.
   const handleWeekChange = React.useCallback(
     (date: Date) => {
-      const nextWeekStart = startOfWeek(date)
-      if (formatDayId(nextWeekStart) === weekStartId) return
-      clearAll()
-      setWeekStart(nextWeekStart)
+      const nextWeekStart = startOfWeek(date);
+      if (formatDayId(nextWeekStart) === weekStartId) return;
+      clearAll();
+      setWeekStart(nextWeekStart);
     },
-    [clearAll, weekStartId]
-  )
+    [clearAll, weekStartId],
+  );
 
   const handlePreviousWeek = React.useCallback(() => {
-    const previous = new Date(weekStart)
-    previous.setDate(weekStart.getDate() - 7)
-    handleWeekChange(previous)
-  }, [handleWeekChange, weekStart])
+    const previous = new Date(weekStart);
+    previous.setDate(weekStart.getDate() - 7);
+    handleWeekChange(previous);
+  }, [handleWeekChange, weekStart]);
 
   const handleNextWeek = React.useCallback(() => {
-    const next = new Date(weekStart)
-    next.setDate(weekStart.getDate() + 7)
-    handleWeekChange(next)
-  }, [handleWeekChange, weekStart])
+    const next = new Date(weekStart);
+    next.setDate(weekStart.getDate() + 7);
+    handleWeekChange(next);
+  }, [handleWeekChange, weekStart]);
 
   const handlePreviousMonth = React.useCallback(() => {
-    const prev = new Date(monthAnchorDate)
-    prev.setDate(1)
-    prev.setMonth(prev.getMonth() - 1)
-    setMonthAnchorDate(prev)
-  }, [monthAnchorDate])
+    const prev = new Date(monthAnchorDate);
+    prev.setDate(1);
+    prev.setMonth(prev.getMonth() - 1);
+    setMonthAnchorDate(prev);
+  }, [monthAnchorDate]);
 
   const handleNextMonth = React.useCallback(() => {
-    const next = new Date(monthAnchorDate)
-    next.setDate(1)
-    next.setMonth(next.getMonth() + 1)
-    setMonthAnchorDate(next)
-  }, [monthAnchorDate])
+    const next = new Date(monthAnchorDate);
+    next.setDate(1);
+    next.setMonth(next.getMonth() + 1);
+    setMonthAnchorDate(next);
+  }, [monthAnchorDate]);
 
-  const drafts = React.useMemo(
-    () => calendarDays.flatMap((day) => day.slots),
-    [calendarDays]
-  )
+  const drafts = React.useMemo(() => calendarDays.flatMap((day) => day.slots), [calendarDays]);
 
   // "Planned" calendar lens: when off, hide bulk-plan drafts from the week/month
   // grids (the list view still shows them, tagged). Default on.
-  const showPlanned = useCalendarStore((state) => state.showPlanned)
+  const showPlanned = useCalendarStore((state) => state.showPlanned);
   const gridDays = React.useMemo(
     () =>
       showPlanned
@@ -361,77 +341,75 @@ export function OrganicCalendarWorkspaceClient({
             ...day,
             slots: day.slots.filter((slot) => !slot.contentPlanId),
           })),
-    [calendarDays, showPlanned]
-  )
+    [calendarDays, showPlanned],
+  );
 
   // Week VIEW MODEL: exactly the 7 days of the current week, sliced from the full
   // loaded set (synthesizing any missing day) so the grid stays 7 columns wide.
   const visibleWeekDays = React.useMemo(
     () => sliceWeekDays(gridDays, weekStart),
-    [gridDays, weekStart]
-  )
+    [gridDays, weekStart],
+  );
 
   // List VIEW MODEL: the loaded set narrowed to the custom timeframe (null = all).
   // Undated drafts (the "unscheduled" sentinel) bypass the date filter so they are
   // always reachable — they are exactly the drafts that were previously invisible.
   const listDays = React.useMemo(() => {
-    const scheduled = gridDays.filter((day) => day.id !== UNSCHEDULED_DAY_ID)
-    const unscheduled = gridDays.filter((day) => day.id === UNSCHEDULED_DAY_ID)
+    const scheduled = gridDays.filter((day) => day.id !== UNSCHEDULED_DAY_ID);
+    const unscheduled = gridDays.filter((day) => day.id === UNSCHEDULED_DAY_ID);
     const filtered = dateRange
       ? scheduled.filter((day) => day.id >= dateRange.from && day.id <= dateRange.to)
-      : scheduled
-    return [...filtered, ...unscheduled]
-  }, [gridDays, dateRange])
+      : scheduled;
+    return [...filtered, ...unscheduled];
+  }, [gridDays, dateRange]);
 
   const selectedDraft = React.useMemo(() => {
-    if (!selectedId) return null
-    return drafts.find((draft) => draft.id === selectedId) ?? null
-  }, [drafts, selectedId])
+    if (!selectedId) return null;
+    return drafts.find((draft) => draft.id === selectedId) ?? null;
+  }, [drafts, selectedId]);
 
-  const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts])
+  const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts]);
 
   // Unified selection sync: prune stale selections and restore preferred
   // draft in a single pass to avoid cascading renders.
   React.useEffect(() => {
     // Prune multi-selection IDs that no longer exist
-    const nextSelectedIds = selectedIds.filter((id) => allDraftIds.has(id))
+    const nextSelectedIds = selectedIds.filter((id) => allDraftIds.has(id));
     if (nextSelectedIds.length !== selectedIds.length) {
-      setSelectedDraftIds(nextSelectedIds)
+      setSelectedDraftIds(nextSelectedIds);
     }
 
     // Resolve the active single-selection draft
-    const lastDraftKey = brandProfileId
-      ? brandStorageKeyAiStudioLastDraft(brandProfileId)
-      : null
+    const lastDraftKey = brandProfileId ? brandStorageKeyAiStudioLastDraft(brandProfileId) : null;
 
     if (selectedId && !allDraftIds.has(selectedId)) {
       // Before the fetch-all finishes, allDraftIds is incomplete — a draft we are
       // returning to from AI Studio (or about to restore) may simply not be loaded
       // yet. Don't prune the selection until hydration is authoritative, or the
       // back-nav transiently loses the draft being edited.
-      if (!isCalendarHydrated) return
+      if (!isCalendarHydrated) return;
       // Current selection is stale -- attempt to restore a preferred draft
       // instead of nulling out then re-selecting on the next render cycle.
-      if (typeof window !== "undefined") {
+      if (typeof window !== 'undefined') {
         const preferredDraftId =
           initialSelectedDraftId ??
-          (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null)
+          (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
         if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
-          setSelectedDraftId(preferredDraftId)
-          return
+          setSelectedDraftId(preferredDraftId);
+          return;
         }
       }
-      setSelectedDraftId(null)
-      return
+      setSelectedDraftId(null);
+      return;
     }
 
     // No current selection -- try to restore from initial prop / localStorage
-    if (!selectedId && typeof window !== "undefined") {
+    if (!selectedId && typeof window !== 'undefined') {
       const preferredDraftId =
         initialSelectedDraftId ??
-        (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null)
+        (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
       if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
-        setSelectedDraftId(preferredDraftId)
+        setSelectedDraftId(preferredDraftId);
       }
     }
   }, [
@@ -443,14 +421,13 @@ export function OrganicCalendarWorkspaceClient({
     selectedIds,
     setSelectedDraftId,
     setSelectedDraftIds,
-  ])
+  ]);
 
-  const {
-    activeDragDraft,
-    handleDragStart,
-    handleDragEnd,
-    handleNativeDrop,
-  } = useCalendarDnD(calendarDays, drafts, platformAccountIds)
+  const { activeDragDraft, handleDragStart, handleDragEnd, handleNativeDrop } = useCalendarDnD(
+    calendarDays,
+    drafts,
+    platformAccountIds,
+  );
 
   const {
     seededDraftCount,
@@ -468,134 +445,139 @@ export function OrganicCalendarWorkspaceClient({
     platformAccountIds,
     activePlatforms,
     weekStartId,
-  })
+  });
 
-  const { refresh: refreshTrends, isFetching: isFetchingTrends } = useBrandInsightsRefresh(brandProfileId ?? "")
+  const { refresh: refreshTrends, isFetching: isFetchingTrends } = useBrandInsightsRefresh(
+    brandProfileId ?? '',
+  );
 
   const plannerPlatforms = React.useMemo(
     () => buildPlannerPlatforms(activePlatforms, calendarDays),
-    [activePlatforms, calendarDays]
-  )
+    [activePlatforms, calendarDays],
+  );
 
   const schedulableChannels = React.useMemo(
     () => plannerPlatforms.filter((platform) => !platform.comingSoon).length,
-    [plannerPlatforms]
-  )
+    [plannerPlatforms],
+  );
 
-  const weekTitle = React.useMemo(() => formatWeekHeading(weekStart), [weekStart])
+  const weekTitle = React.useMemo(() => formatWeekHeading(weekStart), [weekStart]);
   const weekSubtitle = React.useMemo(
     () => `${formatWeekRange(weekStart)} • ${schedulableChannels} scheduling channels`,
-    [schedulableChannels, weekStart]
-  )
+    [schedulableChannels, weekStart],
+  );
 
   const createQuickDraft = React.useCallback(
     (context?: {
-      dayId?: string
-      platform?: PlannerPlatformKey
-      status?: "draft" | "scheduled" | "placeholder"
-      trendId?: string
-      mode?: CreatePostMode
+      dayId?: string;
+      platform?: PlannerPlatformKey;
+      status?: 'draft' | 'scheduled' | 'placeholder';
+      trendId?: string;
+      mode?: CreatePostMode;
+      format?: CreatePostFormat;
     }) => {
       const selectedPlatform =
         (isSchedulablePlannerPlatform(context?.platform) && context?.platform) ||
-        (activePlatforms.find((platform) =>
-          ["instagram", "linkedin"].includes(platform)
-        ) as OrganicPlatformTag | undefined) ||
-        "instagram"
+        (activePlatforms.find((platform) => ['instagram', 'linkedin'].includes(platform)) as
+          | OrganicPlatformTag
+          | undefined) ||
+        'instagram';
 
       const targetDay = context?.dayId
-        ? calendarDays.find((day) => day.id === context.dayId) ?? null
-        : (calendarDays[0] ?? null)
-      if (!targetDay) return null
-      const isManual = context?.mode === "manual"
-      const status = context?.status ?? "draft"
-      const trendTag = context?.trendId
-      const targetAccountId = platformAccountIds[selectedPlatform as OrganicPlatformKey]
+        ? (calendarDays.find((day) => day.id === context.dayId) ?? null)
+        : (calendarDays[0] ?? null);
+      if (!targetDay) return null;
+      const isManual = context?.mode === 'manual';
+      const status = context?.status ?? 'draft';
+      const trendTag = context?.trendId;
+      const targetAccountId = platformAccountIds[selectedPlatform as OrganicPlatformKey];
 
       const draftId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
           ? `draft-${crypto.randomUUID()}`
-          : `draft-${Date.now()}`
+          : `draft-${Date.now()}`;
 
       const nextDraft: OrganicCalendarDraft = {
         id: draftId,
         clientKey: draftId,
         title:
-          status === "placeholder"
-            ? "Content idea"
+          status === 'placeholder'
+            ? 'Content idea'
             : `New ${selectedPlatform[0].toUpperCase()}${selectedPlatform.slice(1)} post`,
-        summary: "",
-        timeLabel: targetDay?.suggestedTimes[0] ?? "9:00 AM",
+        summary: '',
+        timeLabel: targetDay?.suggestedTimes[0] ?? '9:00 AM',
         dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
         status,
         platforms: [selectedPlatform],
-        format: "Post",
-        objective: isManual ? "Manual" : "Draft",
-        origin: isManual ? "manual" : undefined,
-        creativeIdea: "",
-        captionPreview: "",
+        format: context?.format ?? 'Post',
+        objective: isManual ? 'Manual' : 'Draft',
+        origin: isManual ? 'manual' : undefined,
+        creativeIdea: '',
+        captionPreview: '',
         tags: [],
         // No media exists yet for a freshly-created quick draft. Media presence
         // is derived downstream from real publishingAssets / mediaStatus, so this
         // must start at 0 rather than seeding a fake "has media" count.
         mediaCount: 0,
-        seedTrendId: status === "placeholder" ? trendTag : undefined,
+        seedTrendId: status === 'placeholder' ? trendTag : undefined,
         targetAccountId,
-      }
+      };
 
-      addDraft(targetDay.id, nextDraft)
-      handleSelect(draftId, false)
-      return draftId
+      addDraft(targetDay.id, nextDraft);
+      handleSelect(draftId, false);
+      return draftId;
     },
-    [activePlatforms, addDraft, calendarDays, handleSelect, platformAccountIds]
-  )
+    [activePlatforms, addDraft, calendarDays, handleSelect, platformAccountIds],
+  );
 
   // "Create with AI" composer (direction + tagged creatives + trends → durable job).
   const [aiComposer, setAiComposer] = React.useState<{
-    platform: OrganicPlatformKey
-    scheduledAt: string
-  } | null>(null)
+    platform: OrganicPlatformKey;
+    scheduledAt: string;
+  } | null>(null);
 
   const handleGoDraft = React.useCallback(
     (context?: {
-      dayId?: string
-      platform?: PlannerPlatformKey
-      trendId?: string
-      status?: "draft" | "scheduled" | "placeholder"
-      mode?: CreatePostMode
+      dayId?: string;
+      platform?: PlannerPlatformKey;
+      trendId?: string;
+      status?: 'draft' | 'scheduled' | 'placeholder';
+      mode?: CreatePostMode;
+      format?: CreatePostFormat;
     }) => {
-      const mode = context?.mode ?? "ai"
+      const mode = context?.mode ?? 'ai';
       // AI mode opens the composer and tasks a durable single-post agent; manual
       // mode seeds an editable draft from scratch.
-      if (mode === "ai") {
+      if (mode === 'ai') {
         const platform =
-          (isSchedulablePlannerPlatform(context?.platform) && context?.platform) || "instagram"
+          (isSchedulablePlannerPlatform(context?.platform) && context?.platform) || 'instagram';
         const targetDay = context?.dayId
-          ? calendarDays.find((day) => day.id === context.dayId) ?? calendarDays[0] ?? null
-          : calendarDays[0] ?? null
-        const dayId = (targetDay?.id ?? context?.dayId ?? "").slice(0, 10)
+          ? (calendarDays.find((day) => day.id === context.dayId) ?? calendarDays[0] ?? null)
+          : (calendarDays[0] ?? null);
+        const dayId = (targetDay?.id ?? context?.dayId ?? '').slice(0, 10);
         const scheduledAt = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
           ? `${dayId}T12:00:00.000Z`
-          : new Date().toISOString()
-        setAiComposer({ platform: platform as OrganicPlatformKey, scheduledAt })
-        return
+          : new Date().toISOString();
+        setAiComposer({ platform: platform as OrganicPlatformKey, scheduledAt });
+        return;
       }
-      const status = context?.status ?? "draft"
+      const status = context?.status ?? 'draft';
       const createdDraftId = createQuickDraft({
         dayId: context?.dayId,
         platform: context?.platform,
         status,
         trendId: context?.trendId,
         mode,
-      })
-      if (!createdDraftId) return
+        format: context?.format,
+      });
+      if (!createdDraftId) return;
     },
-    [calendarDays, createQuickDraft]
-  )
+    [calendarDays, createQuickDraft],
+  );
 
   const handleGenerateSelectedDrafts = React.useCallback(() => {
-    void handleGenerateDrafts()
-  }, [handleGenerateDrafts])
+    void handleGenerateDrafts();
+  }, [handleGenerateDrafts]);
 
   const { handleOpenInAiStudio, handleOpenDraftInAiStudio } = useAiStudioHandoff({
     brandProfileId,
@@ -604,469 +586,502 @@ export function OrganicCalendarWorkspaceClient({
     updateDraftById,
     setSelectedDraftId,
     isCalendarHydrated,
-  })
+  });
 
   const handleOpenDraftInStudio = React.useCallback(
     (draftId: string) => {
-      let found: OrganicCalendarDraft | undefined
+      let found: OrganicCalendarDraft | undefined;
       for (const day of calendarDays) {
-        found = day.slots.find((d: OrganicCalendarDraft) => d.id === draftId)
-        if (found) break
+        found = day.slots.find((d: OrganicCalendarDraft) => d.id === draftId);
+        if (found) break;
       }
-      if (!found) return
-      handleOpenDraftInAiStudio(found)
+      if (!found) return;
+      handleOpenDraftInAiStudio(found);
     },
-    [calendarDays, handleOpenDraftInAiStudio]
-  )
+    [calendarDays, handleOpenDraftInAiStudio],
+  );
 
   const handleBulkApprove = React.useCallback(() => {
     // Only schedule drafts that meet the bare minimum (caption + media); leave the
     // rest as drafts so the readiness gate can't be bypassed in bulk.
     selectedIds.forEach((id) =>
       updateDraftById(id, (d) =>
-        evaluateDraftReadiness(d).ready ? { ...d, status: "scheduled" as const } : d
-      )
-    )
-    clearAll()
-  }, [selectedIds, updateDraftById, clearAll])
+        evaluateDraftReadiness(d).ready ? { ...d, status: 'scheduled' as const } : d,
+      ),
+    );
+    clearAll();
+  }, [selectedIds, updateDraftById, clearAll]);
 
   const handleBulkDelete = React.useCallback(() => {
-    bulkDeleteDrafts(selectedIds)
-    clearAll()
-  }, [bulkDeleteDrafts, selectedIds, clearAll])
+    bulkDeleteDrafts(selectedIds);
+    clearAll();
+  }, [bulkDeleteDrafts, selectedIds, clearAll]);
 
   const handleBulkMove = React.useCallback(() => {
-    bulkMoveDrafts(selectedIds, calendarDays[0]?.id)
-    clearAll()
-  }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll])
+    bulkMoveDrafts(selectedIds, calendarDays[0]?.id);
+    clearAll();
+  }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll]);
 
   // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel
   // drafts. Reel and image batches both flow through this single hook so the
   // GenerationsPopover ticker registers a backendJobId and server-side cancel works.
-  const { generateDraftMedia, isGenerating: isGeneratingMedia } = useGenerateDraftMedia()
+  const { generateDraftMedia, isGenerating: isGeneratingMedia } = useGenerateDraftMedia();
 
   // Selected reel drafts that carry a persisted storyboard and have not yet been
   // rendered to video — the eligible set for the gated "Generate videos" batch.
   const reelTargets = React.useMemo(() => {
-    const selected = new Set(selectedIds)
+    const selected = new Set(selectedIds);
     return drafts
       .filter((d) => selected.has(d.id))
       .filter((d) => {
-        const format = (d.format ?? "").toLowerCase()
-        const reel = d.mediaSuggestion?.reel
-        const hasStoryboard = Array.isArray(reel?.scenes) && reel.scenes.length > 0
+        const format = (d.format ?? '').toLowerCase();
+        const reel = d.mediaSuggestion?.reel;
+        const hasStoryboard = Array.isArray(reel?.scenes) && reel.scenes.length > 0;
         return (
-          (format === "reel" || format === "video") &&
+          (format === 'reel' || format === 'video') &&
           hasStoryboard &&
           reel?.generated !== true &&
           Boolean(d.backendDraftId)
-        )
+        );
       })
-      .map((d) => ({ id: d.id, backendDraftId: d.backendDraftId as string }))
-  }, [drafts, selectedIds])
+      .map((d) => ({ id: d.id, backendDraftId: d.backendDraftId as string }));
+  }, [drafts, selectedIds]);
 
   const handleGenerateReels = React.useCallback(() => {
-    if (!brandProfileId || reelTargets.length === 0) return
+    if (!brandProfileId || reelTargets.length === 0) return;
     // Cap the batch client-side (the backend also enforces this) so the user
     // gets clear feedback instead of an opaque 400.
-    const capped = reelTargets.slice(0, DEFAULT_REEL_VIDEO_BATCH_MAX)
-    if (typeof window !== "undefined") {
-      const approxClips = capped.length * 4
+    const capped = reelTargets.slice(0, DEFAULT_REEL_VIDEO_BATCH_MAX);
+    if (typeof window !== 'undefined') {
+      const approxClips = capped.length * 4;
       const overflowNote =
         reelTargets.length > capped.length
           ? ` Only the first ${capped.length} of ${reelTargets.length} selected will render (max ${DEFAULT_REEL_VIDEO_BATCH_MAX} per batch).`
-          : ""
+          : '';
       const confirmed = window.confirm(
-        `Generate ${capped.length} reel video${capped.length === 1 ? "" : "s"}? ` +
-          `This renders ~${approxClips} AI video clips and may take a few minutes.${overflowNote}`
-      )
-      if (!confirmed) return
+        `Generate ${capped.length} reel video${capped.length === 1 ? '' : 's'}? ` +
+          `This renders ~${approxClips} AI video clips and may take a few minutes.${overflowNote}`,
+      );
+      if (!confirmed) return;
     }
     void generateDraftMedia(
       brandProfileId,
-      capped.map((t) => ({ feId: t.id, backendDraftId: t.backendDraftId, format: "reel" })),
-    )
-  }, [brandProfileId, reelTargets, generateDraftMedia])
+      capped.map((t) => ({ feId: t.id, backendDraftId: t.backendDraftId, format: 'reel' })),
+    );
+  }, [brandProfileId, reelTargets, generateDraftMedia]);
 
   const mediaGenerationTargets = React.useMemo(() => {
-    const selected = new Set(selectedIds)
+    const selected = new Set(selectedIds);
     return drafts
       .filter((d) => selected.has(d.id) && Boolean(d.backendDraftId))
       .filter((d) => {
         // Only include drafts pending media generation (not already ready or user-supplied).
-        const ms = d.mediaSuggestion?.mediaStatus
-        return !ms || ms === "pending" || ms === "generating"
+        const ms = d.mediaSuggestion?.mediaStatus;
+        return !ms || ms === 'pending' || ms === 'generating';
       })
-      .map((d) => ({ feId: d.id, backendDraftId: d.backendDraftId as string, format: d.format ?? "" }))
-  }, [drafts, selectedIds])
+      .map((d) => ({
+        feId: d.id,
+        backendDraftId: d.backendDraftId as string,
+        format: d.format ?? '',
+      }));
+  }, [drafts, selectedIds]);
 
   const handleBulkGenerateMedia = React.useCallback(() => {
-    if (!brandProfileId || mediaGenerationTargets.length === 0) return
-    void generateDraftMedia(brandProfileId, mediaGenerationTargets)
-  }, [brandProfileId, mediaGenerationTargets, generateDraftMedia])
+    if (!brandProfileId || mediaGenerationTargets.length === 0) return;
+    void generateDraftMedia(brandProfileId, mediaGenerationTargets);
+  }, [brandProfileId, mediaGenerationTargets, generateDraftMedia]);
 
   // Bulk "Attach creative…" — open a library picker once, apply the selection to
   // all selected drafts. The picker's onAttach gives us a resolved PublishingAsset[]
   // that we spread onto every target draft.
-  const [attachPickerOpen, setAttachPickerOpen] = React.useState(false)
+  const [attachPickerOpen, setAttachPickerOpen] = React.useState(false);
 
   const attachTargetDraftIds = React.useMemo(() => {
-    return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)))
-  }, [drafts, selectedIds])
+    return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)));
+  }, [drafts, selectedIds]);
 
   const handlePickerAttach = React.useCallback(
-    (publishingAssets: OrganicCalendarDraft["publishingAssets"]) => {
-      if (!publishingAssets?.length || attachTargetDraftIds.length === 0) return
+    (publishingAssets: OrganicCalendarDraft['publishingAssets']) => {
+      if (!publishingAssets?.length || attachTargetDraftIds.length === 0) return;
       // Derive a mediaSuggestion patch from the publishing assets so
       // assertPublishable + stageMediaForPublish both see consistent data.
-      const primary = publishingAssets[0]
-      const mediaPatch: OrganicCalendarDraft["mediaSuggestion"] = {
-        mediaStatus: "user_supplied",
+      const primary = publishingAssets[0];
+      const mediaPatch: OrganicCalendarDraft['mediaSuggestion'] = {
+        mediaStatus: 'user_supplied',
         kind: primary?.kind ?? undefined,
         bucket: primary?.bucket ?? undefined,
         url: primary?.storagePath ?? undefined,
-      }
+      };
       for (const draftId of attachTargetDraftIds) {
         updateDraftById(draftId, (draft) => ({
           ...draft,
           publishingAssets,
           mediaSuggestion: { ...draft.mediaSuggestion, ...mediaPatch },
-        }))
+        }));
       }
-      setAttachPickerOpen(false)
+      setAttachPickerOpen(false);
     },
     [attachTargetDraftIds, updateDraftById],
-  )
+  );
 
   const handleBulkAttachCreative = React.useCallback(() => {
-    if (attachTargetDraftIds.length === 0 || !brandProfileId) return
-    setAttachPickerOpen(true)
-  }, [attachTargetDraftIds, brandProfileId])
+    if (attachTargetDraftIds.length === 0 || !brandProfileId) return;
+    setAttachPickerOpen(true);
+  }, [attachTargetDraftIds, brandProfileId]);
 
-  const isGenerating = gridStatus === "running"
+  const isGenerating = gridStatus === 'running';
   const slotProgress = React.useMemo(() => {
-    const completed = gridProgress.completed
-    const total = gridProgress.total
-    if (typeof completed !== "number" || typeof total !== "number" || total <= 0) {
-      return null
+    const completed = gridProgress.completed;
+    const total = gridProgress.total;
+    if (typeof completed !== 'number' || typeof total !== 'number' || total <= 0) {
+      return null;
     }
-    const failed = typeof gridProgress.failed === "number" ? Math.max(0, gridProgress.failed) : 0
+    const failed = typeof gridProgress.failed === 'number' ? Math.max(0, gridProgress.failed) : 0;
     return {
       completed: Math.max(0, Math.min(completed, total)),
       total,
       failed,
-    }
-  }, [gridProgress.completed, gridProgress.failed, gridProgress.total])
+    };
+  }, [gridProgress.completed, gridProgress.failed, gridProgress.total]);
 
   const layoutTransition = React.useMemo(
     () => ({
       duration: 0.28,
       ease: [0.2, 0.8, 0.2, 1] as const,
     }),
-    []
-  )
+    [],
+  );
   const previewTransition = React.useMemo(
     () => ({
       duration: 0.24,
       ease: [0.16, 1, 0.3, 1] as const,
     }),
-    []
-  )
+    [],
+  );
 
   return (
     <AiStudioHandoffProvider onOpen={brandProfileId ? handleOpenDraftInStudio : null}>
-    <div
-      className="@container/organic h-full min-h-0 w-full overflow-hidden focus:outline-none"
-      onKeyDown={handleKeyDown}
-      tabIndex={0}
-    >
-      <CalendarDndContext
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        dragOverlay={
-          activeDragDraft ? (
-            <div className="w-[220px] cursor-grabbing opacity-60">
-              <CalendarDraftCard
-                draft={activeDragDraft}
-                isSelected={false}
-                isMultiSelected={false}
-                onSelect={NOOP_STRING}
-                onToggleSelection={NOOP_STRING}
-              />
-            </div>
-          ) : null
-        }
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: planner root is a keyboard-shortcut surface for the whole grid (delete/select), not a single control */}
+      <div
+        className="@container/organic h-full min-h-0 w-full overflow-hidden focus:outline-none"
+        onKeyDown={handleKeyDown}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so grid-level key handlers fire without a child holding focus
+        tabIndex={0}
       >
-        <motion.div
-          layout
-          transition={layoutTransition}
-          className="flex h-full min-h-0 w-full flex-col gap-[var(--shell-gutter-tight)] @[64rem]/organic:flex-row"
+        <CalendarDndContext
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          dragOverlay={
+            activeDragDraft ? (
+              <div className="w-[220px] cursor-grabbing opacity-60">
+                <CalendarDraftCard
+                  draft={activeDragDraft}
+                  isSelected={false}
+                  isMultiSelected={false}
+                  onSelect={NOOP_STRING}
+                  onToggleSelection={NOOP_STRING}
+                />
+              </div>
+            ) : null
+          }
         >
-          <motion.section
+          <motion.div
             layout
             transition={layoutTransition}
-            className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
+            className="flex h-full min-h-0 w-full flex-col gap-[var(--shell-gutter-tight)] @[64rem]/organic:flex-row"
           >
-            <motion.div layout transition={layoutTransition}>
-              <CalendarToolbar
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                dateRange={dateRange}
-                onDateRangeChange={setDateRange}
-                selectedTrendCount={selectedTrendIds.length}
-                maxTrendSelections={maxTrendSelections}
-                seededDraftCount={seededDraftCount}
-                isGenerating={isGenerating}
-                onOpenTrends={() => setTrendsDrawerOpen(true)}
-                onAddPlaceholder={() => handleGoDraft()}
-                onGenerate={handleGenerateSelectedDrafts}
-                onClear={clearCalendar}
-                draftsCount={drafts.length}
-                slotProgress={slotProgress}
-                gridProgress={gridProgress}
-                gridStatus={gridStatus}
-                gridError={gridError}
-                postedContentCount={postedContent.length}
-                isFetchingPostedContent={isFetchingPostedContent}
-                onFetchPostedContent={fetchExternalPosts}
-              />
-            </motion.div>
-
-            <motion.div
+            <motion.section
               layout
               transition={layoutTransition}
-              data-tour-id="organic-list-content"
-              className="min-h-0 flex-1 overflow-hidden"
+              className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
             >
-              <AnimatePresence mode="wait">
-                {viewMode === "week" && (
-                  <motion.div
-                    key="view-week"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="h-full"
-                  >
-                    {/* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
+              <motion.div layout transition={layoutTransition}>
+                <CalendarToolbar
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  dateRange={dateRange}
+                  onDateRangeChange={setDateRange}
+                  selectedTrendCount={selectedTrendIds.length}
+                  maxTrendSelections={maxTrendSelections}
+                  seededDraftCount={seededDraftCount}
+                  isGenerating={isGenerating}
+                  onOpenTrends={() => setTrendsDrawerOpen(true)}
+                  onCreatePost={(options) =>
+                    handleGoDraft({
+                      dayId: options.dayId,
+                      platform: options.platformKey,
+                      status: options.status,
+                      mode: options.mode,
+                      format: options.format,
+                    })
+                  }
+                  onGenerate={handleGenerateSelectedDrafts}
+                  onClear={clearCalendar}
+                  draftsCount={drafts.length}
+                  slotProgress={slotProgress}
+                  gridProgress={gridProgress}
+                  gridStatus={gridStatus}
+                  gridError={gridError}
+                  postedContentCount={postedContent.length}
+                  isFetchingPostedContent={isFetchingPostedContent}
+                  onFetchPostedContent={fetchExternalPosts}
+                />
+              </motion.div>
+
+              <motion.div
+                layout
+                transition={layoutTransition}
+                data-tour-id="organic-list-content"
+                className="min-h-0 flex-1 overflow-hidden"
+              >
+                <AnimatePresence mode="wait">
+                  {viewMode === 'week' && (
+                    <motion.div
+                      key="view-week"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="h-full"
+                    >
+                      {/* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
                         week grid takes the full vertical space instead of a 74/26 split. */}
-                    <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
-                      <TimeGridCanvas
-                        days={visibleWeekDays}
+                      <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
+                        <TimeGridCanvas
+                          days={visibleWeekDays}
+                          platforms={plannerPlatforms}
+                          selectedDraftId={selectedId}
+                          selectedDraftIds={selectedIds}
+                          rangeTitle={weekTitle}
+                          rangeSubtitle={weekSubtitle}
+                          viewMode={localGridViewMode}
+                          onViewModeChange={setLocalGridViewMode}
+                          onPreviousWeek={handlePreviousWeek}
+                          onNextWeek={handleNextWeek}
+                          onCreatePost={(context) =>
+                            handleGoDraft({
+                              dayId: context?.dayId,
+                              platform: context?.platform,
+                              status: context?.status,
+                              mode: context?.mode,
+                              format: context?.format,
+                            })
+                          }
+                          onSelectDraft={(id) => handleSelect(id, false)}
+                          onToggleSelection={(id) => handleSelect(id, true)}
+                          onRegenerate={handleRegenerate}
+                          onClearFailure={handleClearFailure}
+                          onNativeDrop={handleNativeDrop}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {viewMode === 'month' && (
+                    <motion.div
+                      key="view-month"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="h-full"
+                    >
+                      <OrganicMonthlyCalendar
+                        days={gridDays}
+                        monthAnchorDate={monthAnchorDate}
+                        platforms={plannerPlatforms}
+                        postedContent={postedContent}
+                        selectedDraftId={selectedId}
+                        onSelectDraft={(id) => handleSelect(id, false)}
+                        onCreatePost={({ dayId, platformKey, status, mode, format }) =>
+                          handleGoDraft({
+                            dayId,
+                            platform: platformKey as PlannerPlatformKey | undefined,
+                            status,
+                            mode,
+                            format,
+                          })
+                        }
+                        onPreviousMonth={handlePreviousMonth}
+                        onNextMonth={handleNextMonth}
+                        onRegenerate={handleRegenerate}
+                        onDeleteDraft={(id) => bulkDeleteDrafts([id])}
+                      />
+                    </motion.div>
+                  )}
+
+                  {viewMode === 'list' && (
+                    <motion.div
+                      key="view-list"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="h-full"
+                    >
+                      <OrganicListView
+                        days={listDays}
                         platforms={plannerPlatforms}
                         selectedDraftId={selectedId}
                         selectedDraftIds={selectedIds}
-                        rangeTitle={weekTitle}
-                        rangeSubtitle={weekSubtitle}
-                        viewMode={localGridViewMode}
-                        onViewModeChange={setLocalGridViewMode}
-                        onPreviousWeek={handlePreviousWeek}
-                        onNextWeek={handleNextWeek}
-                        onCreatePost={(context) =>
-                          handleGoDraft({
-                            dayId: context?.dayId,
-                            platform: context?.platform,
-                            status: context?.status,
-                            mode: context?.mode,
-                          })
-                        }
                         onSelectDraft={(id) => handleSelect(id, false)}
                         onToggleSelection={(id) => handleSelect(id, true)}
                         onRegenerate={handleRegenerate}
-                        onClearFailure={handleClearFailure}
-                        onNativeDrop={handleNativeDrop}
+                        onCreatePost={({ dayId, platformKey, status, mode }) =>
+                          handleGoDraft({
+                            dayId,
+                            platform: platformKey as PlannerPlatformKey | undefined,
+                            status,
+                            mode,
+                          })
+                        }
+                        brandProfileId={brandProfileId}
+                        backlogDrafts={backlogDrafts}
+                        onAddBacklogDraft={addBacklogDraft}
+                        onDeleteBacklogDraft={deleteBacklogDraft}
+                        onPromoteBacklogDraft={promoteBacklogDraft}
                       />
-                    </div>
-                  </motion.div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
 
-                {viewMode === "month" && (
-                  <motion.div
-                    key="view-month"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="h-full"
-                  >
-                    <OrganicMonthlyCalendar
-                      days={gridDays}
-                      monthAnchorDate={monthAnchorDate}
-                      platforms={plannerPlatforms}
-                      postedContent={postedContent}
-                      selectedDraftId={selectedId}
-                      onSelectDraft={(id) => handleSelect(id, false)}
-                      onCreatePost={({ dayId, platformKey, status, mode }) =>
-                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status, mode })
-                      }
-                      onPreviousMonth={handlePreviousMonth}
-                      onNextMonth={handleNextMonth}
-                      onRegenerate={handleRegenerate}
-                      onDeleteDraft={(id) => bulkDeleteDrafts([id])}
-                    />
-                  </motion.div>
-                )}
-
-                {viewMode === "list" && (
-                  <motion.div
-                    key="view-list"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="h-full"
-                  >
-                    <OrganicListView
-                      days={listDays}
-                      platforms={plannerPlatforms}
-                      selectedDraftId={selectedId}
-                      selectedDraftIds={selectedIds}
-                      onSelectDraft={(id) => handleSelect(id, false)}
-                      onToggleSelection={(id) => handleSelect(id, true)}
-                      onRegenerate={handleRegenerate}
-                      onCreatePost={({ dayId, platformKey, status, mode }) =>
-                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status, mode })
-                      }
-                      brandProfileId={brandProfileId}
-                      backlogDrafts={backlogDrafts}
-                      onAddBacklogDraft={addBacklogDraft}
-                      onDeleteBacklogDraft={deleteBacklogDraft}
-                      onPromoteBacklogDraft={promoteBacklogDraft}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            <OrganicTrendsDrawer
-              open={trendsDrawerOpen}
-              onOpenChange={setTrendsDrawerOpen}
-              trends={resolvedTrends}
-              selectedTrendIds={selectedTrendIds}
-              activePlatforms={activePlatforms}
-              maxSelections={maxTrendSelections}
-              onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-              onFetch={brandProfileId ? refreshTrends : undefined}
-              isFetching={isFetchingTrends}
-            />
-
-            {brandProfileId && aiComposer && (
-              <AiPostComposer
-                open
-                onOpenChange={(next) => {
-                  if (!next) setAiComposer(null)
-                }}
-                brandProfileId={brandProfileId}
-                platform={aiComposer.platform}
-                scheduledAt={aiComposer.scheduledAt}
+              <OrganicTrendsDrawer
+                open={trendsDrawerOpen}
+                onOpenChange={setTrendsDrawerOpen}
                 trends={resolvedTrends}
+                selectedTrendIds={selectedTrendIds}
+                activePlatforms={activePlatforms}
+                maxSelections={maxTrendSelections}
+                onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                onFetch={brandProfileId ? refreshTrends : undefined}
+                isFetching={isFetchingTrends}
               />
-            )}
-          </motion.section>
 
-          <AnimatePresence initial={false}>
-            {selectedDraft ? (
-              <motion.aside
-                key="preview-panel"
-                layout
-                role="complementary"
-                aria-label="Draft preview"
-                tabIndex={-1}
-                onKeyDown={(e: React.KeyboardEvent) => {
-                  if (e.key === "Escape") clearAll()
-                }}
-                initial={{ opacity: 0, x: 28, scale: 0.98 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 24, scale: 0.98 }}
-                transition={previewTransition}
-                className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 @[64rem]/organic:h-full @[64rem]/organic:w-[clamp(26rem,28cqi,38rem)] @[64rem]/organic:shrink-0"
-              >
-                <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Post Preview
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              disabled={!brandProfileId}
-                              onClick={handleOpenInAiStudio}
-                              style={!brandProfileId ? { pointerEvents: "none" } : undefined}
-                            >
-                              Open in AI Studio
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {!brandProfileId ? (
-                          <TooltipContent>Select a brand to use AI Studio</TooltipContent>
-                        ) : null}
-                      </Tooltip>
-                    </TooltipProvider>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label="Close preview"
-                      onClick={clearAll}
-                    >
-                      <Cross2Icon className="h-3.5 w-3.5" />
-                    </Button>
+              {brandProfileId && aiComposer && (
+                <AiPostComposer
+                  open
+                  onOpenChange={(next) => {
+                    if (!next) setAiComposer(null);
+                  }}
+                  brandProfileId={brandProfileId}
+                  platform={aiComposer.platform}
+                  scheduledAt={aiComposer.scheduledAt}
+                  trends={resolvedTrends}
+                />
+              )}
+            </motion.section>
+
+            <AnimatePresence initial={false}>
+              {selectedDraft ? (
+                <motion.aside
+                  key="preview-panel"
+                  layout
+                  role="complementary"
+                  aria-label="Draft preview"
+                  tabIndex={-1}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Escape') clearAll();
+                  }}
+                  initial={{ opacity: 0, x: 28, scale: 0.98 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 24, scale: 0.98 }}
+                  transition={previewTransition}
+                  className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 @[64rem]/organic:h-full @[64rem]/organic:w-[clamp(26rem,28cqi,38rem)] @[64rem]/organic:shrink-0"
+                >
+                  <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Post Preview
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={!brandProfileId}
+                                onClick={handleOpenInAiStudio}
+                                style={!brandProfileId ? { pointerEvents: 'none' } : undefined}
+                              >
+                                Open in AI Studio
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {!brandProfileId ? (
+                            <TooltipContent>Select a brand to use AI Studio</TooltipContent>
+                          ) : null}
+                        </Tooltip>
+                      </TooltipProvider>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Close preview"
+                        onClick={clearAll}
+                      >
+                        <Cross2Icon className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                  <OrganicDraftPreview
-                    draft={selectedDraft}
-                    brandName={brandName}
-                    brandProfileId={brandProfileId}
-                    onApprove={(draftId) =>
-                      updateDraftById(draftId, (d) => ({ ...d, status: "scheduled" as const }))
-                    }
-                  />
-                </div>
-              </motion.aside>
-            ) : null}
-          </AnimatePresence>
-        </motion.div>
-      </CalendarDndContext>
+                  <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                    <OrganicDraftPreview
+                      draft={selectedDraft}
+                      brandName={brandName}
+                      brandProfileId={brandProfileId}
+                      onApprove={(draftId) =>
+                        updateDraftById(draftId, (d) => ({ ...d, status: 'scheduled' as const }))
+                      }
+                    />
+                  </div>
+                </motion.aside>
+              ) : null}
+            </AnimatePresence>
+          </motion.div>
+        </CalendarDndContext>
 
-      <BulkActionToolbar
-        selectedCount={selectedIds.length}
-        onClear={clearAll}
-        onDelete={handleBulkDelete}
-        onMove={handleBulkMove}
-        onApprove={handleBulkApprove}
-        reelCount={reelTargets.length}
-        onGenerateReels={brandProfileId ? handleGenerateReels : undefined}
-        isGeneratingReels={isGeneratingMedia}
-        onAttachCreative={brandProfileId && attachTargetDraftIds.length > 0 ? handleBulkAttachCreative : undefined}
-        onGenerateMedia={brandProfileId && mediaGenerationTargets.length > 0 ? handleBulkGenerateMedia : undefined}
-        isGeneratingMedia={isGeneratingMedia}
-      />
-      {/* Bulk attach creative — one picker selection applied to all selected drafts. */}
-      {brandProfileId && (
-        <Dialog open={attachPickerOpen} onOpenChange={setAttachPickerOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>
-                Attach creative to {attachTargetDraftIds.length} draft{attachTargetDraftIds.length === 1 ? "" : "s"}
-              </DialogTitle>
-            </DialogHeader>
-            <OrganicCreativesPicker
-              brandProfileId={brandProfileId}
-              draftId=""
-              attached={[]}
-              onAttach={handlePickerAttach}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
+        <BulkActionToolbar
+          selectedCount={selectedIds.length}
+          onClear={clearAll}
+          onDelete={handleBulkDelete}
+          onMove={handleBulkMove}
+          onApprove={handleBulkApprove}
+          reelCount={reelTargets.length}
+          onGenerateReels={brandProfileId ? handleGenerateReels : undefined}
+          isGeneratingReels={isGeneratingMedia}
+          onAttachCreative={
+            brandProfileId && attachTargetDraftIds.length > 0 ? handleBulkAttachCreative : undefined
+          }
+          onGenerateMedia={
+            brandProfileId && mediaGenerationTargets.length > 0
+              ? handleBulkGenerateMedia
+              : undefined
+          }
+          isGeneratingMedia={isGeneratingMedia}
+        />
+        {/* Bulk attach creative — one picker selection applied to all selected drafts. */}
+        {brandProfileId && (
+          <Dialog open={attachPickerOpen} onOpenChange={setAttachPickerOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>
+                  Attach creative to {attachTargetDraftIds.length} draft
+                  {attachTargetDraftIds.length === 1 ? '' : 's'}
+                </DialogTitle>
+              </DialogHeader>
+              <OrganicCreativesPicker
+                brandProfileId={brandProfileId}
+                draftId=""
+                attached={[]}
+                onAttach={handlePickerAttach}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
     </AiStudioHandoffProvider>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 // Per-slide editing strip for carousel format.
 // Supports: @dnd-kit/sortable reorder with motion layout thumbnails,
@@ -6,51 +6,54 @@
 // The in-frame social dots (from the preview mock) remain there for
 // position context; this strip is the editing surface.
 
-import * as React from "react"
+import type { MediaAsset } from '@continuum/contracts';
 import {
-  DndContext,
   closestCenter,
+  DndContext,
+  type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core"
+} from '@dnd-kit/core';
 import {
+  horizontalListSortingStrategy,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
-  horizontalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import { Cross2Icon } from "@radix-ui/react-icons"
-import { Plus, Replace } from "lucide-react"
-import Image from "next/image"
-import { cn } from "@/lib/utils"
-import type { UseDraftMediaPlacementResult } from "@/components/organic/hooks/useDraftMediaPlacement"
-import type { MediaAsset } from "@continuum/contracts"
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Cross2Icon } from '@radix-ui/react-icons';
+import { Maximize2, Plus, Replace } from 'lucide-react';
+import Image from 'next/image';
+import * as React from 'react';
+import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
+import { cn } from '@/lib/utils';
 
 type Slide = {
-  slideIndex: number
-  storageUrl: string
-  assetId?: string | null
-  storagePath: string
-}
+  slideIndex: number;
+  storageUrl: string;
+  assetId?: string | null;
+  storagePath: string;
+};
 
 type CarouselSlideStripProps = {
-  slides: Slide[]
+  slides: Slide[];
   // 0-based index of the currently previewed slide.
-  activeIndex: number
-  onSelectSlide: (index: number) => void
-  placement: UseDraftMediaPlacementResult
+  activeIndex: number;
+  onSelectSlide: (index: number) => void;
+  placement: UseDraftMediaPlacementResult;
   // Called when user clicks the + add slot — typically opens the library rail.
-  onAddRequest: () => void
+  onAddRequest: () => void;
   // Called when the user asks to replace a slide; receives the slide's 0-based
   // array position. Opens the picker in "replace" mode. Optional — when absent,
   // the per-slide replace control is hidden.
-  onReplaceRequest?: (position: number) => void
-  className?: string
-}
+  onReplaceRequest?: (position: number) => void;
+  // Called when the user asks to enlarge a slide; receives the slide's 0-based
+  // array position. Opens the media lightbox. Optional — hidden when absent.
+  onEnlarge?: (position: number) => void;
+  className?: string;
+};
 
 function SortableThumb({
   slide,
@@ -59,50 +62,42 @@ function SortableThumb({
   onSelect,
   onRemove,
   onReplace,
+  onEnlarge,
 }: {
-  slide: Slide
-  activeIndex: number
-  totalCount: number
-  onSelect: () => void
-  onRemove: () => void
-  onReplace?: () => void
+  slide: Slide;
+  activeIndex: number;
+  totalCount: number;
+  onSelect: () => void;
+  onRemove: () => void;
+  onReplace?: () => void;
+  onEnlarge?: () => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `slide-${slide.slideIndex}` })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `slide-${slide.slideIndex}`,
+  });
 
-  const isActive = slide.slideIndex === activeIndex
-  const canRemove = totalCount > 1
+  const isActive = slide.slideIndex === activeIndex;
+  const canRemove = totalCount > 1;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-  }
+  };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="group relative shrink-0"
-      {...attributes}
-    >
+    <div ref={setNodeRef} style={style} className="group relative shrink-0" {...attributes}>
       {/* Drag handle + thumbnail — the whole tile is the drag surface */}
       <button
         type="button"
-        aria-label={`Slide ${slide.slideIndex + 1}${isActive ? " (active)" : ""}`}
+        aria-label={`Slide ${slide.slideIndex + 1}${isActive ? ' (active)' : ''}`}
         aria-pressed={isActive}
         onClick={onSelect}
         className={cn(
-          "relative h-14 w-14 overflow-hidden rounded-md border transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          'relative h-14 w-14 overflow-hidden rounded-md border transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           isActive
-            ? "border-primary ring-2 ring-primary ring-offset-1"
-            : "border-border/50 hover:border-border",
+            ? 'border-primary ring-2 ring-primary ring-offset-1'
+            : 'border-border/50 hover:border-border',
         )}
         {...listeners}
       >
@@ -125,8 +120,8 @@ function SortableThumb({
           type="button"
           aria-label={`Replace slide ${slide.slideIndex + 1}`}
           onClick={(e) => {
-            e.stopPropagation()
-            onReplace()
+            e.stopPropagation();
+            onReplace();
           }}
           className="absolute -left-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-background border border-border/70 shadow-sm text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:flex"
         >
@@ -140,16 +135,31 @@ function SortableThumb({
           type="button"
           aria-label={`Remove slide ${slide.slideIndex + 1}`}
           onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
+            e.stopPropagation();
+            onRemove();
           }}
           className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-background border border-border/70 shadow-sm text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:flex"
         >
           <Cross2Icon className="h-2.5 w-2.5" />
         </button>
       )}
+
+      {/* Enlarge, shown on hover at bottom-left */}
+      {onEnlarge && (
+        <button
+          type="button"
+          aria-label={`Enlarge slide ${slide.slideIndex + 1}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEnlarge();
+          }}
+          className="absolute -bottom-1.5 -left-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-background border border-border/70 shadow-sm text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:flex"
+        >
+          <Maximize2 className="h-2.5 w-2.5" />
+        </button>
+      )}
     </div>
-  )
+  );
 }
 
 export function CarouselSlideStrip({
@@ -159,6 +169,7 @@ export function CarouselSlideStrip({
   placement,
   onAddRequest,
   onReplaceRequest,
+  onEnlarge,
   className,
 }: CarouselSlideStripProps) {
   const sensors = useSensors(
@@ -166,45 +177,42 @@ export function CarouselSlideStrip({
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
-  )
+  );
 
-  const sortedSlides = [...slides].sort((a, b) => a.slideIndex - b.slideIndex)
-  const slideIds = sortedSlides.map((s) => `slide-${s.slideIndex}`)
+  const sortedSlides = [...slides].sort((a, b) => a.slideIndex - b.slideIndex);
+  const slideIds = sortedSlides.map((s) => `slide-${s.slideIndex}`);
 
   const handleDragEnd = React.useCallback(
     (event: DragEndEvent) => {
-      const { active, over } = event
-      if (!over || active.id === over.id) return
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-      const fromIndex = sortedSlides.findIndex((s) => `slide-${s.slideIndex}` === active.id)
-      const toIndex = sortedSlides.findIndex((s) => `slide-${s.slideIndex}` === over.id)
+      const fromIndex = sortedSlides.findIndex((s) => `slide-${s.slideIndex}` === active.id);
+      const toIndex = sortedSlides.findIndex((s) => `slide-${s.slideIndex}` === over.id);
 
       if (fromIndex !== -1 && toIndex !== -1) {
-        placement.reorderSlides(fromIndex, toIndex)
+        placement.reorderSlides(fromIndex, toIndex);
         // Keep the active preview in sync after reorder.
         if (activeIndex === fromIndex) {
-          onSelectSlide(toIndex)
+          onSelectSlide(toIndex);
         }
       }
     },
     [sortedSlides, placement, activeIndex, onSelectSlide],
-  )
+  );
 
-  if (slides.length === 0) return null
+  if (slides.length === 0) return null;
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={slideIds} strategy={horizontalListSortingStrategy}>
+        {/* biome-ignore lint/a11y/useSemanticElements: drag-reorder group, not a form fieldset */}
         <div
           role="group"
           aria-label="Carousel slides"
           className={cn(
-            "flex items-center gap-2 overflow-x-auto py-2 px-1 scroll-smooth",
-            "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+            'flex items-center gap-2 overflow-x-auto py-2 px-1 scroll-smooth',
+            '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
             className,
           )}
         >
@@ -217,6 +225,7 @@ export function CarouselSlideStrip({
               onSelect={() => onSelectSlide(slide.slideIndex)}
               onRemove={() => placement.removeSlide(position)}
               onReplace={onReplaceRequest ? () => onReplaceRequest(position) : undefined}
+              onEnlarge={onEnlarge ? () => onEnlarge(position) : undefined}
             />
           ))}
 
@@ -232,5 +241,5 @@ export function CarouselSlideStrip({
         </div>
       </SortableContext>
     </DndContext>
-  )
+  );
 }

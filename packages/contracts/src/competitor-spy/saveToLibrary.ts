@@ -5,7 +5,11 @@
 // it's grabbed as a "competitor post" (inspiration / organic-agent grounding).
 
 import { z } from 'zod';
-import { instagramPostKindSchema, instagramPostSchema } from '../media/instagram';
+import {
+  instagramMediaKindSchema,
+  instagramPostKindSchema,
+  instagramPostSchema,
+} from '../media/instagram';
 
 // The canonical tag + source marker for "this Library asset is a competitor post".
 // Retrieval filters on source='inspiration' + this tag (media_search supports both).
@@ -13,8 +17,27 @@ import { instagramPostKindSchema, instagramPostSchema } from '../media/instagram
 // seeded at save and preserved by analyze_media's tag union.
 export const COMPETITOR_POST_TAG = 'competitor-post';
 
+// Seeded on the NON-cover slides of a saved carousel. A carousel saves one
+// media.assets row per slide (all sharing origin_ref.postId); this tag lets the
+// human Library grid hide the non-cover slides and render just the cover as one
+// grouped carousel tile. The agent's media_search does NOT filter it out, so
+// every slide stays individually searchable.
+export const CAROUSEL_SLIDE_TAG = 'carousel-slide';
+
+// A single slide of a saved carousel, recorded compactly on the COVER row's
+// origin_ref so the Library can page through all slides without a sibling query.
+export const competitorPostSlideRefSchema = z.object({
+  slideIndex: z.number().int().nonnegative(),
+  kind: instagramMediaKindSchema,
+  bucket: z.string(),
+  storagePath: z.string(),
+});
+export type CompetitorPostSlideRef = z.infer<typeof competitorPostSlideRefSchema>;
+
 // Stored in media.assets.origin_ref — the durable re-fetch key. `kind` discriminates
-// the origin_ref union alongside canvas/inspiration refs.
+// the origin_ref union alongside canvas/inspiration refs. Carousels save one row
+// per slide: every row carries slideIndex/slideCount; the cover (slideIndex 0)
+// additionally carries `slides` (the full ordered slide index for display paging).
 export const competitorPostOriginRefSchema = z.object({
   kind: z.literal('competitor_organic'),
   competitorId: z.string().nullable().optional(),
@@ -24,6 +47,10 @@ export const competitorPostOriginRefSchema = z.object({
   shortcode: z.string(),
   permalink: z.string(),
   postKind: instagramPostKindSchema,
+  slideIndex: z.number().int().nonnegative().optional(),
+  slideCount: z.number().int().positive().optional(),
+  slideKind: instagramMediaKindSchema.optional(),
+  slides: z.array(competitorPostSlideRefSchema).optional(),
 });
 export type CompetitorPostOriginRef = z.infer<typeof competitorPostOriginRefSchema>;
 
@@ -41,7 +68,12 @@ export type SaveCompetitorPostToLibraryRequest = z.infer<
 >;
 
 export const saveCompetitorPostToLibraryResponseSchema = z.object({
+  // The cover slide's asset id (slideIndex 0), kept as the primary id for
+  // back-compat. `assetIds` lists every persisted slide; `slideCount` is how many
+  // slides the post had (1 for single posts/reels, N for carousels).
   assetId: z.string().nullable(),
+  assetIds: z.array(z.string()).default([]),
+  slideCount: z.number().int().nonnegative().default(1),
   alreadyExisted: z.boolean(),
 });
 export type SaveCompetitorPostToLibraryResponse = z.infer<

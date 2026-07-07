@@ -1,7 +1,6 @@
-"use client";
+'use client';
 
-import { Box, Card, Flex, Grid } from "@radix-ui/themes";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * MetricCardSkeleton
@@ -10,19 +9,16 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 function MetricCardSkeleton() {
   return (
-    <Card
-      variant="surface"
-      className="border border-subtle bg-surface transition-all"
-    >
-      <Box p="3">
+    <div className="rounded-lg border border-subtle bg-surface transition-all">
+      <div className="p-3">
         {/* Label skeleton */}
         <Skeleton className="h-3 w-[80px] rounded" />
         {/* Value heading skeleton */}
         <Skeleton className="h-7 w-[100px] rounded mt-3" />
         {/* Click hint text skeleton */}
         <Skeleton className="h-3 w-[120px] rounded mt-2" />
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -35,33 +31,29 @@ function MetricCardSkeleton() {
  */
 function MetricsGridSkeleton() {
   return (
-    <Flex direction="column" gap="4">
-      <Grid columns={{ initial: "1", sm: "2", lg: "3" }} gap="3">
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {/* Base metrics count - 6 cards */}
         {Array.from({ length: 6 }).map((_, index) => (
           <MetricCardSkeleton key={index} />
         ))}
-      </Grid>
+      </div>
 
       {/* Interaction breakdown section header */}
-      <Box pt="4">
+      <div className="pt-4">
         <Skeleton className="h-5 w-[280px] rounded mb-3" />
-        <Grid columns={{ initial: "1", sm: "2", lg: "4" }} gap="3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <Card
-              key={index}
-              variant="surface"
-              className="border border-subtle bg-surface"
-            >
-              <Box p="3">
+            <div key={index} className="rounded-lg border border-subtle bg-surface">
+              <div className="p-3">
                 <Skeleton className="h-3 w-[100px] rounded mb-2" />
                 <Skeleton className="h-[120px] w-full rounded" />
-              </Box>
-            </Card>
+              </div>
+            </div>
           ))}
-        </Grid>
-      </Box>
-    </Flex>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -74,43 +66,43 @@ function MetricsGridSkeleton() {
  */
 function TrendsPanelSkeleton() {
   return (
-    <Box pt="4">
+    <div className="pt-4">
       {/* Header section */}
-      <Flex align="center" justify="between" mb="3">
-        <Box>
+      <div className="flex items-center justify-between mb-3">
+        <div>
           <Skeleton className="h-5 w-[120px] rounded mb-1" />
           <Skeleton className="h-4 w-[200px] rounded" />
-        </Box>
+        </div>
         <Skeleton className="h-6 w-[100px] rounded-full" />
-      </Flex>
+      </div>
 
       {/* Helper text */}
       <Skeleton className="h-4 w-[280px] rounded mb-4" />
 
       {/* Charts grid */}
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Reach & Views chart */}
-        <Card variant="surface" className="border border-subtle bg-surface">
-          <Box p="3">
+        <div className="rounded-lg border border-subtle bg-surface">
+          <div className="p-3">
             <Skeleton className="h-4 w-[120px] rounded mb-2" />
             <Skeleton className="h-[200px] w-full rounded" />
-          </Box>
-        </Card>
+          </div>
+        </div>
 
         {/* Engagement chart */}
-        <Card variant="surface" className="border border-subtle bg-surface">
-          <Box p="3">
+        <div className="rounded-lg border border-subtle bg-surface">
+          <div className="p-3">
             <Skeleton className="h-4 w-[120px] rounded mb-2" />
             <Skeleton className="h-[200px] w-full rounded" />
-          </Box>
-        </Card>
-      </Grid>
+          </div>
+        </div>
+      </div>
 
       {/* Callout box */}
-      <Box pt="4">
+      <div className="pt-4">
         <Skeleton className="h-[60px] w-full rounded" />
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }
 
@@ -121,22 +113,22 @@ function TrendsPanelSkeleton() {
  */
 export function OrganicMetricsWidgetSkeleton() {
   return (
-    <Card variant="surface" className="h-full border border-subtle bg-surface">
-      <Box className="border-b px-3 py-1.5">
-        <Flex align="center" gap="2" wrap="wrap">
+    <div className="h-full rounded-lg border border-subtle bg-surface">
+      <div className="border-b px-3 py-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
           <Skeleton className="hidden h-7 w-7 rounded-full sm:block" />
           <Skeleton className="h-8 w-36 rounded-md" />
           <Skeleton className="h-8 w-28 rounded-md" />
           <Skeleton className="h-8 min-w-52 flex-1 rounded-md" />
           <Skeleton className="h-8 w-32 rounded-md" />
           <Skeleton className="ml-auto h-8 w-20 rounded-md" />
-        </Flex>
-      </Box>
+        </div>
+      </div>
 
-      <Box p="3">
+      <div className="p-3">
         <MetricsGridSkeleton />
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }
 

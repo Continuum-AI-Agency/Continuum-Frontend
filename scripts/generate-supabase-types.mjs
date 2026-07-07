@@ -18,7 +18,10 @@ function loadDotEnv() {
       const idx = line.indexOf('=');
       const key = line.slice(0, idx).trim();
       let value = line.slice(idx + 1).trim();
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
         value = value.slice(1, -1);
       }
       if (!(key in process.env)) {
@@ -31,12 +34,15 @@ function loadDotEnv() {
 function generateTypes() {
   loadDotEnv();
   // Prefer explicit project ref, otherwise try to derive from NEXT_PUBLIC_SUPABASE_URL
-  let projectRef = process.env.SUPABASE_PROJECT_REF || process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF || '';
+  let projectRef =
+    process.env.SUPABASE_PROJECT_REF || process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF || '';
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
   if (!projectRef) {
     if (!supabaseUrl) {
-      console.error('Set SUPABASE_PROJECT_REF or NEXT_PUBLIC_SUPABASE_URL (https://<project-ref>.supabase.co)');
+      console.error(
+        'Set SUPABASE_PROJECT_REF or NEXT_PUBLIC_SUPABASE_URL (https://<project-ref>.supabase.co)',
+      );
       process.exit(1);
     }
     try {
@@ -50,7 +56,7 @@ function generateTypes() {
 
   const schemas =
     process.env.SUPABASE_SCHEMAS ||
-    'public,brand_profiles,organic,paid_media,brand_trends,brand_integrations,DCO_Campaigns';
+    'public,brand_profiles,organic,paid_media,brand_trends,brand_integrations,DCO_Campaigns,integrations,plugin_mcp';
 
   const args = ['gen', 'types', 'typescript', '--project-id', projectRef, '--schema', schemas];
 

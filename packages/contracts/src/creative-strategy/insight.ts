@@ -49,6 +49,11 @@ export const creativeExemplarSchema = z.object({
   kind: z.enum(['post', 'ad']),
   snippet: z.string().nullable().default(null),
   thumbnailRef: z.string().nullable().default(null),
+  // Deep link to the live post/ad this exemplar was mined from. Organic posts
+  // resolve reliably; some ads have no shareable permalink, so this stays
+  // nullable. Kept a loose string (not .url()) so a malformed permalink can't
+  // fail the whole report parse — the UI guards on http(s) before linking.
+  permalinkUrl: z.string().nullable().default(null),
 });
 export type CreativeExemplar = z.infer<typeof creativeExemplarSchema>;
 

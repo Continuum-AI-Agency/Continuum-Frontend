@@ -1,32 +1,32 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type AdAccount, AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
-import { PaidSetupDiagnostics } from "@/components/paid-media/PaidSetupDiagnostics";
-import { PageHeader } from "@/components/shared/PageHeader";
-import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
-import { useSearchParams, useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import { ReactFlowProvider } from "@xyflow/react";
-import { useSession } from "@/hooks/useSession";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { AnimatePresence, motion } from "motion/react";
-import { cn } from "@/lib/utils";
-import { PanelRightOpen, PanelRightClose, Maximize2, Minimize2 } from "lucide-react";
-import { prefetchPaidMediaDashboard } from "@/lib/prefetch/paid-media-cache";
+import { ReactFlowProvider } from '@xyflow/react';
+import { Maximize2, Minimize2, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import { useRouter, useSearchParams } from 'next/navigation';
+import * as React from 'react';
+import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
+import { PaidSetupDiagnostics } from '@/components/paid-media/PaidSetupDiagnostics';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useSession } from '@/hooks/useSession';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
+import { cn } from '@/lib/utils';
 
-const PAID_MEDIA_TABS = ["dashboard", "performance", "jaina"] as const;
+const PAID_MEDIA_TABS = ['dashboard', 'performance', 'jaina'] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
 function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
-  if (value === "budget") return "performance";
+  if (value === 'budget') return 'performance';
   return PAID_MEDIA_TABS.some((tab) => tab === value) ? (value as PaidMediaTab) : null;
 }
 
 const CampaignCanvas = dynamic(
-  () => import("@/CampaignCanvas/components/CampaignCanvas").then((mod) => mod.CampaignCanvas),
+  () => import('@/CampaignCanvas/components/CampaignCanvas').then((mod) => mod.CampaignCanvas),
   { ssr: false },
 );
 
@@ -59,34 +59,32 @@ function JainaSkeleton() {
 
 const PaidMediaDashboard = dynamic(
   () =>
-    import("@/components/paid-media/dashboard/PaidMediaDashboard").then(
-      (mod) => mod.PaidMediaDashboard
+    import('@/components/paid-media/dashboard/PaidMediaDashboard').then(
+      (mod) => mod.PaidMediaDashboard,
     ),
-  { ssr: false, loading: () => <DashboardSkeleton /> }
+  { ssr: false, loading: () => <DashboardSkeleton /> },
 );
 
 const JainaChatSurface = dynamic(
   () =>
-    import("@/components/paid-media/jaina/JainaChatSurface").then(
-      (mod) => mod.JainaChatSurface
-    ),
-  { ssr: false, loading: () => <JainaSkeleton /> }
+    import('@/components/paid-media/jaina/JainaChatSurface').then((mod) => mod.JainaChatSurface),
+  { ssr: false, loading: () => <JainaSkeleton /> },
 );
 
 const ReportJobsBell = dynamic(
   () =>
-    import(
-      "@/components/paid-media/jaina/components/ReportJobsBell"
-    ).then((mod) => mod.ReportJobsBell),
-  { ssr: false }
+    import('@/components/paid-media/jaina/components/ReportJobsBell').then(
+      (mod) => mod.ReportJobsBell,
+    ),
+  { ssr: false },
 );
 
-const CampaignPerformanceTab = dynamic(
-  () =>
-    import("@/components/paid-media/performance/CampaignPerformanceTab").then(
-      (mod) => mod.CampaignPerformanceTab
-    ),
-  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> }
+// The "performance" tab slot now hosts the Paid Media Optimizer surface. The
+// legacy CampaignPerformanceTab component is preserved on disk (see risks note
+// for where it should be re-surfaced) but is no longer wired into this slot.
+const OptimizerTab = dynamic(
+  () => import('@/components/paid-media/optimizer/OptimizerTab').then((mod) => mod.OptimizerTab),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> },
 );
 
 type PaidMediaClientPageProps = {
@@ -104,15 +102,15 @@ export default function PaidMediaClientPage({
 }: PaidMediaClientPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tabParam = searchParams.get("tab");
+  const tabParam = searchParams.get('tab');
   const normalizedTabParam = normalizePaidMediaTab(tabParam);
   const { user } = useSession();
   const [, startTabTransition] = React.useTransition();
-  
+
   const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(
-    initialAdAccountId ?? null
+    initialAdAccountId ?? null,
   );
-  const [platform, setPlatform] = React.useState<PaidMediaPlatform>("meta");
+  const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
@@ -120,9 +118,7 @@ export default function PaidMediaClientPage({
     setPlatform(next);
     setSelectedAdAccount(null);
   }, []);
-  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
-    normalizedTabParam ?? "dashboard"
-  );
+  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(normalizedTabParam ?? 'dashboard');
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const [isJainaFullscreen, setIsJainaFullscreen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
@@ -139,7 +135,7 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setSelectedAdAccount(initialAdAccountId ?? null);
     setSelectedCampaign(null);
-    setPlatform("meta");
+    setPlatform('meta');
   }, [brandProfileId, initialAdAccountId]);
 
   React.useEffect(() => {
@@ -153,7 +149,7 @@ export default function PaidMediaClientPage({
     if (!normalizedTab) return;
     setActiveTab(normalizedTab);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", normalizedTab);
+    params.set('tab', normalizedTab);
     startTabTransition(() => {
       router.replace(`?${params.toString()}`, { scroll: false });
     });
@@ -161,11 +157,11 @@ export default function PaidMediaClientPage({
 
   // Prefetch dashboard data while user is on Jaina tab so data is warm on switch-back
   React.useEffect(() => {
-    if (activeTab !== "jaina" || !selectedAdAccount) return;
+    if (activeTab !== 'jaina' || !selectedAdAccount) return;
     const idleHandle =
-      typeof requestIdleCallback === "function"
+      typeof requestIdleCallback === 'function'
         ? requestIdleCallback(() =>
-            prefetchPaidMediaDashboard({ brandId: brandProfileId, adAccountId: selectedAdAccount })
+            prefetchPaidMediaDashboard({ brandId: brandProfileId, adAccountId: selectedAdAccount }),
           )
         : setTimeout(
             () =>
@@ -173,10 +169,10 @@ export default function PaidMediaClientPage({
                 brandId: brandProfileId,
                 adAccountId: selectedAdAccount,
               }),
-            2000
+            2000,
           );
     return () => {
-      if (typeof cancelIdleCallback === "function") {
+      if (typeof cancelIdleCallback === 'function') {
         cancelIdleCallback(idleHandle as number);
       } else {
         clearTimeout(idleHandle as ReturnType<typeof setTimeout>);
@@ -194,7 +190,7 @@ export default function PaidMediaClientPage({
   }, []);
 
   React.useEffect(() => {
-    if (activeTab !== "jaina") setIsJainaFullscreen(false);
+    if (activeTab !== 'jaina') setIsJainaFullscreen(false);
   }, [activeTab]);
 
   const handleCanvasActionApplied = React.useCallback(() => {
@@ -213,7 +209,7 @@ export default function PaidMediaClientPage({
       const { min, max } = getCanvasWidthLimits();
       return Math.max(min, Math.min(max, value));
     },
-    [getCanvasWidthLimits]
+    [getCanvasWidthLimits],
   );
 
   const handleCanvasResizeStart = React.useCallback(
@@ -233,29 +229,29 @@ export default function PaidMediaClientPage({
 
       const handlePointerUp = () => {
         setIsResizingCanvas(false);
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
       };
 
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
     },
-    [canvasWidthPx, clampCanvasWidth, isCanvasOpen]
+    [canvasWidthPx, clampCanvasWidth, isCanvasOpen],
   );
 
   React.useEffect(() => {
     const updateWidth = () => {
       setCanvasWidthPx((current) => clampCanvasWidth(current));
     };
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
   }, [clampCanvasWidth]);
 
   const hasSeededCanvasWidth = React.useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeTab is the intended trigger — the canvas shell re-mounts per tab, so the observer must re-attach and re-seed its width when the tab changes.
   React.useEffect(() => {
     const shell = canvasShellRef.current;
-    if (!shell || typeof ResizeObserver === "undefined") return;
+    if (!shell || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
@@ -331,18 +327,22 @@ export default function PaidMediaClientPage({
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <ReportJobsBell brandProfileId={brandProfileId} />
-            {activeTab === "jaina" ? (
+            {activeTab === 'jaina' ? (
               <>
                 <Button
                   type="button"
-                  variant={isCanvasOpen ? "outline" : "secondary"}
+                  variant={isCanvasOpen ? 'outline' : 'secondary'}
                   size="sm"
                   onClick={handleToggleCanvas}
                   className="h-8 gap-1.5 px-2 text-xs"
                   aria-pressed={isCanvasOpen}
                 >
-                  {isCanvasOpen ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5" />}
-                  {isCanvasOpen ? "Hide canvas" : "Canvas"}
+                  {isCanvasOpen ? (
+                    <PanelRightClose className="size-3.5" />
+                  ) : (
+                    <PanelRightOpen className="size-3.5" />
+                  )}
+                  {isCanvasOpen ? 'Hide canvas' : 'Canvas'}
                 </Button>
                 <Button
                   type="button"
@@ -350,10 +350,14 @@ export default function PaidMediaClientPage({
                   size="sm"
                   onClick={() => setIsJainaFullscreen((v) => !v)}
                   className="h-8 w-8 p-0"
-                  aria-label={isJainaFullscreen ? "Exit full screen" : "Full screen"}
+                  aria-label={isJainaFullscreen ? 'Exit full screen' : 'Full screen'}
                   aria-pressed={isJainaFullscreen}
                 >
-                  {isJainaFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                  {isJainaFullscreen ? (
+                    <Minimize2 className="size-3.5" />
+                  ) : (
+                    <Maximize2 className="size-3.5" />
+                  )}
                 </Button>
               </>
             ) : null}
@@ -361,16 +365,24 @@ export default function PaidMediaClientPage({
               <TabsTrigger
                 value="dashboard"
                 className="px-3 text-xs"
-                onMouseEnter={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
-                onFocus={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
+                onMouseEnter={() => {
+                  void import('@/components/paid-media/dashboard/PaidMediaDashboard');
+                }}
+                onFocus={() => {
+                  void import('@/components/paid-media/dashboard/PaidMediaDashboard');
+                }}
               >
                 Dashboard
               </TabsTrigger>
               <TabsTrigger
                 value="performance"
                 className="px-3 text-xs"
-                onMouseEnter={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
-                onFocus={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
+                onMouseEnter={() => {
+                  void import('@/components/paid-media/optimizer/OptimizerTab');
+                }}
+                onFocus={() => {
+                  void import('@/components/paid-media/optimizer/OptimizerTab');
+                }}
               >
                 Optimization
               </TabsTrigger>
@@ -378,8 +390,12 @@ export default function PaidMediaClientPage({
                 value="jaina"
                 data-tour-id="paid-jaina-tab"
                 className="px-3 text-xs"
-                onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
-                onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
+                onMouseEnter={() => {
+                  void import('@/components/paid-media/jaina/JainaChatSurface');
+                }}
+                onFocus={() => {
+                  void import('@/components/paid-media/jaina/JainaChatSurface');
+                }}
               >
                 Jaina
               </TabsTrigger>
@@ -402,7 +418,11 @@ export default function PaidMediaClientPage({
 
         <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
           {selectedAdAccount ? (
-            <CampaignPerformanceTab brandId={brandProfileId} adAccountId={selectedAdAccount} />
+            <OptimizerTab
+              brandId={brandProfileId}
+              adAccountId={selectedAdAccount}
+              platform={platform}
+            />
           ) : (
             renderBlockedState()
           )}
@@ -412,8 +432,8 @@ export default function PaidMediaClientPage({
           <div
             ref={canvasShellRef}
             className={cn(
-              "relative flex flex-1 min-h-0 overflow-hidden rounded-lg border bg-background/70",
-              isJainaFullscreen && "fixed inset-0 z-50 rounded-none border-none"
+              'relative flex flex-1 min-h-0 overflow-hidden rounded-lg border bg-background/70',
+              isJainaFullscreen && 'fixed inset-0 z-50 rounded-none border-none',
             )}
           >
             <div className="min-h-0 min-w-0 flex-1">
@@ -440,7 +460,7 @@ export default function PaidMediaClientPage({
                     initial={{ opacity: 0, x: 8 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 8 }}
-                    transition={{ type: "spring", stiffness: 260, damping: 28, mass: 0.8 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }}
                     onPointerDown={handleCanvasResizeStart}
                   />
                   <motion.aside
@@ -449,11 +469,11 @@ export default function PaidMediaClientPage({
                     initial={{ opacity: 0, x: 24 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 24 }}
-                    transition={{ type: "spring", stiffness: 240, damping: 26, mass: 0.85 }}
+                    transition={{ type: 'spring', stiffness: 240, damping: 26, mass: 0.85 }}
                     style={{
                       width: canvasWidthPx,
                       boxShadow: isResizingCanvas
-                        ? "inset 0 0 0 1px hsl(var(--primary) / 0.35)"
+                        ? 'inset 0 0 0 1px hsl(var(--primary) / 0.35)'
                         : undefined,
                     }}
                   >

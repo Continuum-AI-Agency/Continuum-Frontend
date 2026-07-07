@@ -1,4 +1,3 @@
-import { Heading, Text } from '@radix-ui/themes';
 import { Suspense } from 'react';
 import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
 import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
@@ -58,8 +57,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   if (!activeBrandId) {
     return (
       <div className="w-full px-3 py-10 sm:px-4 lg:px-6">
-        <Heading size="6">Settings</Heading>
-        <Text color="gray">Set up a brand profile to unlock settings.</Text>
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <p className="text-muted-foreground">Set up a brand profile to unlock settings.</p>
       </div>
     );
   }
@@ -359,10 +358,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   return (
     <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
       <header className="mb-3 shrink-0 space-y-1">
-        <Heading size="5" className="text-white">
-          Settings
-        </Heading>
-        <Text color="gray">Manage this brand and your personal account.</Text>
+        <h1 className="text-xl font-semibold text-white">Settings</h1>
+        <p className="text-muted-foreground">Manage this brand and your personal account.</p>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

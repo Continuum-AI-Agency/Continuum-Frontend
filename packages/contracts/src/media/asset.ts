@@ -3,9 +3,9 @@
 // DB rows are snake_case; these boundary shapes are camelCase and the API layer
 // maps between them.
 
-import { z } from "zod";
+import { z } from 'zod';
 
-export const mediaKindSchema = z.enum(["image", "video"]);
+export const mediaKindSchema = z.enum(['image', 'video']);
 export type MediaKind = z.infer<typeof mediaKindSchema>;
 
 // Where a library asset originated. Each value is a delineated "source" folder in
@@ -21,28 +21,22 @@ export type MediaKind = z.infer<typeof mediaKindSchema>;
 //   clip:         a section cut from a long-form video (OpusClip-style pipeline).
 //   reel:         a client-stitched reel MP4 (Veo scenes → single publishable video).
 export const mediaSourceSchema = z.enum([
-  "upload",
-  "ai_generated",
-  "backfill",
-  "canvas",
-  "inspiration",
-  "hyperframe",
-  "chat_upload",
-  "clip",
-  "reel",
+  'upload',
+  'ai_generated',
+  'backfill',
+  'canvas',
+  'inspiration',
+  'hyperframe',
+  'chat_upload',
+  'clip',
+  'reel',
 ]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
 // stored: persisted, not yet analyzed. analyzing: pipeline running.
 // ready: analysis complete. error: pipeline failed. skipped_free: analysis
 // withheld because the brand is not on a paid tier.
-export const mediaStatusSchema = z.enum([
-  "stored",
-  "analyzing",
-  "ready",
-  "error",
-  "skipped_free",
-]);
+export const mediaStatusSchema = z.enum(['stored', 'analyzing', 'ready', 'error', 'skipped_free']);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
 
 // Normalized 0..1 bounding box (origin top-left). The edge pipeline converts
@@ -123,11 +117,28 @@ export const mediaAssetSchema = z
     updatedAt: z.string(),
     signedUrl: z.string().nullable().optional(),
     thumbnailUrl: z.string().nullable().optional(),
+    // Present only on the cover row of a saved multi-slide group (e.g. a competitor
+    // carousel): the ordered, signed slides so the Library renders one grouped tile
+    // the viewer can page through instead of N loose cards. Transient (signed
+    // per-request), never persisted on the row itself.
+    carousel: z
+      .object({
+        slideCount: z.number().int().positive(),
+        slides: z.array(
+          z.object({
+            slideIndex: z.number().int().nonnegative(),
+            kind: mediaKindSchema,
+            signedUrl: z.string().nullable(),
+          }),
+        ),
+      })
+      .nullable()
+      .optional(),
   })
   .strict();
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 
-export const mediaCollectionKindSchema = z.enum(["manual", "smart"]);
+export const mediaCollectionKindSchema = z.enum(['manual', 'smart']);
 export type MediaCollectionKind = z.infer<typeof mediaCollectionKindSchema>;
 
 export const mediaCollectionSchema = z

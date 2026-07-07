@@ -19,8 +19,9 @@ type Props = {
     facebook: OrganicAccountOption[];
     tiktok: OrganicAccountOption[];
     youtube: OrganicAccountOption[];
+    linkedin: OrganicAccountOption[];
   };
-  initialPlatform?: "instagram" | "facebook" | "tiktok" | "youtube";
+  initialPlatform?: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin";
 };
 
 export function OrganicMetricsDashboardLazy(props: Props) {

@@ -74,12 +74,13 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   threads: ThreadsIcon,
 };
 
-export type ProviderGroup = "facebook" | "google" | "tiktok" | "x";
+export type ProviderGroup = "facebook" | "google" | "tiktok" | "linkedin" | "x";
 
 export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
   facebook: "Meta",
   google: "Google",
   tiktok: "TikTok",
+  linkedin: "LinkedIn",
   x: "X",
 };
 
@@ -87,6 +88,7 @@ export const PROVIDER_GROUP_DESCRIPTIONS: Record<ProviderGroup, string> = {
   facebook: "Facebook & Instagram",
   google: "Google Ads & YouTube",
   tiktok: "TikTok Marketing",
+  linkedin: "LinkedIn Ads / Organic",
   x: "X (Twitter)",
 };
 
@@ -94,6 +96,7 @@ export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
   facebook: MetaIcon,
   google: GoogleIcon,
   tiktok: TikTokIcon,
+  linkedin: LinkedInIcon,
   x: XIcon,
 };
 

@@ -1,17 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Flex, Text, Box } from "@radix-ui/themes";
-import {
-  CheckIcon,
-  Cross2Icon,
-  FileTextIcon,
-  ReloadIcon,
-} from "@radix-ui/react-icons";
-import { cn } from "@/lib/utils";
-import type { StreamEvent } from "./types";
-import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation";
-import { PlacementNotificationCard } from "./PlacementNotificationCard";
+import { CheckIcon, Cross2Icon, FileTextIcon, ReloadIcon } from '@radix-ui/react-icons';
+import type * as React from 'react';
+import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
+import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
+import { cn } from '@/lib/utils';
+import { PlacementNotificationCard } from './PlacementNotificationCard';
+import type { StreamEvent } from './types';
 
 interface StreamEventItemProps {
   event: StreamEvent;
@@ -27,23 +22,23 @@ const stageIcons: Record<string, React.ReactNode> = {
 };
 
 const stageColors: Record<string, string> = {
-  analyzing: "text-blue-500",
-  optimizing: "text-amber-500",
-  drafting: "text-violet-500",
-  matching: "text-cyan-500",
-  finalizing: "text-emerald-500",
+  analyzing: 'text-secondary',
+  optimizing: 'text-warning',
+  drafting: 'text-primary',
+  matching: 'text-secondary',
+  finalizing: 'text-success',
 };
 
 function formatTimeLabel(timestamp: string): string {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemProps) {
   const timeLabel = formatTimeLabel(event.timestamp);
 
-  if (event.type === "placement") {
-    const placementEvent = event.data as Extract<CalendarGenerationEvent, { type: "placement" }>;
+  if (event.type === 'placement') {
+    const placementEvent = event.data as Extract<CalendarGenerationEvent, { type: 'placement' }>;
     const placement = placementEvent.placement;
     return (
       <PlacementNotificationCard
@@ -54,10 +49,10 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
     );
   }
 
-  if (event.type === "slot_completed") {
+  if (event.type === 'slot_completed') {
     const placementData = event.data as Extract<
       CalendarGenerationEvent,
-      { type: "slot_completed" }
+      { type: 'slot_completed' }
     >;
     const placement = placementData.placement;
     return (
@@ -69,135 +64,95 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
     );
   }
 
-  if (event.type === "progress") {
-    const progressData = event.data as Extract<CalendarGenerationEvent, { type: "progress" }>;
-    const stage = progressData.stage || "processing";
+  if (event.type === 'progress') {
+    const progressData = event.data as Extract<CalendarGenerationEvent, { type: 'progress' }>;
+    const stage = progressData.stage || 'processing';
     const icon = stageIcons[stage] || stageIcons.analyzing;
     const colorClass = stageColors[stage] || stageColors.analyzing;
 
     return (
-      <Flex
-        align="center"
-        gap="3"
-        className="py-2 px-3 rounded-md hover:bg-muted/50 transition-colors"
-      >
-        <Box className={cn("flex items-center justify-center", colorClass)}>
-          {icon}
-        </Box>
-        <Flex direction="column" className="flex-1 min-w-0">
-          <Text size="2" className="truncate">
-            {progressData.message || "Processing..."}
-          </Text>
-          <Text size="1" color="gray">
+      <div className="flex items-center gap-3 py-2 px-3 rounded-md hover:bg-muted/50 transition-colors">
+        <div className={cn('flex items-center justify-center', colorClass)}>{icon}</div>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm truncate">{progressData.message || 'Processing...'}</span>
+          <span className="text-xs text-muted-foreground">
             {progressData.completed}/{progressData.total} completed
-          </Text>
-        </Flex>
-        <Text size="1" color="gray" className="tabular-nums">
-          {timeLabel}
-        </Text>
-      </Flex>
+          </span>
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
+      </div>
     );
   }
 
-  if (event.type === "slot_started") {
-    const startedData = event.data as Extract<
-      CalendarGenerationEvent,
-      { type: "slot_started" }
-    >;
+  if (event.type === 'slot_started') {
+    const startedData = event.data as Extract<CalendarGenerationEvent, { type: 'slot_started' }>;
     return (
-      <Flex
-        align="center"
-        gap="3"
-        className="py-2 px-3 rounded-md hover:bg-muted/50 transition-colors"
-      >
-        <Box className="flex items-center justify-center text-amber-500">
+      <div className="flex items-center gap-3 py-2 px-3 rounded-md hover:bg-muted/50 transition-colors">
+        <div className="flex items-center justify-center text-warning">
           <ReloadIcon className="w-3.5 h-3.5" />
-        </Box>
-        <Flex direction="column" className="flex-1 min-w-0">
-          <Text size="2" className="truncate">
+        </div>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm truncate">
             {startedData.message ?? `Generating ${startedData.placementId}`}
-          </Text>
-        </Flex>
-        <Text size="1" color="gray" className="tabular-nums">
-          {timeLabel}
-        </Text>
-      </Flex>
+          </span>
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
+      </div>
     );
   }
 
-  if (event.type === "error") {
-    const errorData = event.data as Extract<CalendarGenerationEvent, { type: "error" }>;
+  if (event.type === 'error') {
+    const errorData = event.data as Extract<CalendarGenerationEvent, { type: 'error' }>;
     return (
-      <Flex
-        align="center"
-        gap="3"
-        className="py-2 px-3 rounded-md bg-red-50 border border-red-100"
+      <div
+        className="flex items-center gap-3 py-2 px-3 rounded-md bg-destructive/10 border border-destructive/20"
         role="alert"
       >
-        <Box className="flex items-center justify-center text-red-500">
+        <div className="flex items-center justify-center text-destructive">
           <Cross2Icon className="w-3.5 h-3.5" />
-        </Box>
-        <Flex direction="column" className="flex-1 min-w-0">
-          <Text size="2" color="red" className="truncate">
-            {errorData.message}
-          </Text>
-        </Flex>
-        <Text size="1" color="gray" className="tabular-nums">
-          {timeLabel}
-        </Text>
-      </Flex>
+        </div>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm text-destructive truncate">
+            {friendlyStreamError(errorData.message)}
+          </span>
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
+      </div>
     );
   }
 
-  if (event.type === "slot_failed") {
-    const errorData = event.data as Extract<
-      CalendarGenerationEvent,
-      { type: "slot_failed" }
-    >;
+  if (event.type === 'slot_failed') {
+    const errorData = event.data as Extract<CalendarGenerationEvent, { type: 'slot_failed' }>;
     return (
-      <Flex
-        align="center"
-        gap="3"
-        className="py-2 px-3 rounded-md bg-red-50 border border-red-100"
+      <div
+        className="flex items-center gap-3 py-2 px-3 rounded-md bg-destructive/10 border border-destructive/20"
         role="alert"
       >
-        <Box className="flex items-center justify-center text-red-500">
+        <div className="flex items-center justify-center text-destructive">
           <Cross2Icon className="w-3.5 h-3.5" />
-        </Box>
-        <Flex direction="column" className="flex-1 min-w-0">
-          <Text size="2" color="red" className="truncate">
-            {errorData.message}
-          </Text>
-          <Text size="1" color="gray">
-            {errorData.placementId}
-          </Text>
-        </Flex>
-        <Text size="1" color="gray" className="tabular-nums">
-          {timeLabel}
-        </Text>
-      </Flex>
+        </div>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm text-destructive truncate">
+            {friendlyStreamError(errorData.message)}
+          </span>
+          <span className="text-xs text-muted-foreground">{errorData.placementId}</span>
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
+      </div>
     );
   }
 
-  if (event.type === "complete") {
+  if (event.type === 'complete') {
     return (
-      <Flex
-        align="center"
-        gap="3"
-        className="py-2 px-3 rounded-md bg-emerald-50 border border-emerald-100"
-      >
-        <Box className="flex items-center justify-center text-emerald-500">
+      <div className="flex items-center gap-3 py-2 px-3 rounded-md bg-success/10 border border-success/20">
+        <div className="flex items-center justify-center text-success">
           <CheckIcon className="w-3.5 h-3.5" />
-        </Box>
-        <Flex direction="column" className="flex-1 min-w-0">
-          <Text size="2" className="truncate">
-            Generation complete
-          </Text>
-        </Flex>
-        <Text size="1" color="gray" className="tabular-nums">
-          {timeLabel}
-        </Text>
-      </Flex>
+        </div>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm truncate">Generation complete</span>
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
+      </div>
     );
   }
 

@@ -1,7 +1,8 @@
+'use client';
 
-"use client";
-
-import * as React from "react";
+import * as React from 'react';
+import { Pill } from '@/components/kibo-ui/pill';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -9,10 +10,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Callout, Text, Badge } from "@radix-ui/themes";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getApiUrl } from "@/lib/api/config";
+} from '@/components/ui/table';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Campaign = {
   id: string;
@@ -28,11 +27,7 @@ type CampaignListProps = {
   onSelectCampaign: (campaignId: string) => void;
 };
 
-export function CampaignList({
-  brandId,
-  adAccountId,
-  onSelectCampaign,
-}: CampaignListProps) {
+export function CampaignList({ brandId, adAccountId, onSelectCampaign }: CampaignListProps) {
   const supabase = createSupabaseBrowserClient();
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -53,33 +48,33 @@ export function CampaignList({
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) {
-          throw new Error("No authentication token available");
+          throw new Error('No authentication token available');
         }
 
         const response = await fetch(
           `/api/campaigns?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(
-            adAccountId!
+            adAccountId!,
           )}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
+              'Content-Type': 'application/json',
             },
-          }
+          },
         );
 
         if (!response.ok) {
-          throw new Error("Failed to load campaigns.");
+          throw new Error('Failed to load campaigns.');
         }
 
         const payload = (await response.json()) as { campaigns?: Campaign[] };
-        
+
         if (mounted) {
           setCampaigns(payload.campaigns ?? []);
         }
       } catch (err) {
         if (mounted) {
-          setError(err instanceof Error ? err.message : "Unable to load campaigns.");
+          setError(err instanceof Error ? err.message : 'Unable to load campaigns.');
         }
       } finally {
         if (mounted) {
@@ -99,7 +94,7 @@ export function CampaignList({
   if (!adAccountId) {
     return (
       <div className="flex h-64 items-center justify-center border border-dashed border-gray-200 rounded-lg">
-        <Text color="gray">Select an ad account to view campaigns</Text>
+        <span className="text-muted-foreground">Select an ad account to view campaigns</span>
       </div>
     );
   }
@@ -107,23 +102,23 @@ export function CampaignList({
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Text color="gray">Loading campaigns...</Text>
+        <span className="text-muted-foreground">Loading campaigns...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <Callout.Root color="red" variant="surface">
-        <Callout.Text>{error}</Callout.Text>
-      </Callout.Root>
+      <Alert variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
     );
   }
 
   if (campaigns.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center border border-dashed border-gray-200 rounded-lg">
-        <Text color="gray">No campaigns found</Text>
+        <span className="text-muted-foreground">No campaigns found</span>
       </div>
     );
   }
@@ -148,18 +143,15 @@ export function CampaignList({
             >
               <TableCell className="font-medium">{campaign.name}</TableCell>
               <TableCell>
-                <Badge 
-                  color={campaign.status === "ACTIVE" ? "green" : "gray"} 
-                  variant="soft"
-                >
+                <Pill variant={campaign.status === 'ACTIVE' ? 'success' : 'muted'}>
                   {campaign.status}
-                </Badge>
+                </Pill>
               </TableCell>
               <TableCell className="text-right">
-                {campaign.spend ? `$${campaign.spend.toLocaleString()}` : "-"}
+                {campaign.spend ? `$${campaign.spend.toLocaleString()}` : '-'}
               </TableCell>
               <TableCell className="text-right">
-                {campaign.roas ? campaign.roas.toFixed(2) : "-"}
+                {campaign.roas ? campaign.roas.toFixed(2) : '-'}
               </TableCell>
             </TableRow>
           ))}

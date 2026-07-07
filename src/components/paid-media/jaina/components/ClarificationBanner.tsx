@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { Badge, Text } from "@radix-ui/themes";
+import { Pill } from '@/components/kibo-ui/pill';
 
 type ClarificationBannerProps = {
   question: string;
@@ -11,14 +11,12 @@ export function ClarificationBanner({ question, onFocusInput }: ClarificationBan
   return (
     <div className="rounded-xl border-l-2 border-amber-400/60 border border-amber-300/30 bg-amber-50/8 px-4 py-3 space-y-2.5">
       <div className="flex items-center gap-2">
-        <Badge color="amber" variant="soft" className="uppercase text-2xs tracking-wide shrink-0">
+        <Pill variant="warning" className="uppercase text-2xs tracking-wide shrink-0">
           Clarification needed
-        </Badge>
+        </Pill>
       </div>
       {question ? (
-        <Text size="2" className="block text-foreground/90 leading-relaxed">
-          {question}
-        </Text>
+        <span className="block text-sm text-foreground/90 leading-relaxed">{question}</span>
       ) : null}
       <button
         type="button"

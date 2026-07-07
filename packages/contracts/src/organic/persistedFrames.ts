@@ -28,6 +28,7 @@ export const PERSISTED_CARD_FRAME_TYPES = [
   "ui.pipeline_card",
   "ui.post_card",
   "ui.skill_proposal",
+  "ui.aeo_snapshot_card",
   "ui.plan_status",
   "draft.blueprint_ready",
   "ui.brand_book",
@@ -93,6 +94,8 @@ export const persistedCardKey = (type: string, data: Record<string, unknown>): s
       return `trend:${readString(data, "title")}`;
     case "ui.skill_proposal":
       return `skill_proposal:${readString(data, "proposalId")}`;
+    case "ui.aeo_snapshot_card":
+      return `aeo_snapshot:${readString(data, "snapshotId")}`;
     case "ui.plan_status":
       return `plan_status:${readString(data, "itemId")}`;
     case "draft.blueprint_ready":

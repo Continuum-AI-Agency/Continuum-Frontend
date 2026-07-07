@@ -293,10 +293,11 @@ async function OrganicContent({
       tiktok: onboarding.connections.tiktok,
     },
   });
-  const initialMetricsPlatform: "instagram" | "facebook" | "tiktok" | "youtube" =
+  const initialMetricsPlatform: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin" =
     metricAccountsByPlatform.instagram.length > 0 ? "instagram"
     : metricAccountsByPlatform.tiktok.length > 0 ? "tiktok"
     : metricAccountsByPlatform.youtube.length > 0 ? "youtube"
+    : metricAccountsByPlatform.linkedin.length > 0 ? "linkedin"
     : "facebook";
 
   return (

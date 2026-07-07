@@ -1,11 +1,14 @@
-"use client";
+'use client';
 
-import { ChevronDownIcon } from "@radix-ui/react-icons";
-import * as Accordion from "@radix-ui/react-accordion";
-import { Badge, Box, Checkbox, Flex, Text } from "@radix-ui/themes";
-import type { MetaSelectableHierarchy, SelectableAsset } from "@/lib/schemas/integrations";
-import { getSelectableAssetLabel } from "@/lib/integrations/selectableAssets";
-import { isReadOnlyMetaRole } from "@/lib/integrations/metaRole";
+import * as Accordion from '@radix-ui/react-accordion';
+import { ChevronDownIcon } from '@radix-ui/react-icons';
+
+import { Pill } from '@/components/kibo-ui/pill';
+import { Checkbox } from '@/components/ui/checkbox';
+import { isReadOnlyMetaRole } from '@/lib/integrations/metaRole';
+import { getSelectableAssetLabel } from '@/lib/integrations/selectableAssets';
+import type { MetaSelectableHierarchy, SelectableAsset } from '@/lib/schemas/integrations';
+import { cn } from '@/lib/utils';
 
 type SelectedByIntegrationAccountId = Record<string, boolean>;
 
@@ -38,14 +41,16 @@ function SelectableAssetRow({
   seenKeys.add(key);
 
   const integrationAccountId = asset.integration_account_id;
-  const checked = integrationAccountId ? Boolean(selectedByIntegrationAccountId[integrationAccountId]) : false;
+  const checked = integrationAccountId
+    ? Boolean(selectedByIntegrationAccountId[integrationAccountId])
+    : false;
   const isDisabled = disabled || !integrationAccountId;
 
   return (
-    <Box className="border-subtle border-t px-3 py-2">
-      <Text as="label" size="2" color={isDisabled ? "gray" : undefined}>
-        <Flex as="span" align="center" justify="between" gap="3">
-          <Flex as="span" align="center" gap="2" className="min-w-0">
+    <div className="border-subtle border-t px-3 py-2">
+      <div className={cn('text-sm', isDisabled && 'text-muted-foreground')}>
+        <span className="flex items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-2">
             <Checkbox
               checked={checked}
               disabled={isDisabled}
@@ -54,23 +59,15 @@ function SelectableAssetRow({
                 onToggleIntegrationAccountId(integrationAccountId, value === true);
               }}
             />
-            <Text as="span" className="truncate">
-              {getSelectableAssetLabel(asset)}
-            </Text>
-          </Flex>
-          <Flex as="span" align="center" gap="2">
-            <Badge variant="soft" color="gray">
-              {asset.type}
-            </Badge>
-            {!integrationAccountId ? (
-              <Text as="span" size="1" color="amber">
-                Not ready
-              </Text>
-            ) : null}
-          </Flex>
-        </Flex>
-      </Text>
-    </Box>
+            <span className="truncate">{getSelectableAssetLabel(asset)}</span>
+          </span>
+          <span className="flex items-center gap-2">
+            <Pill variant="muted">{asset.type}</Pill>
+            {!integrationAccountId ? <span className="text-xs text-warning">Not ready</span> : null}
+          </span>
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -91,13 +88,11 @@ function AssetsList({
 }) {
   if (assets.length === 0) return null;
   return (
-    <Box className="border-subtle rounded-lg border bg-surface">
-      <Box className="px-3 py-2">
-        <Text size="2" weight="medium" className="text-primary">
-          {title}
-        </Text>
-      </Box>
-      <Box>
+    <div className="border-subtle rounded-lg border bg-surface">
+      <div className="px-3 py-2">
+        <span className="text-sm font-medium text-primary">{title}</span>
+      </div>
+      <div>
         {assets.map((asset) => (
           <SelectableAssetRow
             key={asset.asset_pk}
@@ -108,8 +103,8 @@ function AssetsList({
             seenKeys={seenKeys}
           />
         ))}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }
 
@@ -121,30 +116,24 @@ export function MetaSelectableAssetsTree({
 }: Props) {
   const integrations = hierarchy.integrations ?? [];
   if (integrations.length === 0) {
-    return (
-      <Text size="2" color="gray">
-        No Meta businesses found.
-      </Text>
-    );
+    return <span className="text-sm text-muted-foreground">No Meta businesses found.</span>;
   }
 
   const seenKeys = new Set<string>();
 
   return (
-    <Flex direction="column" gap="4">
+    <div className="flex flex-col gap-4">
       {integrations.map((integration) => {
         const businesses = integration.businesses ?? [];
         if (businesses.length === 0) return null;
 
         return (
-          <Box key={integration.integration_id}>
+          <div key={integration.integration_id}>
             <Accordion.Root type="multiple" className="flex flex-col gap-2">
               {businesses.map((business, index) => {
-                const businessKey = `${integration.integration_id}:${business.business_id ?? "none"}:${index}`;
+                const businessKey = `${integration.integration_id}:${business.business_id ?? 'none'}:${index}`;
                 const businessLabel =
-                  business.business_name?.trim() ||
-                  business.business_id ||
-                  "Meta business";
+                  business.business_name?.trim() || business.business_id || 'Meta business';
 
                 return (
                   <Accordion.Item
@@ -154,113 +143,130 @@ export function MetaSelectableAssetsTree({
                   >
                     <Accordion.Header>
                       <Accordion.Trigger className="text-primary group flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
-                        <Flex direction="column" gap="1" className="min-w-0">
-                          <Text size="2" weight="medium" className="truncate">
-                            {businessLabel}
-                          </Text>
+                        <span className="flex min-w-0 flex-col gap-1">
+                          <span className="truncate text-sm font-medium">{businessLabel}</span>
                           {business.business_id ? (
-                            <Text size="1" color="gray" className="truncate">
+                            <span className="truncate text-xs text-muted-foreground">
                               Business ID {business.business_id}
-                            </Text>
+                            </span>
                           ) : null}
-                        </Flex>
-                        <ChevronDownIcon className="text-secondary shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+                        </span>
+                        <ChevronDownIcon
+                          className="text-secondary shrink-0 transition-transform group-data-[state=open]:rotate-180"
+                          aria-hidden="true"
+                        />
                       </Accordion.Trigger>
                     </Accordion.Header>
 
                     <Accordion.Content className="border-subtle border-t px-3 py-3">
-                      <Flex direction="column" gap="3">
+                      <div className="flex flex-col gap-3">
                         {(business.ad_accounts ?? []).length > 0 ? (
-                          <Flex direction="column" gap="2">
-                            <Text size="2" weight="medium" className="text-primary">
-                              Ad accounts
-                            </Text>
-                          <Accordion.Root type="multiple" className="flex flex-col gap-2">
-                            {(business.ad_accounts ?? []).map((adAccount) => {
-                              const adAccountKey = `${businessKey}:ad:${adAccount.ad_account_id}`;
-                              const adAccountLabel = adAccount.ad_account
-                                ? getSelectableAssetLabel(adAccount.ad_account)
-                                : adAccount.ad_account_id;
+                          <div className="flex flex-col gap-2">
+                            <span className="text-sm font-medium text-primary">Ad accounts</span>
+                            <Accordion.Root type="multiple" className="flex flex-col gap-2">
+                              {(business.ad_accounts ?? []).map((adAccount) => {
+                                const adAccountKey = `${businessKey}:ad:${adAccount.ad_account_id}`;
+                                const adAccountLabel = adAccount.ad_account
+                                  ? getSelectableAssetLabel(adAccount.ad_account)
+                                  : adAccount.ad_account_id;
 
-                              const adAccountIntegrationAccountId = adAccount.ad_account?.integration_account_id ?? null;
-                              const adAccountChecked = adAccountIntegrationAccountId
-                                ? Boolean(selectedByIntegrationAccountId[adAccountIntegrationAccountId])
-                                : false;
-                              const adAccountDisabled = disabled || !adAccountIntegrationAccountId;
+                                const adAccountIntegrationAccountId =
+                                  adAccount.ad_account?.integration_account_id ?? null;
+                                const adAccountChecked = adAccountIntegrationAccountId
+                                  ? Boolean(
+                                      selectedByIntegrationAccountId[adAccountIntegrationAccountId],
+                                    )
+                                  : false;
+                                const adAccountDisabled =
+                                  disabled || !adAccountIntegrationAccountId;
 
-                              return (
-                                <Accordion.Item
-                                  key={adAccountKey}
-                                  value={adAccountKey}
-                                  className="border-subtle overflow-hidden rounded-lg border bg-default"
-                                >
-                                  <Accordion.Header className="px-3 py-2">
-                                    <Flex align="center" gap="2">
-                                      <Checkbox
-                                        checked={adAccountChecked}
-                                        disabled={adAccountDisabled}
-                                        onCheckedChange={(value) => {
-                                          if (!adAccountIntegrationAccountId) return;
-                                          onToggleIntegrationAccountId(adAccountIntegrationAccountId, value === true);
-                                        }}
-                                      />
-                                      <Accordion.Trigger className="text-primary group flex w-full flex-1 items-center justify-between gap-2 text-left">
-                                        <Flex direction="column" gap="1" className="min-w-0">
-                                          <Flex align="center" gap="2">
-                                            <Text size="2" weight="medium" className="truncate">
-                                              {adAccountLabel}
-                                            </Text>
-                                            <Badge variant="soft" color="gray">
-                                              ad account
-                                            </Badge>
-                                            {isReadOnlyMetaRole(adAccount.ad_account?.role) ? (
-                                              <Badge variant="soft" color="amber">
-                                                Read-only
-                                              </Badge>
-                                            ) : null}
-                                          </Flex>
-                                          <Text size="1" color="gray" className="truncate">
-                                            Ad Account ID {adAccount.ad_account_id}
-                                          </Text>
-                                        </Flex>
-                                        <ChevronDownIcon className="text-secondary shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-                                      </Accordion.Trigger>
-                                    </Flex>
-                                  </Accordion.Header>
+                                return (
+                                  <Accordion.Item
+                                    key={adAccountKey}
+                                    value={adAccountKey}
+                                    className="border-subtle overflow-hidden rounded-lg border bg-default"
+                                  >
+                                    <Accordion.Header className="px-3 py-2">
+                                      <div className="flex items-center gap-2">
+                                        <Checkbox
+                                          checked={adAccountChecked}
+                                          disabled={adAccountDisabled}
+                                          onCheckedChange={(value) => {
+                                            if (!adAccountIntegrationAccountId) return;
+                                            onToggleIntegrationAccountId(
+                                              adAccountIntegrationAccountId,
+                                              value === true,
+                                            );
+                                          }}
+                                        />
+                                        <Accordion.Trigger className="text-primary group flex w-full flex-1 items-center justify-between gap-2 text-left">
+                                          <span className="flex min-w-0 flex-col gap-1">
+                                            <span className="flex items-center gap-2">
+                                              <span className="truncate text-sm font-medium">
+                                                {adAccountLabel}
+                                              </span>
+                                              <Pill variant="muted">ad account</Pill>
+                                              {isReadOnlyMetaRole(adAccount.ad_account?.role) ? (
+                                                <Pill variant="warning">Read-only</Pill>
+                                              ) : null}
+                                            </span>
+                                            <span className="truncate text-xs text-muted-foreground">
+                                              Ad Account ID {adAccount.ad_account_id}
+                                            </span>
+                                          </span>
+                                          <ChevronDownIcon
+                                            className="text-secondary shrink-0 transition-transform group-data-[state=open]:rotate-180"
+                                            aria-hidden="true"
+                                          />
+                                        </Accordion.Trigger>
+                                      </div>
+                                    </Accordion.Header>
 
-                                  <Accordion.Content className="border-subtle border-t px-3 py-3">
-                                    <Flex direction="column" gap="3">
-                                      <AssetsList
-                                        title="Pages"
-                                        assets={adAccount.pages ?? []}
-                                        selectedByIntegrationAccountId={selectedByIntegrationAccountId}
-                                        onToggleIntegrationAccountId={onToggleIntegrationAccountId}
-                                        disabled={disabled}
-                                        seenKeys={seenKeys}
-                                      />
-                                      <AssetsList
-                                        title="Instagram accounts"
-                                        assets={adAccount.instagram_accounts ?? []}
-                                        selectedByIntegrationAccountId={selectedByIntegrationAccountId}
-                                        onToggleIntegrationAccountId={onToggleIntegrationAccountId}
-                                        disabled={disabled}
-                                        seenKeys={seenKeys}
-                                      />
-                                      <AssetsList
-                                        title="Threads accounts"
-                                        assets={adAccount.threads_accounts ?? []}
-                                        selectedByIntegrationAccountId={selectedByIntegrationAccountId}
-                                        onToggleIntegrationAccountId={onToggleIntegrationAccountId}
-                                        disabled={disabled}
-                                        seenKeys={seenKeys}
-                                      />
-                                    </Flex>
-                                  </Accordion.Content>
-                                </Accordion.Item>
-                              );
+                                    <Accordion.Content className="border-subtle border-t px-3 py-3">
+                                      <div className="flex flex-col gap-3">
+                                        <AssetsList
+                                          title="Pages"
+                                          assets={adAccount.pages ?? []}
+                                          selectedByIntegrationAccountId={
+                                            selectedByIntegrationAccountId
+                                          }
+                                          onToggleIntegrationAccountId={
+                                            onToggleIntegrationAccountId
+                                          }
+                                          disabled={disabled}
+                                          seenKeys={seenKeys}
+                                        />
+                                        <AssetsList
+                                          title="Instagram accounts"
+                                          assets={adAccount.instagram_accounts ?? []}
+                                          selectedByIntegrationAccountId={
+                                            selectedByIntegrationAccountId
+                                          }
+                                          onToggleIntegrationAccountId={
+                                            onToggleIntegrationAccountId
+                                          }
+                                          disabled={disabled}
+                                          seenKeys={seenKeys}
+                                        />
+                                        <AssetsList
+                                          title="Threads accounts"
+                                          assets={adAccount.threads_accounts ?? []}
+                                          selectedByIntegrationAccountId={
+                                            selectedByIntegrationAccountId
+                                          }
+                                          onToggleIntegrationAccountId={
+                                            onToggleIntegrationAccountId
+                                          }
+                                          disabled={disabled}
+                                          seenKeys={seenKeys}
+                                        />
+                                      </div>
+                                    </Accordion.Content>
+                                  </Accordion.Item>
+                                );
                               })}
                             </Accordion.Root>
-                          </Flex>
+                          </div>
                         ) : null}
 
                         <AssetsList
@@ -287,15 +293,15 @@ export function MetaSelectableAssetsTree({
                           disabled={disabled}
                           seenKeys={seenKeys}
                         />
-                      </Flex>
+                      </div>
                     </Accordion.Content>
                   </Accordion.Item>
                 );
               })}
             </Accordion.Root>
-          </Box>
+          </div>
         );
       })}
-    </Flex>
+    </div>
   );
 }

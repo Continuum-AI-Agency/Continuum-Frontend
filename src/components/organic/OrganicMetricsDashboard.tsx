@@ -1,18 +1,6 @@
 'use client';
 
 import { DownloadIcon, ReloadIcon } from '@radix-ui/react-icons';
-import {
-  Badge,
-  Box,
-  Button,
-  Callout,
-  Card,
-  Flex,
-  IconButton,
-  Select,
-  Separator,
-  Text,
-} from '@radix-ui/themes';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import React from 'react';
@@ -24,17 +12,27 @@ import {
   LineChart,
   Pie,
   PieChart,
-  PolarRadiusAxis,
-  RadialBar,
-  RadialBarChart,
   ReferenceLine,
   XAxis,
   YAxis,
 } from 'recharts';
+import { Gauge } from '@/components/charts/gauge';
+import { Pill } from '@/components/kibo-ui/pill';
 import { DisabledControl } from '@/components/organic/DisabledControl';
 import { describeExportBlock, describeRefreshBlock } from '@/components/organic/disabledReasons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
 import { PostCommentsPanel } from '@/components/organic/primitives/PostCommentsPanel';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const OrganicAudienceLocationMapCard = dynamic(
@@ -49,9 +47,9 @@ import type { IntegrationErrorCode } from '@continuum/contracts';
 import { Flag } from 'lucide-react';
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
+import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
 import { OrganicAwarenessReportView } from '@/components/organic/OrganicAwarenessReportView';
-import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
 import {
   formatDateTime,
   formatNumber,
@@ -134,9 +132,10 @@ type AccountsByPlatform = {
   facebook: OrganicAccountOption[];
   tiktok: OrganicAccountOption[];
   youtube: OrganicAccountOption[];
+  linkedin: OrganicAccountOption[];
 };
 
-type MetricsPlatform = 'instagram' | 'facebook' | 'tiktok' | 'youtube';
+type MetricsPlatform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
 type MetricsViewMode = 'account' | 'posts';
 
 const PLATFORM_LABELS: Record<MetricsPlatform, string> = {
@@ -144,6 +143,7 @@ const PLATFORM_LABELS: Record<MetricsPlatform, string> = {
   facebook: 'Facebook',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  linkedin: 'LinkedIn',
 };
 
 type Props = {
@@ -226,13 +226,8 @@ function getKpiConfig(platform: MetricsPlatform): KpiMetric[] {
   return META_KPI_CONFIG;
 }
 
-const audienceChartConfig = {
-  followers: { label: 'Followers', color: '#0284c7' },
-  nonFollowers: { label: 'Non-followers', color: '#f59e0b' },
-} satisfies ChartConfig;
-
 const genderChartConfig = {
-  value: { label: 'Followers', color: '#0284c7' },
+  value: { label: 'Followers', color: 'var(--primary)' },
 } satisfies ChartConfig;
 
 const drilldownChartConfig = {
@@ -349,10 +344,10 @@ function downloadTextFile(params: { content: string; fileName: string; mimeType:
 
 function demographicColor(label: string) {
   const normalized = label.trim().toLowerCase();
-  if (normalized === 'female') return '#10b981';
-  if (normalized === 'male') return '#0284c7';
-  if (normalized === 'unknown') return '#94a3b8';
-  return '#64748b';
+  if (normalized === 'female') return 'var(--primary)';
+  if (normalized === 'male') return 'var(--secondary)';
+  if (normalized === 'unknown') return 'var(--muted-foreground)';
+  return 'var(--accent)';
 }
 
 function resolveProfileVisits(metrics: OrganicMetrics) {
@@ -513,7 +508,7 @@ function PostGalleryCard({
           : 'hover:-translate-y-0.5 hover:shadow-md',
       )}
     >
-      <Box
+      <div
         className={cn(
           'relative flex w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10',
           mediaHeightClass,
@@ -555,6 +550,7 @@ function PostGalleryCard({
                       viewBox="0 0 24 24"
                       fill="currentColor"
                       className="ml-0.5 h-5 w-5 text-black"
+                      aria-hidden="true"
                     >
                       <path d="M8 5v14l11-7z" />
                     </svg>
@@ -564,40 +560,36 @@ function PostGalleryCard({
             </div>
           )
         ) : (
-          <Box className="h-full w-full flex items-center justify-center">
-            <Text size="1" color="gray">
-              Media preview unavailable
-            </Text>
-          </Box>
+          <div className="h-full w-full flex items-center justify-center">
+            <span className="text-xs text-muted-foreground">Media preview unavailable</span>
+          </div>
         )}
 
         <div className="absolute left-2 top-2 flex items-center gap-1">
           {platform === 'youtube' ? (
-            <Badge color={isYouTubeShort(post) ? 'pink' : 'violet'} variant="solid">
+            <Pill variant={isYouTubeShort(post) ? 'warning' : 'violet'}>
               {isYouTubeShort(post) ? 'Short' : 'Video'}
-            </Badge>
+            </Pill>
           ) : (
-            <Badge color={video ? 'violet' : carousel ? 'orange' : 'gray'} variant="solid">
+            <Pill variant={video ? 'violet' : carousel ? 'warning' : 'muted'}>
               {video ? 'Reel/Video' : carousel ? 'Carousel' : 'Post'}
-            </Badge>
+            </Pill>
           )}
           {carousel ? (
-            <Badge color="gray" variant="soft">
-              {(post.carouselMedia?.length ?? 0) || 1} slides
-            </Badge>
+            <Pill variant="muted">{(post.carouselMedia?.length ?? 0) || 1} slides</Pill>
           ) : null}
         </div>
         {post.isBoosted ? (
-          <Badge className="absolute right-2 top-2" color="orange" variant="solid">
+          <Pill className="absolute right-2 top-2" variant="warning">
             Boosted
-          </Badge>
+          </Pill>
         ) : null}
         {loading ? (
-          <Badge className="absolute bottom-2 right-2" color="blue" variant="soft">
+          <Pill className="absolute bottom-2 right-2" variant="teal">
             Loading details...
-          </Badge>
+          </Pill>
         ) : null}
-      </Box>
+      </div>
     </motion.button>
   );
 }
@@ -745,31 +737,21 @@ function PostSnapshotPanel({
       transition={{ duration: 0.24, ease: [0.2, 0.8, 0.2, 1] }}
       className="min-h-0"
     >
-      <Card variant="surface" className="h-full border border-subtle bg-surface">
+      <div className="h-full rounded-lg border border-subtle bg-surface">
         <SectionHeader
           title="Post Snapshot"
           meta={
-            <Text size="1" color="gray">
-              {formatDateTime(post.timestamp)}
-            </Text>
+            <span className="text-xs text-muted-foreground">{formatDateTime(post.timestamp)}</span>
           }
           action={
-            <Flex align="center" gap="1">
-              {post.isBoosted ? (
-                <Badge color="orange" variant="soft">
-                  Boosted
-                </Badge>
-              ) : null}
-              {loading ? (
-                <Badge color="blue" variant="soft">
-                  Refreshing
-                </Badge>
-              ) : null}
-            </Flex>
+            <div className="flex items-center gap-1">
+              {post.isBoosted ? <Pill variant="warning">Boosted</Pill> : null}
+              {loading ? <Pill variant="teal">Refreshing</Pill> : null}
+            </div>
           }
         />
-        <Box p="3" className="h-full">
-          <Box className="mb-3 overflow-hidden rounded-lg bg-black/90">
+        <div className="p-3 h-full">
+          <div className="mb-3 overflow-hidden rounded-lg bg-black/90">
             {isThumbnailOnlyVideo && post.permalink ? (
               <TikTokEmbed videoId={post.id} permalink={post.permalink} />
             ) : preview ? (
@@ -809,13 +791,13 @@ function PostSnapshotPanel({
                 />
               )
             ) : (
-              <Box className="flex min-h-[180px] items-center justify-center">
-                <Text size="1" color="gray">
+              <div className="flex min-h-[180px] items-center justify-center">
+                <span className="text-xs text-muted-foreground">
                   Preview unavailable for this post
-                </Text>
-              </Box>
+                </span>
+              </div>
             )}
-          </Box>
+          </div>
 
           <div className="mb-3">
             {metricsPending ? (
@@ -829,8 +811,8 @@ function PostSnapshotPanel({
             )}
           </div>
 
-          <Box className="mb-3">
-            <Flex align="center" justify="between" mb="2" wrap="wrap" gap="2">
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
                 {(Object.keys(POST_METRIC_LABELS) as PostMetricKey[]).map((metricKey) => (
                   <button
@@ -850,10 +832,8 @@ function PostSnapshotPanel({
                   </button>
                 ))}
               </div>
-              <Text size="1" color="gray" className="px-1">
-                Last 7 days
-              </Text>
-            </Flex>
+              <span className="px-1 text-xs text-muted-foreground">Last 7 days</span>
+            </div>
             {metricsPending ? (
               <Skeleton className="h-24 w-full rounded-lg" />
             ) : series.length > 0 ? (
@@ -882,17 +862,17 @@ function PostSnapshotPanel({
                   </LineChart>
                 </ChartContainer>
                 {trendDays < 7 ? (
-                  <Text size="1" color="gray" className="mt-1 block">
+                  <span className="mt-1 block text-xs text-muted-foreground">
                     Building per-post history — {trendDays}/7 days tracked.
-                  </Text>
+                  </span>
                 ) : null}
               </>
             ) : accountSeries && accountSeries.length > 0 ? (
               <div className="space-y-1">
-                <Text size="1" color="gray" className="block">
+                <span className="block text-xs text-muted-foreground">
                   Per-post trend builds over time ({trendDays}/7 days). Showing the account trend
                   meanwhile.
-                </Text>
+                </span>
                 <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
                   <LineChart data={accountSeries}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -910,19 +890,19 @@ function PostSnapshotPanel({
                 </ChartContainer>
               </div>
             ) : (
-              <Text size="1" color="gray">
+              <span className="text-xs text-muted-foreground">
                 Per-post trend builds over time. Check back tomorrow once a second day is tracked.
-              </Text>
+              </span>
             )}
-          </Box>
+          </div>
 
           <PostCommentsPanel comments={post.comments} />
 
-          <Text size="1" className="line-clamp-8">
+          <span className="block text-xs line-clamp-8">
             {post.caption?.trim().length ? post.caption : 'Caption unavailable for this post.'}
-          </Text>
-        </Box>
-      </Card>
+          </span>
+        </div>
+      </div>
     </motion.aside>
   );
 }
@@ -954,14 +934,13 @@ function MetricCard({
   const hasInsights = insights && insights.length > 0;
 
   const cardContent = (
-    <Card
-      variant="surface"
+    <div
       className={cn(
-        'border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none',
+        'rounded-lg border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none',
         compact ? 'min-h-[48px]' : 'min-h-[96px]',
         active ? 'border-blue-500/70 bg-blue-500/10 shadow-blue-500/10' : '',
-        interactive ? 'hover:-translate-y-0.5 hover:shadow-md' : '',
-        hasInsights ? 'ring-1 ring-violet-400/30' : '',
+        interactive ? 'hover:-translate-y-0.5 hover:shadow-sm' : '',
+        hasInsights ? 'ring-1 ring-primary/30' : '',
       )}
     >
       <button
@@ -977,80 +956,73 @@ function MetricCard({
           interactive ? 'cursor-pointer' : 'cursor-default',
         )}
       >
-        <Flex align="start" justify="between" gap="2" className="w-full">
-          <Flex align="center" gap="1">
-            <Text size="1" color="gray" className="leading-none">
-              {label}
-            </Text>
+        <div className="flex items-start justify-between gap-2 w-full">
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground leading-none">{label}</span>
             {hasInsights ? (
               <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500"
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
                 title="Insights available"
               />
             ) : null}
-          </Flex>
+          </div>
           {!compact && (
             <span
               className={cn(
                 'rounded px-2 py-0.5 text-xs font-medium uppercase tracking-wide',
-                direction === 'up'
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                  : '',
-                direction === 'down' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300' : '',
-                direction === 'flat' ? 'bg-slate-500/15 text-slate-700 dark:text-slate-300' : '',
+                direction === 'up' ? 'bg-success/15 text-success' : '',
+                direction === 'down' ? 'bg-destructive/15 text-destructive' : '',
+                direction === 'flat' ? 'bg-muted text-muted-foreground' : '',
               )}
             >
               {direction}
             </span>
           )}
-        </Flex>
-        <Text
-          size={compact ? '3' : '5'}
-          weight="bold"
-          className="leading-tight tabular-nums tracking-tight"
+        </div>
+        <span
+          className={cn(
+            'block font-semibold leading-tight tabular-nums tracking-tight',
+            compact ? 'text-base' : 'text-xl',
+          )}
         >
           {format === 'percent'
             ? typeof value === 'number'
               ? `${value.toFixed(1)}%`
               : '—'
             : formatNumber(value)}
-        </Text>
+        </span>
         {compact ? (
-          <Text
-            size="1"
+          <span
             className={cn(
-              'leading-none font-medium',
+              'block text-xs leading-none font-medium',
               pctChange === undefined
                 ? 'text-muted-foreground'
                 : pctChange >= 0
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-rose-600 dark:text-rose-400',
+                  ? 'text-success'
+                  : 'text-destructive',
             )}
           >
             {formatPercentChange(pctChange)}
-          </Text>
+          </span>
         ) : (
-          <Flex align="center" justify="between" gap="2">
-            <Text
-              size="1"
+          <div className="flex items-center justify-between gap-2">
+            <span
               className={cn(
-                'leading-none font-medium',
+                'text-xs leading-none font-medium',
                 pctChange === undefined
                   ? 'text-muted-foreground'
                   : pctChange >= 0
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-rose-600 dark:text-rose-400',
+                    ? 'text-success'
+                    : 'text-destructive',
               )}
             >
               {formatPercentChange(pctChange)}
-            </Text>
-            <Text size="1" color="gray" className="leading-none">
-              vs previous period
-            </Text>
-          </Flex>
+            </span>
+            <span className="text-xs text-muted-foreground leading-none">vs previous period</span>
+          </div>
         )}
       </button>
-    </Card>
+    </div>
   );
 
   if (!hasInsights) return cardContent;
@@ -1063,12 +1035,10 @@ function MetricCard({
         align="start"
         className="w-[min(20rem,calc(100vw-2rem))] max-h-[min(70svh,26rem)] overflow-y-auto p-3"
       >
-        <Text size="2" weight="medium" className="mb-2 block">
-          {label} Insights
-        </Text>
-        <Flex direction="column" gap="2">
+        <span className="mb-2 block text-sm font-medium">{label} Insights</span>
+        <div className="flex flex-col gap-2">
           {insights.map((insight, i) => (
-            <Flex key={i} align="start" gap="2">
+            <div key={i} className="flex items-start gap-2">
               <div
                 className={cn(
                   'mt-1 h-2 w-2 shrink-0 rounded-full',
@@ -1080,18 +1050,16 @@ function MetricCard({
                 )}
               />
               <div className="min-w-0">
-                <Text size="1" className="leading-snug">
-                  {insight.text}
-                </Text>
+                <span className="block text-xs leading-snug">{insight.text}</span>
                 {insight.recommendation ? (
-                  <Text size="1" color="gray" className="mt-0.5 block leading-snug">
+                  <span className="mt-0.5 block text-xs text-muted-foreground leading-snug">
                     {insight.recommendation}
-                  </Text>
+                  </span>
                 ) : null}
               </div>
-            </Flex>
+            </div>
           ))}
-        </Flex>
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -1119,22 +1087,18 @@ function YoutubeTypeSummaryStrip({
     },
   ];
   return (
-    <Card variant="surface" className="mb-3 border border-subtle bg-surface">
-      <Box p="3">
-        <Flex gap="6" wrap="wrap">
+    <div className="mb-3 rounded-lg border border-subtle bg-surface">
+      <div className="p-3">
+        <div className="flex gap-6 flex-wrap">
           {stats.map((stat) => (
             <div key={stat.label} className="min-w-0">
-              <Text size="1" color="gray" className="block">
-                {stat.label}
-              </Text>
-              <Text size="3" weight="bold" className="tabular-nums">
-                {stat.value}
-              </Text>
+              <span className="block text-xs text-muted-foreground">{stat.label}</span>
+              <span className="block text-base font-semibold tabular-nums">{stat.value}</span>
             </div>
           ))}
-        </Flex>
-      </Box>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1144,20 +1108,18 @@ function YoutubeContentTypeSplitCard({ performance }: { performance: ContentType
   if (performance.length === 0) return null;
   const maxViews = Math.max(1, ...performance.map((row) => row.views ?? 0));
   return (
-    <Card variant="surface" className="border border-subtle bg-surface">
-      <Box p="3">
-        <Text size="2" weight="medium" className="mb-2 block">
-          Shorts vs Videos
-        </Text>
-        <Flex direction="column" gap="3">
+    <div className="rounded-lg border border-subtle bg-surface">
+      <div className="p-3">
+        <span className="mb-2 block text-sm font-medium">Shorts vs Videos</span>
+        <div className="flex flex-col gap-3">
           {performance.map((row) => (
             <div key={row.contentType}>
-              <Flex align="center" justify="between" mb="1">
-                <Text size="2">{row.contentType}</Text>
-                <Text size="1" color="gray" className="tabular-nums">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm">{row.contentType}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">
                   {formatNumber(row.views ?? 0)} views · {formatNumber(row.engagement ?? 0)} eng
-                </Text>
-              </Flex>
+                </span>
+              </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
                 <div
                   className={cn(
@@ -1169,15 +1131,14 @@ function YoutubeContentTypeSplitCard({ performance }: { performance: ContentType
               </div>
             </div>
           ))}
-        </Flex>
-      </Box>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }
 
 type AudienceCardProps = {
   audienceBreakdown: AudienceBreakdown;
-  audienceRadialData: Array<{ audience: string; followers: number; nonFollowers: number }>;
   audienceTotal: number;
   genderDemographics: Array<AudienceDemographicEntry & { fill: string }>;
   ageDemographics: AudienceDemographicEntry[];
@@ -1191,7 +1152,6 @@ type AudienceCardProps = {
 // YoutubeContentTypeSplitCard above instead of a squeezed recharts BarChart.
 function AudienceCard({
   audienceBreakdown,
-  audienceRadialData,
   audienceTotal,
   genderDemographics,
   ageDemographics,
@@ -1218,74 +1178,31 @@ function AudienceCard({
   const ageMaxValue = Math.max(1, peakAgeBand?.value ?? 0);
 
   return (
-    <Card variant="surface" className={cn('border border-subtle bg-surface', hidden && '!hidden')}>
+    <div className={cn('rounded-lg border border-subtle bg-surface', hidden && '!hidden')}>
       <SectionHeader title="Audience" />
-      <Box p="3">
+      <div className="p-3">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
           <div className="flex flex-col items-center gap-3">
-            <Text size="1" color="gray" className="self-start uppercase tracking-wide">
+            <span className="self-start text-xs text-muted-foreground uppercase tracking-wide">
               Followers Breakdown
-            </Text>
+            </span>
             {audienceTotal === 0 ? (
-              <Flex align="center" justify="center" className="h-64 w-full max-w-xs">
-                <Text size="1" color="gray">
+              <div className="flex items-center justify-center h-64 w-full max-w-xs">
+                <span className="text-xs text-muted-foreground">
                   Followers breakdown unavailable.
-                </Text>
-              </Flex>
+                </span>
+              </div>
             ) : (
               <>
-                <ChartContainer config={audienceChartConfig} className="h-64 w-full max-w-xs">
-                  <RadialBarChart
-                    data={audienceRadialData}
-                    endAngle={180}
-                    innerRadius={58}
-                    outerRadius={106}
-                  >
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                    <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-                      <Label
-                        content={({ viewBox }) => {
-                          if (!viewBox || !('cx' in viewBox) || !('cy' in viewBox)) {
-                            return null;
-                          }
-
-                          return (
-                            <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
-                              <tspan
-                                x={viewBox.cx}
-                                y={(viewBox.cy ?? 0) - 14}
-                                className="fill-foreground text-2xl font-semibold"
-                              >
-                                {formatNumber(audienceTotal)}
-                              </tspan>
-                              <tspan
-                                x={viewBox.cx}
-                                y={(viewBox.cy ?? 0) + 10}
-                                className="fill-muted-foreground text-2xs uppercase tracking-wide"
-                              >
-                                Total Audience
-                              </tspan>
-                            </text>
-                          );
-                        }}
-                      />
-                    </PolarRadiusAxis>
-                    <RadialBar
-                      dataKey="followers"
-                      stackId="audience"
-                      cornerRadius={6}
-                      fill="var(--color-followers)"
-                      className="stroke-transparent stroke-2"
-                    />
-                    <RadialBar
-                      dataKey="nonFollowers"
-                      stackId="audience"
-                      cornerRadius={6}
-                      fill="var(--color-nonFollowers)"
-                      className="stroke-transparent stroke-2"
-                    />
-                  </RadialBarChart>
-                </ChartContainer>
+                <Gauge
+                  orientation="arc"
+                  value={followersPct}
+                  centerValue={audienceTotal}
+                  defaultLabel="Total Audience"
+                  activeFill="var(--primary)"
+                  inactiveFill="var(--muted)"
+                  className="h-64 w-full max-w-xs"
+                />
                 <MetricStrip
                   items={[
                     {
@@ -1303,18 +1220,16 @@ function AudienceCard({
           </div>
 
           <div className="flex flex-col items-center gap-3">
-            <Text size="1" color="gray" className="self-start uppercase tracking-wide">
+            <span className="self-start text-xs text-muted-foreground uppercase tracking-wide">
               Gender
-            </Text>
+            </span>
             {demographicsLoading ? (
-              <Flex direction="column" align="center" gap="2">
+              <div className="flex flex-col items-center gap-2">
                 <div className="h-48 w-48 animate-pulse rounded-full bg-muted/70" />
                 <div className="h-3 w-32 animate-pulse rounded bg-muted/70" />
-              </Flex>
+              </div>
             ) : genderDemographics.length === 0 ? (
-              <Text size="1" color="gray">
-                Gender breakdown unavailable.
-              </Text>
+              <span className="text-xs text-muted-foreground">Gender breakdown unavailable.</span>
             ) : (
               <>
                 <ChartContainer config={genderChartConfig} className="h-48 w-48">
@@ -1360,43 +1275,41 @@ function AudienceCard({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <Flex direction="column" gap="1.5" className="w-full max-w-xs">
+                <div className="flex flex-col gap-1.5 w-full max-w-xs">
                   {genderDemographics.map((entry) => (
-                    <Flex key={entry.key} justify="between" align="center">
-                      <Flex align="center" gap="2" className="min-w-0">
+                    <div key={entry.key} className="flex justify-between items-center">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: entry.fill }}
                         />
-                        <Text size="1" color="gray" className="truncate">
+                        <span className="truncate text-xs text-muted-foreground">
                           {entry.label}
-                        </Text>
-                      </Flex>
-                      <Text size="1" weight="medium" className="font-mono">
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium font-mono">
                         {formatNumber(entry.value)}
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
                   ))}
-                </Flex>
+                </div>
               </>
             )}
           </div>
 
           <div className="min-w-0 sm:col-span-2 xl:col-span-1">
-            <Flex justify="between" align="baseline" mb="2">
-              <Text size="1" color="gray" className="uppercase tracking-wide">
-                Age
-              </Text>
+            <div className="flex justify-between items-baseline mb-2">
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">Age</span>
               {peakAgeBand && ageTotal > 0 ? (
-                <Text size="1" color="gray">
+                <span className="text-xs text-muted-foreground">
                   Peak <span className="font-medium text-foreground">{peakAgeBand.label}</span>
                   {' · '}
                   {formatRate((peakAgeBand.value / ageTotal) * 100)}
-                </Text>
+                </span>
               ) : null}
-            </Flex>
+            </div>
             {demographicsLoading ? (
-              <Flex direction="column" gap="3">
+              <div className="flex flex-col gap-3">
                 {[70, 45, 85, 30, 55, 25].map((width, index) => (
                   <div key={index} className="space-y-1">
                     <div className="h-3 w-10 animate-pulse rounded bg-muted/70" />
@@ -1408,35 +1321,36 @@ function AudienceCard({
                     </div>
                   </div>
                 ))}
-              </Flex>
+              </div>
             ) : ageDemographics.length === 0 ? (
-              <Text size="1" color="gray">
-                Age breakdown unavailable.
-              </Text>
+              <span className="text-xs text-muted-foreground">Age breakdown unavailable.</span>
             ) : (
-              <Flex direction="column" gap="3" className="max-h-64 overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3 max-h-64 overflow-y-auto pr-1">
                 {ageDemographics.map((entry) => (
                   <div key={entry.key}>
-                    <Flex align="center" justify="between" mb="1">
-                      <Text size="2">{entry.label}</Text>
-                      <Text size="1" color="gray" className="font-mono tabular-nums">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm">{entry.label}</span>
+                      <span className="text-xs text-muted-foreground font-mono tabular-nums">
                         {formatNumber(entry.value)}
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
                       <div
-                        className="h-full rounded-full bg-secondary"
+                        className={cn(
+                          'h-full rounded-full',
+                          entry.key === peakAgeBand?.key ? 'bg-primary' : 'bg-primary/70',
+                        )}
                         style={{ width: `${Math.round((entry.value / ageMaxValue) * 100)}%` }}
                       />
                     </div>
                   </div>
                 ))}
-              </Flex>
+              </div>
             )}
           </div>
         </div>
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1602,13 +1516,6 @@ function Dashboard({
   }, [data.posts, platform, youtubePostType]);
 
   const audienceTotal = Math.max(0, audienceBreakdown.followers + audienceBreakdown.nonFollowers);
-  const audienceRadialData = [
-    {
-      audience: 'reach',
-      followers: audienceBreakdown.followers,
-      nonFollowers: audienceBreakdown.nonFollowers,
-    },
-  ];
   const genderDemographics = (data.audienceDemographics?.gender ?? []).map((entry) => ({
     ...entry,
     fill: demographicColor(entry.label),
@@ -1656,11 +1563,11 @@ function Dashboard({
   }, [hasMorePosts, isPostsView, loadingMorePosts, onLoadMorePosts]);
 
   return (
-    <Flex direction="column" gap="2" className="min-h-0 pb-6">
+    <div className="flex flex-col gap-2 min-h-0 pb-6">
       {isAccountView && rangePreset === 'today' ? (
-        <Text size="1" color="gray" className="mb-1 block">
+        <span className="mb-1 block text-xs text-muted-foreground">
           Today so far — deltas compare today (partial) against yesterday.
-        </Text>
+        </span>
       ) : null}
       {isAccountView ? (
         <motion.div
@@ -1704,13 +1611,13 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? (
-        <Card variant="surface" className="border border-subtle bg-surface">
+        <div className="rounded-lg border border-subtle bg-surface">
           <SectionHeader
             title="Metric Drilldown"
             meta={
-              <Text size="1" color="gray">
+              <span className="text-xs text-muted-foreground">
                 {selectedAccountMetricLabel} ({drilldownWindow})
-              </Text>
+              </span>
             }
             action={
               <div className="flex items-center gap-2">
@@ -1762,11 +1669,11 @@ function Dashboard({
               </div>
             }
           />
-          <Box p="3">
+          <div className="p-3">
             {accountSeries.length === 0 ? (
-              <Text size="2" color="gray">
+              <span className="text-sm text-muted-foreground">
                 No metric history is available for this metric in the selected window.
-              </Text>
+              </span>
             ) : (
               <ChartContainer
                 config={drilldownChartConfig}
@@ -1801,14 +1708,13 @@ function Dashboard({
                 </LineChart>
               </ChartContainer>
             )}
-          </Box>
-        </Card>
+          </div>
+        </div>
       ) : null}
 
       {isAccountView ? (
         <AudienceCard
           audienceBreakdown={audienceBreakdown}
-          audienceRadialData={audienceRadialData}
           audienceTotal={audienceTotal}
           genderDemographics={genderDemographics}
           ageDemographics={ageDemographics}
@@ -1844,14 +1750,14 @@ function Dashboard({
           {platform === 'youtube' ? (
             <YoutubeTypeSummaryStrip posts={visiblePosts} filter={youtubePostType} />
           ) : null}
-          <Card variant="surface" className="border border-subtle bg-surface">
-            <Box p="3">
+          <div className="rounded-lg border border-subtle bg-surface">
+            <div className="p-3">
               {visiblePosts.length === 0 ? (
-                <Text size="2" color="gray">
+                <span className="text-sm text-muted-foreground">
                   {platform === 'youtube' && youtubePostType !== 'all'
                     ? `No ${youtubePostType === 'shorts' ? 'Shorts' : 'videos'} were found for this channel in the selected window.`
                     : 'No posts were found for this account in the selected window.'}
-                </Text>
+                </span>
               ) : (
                 <div className="mx-auto w-full">
                   <motion.div
@@ -1863,25 +1769,24 @@ function Dashboard({
                     )}
                   >
                     <motion.div layout className="min-w-0">
-                      <Flex align="center" justify="end" mb="2" px="1" gap="2">
-                        <Text size="1" color="gray">
-                          Sort
-                        </Text>
-                        <Select.Root
+                      <div className="flex items-center justify-end mb-2 px-1 gap-2">
+                        <span className="text-xs text-muted-foreground">Sort</span>
+                        <Select
                           value={postSortKey}
                           onValueChange={(v) => setPostSortKey(v as PostSortKey)}
-                          size="1"
                         >
-                          <Select.Trigger variant="soft" />
-                          <Select.Content>
-                            <Select.Item value="recent">Recent</Select.Item>
-                            <Select.Item value="hookRate">Hook Rate</Select.Item>
-                            <Select.Item value="views">Views</Select.Item>
-                            <Select.Item value="reach">Reach</Select.Item>
-                            <Select.Item value="engagement">Engagement</Select.Item>
-                          </Select.Content>
-                        </Select.Root>
-                      </Flex>
+                          <SelectTrigger size="sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="recent">Recent</SelectItem>
+                            <SelectItem value="hookRate">Hook Rate</SelectItem>
+                            <SelectItem value="views">Views</SelectItem>
+                            <SelectItem value="reach">Reach</SelectItem>
+                            <SelectItem value="engagement">Engagement</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div
                         ref={postsScrollerRef}
                         className="mx-auto max-h-[calc(100dvh-11rem)] w-full overflow-y-auto px-1"
@@ -1950,17 +1855,17 @@ function Dashboard({
                         <div ref={postsLoadSentinelRef} className="h-2 w-full" aria-hidden />
                         <div className="flex items-center justify-center py-4">
                           {loadingMorePosts ? (
-                            <Text size="1" color="gray">
+                            <span className="text-xs text-muted-foreground">
                               Loading previous {POST_GALLERY_WINDOW_DAYS}d...
-                            </Text>
+                            </span>
                           ) : hasMorePosts ? (
-                            <Text size="1" color="gray">
+                            <span className="text-xs text-muted-foreground">
                               Scroll for previous {POST_GALLERY_WINDOW_DAYS}d
-                            </Text>
+                            </span>
                           ) : (
-                            <Text size="1" color="gray">
+                            <span className="text-xs text-muted-foreground">
                               Reached 3-month history cap.
-                            </Text>
+                            </span>
                           )}
                         </div>
                       </div>
@@ -1982,11 +1887,11 @@ function Dashboard({
                   </motion.div>
                 </div>
               )}
-            </Box>
-          </Card>
+            </div>
+          </div>
         </>
       ) : null}
-    </Flex>
+    </div>
   );
 }
 
@@ -2020,6 +1925,7 @@ export function OrganicMetricsDashboard({
     facebook: string | null;
     tiktok: string | null;
     youtube: string | null;
+    linkedin: string | null;
   }>(() => {
     const store = useAccountSelectionStore.getState();
     const resolve = (platform: string, accounts: OrganicAccountOption[]) => {
@@ -2032,6 +1938,7 @@ export function OrganicMetricsDashboard({
       facebook: resolve('facebook', accountsByPlatform.facebook),
       tiktok: resolve('tiktok', accountsByPlatform.tiktok),
       youtube: resolve('youtube', accountsByPlatform.youtube),
+      linkedin: resolve('linkedin', accountsByPlatform.linkedin),
     };
   });
   const [state, setState] = React.useState<LoadState>({ status: 'idle' });
@@ -2049,7 +1956,9 @@ export function OrganicMetricsDashboard({
         ? accountsByPlatform.tiktok
         : platform === 'youtube'
           ? accountsByPlatform.youtube
-          : accountsByPlatform.instagram;
+          : platform === 'linkedin'
+            ? accountsByPlatform.linkedin
+            : accountsByPlatform.instagram;
 
   const selectedAccountId =
     platform === 'facebook'
@@ -2058,7 +1967,9 @@ export function OrganicMetricsDashboard({
         ? selectedAccountByPlatform.tiktok
         : platform === 'youtube'
           ? selectedAccountByPlatform.youtube
-          : selectedAccountByPlatform.instagram;
+          : platform === 'linkedin'
+            ? selectedAccountByPlatform.linkedin
+            : selectedAccountByPlatform.instagram;
 
   const selectedAccount =
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
@@ -2317,6 +2228,21 @@ export function OrganicMetricsDashboard({
       return;
     }
 
+    if (platform === 'linkedin') {
+      if (
+        !selectedAccountByPlatform.linkedin ||
+        !platformAccounts.some(
+          (item) => item.integrationAccountId === selectedAccountByPlatform.linkedin,
+        )
+      ) {
+        setSelectedAccountByPlatform((current) => ({
+          ...current,
+          linkedin: firstPlatformAccountId,
+        }));
+      }
+      return;
+    }
+
     if (
       !selectedAccountByPlatform.instagram ||
       !platformAccounts.some(
@@ -2333,6 +2259,7 @@ export function OrganicMetricsDashboard({
     platformAccounts,
     selectedAccountByPlatform.facebook,
     selectedAccountByPlatform.instagram,
+    selectedAccountByPlatform.linkedin,
     selectedAccountByPlatform.tiktok,
     selectedAccountByPlatform.youtube,
   ]);
@@ -2493,57 +2420,54 @@ export function OrganicMetricsDashboard({
       className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-subtle bg-surface"
     >
       <div className="flex min-h-10 flex-wrap items-center gap-2 border-b px-2 py-1.5 sm:px-3">
-        <Badge color="gray" variant="soft" radius="full" className="hidden sm:inline-flex">
+        <Pill variant="muted" className="hidden sm:inline-flex">
           <PlatformIcon platform={platform} />
-        </Badge>
+        </Pill>
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <Select.Root
+          <Select
             value={platform}
             onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}
           >
-            <Select.Trigger variant="surface" radius="large" className="h-8 w-[8.75rem] text-xs">
+            <SelectTrigger className="h-8 w-[8.75rem] text-xs">
               {
                 {
                   instagram: 'Instagram',
                   facebook: 'Facebook',
                   tiktok: 'TikTok',
                   youtube: 'YouTube',
+                  linkedin: 'LinkedIn',
                 }[platform]
               }
-            </Select.Trigger>
-            <Select.Content>
-              <Select.Item value="instagram">Instagram</Select.Item>
-              <Select.Item value="facebook">Facebook Pages</Select.Item>
-              <Select.Item value="tiktok">TikTok</Select.Item>
-              <Select.Item value="youtube">YouTube</Select.Item>
-            </Select.Content>
-          </Select.Root>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="instagram">Instagram</SelectItem>
+              <SelectItem value="facebook">Facebook Pages</SelectItem>
+              <SelectItem value="tiktok">TikTok</SelectItem>
+              <SelectItem value="youtube">YouTube</SelectItem>
+              <SelectItem value="linkedin">LinkedIn</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <Select.Root
+          <Select
             value={rangePreset}
             onValueChange={(value) =>
               startTransition(() => setRangePreset(value as OrganicDateRangePreset))
             }
           >
-            <Select.Trigger
-              variant="surface"
-              radius="large"
-              className="h-8 w-[7.5rem] text-xs"
-              disabled={viewMode === 'posts'}
-            >
+            <SelectTrigger className="h-8 w-[7.5rem] text-xs" disabled={viewMode === 'posts'}>
               {rangeLabel(rangePreset)}
-            </Select.Trigger>
-            <Select.Content>
+            </SelectTrigger>
+            <SelectContent>
               {RANGE_OPTIONS.map((preset) => (
-                <Select.Item key={preset} value={preset}>
+                <SelectItem key={preset} value={preset}>
                   {rangeLabel(preset)}
-                </Select.Item>
+                </SelectItem>
               ))}
-            </Select.Content>
-          </Select.Root>
+            </SelectContent>
+          </Select>
 
-          <Select.Root
+          <Select
             value={selectedAccountId ?? ''}
             onValueChange={(value) => {
               setSelectedAccountByPlatform((current) => ({
@@ -2553,27 +2477,23 @@ export function OrganicMetricsDashboard({
               setSelection(brandId, platform, value);
             }}
           >
-            <Select.Trigger
-              variant="surface"
-              radius="large"
-              className="h-8 min-w-[13rem] max-w-[22rem] flex-1 text-xs"
-            >
+            <SelectTrigger className="h-8 min-w-[13rem] max-w-[22rem] flex-1 text-xs">
               {selectedAccount?.name ?? `Select a ${platform} account`}
-            </Select.Trigger>
-            <Select.Content position="popper" variant="solid" highContrast>
-              <Select.Group>
-                <Select.Label>{platform} accounts</Select.Label>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectGroup>
+                <SelectLabel>{platform} accounts</SelectLabel>
                 {platformAccounts.map((account) => (
-                  <Select.Item
+                  <SelectItem
                     key={account.integrationAccountId}
                     value={account.integrationAccountId}
                   >
                     {account.name}
-                  </Select.Item>
+                  </SelectItem>
                 ))}
-              </Select.Group>
-            </Select.Content>
-          </Select.Root>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
 
           <Tabs
             value={viewMode}
@@ -2620,16 +2540,16 @@ export function OrganicMetricsDashboard({
               platformLabel: PLATFORM_LABELS[platform],
             })}
           >
-            <IconButton
-              variant="surface"
-              radius="large"
-              size="2"
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
               onClick={handleRefresh}
               disabled={!selectedAccountId || isLoadingView || isPending}
               aria-label="Refresh organic analytics"
             >
               <ReloadIcon className={cn(isLoadingView && 'animate-spin')} />
-            </IconButton>
+            </Button>
           </DisabledControl>
 
           <DisabledControl
@@ -2642,36 +2562,35 @@ export function OrganicMetricsDashboard({
             })}
           >
             <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="surface"
-                radius="large"
-                disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
-                aria-label="Open organic report export options"
-                className="h-8 px-2 text-xs"
-              >
-                <DownloadIcon className={cn(exportingReportFormat !== null && 'animate-pulse')} />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={() => {
-                  void handleExportReport('csv');
-                }}
-                disabled={exportingReportFormat !== null}
-              >
-                Export CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  void handleExportReport('html');
-                }}
-                disabled={exportingReportFormat !== null}
-              >
-                Export HTML
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
+                  aria-label="Open organic report export options"
+                  className="h-8 px-2 text-xs"
+                >
+                  <DownloadIcon className={cn(exportingReportFormat !== null && 'animate-pulse')} />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void handleExportReport('csv');
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void handleExportReport('html');
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  Export HTML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
             </DropdownMenu>
           </DisabledControl>
         </div>
@@ -2684,17 +2603,17 @@ export function OrganicMetricsDashboard({
         )}
       >
         {reportError ? (
-          <Callout.Root color="red" variant="surface" mb="3">
-            <Callout.Text>{reportError}</Callout.Text>
-          </Callout.Root>
+          <Alert variant="destructive" className="mb-3">
+            <AlertDescription>{reportError}</AlertDescription>
+          </Alert>
         ) : null}
         {platformAccounts.length === 0 ? (
-          <Callout.Root color="blue" variant="surface">
-            <Callout.Text className="text-pretty">
+          <Alert className="border-secondary/30 bg-secondary/10">
+            <AlertDescription className="text-secondary text-pretty">
               No {platform} account is connected for this brand yet. Connect one in Integrations to
               unlock reporting.
-            </Callout.Text>
-          </Callout.Root>
+            </AlertDescription>
+          </Alert>
         ) : (
           <AnimatePresence mode="wait" initial={false}>
             {isLoadingView ? (
@@ -2755,9 +2674,9 @@ export function OrganicMetricsDashboard({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
               >
-                <Text color="gray" size="2" className="text-pretty">
+                <span className="text-sm text-muted-foreground text-pretty">
                   Select an account above to load organic reporting and post-level performance.
-                </Text>
+                </span>
               </motion.div>
             )}
           </AnimatePresence>

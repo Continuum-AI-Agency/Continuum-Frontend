@@ -1,22 +1,26 @@
-"use client";
+'use client';
 
-import React from "react";
-import { SunIcon, MoonIcon } from "@radix-ui/react-icons";
-import { IconButton, Tooltip } from "@radix-ui/themes";
-import { useTheme } from "./theme-provider";
+import { MoonIcon, SunIcon } from '@radix-ui/react-icons';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTheme } from './theme-provider';
 
 export function ThemeToggle() {
   const { appearance, toggle } = useTheme();
+  const label = appearance === 'dark' ? 'Switch to light' : 'Switch to dark';
 
   return (
-    <Tooltip content={appearance === "dark" ? "Switch to light" : "Switch to dark"}>
-      <IconButton size="2" variant="soft" color="gray" onClick={toggle} aria-label="Toggle theme">
-        {appearance === "dark" ? <SunIcon /> : <MoonIcon />}
-      </IconButton>
-    </Tooltip>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
+            {appearance === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
 export default ThemeToggle;
-
-

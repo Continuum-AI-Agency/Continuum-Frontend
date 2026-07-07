@@ -1,9 +1,11 @@
-"use client";
+'use client';
 
-import { ActivityLogIcon, OpenInNewWindowIcon, PinTopIcon } from "@radix-ui/react-icons";
-import { Badge, Box, Flex, Heading, IconButton, Separator, Text } from "@radix-ui/themes";
+import { ActivityLogIcon, OpenInNewWindowIcon, PinTopIcon } from '@radix-ui/react-icons';
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Pill } from '@/components/kibo-ui/pill';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 
 export type AgenticActivityItem = {
   id: string;
@@ -21,50 +23,50 @@ type AgenticActivityLogProps = {
 
 function initialsFromName(name: string) {
   return name
-    .split(" ")
+    .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
-    .join("");
+    .join('');
 }
 
 export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogProps) {
   return (
-    <Box>
-      <Flex align="center" justify="between" gap="3" wrap="wrap">
-        <Flex align="center" gap="2">
-          <Badge color="gray" variant="soft" radius="full">
-            <ActivityLogIcon />
-          </Badge>
-          <Box>
-            <Heading size="4">Recent activity</Heading>
-            <Text color="gray" size="2">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Pill variant="muted">
+            <ActivityLogIcon aria-hidden="true" />
+          </Pill>
+          <div>
+            <h3 className="text-lg font-semibold">Recent activity</h3>
+            <p className="text-sm text-muted-foreground">
               Agentic DCO actions from the last 7 days.
-            </Text>
-          </Box>
-        </Flex>
-        <Flex gap="2">
-          <IconButton variant="soft" color="gray" aria-label="Open activity log">
-            <OpenInNewWindowIcon />
-          </IconButton>
-          <IconButton variant="soft" color="gray" aria-label="Pin activity log">
-            <PinTopIcon />
-          </IconButton>
-        </Flex>
-      </Flex>
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="icon" aria-label="Open activity log">
+            <OpenInNewWindowIcon aria-hidden="true" />
+          </Button>
+          <Button variant="secondary" size="icon" aria-label="Pin activity log">
+            <PinTopIcon aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
 
-      <Separator my="3" />
+      <Separator className="my-3" />
 
       {items.length === 0 ? (
-        <Text color="gray" size="2">
-          {emptyMessage ?? "No DCO activity yet. Automations will appear here as they run."}
-        </Text>
+        <p className="text-sm text-muted-foreground">
+          {emptyMessage ?? 'No DCO activity yet. Automations will appear here as they run.'}
+        </p>
       ) : (
-        <Flex direction="column" gap="3">
+        <div className="flex flex-col gap-3">
           {items.map((item, index) => (
-            <Box key={item.id}>
-              <Flex align="center" justify="between" gap="3" wrap="wrap">
-                <Flex align="center" gap="3">
+            <div key={item.id}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
                     {item.avatarUrl ? (
                       <AvatarImage src={item.avatarUrl} alt={item.actorName} />
@@ -73,29 +75,21 @@ export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogPr
                       {initialsFromName(item.actorName)}
                     </AvatarFallback>
                   </Avatar>
-                  <Box>
-                    <Text weight="medium">{item.actorName}</Text>
-                    <Text color="gray" size="2">
-                      {item.summary}
-                    </Text>
-                  </Box>
-                </Flex>
-                <Flex align="center" gap="2">
-                  {item.highlight ? (
-                    <Badge color="violet" variant="soft">
-                      {item.highlight}
-                    </Badge>
-                  ) : null}
-                  <Text color="gray" size="2">
-                    {item.timestamp}
-                  </Text>
-                </Flex>
-              </Flex>
-              {index < items.length - 1 ? <Separator my="3" /> : null}
-            </Box>
+                  <div>
+                    <span className="block font-medium">{item.actorName}</span>
+                    <span className="block text-sm text-muted-foreground">{item.summary}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {item.highlight ? <Pill variant="violet">{item.highlight}</Pill> : null}
+                  <span className="text-sm text-muted-foreground">{item.timestamp}</span>
+                </div>
+              </div>
+              {index < items.length - 1 ? <Separator className="my-3" /> : null}
+            </div>
           ))}
-        </Flex>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }

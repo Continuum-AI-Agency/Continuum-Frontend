@@ -1,10 +1,11 @@
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 
-type ProviderKey = "google" | "meta" | "facebook" | "tiktok" | "x";
+type ProviderKey = "google" | "meta" | "facebook" | "tiktok" | "linkedin" | "x";
 
 function normalizeProviders(provider: ProviderKey): Set<string> {
   if (provider === "facebook") return new Set(["meta", "facebook"]);
   if (provider === "tiktok") return new Set(["tiktok"]);
+  if (provider === "linkedin") return new Set(["linkedin"]);
   if (provider === "x") return new Set(["x"]);
   return new Set([provider]);
 }
@@ -43,4 +44,3 @@ export function hasProviderConnections(
 ): boolean {
   return getProviderConnectionSummary(summary, provider).connected;
 }
-

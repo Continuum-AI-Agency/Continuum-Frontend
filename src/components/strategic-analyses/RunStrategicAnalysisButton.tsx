@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useState, useTransition } from "react";
-import { Button, Callout, Flex, Text } from "@radix-ui/themes";
-import { RocketIcon } from "@radix-ui/react-icons";
-
-import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
-import { useToast } from "@/components/ui/ToastProvider";
-import { requestStrategicRunsCatchUp } from "./realtimeBus";
+import { RocketIcon } from '@radix-ui/react-icons';
+import { useState, useTransition } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { runStrategicAnalysis } from '@/lib/api/strategicAnalyses.client';
+import { requestStrategicRunsCatchUp } from './realtimeBus';
 
 type Props = {
   brandProfileId: string;
@@ -25,50 +25,42 @@ export function RunStrategicAnalysisButton({ brandProfileId, compact = false }: 
         const result = await runStrategicAnalysis(brandProfileId);
         const details = result.runId ?? result.taskId ?? result.status ?? undefined;
         show({
-          title: "Strategic analysis queued",
-          description: details ? `Run reference: ${details}` : "Regeneration requested for this brand.",
-          variant: "success",
+          title: 'Strategic analysis queued',
+          description: details
+            ? `Run reference: ${details}`
+            : 'Regeneration requested for this brand.',
+          variant: 'success',
         });
         void requestStrategicRunsCatchUp(brandProfileId);
       } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : "Unable to start strategic analysis run.";
+        const message = e instanceof Error ? e.message : 'Unable to start strategic analysis run.';
         setError(message);
-        show({ title: "Run failed", description: message, variant: "error" });
+        show({ title: 'Run failed', description: message, variant: 'error' });
       }
     });
   };
 
   return (
-    <Flex direction="column" gap="3">
+    <div className="flex flex-col gap-3">
       {!compact && (
         <div className="space-y-1">
-          <Text size="3" weight="bold" className="text-white">
-            Strategic analyses
-          </Text>
-          <Text size="2" color="gray">
+          <p className="text-base font-semibold text-foreground">Strategic analyses</p>
+          <p className="text-sm text-muted-foreground">
             Manually queue a fresh strategic analysis when no results exist for this brand.
-          </Text>
+          </p>
         </div>
       )}
 
       {error ? (
-        <Callout.Root color="red" variant="surface">
-          <Callout.Icon>
-            <RocketIcon />
-          </Callout.Icon>
-          <Callout.Text>{error}</Callout.Text>
-        </Callout.Root>
+        <Alert variant="destructive">
+          <RocketIcon aria-hidden="true" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <Button
-        onClick={handleRun}
-        disabled={isPending}
-        color="indigo"
-        variant="solid"
-        size={compact ? "2" : "3"}
-      >
-        {isPending ? "Queuing..." : "Run analysis"}
+      <Button onClick={handleRun} disabled={isPending} size={compact ? 'default' : 'lg'}>
+        {isPending ? 'Queuing...' : 'Run analysis'}
       </Button>
-    </Flex>
+    </div>
   );
 }

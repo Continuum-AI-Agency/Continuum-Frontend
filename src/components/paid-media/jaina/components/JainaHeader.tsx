@@ -1,14 +1,7 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Button, Flex, Heading } from "@radix-ui/themes";
-import {
-  ArchiveIcon,
-  Cross2Icon,
-  LayersIcon,
-  ResetIcon,
-  TargetIcon,
-} from "@radix-ui/react-icons";
+import { ArchiveIcon, Cross2Icon, LayersIcon, ResetIcon, TargetIcon } from '@radix-ui/react-icons';
+import React from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +12,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 type JainaHeaderProps = {
   brandName: string;
@@ -42,43 +36,40 @@ export function JainaHeader({
 }: JainaHeaderProps) {
   return (
     <header className="relative z-10 flex items-center justify-between gap-3 border-b border-border/70 bg-background/70 p-3 transition-all duration-300">
-      <Flex align="center" gap="4" className="flex-1 min-w-0">
-        <Flex align="center" gap="2" className="shrink-0 mr-2">
-          <Heading size="2" className="tracking-tight whitespace-nowrap">
-            Jaina
-          </Heading>
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        <div className="flex items-center gap-2 shrink-0 mr-2">
+          <h2 className="text-sm font-semibold tracking-tight whitespace-nowrap">Jaina</h2>
           <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-        </Flex>
+        </div>
 
-        <Flex align="center" gap="3" className="hidden sm:flex overflow-x-auto no-scrollbar py-1">
-          <Flex align="center" gap="1.5" className="shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
+        <div className="hidden sm:flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
+          <div className="flex items-center gap-1.5 shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
             <ArchiveIcon className="size-3" />
             <span className="truncate max-w-[100px]">{brandName}</span>
-          </Flex>
+          </div>
 
           {adAccountId && (
-            <Flex align="center" gap="1.5" className="shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
+            <div className="flex items-center gap-1.5 shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
               <LayersIcon className="size-3" />
               <span className="font-mono truncate max-w-[120px]">{adAccountId}</span>
-            </Flex>
+            </div>
           )}
 
           {campaignId && (
-            <Flex align="center" gap="1.5" className="shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
+            <div className="flex items-center gap-1.5 shrink-0 text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
               <TargetIcon className="size-3" />
               <span className="truncate max-w-[120px]">{campaignId}</span>
-            </Flex>
+            </div>
           )}
-        </Flex>
-      </Flex>
+        </div>
+      </div>
 
-      <Flex align="center" gap="2">
+      <div className="flex items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
-              variant="soft"
-              color="gray"
-              size="1"
+              variant="secondary"
+              size="sm"
               className="hover:bg-white/10"
               aria-label="Clear Memory"
             >
@@ -90,7 +81,8 @@ export function JainaHeader({
             <AlertDialogHeader>
               <AlertDialogTitle>Clear Jaina's memory?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently erase Jaina's memory for this ad account. She will start fresh on your next message. This cannot be undone.
+                This will permanently erase Jaina's memory for this ad account. She will start fresh
+                on your next message. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -108,9 +100,8 @@ export function JainaHeader({
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
-              variant="soft"
-              color="gray"
-              size="1"
+              variant="secondary"
+              size="sm"
               className="hover:bg-white/10"
               aria-label="Clear Conversation"
             >
@@ -122,7 +113,8 @@ export function JainaHeader({
             <AlertDialogHeader>
               <AlertDialogTitle>Clear this conversation?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete the current conversation and all its messages. This cannot be undone.
+                This will delete the current conversation and all its messages. This cannot be
+                undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -138,17 +130,11 @@ export function JainaHeader({
         </AlertDialog>
 
         {isStreaming && (
-          <Button
-            variant="solid"
-            color="red"
-            size="1"
-            onClick={onStop}
-            className="animate-pulse"
-          >
+          <Button variant="destructive" size="sm" onClick={onStop} className="animate-pulse">
             Stop
           </Button>
         )}
-      </Flex>
+      </div>
     </header>
   );
 }

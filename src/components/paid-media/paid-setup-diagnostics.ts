@@ -43,12 +43,14 @@ export const PAID_SETUP_CONNECT_HREF = "/settings?section=integrations";
 function providerLabel(platform: PaidMediaPlatform): string {
   if (platform === "google-ads") return "Google Ads";
   if (platform === "dv360") return "DV360";
+  if (platform === "linkedin") return "LinkedIn Ads";
   return "Meta Ads";
 }
 
 function platformSummaryKey(platform: PaidMediaPlatform): keyof BrandIntegrationSummary {
   if (platform === "google-ads") return "googleAds";
   if (platform === "dv360") return "dv360";
+  if (platform === "linkedin") return "linkedin";
   return "facebook";
 }
 
