@@ -4,23 +4,33 @@
 // Continuum-Backend/App/competitor-ad-spy/schemas.ts (now a re-export shim) per
 // the monorepo "contracts are mandatory for cross-boundary types" rule.
 
-import { z } from "zod";
-import {
-  competitorAdAnalysisSchema,
-} from "./analysis";
-import { instagramAccountSchema, instagramPostSchema } from "../media/instagram";
+import { z } from 'zod';
+import { instagramAccountSchema, instagramPostSchema } from '../media/instagram';
+import { competitorAdAnalysisSchema } from './analysis';
 
-export * from "./analysis";
+export * from './analysis';
 
-export const competitorSourceSchema = z.enum(["auto", "user"]);
-export const competitorStatusSchema = z.enum(["active", "archived"]);
-export const adStatusSchema = z.enum(["active", "paused"]);
-export const adSourceSchema = z.enum(["meta_ad_library"]);
-export const competitorOrganicStatusSchema = z.enum(["ready", "needs_instagram", "unavailable"]);
+export const competitorSourceSchema = z.enum(['auto', 'user']);
+export const competitorStatusSchema = z.enum(['active', 'archived']);
+export const adStatusSchema = z.enum(['active', 'paused']);
+export const adSourceSchema = z.enum(['meta_ad_library']);
+export const competitorOrganicStatusSchema = z.enum(['ready', 'needs_instagram', 'unavailable']);
 export type CompetitorOrganicStatus = z.infer<typeof competitorOrganicStatusSchema>;
-export const competitorPaidStatusSchema = z.enum(["ready", "resolving", "needs_review", "unresolved", "error"]);
+export const competitorPaidStatusSchema = z.enum([
+  'ready',
+  'resolving',
+  'needs_review',
+  'unresolved',
+  'error',
+]);
 export type CompetitorPaidStatus = z.infer<typeof competitorPaidStatusSchema>;
-export const metaPageResolutionStatusSchema = z.enum(["unresolved", "resolving", "resolved", "needs_review", "error"]);
+export const metaPageResolutionStatusSchema = z.enum([
+  'unresolved',
+  'resolving',
+  'resolved',
+  'needs_review',
+  'error',
+]);
 export type MetaPageResolutionStatus = z.infer<typeof metaPageResolutionStatusSchema>;
 
 export const metaPageResolutionCandidateSchema = z
@@ -29,7 +39,7 @@ export const metaPageResolutionCandidateSchema = z
     pageName: z.string(),
     confidence: z.number().min(0).max(1).default(0),
     reasons: z.array(z.string()).default([]),
-    source: z.enum(["meta_ad_library", "deterministic", "ai"]).default("meta_ad_library"),
+    source: z.enum(['meta_ad_library', 'deterministic', 'ai']).default('meta_ad_library'),
   })
   .strict();
 export type MetaPageResolutionCandidate = z.infer<typeof metaPageResolutionCandidateSchema>;
@@ -82,19 +92,21 @@ export const metaPageSearchResultSchema = z.object({
 export type MetaPageSearchResult = z.infer<typeof metaPageSearchResultSchema>;
 
 export const instagramCompetitorSearchWarningSchema = z.enum([
-  "meta_page_search_failed",
-  "meta_page_not_found",
-  "instagram_handle_resolved_by_fallback",
+  'meta_page_search_failed',
+  'meta_page_not_found',
+  'instagram_handle_resolved_by_fallback',
 ]);
-export type InstagramCompetitorSearchWarning = z.infer<typeof instagramCompetitorSearchWarningSchema>;
+export type InstagramCompetitorSearchWarning = z.infer<
+  typeof instagramCompetitorSearchWarningSchema
+>;
 
 export const competitorSearchWarningSchema = z.enum([
-  "meta_page_search_failed",
-  "meta_page_not_found",
-  "instagram_handle_resolved_by_fallback",
-  "paid_page_resolved_by_ai",
-  "paid_page_needs_review",
-  "paid_page_unresolved",
+  'meta_page_search_failed',
+  'meta_page_not_found',
+  'instagram_handle_resolved_by_fallback',
+  'paid_page_resolved_by_ai',
+  'paid_page_needs_review',
+  'paid_page_unresolved',
 ]);
 export type CompetitorSearchWarning = z.infer<typeof competitorSearchWarningSchema>;
 
@@ -216,15 +228,15 @@ export const timelineEntrySchema = z.object({
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>;
 
 export const adLifecycleEventTypeSchema = z.enum([
-  "new_ad",
-  "resumed",
-  "paused",
-  "removed",
-  "variant_spawned",
-  "copy_changed",
-  "sustained_hero",
-  "volume_spike",
-  "creative_theme_shift",
+  'new_ad',
+  'resumed',
+  'paused',
+  'removed',
+  'variant_spawned',
+  'copy_changed',
+  'sustained_hero',
+  'volume_spike',
+  'creative_theme_shift',
 ]);
 export type AdLifecycleEventType = z.infer<typeof adLifecycleEventTypeSchema>;
 
@@ -282,12 +294,16 @@ export type AwarenessReport = z.infer<typeof awarenessReportSchema>;
 
 // Shared DI read cores (paid ads + organic posts). Imported here last so their
 // type-only imports of the shapes above resolve without a runtime cycle.
-export * from "./adsQuery";
-export * from "./organicQuery";
-// Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
-export * from "./smartSearch";
-export * from "./savedBoards";
-// Onboarding-derived competitor recommendations (Competitors tab).
-export * from "./recommended";
+export * from './adsQuery';
 // Health-chip projection over the status enums above (Brand Spy competitor chips).
-export * from "./health-chip";
+export * from './health-chip';
+export * from './organicQuery';
+// Onboarding-derived competitor recommendations (Competitors tab).
+export * from './recommended';
+export * from './savedBoards';
+// Save a competitor post into the media Library as a tagged, re-fetchable asset.
+export * from './saveToLibrary';
+// Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
+export * from './smartSearch';
+// Durable top-posts-of-top-competitors digest (Pulse email + organic agent grounding).
+export * from './topPostsDigest';

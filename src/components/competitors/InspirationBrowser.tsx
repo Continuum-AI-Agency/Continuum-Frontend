@@ -12,6 +12,7 @@ import { RefreshCw, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { AdSnapshotGrid } from '@/components/competitor-spy/AdSnapshotGrid';
+import { CompetitorQuickSelectChips } from '@/components/competitor-spy/CompetitorQuickSelectChips';
 import { CompetitorRail } from '@/components/competitor-spy/CompetitorRail';
 import { competitorHealthChip } from '@/components/competitor-spy/competitorHealth';
 import { SaveToBoardButton } from '@/components/competitor-spy/SaveToBoardButton';
@@ -27,6 +28,7 @@ import { CompetitorOrganicExplorer } from './CompetitorOrganicExplorer';
 import type { CompetitorPostView } from './competitorPostView';
 import { InspirationFeedGrid } from './InspirationFeedGrid';
 import { buildInspirationFeed } from './inspirationFeed';
+import { SaveToLibraryButton } from './SaveToLibraryButton';
 
 type Source = 'organic' | 'paid' | 'all';
 type PaidStatus = 'active' | 'paused' | undefined;
@@ -142,19 +144,23 @@ function KeywordSearch({ value, onChange }: { value: string; onChange: (value: s
 }
 
 function OrganicSave({ brandId }: { brandId: string }) {
-  return (view: CompetitorPostView): ReactNode =>
-    view.competitorId ? (
-      <SaveToBoardButton
-        brandId={brandId}
-        request={{
-          kind: 'organic',
-          competitorId: view.competitorId,
-          competitorName: view.competitorName,
-          instagramUsername: view.instagramUsername,
-          post: view.post,
-        }}
-      />
-    ) : null;
+  return (view: CompetitorPostView): ReactNode => (
+    <div className="flex items-center gap-1.5">
+      {view.competitorId ? (
+        <SaveToBoardButton
+          brandId={brandId}
+          request={{
+            kind: 'organic',
+            competitorId: view.competitorId,
+            competitorName: view.competitorName,
+            instagramUsername: view.instagramUsername,
+            post: view.post,
+          }}
+        />
+      ) : null}
+      <SaveToLibraryButton brandId={brandId} view={view} />
+    </div>
+  );
 }
 
 // Kept in its own component so its two queries only run while "All" is selected.
@@ -257,6 +263,14 @@ export function InspirationBrowser({
           ) : null}
         </div>
       </div>
+
+      {!showRail && (competitors?.length ?? 0) > 0 ? (
+        <CompetitorQuickSelectChips
+          competitors={competitors ?? []}
+          selectedId={competitorId}
+          onSelect={setCompetitorId}
+        />
+      ) : null}
 
       <div className={cn('flex min-w-0 flex-col gap-4', showRail && 'md:flex-row md:gap-5')}>
         {showRail ? (

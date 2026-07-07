@@ -1,43 +1,52 @@
-"use client";
+'use client';
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { request } from "@/lib/api/http";
 import type {
-  Competitor,
-  TimelineEntry,
   AwarenessReportPayload,
-  MetaPageSearchResult,
-  InstagramCompetitorSearchResult,
+  Competitor,
+  CompetitorOrganicPost,
   CompetitorSearchResult,
   CompetitorSmartSearchResult,
-  MetaPageResolutionCandidate,
-  MetaPageResolution,
-  CompetitorOrganicPost,
-  SavedBoard,
-  SavedItem,
-  SaveItemRequest,
-  RecommendedCompetitor,
-  RecommendedCompetitorsResponse,
   DismissRecommendationRequest,
   DismissRecommendationResponse,
-} from "@continuum/contracts";
+  InstagramCompetitorSearchResult,
+  MetaPageResolution,
+  MetaPageResolutionCandidate,
+  MetaPageSearchResult,
+  RecommendedCompetitor,
+  RecommendedCompetitorsResponse,
+  SaveCompetitorPostToLibraryRequest,
+  SaveCompetitorPostToLibraryResponse,
+  SavedBoard,
+  SavedCompetitorPostIdsResponse,
+  SavedItem,
+  SaveItemRequest,
+  TimelineEntry,
+} from '@continuum/contracts';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { request } from '@/lib/api/http';
 
-const BASE = "/api/competitor-ad-spy";
+const BASE = '/api/competitor-ad-spy';
 
 export interface TimelineParams {
   brandId: string;
   competitorId?: string;
-  status?: "active" | "paused";
+  status?: 'active' | 'paused';
   q?: string;
   limit?: number;
-  sort?: "first_seen_at" | "last_seen_at";
-  dir?: "asc" | "desc";
+  sort?: 'first_seen_at' | 'last_seen_at';
+  dir?: 'asc' | 'desc';
 }
 
 export interface SyncResult {
   brandId: string;
   ranAt: string;
-  results: Array<{ competitorId: string; fetched: number; inserted: number; updated: number; skippedReason?: string }>;
+  results: Array<{
+    competitorId: string;
+    fetched: number;
+    inserted: number;
+    updated: number;
+    skippedReason?: string;
+  }>;
   errors: Array<{ competitorId: string; error: string }>;
 }
 
@@ -52,13 +61,15 @@ export async function listCompetitors(brandId: string): Promise<Competitor[]> {
 
 export async function fetchTimeline(params: TimelineParams): Promise<TimelineEntry[]> {
   const qs = new URLSearchParams({ brandId: params.brandId });
-  if (params.competitorId) qs.set("competitorId", params.competitorId);
-  if (params.status) qs.set("status", params.status);
-  if (params.q) qs.set("q", params.q);
-  if (params.sort) qs.set("sort", params.sort);
-  if (params.dir) qs.set("dir", params.dir);
-  qs.set("limit", String(params.limit ?? 60));
-  const res = await request<{ items: TimelineEntry[] }>({ path: `${BASE}/timeline?${qs.toString()}` });
+  if (params.competitorId) qs.set('competitorId', params.competitorId);
+  if (params.status) qs.set('status', params.status);
+  if (params.q) qs.set('q', params.q);
+  if (params.sort) qs.set('sort', params.sort);
+  if (params.dir) qs.set('dir', params.dir);
+  qs.set('limit', String(params.limit ?? 60));
+  const res = await request<{ items: TimelineEntry[] }>({
+    path: `${BASE}/timeline?${qs.toString()}`,
+  });
   return res.items;
 }
 
@@ -68,8 +79,8 @@ export async function fetchInstagramPosts(params: {
   limit?: number;
 }): Promise<CompetitorOrganicPost[]> {
   const qs = new URLSearchParams({ brandId: params.brandId });
-  if (params.competitorId) qs.set("competitorId", params.competitorId);
-  qs.set("limit", String(params.limit ?? 12));
+  if (params.competitorId) qs.set('competitorId', params.competitorId);
+  qs.set('limit', String(params.limit ?? 12));
   const res = await request<{ items: CompetitorOrganicPost[] }>({
     path: `${BASE}/instagram/posts?${qs.toString()}`,
   });
@@ -78,7 +89,9 @@ export async function fetchInstagramPosts(params: {
 
 export async function searchMetaPages(brandId: string, q: string): Promise<MetaPageSearchResult[]> {
   const qs = new URLSearchParams({ brandId, q });
-  const res = await request<{ pages: MetaPageSearchResult[] }>({ path: `${BASE}/pages/search?${qs.toString()}` });
+  const res = await request<{ pages: MetaPageSearchResult[] }>({
+    path: `${BASE}/pages/search?${qs.toString()}`,
+  });
   return res.pages;
 }
 
@@ -87,7 +100,9 @@ export async function searchInstagramCompetitors(
   q: string,
 ): Promise<InstagramCompetitorSearchResult> {
   const qs = new URLSearchParams({ brandId, q });
-  return request<InstagramCompetitorSearchResult>({ path: `${BASE}/instagram/search?${qs.toString()}` });
+  return request<InstagramCompetitorSearchResult>({
+    path: `${BASE}/instagram/search?${qs.toString()}`,
+  });
 }
 
 export async function searchCompetitors(
@@ -98,7 +113,10 @@ export async function searchCompetitors(
   return request<CompetitorSearchResult>({ path: `${BASE}/competitors/search?${qs.toString()}` });
 }
 
-export async function smartSearch(brandId: string, q: string): Promise<CompetitorSmartSearchResult> {
+export async function smartSearch(
+  brandId: string,
+  q: string,
+): Promise<CompetitorSmartSearchResult> {
   const qs = new URLSearchParams({ brandId, q });
   return request<CompetitorSmartSearchResult>({ path: `${BASE}/search?${qs.toString()}` });
 }
@@ -122,12 +140,16 @@ export async function createBoard(input: {
   name: string;
   description?: string;
 }): Promise<SavedBoard> {
-  const res = await request<{ board: SavedBoard }>({ path: `${BASE}/boards`, method: "POST", body: input });
+  const res = await request<{ board: SavedBoard }>({
+    path: `${BASE}/boards`,
+    method: 'POST',
+    body: input,
+  });
   return res.board;
 }
 
 export async function deleteBoard(id: string): Promise<void> {
-  await request({ path: `${BASE}/boards/${id}`, method: "DELETE" });
+  await request({ path: `${BASE}/boards/${id}`, method: 'DELETE' });
 }
 
 export async function listBoardItems(boardId: string): Promise<SavedItem[]> {
@@ -138,14 +160,31 @@ export async function listBoardItems(boardId: string): Promise<SavedItem[]> {
 export async function saveItemToBoard(boardId: string, body: SaveItemRequest): Promise<SavedItem> {
   const res = await request<{ item: SavedItem }>({
     path: `${BASE}/boards/${boardId}/items`,
-    method: "POST",
+    method: 'POST',
     body,
   });
   return res.item;
 }
 
 export async function removeBoardItem(boardId: string, itemId: string): Promise<void> {
-  await request({ path: `${BASE}/boards/${boardId}/items/${itemId}`, method: "DELETE" });
+  await request({ path: `${BASE}/boards/${boardId}/items/${itemId}`, method: 'DELETE' });
+}
+
+export async function saveCompetitorPostToLibrary(
+  body: SaveCompetitorPostToLibraryRequest,
+): Promise<SaveCompetitorPostToLibraryResponse> {
+  return request<SaveCompetitorPostToLibraryResponse>({
+    path: `${BASE}/inspiration/save-to-library`,
+    method: 'POST',
+    body,
+  });
+}
+
+export async function fetchSavedCompetitorPostIds(brandId: string): Promise<string[]> {
+  const res = await request<SavedCompetitorPostIdsResponse>({
+    path: `${BASE}/inspiration/saved-ids?brandId=${encodeURIComponent(brandId)}`,
+  });
+  return res.postIds;
 }
 
 export async function fetchAwareness(brandId: string): Promise<AwarenessReportPayload | null> {
@@ -157,7 +196,9 @@ export async function fetchAwareness(brandId: string): Promise<AwarenessReportPa
 
 export async function fetchCreativeSignedUrl(snapshotId: string): Promise<string | null> {
   try {
-    const res = await request<{ signedUrl: string }>({ path: `${BASE}/media/${snapshotId}/creative` });
+    const res = await request<{ signedUrl: string }>({
+      path: `${BASE}/media/${snapshotId}/creative`,
+    });
     return res.signedUrl ?? null;
   } catch {
     return null;
@@ -169,7 +210,7 @@ export async function createCompetitor(input: {
   name: string;
   metaPageId?: string;
   metaPageName?: string;
-  metaPageResolutionStatus?: "unresolved" | "resolving" | "resolved" | "needs_review" | "error";
+  metaPageResolutionStatus?: 'unresolved' | 'resolving' | 'resolved' | 'needs_review' | 'error';
   metaPageResolutionConfidence?: number;
   metaPageResolutionCandidates?: MetaPageResolutionCandidate[];
   instagramUsername?: string;
@@ -179,17 +220,19 @@ export async function createCompetitor(input: {
 }): Promise<Competitor> {
   const res = await request<{ competitor: Competitor }>({
     path: `${BASE}/competitors`,
-    method: "POST",
+    method: 'POST',
     body: input,
   });
   return res.competitor;
 }
 
 export async function deleteCompetitor(id: string): Promise<void> {
-  await request({ path: `${BASE}/competitors/${id}`, method: "DELETE" });
+  await request({ path: `${BASE}/competitors/${id}`, method: 'DELETE' });
 }
 
-export async function listRecommendedCompetitors(brandId: string): Promise<RecommendedCompetitor[]> {
+export async function listRecommendedCompetitors(
+  brandId: string,
+): Promise<RecommendedCompetitor[]> {
   const res = await request<RecommendedCompetitorsResponse>({
     path: `${BASE}/competitors/recommended?brandId=${encodeURIComponent(brandId)}`,
   });
@@ -201,7 +244,7 @@ export async function dismissRecommendation(
 ): Promise<DismissRecommendationResponse> {
   return request<DismissRecommendationResponse>({
     path: `${BASE}/competitors/recommended/dismiss`,
-    method: "POST",
+    method: 'POST',
     body: input,
   });
 }
@@ -209,7 +252,7 @@ export async function dismissRecommendation(
 export async function triggerSync(brandId: string, competitorIds?: string[]): Promise<SyncResult> {
   return request<SyncResult>({
     path: `${BASE}/sync`,
-    method: "POST",
+    method: 'POST',
     body: { brandId, ...(competitorIds ? { competitorIds } : {}) },
   });
 }
@@ -220,18 +263,18 @@ export async function resolvePaidPage(id: string): Promise<{
 }> {
   return request<{ competitor: Competitor; resolution: MetaPageResolution }>({
     path: `${BASE}/competitors/${id}/resolve-paid`,
-    method: "POST",
+    method: 'POST',
   });
 }
 
 // --- React Query hooks ------------------------------------------------------
 
 const keys = {
-  competitors: (brandId: string) => ["competitor-spy", "competitors", brandId] as const,
+  competitors: (brandId: string) => ['competitor-spy', 'competitors', brandId] as const,
   timeline: (p: TimelineParams) =>
     [
-      "competitor-spy",
-      "timeline",
+      'competitor-spy',
+      'timeline',
       p.brandId,
       p.competitorId ?? null,
       p.status ?? null,
@@ -240,18 +283,23 @@ const keys = {
       p.dir ?? null,
       p.limit ?? null,
     ] as const,
-  awareness: (brandId: string) => ["competitor-spy", "awareness", brandId] as const,
-  creative: (snapshotId: string) => ["competitor-spy", "creative", snapshotId] as const,
-  pageSearch: (brandId: string, q: string) => ["competitor-spy", "page-search", brandId, q] as const,
-  competitorSearch: (brandId: string, q: string) => ["competitor-spy", "competitor-search", brandId, q] as const,
-  instagramSearch: (brandId: string, q: string) => ["competitor-spy", "instagram-search", brandId, q] as const,
+  awareness: (brandId: string) => ['competitor-spy', 'awareness', brandId] as const,
+  creative: (snapshotId: string) => ['competitor-spy', 'creative', snapshotId] as const,
+  pageSearch: (brandId: string, q: string) =>
+    ['competitor-spy', 'page-search', brandId, q] as const,
+  competitorSearch: (brandId: string, q: string) =>
+    ['competitor-spy', 'competitor-search', brandId, q] as const,
+  instagramSearch: (brandId: string, q: string) =>
+    ['competitor-spy', 'instagram-search', brandId, q] as const,
   instagramPosts: (brandId: string, competitorId?: string, limit?: number) =>
-    ["competitor-spy", "instagram-posts", brandId, competitorId ?? null, limit ?? null] as const,
-  smartSearch: (brandId: string, q: string) => ["competitor-spy", "smart-search", brandId, q] as const,
-  adCounts: (brandId: string) => ["competitor-spy", "ad-counts", brandId] as const,
-  recommended: (brandId: string) => ["competitor-spy", "recommended", brandId] as const,
-  boards: (brandId: string) => ["competitor-spy", "boards", brandId] as const,
-  boardItems: (boardId: string) => ["competitor-spy", "board-items", boardId] as const,
+    ['competitor-spy', 'instagram-posts', brandId, competitorId ?? null, limit ?? null] as const,
+  smartSearch: (brandId: string, q: string) =>
+    ['competitor-spy', 'smart-search', brandId, q] as const,
+  adCounts: (brandId: string) => ['competitor-spy', 'ad-counts', brandId] as const,
+  recommended: (brandId: string) => ['competitor-spy', 'recommended', brandId] as const,
+  boards: (brandId: string) => ['competitor-spy', 'boards', brandId] as const,
+  boardItems: (boardId: string) => ['competitor-spy', 'board-items', boardId] as const,
+  savedPostIds: (brandId: string) => ['competitor-spy', 'saved-post-ids', brandId] as const,
 };
 
 export function useCompetitors(brandId: string) {
@@ -270,7 +318,11 @@ export function useAdTimeline(params: TimelineParams) {
   });
 }
 
-export function useInstagramPosts(params: { brandId: string; competitorId?: string; limit?: number }) {
+export function useInstagramPosts(params: {
+  brandId: string;
+  competitorId?: string;
+  limit?: number;
+}) {
   return useQuery({
     queryKey: keys.instagramPosts(params.brandId, params.competitorId, params.limit),
     queryFn: () => fetchInstagramPosts(params),
@@ -338,7 +390,7 @@ export function useCreateCompetitor(brandId: string) {
       name: string;
       metaPageId?: string;
       metaPageName?: string;
-      metaPageResolutionStatus?: "unresolved" | "resolving" | "resolved" | "needs_review" | "error";
+      metaPageResolutionStatus?: 'unresolved' | 'resolving' | 'resolved' | 'needs_review' | 'error';
       metaPageResolutionConfidence?: number;
       metaPageResolutionCandidates?: MetaPageResolutionCandidate[];
       instagramUsername?: string;
@@ -348,7 +400,7 @@ export function useCreateCompetitor(brandId: string) {
     }) => createCompetitor({ brandId, ...input }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
-      void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+      void qc.invalidateQueries({ queryKey: ['competitor-spy', 'instagram-posts', brandId] });
       // Accepting a recommendation tracks it — refresh recs so it flips to alreadyTracked.
       void qc.invalidateQueries({ queryKey: keys.recommended(brandId) });
     },
@@ -361,7 +413,7 @@ export function useDeleteCompetitor(brandId: string) {
     mutationFn: (id: string) => deleteCompetitor(id),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
-      void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+      void qc.invalidateQueries({ queryKey: ['competitor-spy', 'instagram-posts', brandId] });
       // Un-tracking should clear the alreadyTracked badge on the matching rec.
       void qc.invalidateQueries({ queryKey: keys.recommended(brandId) });
     },
@@ -374,7 +426,7 @@ export function useResolvePaidPage(brandId: string) {
     mutationFn: (id: string) => resolvePaidPage(id),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
-      void qc.invalidateQueries({ queryKey: ["competitor-spy", "timeline", brandId] });
+      void qc.invalidateQueries({ queryKey: ['competitor-spy', 'timeline', brandId] });
     },
   });
 }
@@ -385,8 +437,8 @@ export function useCompetitorSync(brandId: string) {
     mutationFn: (competitorIds?: string[]) => triggerSync(brandId, competitorIds),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
-      void qc.invalidateQueries({ queryKey: ["competitor-spy", "timeline", brandId] });
-      void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+      void qc.invalidateQueries({ queryKey: ['competitor-spy', 'timeline', brandId] });
+      void qc.invalidateQueries({ queryKey: ['competitor-spy', 'instagram-posts', brandId] });
       void qc.invalidateQueries({ queryKey: keys.awareness(brandId) });
     },
   });
@@ -448,7 +500,7 @@ export function useSavedBoards(brandId: string) {
 
 export function useBoardItems(boardId: string | undefined) {
   return useQuery({
-    queryKey: keys.boardItems(boardId ?? ""),
+    queryKey: keys.boardItems(boardId ?? ''),
     queryFn: () => listBoardItems(boardId as string),
     enabled: Boolean(boardId),
   });
@@ -457,7 +509,8 @@ export function useBoardItems(boardId: string | undefined) {
 export function useCreateBoard(brandId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; description?: string }) => createBoard({ brandId, ...input }),
+    mutationFn: (input: { name: string; description?: string }) =>
+      createBoard({ brandId, ...input }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
     },
@@ -482,6 +535,36 @@ export function useSaveItemToBoard(brandId: string) {
     onSettled: (_data, _err, vars) => {
       void qc.invalidateQueries({ queryKey: keys.boardItems(vars.boardId) });
       void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
+    },
+  });
+}
+
+// The set of competitor-post ids already saved to the brand's Library. Shared by
+// every SaveToLibraryButton so the "Saved" state survives the hover-card unmount/
+// remount (React Query caches it) instead of resetting to an un-saved affordance.
+export function useSavedCompetitorPostIds(brandId: string) {
+  return useQuery({
+    queryKey: keys.savedPostIds(brandId),
+    queryFn: () => fetchSavedCompetitorPostIds(brandId),
+    enabled: Boolean(brandId),
+    staleTime: 5 * 60_000,
+    select: (postIds) => new Set(postIds),
+  });
+}
+
+export function useSaveCompetitorPostToLibrary(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SaveCompetitorPostToLibraryRequest) => saveCompetitorPostToLibrary(body),
+    onSuccess: (_data, variables) => {
+      // Optimistically mark the post saved so its (and any sibling) button flips to
+      // "Saved" immediately and stays saved across remounts, before the refetch.
+      qc.setQueryData<string[]>(keys.savedPostIds(brandId), (prev) =>
+        prev?.includes(variables.post.id) ? prev : [...(prev ?? []), variables.post.id],
+      );
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.savedPostIds(brandId) });
     },
   });
 }
