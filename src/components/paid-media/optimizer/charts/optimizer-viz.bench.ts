@@ -264,7 +264,7 @@ assert(
   funnelWindow.impressions === 12_000,
   `funnel impressions summed enrolled only (got ${funnelWindow.impressions})`,
 );
-const funnel = buildConversionFunnel(funnelWindow, report.portfolio?.objective ?? 'purchase');
+const funnel = buildConversionFunnel(funnelWindow, 'purchase');
 assert(
   funnel.length === 4 && funnel[0].value === 12_000,
   'funnel has 4 objective stages from the top count',
@@ -284,7 +284,7 @@ assert(
 
 // Pacing verdict + gauge share.
 const pace = pacingSnapshot(
-  (report.latest_run as { pacing: Parameters<typeof pacingSnapshot>[0] }).pacing,
+  (report.latest_run as unknown as { pacing: Parameters<typeof pacingSnapshot>[0] }).pacing,
 );
 assert(pace.status === 'on_track', `pacing on_track (got ${pace.status})`);
 assert(

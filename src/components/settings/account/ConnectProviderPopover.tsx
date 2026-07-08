@@ -1,15 +1,12 @@
-"use client";
+'use client';
 
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, RefreshCw, UserPlus, Unplug } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Plus, RefreshCw, Unplug, UserPlus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
   useDeauthorizeGoogle,
   useDeauthorizeLinkedIn,
@@ -22,21 +19,20 @@ import {
   useStartMetaSync,
   useStartTikTokSync,
   useStartXSync,
-} from "@/lib/api/integrations";
-import { getProviderConnectionSummary } from "@/lib/integrations/providerConnections";
-import { openCenteredPopup, waitForOAuthCompletion } from "@/lib/popup";
-import { useToast } from "@/components/ui/ToastProvider";
+} from '@/lib/api/integrations';
+import { getProviderConnectionSummary } from '@/lib/integrations/providerConnections';
+import type { UserIntegrationSummary } from '@/lib/integrations/userIntegrations';
+import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
+import { cn } from '@/lib/utils';
 import {
+  isProviderComingSoon,
   PROVIDER_GROUP_DESCRIPTIONS,
   PROVIDER_GROUP_ICONS,
   PROVIDER_GROUP_LABELS,
-  isProviderComingSoon,
   type ProviderGroup,
-} from "../shell/platformIcons";
-import { cn } from "@/lib/utils";
-import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
+} from '../shell/platformIcons';
 
-const PROVIDERS: ProviderGroup[] = ["facebook", "google", "tiktok", "linkedin", "x"];
+const PROVIDERS: ProviderGroup[] = ['facebook', 'google', 'tiktok', 'linkedin', 'x'];
 
 type ConnectProviderPopoverProps = {
   integrations: UserIntegrationSummary;
@@ -64,18 +60,18 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
 
   const buildCallbackUrl = (provider: ProviderGroup) => {
     const origin =
-      typeof window !== "undefined" && window.location?.origin
+      typeof window !== 'undefined' && window.location?.origin
         ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-    const url = new URL("/integrations/callback", origin);
-    url.searchParams.set("provider", provider);
-    url.searchParams.set("context", "settings");
+        : (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000');
+    const url = new URL('/integrations/callback', origin);
+    url.searchParams.set('provider', provider);
+    url.searchParams.set('context', 'settings');
     return url.toString();
   };
 
   const handleConnect = (
     provider: ProviderGroup,
-    options?: { forceAccountChooser?: boolean; linkedinMode?: "paid" | "organic" }
+    options?: { forceAccountChooser?: boolean; linkedinMode?: 'paid' | 'organic' },
   ) => {
     if (isProviderComingSoon(provider)) return;
     startTransition(async () => {
@@ -83,45 +79,58 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
       try {
         const callbackUrl = buildCallbackUrl(provider);
         const sync =
-          provider === "google"
+          provider === 'google'
             ? options?.forceAccountChooser
               ? googleAccountChooserSync
               : googleSync
-            : provider === "tiktok"
+            : provider === 'tiktok'
               ? tiktokSync
-            : provider === "linkedin"
+              : provider === 'linkedin'
                 ? linkedinSync
-              : provider === "x"
-                ? xSync
-                : metaSync;
-        const syncResponse = provider === "linkedin"
-          ? await linkedinSync.mutateAsync({
-            callbackUrl,
-            mode: options?.linkedinMode ?? "paid",
-          })
-          : await sync.mutateAsync(callbackUrl);
-        const expectedState = "state" in syncResponse ? syncResponse.state : null;
+                : provider === 'x'
+                  ? xSync
+                  : metaSync;
+        const syncResponse =
+          provider === 'linkedin'
+            ? await linkedinSync.mutateAsync({
+                callbackUrl,
+                mode: options?.linkedinMode ?? 'paid',
+              })
+            : await sync.mutateAsync(callbackUrl);
+        const expectedState = 'state' in syncResponse ? syncResponse.state : null;
 
         const popup = openCenteredPopup(
           syncResponse.url,
-          provider === "linkedin" && options?.linkedinMode === "organic"
-            ? "Connect LinkedIn Organic"
-            : provider === "linkedin"
-              ? "Connect LinkedIn Ads"
-              : `Connect ${PROVIDER_GROUP_LABELS[provider]}`
+          provider === 'linkedin' && options?.linkedinMode === 'organic'
+            ? 'Connect LinkedIn Organic'
+            : provider === 'linkedin'
+              ? 'Connect LinkedIn Ads'
+              : `Connect ${PROVIDER_GROUP_LABELS[provider]}`,
         );
         if (!popup) {
-          show({ title: "Popup blocked", description: "Allow popups to continue.", variant: "error" });
+          show({
+            title: 'Popup blocked',
+            description: 'Allow popups to continue.',
+            variant: 'error',
+          });
           return;
         }
 
         const abortCtrl = new AbortController();
         const timeoutId = window.setTimeout(() => {
-          try { popup?.close(); } catch { /* ignore */ }
+          try {
+            popup?.close();
+          } catch {
+            /* ignore */
+          }
           abortCtrl.abort();
         }, 120000);
         cleanup = () => {
-          try { abortCtrl.abort(); } catch { /* ignore */ }
+          try {
+            abortCtrl.abort();
+          } catch {
+            /* ignore */
+          }
           window.clearTimeout(timeoutId);
         };
 
@@ -135,7 +144,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
         };
         const predicate = (m: Msg) =>
           m.provider === provider &&
-          m.context === "settings" &&
+          m.context === 'settings' &&
           (!expectedState || m.state === expectedState);
 
         // Races postMessage + BroadcastChannel completion signals against the
@@ -150,86 +159,107 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
           signal: abortCtrl.signal,
         });
         if (!result.provider || result.provider !== provider) {
-          show({ title: "Connection incomplete", description: "Provider could not be verified.", variant: "error" });
+          show({
+            title: 'Connection incomplete',
+            description: 'Provider could not be verified.',
+            variant: 'error',
+          });
           cleanup();
           return;
         }
 
-        try { popup.close(); } catch { /* ignore */ }
+        try {
+          popup.close();
+        } catch {
+          /* ignore */
+        }
         cleanup();
         router.refresh();
-        if (result.warning === "no_ads_accounts" || result.warning === "ads_enrichment_failed") {
+        if (result.warning === 'no_ads_accounts' || result.warning === 'ads_enrichment_failed') {
           // Distinct from a hard failure: the token connected fine, but no
           // Google Ads accounts were found under this identity (see #151).
           show({
-            title: "Connected, with a note",
-            description: "No Google Ads accounts were found for this account. Use \"Connect a different Google account for Ads\" if Ads lives under another identity.",
-            variant: "info",
+            title: 'Connected, with a note',
+            description:
+              'No Google Ads accounts were found for this account. Use "Connect a different Google account for Ads" if Ads lives under another identity.',
+            variant: 'info',
           });
-        } else if (result.warning === "meta_partial_sync") {
+        } else if (result.warning === 'meta_partial_sync') {
           // Meta connected, but one or more Graph edges came back degraded, so
           // some accounts may be missing (see #154). The asset picker retries a
           // background resync on open, so this is a heads-up, not a failure.
           show({
-            title: "Connected, with a note",
-            description: "Some Meta accounts may not have loaded. We'll keep trying — reopen the account picker in a moment if any are missing.",
-            variant: "info",
+            title: 'Connected, with a note',
+            description:
+              "Some Meta accounts may not have loaded. We'll keep trying — reopen the account picker in a moment if any are missing.",
+            variant: 'info',
           });
         } else {
-          const linkedInLabel = provider === "linkedin"
-            ? options?.linkedinMode === "organic"
-              ? "LinkedIn Organic"
-              : "LinkedIn Ads"
-            : PROVIDER_GROUP_LABELS[provider];
-          show({ title: "Connected", description: `${linkedInLabel} accounts synced.`, variant: "success" });
+          const linkedInLabel =
+            provider === 'linkedin'
+              ? options?.linkedinMode === 'organic'
+                ? 'LinkedIn Organic'
+                : 'LinkedIn Ads'
+              : PROVIDER_GROUP_LABELS[provider];
+          show({
+            title: 'Connected',
+            description: `${linkedInLabel} accounts synced.`,
+            variant: 'success',
+          });
         }
       } catch (error) {
         show({
-          title: "Connection failed",
-          description: error instanceof Error ? error.message : "Please try again.",
-          variant: "error",
+          title: 'Connection failed',
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'error',
         });
       } finally {
-        try { cleanup?.(); } catch { /* ignore */ }
+        try {
+          cleanup?.();
+        } catch {
+          /* ignore */
+        }
       }
     });
   };
 
   const handleDisconnect = (provider: ProviderGroup) => {
     if (
-      typeof window !== "undefined" &&
-      !window.confirm(`Disconnect ${PROVIDER_GROUP_LABELS[provider]}? This revokes access to your accounts.`)
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        `Disconnect ${PROVIDER_GROUP_LABELS[provider]}? This revokes access to your accounts.`,
+      )
     ) {
       return;
     }
     startTransition(async () => {
       try {
-        if (provider === "google") {
+        if (provider === 'google') {
           await googleDeauthorize.mutateAsync();
-        } else if (provider === "tiktok") {
+        } else if (provider === 'tiktok') {
           const account = integrations.tiktok?.accounts[0];
-          if (!account?.externalAccountId) throw new Error("No TikTok account found.");
+          if (!account?.externalAccountId) throw new Error('No TikTok account found.');
           await tiktokDeauthorize.mutateAsync(account.externalAccountId);
-        } else if (provider === "linkedin") {
-          await linkedinDeauthorize.mutateAsync();
-        } else if (provider === "x") {
+        } else if (provider === 'linkedin') {
+          await linkedinDeauthorize.mutateAsync(undefined);
+        } else if (provider === 'x') {
           const account = integrations.x?.accounts[0];
-          if (!account?.externalAccountId) throw new Error("No X account found.");
+          if (!account?.externalAccountId) throw new Error('No X account found.');
           await xDeauthorize.mutateAsync(account.externalAccountId);
         } else {
           await metaDeauthorize.mutateAsync();
         }
         router.refresh();
         show({
-          title: "Disconnected",
+          title: 'Disconnected',
           description: `${PROVIDER_GROUP_LABELS[provider]} access revoked.`,
-          variant: "success",
+          variant: 'success',
         });
       } catch (error) {
         show({
-          title: "Unable to disconnect",
-          description: error instanceof Error ? error.message : "Please retry shortly.",
-          variant: "error",
+          title: 'Unable to disconnect',
+          description: error instanceof Error ? error.message : 'Please retry shortly.',
+          variant: 'error',
         });
       }
     });
@@ -251,9 +281,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
       <PopoverContent align="end" className="w-80 p-2">
         <div className="px-2 py-1.5">
           <p className="text-sm font-semibold text-foreground">Connections</p>
-          <p className="text-xs text-muted-foreground">
-            OAuth providers tied to your account.
-          </p>
+          <p className="text-xs text-muted-foreground">OAuth providers tied to your account.</p>
         </div>
         <div className="mt-1 space-y-1">
           {PROVIDERS.map((providerId) => {
@@ -267,8 +295,8 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
               <div
                 key={providerId}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-2 py-2",
-                  comingSoon ? "opacity-60" : "hover:bg-muted/40"
+                  'flex items-center gap-3 rounded-md px-2 py-2',
+                  comingSoon ? 'opacity-60' : 'hover:bg-muted/40',
                 )}
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -291,22 +319,17 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
                     {connected && connectionSummary && connectionSummary.accountNames.length > 0
-                      ? connectionSummary.accountNames.join(", ")
+                      ? connectionSummary.accountNames.join(', ')
                       : PROVIDER_GROUP_DESCRIPTIONS[providerId]}
                   </p>
                 </div>
                 {comingSoon ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    disabled
-                  >
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
                     Coming soon
                   </Button>
                 ) : connected ? (
                   <div className="flex items-center gap-1">
-                    {providerId === "google" ? (
+                    {providerId === 'google' ? (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -318,13 +341,13 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                         <UserPlus className="h-3.5 w-3.5" />
                       </Button>
                     ) : null}
-                    {providerId === "linkedin" ? (
+                    {providerId === 'linkedin' ? (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-xs"
                         title="Connect LinkedIn Organic separately"
-                        onClick={() => handleConnect(providerId, { linkedinMode: "organic" })}
+                        onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
                         disabled={isPending}
                       >
                         Organic
@@ -335,7 +358,12 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                       size="icon"
                       className="h-7 w-7"
                       title="Reconnect to refresh accounts"
-                      onClick={() => handleConnect(providerId, providerId === "linkedin" ? { linkedinMode: "paid" } : undefined)}
+                      onClick={() =>
+                        handleConnect(
+                          providerId,
+                          providerId === 'linkedin' ? { linkedinMode: 'paid' } : undefined,
+                        )
+                      }
                       disabled={isPending}
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -351,13 +379,13 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                       <Unplug className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                ) : providerId === "linkedin" ? (
+                ) : providerId === 'linkedin' ? (
                   <div className="flex items-center gap-1">
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => handleConnect(providerId, { linkedinMode: "paid" })}
+                      onClick={() => handleConnect(providerId, { linkedinMode: 'paid' })}
                       disabled={isPending}
                     >
                       <Plus className="h-3 w-3" />
@@ -367,7 +395,7 @@ export function ConnectProviderPopover({ integrations, children }: ConnectProvid
                       variant="outline"
                       size="sm"
                       className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => handleConnect(providerId, { linkedinMode: "organic" })}
+                      onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
                       disabled={isPending}
                     >
                       Organic

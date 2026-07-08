@@ -1,23 +1,23 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useShallow } from "zustand/react/shallow";
+import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
-import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
+import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
 import {
   selectAccountPostDetails,
   usePostAnalyticsStore,
-} from "@/lib/organic/post-analytics-store";
-import type { OrganicPlatform, OrganicPost } from "@/lib/schemas/organicMetrics";
+} from '@/lib/organic/post-analytics-store';
+import type { OrganicPlatform, OrganicPost } from '@/lib/schemas/organicMetrics';
 
 const POST_INSIGHT_METRIC_KEYS = [
-  "reach",
-  "views",
-  "likes",
-  "comments",
-  "shares",
-  "saved",
-  "totalInteractions",
+  'reach',
+  'views',
+  'likes',
+  'comments',
+  'shares',
+  'saved',
+  'totalInteractions',
 ] as const;
 
 // A cached response with every core metric at zero is the signature of a
@@ -29,13 +29,13 @@ export function isAllZeroPost(post: OrganicPost): boolean {
   if (!metrics) return true;
   return POST_INSIGHT_METRIC_KEYS.every((key) => {
     const value = metrics[key];
-    return typeof value !== "number" || value === 0;
+    return typeof value !== 'number' || value === 0;
   });
 }
 
 type UseOrganicPostDetailParams = {
   brandId: string;
-  platform: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok" | "youtube">;
+  platform: Extract<OrganicPlatform, 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'>;
   integrationAccountId: string | null;
 };
 
@@ -102,8 +102,8 @@ export function useOrganicPostDetail(
           brandId,
           integrationAccountId,
           platform,
-          range: { preset: "last_30d" },
-          scope: "posts",
+          range: { preset: 'last_30d' },
+          scope: 'posts',
           selectedPostId: postId,
           forceRefresh,
         });
@@ -124,7 +124,7 @@ export function useOrganicPostDetail(
         }
         return detailedPost;
       } catch (error) {
-        console.error("[useOrganicPostDetail] Failed to load post detail", error);
+        console.error('[useOrganicPostDetail] Failed to load post detail', error);
         return null;
       } finally {
         loadingPostDetailIdsRef.current.delete(postId);

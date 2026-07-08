@@ -1,12 +1,12 @@
 import {
   fetchOrganicAnalytics,
   type OrganicAnalyticsRequest,
-} from "@/lib/api/organicAnalytics.client";
-import type { InstagramOrganicMetricsResponse } from "@/lib/schemas/organicMetrics";
+} from '@/lib/api/organicAnalytics.client';
+import type { OrganicMetricsResponse } from '@/lib/schemas/organicMetrics';
 
 type CacheKey = string;
 type CacheEntry = {
-  promise: Promise<InstagramOrganicMetricsResponse>;
+  promise: Promise<OrganicMetricsResponse>;
   timestamp: number;
 };
 
@@ -17,7 +17,7 @@ const cache = new Map<CacheKey, CacheEntry>();
 function buildKey(
   brandId: string,
   integrationAccountId: string,
-  platform: "instagram" | "facebook" | "tiktok" | "youtube",
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin',
   rangePreset: string,
   scope: string,
 ): CacheKey {
@@ -35,35 +35,35 @@ function isStale(entry: CacheEntry): boolean {
 export function prefetchMetricsDashboard(params: {
   brandId: string;
   integrationAccountId: string;
-  platform: "instagram" | "facebook" | "tiktok" | "youtube";
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
   rangePreset?: string;
 }): void {
-  const { brandId, integrationAccountId, platform, rangePreset = "last_7d" } = params;
+  const { brandId, integrationAccountId, platform, rangePreset = 'last_7d' } = params;
 
   if (!integrationAccountId) return;
 
-  const base: Omit<OrganicAnalyticsRequest, "scope"> = {
+  const base: Omit<OrganicAnalyticsRequest, 'scope'> = {
     brandId,
     integrationAccountId,
     platform,
-    range: { preset: rangePreset as OrganicAnalyticsRequest["range"]["preset"] },
+    range: { preset: rangePreset as OrganicAnalyticsRequest['range']['preset'] },
   };
 
   // Prefetch KPIs
-  const kpiKey = buildKey(brandId, integrationAccountId, platform, rangePreset, "kpis");
+  const kpiKey = buildKey(brandId, integrationAccountId, platform, rangePreset, 'kpis');
   if (!cache.has(kpiKey) || isStale(cache.get(kpiKey)!)) {
     cache.set(kpiKey, {
-      promise: fetchOrganicAnalytics({ ...base, scope: "kpis" }),
+      promise: fetchOrganicAnalytics({ ...base, scope: 'kpis' }),
       timestamp: Date.now(),
     });
   }
 
   // Prefetch demographics (Instagram only)
-  if (platform === "instagram") {
-    const demoKey = buildKey(brandId, integrationAccountId, platform, rangePreset, "demographics");
+  if (platform === 'instagram') {
+    const demoKey = buildKey(brandId, integrationAccountId, platform, rangePreset, 'demographics');
     if (!cache.has(demoKey) || isStale(cache.get(demoKey)!)) {
       cache.set(demoKey, {
-        promise: fetchOrganicAnalytics({ ...base, scope: "demographics" }),
+        promise: fetchOrganicAnalytics({ ...base, scope: 'demographics' }),
         timestamp: Date.now(),
       });
     }
@@ -78,10 +78,10 @@ export function prefetchMetricsDashboard(params: {
 export function consumePrefetched(
   brandId: string,
   integrationAccountId: string,
-  platform: "instagram" | "facebook" | "tiktok" | "youtube",
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin',
   rangePreset: string,
   scope: string,
-): Promise<InstagramOrganicMetricsResponse> | null {
+): Promise<OrganicMetricsResponse> | null {
   const key = buildKey(brandId, integrationAccountId, platform, rangePreset, scope);
   const entry = cache.get(key);
   if (!entry || isStale(entry)) {

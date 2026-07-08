@@ -1,18 +1,17 @@
-"use client";
+'use client';
 
-import * as React from "react";
-
+import type { OrganicAwarenessReportPayload } from '@continuum/contracts';
+import * as React from 'react';
 import type {
-  OrganicInsightsResponse,
   OrganicComputedInsight,
-} from "@/lib/organic/organic-insights.types";
-import type { OrganicAwarenessReportPayload } from "@continuum/contracts";
-import type { OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
+  OrganicInsightsResponse,
+} from '@/lib/organic/organic-insights.types';
+import type { OrganicDateRangePreset } from '@/lib/schemas/organicMetrics';
 
 type UseOrganicInsightsParams = {
   brandId: string;
   integrationAccountId: string | null;
-  platform: "instagram" | "facebook" | "tiktok" | "youtube";
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
   rangePreset: OrganicDateRangePreset;
   enabled?: boolean;
 };
@@ -27,9 +26,7 @@ type UseOrganicInsightsReturn = {
   refresh: () => void;
 };
 
-export function useOrganicInsights(
-  params: UseOrganicInsightsParams
-): UseOrganicInsightsReturn {
+export function useOrganicInsights(params: UseOrganicInsightsParams): UseOrganicInsightsReturn {
   const { brandId, integrationAccountId, platform, rangePreset, enabled = true } = params;
 
   const [data, setData] = React.useState<OrganicInsightsResponse | null>(null);
@@ -62,9 +59,9 @@ export function useOrganicInsights(
 
     const controller = new AbortController();
 
-    fetch("/api/organic/insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    fetch('/api/organic/insights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brandId,
         integrationAccountId,
@@ -79,7 +76,7 @@ export function useOrganicInsights(
           const body = await response.json().catch(() => ({}));
           throw new Error(
             (body as Record<string, string>).error ??
-              `Request failed with status ${response.status}`
+              `Request failed with status ${response.status}`,
           );
         }
         return response.json();
@@ -102,10 +99,8 @@ export function useOrganicInsights(
       })
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load organic insights"
-        );
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setError(err instanceof Error ? err.message : 'Failed to load organic insights');
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {

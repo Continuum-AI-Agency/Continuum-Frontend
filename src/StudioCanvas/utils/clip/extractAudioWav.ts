@@ -149,7 +149,7 @@ export async function extractAudioWav(
 
     const sink = new mb.AudioSampleSink(audioTrack);
     const pcmChunks: Int16Array[] = [];
-    let resampleTail = new Float32Array(0);
+    let resampleTail: Float32Array = new Float32Array(0);
     let sourceSampleRate = 0;
 
     for await (const sample of sink.samples()) {
