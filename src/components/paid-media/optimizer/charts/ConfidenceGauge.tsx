@@ -6,15 +6,14 @@
 import type { RunConfidence } from '@continuum/contracts';
 
 import { Gauge } from '@/components/charts/gauge';
+import { ChartEmpty } from './ChartStates';
 
 export function ConfidenceGauge({ confidence }: { confidence: RunConfidence | null | undefined }) {
   const raw = typeof confidence?.score === 'number' ? confidence.score : null;
   const score = raw == null ? null : Math.round(Math.max(0, Math.min(1, raw)) * 100);
 
   if (score == null) {
-    return (
-      <p className="text-xs text-muted-foreground">Confidence appears after the first cycle.</p>
-    );
+    return <ChartEmpty message="Confidence appears after the first scored cycle." />;
   }
 
   return (

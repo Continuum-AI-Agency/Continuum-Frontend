@@ -1,40 +1,32 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import {
-  ActivityLogIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-} from "@radix-ui/react-icons";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { DashboardWarmOnMount } from "@/components/dashboard/DashboardWarmOnMount";
-import { PaidMetricStrip } from "@/components/dashboard/briefing/PaidMetricStrip";
-import { PaidKpiSelect } from "@/components/dashboard/briefing/PaidKpiSelect";
-import { PaidScopeToggle } from "@/components/dashboard/briefing/PaidScopeToggle";
-import { PaidInsightsList } from "@/components/dashboard/briefing/PaidInsightsList";
-import { CompetitorAdsTable } from "@/components/dashboard/competitor/CompetitorAdsTable";
-import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
-import { useDashboardPrefsStore } from "@/stores/dashboardPrefs";
+import { ActivityLogIcon, ChevronLeftIcon, ChevronRightIcon } from '@radix-ui/react-icons';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { PaidInsightsList } from '@/components/dashboard/briefing/PaidInsightsList';
+import { PaidKpiSelect } from '@/components/dashboard/briefing/PaidKpiSelect';
+import { PaidMetricStrip } from '@/components/dashboard/briefing/PaidMetricStrip';
+import { PaidScopeToggle } from '@/components/dashboard/briefing/PaidScopeToggle';
+import { CompetitorAdsTable } from '@/components/dashboard/competitor/CompetitorAdsTable';
+import { DashboardWarmOnMount } from '@/components/dashboard/DashboardWarmOnMount';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
+import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 
-const PAID_SELECTION_KEY = "paid";
-import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
-import { PaidEntityTable } from "@/components/dashboard/briefing/PaidEntityTable";
-import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
+const PAID_SELECTION_KEY = 'paid';
+
+import { PendingActivityTabs } from '@/components/approvals/PendingActivityTabs';
+import { PaidEntityTable } from '@/components/dashboard/briefing/PaidEntityTable';
+import { DCOActionsWidget } from '@/components/dashboard/DCOActionsWidget';
+import type { PaidPerformanceMetricKey } from '@/components/paid-media/PaidMediaReportingWidget';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const HOVER_CHARGE_MS = 800;
 
 const PaidMediaReportingWidget = dynamic(
   () =>
-    import("@/components/paid-media/PaidMediaReportingWidget").then((m) => ({
+    import('@/components/paid-media/PaidMediaReportingWidget').then((m) => ({
       default: m.PaidMediaReportingWidget,
     })),
   {
@@ -45,11 +37,9 @@ const PaidMediaReportingWidget = dynamic(
 
 const BudgetPacingWidget = dynamic(
   () =>
-    import("@/components/paid-media/budget-pacing/BudgetPacingWidget").then(
-      (m) => ({
-        default: m.BudgetPacingWidget,
-      }),
-    ),
+    import('@/components/paid-media/budget-pacing/BudgetPacingWidget').then((m) => ({
+      default: m.BudgetPacingWidget,
+    })),
   {
     ssr: false,
     loading: () => <Skeleton className="h-64 w-full rounded-lg" />,
@@ -60,31 +50,31 @@ type PaidDashboardViewProps = {
   brandId: string;
 };
 
-const RAIL_COLLAPSE_STORAGE_KEY = "dashboard.paid.rail.collapsed";
+const RAIL_COLLAPSE_STORAGE_KEY = 'dashboard.paid.rail.collapsed';
 const RAIL_WIDTH_PX = 360;
 const STRIP_WIDTH_PX = 36;
 
 const JELLY_SPRING = {
-  type: "spring" as const,
+  type: 'spring' as const,
   stiffness: 380,
   damping: 22,
   mass: 0.85,
 };
 const STRIP_SPRING = {
-  type: "spring" as const,
+  type: 'spring' as const,
   stiffness: 320,
   damping: 26,
   mass: 0.7,
 };
 
 function readCollapsed(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(RAIL_COLLAPSE_STORAGE_KEY) === "1";
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(RAIL_COLLAPSE_STORAGE_KEY) === '1';
 }
 
 function writeCollapsed(value: boolean): void {
-  if (typeof window === "undefined") return;
-  if (value) window.localStorage.setItem(RAIL_COLLAPSE_STORAGE_KEY, "1");
+  if (typeof window === 'undefined') return;
+  if (value) window.localStorage.setItem(RAIL_COLLAPSE_STORAGE_KEY, '1');
   else window.localStorage.removeItem(RAIL_COLLAPSE_STORAGE_KEY);
 }
 
@@ -133,9 +123,9 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
           animate={{ scaleY: charging ? 1 : 0 }}
           transition={{
             duration: charging ? HOVER_CHARGE_MS / 1000 : 0.18,
-            ease: charging ? "linear" : [0.4, 0, 1, 1],
+            ease: charging ? 'linear' : [0.4, 0, 1, 1],
           }}
-          style={{ height: "100%" }}
+          style={{ height: '100%' }}
         />
         <motion.div
           aria-hidden="true"
@@ -143,8 +133,8 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
           initial={false}
           animate={{
             boxShadow: charging
-              ? "inset 0 0 0 1px var(--color-primary)"
-              : "inset 0 0 0 0 transparent",
+              ? 'inset 0 0 0 1px var(--color-primary)'
+              : 'inset 0 0 0 0 transparent',
           }}
           transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
         />
@@ -158,14 +148,12 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
               }}
               aria-label="Open DCO actions"
               className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
-              style={{ transitionProperty: "background-color, color, scale" }}
+              style={{ transitionProperty: 'background-color, color, scale' }}
             >
               <ChevronLeftIcon className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="left">
-            Open DCO actions (or hover)
-          </TooltipContent>
+          <TooltipContent side="left">Open DCO actions (or hover)</TooltipContent>
         </Tooltip>
         <div className="z-10 my-1 h-px w-5 bg-border/70" aria-hidden="true" />
         <Tooltip>
@@ -178,7 +166,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
               }}
               aria-label="Show DCO actions"
               className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
-              style={{ transitionProperty: "background-color, color, scale" }}
+              style={{ transitionProperty: 'background-color, color, scale' }}
             >
               <ActivityLogIcon className="h-3.5 w-3.5" />
             </button>
@@ -200,7 +188,7 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
             onClick={onCollapse}
             aria-label="Hide DCO actions"
             className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]"
-            style={{ transitionProperty: "background-color, color, scale" }}
+            style={{ transitionProperty: 'background-color, color, scale' }}
           >
             <ChevronRightIcon className="h-3.5 w-3.5" />
           </button>
@@ -214,11 +202,10 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   const paidScope = useDashboardPrefsStore((store) => store.paidScope);
   const setSelection = useAccountSelectionStore((store) => store.setSelection);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
-    () => useAccountSelectionStore.getState().getSelection(brandId, PAID_SELECTION_KEY),
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(() =>
+    useAccountSelectionStore.getState().getSelection(brandId, PAID_SELECTION_KEY),
   );
-  const [selectedMetric, setSelectedMetric] =
-    useState<PaidPerformanceMetricKey>("spend");
+  const [selectedMetric, setSelectedMetric] = useState<PaidPerformanceMetricKey>('spend');
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const reduceMotion = useReducedMotion();
 
@@ -268,8 +255,8 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   );
 
   const dispatchResize = useCallback(() => {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(new Event("resize"));
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new Event('resize'));
   }, []);
 
   return (
@@ -278,12 +265,14 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
       <section className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
-          <p className="text-xs text-muted-foreground">Your paid performance at a glance. Pick your next move.</p>
+          <p className="text-xs text-muted-foreground">
+            Your paid performance at a glance. Pick your next move.
+          </p>
         </div>
         <PaidMetricStrip brandId={brandId} adAccountId={selectedAccountId} />
         <div
           data-tour-id="dashboard-top-ads"
-          className="grid grid-cols-1 gap-[var(--dashboard-section-gap)] lg:grid-cols-2 lg:[&>*]:min-h-[var(--dashboard-min-panel-height)]"
+          className="grid grid-cols-1 items-start gap-[var(--dashboard-section-gap)] lg:grid-cols-2 lg:[&>*]:min-h-[var(--dashboard-min-panel-height)]"
         >
           <div className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
             <div className="flex items-center justify-between gap-2">
@@ -294,11 +283,11 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
               brandId={brandId}
               adAccountId={selectedAccountId}
               scope={paidScope}
-              title={paidScope === "top_adsets" ? "Top ad sets" : "Top campaigns"}
+              title={paidScope === 'top_adsets' ? 'Top ad sets' : 'Top campaigns'}
               emptyMessage={
-                paidScope === "top_adsets"
-                  ? "No ad set performance yet for this account."
-                  : "No campaign performance yet for this account."
+                paidScope === 'top_adsets'
+                  ? 'No ad set performance yet for this account.'
+                  : 'No campaign performance yet for this account.'
               }
             />
           </div>
@@ -310,85 +299,71 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
       <div className="grid min-h-[var(--dashboard-reporting-min-height)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
         <div className="min-w-0">{reportingArea}</div>
 
-      <AnimatePresence
-        initial={false}
-        mode="wait"
-        onExitComplete={dispatchResize}
-      >
-        {collapsed ? (
-          <motion.div
-            key="dco-strip"
-            initial={
-              reduceMotion ? false : { opacity: 0, scale: 0.96, x: 8 }
-            }
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={
-              reduceMotion
-                ? { opacity: 0 }
-                : {
-                    opacity: 0,
-                    scale: 0.96,
-                    x: 8,
-                    transition: { duration: 0.16, ease: [0.4, 0, 1, 1] },
+        <AnimatePresence initial={false} mode="wait" onExitComplete={dispatchResize}>
+          {collapsed ? (
+            <motion.div
+              key="dco-strip"
+              initial={reduceMotion ? false : { opacity: 0, scale: 0.96, x: 8 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={
+                reduceMotion
+                  ? { opacity: 0 }
+                  : {
+                      opacity: 0,
+                      scale: 0.96,
+                      x: 8,
+                      transition: { duration: 0.16, ease: [0.4, 0, 1, 1] },
+                    }
+              }
+              transition={STRIP_SPRING}
+              style={{
+                transformOrigin: 'right center',
+                overflow: 'hidden',
+                width: STRIP_WIDTH_PX,
+              }}
+              onAnimationComplete={dispatchResize}
+            >
+              <div style={{ width: STRIP_WIDTH_PX }} className="h-full">
+                <DCORailStrip onExpand={handleExpand} />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="dco-rail"
+              initial={reduceMotion ? false : { opacity: 0, scale: 0.98, x: 12 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={
+                reduceMotion
+                  ? { opacity: 0 }
+                  : {
+                      opacity: 0,
+                      scale: 0.98,
+                      x: 12,
+                      transition: { duration: 0.18, ease: [0.4, 0, 1, 1] },
+                    }
+              }
+              transition={JELLY_SPRING}
+              style={{
+                transformOrigin: 'right center',
+                overflow: 'hidden',
+                width: RAIL_WIDTH_PX,
+              }}
+              onAnimationComplete={dispatchResize}
+            >
+              <div style={{ width: RAIL_WIDTH_PX }} className="relative h-full">
+                <PendingActivityTabs
+                  brandId={brandId}
+                  variant="rail"
+                  className="h-full"
+                  activityContent={
+                    <DCOActionsWidget brandId={brandId} variant="rail" className="h-full" />
                   }
-            }
-            transition={STRIP_SPRING}
-            style={{
-              transformOrigin: "right center",
-              overflow: "hidden",
-              width: STRIP_WIDTH_PX,
-            }}
-            onAnimationComplete={dispatchResize}
-          >
-            <div style={{ width: STRIP_WIDTH_PX }} className="h-full">
-              <DCORailStrip onExpand={handleExpand} />
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="dco-rail"
-            initial={
-              reduceMotion
-                ? false
-                : { opacity: 0, scale: 0.98, x: 12 }
-            }
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={
-              reduceMotion
-                ? { opacity: 0 }
-                : {
-                    opacity: 0,
-                    scale: 0.98,
-                    x: 12,
-                    transition: { duration: 0.18, ease: [0.4, 0, 1, 1] },
-                  }
-            }
-            transition={JELLY_SPRING}
-            style={{
-              transformOrigin: "right center",
-              overflow: "hidden",
-              width: RAIL_WIDTH_PX,
-            }}
-            onAnimationComplete={dispatchResize}
-          >
-            <div style={{ width: RAIL_WIDTH_PX }} className="relative h-full">
-              <PendingActivityTabs
-                brandId={brandId}
-                variant="rail"
-                className="h-full"
-                activityContent={
-                  <DCOActionsWidget
-                    brandId={brandId}
-                    variant="rail"
-                    className="h-full"
-                  />
-                }
-              />
-              <DCORailCollapseButton onCollapse={handleCollapse} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                />
+                <DCORailCollapseButton onCollapse={handleCollapse} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

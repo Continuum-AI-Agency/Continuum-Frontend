@@ -59,8 +59,12 @@ type OptimizerStore = {
   entries: Record<string, CacheEntry>;
   view: OptimizerView;
   selectedPortfolioId: string | null;
+  /** When set, the Portfolios sub-view opens that portfolio as a full-screen detail
+   *  workspace (the hero timeline + drill-ins) instead of the inline card list. */
+  detailPortfolioId: string | null;
   setView: (view: OptimizerView) => void;
   setSelectedPortfolioId: (id: string | null) => void;
+  setDetailPortfolioId: (id: string | null) => void;
   beginFetch: (key: string) => void;
   resolveFetch: (key: string, data: unknown) => void;
   failFetch: (key: string) => void;
@@ -73,8 +77,10 @@ export const useOptimizerStore = create<OptimizerStore>((set) => ({
   entries: {},
   view: 'overview',
   selectedPortfolioId: null,
+  detailPortfolioId: null,
   setView: (view) => set({ view }),
   setSelectedPortfolioId: (selectedPortfolioId) => set({ selectedPortfolioId }),
+  setDetailPortfolioId: (detailPortfolioId) => set({ detailPortfolioId }),
   beginFetch: (key) =>
     set((state) => ({
       entries: {
@@ -156,20 +162,21 @@ export function useCachedRead<T>(
   const isLoading = Boolean(key) && !isFresh && (entry?.loading ?? true);
 
   React.useEffect(() => {
-    if (!key || isFresh || entry?.loading) return;
-    let cancelled = false;
+    if (!key) return;
+    // Decide from the CURRENT store state, NOT the render-time closure. beginFetch()
+    // below flips entry.loading, which triggers a re-render; if `entry?.loading`
+    // were an effect dependency the cleanup would fire and cancel this very fetch,
+    // leaving the surface stuck loading forever. Read state fresh + re-run only on
+    // fetchedAt/error changes (resolve or markStale), and do NOT cancel in-flight.
+    const current = useOptimizerStore.getState().entries[key];
+    const staleWindow = current?.error ? ERROR_RETRY_MS : TTL_MS;
+    const fresh = current ? Date.now() - current.fetchedAt < staleWindow : false;
+    if (fresh || current?.loading) return;
     beginFetch(key);
     withTimeout(fetcherRef.current(), READ_TIMEOUT_MS)
-      .then((data) => {
-        if (!cancelled) resolveFetch(key, data);
-      })
-      .catch(() => {
-        if (!cancelled) failFetch(key);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [key, isFresh, entry?.loading, beginFetch, resolveFetch, failFetch]);
+      .then((data) => resolveFetch(key, data))
+      .catch(() => failFetch(key));
+  }, [key, entry?.fetchedAt, entry?.error, beginFetch, resolveFetch, failFetch]);
 
   const refetch = React.useCallback(() => {
     if (key) markStale((candidate) => candidate === key);

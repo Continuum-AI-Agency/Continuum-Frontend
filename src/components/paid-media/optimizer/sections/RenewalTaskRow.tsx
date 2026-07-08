@@ -20,7 +20,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
   const isBusy = renewal.isPending && renewal.variables?.taskId === task.id;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
       <div className="min-w-0">
         <p className="text-sm font-semibold tracking-tight">
           {glyph} {label} ·{' '}

@@ -13,6 +13,7 @@
     "tests": "bun test --path-ignore-patterns '**/e2e/**'",
     "test": "bun run tests",
     "test:e2e": "playwright test",
+    "optimizer:viz:bench": "bun run src/components/paid-media/optimizer/charts/optimizer-viz.bench.ts",
     "supabase:gen:types": "node scripts/generate-supabase-types.mjs",
     "generate:types": "node scripts/generate-supabase-types.mjs",
     "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.mjs",

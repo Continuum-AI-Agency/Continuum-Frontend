@@ -12,6 +12,7 @@ import { Bar } from '@/components/charts/bar';
 import { BarChart } from '@/components/charts/bar-chart';
 import { BarYAxis } from '@/components/charts/bar-y-axis';
 import { formatCurrency } from '../format';
+import { ChartEmpty } from './ChartStates';
 import { budgetByObjective } from './chartData';
 
 type BudgetByObjectiveChartProps = {
@@ -22,7 +23,9 @@ type BudgetByObjectiveChartProps = {
 export function BudgetByObjectiveChart({ portfolios, currency }: BudgetByObjectiveChartProps) {
   const data = budgetByObjective(portfolios);
 
-  if (data.length === 0) return null;
+  if (data.length === 0) {
+    return <ChartEmpty message="Budget mix appears once portfolios carry a daily budget." />;
+  }
 
   return (
     <div className="space-y-2">

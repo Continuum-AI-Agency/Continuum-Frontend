@@ -18,9 +18,11 @@ import type {
   ApplyMode,
   OptimizationModeDto,
   OptimizationObjective,
+  PortfolioLevel,
   PortfolioSuggestion,
 } from '@continuum/contracts';
 import {
+  ArrowRightIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   PlusIcon,
@@ -42,7 +44,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { currencySymbol, deriveCpa, formatCpa, formatCurrency, humanize } from '../format';
+import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import {
   useOptimizerAccountSnapshots,
   useOptimizerAdAccounts,
@@ -51,11 +55,34 @@ import {
 } from '../useOptimizerData';
 import { PortfolioPreview } from './PortfolioPreview';
 
+// Explains an empty suggestion list precisely (Phase C diagnostic reason), so the
+// onboarding never shows a bare "no suggestions yet". In campaign mode the
+// 'all_cbo' reason means "every campaign is ABO" (budget split at the ad-set level).
+function suggestEmptyMessage(reason: string | null, level: PortfolioLevel): string {
+  switch (reason) {
+    case 'all_cbo':
+      return level === 'campaign'
+        ? "Every campaign here splits its budget at the ad-set level (ABO), so there's nothing to group at the campaign level. Optimize these as an ad-set portfolio instead."
+        : "Every active ad set here uses a campaign-level budget (CBO or lifetime), so there's nothing to group into a suggestion. Pick ad sets with their own daily budgets below.";
+    case 'no_active':
+      return 'No active ad sets found for this account yet. Once ad sets are live, suggestions will appear here.';
+    case 'tracking_gaps':
+      return 'Ad sets are spending but none has tracked conversions yet — set up conversion tracking, or create a portfolio manually below.';
+    case 'not_permitted':
+      return "This ad account isn't linked to the current brand, so we couldn't read its ad sets. Reconnect it in Integrations, then try again.";
+    default:
+      return "No grouped suggestions yet — the optimizer groups ad sets once this account's metrics are available. Create a portfolio manually below in the meantime.";
+  }
+}
+
 type PortfolioSetupProps = {
   brandId: string;
   adAccountId: string;
   currency?: string | null;
   onCreated?: () => void;
+  // The onboarding empty-state shows the account header; the in-tab "New
+  // portfolio" expander suppresses it (the account is already in context there).
+  showAccountHeader?: boolean;
 };
 
 const OBJECTIVES: OptimizationObjective[] = [
@@ -69,19 +96,30 @@ const OBJECTIVES: OptimizationObjective[] = [
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
 const APPLY_MODES: ApplyMode[] = ['recommend', 'autopilot'];
 
-export function PortfolioSetup({ brandId, adAccountId, currency, onCreated }: PortfolioSetupProps) {
+export function PortfolioSetup({
+  brandId,
+  adAccountId,
+  currency,
+  onCreated,
+  showAccountHeader = true,
+}: PortfolioSetupProps) {
   const { data: accounts } = useOptimizerAdAccounts(brandId);
   const account = accounts.find((row) => row.account_id === adAccountId) ?? null;
   const resolvedCurrency = currency ?? account?.currency ?? null;
 
-  const suggestRead = useOptimizerSuggestions(brandId, adAccountId);
+  // What this portfolio reallocates: ad-set budgets (default) or campaign budgets
+  // (CBO). Drives the suggestion/snapshot reads, the picker mode, and create config.
+  const [level, setLevel] = React.useState<PortfolioLevel>('adset');
+
+  const suggestRead = useOptimizerSuggestions(brandId, adAccountId, level);
   const suggestions = suggestRead.data?.suggestions ?? [];
   const diagnostics = suggestRead.data?.diagnostics ?? null;
+  const suggestReason = suggestRead.data?.reason ?? null;
 
-  // Account ad-set snapshots power the client-side "what-if" preview (engine
-  // runs in the browser). Absent when the metrics edge is unreachable — the
-  // preview simply hides in that case.
-  const { data: snapshots } = useOptimizerAccountSnapshots(brandId, adAccountId);
+  // Account snapshots power the client-side "what-if" preview (engine runs in the
+  // browser). Absent when the metrics edge is unreachable — the preview simply
+  // hides in that case.
+  const { data: snapshots } = useOptimizerAccountSnapshots(brandId, adAccountId, level);
 
   const { create, enroll } = useOptimizerMutations(brandId, adAccountId);
   const [createdKeys, setCreatedKeys] = React.useState<Set<string>>(new Set());
@@ -94,6 +132,7 @@ export function PortfolioSetup({ brandId, adAccountId, currency, onCreated }: Po
         config: {
           name: suggestion.name,
           objective: suggestion.objective,
+          level,
           mode: suggestion.mode,
           apply_mode: 'recommend',
           daily_total: suggestion.daily_total,
@@ -114,12 +153,16 @@ export function PortfolioSetup({ brandId, adAccountId, currency, onCreated }: Po
 
   return (
     <div className="space-y-4">
-      <AccountHeader
-        name={account?.name ?? adAccountId}
-        platform={account?.platform ?? null}
-        status={account?.status ?? null}
-        currency={resolvedCurrency}
-      />
+      {showAccountHeader ? (
+        <AccountHeader
+          name={account?.name ?? adAccountId}
+          platform={account?.platform ?? null}
+          status={account?.status ?? null}
+          currency={resolvedCurrency}
+        />
+      ) : null}
+
+      <PortfolioLevelToggle level={level} onLevelChange={setLevel} />
 
       {diagnostics && diagnostics.trackingGaps > 0 ? (
         <TrackingGapBanner
@@ -135,26 +178,40 @@ export function PortfolioSetup({ brandId, adAccountId, currency, onCreated }: Po
           <h3 className="text-sm font-semibold tracking-tight">Suggested portfolios</h3>
           {suggestions.length > 0 ? (
             <span className="text-xs text-muted-foreground">
-              grouped from this account&rsquo;s active ad sets
+              grouped from this account&rsquo;s active{' '}
+              {level === 'campaign' ? 'campaigns' : 'ad sets'}
             </span>
           ) : null}
         </div>
 
         {suggestRead.isLoading ? (
           <div className="space-y-2">
-            <Skeleton className="h-16 rounded-xl" />
-            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-lg" />
+            <Skeleton className="h-16 rounded-lg" />
           </div>
         ) : suggestRead.isError ? (
-          <p className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
+          <p className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-xs text-warning">
             Suggestions are unavailable — the optimizer service is offline. You can still create a
             portfolio manually below.
           </p>
         ) : suggestions.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-3 text-xs text-muted-foreground">
-            No grouped suggestions yet — the optimizer groups ad sets once this account&rsquo;s
-            metrics are available. Create a portfolio manually below in the meantime.
-          </p>
+          <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/10 px-4 py-3">
+            <p className="text-xs text-muted-foreground">
+              {suggestEmptyMessage(suggestReason, level)}
+            </p>
+            {suggestReason === 'all_cbo' && level === 'adset' ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => setLevel('campaign')}
+              >
+                Optimize them as a Campaign portfolio
+                <ArrowRightIcon className="size-3.5" />
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <div className="space-y-2">
             {suggestions.map((suggestion) => {
@@ -176,12 +233,42 @@ export function PortfolioSetup({ brandId, adAccountId, currency, onCreated }: Po
         )}
       </section>
 
-      <ManualCreateForm
+      <PortfolioCreateForm
         brandId={brandId}
         adAccountId={adAccountId}
         currency={resolvedCurrency}
+        level={level}
         onCreated={onCreated}
       />
+    </div>
+  );
+}
+
+function PortfolioLevelToggle({
+  level,
+  onLevelChange,
+}: {
+  level: PortfolioLevel;
+  onLevelChange: (level: PortfolioLevel) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold tracking-tight">Portfolio type</p>
+        <p className="text-xs text-muted-foreground">
+          Reallocate budget across ad sets, or across whole campaigns (CBO).
+        </p>
+      </div>
+      <Tabs value={level} onValueChange={(value) => onLevelChange(value as PortfolioLevel)}>
+        <TabsList className="h-8">
+          <TabsTrigger value="adset" className="px-3 text-xs">
+            Ad sets
+          </TabsTrigger>
+          <TabsTrigger value="campaign" className="px-3 text-xs">
+            Campaigns
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
     </div>
   );
 }
@@ -198,26 +285,26 @@ function AccountHeader({
   currency: string | null;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-card px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-card px-4 py-3">
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">Optimizing account</p>
         <p className="truncate text-sm font-semibold tracking-tight">{name}</p>
       </div>
       <div className="flex items-center gap-1.5">
         {platform ? (
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-3xs">
             {humanize(platform)}
           </Badge>
         ) : null}
         {currency ? (
-          <Badge variant="secondary" className="text-[10px]">
+          <Badge variant="secondary" className="text-3xs">
             {currency}
           </Badge>
         ) : null}
         {status ? (
           <Badge
             variant={status.toLowerCase() === 'active' ? 'success' : 'outline'}
-            className="text-[10px]"
+            className="text-3xs"
           >
             {humanize(status)}
           </Badge>
@@ -237,7 +324,7 @@ function TrackingGapBanner({
   samples: string[];
 }) {
   return (
-    <div className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+    <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-xs text-warning">
       <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
       <div>
         <p>
@@ -245,7 +332,7 @@ function TrackingGapBanner({
           objective — check the pixel/conversion tracking before enrolling.
         </p>
         {samples.length > 0 ? (
-          <p className="mt-1 font-mono text-[11px] opacity-80">{samples.slice(0, 4).join(', ')}</p>
+          <p className="mt-1 font-mono text-2xs opacity-80">{samples.slice(0, 4).join(', ')}</p>
         ) : null}
       </div>
     </div>
@@ -272,12 +359,12 @@ function SuggestionRow({
   const canPreview = snapshots.length > 0;
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card">
+    <div className="rounded-lg border border-border/70 bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             {suggestion.name}
-            <Badge variant="teal" className="text-[10px]">
+            <Badge variant="teal" className="text-3xs">
               {humanize(suggestion.mode)}
             </Badge>
           </p>
@@ -305,7 +392,7 @@ function SuggestionRow({
             </Button>
           ) : null}
           {created ? (
-            <Badge variant="success" className="gap-1 text-[10px]">
+            <Badge variant="success" className="gap-1 text-3xs">
               <CheckCircle2Icon className="size-3" /> created
             </Badge>
           ) : (
@@ -337,18 +424,21 @@ function SuggestionRow({
   );
 }
 
-function ManualCreateForm({
+export function PortfolioCreateForm({
   brandId,
   adAccountId,
   currency,
+  level = 'adset',
   onCreated,
 }: {
   brandId: string;
   adAccountId: string;
   currency: string | null;
+  level?: PortfolioLevel;
   onCreated?: () => void;
 }) {
-  const { create } = useOptimizerMutations(brandId, adAccountId);
+  const { create, enroll } = useOptimizerMutations(brandId, adAccountId);
+  const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
 
   const [name, setName] = React.useState('');
   const [objective, setObjective] = React.useState<OptimizationObjective>('purchase');
@@ -356,9 +446,22 @@ function ManualCreateForm({
   const [applyMode, setApplyMode] = React.useState<ApplyMode>('recommend');
   const [dailyTotal, setDailyTotal] = React.useState('');
   const [cpaTarget, setCpaTarget] = React.useState('');
+  const [selectedAdsetIds, setSelectedAdsetIds] = React.useState<string[]>([]);
 
-  const dailyValue = Number.parseFloat(dailyTotal);
-  const canSubmit = name.trim().length > 0 && Number.isFinite(dailyValue) && dailyValue > 0;
+  // Sum of the selected ad sets' current daily budgets — offered as the default
+  // daily total when the operator hasn't typed one (they keep control).
+  const selectedBudgetSum = React.useMemo(() => {
+    const ids = new Set(selectedAdsetIds);
+    return snapshotsRead.data
+      .filter((snapshot) => ids.has(snapshot.id))
+      .reduce((sum, snapshot) => sum + (snapshot.currentBudget ?? 0), 0);
+  }, [snapshotsRead.data, selectedAdsetIds]);
+
+  const typedDaily = Number.parseFloat(dailyTotal);
+  const effectiveDaily =
+    Number.isFinite(typedDaily) && typedDaily > 0 ? typedDaily : selectedBudgetSum;
+  const canSubmit = name.trim().length > 0 && effectiveDaily > 0;
+  const busy = create.isPending || enroll.isPending;
 
   const handleCreate = () => {
     if (!canSubmit) return;
@@ -370,17 +473,22 @@ function ManualCreateForm({
         config: {
           name: name.trim(),
           objective,
+          level,
           mode,
           apply_mode: applyMode,
-          daily_total: dailyValue,
+          daily_total: effectiveDaily,
           ...(Number.isFinite(cpaValue) && cpaValue > 0 ? { cpa_target: cpaValue } : {}),
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: ({ portfolio_id }) => {
+          if (selectedAdsetIds.length > 0) {
+            enroll.mutate({ portfolio_id, adset_ids: selectedAdsetIds });
+          }
           setName('');
           setDailyTotal('');
           setCpaTarget('');
+          setSelectedAdsetIds([]);
           onCreated?.();
         },
       },
@@ -388,13 +496,15 @@ function ManualCreateForm({
   };
 
   const symbol = currencySymbol(currency);
+  const entityLabel = level === 'campaign' ? 'campaigns' : 'ad sets';
 
   return (
-    <Card className="gap-0 rounded-xl py-0 shadow-none">
+    <Card className="gap-0 rounded-lg py-0 shadow-none">
       <CardHeader className="border-b border-border/70 p-4">
-        <CardTitle className="text-sm">Or create a custom portfolio</CardTitle>
+        <CardTitle className="text-sm">Create a portfolio</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Budgets are in {currency ?? 'the account currency'}.
+          Name it, pick the {entityLabel} to optimize together, and set a daily budget in{' '}
+          {currency ?? 'the account currency'}.
         </p>
       </CardHeader>
       <CardContent className="space-y-3 p-4">
@@ -467,7 +577,7 @@ function ManualCreateForm({
               inputMode="decimal"
               value={dailyTotal}
               onChange={(event) => setDailyTotal(event.target.value)}
-              placeholder="4200"
+              placeholder={selectedBudgetSum > 0 ? String(Math.round(selectedBudgetSum)) : '4200'}
             />
           </div>
           <div className="space-y-1.5">
@@ -482,11 +592,42 @@ function ManualCreateForm({
           </div>
         </div>
 
-        {create.isError ? (
+        <div className="space-y-1.5">
+          <Label>{level === 'campaign' ? 'Campaigns to enroll' : 'Ad sets to enroll'}</Label>
+          <CampaignAdsetPicker
+            snapshots={snapshotsRead.data}
+            selectedAdsetIds={selectedAdsetIds}
+            onChange={setSelectedAdsetIds}
+            brandId={brandId}
+            accountId={adAccountId}
+            currency={currency}
+            disabled={busy}
+            isLoading={snapshotsRead.isLoading}
+            isError={snapshotsRead.isError}
+            mode={level}
+          />
+          <p className="text-2xs text-muted-foreground">
+            {selectedAdsetIds.length > 0
+              ? `${selectedAdsetIds.length} ${
+                  level === 'campaign'
+                    ? selectedAdsetIds.length === 1
+                      ? 'campaign'
+                      : 'campaigns'
+                    : selectedAdsetIds.length === 1
+                      ? 'ad set'
+                      : 'ad sets'
+                } selected · ${formatCurrency(selectedBudgetSum, currency)}/day current budget`
+              : `No ${entityLabel} selected yet — you can also add them later from Manage.`}
+          </p>
+        </div>
+
+        {create.isError || enroll.isError ? (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {create.error instanceof Error
               ? create.error.message
-              : 'Could not create the portfolio.'}
+              : enroll.error instanceof Error
+                ? 'Portfolio created, but enrolling the ad sets failed. Add them from Manage.'
+                : 'Could not create the portfolio.'}
           </p>
         ) : null}
 
@@ -494,11 +635,15 @@ function ManualCreateForm({
           <Button
             type="button"
             className="gap-1.5"
-            disabled={!canSubmit || create.isPending}
+            disabled={!canSubmit || busy}
             onClick={handleCreate}
           >
             <PlusIcon className="size-4" />
-            {create.isPending ? 'Creating…' : 'Create portfolio'}
+            {busy
+              ? 'Creating…'
+              : selectedAdsetIds.length > 0
+                ? `Create & enroll ${selectedAdsetIds.length}`
+                : 'Create portfolio'}
           </Button>
         </div>
       </CardContent>

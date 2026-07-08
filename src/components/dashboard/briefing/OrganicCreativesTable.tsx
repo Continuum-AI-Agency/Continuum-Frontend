@@ -23,6 +23,7 @@ import { resolveOrganicAccount } from '@/lib/organic/resolve-organic-account';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { InsightActionsDropdown, InsightContextActions } from './insightActions';
 import { LeaderboardThumbnail } from './LeaderboardThumbnail';
+import { DASHBOARD_PANEL_MAX_HEIGHT } from './panelLayout';
 
 const RANGE_PRESET = 'last_7d' as const;
 
@@ -233,7 +234,7 @@ export function OrganicCreativesTable({
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
-      maxHeight="28rem"
+      maxHeight={DASHBOARD_PANEL_MAX_HEIGHT}
       defaultSort={{ columnId: 'metric', direction: 'desc' }}
       isLoading={postsState.status === 'idle' || postsState.status === 'loading'}
       emptyState={

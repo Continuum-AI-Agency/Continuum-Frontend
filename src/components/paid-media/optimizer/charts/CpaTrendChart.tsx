@@ -5,12 +5,18 @@
 // (deriveCpa) — so the number matches what agents/MCP report (nothing lies). The
 // header carries the latest CPA + period delta; the area carries the shape.
 // Empty until at least two scored cycles exist.
+//
+// CPA is inverted — LOWER is better — so the delta uses the semantic success/
+// warning tokens directly (falling CPA = success) rather than DeltaBadge, whose
+// up-is-good arrow/color would mislabel a falling CPA.
 
 import type { CpaSeriesPoint } from '@continuum/contracts';
 import { TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 
 import { Area, AreaChart } from '@/components/charts/area-chart';
+import { cn } from '@/lib/utils';
 import { formatCpa } from '../format';
+import { ChartEmpty } from './ChartStates';
 import { buildCpaTrendPoints, cpaTrendSummary } from './chartData';
 
 type CpaTrendChartProps = {
@@ -23,32 +29,24 @@ export function CpaTrendChart({ series, currency }: CpaTrendChartProps) {
   const summary = cpaTrendSummary(points);
 
   if (!summary) {
-    return (
-      <div className="grid h-[70px] place-items-center rounded-lg border border-dashed border-border/60 bg-muted/10 text-xs text-muted-foreground">
-        CPA trend appears after a few scored cycles.
-      </div>
-    );
+    return <ChartEmpty message="CPA trend appears after a few scored cycles." />;
   }
 
   const { last, deltaPct } = summary;
   const improving = deltaPct <= 0; // lower CPA is better
+  const TrendIcon = improving ? TrendingDownIcon : TrendingUpIcon;
 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">CPA trend · {points.length} cycles</span>
         <span
-          className={
-            improving
-              ? 'inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400'
-              : 'inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400'
-          }
-        >
-          {improving ? (
-            <TrendingDownIcon className="size-3.5" />
-          ) : (
-            <TrendingUpIcon className="size-3.5" />
+          className={cn(
+            'inline-flex items-center gap-1 text-xs font-medium tabular-nums',
+            improving ? 'text-success' : 'text-warning',
           )}
+        >
+          <TrendIcon className="size-3.5" aria-hidden="true" />
           {Math.abs(deltaPct)}% · {formatCpa(last, currency)}
         </span>
       </div>

@@ -1,224 +1,274 @@
 'use client';
 
-// Portfolios sub-view — a master list of portfolios and, for the selected one,
-// its latest cycle detail: CPA trend, run confidence + reallocation flow, per-
-// ad-set CPA with Poisson confidence intervals (the P1 CI feature) + HELD states,
-// the audience × angle matrix, and pending recommendations. Mirrors the
-// Portfolios tab of the reference-ui-preview spec.
+// Portfolios sub-view — a full-width stack of portfolio cards. Each card shows a
+// summary row and two inline disclosures: "Performance" (the latest cycle detail)
+// and "Manage" (edit config + add/remove ad sets + archive). A "New portfolio"
+// control expands the create form, and an "Archived" section restores soft-deleted
+// portfolios. The full width gives the campaign -> ad-set tree room to breathe.
 
-import type { CycleItemRow, PortfolioListItem } from '@continuum/contracts';
-import { RefreshCwIcon } from 'lucide-react';
+import type { PortfolioListItem } from '@continuum/contracts';
+import { Activity, ChevronDown, Maximize2, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useOptimizerStore } from '@/lib/paid-media/optimizerStore';
 import { cn } from '@/lib/utils';
-import { AngleMatrix } from '../charts/AngleMatrix';
-import { ConfidenceGauge } from '../charts/ConfidenceGauge';
-import { CpaTrendChart } from '../charts/CpaTrendChart';
-import { ReallocationFlow } from '../charts/ReallocationFlow';
-import { formatCurrency } from '../format';
-import { confidenceBand, parseReport, recommendationLabel } from '../reportModel';
-import {
-  useOptimizerAngleMatrix,
-  useOptimizerCpaSeries,
-  useOptimizerMutations,
-  useOptimizerPerformance,
-} from '../useOptimizerData';
-import { CpaConfidenceBar } from './CpaConfidenceBar';
-import { PortfolioRowCard } from './PortfolioRowCard';
+import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { useOptimizerArchivedPortfolios, useOptimizerMutations } from '../useOptimizerData';
+import { PortfolioManagePanel } from './PortfolioManagePanel';
+import { PortfolioPerformancePanel } from './PortfolioPerformancePanel';
+import { PortfolioSetup } from './PortfolioSetup';
 
 type OptimizerPortfoliosProps = {
+  brandId: string;
+  adAccountId: string;
   portfolios: PortfolioListItem[];
   selectedPortfolioId: string | null;
   currency?: string | null;
-  onSelectPortfolio: (portfolioId: string) => void;
+  onCreated?: () => void;
 };
 
-function ciCpa(item: CycleItemRow): number | null {
-  return item.diagnostics?.ci?.cpa ?? null;
+type CardPanel = 'performance' | 'manage' | null;
+
+function PortfolioCard({
+  brandId,
+  adAccountId,
+  portfolio,
+  currency,
+  defaultOpen,
+}: {
+  brandId: string;
+  adAccountId: string;
+  portfolio: PortfolioListItem;
+  currency?: string | null;
+  defaultOpen: boolean;
+}) {
+  const [panel, setPanel] = useState<CardPanel>(defaultOpen ? 'performance' : null);
+  const openDetail = useOptimizerStore((state) => state.setDetailPortfolioId);
+  const toggle = (next: Exclude<CardPanel, null>) =>
+    setPanel((current) => (current === next ? null : next));
+
+  return (
+    <div className="rounded-lg border border-border/70 bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
+            <span className="truncate">{portfolio.name}</span>
+            <Badge variant="muted" className="text-3xs">
+              {portfolioLevelLabel(portfolio.level)}
+            </Badge>
+            <Badge variant="teal" className="text-3xs">
+              {humanize(portfolio.mode)}
+            </Badge>
+            <Badge variant="outline" className="text-3xs">
+              {humanize(portfolio.apply_mode)}
+            </Badge>
+            {portfolio.pending_recommendations > 0 ? (
+              <Badge variant="secondary" className="text-3xs">
+                {portfolio.pending_recommendations} pending
+              </Badge>
+            ) : null}
+          </p>
+          <p className="mt-1 text-muted-foreground text-xs tabular-nums">
+            {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
+            {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+            {formatCurrency(portfolio.daily_total, currency)}/d
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            aria-label={`Open ${portfolio.name} detail`}
+            className="h-7 gap-1.5 px-2 text-xs"
+            onClick={() => openDetail(portfolio.id)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <Maximize2 className="size-3.5" aria-hidden />
+            Open
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={panel === 'performance' ? 'secondary' : 'ghost'}
+            className="h-7 gap-1.5 px-2 text-xs"
+            aria-expanded={panel === 'performance'}
+            onClick={() => toggle('performance')}
+          >
+            <Activity className="size-3.5" aria-hidden />
+            Performance
+            <ChevronDown
+              className={cn(
+                'size-3.5 transition-transform motion-reduce:transition-none',
+                panel === 'performance' && 'rotate-180',
+              )}
+              aria-hidden
+            />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={panel === 'manage' ? 'secondary' : 'ghost'}
+            className="h-7 gap-1.5 px-2 text-xs"
+            aria-expanded={panel === 'manage'}
+            onClick={() => toggle('manage')}
+          >
+            <SlidersHorizontal className="size-3.5" aria-hidden />
+            Manage
+            <ChevronDown
+              className={cn(
+                'size-3.5 transition-transform motion-reduce:transition-none',
+                panel === 'manage' && 'rotate-180',
+              )}
+              aria-hidden
+            />
+          </Button>
+        </div>
+      </div>
+
+      {panel ? (
+        <div className="border-t border-border/60 p-4">
+          {panel === 'performance' ? (
+            <PortfolioPerformancePanel
+              portfolioId={portfolio.id}
+              brandId={brandId}
+              adAccountId={adAccountId}
+              currency={currency}
+            />
+          ) : (
+            <PortfolioManagePanel
+              brandId={brandId}
+              adAccountId={adAccountId}
+              portfolio={portfolio}
+              currency={currency}
+              onDone={() => setPanel(null)}
+            />
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ArchivedPortfolios({
+  brandId,
+  adAccountId,
+  currency,
+}: {
+  brandId: string;
+  adAccountId: string;
+  currency?: string | null;
+}) {
+  const archivedRead = useOptimizerArchivedPortfolios(brandId, adAccountId);
+  const { restore } = useOptimizerMutations(brandId, adAccountId);
+  const [open, setOpen] = useState(false);
+  const archived = archivedRead.data;
+
+  if (archived.length === 0) return null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-lg px-1 py-2 text-left font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <ChevronDown
+          className="size-3.5 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+          aria-hidden
+        />
+        Archived ({archived.length})
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-2 pt-1">
+        {archived.map((portfolio) => (
+          <div
+            key={portfolio.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-border/60 border-dashed bg-muted/20 px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="truncate font-medium text-sm">{portfolio.name}</p>
+              <p className="text-muted-foreground text-xs">
+                {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
+                {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+                {formatCurrency(portfolio.daily_total, currency)}/d
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              disabled={restore.isPending}
+              onClick={() => restore.mutate({ portfolio_id: portfolio.id, name: portfolio.name })}
+            >
+              <RotateCcw className="size-3.5" aria-hidden />
+              Restore
+            </Button>
+          </div>
+        ))}
+        {restore.isError ? (
+          <p className="text-destructive text-xs">
+            {restore.error instanceof Error ? restore.error.message : 'Could not restore.'}
+          </p>
+        ) : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 export function OptimizerPortfolios({
+  brandId,
+  adAccountId,
   portfolios,
   selectedPortfolioId,
   currency,
-  onSelectPortfolio,
+  onCreated,
 }: OptimizerPortfoliosProps) {
-  const performanceQuery = useOptimizerPerformance(selectedPortfolioId);
-  const cpaSeriesQuery = useOptimizerCpaSeries(selectedPortfolioId);
-  const angleMatrixQuery = useOptimizerAngleMatrix(selectedPortfolioId);
-  const { run } = useOptimizerMutations('', null);
-
-  const report = parseReport(performanceQuery.data);
-  const items = report?.latest_items ?? [];
-  const recommendations = report?.recommendations ?? [];
-  const latestRun = report?.latest_run ?? null;
-  const confidence = confidenceBand(latestRun?.confidence?.band);
-  const confidenceScore = latestRun?.confidence?.score;
-
-  const maxCiCpa = items.reduce((max, item) => Math.max(max, ciCpa(item) ?? 0), 0) || 1;
-  const runUnreachable = run.isError || (run.isSuccess && run.data == null && !run.isPending);
+  const [creating, setCreating] = useState(false);
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold text-sm tracking-tight">Portfolios ({portfolios.length})</h3>
+        <Button
+          type="button"
+          size="sm"
+          variant={creating ? 'secondary' : 'default'}
+          className="gap-1.5"
+          aria-expanded={creating}
+          onClick={() => setCreating((value) => !value)}
+        >
+          <Plus className="size-4" aria-hidden />
+          New portfolio
+        </Button>
+      </div>
+
+      {creating ? (
+        <div className="rounded-lg border border-border/70 bg-card p-4">
+          <PortfolioSetup
+            brandId={brandId}
+            adAccountId={adAccountId}
+            currency={currency ?? null}
+            showAccountHeader={false}
+            onCreated={() => {
+              setCreating(false);
+              onCreated?.();
+            }}
+          />
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         {portfolios.map((portfolio) => (
-          <PortfolioRowCard
+          <PortfolioCard
             key={portfolio.id}
+            brandId={brandId}
+            adAccountId={adAccountId}
             portfolio={portfolio}
             currency={currency}
-            selected={portfolio.id === selectedPortfolioId}
-            onSelect={() => onSelectPortfolio(portfolio.id)}
+            defaultOpen={portfolio.id === selectedPortfolioId}
           />
         ))}
       </div>
 
-      <div className="space-y-3">
-        {performanceQuery.isLoading ? (
-          <>
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-56 rounded-xl" />
-          </>
-        ) : (
-          <>
-            {performanceQuery.isError ? (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
-                Live cycle report is unavailable — the optimizer service is offline. Charts below
-                show only what&rsquo;s cached.
-              </div>
-            ) : null}
-            <Card className="gap-0 rounded-xl py-0 shadow-none">
-              <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-border/70 p-4">
-                <CardTitle className="text-sm">Latest cycle</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant={confidence.variant} className="text-[10px]">
-                    confidence{' '}
-                    {typeof confidenceScore === 'number'
-                      ? `${Math.round(confidenceScore * 100)}%`
-                      : ''}{' '}
-                    ({confidence.label.toLowerCase()})
-                  </Badge>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="h-7 gap-1.5 px-2 text-xs"
-                    disabled={!selectedPortfolioId || run.isPending}
-                    onClick={() => selectedPortfolioId && run.mutate(selectedPortfolioId)}
-                  >
-                    <RefreshCwIcon className={cn('size-3.5', run.isPending && 'animate-spin')} />
-                    Run now
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-1 p-4 text-xs text-muted-foreground">
-                {latestRun ? (
-                  <span>
-                    mode {latestRun.mode} · conservation {latestRun.conserved ? '✓ exact' : '—'} ·
-                    allocated {formatCurrency(latestRun.allocated_total ?? null, currency)}
-                  </span>
-                ) : (
-                  <span>No cycle has run yet. Use “Run now” to score this portfolio.</span>
-                )}
-                {runUnreachable ? (
-                  <p className="text-amber-600 dark:text-amber-400">
-                    Optimizer service not live yet — scheduled cycles will populate this shortly.
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card className="gap-0 rounded-xl py-0 shadow-none">
-              <CardHeader className="border-b border-border/70 p-4">
-                <CardTitle className="text-sm">CPA trend</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <CpaTrendChart series={cpaSeriesQuery.data} currency={currency} />
-              </CardContent>
-            </Card>
-
-            <Card className="gap-0 rounded-xl py-0 shadow-none">
-              <CardHeader className="border-b border-border/70 p-4">
-                <CardTitle className="text-sm">Reallocation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 p-4">
-                <ConfidenceGauge confidence={latestRun?.confidence ?? null} />
-                <ReallocationFlow items={items} currency={currency} />
-              </CardContent>
-            </Card>
-
-            <Card className="gap-0 rounded-xl py-0 shadow-none">
-              <CardHeader className="border-b border-border/70 p-4">
-                <CardTitle className="text-sm">CPA per ad set · with uncertainty</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Bar = 95% confidence interval (Poisson). Narrower = more events = more reliable.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-2.5 p-4">
-                {items.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No scored ad sets in the latest cycle.
-                  </p>
-                ) : (
-                  items.map((item) => (
-                    <CpaConfidenceBar
-                      key={item.adset_id}
-                      item={item}
-                      maxCpa={maxCiCpa}
-                      currency={currency}
-                    />
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="gap-0 rounded-xl py-0 shadow-none">
-              <CardHeader className="border-b border-border/70 p-4">
-                <CardTitle className="text-sm">Audience × angle</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  CPA per audience and creative angle.
-                </p>
-              </CardHeader>
-              <CardContent className="p-4">
-                <AngleMatrix cells={angleMatrixQuery.data} currency={currency} />
-              </CardContent>
-            </Card>
-
-            {recommendations.length > 0 ? (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold tracking-tight">
-                  Recommendations ({recommendations.length})
-                </h3>
-                <div className="space-y-2">
-                  {recommendations.map((rec) => {
-                    const { label, glyph } = recommendationLabel(rec.kind);
-                    return (
-                      <div
-                        key={rec.id}
-                        className="rounded-xl border border-border/70 bg-card px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold tracking-tight">
-                          {glyph} {label} ·{' '}
-                          <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                            {rec.adset_id}
-                          </code>
-                        </p>
-                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                          <Badge variant="outline" className="text-[10px]">
-                            {rec.trigger}
-                          </Badge>
-                          {rec.reason}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
+      <ArchivedPortfolios brandId={brandId} adAccountId={adAccountId} currency={currency} />
     </div>
   );
 }

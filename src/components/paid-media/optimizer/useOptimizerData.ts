@@ -15,8 +15,12 @@
 import {
   type AdAccount,
   AdAccountSchema,
+  type AdDailyTrend,
+  AdDailyTrendsResponseSchema,
   type AdSetSnapshot,
   AdSetSnapshotSchema,
+  type AdsetAd,
+  AdsetAdsResponseSchema,
   type AngleMatrixCell,
   AngleMatrixCellSchema,
   type CpaSeriesPoint,
@@ -27,6 +31,9 @@ import {
   type EnrollRequest,
   type OptimizerLogRow,
   OptimizerLogsResponseSchema,
+  type PortfolioAdset,
+  PortfolioAdsetSchema,
+  type PortfolioLevel,
   type PortfolioListItem,
   PortfolioListItemSchema,
   type RenewalTask,
@@ -36,6 +43,7 @@ import {
   type SetRecommendationStatusRequest,
   type SuggestResult,
   SuggestResultSchema,
+  type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -94,10 +102,18 @@ export const cacheKeys = {
   angleMatrix: (portfolioId: string) => `angleMatrix:${portfolioId}`,
   renewals: (brandId: string) => `renewals:${brandId}`,
   logs: (brandId: string) => `logs:${brandId}`,
-  suggestions: (brandId: string, adAccountId: string | null) =>
-    `suggestions:${brandId}:${adAccountId ?? 'all'}`,
-  accountSnapshots: (brandId: string, adAccountId: string | null) =>
-    `snapshots:${brandId}:${adAccountId ?? 'all'}`,
+  suggestions: (brandId: string, adAccountId: string | null, level: PortfolioLevel = 'adset') =>
+    `suggestions:${brandId}:${adAccountId ?? 'all'}:${level}`,
+  accountSnapshots: (
+    brandId: string,
+    adAccountId: string | null,
+    level: PortfolioLevel = 'adset',
+  ) => `snapshots:${brandId}:${adAccountId ?? 'all'}:${level}`,
+  enrolledAdsets: (portfolioId: string) => `enrolledAdsets:${portfolioId}`,
+  archivedPortfolios: (brandId: string, adAccountId: string | null) =>
+    `archived:${brandId}:${adAccountId ?? 'all'}`,
+  adsetAds: (adsetId: string) => `adsetAds:${adsetId}`,
+  adDailyTrends: (adsetId: string) => `adDailyTrends:${adsetId}`,
 };
 
 // ── Reads ────────────────────────────────────────────────────────────────────
@@ -194,26 +210,98 @@ async function fetchLogs(brandId: string): Promise<OptimizerLogRow[]> {
 async function fetchSuggestions(
   brandId: string,
   adAccountId: string,
+  level: PortfolioLevel = 'adset',
 ): Promise<SuggestResult | null> {
   const { data, error } = await getClient().functions.invoke('optimizer-suggest', {
-    body: { brandId, accountId: adAccountId },
+    body: { brandId, accountId: adAccountId, level },
   });
   if (error) throw new Error('optimizer-suggest unreachable');
   const parsed = SuggestResultSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
 }
 
-/** The account's ad-set snapshots (engine input shape) via the SAME edge the
- *  optimizer service ingest uses — paid-media-metrics scope=adset_snapshots.
- *  It accepts a user JWT (web app), so this runs client-side with no service key.
+/** The account's snapshots (engine input shape) via the SAME edge the optimizer
+ *  service ingest uses — paid-media-metrics. `scope` selects the level: ad sets
+ *  (`adset_snapshots`, default) or campaigns (`campaign_snapshots`, where each
+ *  snapshot's id is the campaign id and campaignId is self-referential). The edge
+ *  accepts a user JWT (web app), so this runs client-side with no service key.
  *  Feeds the client-side "what-if" dry-run (runs the pure engine in the browser). */
-async function fetchAccountSnapshots(brandId: string, accountId: string): Promise<AdSetSnapshot[]> {
+async function fetchAccountSnapshots(
+  brandId: string,
+  accountId: string,
+  scope: 'adset_snapshots' | 'campaign_snapshots' = 'adset_snapshots',
+): Promise<AdSetSnapshot[]> {
   const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
-    body: { platform: 'meta', scope: 'adset_snapshots', brandId, accountId },
+    body: { platform: 'meta', scope, brandId, accountId },
   });
-  if (error) throw new Error('paid-media-metrics adset_snapshots unreachable');
+  if (error) throw new Error(`paid-media-metrics ${scope} unreachable`);
   const snapshots = (data as { snapshots?: unknown })?.snapshots ?? [];
   return z.array(AdSetSnapshotSchema).catch([]).parse(snapshots);
+}
+
+/** The active ad sets currently enrolled in a portfolio (id + name) — reads the
+ *  enrolled roster so the manage panel can pre-select the picker and diff on save.
+ *  Names are stored at enroll time, so this shows enrolled ad sets even when they
+ *  fall outside the current snapshot window. */
+async function fetchEnrolledAdsets(portfolioId: string): Promise<PortfolioAdset[]> {
+  const { data, error } = await getClient().rpc('optimizer_list_portfolio_adsets', {
+    p_portfolio_id: portfolioId,
+  });
+  if (error) throw new Error('optimizer_list_portfolio_adsets unreachable');
+  return z
+    .array(PortfolioAdsetSchema)
+    .catch([])
+    .parse(data ?? []);
+}
+
+/** Archived portfolios for the "Archived" view (optimizer_list_portfolios hides
+ *  them). Same shape + client-side account filter as the active list. */
+async function fetchArchivedPortfolios(
+  brandId: string,
+  adAccountId: string | null,
+): Promise<PortfolioListItem[]> {
+  const { data, error } = await getClient().rpc('optimizer_list_archived_portfolios', {
+    p_brand_id: brandId,
+  });
+  if (error) throw new Error('optimizer_list_archived_portfolios unreachable');
+  const rows = z
+    .array(PortfolioListItemSchema)
+    .catch([])
+    .parse(data ?? []);
+  if (!adAccountId) return rows;
+  return rows.filter((row) => !row.ad_account_id || row.ad_account_id === adAccountId);
+}
+
+/** The ads inside one ad set (provenance only) — lazy-loaded when an ad-set node
+ *  is expanded in the picker. Same edge as the snapshots, scope=adset_ads. */
+async function fetchAdsetAds(
+  brandId: string,
+  accountId: string,
+  adsetId: string,
+): Promise<AdsetAd[]> {
+  const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
+    body: { platform: 'meta', scope: 'adset_ads', brandId, accountId, adsetId },
+  });
+  if (error) throw new Error('paid-media-metrics adset_ads unreachable');
+  const parsed = AdsetAdsResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data.ads : [];
+}
+
+/** Per-ad DAILY trends for one ad set — the finest paid grain (spend/CPA/ROAS/CTR
+ *  per day per creative). Powers the creative HoverCard sparkline + charting an
+ *  individual creative onto the ad-set timeline. Same edge as the snapshots,
+ *  scope=ad_daily_trends. Lazy: reads only when an ad set is in focus. */
+async function fetchAdDailyTrends(
+  brandId: string,
+  accountId: string,
+  adsetId: string,
+): Promise<AdDailyTrend[]> {
+  const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
+    body: { platform: 'meta', scope: 'ad_daily_trends', brandId, accountId, adsetId },
+  });
+  if (error) throw new Error('paid-media-metrics ad_daily_trends unreachable');
+  const parsed = AdDailyTrendsResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data.ads : [];
 }
 
 // ── Writes (throw on failure so the mutation surfaces an error) ───────────────
@@ -248,9 +336,20 @@ async function enrollAdsets(request: EnrollRequest): Promise<{ enrolled: number 
   return { enrolled: parsed.success ? parsed.data.enrolled : 0 };
 }
 
-async function runCycle(portfolioId: string): Promise<RunCycleResponse | null> {
+async function runCycle(
+  portfolioId: string,
+  brandId?: string,
+  accountId?: string | null,
+): Promise<RunCycleResponse | null> {
+  // brandId + accountId scope the run to a brand/account the caller can access —
+  // the optimizer-run edge verifies them (mirrors optimizer-suggest). Omitted keys
+  // keep the request backward-compatible with the portfolio_id-only shape.
   const { data, error } = await getClient().functions.invoke('optimizer-run', {
-    body: { portfolio_id: portfolioId },
+    body: {
+      portfolio_id: portfolioId,
+      ...(brandId ? { brandId } : {}),
+      ...(accountId ? { accountId } : {}),
+    },
   });
   if (error) throw new Error('Failed to run cycle');
   const parsed = RunCycleResponseSchema.safeParse(data);
@@ -273,6 +372,56 @@ async function setRenewalTaskStatus(taskId: string, status: string): Promise<voi
   if (error) throw new Error('Failed to update renewal task');
 }
 
+async function updatePortfolio(input: {
+  portfolio_id: string;
+  patch: UpdatePortfolioPatch;
+}): Promise<void> {
+  const { error } = await getClient().rpc('optimizer_update_portfolio', {
+    p_portfolio_id: input.portfolio_id,
+    p_patch: input.patch,
+  });
+  if (error) {
+    const code = pgErrorCode(error);
+    // 23505 = unique_violation on (brand, account, name) among non-archived rows.
+    const message =
+      code === '23505'
+        ? 'A portfolio with that name already exists for this ad account.'
+        : 'Could not update the portfolio. The optimizer backend may not be reachable yet.';
+    throw new OptimizerRpcError(message, code);
+  }
+}
+
+async function unenrollAdset(input: { portfolio_id: string; adset_id: string }): Promise<void> {
+  const { error } = await getClient().rpc('optimizer_unenroll_adset', {
+    p_portfolio_id: input.portfolio_id,
+    p_adset_id: input.adset_id,
+  });
+  if (error) throw new Error('Failed to remove ad set from the portfolio');
+}
+
+async function archivePortfolio(portfolioId: string): Promise<void> {
+  const { error } = await getClient().rpc('optimizer_archive_portfolio', {
+    p_portfolio_id: portfolioId,
+  });
+  if (error) throw new Error('Failed to archive the portfolio');
+}
+
+/** Restore = flip status back to active. Surfaces the name-collision case (an
+ *  active portfolio already owns this name) as a clean, actionable message. */
+async function restorePortfolio(input: { portfolio_id: string; name: string }): Promise<void> {
+  try {
+    await updatePortfolio({ portfolio_id: input.portfolio_id, patch: { status: 'active' } });
+  } catch (err) {
+    if (err instanceof OptimizerRpcError && err.code === '23505') {
+      throw new OptimizerRpcError(
+        `A portfolio named "${input.name}" already exists — rename it before restoring.`,
+        '23505',
+      );
+    }
+    throw err;
+  }
+}
+
 // ── Read hooks (cache-first, 30-minute TTL) ──────────────────────────────────
 
 const EMPTY_PORTFOLIOS: PortfolioListItem[] = [];
@@ -282,6 +431,9 @@ const EMPTY_ANGLES: AngleMatrixCell[] = [];
 const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
+const EMPTY_ENROLLED: PortfolioAdset[] = [];
+const EMPTY_ADS: AdsetAd[] = [];
+const EMPTY_AD_TRENDS: AdDailyTrend[] = [];
 
 export function useOptimizerPortfolios(brandId: string, adAccountId: string | null) {
   return useCachedRead<PortfolioListItem[]>(
@@ -347,21 +499,79 @@ export function useOptimizerLogs(brandId: string) {
   );
 }
 
-export function useOptimizerSuggestions(brandId: string, adAccountId: string | null) {
+export function useOptimizerSuggestions(
+  brandId: string,
+  adAccountId: string | null,
+  level: PortfolioLevel = 'adset',
+) {
   return useCachedRead<SuggestResult | null>(
-    brandId && adAccountId ? cacheKeys.suggestions(brandId, adAccountId) : null,
-    () => fetchSuggestions(brandId, adAccountId as string),
+    brandId && adAccountId ? cacheKeys.suggestions(brandId, adAccountId, level) : null,
+    () => fetchSuggestions(brandId, adAccountId as string, level),
     null,
   );
 }
 
-/** The account's ad-set snapshots (engine input) — powers the client-side
- *  "what-if" preview. Cached like every other read (30-min TTL). */
-export function useOptimizerAccountSnapshots(brandId: string, adAccountId: string | null) {
+/** The account's snapshots (engine input) — powers the client-side "what-if"
+ *  preview. `level` selects ad sets (default) or campaigns; campaign mode reads
+ *  the campaign_snapshots scope. Cached like every other read (30-min TTL). */
+export function useOptimizerAccountSnapshots(
+  brandId: string,
+  adAccountId: string | null,
+  level: PortfolioLevel = 'adset',
+) {
+  const scope = level === 'campaign' ? 'campaign_snapshots' : 'adset_snapshots';
   return useCachedRead<AdSetSnapshot[]>(
-    brandId && adAccountId ? cacheKeys.accountSnapshots(brandId, adAccountId) : null,
-    () => fetchAccountSnapshots(brandId, adAccountId as string),
+    brandId && adAccountId ? cacheKeys.accountSnapshots(brandId, adAccountId, level) : null,
+    () => fetchAccountSnapshots(brandId, adAccountId as string, scope),
     EMPTY_SNAPSHOTS,
+  );
+}
+
+/** The ad sets enrolled in a portfolio — powers the manage panel's pre-selection
+ *  and add/remove diff. */
+export function useOptimizerEnrolledAdsets(portfolioId: string | null) {
+  return useCachedRead<PortfolioAdset[]>(
+    portfolioId ? cacheKeys.enrolledAdsets(portfolioId) : null,
+    () => fetchEnrolledAdsets(portfolioId as string),
+    EMPTY_ENROLLED,
+  );
+}
+
+/** Archived portfolios for the "Archived" view. */
+export function useOptimizerArchivedPortfolios(brandId: string, adAccountId: string | null) {
+  return useCachedRead<PortfolioListItem[]>(
+    brandId ? cacheKeys.archivedPortfolios(brandId, adAccountId) : null,
+    () => fetchArchivedPortfolios(brandId, adAccountId),
+    EMPTY_PORTFOLIOS,
+  );
+}
+
+/** The ads inside one ad set — lazy: pass adsetId=null to keep the read disabled
+ *  until the ad-set node is expanded. */
+export function useOptimizerAdsetAds(
+  brandId: string,
+  accountId: string | null,
+  adsetId: string | null,
+) {
+  return useCachedRead<AdsetAd[]>(
+    brandId && accountId && adsetId ? cacheKeys.adsetAds(adsetId) : null,
+    () => fetchAdsetAds(brandId, accountId as string, adsetId as string),
+    EMPTY_ADS,
+  );
+}
+
+/** Per-ad daily trends for one ad set — lazy: pass adsetId=null to keep the read
+ *  disabled until an ad set is in focus. Returns [] when the scope isn't deployed
+ *  yet (graceful — the creative HoverCard then shows aggregate only). */
+export function useOptimizerAdDailyTrends(
+  brandId: string,
+  accountId: string | null,
+  adsetId: string | null,
+) {
+  return useCachedRead<AdDailyTrend[]>(
+    brandId && accountId && adsetId ? cacheKeys.adDailyTrends(adsetId) : null,
+    () => fetchAdDailyTrends(brandId, accountId as string, adsetId as string),
+    EMPTY_AD_TRENDS,
   );
 }
 
@@ -383,12 +593,48 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     onSuccess: (_data, request) =>
       markStale(
         (key) =>
-          key.startsWith('portfolios:') || key === cacheKeys.performance(request.portfolio_id),
+          key.startsWith('portfolios:') ||
+          key === cacheKeys.performance(request.portfolio_id) ||
+          key === cacheKeys.enrolledAdsets(request.portfolio_id),
       ),
   });
 
+  const update = useMutation({
+    mutationFn: updatePortfolio,
+    onSuccess: (_data, input) =>
+      markStale(
+        (key) =>
+          key.startsWith('portfolios:') ||
+          key.startsWith('archived:') ||
+          key === cacheKeys.performance(input.portfolio_id),
+      ),
+  });
+
+  const unenroll = useMutation({
+    mutationFn: unenrollAdset,
+    onSuccess: (_data, input) =>
+      markStale(
+        (key) =>
+          key.startsWith('portfolios:') ||
+          key === cacheKeys.performance(input.portfolio_id) ||
+          key === cacheKeys.enrolledAdsets(input.portfolio_id),
+      ),
+  });
+
+  const archive = useMutation({
+    mutationFn: archivePortfolio,
+    onSuccess: () =>
+      markStale((key) => key.startsWith('portfolios:') || key.startsWith('archived:')),
+  });
+
+  const restore = useMutation({
+    mutationFn: restorePortfolio,
+    onSuccess: () =>
+      markStale((key) => key.startsWith('portfolios:') || key.startsWith('archived:')),
+  });
+
   const run = useMutation({
-    mutationFn: runCycle,
+    mutationFn: (portfolioId: string) => runCycle(portfolioId, brandId, adAccountId),
     onSuccess: (_data, portfolioId) =>
       markStale(
         (key) =>
@@ -416,9 +662,5 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     onSuccess: () => markStale((key) => key === cacheKeys.renewals(brandId)),
   });
 
-  // adAccountId is retained in the signature for call-site symmetry with the
-  // read hooks (create/enroll operate on the selected account).
-  void adAccountId;
-
-  return { create, enroll, run, setStatus, renewal };
+  return { create, enroll, update, unenroll, archive, restore, run, setStatus, renewal };
 }

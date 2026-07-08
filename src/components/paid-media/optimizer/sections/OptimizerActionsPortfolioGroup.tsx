@@ -30,7 +30,7 @@ export function OptimizerActionsPortfolioGroup({
   const pending = (report?.recommendations ?? []).filter((rec) => rec.status === 'pending');
 
   if (performanceQuery.isLoading) {
-    return <Skeleton className="h-24 rounded-xl" />;
+    return <Skeleton className="h-24 rounded-lg" />;
   }
 
   if (pending.length === 0) return null;
@@ -39,7 +39,7 @@ export function OptimizerActionsPortfolioGroup({
     <div>
       <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold tracking-tight">
         {portfolio.name}
-        <Badge variant="secondary" className="text-[10px]">
+        <Badge variant="secondary" className="text-3xs">
           {pending.length}
         </Badge>
       </h3>
@@ -50,7 +50,7 @@ export function OptimizerActionsPortfolioGroup({
           return (
             <div
               key={rec.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3"
             >
               <div className="min-w-0">
                 <p className="text-sm font-semibold tracking-tight">
@@ -58,7 +58,7 @@ export function OptimizerActionsPortfolioGroup({
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">{rec.adset_id}</code>
                 </p>
                 <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-3xs">
                     {rec.trigger}
                   </Badge>
                   {rec.reason}

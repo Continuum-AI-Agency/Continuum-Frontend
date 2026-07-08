@@ -28,6 +28,12 @@ export type ApplyMode = z.infer<typeof ApplyModeSchema>;
 export const OptimizationModeSchema = z.enum(['efficiency', 'balanced', 'scale']);
 export type OptimizationModeDto = z.infer<typeof OptimizationModeSchema>;
 
+/** What a portfolio reallocates: ad-set daily budgets (`adset`), or CAMPAIGN budgets
+ *  (`campaign` — CBO, daily or lifetime) across a bucket of campaigns. One level per
+ *  portfolio; the engine + membership RPCs are entity-agnostic. */
+export const PortfolioLevelSchema = z.enum(['adset', 'campaign']);
+export type PortfolioLevel = z.infer<typeof PortfolioLevelSchema>;
+
 export const RecommendationStatusSchema = z.enum(['pending', 'approved', 'rejected', 'applied']);
 export type RecommendationStatus = z.infer<typeof RecommendationStatusSchema>;
 
@@ -35,6 +41,8 @@ export type RecommendationStatus = z.infer<typeof RecommendationStatusSchema>;
 export const PortfolioConfigSchema = z.object({
   name: z.string().min(1),
   objective: OptimizationObjectiveSchema,
+  /** adset (default) or campaign-level (CBO) reallocation. */
+  level: PortfolioLevelSchema.default('adset'),
   mode: OptimizationModeSchema.default('balanced'),
   apply_mode: ApplyModeSchema.default('recommend'),
   daily_total: z.number().nonnegative(),
@@ -115,7 +123,14 @@ export type EnrollResponse = z.infer<typeof EnrollResponseSchema>;
 
 /** Trigger a cycle: either an enrolled portfolio, or an ad-hoc set. */
 export const RunCycleRequestSchema = z.union([
-  z.object({ portfolio_id: z.string().uuid() }),
+  // Enrolled portfolio. brandId + accountId are optional context: the optimizer-run
+  // edge verifies them against the caller's brand access (mirrors optimizer-suggest);
+  // cron / the standalone service call with only portfolio_id.
+  z.object({
+    portfolio_id: z.string().uuid(),
+    brandId: z.string().uuid().optional(),
+    accountId: z.string().optional(),
+  }),
   z.object({
     brand_id: z.string().uuid(),
     ad_account_id: z.string(),
@@ -249,6 +264,7 @@ export const PortfolioRowSchema = z
     mode: z.string(),
     apply_mode: z.string(),
     status: z.string(),
+    level: z.string().optional(),
     daily_total: z.number().nullable().optional(),
     period_budget: z.number().nullable().optional(),
     cpa_target: z.number().nullable().optional(),
@@ -274,6 +290,7 @@ export const PortfolioListItemSchema = z.object({
   name: z.string(),
   ad_account_id: z.string().nullable(),
   objective: z.string(),
+  level: z.string().default('adset'),
   mode: z.string(),
   apply_mode: z.string(),
   daily_total: z.number().nullable(),
@@ -317,6 +334,9 @@ export type AdAccount = z.infer<typeof AdAccountSchema>;
 export const PortfolioSuggestionSchema = z.object({
   objective: OptimizationObjectiveSchema,
   name: z.string(),
+  /** adset (default) or campaign-level suggestion. Campaign suggestions carry
+   *  campaign_ids in `adset_ids` (the enroll field is the entity id at either level). */
+  level: PortfolioLevelSchema.default('adset'),
   mode: OptimizationModeSchema,
   daily_total: z.number().nonnegative(),
   cpa_target: z.number().positive().optional(),
@@ -339,13 +359,92 @@ export const IngestDiagnosticsSchema = z.object({
 });
 export type IngestDiagnostics = z.infer<typeof IngestDiagnosticsSchema>;
 
+/** Why the suggestion list is the way it is — lets the onboarding UI explain an
+ *  empty result precisely instead of a bare "no suggestions yet":
+ *  - `ok`            — suggestions were produced.
+ *  - `no_active`     — the account returned no active ad sets at all.
+ *  - `all_cbo`       — active ad sets exist, but every one is CBO/lifetime (no
+ *                      ad-set daily budget the optimizer can move).
+ *  - `tracking_gaps` — eligible ad sets exist and are spending, but none has a
+ *                      tracked conversion, so we can't responsibly group them.
+ *  - `not_permitted` — the ad account isn't visible to this brand/caller (the
+ *                      brand-access gate rejected it), so nothing was fetched. */
+export const SuggestReasonSchema = z.enum([
+  'ok',
+  'no_active',
+  'all_cbo',
+  'tracking_gaps',
+  'not_permitted',
+]);
+export type SuggestReason = z.infer<typeof SuggestReasonSchema>;
+
 /** Onboarding suggestions plus ingest data-quality flags (partial data / tracking gaps). */
 export const SuggestResultSchema = z.object({
   suggestions: z.array(PortfolioSuggestionSchema),
+  /** Present when the suggestion list is empty (or partial) — the FE renders it. */
+  reason: SuggestReasonSchema.optional(),
   truncated: z.boolean().optional(),
   diagnostics: IngestDiagnosticsSchema.nullable().optional(),
 });
 export type SuggestResult = z.infer<typeof SuggestResultSchema>;
+
+/** One active ad set enrolled in a portfolio (row of optimizer_list_portfolio_adsets).
+ *  Read to pre-select the picker and diff enroll/unenroll on save. */
+export const PortfolioAdsetSchema = z.object({
+  adset_id: z.string(),
+  adset_name: z.string().nullable(),
+  active: z.boolean(),
+});
+export type PortfolioAdset = z.infer<typeof PortfolioAdsetSchema>;
+
+/** One ad inside an ad set — provenance only (display-only; ads are not enrollable).
+ *  Lazy-loaded per ad set via paid-media-metrics scope=adset_ads. */
+export const AdsetAdSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable().optional(),
+  status: z.string().nullable().optional(), // Meta effective_status
+  thumbnailUrl: z.string().nullable().optional(),
+});
+export type AdsetAd = z.infer<typeof AdsetAdSchema>;
+
+/** paid-media-metrics scope=adset_ads response — the ads under one ad set. */
+export const AdsetAdsResponseSchema = z.object({
+  ads: z.array(AdsetAdSchema),
+});
+export type AdsetAdsResponse = z.infer<typeof AdsetAdsResponseSchema>;
+
+/** One calendar day of an individual ad's paid performance — the grain behind the
+ *  creative hovercard sparkline and the per-creative line chart. Derived from Meta
+ *  ad-level daily insights (time_increment=1). cpa is null on a zero-purchase day
+ *  and roas is null on a zero-spend day (undefined ratios stay undefined, not 0). */
+export const AdDailyTrendPointSchema = z.object({
+  date: z.string(),
+  spend: z.number(),
+  impressions: z.number(),
+  clicks: z.number(),
+  ctr: z.number(),
+  cpc: z.number(),
+  cpa: z.number().nullable(),
+  roas: z.number().nullable(),
+  purchases: z.number(),
+  purchase_value: z.number(),
+});
+export type AdDailyTrendPoint = z.infer<typeof AdDailyTrendPointSchema>;
+
+/** One ad's date-ascending daily series (paid-media-metrics scope=ad_daily_trends). */
+export const AdDailyTrendSchema = z.object({
+  ad_id: z.string(),
+  ad_name: z.string().nullable(),
+  series: z.array(AdDailyTrendPointSchema),
+});
+export type AdDailyTrend = z.infer<typeof AdDailyTrendSchema>;
+
+/** paid-media-metrics scope=ad_daily_trends response — per-ad daily trend series
+ *  for a set of ads (filtered by adset or explicit adIds). */
+export const AdDailyTrendsResponseSchema = z.object({
+  ads: z.array(AdDailyTrendSchema),
+});
+export type AdDailyTrendsResponse = z.infer<typeof AdDailyTrendsResponseSchema>;
 
 /** One point of optimizer_get_cpa_series — portfolio spend/conversions per cycle,
  *  aggregated across ad sets for each trailing window. FE derives CPA = spend/conv. */

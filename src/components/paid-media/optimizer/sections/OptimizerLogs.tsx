@@ -6,6 +6,7 @@
 
 import type { OptimizerLogRow } from '@continuum/contracts';
 import { ScrollTextIcon } from 'lucide-react';
+import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOptimizerLogs } from '../useOptimizerData';
 
@@ -13,8 +14,8 @@ type OptimizerLogsProps = { brandId: string };
 
 const LEVEL_STYLES: Record<OptimizerLogRow['level'], string> = {
   info: 'border-border/70 bg-muted/40 text-muted-foreground',
-  warn: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  error: 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
+  warn: 'border-warning/40 bg-warning/10 text-warning',
+  error: 'border-destructive/40 bg-destructive/10 text-destructive',
 };
 
 const SKELETON_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6'];
@@ -55,7 +56,7 @@ function LogRow({ row }: { row: OptimizerLogRow }) {
   return (
     <li className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
       <span
-        className={`mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${LEVEL_STYLES[row.level]}`}
+        className={`mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide ${LEVEL_STYLES[row.level]}`}
       >
         {row.level}
       </span>
@@ -70,7 +71,7 @@ function LogRow({ row }: { row: OptimizerLogRow }) {
           <span className="text-xs text-muted-foreground">{row.portfolio_name}</span>
         ) : null}
         {fields ? (
-          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{fields}</p>
+          <p className="mt-0.5 truncate font-mono text-2xs text-muted-foreground">{fields}</p>
         ) : null}
       </div>
     </li>
@@ -93,15 +94,11 @@ export function OptimizerLogs({ brandId }: OptimizerLogsProps) {
   const logs = logsQuery.data ?? [];
   if (logs.length === 0) {
     return (
-      <div className="grid min-h-[16rem] place-items-center rounded-xl border border-dashed border-border/70 bg-muted/10 p-8 text-center">
-        <div className="max-w-sm">
-          <ScrollTextIcon className="mx-auto size-5 text-muted-foreground" />
-          <h3 className="mt-2 text-sm font-semibold tracking-tight">No optimizer activity yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Cycle results, budget changes, and any failures appear here after the optimizer runs.
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        headline="No optimizer activity yet"
+        media={<ScrollTextIcon aria-hidden="true" />}
+        description="Cycle results, budget changes, and any failures appear here after the optimizer runs."
+      />
     );
   }
 

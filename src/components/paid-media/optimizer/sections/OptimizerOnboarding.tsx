@@ -29,7 +29,7 @@ export function OptimizerOnboarding({
 }: OptimizerOnboardingProps) {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="rounded-xl border border-dashed border-border/70 bg-muted/10 p-6 text-center">
+      <div className="rounded-lg border border-dashed border-border/70 bg-muted/10 p-6 text-center">
         <div className="mx-auto grid size-12 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground">
           <GaugeCircleIcon className="size-5" />
         </div>
@@ -46,7 +46,7 @@ export function OptimizerOnboarding({
             key={step}
             className="flex items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-2"
           >
-            <span className="grid size-5 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+            <span className="grid size-5 place-items-center rounded-full bg-primary text-2xs font-semibold text-primary-foreground">
               {index + 1}
             </span>
             <span className="text-muted-foreground">{step}</span>

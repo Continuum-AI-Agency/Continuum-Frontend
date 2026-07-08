@@ -65,3 +65,9 @@ export function humanize(value: string | null | undefined): string {
   const spaced = value.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
+
+/** A portfolio's reallocation level → a short badge label. Loose DB string
+ *  (default 'adset'); anything other than 'campaign' reads as ad sets. */
+export function portfolioLevelLabel(level: string | null | undefined): string {
+  return level === 'campaign' ? 'Campaigns' : 'Ad sets';
+}

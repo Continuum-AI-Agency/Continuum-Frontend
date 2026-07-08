@@ -6,11 +6,14 @@
 // until the v2 Jaina creative-angle worker runs — we render the real audience
 // axis and the untagged column now so the shell lights up automatically when
 // tags arrive (rather than hiding the capability). CPA per cell = spend /
-// conversions (engine math — nothing lies).
+// conversions (engine math — nothing lies). Cell fill rides the shared semantic
+// good→bad ramp (cpaHeatFill) so it adapts to light/dark automatically.
 
 import type { AngleMatrixCell } from '@continuum/contracts';
 
 import { formatCpa, humanize } from '../format';
+import { ChartEmpty } from './ChartStates';
+import { cpaHeatFill } from './chartScale';
 
 type AngleMatrixProps = {
   cells: AngleMatrixCell[];
@@ -22,9 +25,7 @@ const AUDIENCE_ORDER = ['prospecting', 'retargeting', 'remarketing', 'unknown'];
 export function AngleMatrix({ cells, currency }: AngleMatrixProps) {
   if (cells.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        No audience data yet — the matrix fills after the first scored cycle.
-      </p>
+      <ChartEmpty message="No audience data yet — the matrix fills after the first scored cycle." />
     );
   }
 
@@ -47,7 +48,7 @@ export function AngleMatrix({ cells, currency }: AngleMatrixProps) {
     <div className="space-y-2">
       <div className="overflow-x-auto">
         <div
-          className="grid gap-1 text-[11px]"
+          className="grid gap-1 text-2xs"
           style={{ gridTemplateColumns: `7rem repeat(${angles.length}, minmax(4.5rem, 1fr))` }}
         >
           <div />
@@ -71,7 +72,7 @@ export function AngleMatrix({ cells, currency }: AngleMatrixProps) {
         </div>
       </div>
       {allUntagged ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           Angle tagging pending — the columns split by creative angle once the v2 tagging worker
           runs.
         </p>
@@ -103,11 +104,18 @@ function MatrixRow({
       {angles.map((angle) => {
         const cell = byKey.get(`${audience}::${angle}`);
         const cpa = cell && cell.conversions > 0 ? cell.spend / cell.conversions : null;
+        const ratio = cpa == null ? null : maxCpa > minCpa ? (cpa - minCpa) / (maxCpa - minCpa) : 0;
+        const label =
+          cpa != null
+            ? `${humanize(audience)}, ${angle === 'untagged' ? 'untagged' : humanize(angle)}: ${formatCpa(cpa, currency)} CPA across ${cell?.adsets ?? 0} ad sets`
+            : `${humanize(audience)}, ${angle === 'untagged' ? 'untagged' : humanize(angle)}: no data`;
         return (
           <div
             key={angle}
+            role="img"
+            aria-label={label}
             className="grid h-10 place-items-center rounded-md border border-border/40 text-center tabular-nums"
-            style={{ backgroundColor: cellColor(cpa, minCpa, maxCpa) }}
+            style={{ backgroundColor: cpaHeatFill(ratio) }}
             title={cell ? `${cell.adsets} ad sets` : 'no data'}
           >
             {cpa != null ? (
@@ -120,13 +128,4 @@ function MatrixRow({
       })}
     </>
   );
-}
-
-// Green (efficient / low CPA) → red (expensive / high CPA). Empty cells stay
-// neutral. Low-alpha fills so text stays readable in both themes.
-function cellColor(cpa: number | null, min: number, max: number): string {
-  if (cpa == null) return 'transparent';
-  const ratio = max > min ? (cpa - min) / (max - min) : 0;
-  const hue = Math.round(140 - ratio * 140); // 140 = green, 0 = red
-  return `hsl(${hue} 65% 45% / 0.18)`;
 }

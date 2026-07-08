@@ -18,6 +18,7 @@ import {
   ScrollTextIcon,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOptimizerStore } from '@/lib/paid-media/optimizerStore';
@@ -28,6 +29,7 @@ import { OptimizerOffline } from './sections/OptimizerOffline';
 import { OptimizerOnboarding } from './sections/OptimizerOnboarding';
 import { OptimizerOverview } from './sections/OptimizerOverview';
 import { OptimizerPortfolios } from './sections/OptimizerPortfolios';
+import { PortfolioDetailWorkspace } from './sections/PortfolioDetailWorkspace';
 import {
   useAdAccountCurrency,
   useOptimizerPortfolios,
@@ -46,24 +48,34 @@ function totalPending(portfolios: PortfolioListItem[]): number {
 
 function OptimizerSkeleton() {
   return (
-    <div className="space-y-3 p-2">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-24 rounded-xl" />
+    <div className="space-y-3 p-2" role="status" aria-busy="true">
+      <span className="sr-only">Loading optimizer</span>
+      <Skeleton className="h-6 w-56 rounded-md bg-muted/70" />
+      <Skeleton className="h-40 rounded-lg bg-muted/70" />
+      <div className="space-y-2">
+        <Skeleton className="h-16 rounded-lg bg-muted/70" />
+        <Skeleton className="h-16 rounded-lg bg-muted/70" />
       </div>
-      <Skeleton className="h-64 rounded-xl" />
     </div>
   );
 }
 
 export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabProps) {
-  const { view, setView, selectedPortfolioId, setSelectedPortfolioId } = useOptimizerStore(
+  const {
+    view,
+    setView,
+    selectedPortfolioId,
+    setSelectedPortfolioId,
+    detailPortfolioId,
+    setDetailPortfolioId,
+  } = useOptimizerStore(
     useShallow((state) => ({
       view: state.view,
       setView: state.setView,
       selectedPortfolioId: state.selectedPortfolioId,
       setSelectedPortfolioId: state.setSelectedPortfolioId,
+      detailPortfolioId: state.detailPortfolioId,
+      setDetailPortfolioId: state.setDetailPortfolioId,
     })),
   );
 
@@ -97,7 +109,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
   // No portfolios yet → onboarding path.
   if (portfolios.length === 0) {
     return (
-      <div className="min-h-0 overflow-y-auto p-2">
+      <div className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none">
         <OptimizerOnboarding
           brandId={brandId}
           adAccountId={adAccountId}
@@ -109,6 +121,26 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
     );
   }
 
+  // A portfolio opened for full-screen detail replaces the tab body with its own
+  // command-center workspace (hero timeline + drill-ins). Guarded by find() so a
+  // stale id (e.g. after an account switch) falls back to the tabbed view.
+  const detailPortfolio = detailPortfolioId
+    ? portfolios.find((portfolio) => portfolio.id === detailPortfolioId)
+    : undefined;
+  if (detailPortfolio) {
+    return (
+      <section className="grid h-full min-h-0 overflow-hidden rounded-lg border border-border/70 bg-background">
+        <PortfolioDetailWorkspace
+          adAccountId={adAccountId}
+          brandId={brandId}
+          currency={currency}
+          onClose={() => setDetailPortfolioId(null)}
+          portfolio={detailPortfolio}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
       <Tabs
@@ -116,44 +148,45 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
         onValueChange={(value) => setView(value as typeof view)}
         className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/10 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-md border border-border/70 bg-card text-muted-foreground">
-              <GaugeCircleIcon className="size-4" />
+        <SectionHeader
+          className="bg-muted/10"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <GaugeCircleIcon className="size-4" aria-hidden="true" />
+              Optimizer
             </span>
-            <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold tracking-tight">Optimizer</h2>
-              <p className="text-xs text-muted-foreground">
-                Portfolios · reallocation · recommendations.
-              </p>
-            </div>
-          </div>
-          <TabsList className="h-8">
-            <TabsTrigger value="overview" className="gap-1.5 px-3 text-xs">
-              <LayersIcon className="size-3.5" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="portfolios" className="gap-1.5 px-3 text-xs">
-              <RefreshCwIcon className="size-3.5" />
-              Portfolios
-            </TabsTrigger>
-            <TabsTrigger value="actions" className="gap-1.5 px-3 text-xs">
-              <ListChecksIcon className="size-3.5" />
-              Actions
-              {pendingCount + renewalCount > 0 ? (
-                <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                  {pendingCount + renewalCount}
-                </span>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="logs" className="gap-1.5 px-3 text-xs">
-              <ScrollTextIcon className="size-3.5" />
-              Logs
-            </TabsTrigger>
-          </TabsList>
-        </div>
+          }
+          action={
+            <TabsList className="h-8">
+              <TabsTrigger value="overview" className="gap-1.5 px-3 text-xs">
+                <LayersIcon className="size-3.5" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="portfolios" className="gap-1.5 px-3 text-xs">
+                <RefreshCwIcon className="size-3.5" />
+                Portfolios
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="gap-1.5 px-3 text-xs">
+                <ListChecksIcon className="size-3.5" />
+                Actions
+                {pendingCount + renewalCount > 0 ? (
+                  <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-3xs font-semibold text-primary-foreground">
+                    {pendingCount + renewalCount}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger value="logs" className="gap-1.5 px-3 text-xs">
+                <ScrollTextIcon className="size-3.5" />
+                Logs
+              </TabsTrigger>
+            </TabsList>
+          }
+        />
 
-        <TabsContent value="overview" className="min-h-0 overflow-y-auto p-2">
+        <TabsContent
+          value="overview"
+          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
+        >
           <OptimizerOverview
             portfolios={portfolios}
             pendingCount={pendingCount}
@@ -163,16 +196,24 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
           />
         </TabsContent>
 
-        <TabsContent value="portfolios" className="min-h-0 overflow-y-auto p-2">
+        <TabsContent
+          value="portfolios"
+          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
+        >
           <OptimizerPortfolios
+            brandId={brandId}
+            adAccountId={adAccountId}
             portfolios={portfolios}
             selectedPortfolioId={selectedPortfolioId ?? portfolios[0]?.id ?? null}
             currency={currency}
-            onSelectPortfolio={setSelectedPortfolioId}
+            onCreated={portfoliosQuery.refetch}
           />
         </TabsContent>
 
-        <TabsContent value="actions" className="min-h-0 overflow-y-auto p-2">
+        <TabsContent
+          value="actions"
+          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
+        >
           <OptimizerActions
             brandId={brandId}
             adAccountId={adAccountId}
@@ -181,7 +222,10 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
           />
         </TabsContent>
 
-        <TabsContent value="logs" className="min-h-0 overflow-y-auto p-2">
+        <TabsContent
+          value="logs"
+          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
+        >
           <OptimizerLogs brandId={brandId} />
         </TabsContent>
       </Tabs>

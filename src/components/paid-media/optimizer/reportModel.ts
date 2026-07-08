@@ -59,7 +59,7 @@ export function freezeLabel(
     case 'unsupported_budget':
       return {
         label: 'Held · CBO/lifetime',
-        hint: 'Budget is managed at the campaign level (CBO or lifetime) — the optimizer does not touch it.',
+        hint: 'Budget is managed at the campaign level (CBO or lifetime) — the optimizer does not touch it. Create a campaign-level portfolio to optimize this.',
       };
     default:
       if (reason) return { label: 'Held', hint: 'Budget left unchanged on purpose this cycle.' };

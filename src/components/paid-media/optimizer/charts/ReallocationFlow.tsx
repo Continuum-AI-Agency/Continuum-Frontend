@@ -5,11 +5,16 @@
 // a single-series BKLit bar chart, and the reference-ui spec itself uses bar rows,
 // so this is a purpose-built, honest visualization. HELD items (freezeReason) are
 // excluded — their budget was left unchanged on purpose, so they are not "flow".
+// Gain/loss uses the shared semantic pair (--success / --destructive) so light/dark
+// theming stays automatic — no hardcoded emerald/rose.
 
 import type { CycleItemRow } from '@continuum/contracts';
 
 import { formatCurrency } from '../format';
+import { AdSetIdLabel } from './AdSetIdLabel';
+import { ChartEmpty } from './ChartStates';
 import { type FlowRow, splitReallocation } from './chartData';
+import { pct } from './chartScale';
 
 type ReallocationFlowProps = {
   items: CycleItemRow[];
@@ -21,11 +26,7 @@ export function ReallocationFlow({ items, currency }: ReallocationFlowProps) {
   const movedCount = gaining.length + losing.length;
 
   if (movedCount === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        No budget moved this cycle — allocations held steady.
-      </p>
-    );
+    return <ChartEmpty message="No budget moved this cycle — allocations held steady." />;
   }
 
   return (
@@ -59,22 +60,18 @@ function FlowSection({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-medium text-muted-foreground">
+      <p className="text-2xs font-medium text-muted-foreground">
         {positive ? '↑' : '↓'} {label}
       </p>
       {rows.map((row) => {
-        const width = Math.max(4, (Math.abs(row.change) / maxAbs) * 100);
+        const width = Math.max(4, pct(Math.abs(row.change), maxAbs));
         return (
           <div key={row.adsetId} className="flex items-center gap-2">
-            <code className="w-40 shrink-0 truncate text-[11px] text-muted-foreground">
-              {row.adsetId}
-            </code>
-            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted/40">
+            <AdSetIdLabel id={row.adsetId} />
+            <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted/40">
               <div
                 className={
-                  positive
-                    ? 'h-full rounded-full bg-emerald-500'
-                    : 'h-full rounded-full bg-rose-500'
+                  positive ? 'h-full rounded-full bg-success' : 'h-full rounded-full bg-destructive'
                 }
                 style={{ width: `${width}%` }}
               />
@@ -82,8 +79,8 @@ function FlowSection({
             <span
               className={
                 positive
-                  ? 'w-16 shrink-0 text-right text-[11px] font-medium tabular-nums text-emerald-600 dark:text-emerald-400'
-                  : 'w-16 shrink-0 text-right text-[11px] font-medium tabular-nums text-rose-600 dark:text-rose-400'
+                  ? 'w-16 shrink-0 text-right text-2xs font-medium tabular-nums text-success'
+                  : 'w-16 shrink-0 text-right text-2xs font-medium tabular-nums text-destructive'
               }
             >
               {positive ? '+' : '−'}

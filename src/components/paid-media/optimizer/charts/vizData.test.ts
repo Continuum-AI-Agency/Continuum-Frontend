@@ -1,0 +1,304 @@
+import { describe, expect, it } from 'bun:test';
+
+import type { ParsedCycleRunReport } from '@continuum/contracts';
+import { cpaSeriesTrend } from './__fixtures__/optimizerFixtures';
+import type { CpaTrendPoint } from './chartData';
+import {
+  adSetRoasSeries,
+  buildConfidenceRadar,
+  buildConversionFunnel,
+  buildCpaHeroPoints,
+  buildCpaProjection,
+  buildCycleActionMap,
+  mergeAdDailyByMetric,
+  pacingSnapshot,
+  projectionEndpoint,
+  roasBreakevenSeries,
+  sumFunnelWindow,
+} from './vizData';
+
+function trendPoint(date: string, over: Record<string, number | null>) {
+  return {
+    date,
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    ctr: 0,
+    cpc: 0,
+    cpa: 0,
+    roas: 0,
+    purchases: 0,
+    purchase_value: 0,
+    ...over,
+  };
+}
+
+describe('buildConversionFunnel', () => {
+  it('builds the purchase funnel with step conversion % and a heat color per step past the top', () => {
+    const stages = buildConversionFunnel(
+      { impressions: 10_000, clicks: 500, addToCarts: 100, purchases: 25 },
+      'purchase',
+    );
+    expect(stages.map((s) => s.label)).toEqual([
+      'Impressions',
+      'Clicks',
+      'Add to cart',
+      'Purchases',
+    ]);
+    expect(stages.map((s) => s.value)).toEqual([10_000, 500, 100, 25]);
+    // Top stage shows an absolute count and carries no heat color.
+    expect(stages[0].displayValue).toBe('10,000');
+    expect(stages[0].color).toBeUndefined();
+    // Downstream stages show step conversion % and a heat fill.
+    expect(stages[1].displayValue).toBe('5%'); // 500 / 10000
+    expect(stages[2].displayValue).toBe('20%'); // 100 / 500
+    expect(stages[3].displayValue).toBe('25%'); // 25 / 100
+    expect(stages[1].color).toContain('color-mix');
+  });
+
+  it('is objective-aware — awareness is impressions → reach', () => {
+    const stages = buildConversionFunnel({ impressions: 8000, reach: 6000 }, 'awareness');
+    expect(stages.map((s) => s.label)).toEqual(['Impressions', 'Reach']);
+    expect(stages[1].displayValue).toBe('75%');
+  });
+
+  it('renders a zero-upstream stage honestly instead of dividing by zero', () => {
+    const stages = buildConversionFunnel(
+      { impressions: 0, clicks: 0, addToCarts: 0, purchases: 0 },
+      'purchase',
+    );
+    expect(stages).toHaveLength(4);
+    expect(stages[1].displayValue).toBe('0%');
+  });
+
+  it('falls back to the purchase funnel for an unknown objective', () => {
+    const stages = buildConversionFunnel({ impressions: 100, clicks: 10 }, 'mystery');
+    expect(stages.map((s) => s.label)).toEqual([
+      'Impressions',
+      'Clicks',
+      'Add to cart',
+      'Purchases',
+    ]);
+  });
+});
+
+describe('buildConfidenceRadar', () => {
+  it('scales the 0–1 sub-scores onto the radar 0–100 domain', () => {
+    const radar = buildConfidenceRadar({
+      score: 0.72,
+      predictiveness: 0.88,
+      sampleSize: 0.5,
+      consistency: 0.61,
+      band: 'high',
+    });
+    expect(radar).not.toBeNull();
+    expect(radar?.metrics.map((m) => m.key)).toEqual([
+      'predictiveness',
+      'sampleSize',
+      'consistency',
+      'score',
+    ]);
+    expect(radar?.data[0].values).toEqual({
+      predictiveness: 88,
+      sampleSize: 50,
+      consistency: 61,
+      score: 72,
+    });
+  });
+
+  it('returns null when the run carries no confidence signal at all', () => {
+    expect(buildConfidenceRadar(null)).toBeNull();
+    expect(buildConfidenceRadar({ band: 'medium' })).toBeNull();
+  });
+});
+
+describe('roasBreakevenSeries', () => {
+  it('shifts ROAS to a P&L number vs the break-even baseline and sorts chronologically', () => {
+    const series = roasBreakevenSeries([
+      { date: '2026-07-03', roas: 0.8 },
+      { date: '2026-07-01', roas: 2.5 },
+    ]);
+    expect(series.map((p) => p.date.toISOString().slice(0, 10))).toEqual([
+      '2026-07-01',
+      '2026-07-03',
+    ]);
+    expect(series[0].pnl).toBeCloseTo(1.5); // 2.5 - 1
+    expect(series[1].pnl).toBeCloseTo(-0.2); // 0.8 - 1
+  });
+
+  it('honors a custom break-even target', () => {
+    const [point] = roasBreakevenSeries([{ date: '2026-07-01', roas: 3 }], 2);
+    expect(point.pnl).toBeCloseTo(1); // 3 - 2
+  });
+});
+
+describe('buildCpaProjection', () => {
+  const points: CpaTrendPoint[] = [
+    { date: new Date('2026-07-01'), cpa: 20 },
+    { date: new Date('2026-07-02'), cpa: 18 },
+    { date: new Date('2026-07-03'), cpa: 16 },
+  ];
+
+  it('needs at least two points', () => {
+    expect(buildCpaProjection([points[0]])).toEqual([]);
+  });
+
+  it('extends the recent trend downward when no target is given', () => {
+    const projection = buildCpaProjection(points);
+    expect(projection.length).toBeGreaterThanOrEqual(2);
+    expect(projection[0].value).toBe(16); // anchor = last actual
+    expect(projection.at(-1)?.value).toBeLessThan(16); // falling CPA continues down
+  });
+
+  it('heads for the target CPA when one is provided', () => {
+    const projection = buildCpaProjection(points, { targetCpa: 10 });
+    expect(projectionEndpoint(projection)).toBe(10);
+  });
+});
+
+describe('pacingSnapshot', () => {
+  it('classifies pace from the ratio', () => {
+    expect(pacingSnapshot({ pacingRatio: 1.3 }).status).toBe('overpacing');
+    expect(pacingSnapshot({ pacingRatio: 0.7 }).status).toBe('underpacing');
+    expect(pacingSnapshot({ pacingRatio: 1.0 }).status).toBe('on_track');
+    expect(pacingSnapshot({}).status).toBe('unknown');
+  });
+
+  it('derives the ratio from actual vs ideal when not given', () => {
+    expect(pacingSnapshot({ actualSpendToDate: 500, idealCumulative: 1000 }).ratio).toBeCloseTo(
+      0.5,
+    );
+  });
+
+  it('computes the gauge share of budget and the projected end-of-period spend', () => {
+    const snapshot = pacingSnapshot({
+      actualSpendToDate: 300,
+      periodBudget: 1000,
+      dayIndex: 10,
+      periodDays: 30,
+    });
+    expect(snapshot.pctSpent).toBeCloseTo(30);
+    expect(snapshot.projectedEndSpend).toBe(900); // (300 / 10) * 30
+  });
+});
+
+describe('buildCpaHeroPoints', () => {
+  it('enriches each cycle with the spend/conversions behind the CPA and attaches actions by ts', () => {
+    const points = buildCpaHeroPoints(cpaSeriesTrend, {
+      '2026-06-22T00:00:00.000Z': ['Reallocated · ↑2 ↓1'],
+    });
+    expect(points).toHaveLength(4);
+    const last = points.at(-1);
+    expect(last?.cpa).toBe(25); // 500 / 20
+    expect(last?.spend).toBe(500);
+    expect(last?.conv).toBe(20);
+    expect(last?.actions).toEqual(['Reallocated · ↑2 ↓1']);
+    // Earlier cycles carry no actions.
+    expect(points[0].actions).toEqual([]);
+  });
+});
+
+describe('buildCycleActionMap', () => {
+  it('summarizes the latest run reallocation and appends recommendation labels', () => {
+    const report = {
+      portfolio: null,
+      latest_run: { id: 'run', cycle_ts: '2026-06-22T00:00:00.000Z', mode: 'balanced' },
+      latest_items: [
+        { adset_id: 'a', current_budget: 100, final_budget: 140, change_abs: 40, change_pct: 40 },
+        { adset_id: 'b', current_budget: 100, final_budget: 90, change_abs: -10, change_pct: -10 },
+      ],
+      recommendations: [
+        {
+          id: 'r',
+          adset_id: 'act_1::adset_x',
+          kind: 'pause',
+          trigger: 'P2',
+          severity: 'high',
+          reason: null,
+          status: 'pending',
+        },
+      ],
+      history: [],
+    } as unknown as ParsedCycleRunReport;
+
+    const map = buildCycleActionMap(report);
+    expect(map['2026-06-22T00:00:00.000Z']).toEqual(['Reallocated · ↑1 ↓1', 'pause · adset_x']);
+  });
+
+  it('returns an empty map when there is no run', () => {
+    expect(buildCycleActionMap(null)).toEqual({});
+  });
+});
+
+describe('mergeAdDailyByMetric', () => {
+  it('pivots per-ad daily series into wide rows keyed by date, one column per ad', () => {
+    const trends = [
+      {
+        ad_id: 'a',
+        ad_name: 'A',
+        series: [trendPoint('2026-07-01', { spend: 10 }), trendPoint('2026-07-02', { spend: 12 })],
+      },
+      { ad_id: 'b', ad_name: 'B', series: [trendPoint('2026-07-02', { spend: 5 })] },
+    ] as unknown as Parameters<typeof mergeAdDailyByMetric>[0];
+
+    const { rows, adIds } = mergeAdDailyByMetric(trends, 'spend');
+    expect(adIds).toEqual(['a', 'b']);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].a).toBe(10);
+    expect(rows[1].a).toBe(12);
+    expect(rows[1].b).toBe(5);
+  });
+
+  it('coerces null cost-per-event days to 0 so a gap does not fake a value', () => {
+    const trends = [
+      {
+        ad_id: 'a',
+        ad_name: null,
+        series: [trendPoint('2026-07-01', { cpa: null }), trendPoint('2026-07-02', { cpa: 20 })],
+      },
+    ] as unknown as Parameters<typeof mergeAdDailyByMetric>[0];
+
+    const { rows } = mergeAdDailyByMetric(trends, 'cpa');
+    expect(rows[0].a).toBe(0);
+    expect(rows[1].a).toBe(20);
+  });
+});
+
+describe('sumFunnelWindow', () => {
+  it('sums the 7-day window of only the enrolled ad sets', () => {
+    const snapshots = [
+      { id: 'enrolled_1', windows: { d7: { impressions: 1000, clicks: 50, purchases: 5 } } },
+      { id: 'enrolled_2', windows: { d7: { impressions: 500, clicks: 30, purchases: 3 } } },
+      { id: 'not_enrolled', windows: { d7: { impressions: 9999, clicks: 999, purchases: 99 } } },
+    ];
+    const window = sumFunnelWindow(snapshots, ['enrolled_1', 'enrolled_2']);
+    expect(window.impressions).toBe(1500);
+    expect(window.clicks).toBe(80);
+    expect(window.purchases).toBe(8);
+  });
+});
+
+describe('adSetRoasSeries', () => {
+  it('aggregates per-ad daily trends into one Σvalue/Σspend series per day', () => {
+    const trends = [
+      {
+        ad_id: 'a',
+        ad_name: 'A',
+        series: [
+          trendPoint('2026-07-01', { spend: 100, purchase_value: 250 }),
+          trendPoint('2026-07-02', { spend: 50, purchase_value: 40 }),
+        ],
+      },
+      {
+        ad_id: 'b',
+        ad_name: 'B',
+        series: [trendPoint('2026-07-01', { spend: 100, purchase_value: 150 })],
+      },
+    ] as unknown as Parameters<typeof adSetRoasSeries>[0];
+
+    const series = adSetRoasSeries(trends);
+    expect(series.map((p) => p.date)).toEqual(['2026-07-01', '2026-07-02']);
+    expect(series[0].roas).toBeCloseTo(2); // (250 + 150) / (100 + 100)
+    expect(series[1].roas).toBeCloseTo(0.8); // 40 / 50
+  });
+});

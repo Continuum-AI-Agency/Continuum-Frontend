@@ -1,15 +1,18 @@
 'use client';
 
-// Overview sub-view — top-level KPIs (portfolios / daily budget / pending
-// actions) and a "portfolios at a glance" list. Mirrors the Overview tab of the
-// reference-ui-preview spec.
+// Overview sub-view — headline KPIs as a quiet MetricStrip (the calm-dense
+// styleguide replacement for a stat-card grid) and a "portfolios at a glance"
+// list. The budget mix rides the shared OptimizerPanel.
 
 import type { PortfolioListItem } from '@continuum/contracts';
+import { ArrowRightIcon } from 'lucide-react';
 
+import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { BudgetByObjectiveChart } from '../charts/BudgetByObjectiveChart';
 import { formatCurrency } from '../format';
+import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
 type OptimizerOverviewProps = {
@@ -19,18 +22,6 @@ type OptimizerOverviewProps = {
   onOpenActions: () => void;
   onSelectPortfolio: (portfolioId: string) => void;
 };
-
-function KpiCard({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <Card className="gap-0 rounded-xl bg-muted/30 py-0 shadow-none">
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
-    </Card>
-  );
-}
 
 export function OptimizerOverview({
   portfolios,
@@ -44,38 +35,40 @@ export function OptimizerOverview({
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <KpiCard
-          label="Portfolios"
-          value={String(portfolios.length)}
-          sub={`${adsetTotal} ad sets`}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <MetricStrip
+          items={[
+            { label: 'Portfolios', value: String(portfolios.length) },
+            { label: 'Ad sets', value: String(adsetTotal) },
+            { label: 'Daily budget', value: formatCurrency(dailyTotal, currency) },
+            { label: 'Pending', value: String(pendingCount) },
+          ]}
         />
-        <KpiCard label="Daily budget" value={formatCurrency(dailyTotal, currency)} sub="total" />
-        <button
-          type="button"
-          onClick={onOpenActions}
-          className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
-        >
-          <KpiCard label="Pending actions" value={String(pendingCount)} sub="awaiting approval" />
-        </button>
+        {pendingCount > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-7 gap-1.5 px-2 text-xs"
+            onClick={onOpenActions}
+          >
+            Review {pendingCount} pending
+            <ArrowRightIcon className="size-3.5" aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
 
-      {portfolios.length > 0 ? (
-        <Card className="gap-0 rounded-xl py-0 shadow-none">
-          <CardHeader className="border-b border-border/70 p-4">
-            <CardTitle className="text-sm">Budget by objective</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <BudgetByObjectiveChart portfolios={portfolios} currency={currency} />
-          </CardContent>
-        </Card>
-      ) : null}
+      <OptimizerPanel title="Budget by objective">
+        <BudgetByObjectiveChart portfolios={portfolios} currency={currency} />
+      </OptimizerPanel>
 
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold tracking-tight">Portfolios at a glance</h3>
+      <section className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Portfolios at a glance
+          </p>
           {pendingCount > 0 ? (
-            <Badge variant="secondary" className="text-[11px]">
+            <Badge variant="secondary" className="text-3xs">
               {pendingCount} pending
             </Badge>
           ) : null}
@@ -90,7 +83,7 @@ export function OptimizerOverview({
             />
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

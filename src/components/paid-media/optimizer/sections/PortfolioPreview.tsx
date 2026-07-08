@@ -50,9 +50,9 @@ export function PortfolioPreview({
   return (
     <div className="grid gap-4 rounded-lg border border-border/60 bg-muted/10 p-3 lg:grid-cols-2">
       <section>
-        <p className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Ad sets today</p>
+        <p className="mb-1.5 text-2xs font-semibold text-muted-foreground">Ad sets today</p>
         <div className="overflow-x-auto rounded-md border border-border/60 bg-card">
-          <table className="w-full text-[11px]">
+          <table className="w-full text-2xs">
             <thead className="text-muted-foreground">
               <tr className="border-b border-border/60">
                 <th className="px-2 py-1 text-left font-medium">Ad set</th>
@@ -67,7 +67,7 @@ export function PortfolioPreview({
                 return (
                   <tr key={row.adsetId} className="border-b border-border/40 last:border-0">
                     <td className="max-w-[9rem] truncate px-2 py-1">
-                      <code className="text-[10px] text-muted-foreground">{row.name}</code>
+                      <code className="text-3xs text-muted-foreground">{row.name}</code>
                     </td>
                     <td className="px-2 py-1 text-right tabular-nums">
                       {formatCurrency(row.currentBudget, currency)}
@@ -88,10 +88,10 @@ export function PortfolioPreview({
 
       <section>
         <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-[11px] font-semibold text-muted-foreground">
+          <p className="text-2xs font-semibold text-muted-foreground">
             If applied · {humanize(mode)} mode
           </p>
-          <span className="text-[10px] text-muted-foreground">preview only — nothing applied</span>
+          <span className="text-3xs text-muted-foreground">preview only — nothing applied</span>
         </div>
         {whatIf ? (
           <ReallocationFlow items={whatIf.items} currency={currency} />

@@ -6,7 +6,9 @@
 // Actions tab of the reference-ui-preview spec.
 
 import type { PortfolioListItem, RenewalTask } from '@continuum/contracts';
+import { CheckCircle2Icon } from 'lucide-react';
 
+import { EmptyState } from '@/components/shared/state/EmptyState';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
@@ -31,15 +33,11 @@ export function OptimizerActions({
 
   if (!hasWork) {
     return (
-      <div className="grid min-h-[16rem] place-items-center rounded-xl border border-dashed border-border/70 bg-muted/10 p-8 text-center">
-        <div className="max-w-sm">
-          <h3 className="text-sm font-semibold tracking-tight">You’re all caught up</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            No pending recommendations or open renewal tasks. New actions appear here after the next
-            optimization cycle.
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        headline="You’re all caught up"
+        media={<CheckCircle2Icon aria-hidden="true" />}
+        description="No pending recommendations or open renewal tasks. New actions appear here after the next optimization cycle."
+      />
     );
   }
 
@@ -56,7 +54,7 @@ export function OptimizerActions({
 
       {renewals.length > 0 ? (
         <div>
-          <h3 className="mb-2 text-sm font-semibold tracking-tight">
+          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Approved renewals · tasks ({renewals.length})
           </h3>
           <div className="space-y-2">
