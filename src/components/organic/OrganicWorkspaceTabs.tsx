@@ -19,7 +19,7 @@ const ViewTransition =
 type MetricsPrefetchParams = {
   brandId: string;
   integrationAccountId: string;
-  platform: "instagram" | "facebook" | "tiktok" | "youtube";
+  platform: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin";
 };
 
 type Props = {
