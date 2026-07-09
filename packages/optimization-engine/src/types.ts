@@ -99,14 +99,16 @@ export type AdSetSnapshot = {
     d7: WindowMetrics; // CUMULATIVE 0-7d (contains d3)
     d14: WindowMetrics; // CUMULATIVE 0-14d
   };
-  /** ARCHIVAL rollups — constructed for history/reporting only, NOT used in scoring. */
+  /** ARCHIVAL rollups — constructed for history/reporting only, NOT used in scoring.
+   *  d90 was removed: no reader ever existed (only optimizer_upsert_snapshots WROTE it),
+   *  and the 90-day daily pull it required was 89% of a cold ingest. */
   archivalWindows?: {
     d30: WindowMetrics; // CUMULATIVE 0-30d
-    d90: WindowMetrics; // CUMULATIVE 0-90d
   };
-  /** Per-day raw counts (up to 90d, oldest-first) the windows are rolled up from —
-   *  the score system's daily grain + FE charts + archival. Optional so hand-built
-   *  fixtures (tests) can still supply just `windows`. */
+  /** Per-day raw counts (up to 30d, oldest-first) the windows are rolled up from —
+   *  the score system's daily grain + FE charts + archival. Every scoring window
+   *  (d3 ⊆ d7 ⊆ d14) is derived from this one series, so 30 days covers all of them.
+   *  Optional so hand-built fixtures (tests) can still supply just `windows`. */
   daily?: DailyMetrics[];
 };
 

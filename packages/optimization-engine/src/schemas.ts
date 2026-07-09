@@ -77,10 +77,12 @@ export const AdSetSnapshotSchema = z.object({
     d7: WindowMetricsSchema,
     d14: WindowMetricsSchema,
   }),
+  // d90 was dropped: nothing ever read it, and pulling 90 days of daily rows was 89% of a
+  // cold ingest. z.object strips unknown keys, so a payload from an older edge that still
+  // carries d90 parses fine — which is what makes the service safe to deploy BEFORE the edge.
   archivalWindows: z
     .object({
       d30: WindowMetricsSchema,
-      d90: WindowMetricsSchema,
     })
     .optional(),
   daily: z.array(DailyMetricsSchema).optional(),
