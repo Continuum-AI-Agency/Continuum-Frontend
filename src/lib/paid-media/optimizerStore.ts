@@ -185,3 +185,33 @@ export function useCachedRead<T>(
   const data = (entry?.data as T | undefined) ?? empty;
   return { data, isLoading, isError: entry?.error ?? false, refetch };
 }
+
+// Poll a cached read on an interval while `active` is true, up to `maxTries`.
+// Used to await a freshly-enrolled portfolio's first cycle: `optimizer-enroll`
+// sets next_realloc_at=now() so the scheduler produces a result "within one tick",
+// but reads are cache-first (30-min TTL) and won't notice on their own. So while a
+// portfolio has no cycle yet, re-mark its performance key stale every interval so
+// the just-scored result appears without a manual refresh. Stops as soon as
+// `active` flips false (a run landed) or the try budget is spent (so a portfolio
+// that never scores does not poll forever).
+export function usePollWhile(
+  active: boolean,
+  refetch: () => void,
+  opts?: { intervalMs?: number; maxTries?: number },
+): void {
+  const intervalMs = opts?.intervalMs ?? 15_000;
+  const maxTries = opts?.maxTries ?? 12;
+  const refetchRef = React.useRef(refetch);
+  refetchRef.current = refetch;
+
+  React.useEffect(() => {
+    if (!active) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      refetchRef.current();
+      if (tries >= maxTries) clearInterval(timer);
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [active, intervalMs, maxTries]);
+}
