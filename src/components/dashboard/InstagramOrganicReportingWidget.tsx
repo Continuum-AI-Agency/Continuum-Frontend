@@ -30,6 +30,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
+import { resolveSelectedAccountId } from '@/lib/integrations/resolveSelectedAccountId';
 import type {
   MetricComparison,
   OrganicDateRangePreset,
@@ -60,7 +61,13 @@ const SUPPORTED_WIDGET_PLATFORMS: ReadonlySet<OrganicPlatform> = new Set(['insta
 type LoadState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }
+  | {
+      status: 'error';
+      message: string;
+      errorCode?: IntegrationErrorCode;
+      retryAfter?: number;
+      errorPlatform?: string;
+    }
   | { status: 'success'; data: OrganicMetricsResponse };
 
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = 'last_7d';
@@ -205,11 +212,14 @@ export function InstagramOrganicReportingWidget({
   const { getSelection, setSelection } = useAccountSelectionStore();
   const platformAccounts = platform === 'youtube' ? youtubeAccounts : accounts;
   const isSupportedPlatform = SUPPORTED_WIDGET_PLATFORMS.has(platform);
-  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(() => {
-    const stored = useAccountSelectionStore.getState().getSelection(brandId, initialPlatform);
-    const isValid = stored !== null && accounts.some((a) => a.integrationAccountId === stored);
-    return isValid ? stored : (accounts[0]?.integrationAccountId ?? null);
-  });
+  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(() =>
+    resolveSelectedAccountId({
+      brandId,
+      platform,
+      platformAccounts,
+      getSelection: useAccountSelectionStore.getState().getSelection,
+    }),
+  );
   const [state, setState] = React.useState<LoadState>({ status: 'idle' });
   const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
   const [posts, setPosts] = React.useState<OrganicPost[]>([]);
@@ -218,10 +228,9 @@ export function InstagramOrganicReportingWidget({
   // Re-resolve the selected account when the brand or platform changes (each
   // platform keeps its own remembered selection and its own account list).
   React.useEffect(() => {
-    const stored = getSelection(brandId, platform);
-    const isValid =
-      stored !== null && platformAccounts.some((a) => a.integrationAccountId === stored);
-    setSelectedAccountId(isValid ? stored : (platformAccounts[0]?.integrationAccountId ?? null));
+    setSelectedAccountId(
+      resolveSelectedAccountId({ brandId, platform, platformAccounts, getSelection }),
+    );
     setState({ status: 'idle' });
     setExpandedMetric(null);
     setPosts([]);
@@ -255,7 +264,8 @@ export function InstagramOrganicReportingWidget({
           error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
-        setState({ status: 'error', message, errorCode, retryAfter });
+        const errorPlatform = (error as { errorPlatform?: string }).errorPlatform;
+        setState({ status: 'error', message, errorCode, retryAfter, errorPlatform });
       }
     }
 
@@ -352,15 +362,15 @@ export function InstagramOrganicReportingWidget({
         </div>
 
         <div className="flex items-center gap-1">
-          {platform === 'instagram' && posts.length > 0 ? (
+          {posts.length > 0 ? (
             <label
-              htmlFor="ig-reporting-post-flags"
+              htmlFor="organic-reporting-post-flags"
               className="flex cursor-pointer select-none items-center gap-1 rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground"
             >
               <Flag size={11} className="text-primary" />
               <span className="hidden sm:inline">Posts</span>
               <Switch
-                id="ig-reporting-post-flags"
+                id="organic-reporting-post-flags"
                 checked={showFlags}
                 onCheckedChange={setShowFlags}
                 aria-label="Toggle post activity markers"
@@ -423,7 +433,7 @@ export function InstagramOrganicReportingWidget({
             <IntegrationErrorBanner
               errorCode={state.errorCode}
               message={state.message}
-              platform={platform}
+              platform={state.errorPlatform ?? platform}
               retryAfter={state.retryAfter}
             />
           ) : state.status === 'loading' ? (
@@ -548,7 +558,7 @@ function MetricsPanel({
     <div className="flex min-h-0 flex-col gap-2">
       <div className="grid min-h-0 grid-cols-1 gap-2">
         <div className="w-full">
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-7">
             {metricCards.map((item) => {
               const delta = comparison?.[item.key]?.percentageChange;
               const formattedDelta = formatPercent(delta ?? undefined);
