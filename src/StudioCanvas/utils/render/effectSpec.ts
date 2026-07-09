@@ -49,15 +49,7 @@ export interface TextOverlay {
   fontWeight?: number;
 }
 
-export type FilterPreset =
-  | 'none'
-  | 'bw'
-  | 'vintage'
-  | 'vivid'
-  | 'cool'
-  | 'warm'
-  | 'noir'
-  | 'dream';
+export type FilterPreset = 'none' | 'bw' | 'vintage' | 'vivid' | 'cool' | 'warm' | 'noir' | 'dream';
 
 // Named one-tap looks (CapCut-style filters). Each is a base set of adjustments
 // that the clip's manual adjustments then override. Kept as CSS-filter-mappable
@@ -116,13 +108,23 @@ export interface TransformKeyframe {
 
 // The subset of composite/blend modes shared by canvas `globalCompositeOperation`
 // and CSS `mix-blend-mode` (identical names), so preview == export.
-export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'lighten' | 'darken' | 'difference';
+export type BlendMode =
+  | 'normal'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'lighten'
+  | 'darken'
+  | 'difference';
 
 // Merge a filter preset's base adjustments with the clip's manual adjustments
 // (manual wins). The single source of truth for both CSS and canvas filters.
 export function resolveAdjustments(spec: ClipEffectSpec | undefined): ClipAdjustments | undefined {
   if (!spec) return undefined;
-  const preset = spec.filterPreset && spec.filterPreset !== 'none' ? FILTER_PRESETS[spec.filterPreset] : undefined;
+  const preset =
+    spec.filterPreset && spec.filterPreset !== 'none'
+      ? FILTER_PRESETS[spec.filterPreset]
+      : undefined;
   if (!preset) return spec.adjustments;
   return { ...preset, ...spec.adjustments };
 }
@@ -151,7 +153,11 @@ export function opacityFor(spec: ClipEffectSpec | undefined): number {
  * The transform at normalized clip time `u` (0..1). Interpolates Ken Burns
  * (from → to) when present, otherwise returns the static transform.
  */
-function lerpTransform(a: Required<ClipTransform>, b: Required<ClipTransform>, k: number): Required<ClipTransform> {
+function lerpTransform(
+  a: Required<ClipTransform>,
+  b: Required<ClipTransform>,
+  k: number,
+): Required<ClipTransform> {
   return {
     scale: lerp(a.scale, b.scale, k),
     offsetX: lerp(a.offsetX, b.offsetX, k),
@@ -200,7 +206,8 @@ export function resolveTransformAt(
 export function filterString(adjustments: ClipAdjustments | undefined): string {
   if (!adjustments) return '';
   const parts: string[] = [];
-  const { brightness, contrast, saturation, grayscale, sepia, hueRotate, blur, invert } = adjustments;
+  const { brightness, contrast, saturation, grayscale, sepia, hueRotate, blur, invert } =
+    adjustments;
   if (brightness !== undefined && brightness !== 1) parts.push(`brightness(${brightness})`);
   if (contrast !== undefined && contrast !== 1) parts.push(`contrast(${contrast})`);
   if (saturation !== undefined && saturation !== 1) parts.push(`saturate(${saturation})`);
@@ -239,14 +246,18 @@ export function resolveTextOverlays(spec: ClipEffectSpec | undefined): ResolvedT
 
 // ---- Preview (CSS) consumer -------------------------------------------------
 
-export interface ClipEffectCss {
+// Must stay a type alias, not an interface: this is assigned straight into
+// `React.CSSProperties`, and only type aliases get TypeScript's implicit index
+// signature. Some Radix releases augment `CSSProperties` with a
+// `--radix-${string}` index signature that an interface can never satisfy.
+export type ClipEffectCss = {
   filter?: string;
   transform?: string;
   opacity?: number;
   // A `BlendMode` value is a subset of CSS `mix-blend-mode`, so this is directly
   // assignable to React.CSSProperties.
   mixBlendMode?: BlendMode;
-}
+};
 
 /** Resolve the clip's visual effects to CSS for the preview <video>/<img>. */
 export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): ClipEffectCss {
