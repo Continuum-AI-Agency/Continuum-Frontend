@@ -46,7 +46,11 @@ export const AdSetStatusSchema = z.enum([
 export const AudienceTypeSchema = z.enum(['prospecting', 'retargeting', 'remarketing', 'unknown']);
 
 /** Why the ingest boundary abstained (froze) an ad set — mirrors FreezeReason in ./types. */
-export const FreezeReasonSchema = z.enum(['no_conversions', 'unsupported_budget']);
+export const FreezeReasonSchema = z.enum([
+  'no_conversions',
+  'unsupported_budget',
+  'lifetime_budget',
+]);
 
 export const AdSetSnapshotSchema = z.object({
   id: z.string(),

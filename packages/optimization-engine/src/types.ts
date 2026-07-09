@@ -18,8 +18,13 @@ export type AudienceType = 'prospecting' | 'retargeting' | 'remarketing' | 'unkn
  *  than starve it on data it can't trust). Distinguishes an auto-abstain from a
  *  manual operator freeze in reports/telemetry.
  *   - no_conversions:     spend but zero measured KPI events (can't score CPA)
- *   - unsupported_budget: CBO / lifetime ad set — no ad-set daily_budget to optimize */
-export type FreezeReason = 'no_conversions' | 'unsupported_budget';
+ *   - unsupported_budget: CBO / lifetime ad set — no ad-set daily_budget to optimize
+ *   - lifetime_budget:    a CAMPAIGN whose budget is a whole-flight lifetime_budget, not a
+ *                         per-cycle daily_budget. The engine's windows (3d/7d/14d) and its
+ *                         pacing all reason in DAILY terms, so reallocating a lifetime total
+ *                         as if it were a daily budget would silently resize a live flight.
+ *                         Held until the flight model exists. */
+export type FreezeReason = 'no_conversions' | 'unsupported_budget' | 'lifetime_budget';
 
 /** Raw counts for one analysis window. Cost-per-event is DERIVED, never stored.
  * The KPI event used for scoring is chosen by the portfolio's objective profile

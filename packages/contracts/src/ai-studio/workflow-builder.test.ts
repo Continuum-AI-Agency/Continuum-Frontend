@@ -6,6 +6,7 @@ import {
   buildWorkflowGraph,
   applyOps,
   validateWorkflowGraph,
+  mergeGraphs,
 } from "./workflow-builder";
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({
@@ -171,5 +172,89 @@ describe("validateWorkflowGraph", () => {
       edges: [{ id: "e1", source: "a", target: "n", sourceHandle: "audio", targetHandle: "prompt" }],
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("mergeGraphs", () => {
+  const positioned = (id: string, type: string, x: number, y: number) => ({
+    id,
+    type,
+    position: { x, y },
+    data: {},
+  });
+
+  it("keeps every base node when incoming work is added", () => {
+    const base = {
+      nodes: [positioned("user-brief", "string", 0, 0), positioned("user-image", "nanoGen", 360, 0)],
+      edges: [{ id: "ue", source: "user-brief", target: "user-image", sourceHandle: "text", targetHandle: "prompt" }],
+    };
+    const incoming = buildWorkflowGraph(
+      [
+        { ref: "agent-prompt", type: "string" },
+        { ref: "agent-image", type: "nanoGen" },
+      ],
+      [{ from_ref: "agent-prompt", to_ref: "agent-image" }],
+    ).graph;
+
+    const graph = mergeGraphs(base, incoming);
+
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual([
+      "agent-image",
+      "agent-prompt",
+      "user-brief",
+      "user-image",
+    ]);
+    expect(graph.edges.map((e) => e.id).sort()).toEqual(["ue", ...incoming.edges.map((e) => e.id)].sort());
+  });
+
+  it("does not disturb the positions the user already arranged", () => {
+    const base = { nodes: [positioned("user-brief", "string", 40, 90)], edges: [] };
+    const incoming = buildWorkflowGraph([{ ref: "agent-prompt", type: "string" }]).graph;
+
+    const graph = mergeGraphs(base, incoming);
+
+    expect(graph.nodes.find((n) => n.id === "user-brief")?.position).toEqual({ x: 40, y: 90 });
+  });
+
+  it("drops incoming nodes clear of the base so nothing lands on top of the user's work", () => {
+    const base = { nodes: [positioned("user-brief", "string", 0, 500)], edges: [] };
+    const incoming = buildWorkflowGraph([{ ref: "agent-prompt", type: "string" }]).graph;
+
+    const graph = mergeGraphs(base, incoming);
+    const agent = graph.nodes.find((n) => n.id === "agent-prompt");
+
+    expect(agent?.position.y).toBeGreaterThan(500);
+  });
+
+  it("updates a colliding node in place rather than duplicating or dropping it", () => {
+    const base = { nodes: [positioned("prompt", "string", 12, 34)], edges: [] };
+    const incoming = buildWorkflowGraph([{ ref: "prompt", type: "string", data: { value: "agent text" } }]).graph;
+
+    const graph = mergeGraphs(base, incoming);
+
+    expect(graph.nodes).toHaveLength(1);
+    expect((graph.nodes[0]?.data as Record<string, unknown>).value).toBe("agent text");
+    // Overwriting the node's data must not yank it out from under the user's cursor.
+    expect(graph.nodes[0]?.position).toEqual({ x: 12, y: 34 });
+  });
+
+  it("merging an empty incoming graph is a no-op", () => {
+    const base = { nodes: [positioned("user-brief", "string", 0, 0)], edges: [] };
+    const graph = mergeGraphs(base, { nodes: [], edges: [] });
+    expect(graph.nodes.map((n) => n.id)).toEqual(["user-brief"]);
+  });
+
+  it("merging into an empty canvas keeps the incoming layout untouched", () => {
+    const incoming = buildWorkflowGraph(
+      [
+        { ref: "a", type: "string" },
+        { ref: "b", type: "nanoGen" },
+      ],
+      [{ from_ref: "a", to_ref: "b" }],
+    ).graph;
+
+    const graph = mergeGraphs({ nodes: [], edges: [] }, incoming);
+
+    expect(graph.nodes.map((n) => n.position)).toEqual(incoming.nodes.map((n) => n.position));
   });
 });

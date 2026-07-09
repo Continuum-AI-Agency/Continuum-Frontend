@@ -1,14 +1,14 @@
 import {
-  STUDIO_NODE_TYPES,
-  type StudioNodeType,
-  type GraphNodeLike,
-  type GraphEdgeLike,
-  type WorkflowMediaKind,
   createNodeData,
+  type GraphEdgeLike,
+  type GraphNodeLike,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   isValidConnection,
-} from "./workflow-graph";
+  STUDIO_NODE_TYPES,
+  type StudioNodeType,
+  type WorkflowMediaKind,
+} from './workflow-graph';
 
 // Construct + surgically edit AI Studio workflow graphs from a structured spec,
 // auto-resolving valid handles, laying out positions, and validating against the
@@ -49,13 +49,13 @@ const isStudioNodeType = (type: string): type is StudioNodeType =>
 
 function inferDataType(sourceHandle?: string | null): string {
   switch (sourceHandle) {
-    case "image":
-    case "video":
-    case "audio":
-    case "document":
+    case 'image':
+    case 'video':
+    case 'audio':
+    case 'document':
       return sourceHandle;
     default:
-      return "text";
+      return 'text';
   }
 }
 
@@ -101,20 +101,25 @@ export function resolveConnection(
 
   return {
     ok: false,
-    reason: `no compatible handle from ${sourceNode.type ?? "?"} to ${targetNode.type ?? "?"}${opts.roleHint ? ` (role ${opts.roleHint})` : ""}`,
+    reason: `no compatible handle from ${sourceNode.type ?? '?'} to ${targetNode.type ?? '?'}${opts.roleHint ? ` (role ${opts.roleHint})` : ''}`,
   };
 }
 
-function makeEdge(source: string, sourceHandle: string, target: string, targetHandle: string): WorkflowEdge {
+function makeEdge(
+  source: string,
+  sourceHandle: string,
+  target: string,
+  targetHandle: string,
+): WorkflowEdge {
   return {
     id: `e:${source}:${target}:${targetHandle}`,
     source,
     target,
     sourceHandle,
     targetHandle,
-    type: "dataType",
-    className: "studio-edge",
-    data: { dataType: inferDataType(sourceHandle), pathType: "button" },
+    type: 'dataType',
+    className: 'studio-edge',
+    data: { dataType: inferDataType(sourceHandle), pathType: 'button' },
   };
 }
 
@@ -170,7 +175,11 @@ export interface BuildResult {
   errors: string[];
 }
 
-function makeNode(id: string, type: string, dataOverrides: Record<string, unknown> = {}): WorkflowNode {
+function makeNode(
+  id: string,
+  type: string,
+  dataOverrides: Record<string, unknown> = {},
+): WorkflowNode {
   const { data, style } = createNodeData(type as StudioNodeType, dataOverrides);
   const node: WorkflowNode = { id, type, position: { x: 0, y: 0 }, data };
   if (style) {
@@ -228,6 +237,48 @@ export function buildWorkflowGraph(
 }
 
 // ---------------------------------------------------------------------------
+// Merge
+// ---------------------------------------------------------------------------
+
+function lowestFreeY(nodes: WorkflowNode[]): number {
+  if (nodes.length === 0) return 0;
+  const bottom = Math.max(...nodes.map((n) => n.position.y + (n.height ?? 0)));
+  return bottom + ROW_SPACING;
+}
+
+/**
+ * Fold `incoming` into `base` additively. A node the base already carries keeps
+ * its position — the user arranged it — but takes the incoming data; anything
+ * new is dropped below the base so it never lands on top of existing work.
+ *
+ * Additive is the only safe merge when a human may be editing the same canvas:
+ * replacing the graph wholesale reads to the browser's realtime merge as a
+ * remote deletion of everything omitted, and the user's work disappears.
+ */
+export function mergeGraphs(base: WorkflowGraph, incoming: WorkflowGraph): WorkflowGraph {
+  const basePositions = new Map(base.nodes.map((n) => [n.id, n.position]));
+  const offsetY = lowestFreeY(base.nodes);
+
+  const nodes = new Map(base.nodes.map((n) => [n.id, n]));
+  for (const node of incoming.nodes) {
+    const existing = basePositions.get(node.id);
+    nodes.set(node.id, {
+      ...node,
+      position: existing ?? { x: node.position.x, y: node.position.y + offsetY },
+    });
+  }
+
+  const edges = new Map(base.edges.map((e) => [e.id, e]));
+  for (const edge of incoming.edges) edges.set(edge.id, edge);
+
+  const graph: WorkflowGraph = { nodes: [...nodes.values()], edges: [...edges.values()] };
+  if (base.metadata || incoming.metadata) {
+    graph.metadata = { ...(base.metadata ?? {}), ...(incoming.metadata ?? {}) };
+  }
+  return graph;
+}
+
+// ---------------------------------------------------------------------------
 // Surgical edits
 // ---------------------------------------------------------------------------
 
@@ -241,15 +292,15 @@ export interface AttachMediaInput {
 }
 
 export type WorkflowEditOp =
-  | { op: "add_node"; ref: string; type: string; data?: Record<string, unknown> }
-  | { op: "remove_node"; id: string }
-  | { op: "update_node"; id: string; data: Record<string, unknown> }
-  | { op: "connect"; from: string; to: string; role?: string }
-  | { op: "disconnect"; from?: string; to?: string; targetHandle?: string }
-  | { op: "rewire"; from: string; to: string; role?: string }
-  | { op: "attach_media"; id: string; media: AttachMediaInput }
-  | { op: "detach_media"; id: string }
-  | { op: "rename"; id: string; label: string };
+  | { op: 'add_node'; ref: string; type: string; data?: Record<string, unknown> }
+  | { op: 'remove_node'; id: string }
+  | { op: 'update_node'; id: string; data: Record<string, unknown> }
+  | { op: 'connect'; from: string; to: string; role?: string }
+  | { op: 'disconnect'; from?: string; to?: string; targetHandle?: string }
+  | { op: 'rewire'; from: string; to: string; role?: string }
+  | { op: 'attach_media'; id: string; media: AttachMediaInput }
+  | { op: 'detach_media'; id: string }
+  | { op: 'rename'; id: string; label: string };
 
 export interface ApplyResult {
   graph: WorkflowGraph;
@@ -257,13 +308,13 @@ export interface ApplyResult {
 }
 
 const REFERENCE_NODE_KIND: Record<string, WorkflowMediaKind> = {
-  image: "image",
-  video: "video",
-  audio: "audio",
-  document: "document",
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+  document: 'document',
 };
 
-const MEDIA_DATA_KEYS = ["sourcePath", "bucket", "sourceUrl", "fileName", "referenceType"];
+const MEDIA_DATA_KEYS = ['sourcePath', 'bucket', 'sourceUrl', 'fileName', 'referenceType'];
 
 export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResult {
   let nodes: WorkflowNode[] = [...graph.nodes];
@@ -279,7 +330,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
 
   for (const op of ops) {
     switch (op.op) {
-      case "add_node": {
+      case 'add_node': {
         if (nodes.some((n) => n.id === op.ref)) {
           errors.push(`node "${op.ref}" already exists`);
           break;
@@ -291,7 +342,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         nodes = [...nodes, makeNode(op.ref, op.type, op.data)];
         break;
       }
-      case "remove_node": {
+      case 'remove_node': {
         if (!nodes.some((n) => n.id === op.id)) {
           errors.push(`node "${op.id}" not found`);
           break;
@@ -300,34 +351,34 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         edges = edges.filter((e) => e.source !== op.id && e.target !== op.id);
         break;
       }
-      case "update_node": {
+      case 'update_node': {
         if (!replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, ...op.data } }))) {
           errors.push(`node "${op.id}" not found`);
         }
         break;
       }
-      case "rename": {
+      case 'rename': {
         if (!replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, label: op.label } }))) {
           errors.push(`node "${op.id}" not found`);
         }
         break;
       }
-      case "connect": {
+      case 'connect': {
         const result = connectNodes(nodes, edges, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
         else edges = [...edges, result.edge];
         break;
       }
-      case "rewire": {
+      case 'rewire': {
         edges = edges.filter((e) => e.source !== op.from);
         const result = connectNodes(nodes, edges, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
         else edges = [...edges, result.edge];
         break;
       }
-      case "disconnect": {
+      case 'disconnect': {
         if (op.from === undefined && op.to === undefined && op.targetHandle === undefined) {
-          errors.push("disconnect requires at least one of from / to / targetHandle");
+          errors.push('disconnect requires at least one of from / to / targetHandle');
           break;
         }
         edges = edges.filter(
@@ -340,7 +391,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         );
         break;
       }
-      case "attach_media": {
+      case 'attach_media': {
         const node = nodes.find((n) => n.id === op.id);
         if (!node) {
           errors.push(`node "${op.id}" not found`);
@@ -362,12 +413,14 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
             sourcePath: op.media.storagePath,
             bucket: op.media.bucket,
             fileName: op.media.fileName,
-            ...(node.type === "image" ? { referenceType: op.media.referenceType ?? "default" } : {}),
+            ...(node.type === 'image'
+              ? { referenceType: op.media.referenceType ?? 'default' }
+              : {}),
           },
         }));
         break;
       }
-      case "detach_media": {
+      case 'detach_media': {
         if (!replaceNode(op.id, (n) => ({ ...n, data: dropKeys(n.data, MEDIA_DATA_KEYS) }))) {
           errors.push(`node "${op.id}" not found`);
         }
@@ -390,7 +443,8 @@ function connectNodes(
 ): { ok: true; edge: WorkflowEdge } | { ok: false; reason: string } {
   const from = nodes.find((n) => n.id === fromId);
   const to = nodes.find((n) => n.id === toId);
-  if (!from || !to) return { ok: false, reason: `connect references missing node: ${fromId} → ${toId}` };
+  if (!from || !to)
+    return { ok: false, reason: `connect references missing node: ${fromId} → ${toId}` };
   const resolved = resolveConnection(from, to, { roleHint: role, edges });
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
   return { ok: true, edge: makeEdge(from.id, resolved.sourceHandle, to.id, resolved.targetHandle) };
@@ -407,7 +461,7 @@ function dropKeys(data: Record<string, unknown>, keys: string[]): Record<string,
 // ---------------------------------------------------------------------------
 
 export interface GraphIssue {
-  code: "unknown_node_type" | "dangling_edge" | "invalid_connection";
+  code: 'unknown_node_type' | 'dangling_edge' | 'invalid_connection';
   message: string;
   nodeId?: string;
   edgeId?: string;
@@ -418,27 +472,38 @@ export interface ValidationResult {
   issues: GraphIssue[];
 }
 
-export function validateWorkflowGraph(graph: { nodes: GraphNodeLike[]; edges: GraphEdgeLike[] }): ValidationResult {
+export function validateWorkflowGraph(graph: {
+  nodes: GraphNodeLike[];
+  edges: GraphEdgeLike[];
+}): ValidationResult {
   const issues: GraphIssue[] = [];
   const nodeIds = new Set(graph.nodes.map((n) => n.id));
 
   for (const node of graph.nodes) {
     if (!node.type || !(STUDIO_NODE_TYPES as readonly string[]).includes(node.type)) {
-      issues.push({ code: "unknown_node_type", message: `unknown node type "${node.type}"`, nodeId: node.id });
+      issues.push({
+        code: 'unknown_node_type',
+        message: `unknown node type "${node.type}"`,
+        nodeId: node.id,
+      });
     }
   }
 
   graph.edges.forEach((edge, index) => {
     const edgeId = edge.id ?? `edge[${index}]`;
     if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
-      issues.push({ code: "dangling_edge", message: `edge ${edgeId} references a missing node`, edgeId });
+      issues.push({
+        code: 'dangling_edge',
+        message: `edge ${edgeId} references a missing node`,
+        edgeId,
+      });
       return;
     }
     const others = graph.edges.filter((e) => e !== edge);
     if (!isValidConnection(edge, others, graph.nodes)) {
       issues.push({
-        code: "invalid_connection",
-        message: `edge ${edgeId} (${edge.source} → ${edge.target}.${edge.targetHandle ?? "?"}) is not a valid connection`,
+        code: 'invalid_connection',
+        message: `edge ${edgeId} (${edge.source} → ${edge.target}.${edge.targetHandle ?? '?'}) is not a valid connection`,
         edgeId,
       });
     }

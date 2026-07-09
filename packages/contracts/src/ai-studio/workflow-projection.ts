@@ -14,6 +14,14 @@ import type {
 const FREE_TEXT_KEYS = new Set(['value', 'prompt', 'positivePrompt', 'negativePrompt']);
 const FREE_TEXT_CAP = 160;
 
+// Hard ceilings on how much of a canvas reaches the agent. A workflow can grow
+// without bound; the context window cannot. When either ceiling engages the
+// projection serves a window and says so via `truncated` — but `node_count` /
+// `edge_count` keep describing the whole graph, so the agent is never misled
+// about what it is editing.
+export const MAX_PROJECTED_NODES = 60;
+export const MAX_PROJECTED_WIRING = 120;
+
 export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   string: ['value'],
   videoDecode: ['value'],
@@ -54,6 +62,11 @@ export interface ProjectedAttachment {
   asset_ref?: string;
 }
 
+export interface ProjectedTruncation {
+  nodes_omitted: number;
+  edges_omitted: number;
+}
+
 export interface ProjectedGraph {
   node_count: number;
   edge_count: number;
@@ -61,6 +74,7 @@ export interface ProjectedGraph {
   nodes: ProjectedNode[];
   wiring: string[];
   attachments: ProjectedAttachment[];
+  truncated?: ProjectedTruncation;
 }
 
 interface ProjectionInput {
@@ -153,30 +167,37 @@ function attachmentFor(
 
 export function projectGraphForAgent(graph: ProjectionInput): ProjectedGraph {
   const nodeTypes: Record<string, number> = {};
-  const nodes: ProjectedNode[] = [];
-
   for (const node of graph.nodes) {
     const type = node.type ?? 'unknown';
     nodeTypes[type] = (nodeTypes[type] ?? 0) + 1;
-    const data = node.data ?? {};
-    const projected: ProjectedNode = { id: node.id, type };
-    if (typeof data.label === 'string' && data.label.trim()) projected.label = data.label;
-    const config = projectConfig(type, data);
-    if (config) projected.config = config;
-    nodes.push(projected);
   }
 
-  const wiring = graph.edges.map(
-    (e) => `${e.source}.${e.sourceHandle ?? 'out'} → ${e.target}.${e.targetHandle ?? 'in'}`,
-  );
-
+  const window = graph.nodes.slice(0, MAX_PROJECTED_NODES);
+  const nodes: ProjectedNode[] = [];
   const attachments: ProjectedAttachment[] = [];
-  for (const node of graph.nodes) {
+
+  for (const node of window) {
+    const data = node.data ?? {};
+    const projected: ProjectedNode = { id: node.id, type: node.type ?? 'unknown' };
+    if (typeof data.label === 'string' && data.label.trim()) projected.label = data.label;
+    const config = projectConfig(projected.type, data);
+    if (config) projected.config = config;
+    nodes.push(projected);
+
+    // Handles resolve against the full edge list, not the wiring window, so an
+    // attachment still reports the handle it feeds even past the wiring cap.
     const attachment = attachmentFor(node, graph.edges);
     if (attachment) attachments.push(attachment);
   }
 
-  return {
+  const wiring = graph.edges
+    .slice(0, MAX_PROJECTED_WIRING)
+    .map((e) => `${e.source}.${e.sourceHandle ?? 'out'} → ${e.target}.${e.targetHandle ?? 'in'}`);
+
+  const nodesOmitted = graph.nodes.length - nodes.length;
+  const edgesOmitted = graph.edges.length - wiring.length;
+
+  const projection: ProjectedGraph = {
     node_count: graph.nodes.length,
     edge_count: graph.edges.length,
     node_types: nodeTypes,
@@ -184,4 +205,8 @@ export function projectGraphForAgent(graph: ProjectionInput): ProjectedGraph {
     wiring,
     attachments,
   };
+  if (nodesOmitted > 0 || edgesOmitted > 0) {
+    projection.truncated = { nodes_omitted: nodesOmitted, edges_omitted: edgesOmitted };
+  }
+  return projection;
 }

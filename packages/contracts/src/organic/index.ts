@@ -7,4 +7,5 @@ export * from './creativeLeaderboard';
 export * from './insights';
 export * from './metrics';
 export * from './persistedFrames';
+export * from './publishing';
 export * from './quick-create';

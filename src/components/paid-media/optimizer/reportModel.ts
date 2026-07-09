@@ -61,6 +61,11 @@ export function freezeLabel(
         label: 'Held · CBO/lifetime',
         hint: 'Budget is managed at the campaign level (CBO or lifetime) — the optimizer does not touch it. Convert the campaign to ad-set budgets to optimize its ad sets.',
       };
+    case 'lifetime_budget':
+      return {
+        label: 'Held · lifetime budget',
+        hint: 'This campaign has a whole-flight lifetime budget, not a daily one. The optimizer paces and scores in daily terms, so it will not resize a flight it cannot reason about.',
+      };
     default:
       if (reason) return { label: 'Held', hint: 'Budget left unchanged on purpose this cycle.' };
       return null;

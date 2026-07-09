@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Output contract for the MCP `studio_workflow` tool — the lean, token-disciplined
 // view of an AI Studio canvas workflow the agent reasons over. Strict: signed URLs,
@@ -6,10 +6,10 @@ import { z } from "zod";
 // structuredContent, never the agent's reasoning payload). The Backend validates
 // exactly what it emits against this schema.
 
-export const mcpWorkflowTargetSchema = z.enum(["library", "canvas"]);
+export const mcpWorkflowTargetSchema = z.enum(['library', 'canvas']);
 export type McpWorkflowTarget = z.infer<typeof mcpWorkflowTargetSchema>;
 
-export const mcpWorkflowMediaKindSchema = z.enum(["image", "video", "audio", "document"]);
+export const mcpWorkflowMediaKindSchema = z.enum(['image', 'video', 'audio', 'document']);
 
 const projectedNodeSchema = z
   .object({
@@ -32,7 +32,7 @@ const projectedAttachmentSchema = z
 
 const graphIssueSchema = z
   .object({
-    code: z.enum(["unknown_node_type", "dangling_edge", "invalid_connection"]),
+    code: z.enum(['unknown_node_type', 'dangling_edge', 'invalid_connection']),
     message: z.string(),
     nodeId: z.string().optional(),
     edgeId: z.string().optional(),
@@ -51,9 +51,13 @@ export const mcpStudioWorkflowSchema = z
     nodes: z.array(projectedNodeSchema),
     wiring: z.array(z.string()),
     attachments: z.array(projectedAttachmentSchema),
-    validation: z
-      .object({ ok: z.boolean(), issues: z.array(graphIssueSchema) })
-      .strict(),
+    validation: z.object({ ok: z.boolean(), issues: z.array(graphIssueSchema) }).strict(),
+    // Present only when the canvas exceeded the projection ceilings. node_count /
+    // edge_count above still describe the whole graph.
+    truncated: z
+      .object({ nodes_omitted: z.number(), edges_omitted: z.number() })
+      .strict()
+      .optional(),
     change_summary: z.string().optional(),
     open_url: z.string().optional(),
   })
@@ -65,18 +69,14 @@ export type McpStudioWorkflow = z.infer<typeof mcpStudioWorkflowSchema>;
 // requested nodes and writes this compact summary back to canvas_run_requests.result,
 // which the agent reads via run_status. Deliberately media-free — node ids and output
 // kinds only, never base64 or signed URLs (those stay on the canvas / display card).
-export const canvasRunOutputKindSchema = z.enum(["image", "video", "text"]);
+export const canvasRunOutputKindSchema = z.enum(['image', 'video', 'text']);
 export type CanvasRunOutputKind = z.infer<typeof canvasRunOutputKindSchema>;
 
 export const canvasRunResultSchema = z
   .object({
     executed_node_ids: z.array(z.string()),
-    outputs: z.array(
-      z.object({ node_id: z.string(), kind: canvasRunOutputKindSchema }).strict(),
-    ),
-    failed: z
-      .array(z.object({ node_id: z.string(), error: z.string() }).strict())
-      .optional(),
+    outputs: z.array(z.object({ node_id: z.string(), kind: canvasRunOutputKindSchema }).strict()),
+    failed: z.array(z.object({ node_id: z.string(), error: z.string() }).strict()).optional(),
   })
   .strict();
 
