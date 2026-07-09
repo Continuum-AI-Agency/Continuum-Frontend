@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Continuum Paid-Media Budget Optimizer — System Diagram</title>
+<style>
+  :root {
+    --bg: #0d0c1d;
+    --bg2: #141229;
+    --panel: #1b1838;
+    --panel2: #221e44;
+    --ink: #ECEAFE;
+    --muted: #9d97c9;
+    --faint: #6f6aa0;
+    --violet: #7B6BFF;
+    --violet-strong: #5A48F9;
+    --teal: #2dd4bf;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #fb7185;
+    --sky: #38bdf8;
+    --pink: #ec4899;
+    --line: #322c5e;
+    --radius: 14px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 70% -10%, #241f4d 0%, var(--bg) 55%) fixed;
+    color: var(--ink); font-family: var(--sans); line-height: 1.5; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--violet); }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  header.top {
+    position: sticky; top: 0; z-index: 50; backdrop-filter: blur(10px);
+    background: rgba(13,12,29,.82); border-bottom: 1px solid var(--line);
+    padding: 14px 28px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header.top .logo { width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--violet-strong), var(--pink)); flex: none;
+    box-shadow: 0 0 22px rgba(90,72,249,.55); }
+  header.top h1 { font-size: 16px; margin: 0; letter-spacing: .2px; }
+  header.top .sub { color: var(--muted); font-size: 12.5px; }
+  nav.toc { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { font-size: 11.5px; color: var(--muted); text-decoration: none;
+    border: 1px solid var(--line); padding: 4px 9px; border-radius: 999px; background: var(--panel); }
+  nav.toc a:hover { color: var(--ink); border-color: var(--violet); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 30px 24px 90px; }
+
+  .intro { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; margin-bottom: 30px; }
+  @media (max-width: 820px){ .intro { grid-template-columns: 1fr; } }
+  .intro p { color: var(--muted); margin: 0 0 10px; }
+  .intro h2 { margin: 0 0 8px; font-size: 22px; }
+  .legend { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .legend h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--faint); }
+  .legend .row { display: flex; align-items: center; gap: 9px; margin: 7px 0; font-size: 13px; }
+  .swatch { width: 13px; height: 13px; border-radius: 4px; flex: none; }
+
+  section { margin: 34px 0; scroll-margin-top: 80px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 9px; }
+  .sec-head .num { font-family: var(--mono); color: var(--violet); font-weight: 700; font-size: 14px;
+    border: 1px solid var(--violet); border-radius: 8px; padding: 2px 8px; flex: none; }
+  .sec-head h2 { margin: 0; font-size: 19px; }
+  .sec-head .tag { margin-left: auto; font-size: 11px; color: var(--faint); font-family: var(--mono); }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .grid { display: grid; gap: 14px; }
+  .muted { color: var(--muted); }
+  .faint { color: var(--faint); }
+  .small { font-size: 12.5px; }
+  .pill { display: inline-block; font-size: 10.5px; font-family: var(--mono); padding: 2px 7px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--muted); background: var(--bg2); white-space: nowrap; }
+
+  /* flow */
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .stage { position: relative; background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 18px; }
+  .stage.viol { border-left: 4px solid var(--violet); }
+  .stage .st-title { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15px; }
+  .stage .st-title .fn { font-family: var(--mono); font-size: 11px; color: var(--teal); background: rgba(45,212,191,.08);
+    border: 1px solid rgba(45,212,191,.25); padding: 1px 7px; border-radius: 7px; }
+  .stage .st-body { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px){ .stage .st-body { grid-template-columns: 1fr; } }
+  .io { font-size: 12.5px; }
+  .io b { color: var(--faint); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; display:block; margin-bottom:3px;}
+  .arrow { align-self: center; color: var(--violet); font-size: 22px; line-height: 1; margin: 4px 0; text-align: center; }
+  .arrow small { display:block; font-size:10.5px; color: var(--faint); font-family: var(--mono); margin-top: 2px; }
+
+  ul.tight { margin: 6px 0 0; padding-left: 18px; }
+  ul.tight li { margin: 3px 0; font-size: 13px; }
+  ul.tight li .k { color: var(--ink); font-family: var(--mono); font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  th { color: var(--faint); text-transform: uppercase; letter-spacing: .07em; font-size: 10px; font-weight: 600; }
+  td.mono, th.mono { font-family: var(--mono); }
+  tr:hover td { background: rgba(123,107,255,.05); }
+  .obj { display:inline-block; width:9px;height:9px;border-radius:50%; margin-right:6px; vertical-align: middle; }
+
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .cols3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  @media (max-width: 820px){ .cols2,.cols3 { grid-template-columns: 1fr; } }
+
+  .callout { border-radius: var(--radius); padding: 14px 16px; border: 1px solid; font-size: 13.5px; }
+  .callout h4 { margin: 0 0 6px; font-size: 13px; display:flex; align-items:center; gap:8px;}
+  .c-green { background: rgba(52,211,153,.07); border-color: rgba(52,211,153,.35); }
+  .c-amber { background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.35); }
+  .c-violet { background: rgba(123,107,255,.08); border-color: rgba(123,107,255,.4); }
+  .c-sky { background: rgba(56,189,248,.07); border-color: rgba(56,189,248,.35); }
+
+  .stack { display:flex; flex-direction:column; gap:0; }
+  .layer { border:1px solid var(--line); padding:9px 14px; font-size:13px; background: var(--panel); position: relative; }
+  .layer:first-child { border-radius: 10px 10px 0 0; }
+  .layer:last-child { border-radius: 0 0 10px 10px; }
+  .layer .lbl { font-family: var(--mono); font-size:11px; color: var(--violet); }
+  .layer.win { background: linear-gradient(90deg, rgba(90,72,249,.18), transparent); }
+
+  .route { font-family: var(--mono); font-size: 12px; }
+  .route .seg { color: var(--violet); }
+
+  .pkgbox { border:1px dashed var(--line); border-radius: var(--radius); padding: 14px; }
+  .badge-green { color: var(--green); border:1px solid rgba(52,211,153,.4); background: rgba(52,211,153,.08);
+    border-radius: 999px; padding: 1px 9px; font-size: 11px; font-family: var(--mono); }
+
+  footer { margin-top: 50px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+  .chip-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  h3.mini { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); margin: 0 0 8px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="logo"></div>
+  <div>
+    <h1>Continuum — Paid-Media Budget Optimizer</h1>
+    <div class="sub">Conceptual system diagram · ad-set-level daily budget reallocation for Meta · propose-only</div>
+  </div>
+  <nav class="toc">
+    <a href="#ingest">1 · Ingest</a>
+    <a href="#objectives">2 · Objectives</a>
+    <a href="#pipeline">3 · Engine</a>
+    <a href="#config">4 · Config</a>
+    <a href="#ewma">5 · EWMA</a>
+    <a href="#frontend">6 · Frontend</a>
+    <a href="#invariants">7 · Invariants</a>
+    <a href="#topology">8 · Topology</a>
+  </nav>
+</header>
+
+<main>
+
+  <div class="intro">
+    <div>
+      <h2>The budget brain that replaces CBO / Advantage+ allocation</h2>
+      <p>The optimizer takes a portfolio of Meta ad sets with raw 3/7/14-day metric windows and reallocates a
+      fixed daily budget toward the best performers — <b>conserving the total exactly</b> (<span class="mono">Σ proposed = total</span>),
+      enforcing per-ad-set guardrails, and emitting pause recommendations that <b>always require human approval</b>.</p>
+      <p>It is a pure-TypeScript engine (<span class="mono">@continuum/optimization-engine</span>, Zod only at the IO edge) wrapped by a
+      Next.js UI. Behaviour is <b>data-calibrated per objective</b> (18 months of Meta data: 26 accounts, $37.4M spend,
+      440k ad-day rows) and <b>additive</b>: with no objective set it reproduces the original Excel model 1:1.</p>
+      <div class="chip-row">
+        <span class="pill">pure compute · no external calls</span>
+        <span class="pill">propose-only · no auto-pause</span>
+        <span class="pill">conservation invariant</span>
+        <span class="pill">6 objectives</span>
+        <span class="pill">20 unit tests green</span>
+      </div>
+    </div>
+    <div class="legend">
+      <h3>Legend</h3>
+      <div class="row"><span class="swatch" style="background:var(--violet)"></span> Engine pipeline stage</div>
+      <div class="row"><span class="swatch" style="background:var(--teal)"></span> Source file / function</div>
+      <div class="row"><span class="swatch" style="background:var(--green)"></span> Guaranteed invariant</div>
+      <div class="row"><span class="swatch" style="background:var(--amber)"></span> Needs human approval</div>
+      <div class="row"><span class="swatch" style="background:var(--sky)"></span> Frontend / API surface</div>
+      <div class="row faint small" style="margin-top:10px">Arrows show data flow ▼. Monospace = real identifiers in the codebase.</div>
+    </div>
+  </div>
+
+  <!-- ===================== 1 INGEST ===================== -->
+  <section id="ingest">
+    <div class="sec-head"><span class="num">1</span><h2>Ingestion — Meta data → engine snapshot</h2><span class="tag">ingest.ts · types.ts · schemas.ts</span></div>
+    <div class="cols2">
+      <div class="card">
+        <h3 class="mini">Field mapping <span class="pill">mapMetaRowToWindowMetrics()</span></h3>
+        <table>
+          <thead><tr><th>Meta export / API column</th><th class="mono">WindowMetrics</th></tr></thead>
+          <tbody>
+            <tr><td>Amount spent</td><td class="mono">spend</td></tr>
+            <tr><td>Purchases</td><td class="mono">purchases</td></tr>
+            <tr><td>App installs</td><td class="mono">appInstalls</td></tr>
+            <tr><td>Checkouts initiated</td><td class="mono">signups</td></tr>
+            <tr><td>Leads</td><td class="mono">leads</td></tr>
+            <tr><td>Landing page views</td><td class="mono">landingPageViews</td></tr>
+            <tr><td>Adds to cart</td><td class="mono">addToCarts</td></tr>
+            <tr><td>Link clicks</td><td class="mono">clicks</td></tr>
+            <tr><td>Impressions / Reach</td><td class="mono">impressions / reach</td></tr>
+          </tbody>
+        </table>
+        <p class="small faint" style="margin:10px 0 0">MVP source = uploaded CSV or sample JSON, parsed server-side. Live Meta API / OAuth is out of scope (propose-only).</p>
+      </div>
+      <div class="card">
+        <h3 class="mini">The snapshot contract <span class="pill">AdSetSnapshot</span></h3>
+        <div class="stack" style="margin-bottom:12px">
+          <div class="layer"><span class="lbl">id · name · status · currentBudget · ageDays · audienceType · frequency7d</span></div>
+          <div class="layer win"><span class="lbl">windows.d3</span> &nbsp;raw cumulative 0–3d counts</div>
+          <div class="layer win"><span class="lbl">windows.d7</span> &nbsp;raw cumulative 0–7d (contains d3)</div>
+          <div class="layer win"><span class="lbl">windows.d14</span> &nbsp;raw cumulative 0–14d</div>
+        </div>
+        <ul class="tight">
+          <li>Windows hold <b>raw event counts</b> — cost-per-event is always <i>derived</i>, never stored.</li>
+          <li>Cumulative shape lets the engine recover the prior block (days 4–7) by subtraction → clean momentum &amp; significance gate.</li>
+          <li>Every payload is validated at the boundary with <span class="mono">AdSetSnapshotSchema</span> / <span class="mono">EngineConfigSchema</span> (Zod).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 2 OBJECTIVES ===================== -->
+  <section id="objectives">
+    <div class="sec-head"><span class="num">2</span><h2>Objective profiles — the calibrated knobs</h2><span class="tag">objectives.ts · OBJECTIVE_PROFILES</span></div>
+    <div class="card">
+      <p class="small muted" style="margin-top:0">Each portfolio declares one <span class="mono">objective</span>. The engine resolves the matching profile, which selects the
+      scoring KPI and the calibrated parameters. <b>γ = 1 for all</b> — the velocity cap, not gamma, is the real saturation control.</p>
+      <table>
+        <thead>
+          <tr><th>Objective</th><th class="mono">kpiField (score = events/spend)</th><th>Weights 3 / 7 / 14d</th><th>Cap up / down</th><th>Gate</th><th>EWMA α</th><th>Cost label</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="obj" style="background:var(--green)"></span>purchase</td><td class="mono">purchases</td><td>.30 / .50 / .20</td><td>+30% / −40%</td><td>—</td><td>0</td><td>CPA</td></tr>
+          <tr><td><span class="obj" style="background:var(--violet)"></span>app_install</td><td class="mono">appInstalls</td><td>.30 / .50 / .20</td><td>+40% / −45%</td><td>—</td><td>0</td><td>CPI</td></tr>
+          <tr><td><span class="obj" style="background:var(--sky)"></span>signup</td><td class="mono">signups</td><td>.45 / .35 / .20</td><td>+50% / −50%</td><td>—</td><td>0</td><td>CPA</td></tr>
+          <tr><td><span class="obj" style="background:var(--amber)"></span>lead</td><td class="mono">leads</td><td>.10 / .40 / .50</td><td>+25% / −35%</td><td>≥ 5 ev</td><td>0.5</td><td>CPL</td></tr>
+          <tr><td><span class="obj" style="background:var(--teal)"></span>traffic</td><td class="mono">landingPageViews</td><td>.50 / .35 / .15</td><td>+45% / −50%</td><td>—</td><td>0</td><td>CPV</td></tr>
+          <tr><td><span class="obj" style="background:var(--pink)"></span>awareness</td><td class="mono">impressions</td><td>.50 / .35 / .15</td><td>+45% / −50%</td><td>—</td><td>0</td><td>CPM</td></tr>
+        </tbody>
+      </table>
+      <div class="cols3" style="margin-top:14px">
+        <div class="callout c-violet small"><h4>Asymmetric caps</h4>Cuts never penalise CPA; raises are safe to ~50%. So down-caps are wider — except saturating objectives (purchase, lead) keep raises tight.</div>
+        <div class="callout c-amber small"><h4>Lead is special</h4>Noisiest objective (Spearman ≈0.45). 3d is noise → de-weighted; it gets the significance <b>gate</b> + <b>EWMA</b> smoothing + cautious caps.</div>
+        <div class="callout c-sky small"><h4>Weights are robust</h4>Re-weighting barely moves predictiveness (+0.00–0.03 Spearman). The numbers are principled, not over-fit.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3 PIPELINE ===================== -->
+  <section id="pipeline">
+    <div class="sec-head"><span class="num">3</span><h2>The engine pipeline</h2><span class="tag">runCycle() orchestrates all five stages</span></div>
+    <div class="flow">
+
+      <div class="stage viol">
+        <div class="st-title"><span class="obj" style="background:var(--violet)"></span> A · Pacing <span class="fn">pacing.ts → computePacing()</span></div>
+        <div class="st-body">
+          <div class="io"><b>in</b> periodBudget · periodDays · dayIndex · actualSpendToDate</div>
+          <div class="io"><b>out</b> dailyTotal (linear catch-up) · status: on_track / under / over</div>
+        </div>
+        <p class="small muted" style="margin:8px 0 0">Decides <i>how much</i> to spend today from the period plan vs actual spend. Feeds the budget total into reallocation.</p>
+      </div>
+      <div class="arrow">▼<small>dailyTotal</small></div>
+
+      <div class="stage viol">
+        <div class="st-title"><span class="obj" style="background:var(--violet)"></span> B · Classify <span class="fn">classify.ts → classifyPortfolio()</span></div>
+        <div class="st-body">
+          <div class="io"><b>in</b> snapshots + resolved config</div>
+          <div class="io"><b>out</b> per-ad-set status</div>
+        </div>
+        <ul class="tight">
+          <li><span class="k">frozen</span> manual freeze, or age &lt; 3d (budget fully locked)</li>
+          <li><span class="k">grace</span> age &lt; newItemProtectDays (7) → gets average active score</li>
+          <li><span class="k">learning</span> objective-KPI events in 7d &lt; threshold, or age &lt; 7d</li>
+          <li><span class="k">active</span> everything else</li>
+        </ul>
+      </div>
+      <div class="arrow">▼<small>classified snapshots</small></div>
+
+      <div class="stage viol">
+        <div class="st-title"><span class="obj" style="background:var(--amber)"></span> C · Triggers <span class="fn">triggers.ts → evaluateTriggers()</span></div>
+        <div class="st-body">
+          <div class="io"><b>in</b> classified snapshots</div>
+          <div class="io"><b>out</b> Recommendation[] (needsApproval) + starve set</div>
+        </div>
+        <ul class="tight">
+          <li><span class="k">P1</span> zero upper funnel — fast, 3d</li>
+          <li><span class="k">P2</span> sustained poor vs a robust P25 cost reference — 14d</li>
+          <li><span class="k">P3</span> dead weight (spent enough, ~zero results) — 14d</li>
+        </ul>
+        <div class="callout c-amber small" style="margin-top:10px"><h4>⚠ never auto-pauses</h4>Triggers only emit recommendations (all <span class="mono">needsApproval: true</span>) and mark the ad set <span class="mono">starved</span> so the solver drives it toward its floor in the meantime. KPI counting is objective-aware.</div>
+      </div>
+      <div class="arrow">▼<small>starved marks + pool</small></div>
+
+      <div class="stage viol">
+        <div class="st-title"><span class="obj" style="background:var(--violet)"></span> D · Reallocate <span class="fn">engine.ts · scoring.ts · solver.ts</span></div>
+        <div class="st-body">
+          <div class="io"><b>in</b> snapshots · total · resolved config · priorComposites</div>
+          <div class="io"><b>out</b> ReallocationResult (per-item budgets + diagnostics)</div>
+        </div>
+
+        <div class="cols2" style="margin-top:12px">
+          <div class="card" style="background:var(--bg2)">
+            <h3 class="mini">D1 · Score <span class="pill">scoreAdSet()</span></h3>
+            <ul class="tight">
+              <li>window score = <span class="mono">events / spend</span> on the objective KPI</li>
+              <li>trajectory 3d vs 7d → pick positive / neutral / negative weight set</li>
+              <li>significance gate drops sub-threshold windows; composite renormalised</li>
+              <li>saturation γ, then <b>EWMA</b> blend with prior composite</li>
+            </ul>
+          </div>
+          <div class="card" style="background:var(--bg2)">
+            <h3 class="mini">D2 · Solve <span class="pill">solve() · water-filling</span></h3>
+            <ul class="tight">
+              <li>pool = total − frozen; floor = max(% of avg, target·minSignals/window)</li>
+              <li>box per item: <span class="mono">lo = max(floor, cur·(1−down))</span>, <span class="mono">hi = max(cur·(1+up), floor)</span></li>
+              <li>learning keeps the −8% down-cap as an <i>additional</i> floor</li>
+              <li>iteratively assign ∝ score, clamp to box, re-fill → <b>Σ = total exactly</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout c-green small" style="margin-top:10px"><h4>Precedence on conflict</h4><b>Conservation &gt; Floor &gt; Velocity cap.</b> Overflow modes: <span class="mono">breach_best</span> (default) · <span class="mono">underspend</span> · <span class="mono">relax_uniform</span>.</div>
+      </div>
+      <div class="arrow">▼<small>budgets shaped by mode</small></div>
+
+      <div class="stage viol">
+        <div class="st-title"><span class="obj" style="background:var(--violet)"></span> E · Mode <span class="fn">runCycle.ts</span></div>
+        <div class="st-body">
+          <div class="io"><b>in</b> reallocation + mode</div>
+          <div class="io"><b>out</b> CycleResult { pacing, reallocation, recommendations }</div>
+        </div>
+        <div class="cols3" style="margin-top:8px">
+          <div class="callout c-violet small"><h4>balanced</h4>Spend the planned total exactly (overflow → breach best).</div>
+          <div class="callout c-violet small"><h4>efficiency</h4>Total is a ceiling — underspend rather than fund bad inventory.</div>
+          <div class="callout c-violet small"><h4>scale</h4>Grow up to maxBudget while portfolio cost-per-KPI ≤ target.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4 CONFIG ===================== -->
+  <section id="config">
+    <div class="sec-head"><span class="num">4</span><h2>Config resolution &amp; precedence</h2><span class="tag">config.ts → resolveConfig()</span></div>
+    <div class="cols2">
+      <div class="card">
+        <h3 class="mini">Layered merge (lowest → highest)</h3>
+        <div class="stack">
+          <div class="layer"><span class="lbl">DEFAULT_CONFIG</span> — Excel model 1:1 (the additive baseline)</div>
+          <div class="layer win"><span class="lbl">applyObjectiveProfile()</span> — overlays the calibrated profile</div>
+          <div class="layer win"><span class="lbl">portfolio overrides</span> — saved settings (target, caps…)</div>
+          <div class="layer win"><span class="lbl">review overrides</span> — this-reallocation-only tweaks</div>
+        </div>
+        <p class="small faint" style="margin:10px 0 0">Higher layers win. Each layer only sets the keys it cares about; the rest fall through.</p>
+      </div>
+      <div class="card">
+        <h3 class="mini">Why additive matters</h3>
+        <p class="small muted" style="margin-top:0">With <b>no objective</b>, <span class="mono">kpiField</span> is unset and the engine takes the legacy purchase path (Tier-1 1/CPP, Tier-2 ATC proxy, symmetric ±cap). That reproduces the original Excel sheet exactly —</p>
+        <div class="callout c-green small"><h4>✓ fidelity preserved</h4>The Excel-fidelity tests never pass an objective, so they stay green. Objective handling is purely opt-in.</div>
+        <p class="small faint" style="margin:10px 0 0">When an objective <i>is</i> set, scoring switches to <span class="mono">events/spend</span> on its KPI and caps become asymmetric.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 5 EWMA ===================== -->
+  <section id="ewma">
+    <div class="sec-head"><span class="num">5</span><h2>EWMA state — smoothing across cycles</h2><span class="tag">Lead objective only · α = 0.5</span></div>
+    <div class="card">
+      <div class="flow" style="gap:0">
+        <div class="cols3">
+          <div class="stage"><div class="st-title small">priorComposite<sub>t−1</sub></div><p class="small faint" style="margin:6px 0 0">read from OptimizerProvider state, keyed by portfolio → ad-set id</p></div>
+          <div class="stage"><div class="st-title small">scoreAdSet()</div><p class="small faint" style="margin:6px 0 0"><span class="mono">composite = α·raw + (1−α)·prior</span></p></div>
+          <div class="stage"><div class="st-title small">compositeScore<sub>t</sub></div><p class="small faint" style="margin:6px 0 0">emitted in diagnostics → committed on <b>Approve</b> as the next prior</p></div>
+        </div>
+      </div>
+      <div class="callout c-sky small" style="margin-top:12px"><h4>Where state lives today</h4>
+      Session-scoped in <span class="mono">OptimizerProvider</span> (<span class="mono">getPriorComposites</span> / <span class="mono">commitComposites</span>). The engine stays <b>pure</b>: prior in → composite out.
+      Durable cross-session persistence (<span class="mono">ad_set_engine_state</span> in Supabase) is a separate, review-gated migration.</div>
+    </div>
+  </section>
+
+  <!-- ===================== 6 FRONTEND ===================== -->
+  <section id="frontend">
+    <div class="sec-head"><span class="num">6</span><h2>Frontend &amp; API surface</h2><span class="tag">Next.js App Router · React 19 · Radix · Tailwind</span></div>
+    <div class="cols2">
+      <div class="card">
+        <h3 class="mini">Routes <span class="pill">/paid-media/optimizer</span></h3>
+        <div class="stack">
+          <div class="layer route"><span class="seg">/optimizer</span> — Overview (aggregate KPIs, portfolios at a glance)</div>
+          <div class="layer route"><span class="seg">/optimizer/portfolios</span> — list · create · edit</div>
+          <div class="layer route"><span class="seg">/optimizer/actions</span> — global recommendations feed</div>
+          <div class="layer route"><span class="seg">/optimizer/[id]</span> — Dashboard (KPIs + ad-set table)</div>
+          <div class="layer route"><span class="seg">/optimizer/[id]/reallocation</span> — review · asymmetric caps · Approve</div>
+          <div class="layer route"><span class="seg">/optimizer/[id]/settings</span> — objective · budget · caps · mode</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="mini">State &amp; compute path</h3>
+        <div class="flow">
+          <div class="stage small"><b>OptimizerProvider</b> — in-memory portfolios (sample data), approvals, EWMA prior composites</div>
+          <div class="arrow">▼</div>
+          <div class="stage small"><b>runPortfolioCycle()</b> — maps portfolio + overrides → <span class="mono">runCycle()</span> (client-side, instant preview)</div>
+          <div class="arrow">▼ <small>or over HTTP</small></div>
+          <div class="stage small"><b>POST /api/optimizer</b> — Zod-validated, authenticated, pure compute → CycleResult</div>
+        </div>
+        <div class="callout c-amber small" style="margin-top:10px"><h4>Human in the loop</h4>Reallocations apply on approval; <b>pauses always need explicit approval</b>. Conservation badge turns green when <span class="mono">Σ proposed = total</span>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 7 INVARIANTS ===================== -->
+  <section id="invariants">
+    <div class="sec-head"><span class="num">7</span><h2>Cross-cutting invariants</h2><span class="tag">verified by the test suite</span></div>
+    <div class="cols2">
+      <div class="callout c-green"><h4>① Conservation <span class="badge-green">Σ = total</span></h4>Final budgets always sum to the day's total (water-filling + reconciliation). Top guardrail — it never yields.</div>
+      <div class="callout c-amber"><h4>② No auto-pause</h4>The system only lowers budget to a floor (<span class="mono">starved</span>) and recommends. A human approves every pause.</div>
+      <div class="callout c-green"><h4>③ Additive</h4>No objective ⇒ exact Excel behaviour. Turning a profile on never breaks conservation.</div>
+      <div class="callout c-sky"><h4>④ Pure &amp; bounded</h4>Dependency-free TypeScript (Zod only at the edge). No network, no DB inside the engine — trivially testable &amp; portable.</div>
+    </div>
+  </section>
+
+  <!-- ===================== 8 TOPOLOGY ===================== -->
+  <section id="topology">
+    <div class="sec-head"><span class="num">8</span><h2>Package topology</h2><span class="tag">Bun workspace</span></div>
+    <div class="pkgbox">
+      <div class="cols3">
+        <div class="card">
+          <h3 class="mini">@continuum/optimization-engine</h3>
+          <p class="small faint" style="margin:0 0 8px">pure compute · the "backend"</p>
+          <div class="chip-row">
+            <span class="pill">config.ts</span><span class="pill">objectives.ts</span><span class="pill">scoring.ts</span>
+            <span class="pill">engine.ts</span><span class="pill">solver.ts</span><span class="pill">classify.ts</span>
+            <span class="pill">triggers.ts</span><span class="pill">pacing.ts</span><span class="pill">runCycle.ts</span>
+            <span class="pill">ingest.ts</span><span class="pill">schemas.ts</span><span class="pill">internal/math.ts</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="mini">Continuum-Frontend</h3>
+          <p class="small faint" style="margin:0 0 8px">imports the engine via the root entry</p>
+          <div class="chip-row">
+            <span class="pill">app/api/optimizer/route.ts</span>
+            <span class="pill">lib/.../engine-helpers.ts</span>
+            <span class="pill">lib/.../sample-data.ts</span>
+            <span class="pill">components/.../OptimizerProvider</span>
+            <span class="pill">screens/*Client.tsx</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="mini">Boundaries</h3>
+          <ul class="tight" style="margin-top:0">
+            <li>Engine ← consumed by both FE compute &amp; the API route</li>
+            <li>Zod schemas guard every IO edge</li>
+            <li>No engine ↔ network/DB coupling</li>
+            <li>Durable state (Supabase) sits <i>outside</i> the engine</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Continuum Paid-Media Budget Optimizer — conceptual diagram. Identifiers, parameters and stages mirror the live
+    implementation in <span class="mono">@continuum/optimization-engine</span> and the Next.js optimizer screens.
+    Propose-only MVP · live Meta writes, scheduled cron, EWMA DB persistence and Core/Non-Core scaling are documented follow-ups.
+  </footer>
+
+</main>
+</body>
+</html>
