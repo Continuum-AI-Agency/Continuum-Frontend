@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId, useUpdateNodeInternals } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import { NanoGenNodeData } from '../types';
 import { ImageIcon } from '@radix-ui/react-icons';
@@ -38,6 +38,13 @@ import { Toolbar } from '@/components/ai-elements/toolbar';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { getAspectRatioValue, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 
+const VARIATION_COUNTS = [1, 4] as const;
+type VariationCount = typeof VARIATION_COUNTS[number];
+
+const supportsVariations = (_model: NanoGenNodeData['model']) => true;
+
+const variationHandleId = (index: number) => index === 0 ? 'image' : `image-${index}`;
+
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
   const edges = useEdges();
   const nodeId = useNodeId();
@@ -65,10 +72,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const brandId = useStudioStore((state) => state.brandId);
+  const setEdges = useStudioStore((state) => state.setEdges);
+  const currentEdges = useStudioStore((state) => state.edges);
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
-  
+
+  const updateNodeInternals = useUpdateNodeInternals();
   const [isHovered, setIsHovered] = useState(false);
 
   const handleModelChange = useCallback(
@@ -141,12 +151,47 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     [id, triggerSave, updateNode]
   );
 
+  const handleVariationCountChange = useCallback(
+    (count: VariationCount) => {
+      const previousCount = data.variationCount ?? 1;
+
+      updateNode(id, (node) => ({
+        ...node,
+        data: { ...(node.data as NanoGenNodeData), variationCount: count },
+      }));
+
+      if (count < previousCount) {
+        const reroutedEdges = currentEdges.map((edge) => {
+          if (edge.source !== id) return edge;
+          const handleIndex = edge.sourceHandle === 'image' || !edge.sourceHandle
+            ? 0
+            : parseInt(edge.sourceHandle.replace('image-', ''), 10) || 0;
+          if (handleIndex >= count) {
+            return { ...edge, sourceHandle: 'image' };
+          }
+          return edge;
+        });
+        setEdges(reroutedEdges);
+      }
+
+      triggerSave();
+      updateNodeInternals(id);
+    },
+    [currentEdges, data.variationCount, id, setEdges, triggerSave, updateNode, updateNodeInternals]
+  );
+
   const handleRun = useCallback(async () => {
     console.info("[studio] run image node", { nodeId: id });
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
-  const previewImage = (data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl;
+  const variationCount = data.variationCount ?? 1;
+  const displayImages = data.generatedImages && data.generatedImages.length > 1
+    ? data.generatedImages
+    : null;
+  const previewImage = displayImages
+    ? null
+    : (data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl;
   const refImageLimit = data.maxReferenceImages ?? 14;
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = getAspectRatioValue(aspectRatio);
@@ -183,6 +228,97 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     }
   }, [previewImage, fileBaseName, show]);
 
+  const renderImageContent = () => {
+    if (data.isExecuting) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-muted p-4">
+          <AspectRatio ratio={ratio} className="w-full h-full">
+            <GenerationPulseLoader />
+          </AspectRatio>
+        </div>
+      );
+    }
+
+    if (displayImages) {
+      return (
+        <div className={cn(
+          "w-full h-full grid gap-0.5 bg-muted",
+          displayImages.length <= 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2"
+        )}>
+          {displayImages.map((img, index) => (
+            <div key={index} className="relative overflow-hidden bg-muted">
+              <img
+                src={img.dataUrl}
+                alt={`Generated image ${index + 1}`}
+                className="h-full w-full object-cover"
+              />
+              <Button
+                variant="secondary"
+                size="icon"
+                className="nodrag absolute right-1 top-1 z-20 h-6 w-6 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/preview:opacity-90 hover:opacity-100"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  downloadAsset({ data: img.dataUrl, baseName: `${fileBaseName}-${index + 1}`, fallbackExtension: 'png' });
+                }}
+                title={`Download image ${index + 1}`}
+                aria-label={`Download image ${index + 1}`}
+              >
+                <DownloadIcon className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (previewImage) {
+      return (
+        <div className="relative w-full h-full flex items-center justify-center bg-muted">
+          <div className="w-full h-full">
+            <AspectRatio ratio={ratio} className="h-full w-full">
+              <img
+                src={previewImage as string}
+                alt="Generated Image"
+                className="h-full w-full object-contain"
+              />
+            </AspectRatio>
+          </div>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDownload();
+            }}
+            title="Download Output"
+            aria-label="Download generated image"
+          >
+            <DownloadIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ImageIcon />
+            </EmptyMedia>
+            <EmptyTitle>No Image</EmptyTitle>
+            <EmptyDescription>Generated image will appear here</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
+    );
+  };
+
+  const outputHandleCount = displayImages ? displayImages.length : variationCount;
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -196,11 +332,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-      <NodeResizer 
-        minWidth={200} 
-        minHeight={200} 
-        isVisible={selected} 
-        lineClassName="border-brand-primary/60" 
+      <NodeResizer
+        minWidth={200}
+        minHeight={200}
+        isVisible={selected}
+        lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
 
@@ -209,9 +345,28 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         position={Position.Top}
         className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
       >
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
-            <PlayIcon className="h-4 w-4" />
-          </Button>
+        {supportsVariations(data.model) && (
+          <div className="flex items-center gap-0.5 rounded border border-border/60 bg-muted/50 p-0.5">
+            {VARIATION_COUNTS.map((count) => (
+              <button
+                key={count}
+                className={cn(
+                  "h-5 min-w-[1.25rem] rounded px-1 text-[10px] font-medium transition-colors",
+                  variationCount === count
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => handleVariationCountChange(count)}
+                title={`Generate ${count} variation${count > 1 ? 's' : ''}`}
+              >
+                {count}
+              </button>
+            ))}
+          </div>
+        )}
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
+          <PlayIcon className="h-4 w-4" />
+        </Button>
       </Toolbar>
 
       <CanvasNode
@@ -220,97 +375,110 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
         <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
-            {data.isExecuting ? (
-              <div className="w-full h-full flex items-center justify-center bg-muted p-4">
-                  <AspectRatio ratio={ratio} className="w-full h-full">
-                      <GenerationPulseLoader />
-                  </AspectRatio>
-              </div>
-            ) : previewImage ? (
-              <div className="relative w-full h-full flex items-center justify-center bg-muted">
-                <div className="w-full h-full">
-                  <AspectRatio ratio={ratio} className="h-full w-full">
-                    <img
-                      src={previewImage as string}
-                      alt="Generated Image"
-                      className="h-full w-full object-contain"
-                    />
-                  </AspectRatio>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleDownload();
-                  }}
-                  title="Download Output"
-                  aria-label="Download generated image"
-                >
-                  <DownloadIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <ImageIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>No Image</EmptyTitle>
-                    <EmptyDescription>Generated image will appear here</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              </div>
-            )}
+          {renderImageContent()}
         </NodeContent>
       </CanvasNode>
 
-      <div
-        className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-      >
-        <Handle 
-          type="source" 
-          position={Position.Right} 
-          id="image" 
-          className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto" 
-        />
-      </div>
+      {outputHandleCount === 4 ? (
+        <>
+          {([0, 1] as const).map((index) => (
+            <div
+              key={index}
+              className="absolute -top-2 pointer-events-none"
+              style={{
+                ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                left: `${25 + index * 50}%`,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <div className="relative group/handle pointer-events-auto">
+                <Handle
+                  type="source"
+                  position={Position.Top}
+                  id={variationHandleId(index)}
+                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                <span className="studio-handle-pill absolute top-6 left-1/2 -translate-x-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                  {index + 1}
+                </span>
+              </div>
+            </div>
+          ))}
+          {([2, 3] as const).map((index) => (
+            <div
+              key={index}
+              className="absolute -bottom-2 pointer-events-none"
+              style={{
+                ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                left: `${25 + (index - 2) * 50}%`,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <div className="relative group/handle pointer-events-auto">
+                <Handle
+                  type="source"
+                  position={Position.Bottom}
+                  id={variationHandleId(index)}
+                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                <span className="studio-handle-pill absolute bottom-6 left-1/2 -translate-x-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                  {index + 1}
+                </span>
+              </div>
+            </div>
+          ))}
+        </>
+      ) : (
+        <div
+          className="absolute -right-2 flex items-center pointer-events-none"
+          style={{
+            ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}
+        >
+          <div className="relative pointer-events-auto">
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="image"
+              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Handles Container - Outside of Card to prevent clipping */}
       <div className="absolute -left-2 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
-          
+
           <div
             className="relative pointer-events-auto group/handle"
             style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
           >
-            <LimitedHandle 
-              type="target" 
-              position={Position.Left} 
-              id="prompt" 
+            <LimitedHandle
+              type="target"
+              position={Position.Left}
+              id="prompt"
               maxConnections={1}
-              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
+              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
             />
             <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
               Prompt
             </span>
           </div>
-          
+
 
 
           <div
             className="relative pointer-events-auto group/handle"
             style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
           >
-            <LimitedHandle 
-              type="target" 
-              position={Position.Left} 
-              id="ref-image" 
+            <LimitedHandle
+              type="target"
+              position={Position.Left}
+              id="ref-image"
               maxConnections={refImageLimit}
-              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
+              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
             />
             <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
               Ref Image
