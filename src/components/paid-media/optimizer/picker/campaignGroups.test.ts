@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { AdSetSnapshot, WindowMetrics } from '@continuum/contracts';
-import { buildCampaignSections, filterSection, sectionEligibleIds } from './campaignGroups';
+import {
+  buildCampaignSections,
+  buildCboCampaignSections,
+  filterSection,
+  sectionEligibleIds,
+} from './campaignGroups';
 
 function win(spend: number, purchases = 0): WindowMetrics {
   return { spend, purchases, addToCarts: 0, clicks: 0, impressions: 0 };
@@ -179,6 +184,59 @@ describe('campaign mode', () => {
     );
     const cbo = sections.find((s) => s.campaignId === 'cbo');
     expect(sectionEligibleIds(cbo?.adsets ?? [])).toEqual(['cbo']);
+  });
+});
+
+describe('buildCboCampaignSections', () => {
+  const cboSet = (id: string, campaignId: string, campaignName: string): AdSetSnapshot =>
+    snap({
+      id,
+      campaignId,
+      campaignName,
+      status: 'frozen',
+      freeze: true,
+      freezeReason: 'unsupported_budget',
+      currentBudget: 0,
+      windows: { d3: win(30), d7: win(70), d14: win(140) },
+    });
+
+  it('groups only the CBO-held ad sets by their parent campaign', () => {
+    const sections = buildCboCampaignSections([
+      cboSet('a', 'c1', 'Summer CBO'),
+      cboSet('b', 'c1', 'Summer CBO'),
+      snap({ id: 'live', campaignId: 'c2', campaignName: 'Always-On' }), // eligible, not CBO
+    ]);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].campaignId).toBe('c1');
+    expect(sections[0].totalCount).toBe(2);
+  });
+
+  it('excludes CBO ad sets without a campaign id (a convert needs one)', () => {
+    const sections = buildCboCampaignSections([
+      snap({
+        id: 'orphan',
+        status: 'frozen',
+        freeze: true,
+        freezeReason: 'unsupported_budget',
+        currentBudget: 0,
+        windows: { d3: win(0), d7: win(0), d14: win(0) },
+      }),
+    ]);
+    expect(sections).toHaveLength(0);
+  });
+
+  it('ignores non-CBO holds (e.g. no_conversions)', () => {
+    const sections = buildCboCampaignSections([
+      snap({
+        id: 'held',
+        campaignId: 'c9',
+        campaignName: 'Thin',
+        status: 'frozen',
+        freeze: true,
+        freezeReason: 'no_conversions',
+      }),
+    ]);
+    expect(sections).toHaveLength(0);
   });
 });
 

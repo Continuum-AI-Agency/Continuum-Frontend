@@ -51,9 +51,21 @@ export function campaignRows(
     .sort((a, b) => b.spend14 - a.spend14);
 }
 
+/** A pause/refresh recommendation the dry-run would raise, flattened to the wire
+ *  casing the FE renders (engine emits camelCase `adSetId`). Client-side what-if
+ *  recs have no DB id, so the insight anchor keys them by content hash. */
+export type WhatIfRecommendation = {
+  adsetId: string;
+  kind: string;
+  trigger: string;
+  severity: string;
+  reason: string;
+};
+
 export type WhatIfResult = {
   /** Per-ad-set proposal in the shape the ReallocationFlow / CI viz already consume. */
   items: CycleItemRow[];
+  recommendations: WhatIfRecommendation[];
   confidenceScore: number | null;
   confidenceBand: string | null;
   allocatedTotal: number;
@@ -86,9 +98,18 @@ export function runWhatIf(
     },
   }));
 
+  const recommendations: WhatIfRecommendation[] = result.recommendations.map((rec) => ({
+    adsetId: rec.adSetId,
+    kind: rec.kind,
+    trigger: rec.trigger,
+    severity: rec.severity,
+    reason: rec.reason,
+  }));
+
   const confidence = result.confidence as { score?: number; band?: string };
   return {
     items,
+    recommendations,
     confidenceScore: typeof confidence.score === 'number' ? confidence.score : null,
     confidenceBand: typeof confidence.band === 'string' ? confidence.band : null,
     allocatedTotal: result.reallocation.allocatedTotal,

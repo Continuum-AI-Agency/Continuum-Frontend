@@ -16,7 +16,7 @@ type OptimizerOnboardingProps = {
   adAccountId: string;
   platform: PaidMediaPlatform;
   currency?: string | null;
-  onCreated: () => void;
+  onCreated: (portfolioId: string) => void;
 };
 
 const STEPS = ['Discover account', 'Review suggestions', 'Create & enroll'];

@@ -26,7 +26,7 @@ type OptimizerPortfoliosProps = {
   portfolios: PortfolioListItem[];
   selectedPortfolioId: string | null;
   currency?: string | null;
-  onCreated?: () => void;
+  onCreated?: (portfolioId: string) => void;
 };
 
 type CardPanel = 'performance' | 'manage' | null;
@@ -135,6 +135,7 @@ function PortfolioCard({
               brandId={brandId}
               adAccountId={adAccountId}
               currency={currency}
+              applyMode={portfolio.apply_mode}
             />
           ) : (
             <PortfolioManagePanel
@@ -247,9 +248,9 @@ export function OptimizerPortfolios({
             adAccountId={adAccountId}
             currency={currency ?? null}
             showAccountHeader={false}
-            onCreated={() => {
+            onCreated={(portfolioId) => {
               setCreating(false);
-              onCreated?.();
+              onCreated?.(portfolioId);
             }}
           />
         </div>

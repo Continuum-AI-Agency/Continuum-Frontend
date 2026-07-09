@@ -6,14 +6,15 @@
 // ones. Objective is immutable after create (shown read-only). Reached from a
 // portfolio card's "Manage" disclosure.
 
-import type {
-  ApplyMode,
-  OptimizationModeDto,
-  PortfolioLevel,
-  PortfolioListItem,
-  UpdatePortfolioPatch,
+import {
+  type ApplyMode,
+  type OptimizationModeDto,
+  type PortfolioLevel,
+  type PortfolioListItem,
+  toMinorUnits,
+  type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { Archive, Loader2 } from 'lucide-react';
+import { Archive, Loader2, Pause, Play } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   AlertDialog,
@@ -66,17 +67,28 @@ export function PortfolioManagePanel({
   // snapshot scope + picker mode the manage panel shows. Enroll/unenroll operate
   // on the entity id at either level, so the diff below is unchanged.
   const level = (portfolio.level as PortfolioLevel) ?? 'adset';
-  const { update, enroll, unenroll, archive } = useOptimizerMutations(brandId, adAccountId);
+  const { update, enroll, unenroll, archive, setPaused } = useOptimizerMutations(
+    brandId,
+    adAccountId,
+  );
   const enrolledRead = useOptimizerEnrolledAdsets(portfolio.id);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
 
   const [name, setName] = useState(portfolio.name);
   const [mode, setMode] = useState<OptimizationModeDto>(portfolio.mode as OptimizationModeDto);
   const [applyMode, setApplyMode] = useState<ApplyMode>(portfolio.apply_mode as ApplyMode);
+  // Confirmation gate: flipping ON autopilot begins writing real budgets, so it opens a
+  // dialog before it takes effect (mirrors the Archive confirm).
+  const [pendingAutopilot, setPendingAutopilot] = useState(false);
   const [dailyTotal, setDailyTotal] = useState(
     portfolio.daily_total != null ? String(portfolio.daily_total) : '',
   );
   const [cpaTarget, setCpaTarget] = useState('');
+  // Autopilot blast-radius guardrails. Inputs are MAJOR: dollars/day and percent/cycle;
+  // converted to the contract's minor units / fraction on save. Blank = keep current.
+  const [maxDailyApply, setMaxDailyApply] = useState('');
+  const [maxChangePct, setMaxChangePct] = useState('');
+  const isPaused = Boolean(portfolio.autopilot_paused);
   // null until the operator first touches the picker — before that the enrolled
   // roster is the selection (kept reactive as the async read resolves).
   const [selection, setSelection] = useState<string[] | null>(null);
@@ -100,8 +112,44 @@ export function PortfolioManagePanel({
     }
     const cpa = Number.parseFloat(cpaTarget);
     if (Number.isFinite(cpa) && cpa > 0) next.cpa_target = cpa;
+    const maxDaily = Number.parseFloat(maxDailyApply);
+    if (Number.isFinite(maxDaily) && maxDaily >= 0) {
+      next.max_daily_apply_minor = toMinorUnits(maxDaily, currency);
+    }
+    const maxPct = Number.parseFloat(maxChangePct);
+    if (Number.isFinite(maxPct) && maxPct >= 0) next.max_change_pct_per_cycle = maxPct / 100;
     return next;
-  }, [name, mode, applyMode, dailyTotal, cpaTarget, portfolio]);
+  }, [
+    name,
+    mode,
+    applyMode,
+    dailyTotal,
+    cpaTarget,
+    maxDailyApply,
+    maxChangePct,
+    portfolio,
+    currency,
+  ]);
+
+  // Autopilot writes real budgets to Meta, and the apply layer reads an absent cap as
+  // UNCAPPED — so it may only be armed once BOTH guardrails are set and positive. The DB
+  // refuses the flip too (optimizer_portfolios_autopilot_guardrails_chk); this keeps the
+  // user from reaching a save that would only fail. A blank input means "keep current".
+  const guardrailsReady = useMemo(() => {
+    const dailyCapMinor = patch.max_daily_apply_minor ?? portfolio.max_daily_apply_minor;
+    const pctCap = patch.max_change_pct_per_cycle ?? portfolio.max_change_pct_per_cycle;
+    return Boolean(dailyCapMinor && dailyCapMinor > 0 && pctCap && pctCap > 0);
+  }, [patch, portfolio]);
+
+  // Flip to autopilot only through the confirm dialog; every other transition is immediate.
+  function handleApplyModeChange(value: ApplyMode) {
+    if (value === 'autopilot' && applyMode !== 'autopilot') {
+      if (!guardrailsReady) return;
+      setPendingAutopilot(true);
+    } else {
+      setApplyMode(value);
+    }
+  }
 
   const { toAdd, toRemove } = useMemo(() => {
     const enrolledSet = new Set(enrolledIds);
@@ -182,18 +230,30 @@ export function PortfolioManagePanel({
         </div>
         <div className="space-y-1.5">
           <Label>Apply mode</Label>
-          <Select value={applyMode} onValueChange={(value) => setApplyMode(value as ApplyMode)}>
+          <Select
+            value={applyMode}
+            onValueChange={(value) => handleApplyModeChange(value as ApplyMode)}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {APPLY_MODES.map((value) => (
-                <SelectItem key={value} value={value}>
+                <SelectItem
+                  key={value}
+                  value={value}
+                  disabled={value === 'autopilot' && !guardrailsReady}
+                >
                   {humanize(value)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {!guardrailsReady && applyMode !== 'autopilot' ? (
+            <p className="text-2xs text-muted-foreground">
+              Set both autopilot guardrails below to enable autopilot.
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`manage-daily-${portfolio.id}`}>Daily budget ({symbol})</Label>
@@ -215,6 +275,107 @@ export function PortfolioManagePanel({
           />
         </div>
       </div>
+
+      <div className="space-y-2.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold tracking-tight">Autopilot guardrails</p>
+            <p className="text-2xs text-muted-foreground">
+              Both are required to turn autopilot on. They bound autonomous budget writes: a change
+              over the % cap is held for your approval instead of being auto-applied.
+            </p>
+          </div>
+          {portfolio.apply_mode === 'autopilot' ? (
+            <Button
+              type="button"
+              variant={isPaused ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5"
+              disabled={setPaused.isPending}
+              onClick={() =>
+                setPaused.mutate({
+                  portfolio_id: portfolio.id,
+                  paused: !isPaused,
+                  reason: isPaused ? undefined : 'Paused from Manage panel',
+                })
+              }
+            >
+              {setPaused.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : isPaused ? (
+                <Play className="size-3.5" />
+              ) : (
+                <Pause className="size-3.5" />
+              )}
+              {isPaused ? 'Resume autopilot' : 'Pause autopilot'}
+            </Button>
+          ) : null}
+        </div>
+        {isPaused ? (
+          <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs text-amber-600 dark:text-amber-400">
+            Autopilot is paused — no autonomous budget writes until you resume.
+          </p>
+        ) : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={`manage-maxdaily-${portfolio.id}`}>
+              Max autopilot spend/day ({symbol})
+            </Label>
+            <Input
+              id={`manage-maxdaily-${portfolio.id}`}
+              inputMode="decimal"
+              value={maxDailyApply}
+              onChange={(event) => setMaxDailyApply(event.target.value)}
+              placeholder={
+                portfolio.max_daily_apply_minor ? 'leave blank to keep' : 'required for autopilot'
+              }
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`manage-maxpct-${portfolio.id}`}>Max change per cycle (%)</Label>
+            <Input
+              id={`manage-maxpct-${portfolio.id}`}
+              inputMode="decimal"
+              value={maxChangePct}
+              onChange={(event) => setMaxChangePct(event.target.value)}
+              placeholder={
+                portfolio.max_change_pct_per_cycle
+                  ? 'leave blank to keep'
+                  : 'required · larger changes held for approval'
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      <AlertDialog
+        open={pendingAutopilot}
+        onOpenChange={(open) => {
+          if (!open) setPendingAutopilot(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Turn on autopilot for “{portfolio.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Autopilot begins writing real budgets to Meta on every cycle, within your guardrails.
+              Every change is logged and audited, and you can pause it instantly from this panel. It
+              takes effect when you save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingAutopilot(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setApplyMode('autopilot');
+                setPendingAutopilot(false);
+              }}
+            >
+              Turn on autopilot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="space-y-1.5">
         <Label>{level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}</Label>

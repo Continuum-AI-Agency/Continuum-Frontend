@@ -72,6 +72,26 @@ describe('splitReallocation', () => {
     expect(flow.totalMoved).toBe(380);
     expect(flow.maxAbs).toBe(410);
   });
+
+  it('carries the current→proposed budget pair and signed % per moved row', () => {
+    const items = [
+      item({
+        adset_id: 'gain',
+        current_budget: 40,
+        final_budget: 60,
+        change_abs: 20,
+        change_pct: 0.5,
+      }),
+    ];
+    const flow = splitReallocation(items);
+    expect(flow.gaining[0]).toMatchObject({
+      adsetId: 'gain',
+      change: 20,
+      current: 40,
+      proposed: 60,
+      changePct: 0.5,
+    });
+  });
 });
 
 describe('budgetByObjective', () => {

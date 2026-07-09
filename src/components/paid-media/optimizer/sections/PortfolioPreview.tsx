@@ -16,9 +16,12 @@ import * as React from 'react';
 
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { deriveCpa, formatCpa, formatCurrency, humanize } from '../format';
+import { recommendationInsightKey } from '../insightKey';
 import { campaignRows, runWhatIf } from '../preview/whatIf';
+import { RecommendationInsight } from './RecommendationInsight';
 
 type PortfolioPreviewProps = {
+  brandId: string;
   snapshots: AdSetSnapshot[];
   objective: OptimizationObjective;
   mode: OptimizationModeDto;
@@ -27,6 +30,7 @@ type PortfolioPreviewProps = {
 };
 
 export function PortfolioPreview({
+  brandId,
   snapshots,
   objective,
   mode,
@@ -94,7 +98,29 @@ export function PortfolioPreview({
           <span className="text-3xs text-muted-foreground">preview only — nothing applied</span>
         </div>
         {whatIf ? (
-          <ReallocationFlow items={whatIf.items} currency={currency} />
+          <div className="space-y-2">
+            <ReallocationFlow currency={currency} items={whatIf.items} />
+            {whatIf.recommendations.length > 0 ? (
+              <div className="space-y-1.5">
+                {whatIf.recommendations.map((rec) => (
+                  <div
+                    className="rounded-md border border-border/60 bg-card px-2.5 py-1.5"
+                    key={recommendationInsightKey(rec)}
+                  >
+                    <RecommendationInsight
+                      adsetId={rec.adsetId}
+                      brandId={brandId}
+                      kind={rec.kind}
+                      reason={rec.reason}
+                      severity={rec.severity}
+                      trigger={rec.trigger}
+                    />
+                    <p className="mt-0.5 text-3xs text-muted-foreground">{rec.reason}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : (
           <p className="text-xs text-muted-foreground">Not enough signal to simulate a cycle.</p>
         )}

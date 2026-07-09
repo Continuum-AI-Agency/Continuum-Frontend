@@ -12,13 +12,14 @@ import { RefreshCwIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePollWhile } from '@/lib/paid-media/optimizerStore';
 import { cn } from '@/lib/utils';
 import { AngleMatrix } from '../charts/AngleMatrix';
 import { ConfidenceGauge } from '../charts/ConfidenceGauge';
 import { CpaTrendChart } from '../charts/CpaTrendChart';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { formatCurrency } from '../format';
-import { confidenceBand, parseReport, recommendationLabel } from '../reportModel';
+import { applyModeExplainer, confidenceBand, parseReport } from '../reportModel';
 import {
   useOptimizerAngleMatrix,
   useOptimizerCpaSeries,
@@ -27,12 +28,16 @@ import {
 } from '../useOptimizerData';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { OptimizerPanel } from './OptimizerPanel';
+import { RecommendationInsight } from './RecommendationInsight';
 
 type PortfolioPerformancePanelProps = {
   portfolioId: string;
   brandId: string;
   adAccountId: string;
   currency?: string | null;
+  // The portfolio's autonomy tier, so the reallocation panel can state whether these
+  // moves are proposals (recommend) or auto-applied (autopilot).
+  applyMode?: string | null;
 };
 
 function ciCpa(item: CycleItemRow): number | null {
@@ -44,6 +49,7 @@ export function PortfolioPerformancePanel({
   brandId,
   adAccountId,
   currency,
+  applyMode,
 }: PortfolioPerformancePanelProps) {
   const performanceQuery = useOptimizerPerformance(portfolioId);
   const cpaSeriesQuery = useOptimizerCpaSeries(portfolioId);
@@ -56,6 +62,9 @@ export function PortfolioPerformancePanel({
   const items = report?.latest_items ?? [];
   const recommendations = report?.recommendations ?? [];
   const latestRun = report?.latest_run ?? null;
+  // Await the first cycle of a freshly-enrolled portfolio (scheduler + the create
+  // path's kicked run land it) — poll until it appears instead of sitting empty.
+  usePollWhile(!latestRun, performanceQuery.refetch);
   const confidence = confidenceBand(latestRun?.confidence?.band);
   const confidenceScore = latestRun?.confidence?.score;
 
@@ -132,6 +141,7 @@ export function PortfolioPerformancePanel({
       </OptimizerPanel>
 
       <OptimizerPanel title="Reallocation" bodyClassName="space-y-4">
+        <p className="text-3xs text-muted-foreground">{applyModeExplainer(applyMode)}</p>
         <ConfidenceGauge confidence={latestRun?.confidence ?? null} />
         <ReallocationFlow items={items} currency={currency} />
       </OptimizerPanel>
@@ -171,12 +181,19 @@ export function PortfolioPerformancePanel({
           </p>
           <div className="space-y-2">
             {recommendations.map((rec) => {
-              const { label, glyph } = recommendationLabel(rec.kind);
               return (
                 <div key={rec.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
                   <p className="text-sm font-semibold tracking-tight">
-                    {glyph} {label} ·{' '}
-                    <code className="rounded bg-muted px-1 py-0.5 text-xs">{rec.adset_id}</code>
+                    <RecommendationInsight
+                      adsetId={rec.adset_id}
+                      brandId={brandId}
+                      id={rec.id}
+                      kind={rec.kind}
+                      reason={rec.reason ?? ''}
+                      severity={rec.severity}
+                      trigger={rec.trigger}
+                    />{' '}
+                    · <code className="rounded bg-muted px-1 py-0.5 text-xs">{rec.adset_id}</code>
                   </p>
                   <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                     <Badge variant="outline" className="text-3xs">

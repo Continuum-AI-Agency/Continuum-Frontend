@@ -11,8 +11,7 @@ import type { EngineConfig } from './config';
 import { costPerEvent, kpiEvents, scoreAdSet } from './scoring';
 import type { AdSetSnapshot, Recommendation } from './types';
 
-const isEvaluable = (s: AdSetSnapshot): boolean =>
-  s.status !== 'frozen' && s.status !== 'flagged';
+const isEvaluable = (s: AdSetSnapshot): boolean => s.status !== 'frozen' && s.status !== 'flagged';
 
 /** Lower-percentile ("robust best") of a sorted-ascending numeric array. */
 function percentile(values: number[], p: number): number {
@@ -27,10 +26,7 @@ export type TriggerOutput = {
   starveIds: Set<string>;
 };
 
-export function evaluateTriggers(
-  snapshots: AdSetSnapshot[],
-  cfg: EngineConfig,
-): TriggerOutput {
+export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig): TriggerOutput {
   const recs: Recommendation[] = [];
   const starve = new Set<string>();
 
@@ -47,10 +43,7 @@ export function evaluateTriggers(
     .map((s) => s.windows.d3.spend / s.windows.d3.addToCarts);
   const avgAtcCost = atcCosts.length ? atcCosts.reduce((a, b) => a + b, 0) / atcCosts.length : 0;
 
-  const floor = Math.max(
-    (cfg.cpaTarget * cfg.floorMinSignals) / cfg.floorWindowDays,
-    0,
-  );
+  const floor = Math.max((cfg.cpaTarget * cfg.floorMinSignals) / cfg.floorWindowDays, 0);
 
   for (const s of snapshots) {
     if (!isEvaluable(s)) continue;
@@ -67,9 +60,19 @@ export function evaluateTriggers(
       (d3.addToCarts === 0 ||
         (avgAtcCost > 0 && atcCost3d > cfg.upperFunnelOverrideMult * avgAtcCost));
     if (p1) {
+      // P1 fires on two disjoint conditions; say which one actually happened. The reason is
+      // the sole grounding source for the AI insight tooltip, so every figure in it must be
+      // real — a placeholder like "null" reads as a number that was never measured.
+      const reason =
+        d3.addToCarts === 0
+          ? `Spent ${d3.spend.toFixed(0)} over 3d with 0 conversions and 0 add-to-carts.`
+          : `Spent ${d3.spend.toFixed(0)} over 3d with 0 conversions and an add-to-cart cost of ${atcCost3d.toFixed(0)} — over ${cfg.upperFunnelOverrideMult}× the portfolio average of ${avgAtcCost.toFixed(0)}.`;
       recs.push({
-        adSetId: s.id, kind: 'pause', trigger: 'P1_zero_upper_funnel', severity: 'high',
-        reason: `Spent ${d3.spend.toFixed(0)} over 3d with 0 conversions and null / ${cfg.upperFunnelOverrideMult}× upper-funnel cost vs portfolio average.`,
+        adSetId: s.id,
+        kind: 'pause',
+        trigger: 'P1_zero_upper_funnel',
+        severity: 'high',
+        reason,
         needsApproval: true,
       });
       starve.add(s.id);
@@ -81,7 +84,10 @@ export function evaluateTriggers(
       const cpp14 = costPerEvent(d14, cfg);
       if (cpp14 > cfg.sustainedPoorMultiplier * robustBestCpp) {
         recs.push({
-          adSetId: s.id, kind: 'pause', trigger: 'P2_sustained_poor', severity: 'medium',
+          adSetId: s.id,
+          kind: 'pause',
+          trigger: 'P2_sustained_poor',
+          severity: 'medium',
           reason: `CPP 14d $${cpp14.toFixed(0)} > ${cfg.sustainedPoorMultiplier}× the robust reference ($${robustBestCpp.toFixed(0)}), with no recent improvement.`,
           needsApproval: true,
         });
@@ -91,9 +97,16 @@ export function evaluateTriggers(
     }
 
     // P3 — low significance / dead weight (spent enough, ~zero results)
-    if (kpiEvents(d14, cfg) === 0 && kpiEvents(s.windows.d7, cfg) === 0 && d14.spend > cfg.cpaTarget) {
+    if (
+      kpiEvents(d14, cfg) === 0 &&
+      kpiEvents(s.windows.d7, cfg) === 0 &&
+      d14.spend > cfg.cpaTarget
+    ) {
       recs.push({
-        adSetId: s.id, kind: 'pause', trigger: 'P3_low_significance', severity: 'low',
+        adSetId: s.id,
+        kind: 'pause',
+        trigger: 'P3_low_significance',
+        severity: 'low',
         reason: `Spent $${d14.spend.toFixed(0)} over 14d (> 1 target CPA) with 0 conversions: dead weight.`,
         needsApproval: true,
       });

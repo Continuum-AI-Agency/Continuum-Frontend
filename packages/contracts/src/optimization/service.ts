@@ -49,6 +49,11 @@ export const PortfolioConfigSchema = z.object({
   period_budget: z.number().nonnegative().optional(),
   cpa_target: z.number().positive().optional(),
   velocity_cap_pct: z.number().min(0).max(5).optional(),
+  /** Autopilot guardrails. max_daily_apply_minor: refuse autopilot if the daily pool
+   *  exceeds this ceiling (MINOR units). max_change_pct_per_cycle: an autopilot change
+   *  above this fraction is HELD for per-item human approval instead of auto-written. */
+  max_daily_apply_minor: z.number().int().nonnegative().optional(),
+  max_change_pct_per_cycle: z.number().min(0).optional(),
   /** DeepPartial<EngineConfig> overrides — kept loose; the engine validates. */
   config: z.record(z.string(), z.unknown()).optional(),
 });
@@ -82,6 +87,9 @@ export const UpdatePortfolioPatchSchema = z
     period_budget: z.number().nonnegative().nullable().optional(),
     cpa_target: z.number().positive().nullable().optional(),
     velocity_cap_pct: z.number().min(0).max(5).optional(),
+    // Autopilot guardrails — null clears the cap (uncapped).
+    max_daily_apply_minor: z.number().int().nonnegative().nullable().optional(),
+    max_change_pct_per_cycle: z.number().min(0).nullable().optional(),
     status: PortfolioStatusSchema.optional(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
@@ -199,6 +207,19 @@ export const CycleItemDiagnosticsSchema = z
 export type CycleItemDiagnostics = z.infer<typeof CycleItemDiagnosticsSchema>;
 
 /** One optimizer.cycle_items row inside CycleRunReport.latest_items. */
+/** Per-item apply state. 'held' is an AUTOPILOT change parked over the portfolio's
+ *  max_change_pct_per_cycle — scored, too large to auto-write, waiting on a human.
+ *  'approved_pending' is one a human approved (optimizer_request_apply_item) and the
+ *  service's /apply/approved will execute. Mirrors optimizer_cycle_items_apply_status_chk. */
+export const CycleItemApplyStatusSchema = z.enum([
+  'applied',
+  'failed',
+  'skipped',
+  'held',
+  'approved_pending',
+]);
+export type CycleItemApplyStatus = z.infer<typeof CycleItemApplyStatusSchema>;
+
 export const CycleItemRowSchema = z
   .object({
     adset_id: z.string(),
@@ -208,6 +229,11 @@ export const CycleItemRowSchema = z
     change_pct: z.number().nullable(),
     composite_score: z.number().nullable().optional(),
     diagnostics: CycleItemDiagnosticsSchema.nullable().optional(),
+    // optimizer_get_portfolio_performance returns the whole cycle_items row (to_jsonb),
+    // so these arrive already — declaring them is what makes a held item renderable.
+    apply_status: CycleItemApplyStatusSchema.nullable().optional(),
+    apply_requested_by: z.string().nullable().optional(),
+    apply_requested_at: z.string().nullable().optional(),
   })
   .loose();
 export type CycleItemRow = z.infer<typeof CycleItemRowSchema>;
@@ -226,6 +252,30 @@ export const RecommendationRowSchema = z
   })
   .loose();
 export type RecommendationRow = z.infer<typeof RecommendationRowSchema>;
+
+/** Request to the optimizer-insight edge fn: generate/fetch a plain-language
+ *  rephrasing of a recommendation's deterministic reason. `insightKey` is the DB
+ *  recommendation id for enrolled recs, or a content hash (wi_<fnv1a>) for
+ *  client-side what-if recs. `reason` is the grounding source — the model rephrases
+ *  it and never introduces a figure not present in it. */
+export const OptimizerInsightRequestSchema = z.object({
+  brandId: z.string(),
+  insightKey: z.string().min(1),
+  adsetId: z.string(),
+  reason: z.string().min(1),
+  kind: z.string(),
+  trigger: z.string(),
+  severity: z.string().nullable().optional(),
+});
+export type OptimizerInsightRequest = z.infer<typeof OptimizerInsightRequestSchema>;
+
+/** Response from optimizer-insight. `source` distinguishes a durable cache hit,
+ *  fresh Gemini output, and the deterministic-reason fallback (Gemini unavailable). */
+export const OptimizerInsightResponseSchema = z.object({
+  insight: z.string(),
+  source: z.enum(['cache', 'gemini', 'reason']),
+});
+export type OptimizerInsightResponse = z.infer<typeof OptimizerInsightResponseSchema>;
 
 /** Cycle-level Confidence (optimizer.cycle_runs.confidence jsonb). Aligned with
  *  the engine `Confidence` shape (see @continuum/optimization-engine ConfidenceSchema)
@@ -299,6 +349,12 @@ export const PortfolioListItemSchema = z.object({
   next_realloc_at: z.string().nullable(),
   adset_count: z.number().int().nonnegative(),
   pending_recommendations: z.number().int().nonnegative(),
+  // Autopilot state. optimizer_list_portfolios returns all three; they must be DECLARED
+  // here or z.object strips them and the FE reads undefined (which is how the paused
+  // banner and the guardrail gate silently read as "not paused" / "no caps").
+  autopilot_paused: z.boolean().nullable().optional(),
+  max_daily_apply_minor: z.number().nullable().optional(),
+  max_change_pct_per_cycle: z.number().nullable().optional(),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
 
@@ -349,6 +405,149 @@ export const PortfolioSuggestionSchema = z.object({
   reason: z.string(),
 });
 export type PortfolioSuggestion = z.infer<typeof PortfolioSuggestionSchema>;
+
+/** One ad set's target daily budget when converting its parent campaign off CBO
+ *  (Advantage Campaign Budget) to ad-set (ABO) budgets. `daily_budget` is MINOR units
+ *  (what Meta's adset_budgets write takes); `daily_major` is the same in major units for
+ *  display. */
+export const AdsetBudgetSchema = z.object({
+  adset_id: z.string(),
+  adset_name: z.string().nullable().optional(),
+  daily_budget: z.number().int().nonnegative(),
+  daily_major: z.number().nonnegative(),
+});
+export type AdsetBudget = z.infer<typeof AdsetBudgetSchema>;
+
+/** Request to convert a CBO campaign to ad-set budgets (optimizer-convert-cbo edge).
+ *  `dryRun` (default true) returns the computed per-ad-set budgets WITHOUT writing to
+ *  Meta — the FE previews them before the real convert (which is one POST /{campaign_id}
+ *  with `adset_budgets`, removing the campaign budget). */
+export const ConvertCboRequestSchema = z.object({
+  brandId: z.string().uuid(),
+  accountId: z.string().min(1),
+  campaignId: z.string().min(1),
+  dryRun: z.boolean().optional(),
+});
+export type ConvertCboRequest = z.infer<typeof ConvertCboRequestSchema>;
+
+/** optimizer-convert-cbo response — the per-ad-set budgets that would be (dryRun) or were
+ *  set. `reason` is present on a soft failure (not_permitted / no_adsets / no_token). */
+export const ConvertCboResponseSchema = z.object({
+  ok: z.boolean(),
+  dryRun: z.boolean().optional(),
+  campaignId: z.string().optional(),
+  currency: z.string().optional(),
+  adset_budgets: z.array(AdsetBudgetSchema).default([]),
+  converted: z.number().int().nonnegative().optional(),
+  /** A real convert (dryRun:false) skipped because this campaign was already converted
+   *  today — the per-(campaign, utc_day) convert_ledger deduped the second write. */
+  deduped: z.boolean().optional(),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ConvertCboResponse = z.infer<typeof ConvertCboResponseSchema>;
+
+/** Request to apply a scored run's proposed ad-set budgets on Meta (optimizer-apply-run
+ *  edge → service /apply). The manual "Apply proposed budgets" action for a portfolio in
+ *  recommend mode — the human approval is the autonomy gate (no apply_mode flip needed).
+ *  `run_id` (optional) pins the apply to the run the user is looking at; if it no longer
+ *  matches the latest run the apply is refused (stale). `dryRun` (default true) returns
+ *  the would-write set with ZERO writes to Meta — the FE previews before the real apply,
+ *  which stays gated until the sandbox-apply bench passes. */
+export const ApplyRunRequestSchema = z.object({
+  portfolio_id: z.string().uuid(),
+  brandId: z.string().uuid().optional(),
+  accountId: z.string().optional(),
+  run_id: z.string().uuid().optional(),
+  dryRun: z.boolean().optional(),
+  /** The human who approved this apply — recorded as the actor on the immutable
+   *  apply_audits row (authorized_kind='human'). The per-item approval path
+   *  (/apply/approved) reads the approver per item from cycle_items instead. */
+  authorized_by: z.string().uuid().optional(),
+});
+export type ApplyRunRequest = z.infer<typeof ApplyRunRequestSchema>;
+
+/** Set/clear a portfolio's autopilot kill-switch (optimizer_set_autopilot_paused).
+ *  Halts autonomous writes instantly without losing the apply_mode config. */
+export const SetAutopilotPausedRequestSchema = z.object({
+  portfolio_id: z.string().uuid(),
+  paused: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+export type SetAutopilotPausedRequest = z.infer<typeof SetAutopilotPausedRequestSchema>;
+
+/** Approve one proposed budget change for the per-item apply path
+ *  (optimizer_request_apply_item → marks the cycle item approved_pending). */
+export const RequestApplyItemRequestSchema = z.object({
+  run_id: z.string().uuid(),
+  adset_id: z.string().min(1),
+});
+export type RequestApplyItemRequest = z.infer<typeof RequestApplyItemRequestSchema>;
+
+/** The Meta write receipt captured on a successful budget write and stored in
+ *  optimizer.apply_audits.meta_receipt. Kept loose — it is read back from jsonb. */
+export const ApplyReceiptSchema = z
+  .object({
+    success: z.boolean().optional(),
+    entityId: z.string().optional(),
+    fbtraceId: z.string().optional(),
+  })
+  .loose();
+export type ApplyReceipt = z.infer<typeof ApplyReceiptSchema>;
+
+/** One immutable money-write audit row (optimizer.apply_audits) surfaced to the FE.
+ *  DB-derived read model → LOOSE (built from jsonb, narrowed on read). */
+export const ApplyAuditSchema = z
+  .object({
+    id: z.string().optional(),
+    scope: z.enum(['adset_budget', 'campaign_convert']).optional(),
+    portfolio_id: z.string().nullable().optional(),
+    campaign_id: z.string().nullable().optional(),
+    adset_id: z.string().nullable().optional(),
+    prior_minor: z.number().nullable().optional(),
+    target_minor: z.number().nullable().optional(),
+    authorized_kind: z.enum(['autopilot', 'human']).optional(),
+    authorized_by: z.string().nullable().optional(),
+    mode: z.string().nullable().optional(),
+    meta_receipt: z.record(z.string(), z.unknown()).optional(),
+    created_at: z.string().optional(),
+  })
+  .loose();
+export type ApplyAudit = z.infer<typeof ApplyAuditSchema>;
+
+/** One proposed budget move in an apply preview: the current daily budget and the
+ *  proposed one (both MAJOR units, account currency). */
+export const ApplyWouldWriteSchema = z.object({
+  adset_id: z.string(),
+  current: z.number().nonnegative(),
+  proposed: z.number().nonnegative(),
+});
+export type ApplyWouldWrite = z.infer<typeof ApplyWouldWriteSchema>;
+
+/** One applied-write outcome (real apply). */
+export const ApplyResultItemSchema = z.object({
+  adsetId: z.string(),
+  ok: z.boolean(),
+  error: z.string().optional(),
+});
+export type ApplyResultItem = z.infer<typeof ApplyResultItemSchema>;
+
+/** optimizer-apply-run response. Dry-run returns `would` (the moves that WOULD be
+ *  written, 0 writes); a real apply returns the ledger-guarded outcome counters +
+ *  per-item `results`. `reason` is a soft failure (no_cycle / stale_run / not_permitted). */
+export const ApplyRunResponseSchema = z.object({
+  ok: z.boolean(),
+  dryRun: z.boolean().optional(),
+  runId: z.string().optional(),
+  would: z.array(ApplyWouldWriteSchema).default([]),
+  applied: z.number().int().nonnegative().optional(),
+  failed: z.number().int().nonnegative().optional(),
+  deduped: z.number().int().nonnegative().optional(),
+  results: z.array(ApplyResultItemSchema).default([]),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ApplyRunResponse = z.infer<typeof ApplyRunResponseSchema>;
 
 /** Ingest data-quality signal from paid-media-metrics (tracking gaps / empty account). */
 export const IngestDiagnosticsSchema = z.object({

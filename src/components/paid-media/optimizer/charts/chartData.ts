@@ -30,7 +30,16 @@ export function cpaTrendSummary(
   return { last, deltaPct };
 }
 
-export type FlowRow = { adsetId: string; change: number };
+export type FlowRow = {
+  adsetId: string;
+  change: number;
+  // The current→proposed pair (+ signed %) so the reallocation reads as a concrete
+  // budget move, not just a delta bar. In recommend mode these are proposals; in
+  // autopilot they are what was applied.
+  current: number;
+  proposed: number;
+  changePct: number | null;
+};
 export type Reallocation = {
   gaining: FlowRow[];
   losing: FlowRow[];
@@ -43,7 +52,13 @@ export type Reallocation = {
 export function splitReallocation(items: CycleItemRow[]): Reallocation {
   const moved: FlowRow[] = items
     .filter((item) => !item.diagnostics?.freezeReason)
-    .map((item) => ({ adsetId: item.adset_id, change: item.change_abs ?? 0 }))
+    .map((item) => ({
+      adsetId: item.adset_id,
+      change: item.change_abs ?? 0,
+      current: item.current_budget ?? 0,
+      proposed: item.final_budget ?? 0,
+      changePct: item.change_pct ?? null,
+    }))
     .filter((row) => Math.abs(row.change) >= 1);
 
   const gaining = moved.filter((row) => row.change > 0).sort((a, b) => b.change - a.change);

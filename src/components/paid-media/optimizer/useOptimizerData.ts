@@ -23,12 +23,21 @@ import {
   AdsetAdsResponseSchema,
   type AngleMatrixCell,
   AngleMatrixCellSchema,
+  type ApplyRunRequest,
+  type ApplyRunResponse,
+  ApplyRunResponseSchema,
+  type ConvertCboRequest,
+  type ConvertCboResponse,
+  ConvertCboResponseSchema,
   type CpaSeriesPoint,
   CpaSeriesPointSchema,
   type CreatePortfolioRequest,
   type CycleRunReport,
   CycleRunReportSchema,
   type EnrollRequest,
+  type OptimizerInsightRequest,
+  type OptimizerInsightResponse,
+  OptimizerInsightResponseSchema,
   type OptimizerLogRow,
   OptimizerLogsResponseSchema,
   type PortfolioAdset,
@@ -49,6 +58,7 @@ import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
 import { useCachedRead, useOptimizerStore } from '@/lib/paid-media/optimizerStore';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { recommendationInsightKey } from './insightKey';
 
 // The optimizer RPCs/edge functions are not yet in the generated Supabase types
 // (they deploy later), so the client is treated as loosely typed at this single
@@ -114,6 +124,7 @@ export const cacheKeys = {
     `archived:${brandId}:${adAccountId ?? 'all'}`,
   adsetAds: (adsetId: string) => `adsetAds:${adsetId}`,
   adDailyTrends: (adsetId: string) => `adDailyTrends:${adsetId}`,
+  insight: (insightKey: string) => `insight:${insightKey}`,
 };
 
 // ── Reads ────────────────────────────────────────────────────────────────────
@@ -356,9 +367,48 @@ async function runCycle(
   return parsed.success ? parsed.data : null;
 }
 
+/** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
+ *  the optimizer-convert-cbo edge. `dryRun` (default true) returns the per-ad-set
+ *  budgets that WOULD be set with ZERO writes to Meta — the FE previews them before
+ *  the real convert is un-gated. Returns null when the response is malformed. */
+async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-convert-cbo', {
+    body: {
+      brandId: request.brandId,
+      accountId: request.accountId,
+      campaignId: request.campaignId,
+      dryRun: request.dryRun ?? true,
+    },
+  });
+  if (error) throw new Error('optimizer-convert-cbo unreachable');
+  const parsed = ConvertCboResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Apply (or preview) a scored run's proposed ad-set budgets on Meta via the
+ *  optimizer-apply-run edge. `dryRun` (default true) returns the would-write set with ZERO
+ *  writes — the FE previews them; the real apply (`dryRun:false`) stays gated in the UI
+ *  until the sandbox-apply bench passes. Returns null when the response is malformed. */
+async function applyRunBudgets(request: ApplyRunRequest): Promise<ApplyRunResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-run', {
+    body: {
+      portfolio_id: request.portfolio_id,
+      ...(request.brandId ? { brandId: request.brandId } : {}),
+      ...(request.accountId ? { accountId: request.accountId } : {}),
+      ...(request.run_id ? { run_id: request.run_id } : {}),
+      dryRun: request.dryRun ?? true,
+    },
+  });
+  if (error) throw new Error('optimizer-apply-run unreachable');
+  const parsed = ApplyRunResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
 async function setRecommendationStatus(request: SetRecommendationStatusRequest): Promise<void> {
+  // The RPC parameter is p_rec_id — p_recommendation_id does not exist and PostgREST
+  // rejects the call with PGRST202 (function not found in the schema cache).
   const { error } = await getClient().rpc('optimizer_set_recommendation_status', {
-    p_recommendation_id: request.recommendation_id,
+    p_rec_id: request.recommendation_id,
     p_status: request.status,
   });
   if (error) throw new Error('Failed to update recommendation');
@@ -397,6 +447,32 @@ async function unenrollAdset(input: { portfolio_id: string; adset_id: string }):
     p_adset_id: input.adset_id,
   });
   if (error) throw new Error('Failed to remove ad set from the portfolio');
+}
+
+/** The autopilot kill-switch — instantly halt (or resume) this portfolio's autonomous
+ *  budget writes without losing its apply_mode. Audited server-side (portfolio_audits). */
+async function setAutopilotPaused(input: {
+  portfolio_id: string;
+  paused: boolean;
+  reason?: string;
+}): Promise<void> {
+  const { error } = await getClient().rpc('optimizer_set_autopilot_paused', {
+    p_portfolio_id: input.portfolio_id,
+    p_paused: input.paused,
+    p_reason: input.reason ?? null,
+  });
+  if (error) throw new Error('Could not update the autopilot kill-switch.');
+}
+
+/** Approve one proposed budget change (per-item apply). Records the approval intent +
+ *  the approver server-side; the optimizer service then executes it through the same
+ *  ledger-guarded, audited write path. */
+async function requestApplyItem(input: { run_id: string; adset_id: string }): Promise<void> {
+  const { error } = await getClient().rpc('optimizer_request_apply_item', {
+    p_run_id: input.run_id,
+    p_adset_id: input.adset_id,
+  });
+  if (error) throw new Error('Could not approve this budget change.');
 }
 
 async function archivePortfolio(portfolioId: string): Promise<void> {
@@ -575,6 +651,54 @@ export function useOptimizerAdDailyTrends(
   );
 }
 
+/** Generate/fetch a plain-language insight for one recommendation via the
+ *  optimizer-insight edge fn (durable read-through cache → Gemini on miss).
+ *  Throws only on a transport failure — the edge never 500s on a Gemini problem
+ *  (it returns the deterministic reason), so the tooltip always resolves. */
+async function fetchOptimizerInsight(
+  request: OptimizerInsightRequest,
+): Promise<OptimizerInsightResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-insight', {
+    body: request,
+  });
+  if (error) throw new Error('optimizer-insight unreachable');
+  const parsed = OptimizerInsightResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+/** One recommendation's insight — lazy: pass enabled=false to keep the read
+ *  disabled until the tooltip opens; the result is then cached (30-min TTL) so a
+ *  re-hover is instant and never re-generates. Serves enrolled recs (DB id) and
+ *  what-if recs (content hash) uniformly via recommendationInsightKey. */
+export function useOptimizerInsight(
+  input: {
+    brandId: string;
+    id?: string | null;
+    adsetId: string;
+    kind: string;
+    trigger: string;
+    severity?: string | null;
+    reason: string;
+  },
+  enabled: boolean,
+) {
+  const insightKey = recommendationInsightKey(input);
+  return useCachedRead<OptimizerInsightResponse | null>(
+    enabled && input.brandId && input.reason ? cacheKeys.insight(insightKey) : null,
+    () =>
+      fetchOptimizerInsight({
+        brandId: input.brandId,
+        insightKey,
+        adsetId: input.adsetId,
+        reason: input.reason,
+        kind: input.kind,
+        trigger: input.trigger,
+        severity: input.severity ?? null,
+      }),
+    null,
+  );
+}
+
 // ── Mutations (React Query for lifecycle; invalidate the store on success) ────
 
 export function useOptimizerMutations(brandId: string, adAccountId: string | null) {
@@ -662,5 +786,67 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     onSuccess: () => markStale((key) => key === cacheKeys.renewals(brandId)),
   });
 
-  return { create, enroll, update, unenroll, archive, restore, run, setStatus, renewal };
+  const setPaused = useMutation({
+    mutationFn: setAutopilotPaused,
+    onSuccess: (_data, input) =>
+      markStale(
+        (key) => key.startsWith('portfolios:') || key === cacheKeys.performance(input.portfolio_id),
+      ),
+  });
+
+  const requestApply = useMutation({
+    mutationFn: requestApplyItem,
+    onSuccess: () => markStale((key) => key.startsWith('performance:')),
+  });
+
+  return {
+    create,
+    enroll,
+    update,
+    unenroll,
+    archive,
+    restore,
+    run,
+    setStatus,
+    renewal,
+    setPaused,
+    requestApply,
+  };
+}
+
+/** Preview or apply a CBO→ABO conversion for one campaign. Instantiated PER CBO
+ *  campaign row so each keeps its own pending/preview/error state. The FE only ever
+ *  calls it with `dryRun:true` today (a working preview); a real conversion
+ *  (`dryRun:false`, un-gated after the sandbox bench) makes the campaign's ad sets
+ *  ABO — so a real success marks the account snapshots + suggestions stale so the
+ *  now-optimizable ad sets reappear. A dry-run preview writes nothing and skips it. */
+export function useConvertCbo(brandId: string) {
+  const markStale = useOptimizerStore((state) => state.markStale);
+  return useMutation({
+    mutationFn: convertCbo,
+    onSuccess: (data) => {
+      if (data?.ok && data.dryRun !== true) {
+        markStale(
+          (key) =>
+            key.startsWith(`snapshots:${brandId}`) || key.startsWith(`suggestions:${brandId}`),
+        );
+      }
+    },
+  });
+}
+
+/** Preview or apply a portfolio's proposed reallocation. Instantiated per portfolio so
+ *  each keeps its own pending/preview/error state. The FE calls it with `dryRun:true` for
+ *  the preview; a real apply (`dryRun:false`, un-gated after the sandbox bench) changed
+ *  budgets on Meta, so it marks that portfolio's performance report stale. */
+export function useApplyRun() {
+  const markStale = useOptimizerStore((state) => state.markStale);
+  return useMutation({
+    mutationFn: applyRunBudgets,
+    onSuccess: (data, request) => {
+      if (data?.ok && data.dryRun !== true) {
+        markStale((key) => key === cacheKeys.performance(request.portfolio_id));
+      }
+    },
+  });
 }

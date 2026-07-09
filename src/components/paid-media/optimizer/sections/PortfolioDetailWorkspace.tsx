@@ -15,11 +15,13 @@ import { useState } from 'react';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { usePollWhile } from '@/lib/paid-media/optimizerStore';
 import { cn } from '@/lib/utils';
 import { AdSetTimeline } from '../charts/AdSetTimeline';
 import { AdsetActionMenu } from '../charts/AdsetActionMenu';
 import { AngleMatrix } from '../charts/AngleMatrix';
 import { CpaHeroTimeline } from '../charts/CpaHeroTimeline';
+import { splitReallocation } from '../charts/chartData';
 import { FunnelConversion } from '../charts/FunnelConversion';
 import { PacingGauge } from '../charts/PacingGauge';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
@@ -27,7 +29,7 @@ import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { ScoreRadar } from '../charts/ScoreRadar';
 import { adSetRoasSeries, buildCycleActionMap, sumFunnelWindow } from '../charts/vizData';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
-import { confidenceBand, parseReport } from '../reportModel';
+import { applyModeExplainer, confidenceBand, parseReport } from '../reportModel';
 import {
   useOptimizerAccountSnapshots,
   useOptimizerAdDailyTrends,
@@ -38,7 +40,9 @@ import {
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
+import { HeldChangesPanel } from './HeldChangesPanel';
 import { OptimizerPanel } from './OptimizerPanel';
 
 type PortfolioDetailWorkspaceProps = {
@@ -74,7 +78,18 @@ export function PortfolioDetailWorkspace({
   const report = parseReport(performanceQuery.data);
   const items = report?.latest_items ?? [];
   const latestRun = report?.latest_run ?? null;
+  // A freshly-enrolled portfolio has no cycle yet. The create path kicked off a run
+  // and the scheduler backstops it (next_realloc_at=now), so poll the performance
+  // read until the first result lands rather than leaving the user on empty panels.
+  const awaitingFirstCycle = !latestRun;
+  usePollWhile(awaitingFirstCycle, performanceQuery.refetch);
   const confidence = confidenceBand(latestRun?.confidence?.band);
+  // Offer the manual apply only when there are actual moves and the portfolio is in
+  // recommend mode (autopilot applies automatically). runId pins the apply to this run.
+  const reallocation = splitReallocation(items);
+  const movedCount = reallocation.gaining.length + reallocation.losing.length;
+  const canApplyReallocation = portfolio.apply_mode === 'recommend' && movedCount > 0;
+  const latestRunId = (latestRun as { id?: string } | null)?.id;
   const confidenceScore = latestRun?.confidence?.score;
   const actionsByTs = buildCycleActionMap(report);
   const pacing = (latestRun as { pacing?: unknown } | null)?.pacing ?? null;
@@ -141,6 +156,20 @@ export function PortfolioDetailWorkspace({
       </header>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        {awaitingFirstCycle ? (
+          <div
+            role="status"
+            aria-busy="true"
+            className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-foreground"
+          >
+            <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
+            <span>
+              Scoring your first cycle — this can take up to a couple of minutes. Results appear
+              here automatically; you can keep working.
+            </span>
+          </div>
+        ) : null}
+
         <MetricStrip
           items={[
             { label: 'Daily budget', value: formatCurrency(portfolio.daily_total, currency) },
@@ -199,8 +228,32 @@ export function PortfolioDetailWorkspace({
         </div>
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <OptimizerPanel title="Reallocation">
+          <OptimizerPanel
+            action={
+              canApplyReallocation ? (
+                <ApplyReallocationDialog
+                  accountId={adAccountId}
+                  brandId={brandId}
+                  currency={currency ?? null}
+                  portfolioId={portfolio.id}
+                  runId={latestRunId}
+                />
+              ) : null
+            }
+            bodyClassName="space-y-2"
+            title="Reallocation"
+          >
+            <p className="text-3xs text-muted-foreground">
+              {applyModeExplainer(portfolio.apply_mode)}
+            </p>
             <ReallocationFlow currency={currency} items={items} />
+            <HeldChangesPanel
+              adAccountId={adAccountId}
+              brandId={brandId}
+              currency={currency}
+              items={items}
+              runId={latestRunId ?? null}
+            />
           </OptimizerPanel>
           <OptimizerPanel
             meta={

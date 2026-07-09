@@ -65,6 +65,10 @@ function FlowSection({
       </p>
       {rows.map((row) => {
         const width = Math.max(4, pct(Math.abs(row.change), maxAbs));
+        const pctLabel =
+          row.changePct != null
+            ? ` (${positive ? '+' : '−'}${Math.round(Math.abs(row.changePct) * 100)}%)`
+            : '';
         return (
           <div key={row.adsetId} className="flex items-center gap-2">
             <AdSetIdLabel id={row.adsetId} />
@@ -76,16 +80,22 @@ function FlowSection({
                 style={{ width: `${width}%` }}
               />
             </div>
-            <span
-              className={
-                positive
-                  ? 'w-16 shrink-0 text-right text-2xs font-medium tabular-nums text-success'
-                  : 'w-16 shrink-0 text-right text-2xs font-medium tabular-nums text-destructive'
-              }
-            >
-              {positive ? '+' : '−'}
-              {formatCurrency(Math.abs(row.change), currency)}
-            </span>
+            <div className="w-32 shrink-0 text-right leading-tight">
+              <div className="text-3xs tabular-nums text-muted-foreground">
+                {formatCurrency(row.current, currency)} → {formatCurrency(row.proposed, currency)}
+              </div>
+              <div
+                className={
+                  positive
+                    ? 'text-2xs font-medium tabular-nums text-success'
+                    : 'text-2xs font-medium tabular-nums text-destructive'
+                }
+              >
+                {positive ? '+' : '−'}
+                {formatCurrency(Math.abs(row.change), currency)}
+                {pctLabel}
+              </div>
+            </div>
           </div>
         );
       })}

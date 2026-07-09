@@ -1,6 +1,34 @@
 import { describe, expect, it } from 'bun:test';
 
-import { confidenceBand, freezeLabel, parseReport, recommendationLabel } from './reportModel';
+import {
+  confidenceBand,
+  freezeLabel,
+  partitionHeldItems,
+  parseReport,
+  recommendationActionCopy,
+  recommendationLabel,
+} from './reportModel';
+
+describe('pause is advisory, never an implied execution', () => {
+  it('labels a pause recommendation as manual-review, not "Pause"', () => {
+    // The optimizer never pauses an ad set on Meta, so the label must not imply it does.
+    expect(recommendationLabel('pause').label).toBe('Review · pause manually');
+  });
+
+  it('gives a pause row an "Acknowledge" action + advisory copy (not "Approve")', () => {
+    const copy = recommendationActionCopy('pause');
+    expect(copy.approveLabel).toBe('Acknowledge');
+    expect(copy.advisory).toContain('never pauses');
+  });
+
+  it('keeps "Approve" (no advisory) for fatigue kinds that DO open a renewal task', () => {
+    for (const kind of ['creative_refresh', 'audience_expand']) {
+      const copy = recommendationActionCopy(kind);
+      expect(copy.approveLabel).toBe('Approve');
+      expect(copy.advisory).toBeNull();
+    }
+  });
+});
 
 describe('freezeLabel', () => {
   it('returns null when the item was not held (budget actually moved)', () => {
@@ -103,12 +131,39 @@ describe('confidenceBand', () => {
 
 describe('recommendationLabel', () => {
   it('maps known kinds', () => {
-    expect(recommendationLabel('pause').label).toBe('Pause');
+    expect(recommendationLabel('pause').label).toBe('Review · pause manually');
     expect(recommendationLabel('creative_refresh').label).toBe('Refresh creative');
     expect(recommendationLabel('audience_expand').label).toBe('Expand audience');
   });
 
   it('humanizes unknown kinds', () => {
     expect(recommendationLabel('some_new_kind').label).toBe('some new kind');
+  });
+});
+
+describe('partitionHeldItems', () => {
+  const items = [
+    { adset_id: 'a', apply_status: 'held' as const },
+    { adset_id: 'b', apply_status: 'approved_pending' as const },
+    { adset_id: 'c', apply_status: 'applied' as const },
+    { adset_id: 'd', apply_status: 'failed' as const },
+    { adset_id: 'e', apply_status: null },
+    { adset_id: 'f' },
+  ];
+
+  it('surfaces only the two states that need a human', () => {
+    const { held, approved } = partitionHeldItems(items);
+    expect(held.map((i) => i.adset_id)).toEqual(['a']);
+    expect(approved.map((i) => i.adset_id)).toEqual(['b']);
+  });
+
+  it('never treats an applied, failed, skipped or unset item as awaiting approval', () => {
+    // A guardrail hold is the ONLY thing that strands a scored change; everything else has
+    // already resolved. Mis-classifying here would offer to re-apply a written budget.
+    const { held, approved } = partitionHeldItems(
+      items.filter((i) => i.apply_status !== 'held' && i.apply_status !== 'approved_pending'),
+    );
+    expect(held).toHaveLength(0);
+    expect(approved).toHaveLength(0);
   });
 });

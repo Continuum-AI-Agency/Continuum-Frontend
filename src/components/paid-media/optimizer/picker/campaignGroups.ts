@@ -151,6 +151,18 @@ export function buildCampaignSections(
   });
 }
 
+// The CBO campaigns in a fleet: campaigns whose ad sets are held
+// `unsupported_budget` (the budget lives on the campaign, not the ad sets — Meta's
+// "Advantage Campaign Budget"). These are the convert-to-ABO targets we surface as
+// not-yet-optimizable. Only snapshots carrying a real campaignId qualify (a convert
+// needs one), and each resulting section is one CBO campaign with its held ad sets.
+export function buildCboCampaignSections(snapshots: AdSetSnapshot[]): CampaignSection[] {
+  const cbo = snapshots.filter(
+    (snapshot) => snapshot.freezeReason === 'unsupported_budget' && !!snapshot.campaignId?.trim(),
+  );
+  return buildCampaignSections(cbo).filter((section) => section.campaignId !== UNGROUPED_ID);
+}
+
 // Narrow a section's ad sets to a search query. A hit on the campaign name keeps
 // every ad set; otherwise only ad sets whose name or id match survive.
 export function filterSection(section: CampaignSection, query: string): AdsetPickItem[] {

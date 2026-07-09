@@ -59,7 +59,7 @@ export const BUILTIN_PARITY_TEMPLATES: RuleTemplate[] = [
       kind: 'pause',
       severity: 'high',
       reasonTemplate:
-        'Spent {{spend_d3}} over 3d with 0 conversions and null / {{upper_funnel_override_mult}}× upper-funnel cost vs portfolio average.',
+        'Spent {{spend_d3}} over 3d with 0 conversions and a dead or over-{{upper_funnel_override_mult}}× upper-funnel cost vs portfolio average.',
     },
     conditions: {
       all: [

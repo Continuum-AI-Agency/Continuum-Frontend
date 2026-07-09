@@ -15,14 +15,13 @@
 
 import type {
   AdSetSnapshot,
-  ApplyMode,
   OptimizationModeDto,
   OptimizationObjective,
   PortfolioLevel,
   PortfolioSuggestion,
 } from '@continuum/contracts';
+import { suggestionToEnrollRequest, suggestionToPortfolioConfig } from '@continuum/contracts';
 import {
-  ArrowRightIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   PlusIcon,
@@ -44,15 +43,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { currencySymbol, deriveCpa, formatCpa, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
+import { buildCboCampaignSections } from '../picker/campaignGroups';
 import {
   useOptimizerAccountSnapshots,
   useOptimizerAdAccounts,
   useOptimizerMutations,
   useOptimizerSuggestions,
 } from '../useOptimizerData';
+import { CboCampaigns } from './CboCampaigns';
 import { PortfolioPreview } from './PortfolioPreview';
 
 // Explains an empty suggestion list precisely (Phase C diagnostic reason), so the
@@ -79,7 +79,10 @@ type PortfolioSetupProps = {
   brandId: string;
   adAccountId: string;
   currency?: string | null;
-  onCreated?: () => void;
+  // Called with the new portfolio id once it is created (and its ad sets enrolled).
+  // The caller navigates to that portfolio's detail workspace so the user watches
+  // the first cycle score instead of landing on an empty Overview.
+  onCreated?: (portfolioId: string) => void;
   // The onboarding empty-state shows the account header; the in-tab "New
   // portfolio" expander suppresses it (the account is already in context there).
   showAccountHeader?: boolean;
@@ -94,7 +97,27 @@ const OBJECTIVES: OptimizationObjective[] = [
   'awareness',
 ];
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
-const APPLY_MODES: ApplyMode[] = ['recommend', 'autopilot'];
+
+// Per-objective default reallocation mode — mirrors optimizer-suggest's DEFAULT_MODE
+// so changing the objective on a suggestion card re-derives the same mode the server
+// would have chosen for that objective.
+const DEFAULT_MODE_BY_OBJECTIVE: Record<OptimizationObjective, OptimizationModeDto> = {
+  purchase: 'balanced',
+  app_install: 'scale',
+  signup: 'scale',
+  lead: 'efficiency',
+  traffic: 'balanced',
+  awareness: 'efficiency',
+};
+
+// Conversion objectives need tracked events to score; with 0 tracked conversions the
+// first cycle is pause-all / Low-confidence. The suggestion card nudges toward Traffic.
+const CONVERSION_OBJECTIVES = new Set<OptimizationObjective>([
+  'purchase',
+  'app_install',
+  'signup',
+  'lead',
+]);
 
 export function PortfolioSetup({
   brandId,
@@ -107,9 +130,11 @@ export function PortfolioSetup({
   const account = accounts.find((row) => row.account_id === adAccountId) ?? null;
   const resolvedCurrency = currency ?? account?.currency ?? null;
 
-  // What this portfolio reallocates: ad-set budgets (default) or campaign budgets
-  // (CBO). Drives the suggestion/snapshot reads, the picker mode, and create config.
-  const [level, setLevel] = React.useState<PortfolioLevel>('adset');
+  // The Optimizer stays ad-set-level only — it never reallocates a campaign (CBO)
+  // budget. CBO campaigns are surfaced separately (CboCampaigns) with a one-click
+  // convert-to-ABO. `level` is pinned to 'adset'; the dormant campaign params in the
+  // reads/picker/create stay harmless at their 'adset' default.
+  const level: PortfolioLevel = 'adset';
 
   const suggestRead = useOptimizerSuggestions(brandId, adAccountId, level);
   const suggestions = suggestRead.data?.suggestions ?? [];
@@ -121,31 +146,48 @@ export function PortfolioSetup({
   // hides in that case.
   const { data: snapshots } = useOptimizerAccountSnapshots(brandId, adAccountId, level);
 
-  const { create, enroll } = useOptimizerMutations(brandId, adAccountId);
+  // CBO campaigns (their ad sets held `unsupported_budget`) — surfaced as
+  // not-yet-optimizable with a one-click convert-to-ABO preview.
+  const cboSections = React.useMemo(() => buildCboCampaignSections(snapshots), [snapshots]);
+
+  const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
   const [createdKeys, setCreatedKeys] = React.useState<Set<string>>(new Set());
 
-  const createFromSuggestion = (suggestion: PortfolioSuggestion) => {
+  const createFromSuggestion = (
+    suggestion: PortfolioSuggestion,
+    override?: { objective: OptimizationObjective; mode: OptimizationModeDto },
+  ) => {
+    // Base config from the SHARED builder (@continuum/contracts) so onboarding and the
+    // Jaina/MCP agents produce the identical portfolio config; the FE then pins `level`
+    // (optimizer is ad-set-level here) and applies the optional objective/mode override.
+    const config = {
+      ...suggestionToPortfolioConfig(suggestion),
+      level,
+      ...(override ? { objective: override.objective, mode: override.mode } : {}),
+    };
     create.mutate(
       {
         brand_id: brandId,
         ad_account_id: adAccountId,
-        config: {
-          name: suggestion.name,
-          objective: suggestion.objective,
-          level,
-          mode: suggestion.mode,
-          apply_mode: 'recommend',
-          daily_total: suggestion.daily_total,
-          ...(suggestion.cpa_target ? { cpa_target: suggestion.cpa_target } : {}),
-        },
+        config,
       },
       {
         onSuccess: ({ portfolio_id }) => {
-          if (suggestion.adset_ids.length > 0) {
-            enroll.mutate({ portfolio_id, adset_ids: suggestion.adset_ids });
-          }
           setCreatedKeys((prev) => new Set(prev).add(suggestion.name));
-          onCreated?.();
+          if (suggestion.adset_ids.length > 0) {
+            // Score the first cycle only AFTER enrollment lands (a cycle on 0 ad
+            // sets is a no-op); navigate to the detail workspace either way — the
+            // scheduler already has next_realloc_at=now() as the backstop.
+            enroll.mutate(suggestionToEnrollRequest(portfolio_id, suggestion), {
+              onSuccess: () => {
+                run.mutate(portfolio_id);
+                onCreated?.(portfolio_id);
+              },
+              onError: () => onCreated?.(portfolio_id),
+            });
+          } else {
+            onCreated?.(portfolio_id);
+          }
         },
       },
     );
@@ -162,8 +204,6 @@ export function PortfolioSetup({
         />
       ) : null}
 
-      <PortfolioLevelToggle level={level} onLevelChange={setLevel} />
-
       {diagnostics && diagnostics.trackingGaps > 0 ? (
         <TrackingGapBanner
           gaps={diagnostics.trackingGaps}
@@ -178,8 +218,7 @@ export function PortfolioSetup({
           <h3 className="text-sm font-semibold tracking-tight">Suggested portfolios</h3>
           {suggestions.length > 0 ? (
             <span className="text-xs text-muted-foreground">
-              grouped from this account&rsquo;s active{' '}
-              {level === 'campaign' ? 'campaigns' : 'ad sets'}
+              grouped from this account&rsquo;s active ad sets
             </span>
           ) : null}
         </div>
@@ -199,18 +238,6 @@ export function PortfolioSetup({
             <p className="text-xs text-muted-foreground">
               {suggestEmptyMessage(suggestReason, level)}
             </p>
-            {suggestReason === 'all_cbo' && level === 'adset' ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-xs"
-                onClick={() => setLevel('campaign')}
-              >
-                Optimize them as a Campaign portfolio
-                <ArrowRightIcon className="size-3.5" />
-              </Button>
-            ) : null}
           </div>
         ) : (
           <div className="space-y-2">
@@ -220,18 +247,26 @@ export function PortfolioSetup({
               return (
                 <SuggestionRow
                   key={suggestion.name}
+                  brandId={brandId}
                   suggestion={suggestion}
                   snapshots={groupSnapshots}
                   currency={resolvedCurrency}
                   created={createdKeys.has(suggestion.name)}
                   busy={create.isPending && create.variables?.config.name === suggestion.name}
-                  onCreate={() => createFromSuggestion(suggestion)}
+                  onCreate={(override) => createFromSuggestion(suggestion, override)}
                 />
               );
             })}
           </div>
         )}
       </section>
+
+      <CboCampaigns
+        brandId={brandId}
+        accountId={adAccountId}
+        currency={resolvedCurrency}
+        sections={cboSections}
+      />
 
       <PortfolioCreateForm
         brandId={brandId}
@@ -240,35 +275,6 @@ export function PortfolioSetup({
         level={level}
         onCreated={onCreated}
       />
-    </div>
-  );
-}
-
-function PortfolioLevelToggle({
-  level,
-  onLevelChange,
-}: {
-  level: PortfolioLevel;
-  onLevelChange: (level: PortfolioLevel) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold tracking-tight">Portfolio type</p>
-        <p className="text-xs text-muted-foreground">
-          Reallocate budget across ad sets, or across whole campaigns (CBO).
-        </p>
-      </div>
-      <Tabs value={level} onValueChange={(value) => onLevelChange(value as PortfolioLevel)}>
-        <TabsList className="h-8">
-          <TabsTrigger value="adset" className="px-3 text-xs">
-            Ad sets
-          </TabsTrigger>
-          <TabsTrigger value="campaign" className="px-3 text-xs">
-            Campaigns
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
     </div>
   );
 }
@@ -340,6 +346,7 @@ function TrackingGapBanner({
 }
 
 function SuggestionRow({
+  brandId,
   suggestion,
   snapshots,
   currency,
@@ -347,16 +354,25 @@ function SuggestionRow({
   busy,
   onCreate,
 }: {
+  brandId: string;
   suggestion: PortfolioSuggestion;
   snapshots: AdSetSnapshot[];
   currency: string | null;
   created: boolean;
   busy: boolean;
-  onCreate: () => void;
+  onCreate: (override: { objective: OptimizationObjective; mode: OptimizationModeDto }) => void;
 }) {
   const [previewOpen, setPreviewOpen] = React.useState(false);
+  // The objective is the lever: it decides what "good" means for the cycle. Default
+  // to the server's inference but let the operator correct it before creating — the
+  // mode follows the objective (same map the server uses).
+  const [objective, setObjective] = React.useState<OptimizationObjective>(suggestion.objective);
+  const mode = DEFAULT_MODE_BY_OBJECTIVE[objective];
   const cpa = deriveCpa(suggestion.summary.spend14, suggestion.summary.conv14);
   const canPreview = snapshots.length > 0;
+  // Nudge toward Traffic when a conversion objective has no tracked conversions — that
+  // combination scores as pause-all / Low confidence and gives the user no value.
+  const noConversions = CONVERSION_OBJECTIVES.has(objective) && suggestion.summary.conv14 === 0;
 
   return (
     <div className="rounded-lg border border-border/70 bg-card">
@@ -365,17 +381,31 @@ function SuggestionRow({
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             {suggestion.name}
             <Badge variant="teal" className="text-3xs">
-              {humanize(suggestion.mode)}
+              {humanize(mode)}
             </Badge>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {suggestion.summary.adsets} ad sets · {formatCurrency(suggestion.daily_total, currency)}
             /d
-            {cpa != null ? ` · CPA ${formatCpa(cpa, currency)}` : ''} ·{' '}
-            {humanize(suggestion.objective)}
+            {cpa != null ? ` · CPA ${formatCpa(cpa, currency)}` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Select
+            value={objective}
+            onValueChange={(value) => setObjective(value as OptimizationObjective)}
+          >
+            <SelectTrigger className="h-7 w-36 text-xs" aria-label="Optimization objective">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {OBJECTIVES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {humanize(value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {canPreview ? (
             <Button
               type="button"
@@ -401,7 +431,7 @@ function SuggestionRow({
               size="sm"
               className="h-7 gap-1.5 px-3 text-xs"
               disabled={busy}
-              onClick={onCreate}
+              onClick={() => onCreate({ objective, mode })}
             >
               <PlusIcon className="size-3.5" />
               {busy ? 'Creating…' : 'Create'}
@@ -409,12 +439,19 @@ function SuggestionRow({
           )}
         </div>
       </div>
+      {noConversions ? (
+        <p className="px-4 pb-2 text-2xs text-warning">
+          No conversions tracked in the last 14 days — a conversion objective will score as Low
+          confidence. Consider <b>Traffic</b> for a decisive first cycle.
+        </p>
+      ) : null}
       {previewOpen && canPreview ? (
         <div className="border-t border-border/60 p-3">
           <PortfolioPreview
+            brandId={brandId}
             snapshots={snapshots}
-            objective={suggestion.objective}
-            mode={suggestion.mode}
+            objective={objective}
+            mode={mode}
             dailyTotal={suggestion.daily_total}
             currency={currency}
           />
@@ -435,15 +472,14 @@ export function PortfolioCreateForm({
   adAccountId: string;
   currency: string | null;
   level?: PortfolioLevel;
-  onCreated?: () => void;
+  onCreated?: (portfolioId: string) => void;
 }) {
-  const { create, enroll } = useOptimizerMutations(brandId, adAccountId);
+  const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
 
   const [name, setName] = React.useState('');
   const [objective, setObjective] = React.useState<OptimizationObjective>('purchase');
   const [mode, setMode] = React.useState<OptimizationModeDto>('balanced');
-  const [applyMode, setApplyMode] = React.useState<ApplyMode>('recommend');
   const [dailyTotal, setDailyTotal] = React.useState('');
   const [cpaTarget, setCpaTarget] = React.useState('');
   const [selectedAdsetIds, setSelectedAdsetIds] = React.useState<string[]>([]);
@@ -460,7 +496,10 @@ export function PortfolioCreateForm({
   const typedDaily = Number.parseFloat(dailyTotal);
   const effectiveDaily =
     Number.isFinite(typedDaily) && typedDaily > 0 ? typedDaily : selectedBudgetSum;
-  const canSubmit = name.trim().length > 0 && effectiveDaily > 0;
+  // A portfolio with no enrolled entities is INERT: the scheduler claims it every cycle and
+  // skips with `no_adsets`, forever, while the UI shows an active portfolio that never
+  // scores. Enrollment is what makes a portfolio real, so it is required to create one.
+  const canSubmit = name.trim().length > 0 && effectiveDaily > 0 && selectedAdsetIds.length > 0;
   const busy = create.isPending || enroll.isPending;
 
   const handleCreate = () => {
@@ -475,21 +514,30 @@ export function PortfolioCreateForm({
           objective,
           level,
           mode,
-          apply_mode: applyMode,
+          apply_mode: 'recommend',
           daily_total: effectiveDaily,
           ...(Number.isFinite(cpaValue) && cpaValue > 0 ? { cpa_target: cpaValue } : {}),
         },
       },
       {
         onSuccess: ({ portfolio_id }) => {
-          if (selectedAdsetIds.length > 0) {
-            enroll.mutate({ portfolio_id, adset_ids: selectedAdsetIds });
-          }
-          setName('');
-          setDailyTotal('');
-          setCpaTarget('');
-          setSelectedAdsetIds([]);
-          onCreated?.();
+          // canSubmit guarantees a non-empty selection, so enroll always runs. On failure we
+          // stay put with the error visible rather than navigating to an inert portfolio;
+          // create is idempotent (unique name per account), so pressing Create again retries
+          // the enroll against the same portfolio.
+          enroll.mutate(
+            { portfolio_id, adset_ids: selectedAdsetIds },
+            {
+              onSuccess: () => {
+                run.mutate(portfolio_id);
+                setName('');
+                setDailyTotal('');
+                setCpaTarget('');
+                setSelectedAdsetIds([]);
+                onCreated?.(portfolio_id);
+              },
+            },
+          );
         },
       },
     );
@@ -557,18 +605,15 @@ export function PortfolioCreateForm({
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Apply mode</Label>
-            <Select value={applyMode} onValueChange={(value) => setApplyMode(value as ApplyMode)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {APPLY_MODES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {humanize(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* A new portfolio is always recommend-only. Autopilot writes real budgets to
+                Meta and may only be armed once both guardrails are set, which happens in the
+                Manage panel — the DB refuses an autopilot portfolio without them. */}
+            <div className="flex h-9 items-center rounded-md border border-border/60 bg-muted/30 px-3 text-sm">
+              Recommend
+            </div>
+            <p className="text-2xs text-muted-foreground">
+              Turn on autopilot from Manage, after setting guardrails.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="optimizer-daily-total">Daily budget ({symbol})</Label>
@@ -617,7 +662,7 @@ export function PortfolioCreateForm({
                       ? 'ad set'
                       : 'ad sets'
                 } selected · ${formatCurrency(selectedBudgetSum, currency)}/day current budget`
-              : `No ${entityLabel} selected yet — you can also add them later from Manage.`}
+              : `Select at least one of the ${entityLabel} above — a portfolio with none never scores.`}
           </p>
         </div>
 
@@ -626,7 +671,7 @@ export function PortfolioCreateForm({
             {create.error instanceof Error
               ? create.error.message
               : enroll.error instanceof Error
-                ? 'Portfolio created, but enrolling the ad sets failed. Add them from Manage.'
+                ? `Portfolio created, but enrolling the ${entityLabel} failed — press Create again to retry, or add them from Manage.`
                 : 'Could not create the portfolio.'}
           </p>
         ) : null}

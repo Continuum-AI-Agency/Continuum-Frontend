@@ -38,7 +38,12 @@ export {
   WindowMetricsSchema,
   WindowWeightsSchema,
 } from '@continuum/optimization-engine/schemas';
+// Meta currency MAJOR->MINOR scaling, shared by the FE guardrail inputs, the apply
+// ledger/audit keys, and the Graph budget write. Never hardcode *100.
+export * from './currency';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
 export * from './mcp';
+// Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
+export * from './onboarding';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';

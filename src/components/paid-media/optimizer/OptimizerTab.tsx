@@ -92,6 +92,15 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
     setView('portfolios');
   };
 
+  // After a portfolio is created + enrolled, land the user on its detail workspace
+  // so they watch the first cycle score (the create path already kicked off a run,
+  // and the scheduler backstops it) — the natural end of onboarding, instead of an
+  // empty Overview. The refetch pulls the new portfolio into the list so detail resolves.
+  const handlePortfolioCreated = (portfolioId: string) => {
+    setDetailPortfolioId(portfolioId);
+    portfoliosQuery.refetch();
+  };
+
   if (portfoliosQuery.isLoading) {
     return <OptimizerSkeleton />;
   }
@@ -115,7 +124,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
           adAccountId={adAccountId}
           platform={platform}
           currency={currency}
-          onCreated={portfoliosQuery.refetch}
+          onCreated={handlePortfolioCreated}
         />
       </div>
     );
@@ -206,7 +215,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
             portfolios={portfolios}
             selectedPortfolioId={selectedPortfolioId ?? portfolios[0]?.id ?? null}
             currency={currency}
-            onCreated={portfoliosQuery.refetch}
+            onCreated={handlePortfolioCreated}
           />
         </TabsContent>
 
