@@ -1,3 +1,4 @@
+import type { PublishPlatform } from "@continuum/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import * as storeRegistry from "@/lib/storage/storeRegistry";
@@ -114,7 +115,7 @@ interface CalendarState {
   selectedDraftIds: string[];
   selectedTrendIds: string[];
   persistedWeekStartId: string | null;
-  accountContext: { igAccountId: string | null; brandId: string | null };
+  accountContext: { accountIds: Partial<Record<PublishPlatform, string>>; brandId: string | null };
   gridStatus: GridStatus;
   gridProgress: {
     percent: number;
@@ -212,8 +213,10 @@ interface CalendarState {
   deleteBacklogDraft: (draftId: string) => void;
   promoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
   duplicateDraft: (sourceDraftId: string, targetDayId?: string, newTimeLabel?: string) => void;
-  setAccountContext: (ctx: { igAccountId: string | null; brandId: string | null }) => void;
-
+  setAccountContext: (ctx: {
+    accountIds: Partial<Record<PublishPlatform, string>>;
+    brandId: string | null;
+  }) => void;
 }
 
 type PersistedCalendarState = Pick<
@@ -289,7 +292,7 @@ export const useCalendarStore = create<CalendarState>()(
       selectedDraftIds: [],
       selectedTrendIds: [],
       persistedWeekStartId: null,
-      accountContext: { igAccountId: null, brandId: null },
+      accountContext: { accountIds: {}, brandId: null },
       gridStatus: "idle",
       gridProgress: { percent: 0 },
       gridError: null,
@@ -693,7 +696,7 @@ export const useCalendarStore = create<CalendarState>()(
           selectedDraftIds: [],
           selectedTrendIds: [],
           persistedWeekStartId: null,
-          accountContext: { igAccountId: null, brandId: null },
+          accountContext: { accountIds: {}, brandId: null },
           gridStatus: "idle",
           gridProgress: { percent: 0 },
           gridError: null,

@@ -1,10 +1,19 @@
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
-import { buildInstagramCaption } from "@continuum/contracts"
+import { buildInstagramCaption, PLATFORM_CAPABILITIES, type PublishPlatform } from "@continuum/contracts"
 
 export function inferPostType(draft: OrganicCalendarDraft): "POST" | "REEL" | "CAROUSEL" {
   if (draft.format === "Reel" || draft.format === "Video") return "REEL"
   if (draft.format === "Carousel") return "CAROUSEL"
   return "POST"
+}
+
+const PUBLISHABLE_PLATFORMS = Object.keys(PLATFORM_CAPABILITIES) as PublishPlatform[]
+
+/** The platform a draft publishes to: its first tagged platform we can actually publish to. */
+export function inferPublishPlatform(draft: OrganicCalendarDraft): PublishPlatform | null {
+  return (
+    PUBLISHABLE_PLATFORMS.find((platform) => draft.platforms.includes(platform)) ?? null
+  )
 }
 
 // ── Request body shapes ───────────────────────────────────────────────────────
@@ -14,7 +23,8 @@ type PostPublishBody = {
   placementId: string
   imageUrl?: string
   caption?: string
-  igAccountId?: string
+  platform?: PublishPlatform
+  accountId?: string
   brandId?: string
 }
 
@@ -25,7 +35,8 @@ type ReelPublishBody = {
   caption?: string
   coverUrl?: string
   shareToFeed: true
-  igAccountId?: string
+  platform?: PublishPlatform
+  accountId?: string
   brandId?: string
 }
 
@@ -34,7 +45,8 @@ type CarouselPublishBody = {
   placementId: string
   items?: Array<{ imageUrl: string }>
   caption?: string
-  igAccountId?: string
+  platform?: PublishPlatform
+  accountId?: string
   brandId?: string
 }
 
@@ -53,7 +65,8 @@ export function buildFullCaption(draft: OrganicCalendarDraft): string {
 
 export function buildPublishBody(
   draft: OrganicCalendarDraft,
-  igAccountId: string | null,
+  platform: PublishPlatform | null,
+  accountId: string | null,
   brandId: string | null
 ): PublishRequestBody {
   const postType = inferPostType(draft)
@@ -61,7 +74,8 @@ export function buildPublishBody(
   const assets = draft.publishingAssets ?? []
 
   const accountFields = {
-    ...(igAccountId ? { igAccountId } : {}),
+    ...(platform ? { platform } : {}),
+    ...(accountId ? { accountId } : {}),
     ...(brandId ? { brandId } : {}),
   }
 
