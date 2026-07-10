@@ -972,19 +972,137 @@ body {
   }
 }
 
+/* Legacy mirror-highlight classes kept inert so any residual mark markup
+   does not wash tokens. Mentions render as inline chips instead. */
 .mention-token,
 .link-token {
-  background-color: color-mix(in oklch, var(--muted-foreground) 10%, transparent);
-  border-radius: 2px;
-  /* color: transparent prevents the browser UA mark{color:black} from making
-     mirror-div text visible and doubling the rendered @token appearance */
-  color: transparent;
+  background: none;
+  color: inherit;
+  border-radius: 0;
 }
 
-.mention-chip {
-  color: var(--primary);
+/* Grok-style inline mention chips inside the contenteditable composer. */
+.inline-mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 14rem;
+  margin: 0 0.12rem;
+  padding: 0.1rem 0.45rem 0.1rem 0.15rem;
+  vertical-align: middle;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklch, var(--border) 85%, transparent);
+  background: color-mix(in oklch, var(--muted) 55%, var(--background));
+  color: var(--foreground);
+  font-size: 0.8125rem;
   font-weight: 500;
-  border-radius: 2px;
+  line-height: 1.25;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.inline-mention-chip__thumb {
+  position: relative;
+  display: inline-flex;
+  height: 1.15rem;
+  width: 1.15rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.inline-mention-chip__thumb--icon {
+  background: color-mix(in oklch, var(--primary) 12%, var(--muted));
+}
+
+.inline-mention-chip__img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.inline-mention-chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Chat history: underlined inline mentions (no highlight wash). Media gets a
+   Grok-style inline thumb + label; hover cards provide richer previews. */
+.mention-inline {
+  display: inline-flex;
+  max-width: 16rem;
+  align-items: center;
+  gap: 0.28rem;
+  margin: 0 0.08rem;
+  vertical-align: baseline;
+  color: var(--foreground);
+  font-weight: 500;
+  font-size: 0.95em;
+  line-height: 1.35;
+  cursor: default;
+}
+
+.mention-inline__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--foreground) 28%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.mention-inline:hover .mention-inline__label,
+button:hover .mention-inline__label,
+button:focus-visible .mention-inline__label {
+  text-decoration-color: color-mix(in oklch, var(--foreground) 70%, transparent);
+}
+
+.mention-inline__thumb {
+  display: inline-block;
+  height: 1.25rem;
+  width: 1.25rem;
+  flex-shrink: 0;
+  border-radius: 0.3rem;
+  object-fit: cover;
+  background: var(--muted);
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--border) 80%, transparent);
+}
+
+.mention-inline__icon {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+
+.mention-inline--media {
+  gap: 0.32rem;
+  padding: 0.05rem 0.15rem 0.05rem 0.05rem;
+  border-radius: 0.4rem;
+}
+
+/* Legacy class — keep inert if any residual markup still uses it. */
+.mention-chip {
+  background: none;
+  border: none;
+  color: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 .dark {

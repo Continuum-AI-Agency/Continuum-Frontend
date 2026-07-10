@@ -16,6 +16,7 @@ import {
   type InsightColumn,
   InsightDataTable,
 } from '@/components/dashboard/datatable/InsightDataTable';
+import { creativeInsightToMentionSuggestion } from '@/lib/agent/kpi-mentions';
 import { type InsightRowView, toInsightRows } from '@/lib/organic/creative-strategy-rows';
 import { ExemplarThumb } from './ExemplarThumb';
 
@@ -73,6 +74,17 @@ function ExpandedInsight({ row }: { row: InsightRowView }) {
 
 export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[] }) {
   const rows = useMemo(() => toInsightRows(insights), [insights]);
+  // Cluster ids can collide (kind-archetype); keep list index so pin keys stay unique.
+  const insightByRowId = useMemo(() => {
+    const map = new Map<string, { insight: CreativeInsight; index: number }>();
+    insights.forEach((insight, index) => {
+      // Prefer first occurrence for id collisions so table row id still resolves.
+      if (!map.has(insight.id)) map.set(insight.id, { insight, index });
+      // Also index by disambiguated row id used when rows share an insight.id.
+      map.set(`${insight.id}#${index}`, { insight, index });
+    });
+    return map;
+  }, [insights]);
 
   const columns = useMemo<InsightColumn<InsightRowView>[]>(
     () => [
@@ -140,8 +152,32 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
       getRowId={(row) => row.id}
       defaultSort={{ columnId: 'confidence', direction: 'desc' }}
       expandedContent={(row) => <ExpandedInsight row={row} />}
-      contextMenu={(row) => <InsightContextActions permalink={row.topPermalink ?? undefined} />}
-      rowActions={(row) => <InsightActionsDropdown permalink={row.topPermalink ?? undefined} />}
+      contextMenu={(row) => {
+        const entry = insightByRowId.get(row.id);
+        return (
+          <InsightContextActions
+            permalink={row.topPermalink ?? undefined}
+            agentSuggestion={
+              entry
+                ? creativeInsightToMentionSuggestion(entry.insight, { index: entry.index })
+                : null
+            }
+          />
+        );
+      }}
+      rowActions={(row) => {
+        const entry = insightByRowId.get(row.id);
+        return (
+          <InsightActionsDropdown
+            permalink={row.topPermalink ?? undefined}
+            agentSuggestion={
+              entry
+                ? creativeInsightToMentionSuggestion(entry.insight, { index: entry.index })
+                : null
+            }
+          />
+        );
+      }}
       maxHeight="34rem"
     />
   );

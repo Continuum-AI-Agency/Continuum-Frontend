@@ -5,6 +5,7 @@ import {
   CalendarPlus,
   ExternalLink,
   MessageSquare,
+  MessageSquarePlus,
   MoreHorizontal,
   Rocket,
   Sparkles,
@@ -22,6 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { AgentMentionSuggestion } from "@/lib/agent-references";
+import { enqueueAgentMentions } from "@/lib/agent/mention-queue-store";
 
 // The "North Star" verbs an insight row routes into. One source for the
 // right-click context menu and the trailing tap-friendly dropdown so they never
@@ -34,13 +37,28 @@ export const NORTH_STAR_VERBS = [
   { key: "jaina", label: "Ask Jaina", icon: MessageSquare, href: "/scale?tab=jaina" },
 ] as const;
 
-export function InsightContextActions({ permalink }: { permalink?: string }) {
+type InsightActionExtras = {
+  permalink?: string;
+  /** When set, "Add to agent" pins this structured mention into the organic composer. */
+  agentSuggestion?: AgentMentionSuggestion | null;
+};
+
+export function InsightContextActions({ permalink, agentSuggestion }: InsightActionExtras) {
   const router = useRouter();
   return (
     <>
       <ContextMenuLabel className="text-2xs uppercase tracking-wide text-muted-foreground">
         Take action
       </ContextMenuLabel>
+      {agentSuggestion ? (
+        <ContextMenuItem
+          className="gap-2 text-xs"
+          onSelect={() => enqueueAgentMentions(agentSuggestion)}
+        >
+          <MessageSquarePlus className="size-3.5" />
+          Add to agent
+        </ContextMenuItem>
+      ) : null}
       {NORTH_STAR_VERBS.map((verb) => (
         <ContextMenuItem key={verb.key} className="gap-2 text-xs" onSelect={() => router.push(verb.href)}>
           <verb.icon className="size-3.5" />
@@ -60,7 +78,7 @@ export function InsightContextActions({ permalink }: { permalink?: string }) {
   );
 }
 
-export function InsightActionsDropdown({ permalink }: { permalink?: string }) {
+export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightActionExtras) {
   const router = useRouter();
   return (
     <DropdownMenu>
@@ -76,6 +94,18 @@ export function InsightActionsDropdown({ permalink }: { permalink?: string }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
+        {agentSuggestion ? (
+          <>
+            <DropdownMenuItem
+              className="gap-2 text-xs"
+              onSelect={() => enqueueAgentMentions(agentSuggestion)}
+            >
+              <MessageSquarePlus className="size-3.5" />
+              Add to agent
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {NORTH_STAR_VERBS.map((verb) => (
           <DropdownMenuItem key={verb.key} className="gap-2 text-xs" onSelect={() => router.push(verb.href)}>
             <verb.icon className="size-3.5" />

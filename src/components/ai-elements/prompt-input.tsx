@@ -1,19 +1,22 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import Image from "next/image";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ChevronRight, ImageIcon, Paperclip, Square, Video, Workflow, X } from "lucide-react";
+import { Paperclip, Square } from "lucide-react";
 
 import { Attachments, type Attachment } from "./attachments";
+import {
+  MentionPickerMenu,
+  type MentionPlatformOption,
+} from "./mention-picker-menu";
+import type { MentionAnalyticsContext } from "./mention-suggestion-hover";
 import { SpeechInput } from "./speech-input";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupTextarea,
   InputGroupText,
 } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
@@ -26,41 +29,12 @@ import {
 } from "@/lib/agent-references";
 
 const URL_RE = /https?:\/\/[^\s<>"]+/g;
-
-// All user-supplied strings are run through escapeHtml before entering the
-// HTML string, so dangerouslySetInnerHTML on the mirror div is XSS-safe.
-// Only hardcoded class names and <mark>/<br> tags are injected by this code.
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function processTextSegment(text: string): string {
-  const urlParts = text.split(/(https?:\/\/[^\s<>"]+)/g);
-  return urlParts
-    .map((part, i) =>
-      i % 2 === 1
-        ? `<mark class="link-token">${escapeHtml(part)}</mark>`
-        : escapeHtml(part).replace(/\n/g, "<br>")
-    )
-    .join("");
-}
-
-function buildHighlightHtml(value: string, tokens: string[]): string {
-  if (tokens.length === 0) return processTextSegment(value);
-  const pattern = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  return value
-    .split(new RegExp(`(${pattern})`, "g"))
-    .map((part, i) =>
-      i % 2 === 1
-        ? `<mark class="mention-token">${escapeHtml(part)}</mark>`
-        : processTextSegment(part)
-    )
-    .join("");
-}
+const CHIP_ATTR = "data-mention-chip";
+const CHIP_REF_ATTR = "data-mention-ref-key";
 
 function extractLinkReferences(
   text: string,
-  source: AgentMentionReference["source"]
+  source: AgentMentionReference["source"],
 ): AgentMentionReference[] {
   const matches = [...text.matchAll(new RegExp(URL_RE.source, "g"))];
   return [...new Set(matches.map((m) => m[0]))].map((url) => ({
@@ -76,7 +50,7 @@ type PromptInputProps = {
   onSubmit: (
     value: string,
     attachments: Attachment[],
-    references: AgentMentionReference[]
+    references: AgentMentionReference[],
   ) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -87,6 +61,20 @@ type PromptInputProps = {
   mentionSource?: AgentMentionReference["source"];
   queuedMentionSuggestions?: AgentMentionSuggestion[];
   onQueuedMentionSuggestionsConsumed?: () => void;
+  /**
+   * When the user selects a multi-ref pack (e.g. KPIs › Packs › Grow followers),
+   * expand it into concrete metric chips instead of inserting a single pack atom.
+   * Return null/empty to fall through to normal single-chip insert.
+   */
+  expandPackSuggestion?: (
+    suggestion: AgentMentionSuggestion,
+  ) => AgentMentionSuggestion[] | null | undefined;
+  /** Enables KPI/pack hover charts in the context grabber. */
+  mentionAnalytics?: MentionAnalyticsContext | null;
+  /** Connected platforms for the in-menu platform filter widget. */
+  mentionPlatforms?: MentionPlatformOption[];
+  mentionPlatform?: string | null;
+  onMentionPlatformChange?: (platformId: string) => void;
   // While a turn is streaming, the submit button becomes a stop button that
   // calls onStop (the consumer aborts its stream). Stays enabled so the user
   // can always interrupt a running turn.
@@ -95,6 +83,7 @@ type PromptInputProps = {
 };
 
 type ActiveMention = {
+  /** Character offset of `@` within the serialized plain text. */
   start: number;
   end: number;
   query: string;
@@ -103,6 +92,8 @@ type ActiveMention = {
 type TrackedReference = AgentMentionReference & {
   token: string;
   preview?: AgentMentionSuggestion["preview"];
+  /** Stable key tying the chip DOM node to this reference instance. */
+  refKey: string;
 };
 
 function appendTranscript(base: string, incoming: string): string {
@@ -112,129 +103,277 @@ function appendTranscript(base: string, incoming: string): string {
   return `${base.trimEnd()} ${normalizedIncoming}`.replace(/\s+/g, " ");
 }
 
-function findActiveMention(value: string, caret: number): ActiveMention | null {
+function newRefKey(): string {
+  return `m_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Serializes the contenteditable DOM into plain text (chips → `@label`) and the
+ * ordered list of structured references still present as chips.
+ */
+function serializeEditor(
+  root: HTMLElement,
+  catalog: Map<string, TrackedReference>,
+): { text: string; references: TrackedReference[] } {
+  let text = "";
+  const references: TrackedReference[] = [];
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent ?? "";
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    if (el.getAttribute(CHIP_ATTR) === "true") {
+      const key = el.getAttribute(CHIP_REF_ATTR) ?? "";
+      const tracked = catalog.get(key);
+      if (tracked) {
+        text += tracked.token;
+        references.push(tracked);
+      } else {
+        text += el.getAttribute("data-mention-label")
+          ? createMentionToken(el.getAttribute("data-mention-label") ?? "")
+          : "";
+      }
+      return;
+    }
+    if (el.tagName === "BR") {
+      text += "\n";
+      return;
+    }
+    if (el.tagName === "DIV" || el.tagName === "P") {
+      // Block boundaries become newlines (except leading).
+      if (text.length > 0 && !text.endsWith("\n")) text += "\n";
+    }
+    for (const child of Array.from(el.childNodes)) walk(child);
+  };
+
+  for (const child of Array.from(root.childNodes)) walk(child);
+  // contenteditable often ends with a trailing newline from a final empty block.
+  return { text: text.replace(/\u00a0/g, " "), references };
+}
+
+function findActiveMentionInText(
+  value: string,
+  caret: number,
+  completedTokens: string[] = [],
+): ActiveMention | null {
   const beforeCaret = value.slice(0, caret);
-  const atIndex = beforeCaret.lastIndexOf("@");
-  if (atIndex < 0) return null;
-  const previous = atIndex > 0 ? beforeCaret[atIndex - 1] : "";
-  if (previous && !/[\s([{,;:]/.test(previous)) return null;
-  const query = beforeCaret.slice(atIndex + 1);
-  if (query.includes("\n")) return null;
-  if (query.length > 80) return null;
-  return { start: atIndex, end: caret, query };
-}
-
-function pruneReferencesForValue(
-  references: TrackedReference[],
-  value: string
-): TrackedReference[] {
-  const counts = new Map<string, number>();
-  for (const reference of references) {
-    const escaped = reference.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matches = value.match(new RegExp(escaped, "g"));
-    counts.set(reference.token, matches?.length ?? 0);
-  }
-
-  const used = new Map<string, number>();
-  return references.filter((reference) => {
-    const current = used.get(reference.token) ?? 0;
-    const available = counts.get(reference.token) ?? 0;
-    if (current >= available) return false;
-    used.set(reference.token, current + 1);
-    return true;
-  });
-}
-
-function ReferencePreviewThumb({
-  preview,
-  label,
-  className,
-}: {
-  preview?: AgentMentionSuggestion["preview"];
-  label: string;
-  className?: string;
-}) {
-  const baseClass = cn(
-    "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground",
-    className
-  );
-
-  if (preview?.url && preview.kind === "video") {
-    return (
-      <video
-        aria-label={label}
-        className={cn(baseClass, "object-cover")}
-        muted
-        playsInline
-        preload="metadata"
-        src={preview.url}
-      />
+  // Walk every `@` before the caret from right to left; skip ones that start a
+  // completed chip token (`@Label`) so typing after an existing chip does not
+  // reopen the picker on that chip's token.
+  let searchFrom = beforeCaret.length;
+  while (searchFrom > 0) {
+    const atIndex = beforeCaret.lastIndexOf("@", searchFrom - 1);
+    if (atIndex < 0) return null;
+    const isCompleted = completedTokens.some(
+      (token) => value.slice(atIndex, atIndex + token.length) === token,
     );
+    if (isCompleted) {
+      searchFrom = atIndex;
+      continue;
+    }
+    const previous = atIndex > 0 ? beforeCaret[atIndex - 1] : "";
+    if (previous && !/[\s([{,;:]/.test(previous)) {
+      searchFrom = atIndex;
+      continue;
+    }
+    const query = beforeCaret.slice(atIndex + 1);
+    if (query.includes("\n") || query.length > 80) {
+      searchFrom = atIndex;
+      continue;
+    }
+    return { start: atIndex, end: caret, query };
   }
-
-  if (preview?.url) {
-    return (
-      <span className={cn(baseClass, "relative")}>
-        <Image
-          alt={label}
-          className="object-cover"
-          fill
-          sizes="36px"
-          src={preview.url}
-          unoptimized
-        />
-      </span>
-    );
-  }
-
-  if (preview?.kind === "video") return <span className={baseClass}><Video className="size-4" /></span>;
-  if (preview?.kind === "canvas") return <span className={baseClass}><Workflow className="size-4" /></span>;
-  return <span className={baseClass}><ImageIcon className="size-4" /></span>;
+  return null;
 }
 
-function ReferencePreviewChips({
-  references,
-  onRemove,
-}: {
-  references: TrackedReference[];
-  onRemove: (reference: TrackedReference) => void;
-}) {
-  if (references.length === 0) return null;
+/**
+ * Maps a plain-text caret offset (as produced by serializeEditor) back to a
+ * DOM selection point inside the contenteditable.
+ */
+function setCaretFromPlainOffset(root: HTMLElement, targetOffset: number): void {
+  const selection = window.getSelection();
+  if (!selection) return;
 
-  return (
-    <motion.div
-      key="references"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.18 }}
-      className="flex max-h-24 flex-wrap gap-2 overflow-y-auto rounded-md border border-border/60 bg-card/80 p-2"
-    >
-      {references.map((reference, index) => (
-        <span
-          key={`${reference.type}:${reference.id}:${index}`}
-          className="flex min-w-0 max-w-[15rem] items-center gap-2 rounded-md border border-border/60 bg-background/85 px-2 py-1.5"
-        >
-          <ReferencePreviewThumb
-            preview={reference.preview}
-            label={reference.preview?.label ?? reference.label}
-          />
-          <span className="min-w-0">
-            <span className="block truncate text-xs font-medium text-foreground">{reference.label}</span>
-            <span className="block text-2xs uppercase text-muted-foreground">{reference.type}</span>
-          </span>
-          <button
-            type="button"
-            aria-label={`Remove ${reference.label}`}
-            className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            onClick={() => onRemove(reference)}
-          >
-            <X className="size-3.5" />
-          </button>
-        </span>
-      ))}
-    </motion.div>
-  );
+  let remaining = Math.max(0, targetOffset);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let node: Node | null = walker.currentNode;
+  // TreeWalker starts at root; advance into children.
+  node = walker.nextNode();
+
+  while (node) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      if (el.getAttribute(CHIP_ATTR) === "true") {
+        const tokenLen = (el.getAttribute("data-mention-token") ?? "").length;
+        if (remaining <= tokenLen) {
+          // Place caret after the chip when landing inside its token span.
+          const range = document.createRange();
+          range.setStartAfter(el);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return;
+        }
+        remaining -= tokenLen;
+        // Skip chip's descendants.
+        walker.nextSibling();
+        node = walker.nextNode();
+        continue;
+      }
+    } else if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0;
+      if (remaining <= len) {
+        const range = document.createRange();
+        range.setStart(node, remaining);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+      }
+      remaining -= len;
+    }
+    node = walker.nextNode();
+  }
+
+  // Fallback: end of editor.
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function plainOffsetFromSelection(root: HTMLElement): number {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return 0;
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer)) return 0;
+
+  const pre = range.cloneRange();
+  pre.selectNodeContents(root);
+  pre.setEnd(range.startContainer, range.startOffset);
+
+  // Count text + chip tokens in the pre-caret fragment.
+  const frag = pre.cloneContents();
+  const holder = document.createElement("div");
+  holder.appendChild(frag);
+  // Chips in the fragment still carry data-mention-token.
+  let offset = 0;
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += node.textContent?.length ?? 0;
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    if (el.getAttribute(CHIP_ATTR) === "true") {
+      offset += (el.getAttribute("data-mention-token") ?? "").length;
+      return;
+    }
+    if (el.tagName === "BR") {
+      offset += 1;
+      return;
+    }
+    for (const child of Array.from(el.childNodes)) walk(child);
+  };
+  for (const child of Array.from(holder.childNodes)) walk(child);
+  return offset;
+}
+
+/** Builds a contentEditable=false chip element for a tracked reference. */
+function buildChipElement(tracked: TrackedReference): HTMLSpanElement {
+  const chip = document.createElement("span");
+  chip.setAttribute(CHIP_ATTR, "true");
+  chip.setAttribute(CHIP_REF_ATTR, tracked.refKey);
+  chip.setAttribute("data-mention-token", tracked.token);
+  chip.setAttribute("data-mention-label", tracked.label);
+  chip.setAttribute("contenteditable", "false");
+  chip.setAttribute("role", "inline");
+  chip.className = "inline-mention-chip";
+  chip.title = `${tracked.type}: ${tracked.label}`;
+
+  // Thumb
+  const thumb = document.createElement("span");
+  thumb.className = "inline-mention-chip__thumb";
+  if (tracked.preview?.url) {
+    const img = document.createElement("img");
+    img.src = tracked.preview.url;
+    img.alt = "";
+    img.className = "inline-mention-chip__img";
+    thumb.appendChild(img);
+  } else {
+    thumb.classList.add("inline-mention-chip__thumb--icon");
+    thumb.textContent =
+      tracked.type === "skill"
+        ? "✦"
+        : tracked.type === "document"
+          ? "◈"
+          : tracked.type === "creative_insight" ||
+              tracked.type === "organic_insight" ||
+              tracked.type === "kpi"
+            ? "↗"
+            : tracked.type === "trend" || tracked.type === "event"
+              ? "△"
+              : "●";
+  }
+  chip.appendChild(thumb);
+
+  const label = document.createElement("span");
+  label.className = "inline-mention-chip__label";
+  label.textContent = tracked.label;
+  chip.appendChild(label);
+
+  return chip;
+}
+
+function insertChipAtSelection(
+  root: HTMLElement,
+  tracked: TrackedReference,
+  replaceFromPlainOffset: number | null,
+  replaceToPlainOffset: number | null,
+): void {
+  root.focus();
+  if (replaceFromPlainOffset != null && replaceToPlainOffset != null) {
+    setCaretFromPlainOffset(root, replaceFromPlainOffset);
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      // Extend selection to cover the @query span.
+      const startRange = selection.getRangeAt(0);
+      setCaretFromPlainOffset(root, replaceToPlainOffset);
+      const endRange = selection.getRangeAt(0);
+      startRange.setEnd(endRange.startContainer, endRange.startOffset);
+      selection.removeAllRanges();
+      selection.addRange(startRange);
+      startRange.deleteContents();
+    }
+  }
+
+  const selection = window.getSelection();
+  const range =
+    selection && selection.rangeCount > 0
+      ? selection.getRangeAt(0)
+      : (() => {
+          const r = document.createRange();
+          r.selectNodeContents(root);
+          r.collapse(false);
+          return r;
+        })();
+
+  const chip = buildChipElement(tracked);
+  range.insertNode(chip);
+
+  // Trailing space after chip so typing continues cleanly.
+  const space = document.createTextNode("\u00a0");
+  chip.after(space);
+
+  const after = document.createRange();
+  after.setStartAfter(space);
+  after.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(after);
 }
 
 export function PromptInput({
@@ -248,66 +387,87 @@ export function PromptInput({
   mentionSource = "organic",
   queuedMentionSuggestions,
   onQueuedMentionSuggestionsConsumed,
+  expandPackSuggestion,
+  mentionAnalytics,
+  mentionPlatforms,
+  mentionPlatform,
+  onMentionPlatformChange,
   isStreaming = false,
   onStop,
 }: PromptInputProps) {
-  const [value, setValue] = React.useState("");
+  const [plainValue, setPlainValue] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const [references, setReferences] = React.useState<TrackedReference[]>([]);
+  const referencesRef = useRef<Map<string, TrackedReference>>(new Map());
   const [activeMention, setActiveMention] = React.useState<ActiveMention | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<AgentMentionSuggestion[]>([]);
-  // A stack so nested folders (e.g. Media library > Uploads > assets) can pop
+  // A stack so nested folders (e.g. Media > Media library > Uploads) can pop
   // back one level at a time instead of jumping straight to the root.
   const [mentionParentStack, setMentionParentStack] = React.useState<AgentMentionSuggestion[]>([]);
   const mentionParent = mentionParentStack[mentionParentStack.length - 1] ?? null;
   const [highlightedMentionIndex, setHighlightedMentionIndex] = React.useState(0);
   const [isListening, setIsListening] = React.useState(false);
   const [isSpeechProcessing, setIsSpeechProcessing] = React.useState(false);
+  const [isEmpty, setIsEmpty] = React.useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mirrorRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
-  const canSubmit = useMemo(
-    () => Boolean(value.trim()) || attachments.length > 0,
-    [attachments.length, value]
-  );
-
-  const highlightHtml = useMemo(() => {
-    const tokens = [...new Set(references.map((r) => r.token))];
-    return buildHighlightHtml(value, tokens);
-  }, [value, references]);
-
-  const syncMirrorScroll = useCallback(() => {
-    if (mirrorRef.current && textareaRef.current) {
-      mirrorRef.current.scrollTop = textareaRef.current.scrollTop;
+  const syncFromEditor = useCallback(() => {
+    const root = editorRef.current;
+    if (!root) return { text: "", references: [] as TrackedReference[] };
+    const serialized = serializeEditor(root, referencesRef.current);
+    // Drop catalog entries for chips that were deleted.
+    const liveKeys = new Set(serialized.references.map((r) => r.refKey));
+    for (const key of Array.from(referencesRef.current.keys())) {
+      if (!liveKeys.has(key)) referencesRef.current.delete(key);
     }
+    setPlainValue(serialized.text);
+    setReferences(serialized.references);
+    setIsEmpty(serialized.text.trim().length === 0 && serialized.references.length === 0);
+    return serialized;
   }, []);
+
+  const canSubmit = useMemo(
+    () => Boolean(plainValue.trim()) || attachments.length > 0 || references.length > 0,
+    [attachments.length, plainValue, references.length],
+  );
 
   const handleSubmit = useCallback(
     (event?: React.FormEvent) => {
       event?.preventDefault();
       if (!canSubmit || disabled) return;
-      const trimmedValue = value.trim();
-      const validReferences = pruneReferencesForValue(references, trimmedValue);
+      const serialized = syncFromEditor();
+      const trimmedValue = serialized.text.trim();
       const linkReferences = extractLinkReferences(trimmedValue, mentionSource);
-      onSubmit(
-        trimmedValue,
-        attachments,
-        [
-          ...validReferences.map(({ token: _token, preview: _preview, ...reference }) => reference),
-          ...linkReferences,
-        ]
-      );
-      setValue("");
+      onSubmit(trimmedValue, attachments, [
+        ...serialized.references.map(({ token: _t, preview, refKey: _k, ...reference }) => {
+          // Fold composer preview into metadata so history can render inline media
+          // thumbs + hover cards without a re-fetch.
+          if (!preview?.url) return reference;
+          return {
+            ...reference,
+            metadata: {
+              ...reference.metadata,
+              previewUrl: preview.url,
+              previewKind: preview.kind ?? reference.metadata?.kind ?? null,
+            },
+          };
+        }),
+        ...linkReferences,
+      ]);
       setAttachments([]);
       setReferences([]);
+      referencesRef.current.clear();
+      setPlainValue("");
+      setIsEmpty(true);
       setActiveMention(null);
       setMentionParentStack([]);
       setMentionSuggestions([]);
+      if (editorRef.current) editorRef.current.innerHTML = "";
     },
-    [attachments, canSubmit, disabled, mentionSource, onSubmit, references, value]
+    [attachments, canSubmit, disabled, mentionSource, onSubmit, syncFromEditor],
   );
 
   useEffect(() => {
@@ -336,39 +496,57 @@ export function PromptInput({
     return () => {
       cancelled = true;
     };
-  }, [activeMention, mentionParent, mentionProvider]);
+    // mentionPlatform is intentional: KPI/insights re-fetch when the filter chip changes.
+  }, [activeMention, mentionParent, mentionPlatform, mentionProvider]);
 
-  const updateValue = useCallback((nextValue: string, caret?: number) => {
-    setValue(nextValue);
-    setReferences((previous) => pruneReferencesForValue(previous, nextValue));
-    const nextCaret = caret ?? textareaRef.current?.selectionStart ?? nextValue.length;
-    const nextMention = findActiveMention(nextValue, nextCaret);
-    setActiveMention(nextMention);
-    if (!nextMention) {
-      setMentionParentStack([]);
-    }
-  }, []);
+  const refreshActiveMention = useCallback(() => {
+    const root = editorRef.current;
+    if (!root) return;
+    const serialized = syncFromEditor();
+    const caret = plainOffsetFromSelection(root);
+    const completedTokens = serialized.references.map((r) => r.token);
+    const next = findActiveMentionInText(serialized.text, caret, completedTokens);
+    setActiveMention(next);
+    if (!next) setMentionParentStack([]);
+  }, [syncFromEditor]);
 
-  const appendMentionSuggestion = useCallback((suggestion: AgentMentionSuggestion) => {
-    if (!suggestion.reference) return;
-    const reference = suggestion.reference;
-    const token = createMentionToken(reference.label);
-    setValue((previous) => {
-      const prefix = previous.trimEnd();
-      const nextValue = `${prefix}${prefix ? " " : ""}${token} `;
-      setReferences((current) =>
-        pruneReferencesForValue(
-          [...current, { ...reference, token, preview: suggestion.preview }],
-          nextValue
-        )
+  const insertTrackedMention = useCallback(
+    (suggestion: AgentMentionSuggestion, replaceActive: boolean) => {
+      if (!suggestion.reference || !editorRef.current) return;
+      const reference = suggestion.reference;
+      const token = createMentionToken(reference.label);
+      const refKey = newRefKey();
+      const tracked: TrackedReference = {
+        ...reference,
+        token,
+        preview: suggestion.preview,
+        refKey,
+      };
+      referencesRef.current.set(refKey, tracked);
+
+      const active = replaceActive ? activeMention : null;
+      insertChipAtSelection(
+        editorRef.current,
+        tracked,
+        active?.start ?? null,
+        active?.end ?? null,
       );
-      return nextValue;
-    });
-    setActiveMention(null);
-    setMentionParentStack([]);
-    setMentionSuggestions([]);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, []);
+
+      setActiveMention(null);
+      setMentionParentStack([]);
+      setMentionSuggestions([]);
+      syncFromEditor();
+      requestAnimationFrame(() => editorRef.current?.focus());
+    },
+    [activeMention, syncFromEditor],
+  );
+
+  const appendMentionSuggestion = useCallback(
+    (suggestion: AgentMentionSuggestion) => {
+      insertTrackedMention(suggestion, false);
+    },
+    [insertTrackedMention],
+  );
 
   useEffect(() => {
     if (!queuedMentionSuggestions?.length) return;
@@ -376,67 +554,33 @@ export function PromptInput({
     onQueuedMentionSuggestionsConsumed?.();
   }, [appendMentionSuggestion, onQueuedMentionSuggestionsConsumed, queuedMentionSuggestions]);
 
-  const insertMention = useCallback(
-    (suggestion: AgentMentionSuggestion) => {
-      if (!activeMention || !suggestion.reference) return;
-      const reference = suggestion.reference;
-      const token = createMentionToken(reference.label);
-      const afterMention = value.slice(activeMention.end);
-      const insertedToken = `${token}${afterMention.length === 0 || !/^[\s.,;:!?)]/.test(afterMention) ? " " : ""}`;
-      const nextValue = `${value.slice(0, activeMention.start)}${insertedToken}${afterMention}`;
-      const nextCaret = activeMention.start + insertedToken.length;
-      setValue(nextValue);
-      setReferences((previous) =>
-        pruneReferencesForValue(
-          [...previous, { ...reference, token, preview: suggestion.preview }],
-          nextValue
-        )
-      );
-      setActiveMention(null);
-      setMentionParentStack([]);
-      setMentionSuggestions([]);
-      requestAnimationFrame(() => {
-        textareaRef.current?.focus();
-        textareaRef.current?.setSelectionRange(nextCaret, nextCaret);
-      });
-    },
-    [activeMention, value]
-  );
-
-  const removeReference = useCallback((reference: TrackedReference) => {
-    const escaped = reference.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const tokenPattern = new RegExp(`(^|\\s)${escaped}(?=\\s|$)`);
-    const nextValue = value.replace(tokenPattern, " ").replace(/\s{2,}/g, " ").trimStart();
-    let removed = false;
-    const nextReferences = references.filter((candidate) => {
-      if (!removed && candidate.id === reference.id && candidate.type === reference.type && candidate.token === reference.token) {
-        removed = true;
-        return false;
-      }
-      return true;
-    });
-    setValue(nextValue);
-    setReferences(pruneReferencesForValue(nextReferences, nextValue));
-    setActiveMention(null);
-    setMentionParentStack([]);
-  }, [references, value]);
-
   const selectMentionSuggestion = useCallback(
     (suggestion: AgentMentionSuggestion) => {
       if (suggestion.childrenLabel && mentionProvider?.getChildSuggestions) {
         setMentionParentStack((stack) => [...stack, suggestion]);
         setMentionSuggestions([]);
         setHighlightedMentionIndex(0);
-        requestAnimationFrame(() => textareaRef.current?.focus());
+        requestAnimationFrame(() => editorRef.current?.focus());
         return;
       }
-      insertMention(suggestion);
+      const expanded = expandPackSuggestion?.(suggestion);
+      if (expanded && expanded.length > 0) {
+        // Multi-insert pack: clear the @query once, then append each metric chip.
+        for (const item of expanded) {
+          insertTrackedMention(item, item === expanded[0]);
+        }
+        setActiveMention(null);
+        setMentionParentStack([]);
+        setMentionSuggestions([]);
+        return;
+      }
+      insertTrackedMention(suggestion, true);
     },
-    [insertMention, mentionProvider]
+    [expandPackSuggestion, insertTrackedMention, mentionProvider],
   );
 
   const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (activeMention && mentionSuggestions.length > 0) {
         if (event.key === "ArrowDown") {
           event.preventDefault();
@@ -446,13 +590,15 @@ export function PromptInput({
         if (event.key === "ArrowUp") {
           event.preventDefault();
           setHighlightedMentionIndex((current) =>
-            current === 0 ? mentionSuggestions.length - 1 : current - 1
+            current === 0 ? mentionSuggestions.length - 1 : current - 1,
           );
           return;
         }
         if (event.key === "Tab" || event.key === "Enter") {
           event.preventDefault();
-          selectMentionSuggestion(mentionSuggestions[highlightedMentionIndex] ?? mentionSuggestions[0]);
+          selectMentionSuggestion(
+            mentionSuggestions[highlightedMentionIndex] ?? mentionSuggestions[0],
+          );
           return;
         }
         if (event.key === "Escape") {
@@ -479,7 +625,7 @@ export function PromptInput({
       mentionParent,
       mentionSuggestions,
       selectMentionSuggestion,
-    ]
+    ],
   );
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -500,15 +646,27 @@ export function PromptInput({
     setAttachments((previous) => previous.filter((attachment) => attachment.id !== id));
   }, []);
 
-  const handleSpeechResult = useCallback((transcript: string) => {
-    setValue((previous) => {
-      const nextValue = appendTranscript(previous, transcript);
-      setReferences((current) => pruneReferencesForValue(current, nextValue));
-      return nextValue;
-    });
-    setActiveMention(null);
-    setMentionParentStack([]);
-  }, []);
+  const handleSpeechResult = useCallback(
+    (transcript: string) => {
+      const root = editorRef.current;
+      if (!root) return;
+      root.focus();
+      const selection = window.getSelection();
+      const text = appendTranscript("", transcript);
+      // Append at caret (or end).
+      if (selection && selection.rangeCount > 0 && root.contains(selection.anchorNode)) {
+        const range = selection.getRangeAt(0);
+        range.insertNode(document.createTextNode(text.startsWith(" ") ? text : ` ${text}`));
+        range.collapse(false);
+      } else {
+        root.appendChild(document.createTextNode(text));
+      }
+      syncFromEditor();
+      setActiveMention(null);
+      setMentionParentStack([]);
+    },
+    [syncFromEditor],
+  );
 
   const handleAudioRecorded = useCallback(async (audioBlob: Blob) => {
     setIsSpeechProcessing(true);
@@ -527,9 +685,6 @@ export function PromptInput({
     <div className={cn("mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8", className)}>
       <form onSubmit={handleSubmit} className="relative flex flex-col gap-2">
         <AnimatePresence initial={false}>
-          {references.length > 0 ? (
-            <ReferencePreviewChips references={references} onRemove={removeReference} />
-          ) : null}
           {attachments.length > 0 ? (
             <motion.div
               key="attachments"
@@ -546,124 +701,63 @@ export function PromptInput({
         <InputGroup
           className={cn(
             "border-border/70 bg-card/75 backdrop-blur-sm",
-            "shadow-[0_10px_30px_-22px_color-mix(in_oklch,var(--color-indigo-600)_45%,transparent)]"
+            "shadow-[0_10px_30px_-22px_color-mix(in_oklch,var(--color-indigo-600)_45%,transparent)]",
           )}
           isProcessing={isSpeechProcessing}
           isRecording={isListening}
         >
           <div className="relative w-full">
+            {/* Placeholder overlay when editor is empty */}
+            {isEmpty ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 px-3 py-3.5 text-sm leading-6 text-muted-foreground/85"
+              >
+                {placeholder ?? "Send a message…"}
+              </div>
+            ) : null}
+            {/* contenteditable is required for Grok-style inline mention chips;
+                a native textarea cannot host non-editable chip elements mid-flow. */}
+            {/* biome-ignore lint/a11y/useSemanticElements: contenteditable host for inline chips */}
             <div
-              ref={mirrorRef}
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words px-3 py-3.5 text-sm leading-6 text-transparent"
-              dangerouslySetInnerHTML={{ __html: highlightHtml }}
-            />
-            <InputGroupTextarea
+              ref={editorRef}
               aria-label={ariaLabel}
+              aria-multiline="true"
               className={cn(
-                "relative min-h-[74px] max-h-[160px] overflow-y-auto border-none bg-transparent py-3.5 text-sm leading-6 focus-visible:ring-0",
-                "placeholder:text-muted-foreground/85"
+                "relative min-h-[74px] max-h-[160px] overflow-y-auto whitespace-pre-wrap break-words",
+                "px-3 py-3.5 text-sm leading-6 text-foreground outline-none",
+                "focus-visible:ring-0",
+                disabled && "pointer-events-none opacity-60",
               )}
-              disabled={disabled}
-              onChange={(event) => updateValue(event.target.value, event.target.selectionStart)}
-              onKeyDown={handleKeyDown}
-              onScroll={syncMirrorScroll}
-              onSelect={(event) => {
-                const target = event.currentTarget;
-                setActiveMention(findActiveMention(target.value, target.selectionStart));
+              contentEditable={!disabled}
+              data-slot="input-group-control"
+              onInput={() => {
+                refreshActiveMention();
               }}
-              placeholder={placeholder ?? "Send a message…"}
-              ref={textareaRef}
-              value={value}
+              onKeyDown={handleKeyDown}
+              onKeyUp={() => refreshActiveMention()}
+              onMouseUp={() => refreshActiveMention()}
+              role="textbox"
+              suppressContentEditableWarning
+              tabIndex={disabled ? -1 : 0}
             />
           </div>
-          {activeMention && mentionProvider && (
-            <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-full max-w-[42rem] overflow-hidden rounded-md border border-border/70 bg-popover text-popover-foreground shadow-xl">
-              {mentionParent ? (
-                <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-medium">
-                      {mentionParentStack.map((p) => p.label).join(" › ")}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{mentionParent.childrenLabel}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    onClick={() => setMentionParentStack((stack) => stack.slice(0, -1))}
-                  >
-                    Back
-                  </button>
-                </div>
-              ) : null}
-              <div className="max-h-72 overflow-y-auto p-1">
-                {mentionSuggestions.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    No references found.
-                  </div>
-                ) : (
-                  mentionSuggestions.map((suggestion, index) =>
-                    suggestion.isFolder ? (
-                      <button
-                        key={suggestion.key}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-center justify-between gap-3 rounded px-2.5 py-2 text-left text-sm",
-                          index === highlightedMentionIndex
-                            ? "bg-accent text-accent-foreground"
-                            : "hover:bg-accent/70"
-                        )}
-                        onMouseEnter={() => setHighlightedMentionIndex(index)}
-                        onClick={() => selectMentionSuggestion(suggestion)}
-                      >
-                        <span className="font-medium">{suggestion.label}</span>
-                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                          {suggestion.childrenLabel}
-                          <ChevronRight className="size-3" />
-                        </span>
-                      </button>
-                    ) : (
-                      <button
-                        key={suggestion.key}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-start justify-between gap-3 rounded px-2.5 py-2 text-left text-sm",
-                          index === highlightedMentionIndex
-                            ? "bg-accent text-accent-foreground"
-                            : "hover:bg-accent/70"
-                        )}
-                        onMouseEnter={() => setHighlightedMentionIndex(index)}
-                        onClick={() => selectMentionSuggestion(suggestion)}
-                      >
-                        <span className="flex min-w-0 flex-1 items-start gap-2">
-                          {suggestion.preview ? (
-                            <ReferencePreviewThumb
-                              className="h-8 w-8"
-                              label={suggestion.preview.label ?? suggestion.label}
-                              preview={suggestion.preview}
-                            />
-                          ) : null}
-                          <span className="min-w-0">
-                          <span className="block truncate font-medium">{suggestion.label}</span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {suggestion.description ?? suggestion.group ?? suggestion.type}
-                          </span>
-                          </span>
-                        </span>
-                        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-2xs uppercase text-muted-foreground">
-                          {suggestion.badge ?? suggestion.childrenLabel ?? suggestion.type}
-                        </span>
-                      </button>
-                    )
-                  )
-                )}
-              </div>
-            </div>
-          )}
-          <InputGroupAddon
-            align="block-end"
-            className="w-full border-t border-border/60 py-2.5"
-          >
+          {activeMention && mentionProvider ? (
+            <MentionPickerMenu
+              suggestions={mentionSuggestions}
+              highlightedIndex={highlightedMentionIndex}
+              parentStack={mentionParentStack}
+              activeQuery={activeMention.query}
+              onHighlight={setHighlightedMentionIndex}
+              onSelect={selectMentionSuggestion}
+              onBack={() => setMentionParentStack((stack) => stack.slice(0, -1))}
+              analytics={mentionAnalytics}
+              platforms={mentionPlatforms}
+              selectedPlatform={mentionPlatform}
+              onPlatformChange={onMentionPlatformChange}
+            />
+          ) : null}
+          <InputGroupAddon align="block-end" className="w-full border-t border-border/60 py-2.5">
             <div className="flex w-full items-center justify-between gap-2">
               <div className="min-h-5">
                 <AnimatePresence initial={false}>
@@ -695,7 +789,7 @@ export function PromptInput({
                   aria-label="Dictate message"
                   className={cn(
                     "h-8 w-8 border border-border/65 bg-background text-foreground hover:bg-accent",
-                    "focus-visible:ring-2 focus-visible:ring-ring/40"
+                    "focus-visible:ring-2 focus-visible:ring-ring/40",
                   )}
                   onAudioRecorded={handleAudioRecorded}
                   onListeningChange={setIsListening}

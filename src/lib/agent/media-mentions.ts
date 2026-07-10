@@ -40,6 +40,7 @@ export const MEDIA_COLLECTION_FOLDER_PREFIX = "media-collection:";
 
 export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSuggestion {
   const label = asset.title ?? asset.storagePath.split("/").pop() ?? asset.id;
+  const previewUrl = asset.signedUrl ?? asset.thumbnailUrl ?? null;
   const reference: AgentMentionReference = {
     id: asset.id,
     type: "media_asset",
@@ -53,6 +54,13 @@ export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSu
       tags: asset.tags,
       mimeType: asset.mimeType,
       source: asset.source,
+      // Durable storage coordinates — signed previewUrl can expire; re-sign
+      // from bucket+storagePath when hydrating long-lived chat history.
+      bucket: asset.bucket,
+      storagePath: asset.storagePath,
+      // Transient signed URL for immediate inline thumbs + hover previews.
+      previewUrl,
+      previewKind: asset.kind,
     },
   };
   return {
@@ -65,7 +73,7 @@ export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSu
     badge: asset.kind,
     reference,
     preview: {
-      url: asset.signedUrl ?? asset.thumbnailUrl,
+      url: previewUrl,
       kind: asset.kind,
       label,
     },

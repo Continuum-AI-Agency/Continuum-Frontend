@@ -6,6 +6,8 @@ import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
+import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
+import { organicInsightToMentionSuggestion } from '@/lib/agent/kpi-mentions';
 import type { OrganicComputedInsight } from '@/lib/organic/organic-insights.types';
 import type { OrganicDateRangePreset } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
@@ -132,6 +134,8 @@ export function OrganicInsightsPanel({
                 icon={cat.icon}
                 accent={cat.accent}
                 insights={catInsights}
+                platform={platform}
+                rangePreset={rangePreset}
               />
             );
           })}
@@ -146,11 +150,15 @@ function InsightCategoryCard({
   icon: Icon,
   accent,
   insights,
+  platform,
+  rangePreset,
 }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   accent: string;
   insights: OrganicComputedInsight[];
+  platform?: string;
+  rangePreset?: string;
 }) {
   return (
     <div className="rounded-lg border border-subtle bg-surface-subtle p-3">
@@ -166,41 +174,55 @@ function InsightCategoryCard({
         <span className="text-xs text-muted-foreground">No insights available</span>
       ) : (
         <div className="flex flex-col gap-2">
-          {insights.slice(0, 3).map((insight, i) => (
-            <div key={i}>
-              <div className="flex items-start gap-2">
-                <div
-                  className={cn(
-                    'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                    insight.severity === 'positive'
-                      ? 'bg-emerald-500'
-                      : insight.severity === 'negative'
-                        ? 'bg-red-500'
-                        : 'bg-blue-500',
-                  )}
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1 mb-1">
-                    {insight.metric && METRIC_LABELS[insight.metric] ? (
-                      <Pill variant="muted" className="shrink-0">
-                        {METRIC_LABELS[insight.metric]}
+          {insights.slice(0, 3).map((insight, i) => {
+            const suggestion = organicInsightToMentionSuggestion(insight, i, {
+              platform: platform ?? null,
+              rangePreset: rangePreset ?? null,
+            });
+            return (
+              <div key={i} className="group/insight relative">
+                <div className="flex items-start gap-2">
+                  <div
+                    className={cn(
+                      'mt-1.5 h-2 w-2 shrink-0 rounded-full',
+                      insight.severity === 'positive'
+                        ? 'bg-emerald-500'
+                        : insight.severity === 'negative'
+                          ? 'bg-red-500'
+                          : 'bg-blue-500',
+                    )}
+                  />
+                  <div className="min-w-0 flex-1 pr-7">
+                    <div className="flex items-center gap-1 mb-1">
+                      {insight.metric && METRIC_LABELS[insight.metric] ? (
+                        <Pill variant="muted" className="shrink-0">
+                          {METRIC_LABELS[insight.metric]}
+                        </Pill>
+                      ) : null}
+                      <Pill variant={insight.source === 'llm' ? 'violet' : 'muted'}>
+                        {insight.source === 'llm' ? 'AI' : 'Computed'}
                       </Pill>
+                    </div>
+                    <span className="block text-xs leading-snug">{insight.text}</span>
+                    {insight.recommendation ? (
+                      <span className="mt-0.5 block text-xs text-muted-foreground leading-snug">
+                        {insight.recommendation}
+                        {insight.estimated_impact ? ` (${insight.estimated_impact})` : ''}
+                      </span>
                     ) : null}
-                    <Pill variant={insight.source === 'llm' ? 'violet' : 'muted'}>
-                      {insight.source === 'llm' ? 'AI' : 'Computed'}
-                    </Pill>
                   </div>
-                  <span className="block text-xs leading-snug">{insight.text}</span>
-                  {insight.recommendation ? (
-                    <span className="mt-0.5 block text-xs text-muted-foreground leading-snug">
-                      {insight.recommendation}
-                      {insight.estimated_impact ? ` (${insight.estimated_impact})` : ''}
-                    </span>
-                  ) : null}
+                  <div className="absolute right-0 top-0">
+                    <PinToAgentButton
+                      suggestions={suggestion}
+                      iconOnly
+                      label="Add insight to agent"
+                      className="opacity-0 group-hover/insight:opacity-100 max-sm:opacity-100"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

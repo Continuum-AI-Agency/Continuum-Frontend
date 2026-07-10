@@ -64,6 +64,10 @@ describe("mediaAssetToMentionSuggestion", () => {
       kind: "image",
       mimeType: "image/png",
       source: "canvas",
+      bucket: "brand-profile-assets",
+      storagePath: "brand-1/creatives/sunset.png",
+      previewUrl: "https://signed.example/sunset.png",
+      previewKind: "image",
     });
     expect(suggestion.preview).toEqual({
       url: "https://signed.example/sunset.png",
