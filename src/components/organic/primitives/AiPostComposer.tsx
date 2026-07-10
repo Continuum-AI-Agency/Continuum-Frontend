@@ -1,15 +1,22 @@
 /* eslint-disable @next/next/no-img-element */
-"use client"
+'use client';
 
-import * as React from "react"
-import { ImageOff, Images, Loader2, Play, Sparkles } from "lucide-react"
+// Calendar "Create with AI" composer — the one-shot "very light harness".
+// Collects a direction plus predetermined evidence (selected metrics, insights,
+// winning angles), optionally tags library creatives (>=2 ⇒ carousel) and
+// trends, then runs ONE synchronous schema-direct generation pass on the
+// Backend. The persisted text-checkpoint draft comes back in the response and
+// surfaces on the calendar via the existing realtime refetch.
 
 import {
   creativeRefFromAsset,
   type MediaAsset,
-  type QuickCreatePostResponse,
-} from "@continuum/contracts"
-
+  type OneShotPostResponse,
+} from '@continuum/contracts';
+import { ImageOff, Images, Loader2, Play, Sparkles } from 'lucide-react';
+import * as React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -17,31 +24,30 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
-import { useStudioLibraryBrowser } from "@/lib/creative-assets/useStudioLibraryBrowser"
-import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl"
-import { quickCreatePost } from "@/lib/organic/quickCreatePost"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
-import type { Trend } from "@/lib/organic/trends"
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
+import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import { createOneShotPost } from '@/lib/organic/oneShotPost';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { Trend } from '@/lib/organic/trends';
+import { cn } from '@/lib/utils';
+import { useOneShotEvidence } from './useOneShotEvidence';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function ComposerAssetTile({
   asset,
   order,
   onToggle,
 }: {
-  asset: MediaAsset
-  order: number
-  onToggle: () => void
+  asset: MediaAsset;
+  order: number;
+  onToggle: () => void;
 }) {
-  const url = sanitizeCreativeAssetUrl(asset.signedUrl)
-  const isVideo = asset.kind === "video"
-  const isSelected = order > 0
+  const url = sanitizeCreativeAssetUrl(asset.signedUrl);
+  const isVideo = asset.kind === 'video';
+  const isSelected = order > 0;
   return (
     <button
       type="button"
@@ -49,14 +55,27 @@ function ComposerAssetTile({
       aria-pressed={isSelected}
       onClick={onToggle}
       className={cn(
-        "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all duration-150",
-        isSelected ? "border-primary ring-2 ring-primary ring-offset-1" : "border-border/50 hover:border-border",
+        'group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all duration-150',
+        isSelected
+          ? 'border-primary ring-2 ring-primary ring-offset-1'
+          : 'border-border/50 hover:border-border',
       )}
     >
       {url && !isVideo ? (
-        <img src={url} alt={asset.title ?? asset.fileName} loading="lazy" className="h-full w-full object-cover" />
+        <img
+          src={url}
+          alt={asset.title ?? asset.fileName}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
       ) : url && isVideo ? (
-        <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
+        <video
+          src={`${url}#t=0.01`}
+          preload="metadata"
+          muted
+          playsInline
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
           <ImageOff className="size-5" />
@@ -75,15 +94,52 @@ function ComposerAssetTile({
         </div>
       )}
     </button>
-  )
+  );
 }
 
-/**
- * Calendar "Create with AI" composer. Collects a direction, optionally tags one
- * or more library creatives (>=2 ⇒ carousel), and optionally tags trends, then
- * fires ONE durable post-generation job. The generated draft surfaces in the
- * calendar via the existing realtime refetch when the worker persists it.
- */
+function EvidenceChipGroup({
+  title,
+  items,
+  selectedRefs,
+  onToggle,
+}: {
+  title: string;
+  items: Array<{ refId: string; label: string }>;
+  selectedRefs: string[];
+  onToggle: (refId: string) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item) => {
+          const active = selectedRefs.includes(item.refId);
+          return (
+            <button
+              key={item.refId}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onToggle(item.refId)}
+              className={cn(
+                'max-w-full truncate rounded-full border px-2.5 py-1 text-left text-xs transition-colors',
+                active
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
+              )}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const toggleRef = (refId: string) => (prev: string[]) =>
+  prev.includes(refId) ? prev.filter((x) => x !== refId) : [...prev, refId];
+
 export function AiPostComposer({
   open,
   onOpenChange,
@@ -91,90 +147,109 @@ export function AiPostComposer({
   platform,
   scheduledAt,
   trends,
-  onQueued,
+  platformAccountIds,
+  onCreated,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  brandProfileId: string
-  platform: OrganicPlatformKey
-  scheduledAt: string
-  trends: Trend[]
-  onQueued?: (response: QuickCreatePostResponse) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  brandProfileId: string;
+  platform: OrganicPlatformKey;
+  scheduledAt: string;
+  trends: Trend[];
+  platformAccountIds?: Record<string, string>;
+  onCreated?: (response: OneShotPostResponse) => void;
 }) {
-  const [angle, setAngle] = React.useState("")
-  const [guidance, setGuidance] = React.useState("")
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([])
-  const [selectedTrendIds, setSelectedTrendIds] = React.useState<string[]>([])
-  const [submitting, setSubmitting] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const [angle, setAngle] = React.useState('');
+  const [guidance, setGuidance] = React.useState('');
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [selectedTrendIds, setSelectedTrendIds] = React.useState<string[]>([]);
+  const [selectedMetricRefs, setSelectedMetricRefs] = React.useState<string[]>([]);
+  const [selectedInsightRefs, setSelectedInsightRefs] = React.useState<string[]>([]);
+  const [selectedAngleRefs, setSelectedAngleRefs] = React.useState<string[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   // Synchronous re-entrancy latch (blocks a double-click before `submitting` state
-  // commits) + a stable per-composition idempotency key so a retry dedupes to one job.
-  const dispatchInFlightRef = React.useRef(false)
-  const idempotencyKeyRef = React.useRef<string | null>(null)
+  // commits) + a stable per-composition idempotency key so a retry replays the
+  // same in-flight generation server-side instead of minting a second draft.
+  const dispatchInFlightRef = React.useRef(false);
+  const idempotencyKeyRef = React.useRef<string | null>(null);
 
-  const { assets, loading, hasMore, loadMore } = useStudioLibraryBrowser(brandProfileId)
+  const { assets, loading, hasMore, loadMore } = useStudioLibraryBrowser(brandProfileId);
+  const evidence = useOneShotEvidence({
+    brandId: brandProfileId,
+    platform,
+    integrationAccountId: platformAccountIds?.[platform] ?? null,
+    enabled: open,
+  });
 
   // Reset to a clean slate whenever the dialog closes.
   React.useEffect(() => {
     if (!open) {
-      setAngle("")
-      setGuidance("")
-      setSelectedIds([])
-      setSelectedTrendIds([])
-      setError(null)
-      setSubmitting(false)
-      dispatchInFlightRef.current = false
-      idempotencyKeyRef.current = null
+      setAngle('');
+      setGuidance('');
+      setSelectedIds([]);
+      setSelectedTrendIds([]);
+      setSelectedMetricRefs([]);
+      setSelectedInsightRefs([]);
+      setSelectedAngleRefs([]);
+      setError(null);
+      setSubmitting(false);
+      dispatchInFlightRef.current = false;
+      idempotencyKeyRef.current = null;
     }
-  }, [open])
+  }, [open]);
 
   // Only real (uuid) trends can anchor a durable job; seeded slug trends are skipped.
-  const taggableTrends = React.useMemo(() => trends.filter((t) => UUID_RE.test(t.id)), [trends])
+  const taggableTrends = React.useMemo(() => trends.filter((t) => UUID_RE.test(t.id)), [trends]);
 
   const toggleAsset = (id: string) =>
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleTrend = (id: string) =>
-    setSelectedTrendIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+    setSelectedTrendIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
 
-  const isCarousel = selectedIds.length > 1
+  const isCarousel = selectedIds.length > 1;
+  const hasDirection = Boolean(angle.trim()) || selectedAngleRefs.length > 0;
 
   const handleSubmit = async () => {
-    const trimmed = angle.trim()
-    if (!trimmed || dispatchInFlightRef.current) return
-    dispatchInFlightRef.current = true
-    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID()
-    setSubmitting(true)
-    setError(null)
+    if (!hasDirection || dispatchInFlightRef.current) return;
+    dispatchInFlightRef.current = true;
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID();
+    setSubmitting(true);
+    setError(null);
     try {
-      const byId = new Map(assets.map((a) => [a.id, a]))
-      const userSuppliedMedia = selectedIds
+      const byId = new Map(assets.map((a) => [a.id, a]));
+      const libraryCreativeRefs = selectedIds
         .map((id) => byId.get(id))
         .filter((a): a is MediaAsset => !!a)
-        .map(creativeRefFromAsset)
+        .map(creativeRefFromAsset);
 
-      const response = await quickCreatePost({
+      const response = await createOneShotPost({
         brandId: brandProfileId,
-        angle: trimmed,
-        guidancePrompt: guidance.trim() ? guidance.trim() : null,
-        trendIds: selectedTrendIds,
-        userSuppliedMedia,
         platform,
         scheduledAt,
-        format: isCarousel ? "carousel" : null,
+        direction: angle.trim() ? angle.trim() : null,
+        format: isCarousel ? 'carousel' : null,
+        metrics: evidence.metrics.filter((m) => selectedMetricRefs.includes(m.refId)),
+        insights: evidence.insights.filter((i) => selectedInsightRefs.includes(i.refId)),
+        angles: evidence.angles.filter((a) => selectedAngleRefs.includes(a.refId)),
+        libraryCreativeRefs,
+        trendIds: selectedTrendIds,
+        guidancePrompt: guidance.trim() ? guidance.trim() : null,
         idempotencyKey: idempotencyKeyRef.current,
-      })
-      // Success: clear the key so the next composition mints a fresh job; a failure
-      // keeps it so a retry collapses onto the same job via the backend client_key.
-      idempotencyKeyRef.current = null
-      onQueued?.(response)
-      onOpenChange(false)
+        platformAccountIds,
+      });
+      idempotencyKeyRef.current = null;
+      onCreated?.(response);
+      onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not queue the post. Try again.")
+      setError(err instanceof Error ? err.message : 'Could not create the post. Try again.');
     } finally {
-      dispatchInFlightRef.current = false
-      setSubmitting(false)
+      dispatchInFlightRef.current = false;
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,15 +260,18 @@ export function AiPostComposer({
             Create with AI
           </DialogTitle>
           <DialogDescription>
-            Give the agent a direction. Tag creatives to use them (two or more makes a carousel) and
-            trends to ground the post.
+            Give the agent a direction — or pick a winning angle. Selected metrics and insights
+            ground the copy; tagged creatives are used directly (two or more makes a carousel).
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="ai-post-direction" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Direction
+            <label
+              htmlFor="ai-post-direction"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Direction{selectedAngleRefs.length > 0 ? ' (optional — angle selected)' : ''}
             </label>
             <Textarea
               id="ai-post-direction"
@@ -204,6 +282,36 @@ export function AiPostComposer({
               autoFocus
             />
           </div>
+
+          {evidence.loading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+              <Loader2 className="size-3 animate-spin" /> Loading brand evidence…
+            </div>
+          ) : (
+            <>
+              <EvidenceChipGroup
+                title="Winning angles"
+                items={evidence.angles.map((a) => ({ refId: a.refId, label: a.angle }))}
+                selectedRefs={selectedAngleRefs}
+                onToggle={(refId) => setSelectedAngleRefs(toggleRef(refId))}
+              />
+              <EvidenceChipGroup
+                title="Metrics to cite"
+                items={evidence.metrics.map((m) => ({
+                  refId: m.refId,
+                  label: `${m.label}: ${m.value}${m.unit ?? ''}`,
+                }))}
+                selectedRefs={selectedMetricRefs}
+                onToggle={(refId) => setSelectedMetricRefs(toggleRef(refId))}
+              />
+              <EvidenceChipGroup
+                title="Insights"
+                items={evidence.insights.map((i) => ({ refId: i.refId, label: i.summary }))}
+                selectedRefs={selectedInsightRefs}
+                onToggle={(refId) => setSelectedInsightRefs(toggleRef(refId))}
+              />
+            </>
+          )}
 
           <details className="group/guidance">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
@@ -222,7 +330,11 @@ export function AiPostComposer({
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Images className="size-3.5" /> Creatives
               </p>
-              {isCarousel && <Badge variant="secondary" className="text-2xs">Carousel · {selectedIds.length}</Badge>}
+              {isCarousel && (
+                <Badge variant="secondary" className="text-2xs">
+                  Carousel · {selectedIds.length}
+                </Badge>
+              )}
             </div>
             <div className="max-h-40 overflow-y-auto rounded-lg border border-border/50 p-1.5">
               {assets.length === 0 && loading ? (
@@ -262,45 +374,41 @@ export function AiPostComposer({
           </div>
 
           {taggableTrends.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trends</p>
-              <div className="flex flex-wrap gap-1.5">
-                {taggableTrends.map((trend) => {
-                  const active = selectedTrendIds.includes(trend.id)
-                  return (
-                    <button
-                      key={trend.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => toggleTrend(trend.id)}
-                      className={cn(
-                        "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                        active
-                          ? "border-primary/40 bg-primary/10 text-primary"
-                          : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
-                      )}
-                    >
-                      {trend.title}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <EvidenceChipGroup
+              title="Trends"
+              items={taggableTrends.map((trend) => ({ refId: trend.id, label: trend.title }))}
+              selectedRefs={selectedTrendIds}
+              onToggle={toggleTrend}
+            />
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
             Cancel
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={!angle.trim() || submitting} className="gap-1.5">
-            {submitting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-            {submitting ? "Queuing…" : "Create post"}
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!hasDirection || submitting}
+            className="gap-1.5"
+          >
+            {submitting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Sparkles className="size-4" />
+            )}
+            {submitting ? 'Generating…' : 'Create post'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

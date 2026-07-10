@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
+import { inferPublishPlatform } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
@@ -72,6 +73,12 @@ function resolveAccentColor(draft: OrganicCalendarDraft, platform: string): stri
 function hasTextValue(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
+
+const PUBLISH_PLATFORM_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+};
 
 export function CalendarDraftCard({
   draft,
@@ -119,10 +126,9 @@ export function CalendarDraftCard({
   const { publish, isPublishing } = usePublishDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const openInStudio = useOpenDraftInAiStudio();
-  const canPublishToInstagram =
-    draft.platforms.includes('instagram') &&
-    draft.status !== 'published' &&
-    draft.status !== 'streaming';
+  const publishPlatform = inferPublishPlatform(draft);
+  const canPublish =
+    publishPlatform !== null && draft.status !== 'published' && draft.status !== 'streaming';
 
   const accentColor = resolveAccentColor(draft, platform);
   // Enrichment state is the authoritative backend media_stage (with a derived
@@ -587,7 +593,7 @@ export function CalendarDraftCard({
               Clear failure
             </ContextMenuItem>
           ) : null}
-          {canPublishToInstagram ? (
+          {canPublish ? (
             <ContextMenuItem disabled={isPublishing} onSelect={() => publish(draft)}>
               <svg
                 aria-hidden="true"
@@ -600,7 +606,9 @@ export function CalendarDraftCard({
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
-              {isPublishing ? 'Publishing…' : 'Publish to Instagram'}
+              {isPublishing
+                ? 'Publishing…'
+                : `Publish to ${PUBLISH_PLATFORM_LABELS[publishPlatform ?? 'instagram']}`}
             </ContextMenuItem>
           ) : null}
           {openInStudio && draft.status !== 'streaming' && draft.status !== 'placeholder' ? (

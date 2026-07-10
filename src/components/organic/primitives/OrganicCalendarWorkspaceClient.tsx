@@ -163,8 +163,16 @@ export function OrganicCalendarWorkspaceClient({
   );
 
   React.useEffect(() => {
-    const igAccountId = instagramAccountId ?? platformAccountIds.instagram ?? null;
-    setAccountContext({ igAccountId, brandId: brandProfileId ?? null });
+    // One account id per publishable platform; the publish hook picks by the draft's platform.
+    const instagram = instagramAccountId ?? platformAccountIds.instagram;
+    setAccountContext({
+      accountIds: {
+        ...(instagram ? { instagram } : {}),
+        ...(platformAccountIds.facebook ? { facebook: platformAccountIds.facebook } : {}),
+        ...(platformAccountIds.linkedin ? { linkedin: platformAccountIds.linkedin } : {}),
+      },
+      brandId: brandProfileId ?? null,
+    });
   }, [instagramAccountId, platformAccountIds, brandProfileId, setAccountContext]);
 
   const { selectedId, selectedIds, handleSelect, clearAll, handleKeyDown } =
@@ -968,6 +976,7 @@ export function OrganicCalendarWorkspaceClient({
                   platform={aiComposer.platform}
                   scheduledAt={aiComposer.scheduledAt}
                   trends={resolvedTrends}
+                  platformAccountIds={platformAccountIds}
                 />
               )}
             </motion.section>

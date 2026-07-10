@@ -158,5 +158,19 @@ export function toInsightRow(insight: CreativeInsight): InsightRowView {
 }
 
 export function toInsightRows(insights: CreativeInsight[]): InsightRowView[] {
-  return insights.map(toInsightRow);
+  // Cluster ids (`kind-archetype`) can collide across parallel groups. Keep the
+  // canonical insight id when unique; otherwise append the list index so tables
+  // and pickers never remount two rows under one React key.
+  const seen = new Map<string, number>();
+  return insights.map((insight, index) => {
+    const row = toInsightRow(insight);
+    const count = seen.get(insight.id) ?? 0;
+    seen.set(insight.id, count + 1);
+    if (count === 0) {
+      // First use of this id — check if any later sibling collides.
+      const hasCollision = insights.some((other, j) => j > index && other.id === insight.id);
+      if (!hasCollision) return row;
+    }
+    return { ...row, id: `${insight.id}#${index}` };
+  });
 }
