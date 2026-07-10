@@ -12,6 +12,11 @@ import {
   organicAwarenessReportSchema,
   youtubeContentTypeSchema,
   isYoutubeShortType,
+  ORGANIC_METRIC_CATALOG,
+  defaultSelectedMetricIds,
+  isMetricAvailableOnPlatform,
+  kpiConfigForPlatform,
+  metricsForPlatform,
 } from "./index";
 
 describe("organicMetricsSchema", () => {
@@ -182,5 +187,40 @@ describe("youtubeContentTypeSchema", () => {
     expect(isYoutubeShortType("VIDEO")).toBe(false);
     expect(isYoutubeShortType(null)).toBe(false);
     expect(isYoutubeShortType(undefined)).toBe(false);
+  });
+});
+
+describe("ORGANIC_METRIC_CATALOG", () => {
+  it("lists unique metric ids", () => {
+    const ids = ORGANIC_METRIC_CATALOG.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("never marks rate metrics as summable", () => {
+    for (const entry of ORGANIC_METRIC_CATALOG) {
+      if (entry.format === "percent") {
+        expect(entry.summable).toBe(false);
+      }
+    }
+  });
+
+  it("exposes LinkedIn impressions without claiming Meta reach", () => {
+    expect(isMetricAvailableOnPlatform("reach", "linkedin")).toBe(false);
+    expect(isMetricAvailableOnPlatform("impressions", "linkedin")).toBe(true);
+    expect(isMetricAvailableOnPlatform("impressions", "instagram")).toBe(false);
+  });
+
+  it("returns platform KPI configs used by the metrics dashboard", () => {
+    const meta = kpiConfigForPlatform("instagram");
+    expect(meta.some((row) => row.key === "reach")).toBe(true);
+    const linkedin = metricsForPlatform("linkedin");
+    expect(linkedin.every((row) => row.platforms.includes("linkedin"))).toBe(true);
+  });
+
+  it("defaults include multi-platform headline metrics", () => {
+    const defaults = defaultSelectedMetricIds();
+    expect(defaults).toContain("views");
+    expect(defaults).toContain("reach");
+    expect(defaults.length).toBeGreaterThanOrEqual(4);
   });
 });

@@ -7,23 +7,34 @@
 // (browser), the Backend MCP handlers, and the isolated Jaina package alike.
 
 import type {
+  ApplyMode,
   CreatePortfolioRequest,
   EnrollRequest,
   PortfolioConfig,
   PortfolioSuggestion,
 } from './service';
 
+export type SuggestionToConfigOpts = {
+  /** Override the default `observe` (soak-first) create mode. Use `recommend` for
+   *  human-in-the-loop create, or `autopilot` only when guardrails are also set. */
+  apply_mode?: ApplyMode;
+};
+
 /** Map an onboarding suggestion to the portfolio config used to create it. Mirrors
- *  the dashboard's `createFromSuggestion` exactly: `apply_mode` is forced to
- *  `'recommend'` (money-safety — a freshly created portfolio never auto-applies
- *  budget), and `cpa_target` is carried only when the suggestion set one. */
-export function suggestionToPortfolioConfig(suggestion: PortfolioSuggestion): PortfolioConfig {
+ *  the dashboard's `createFromSuggestion` exactly: `apply_mode` defaults to
+ *  `'observe'` (soak-first — ingest + score, no Meta writes; promote to recommend
+ *  or autopilot from Manage). Pass `apply_mode: 'recommend'` when the caller wants
+ *  human-in-the-loop create. `cpa_target` is carried only when the suggestion set one. */
+export function suggestionToPortfolioConfig(
+  suggestion: PortfolioSuggestion,
+  opts: SuggestionToConfigOpts = {},
+): PortfolioConfig {
   return {
     name: suggestion.name,
     objective: suggestion.objective,
     level: suggestion.level,
     mode: suggestion.mode,
-    apply_mode: 'recommend',
+    apply_mode: opts.apply_mode ?? 'observe',
     daily_total: suggestion.daily_total,
     ...(suggestion.cpa_target ? { cpa_target: suggestion.cpa_target } : {}),
   };
@@ -34,11 +45,12 @@ export function suggestionToCreateRequest(args: {
   brand_id: string;
   ad_account_id: string;
   suggestion: PortfolioSuggestion;
+  apply_mode?: ApplyMode;
 }): CreatePortfolioRequest {
   return {
     brand_id: args.brand_id,
     ad_account_id: args.ad_account_id,
-    config: suggestionToPortfolioConfig(args.suggestion),
+    config: suggestionToPortfolioConfig(args.suggestion, { apply_mode: args.apply_mode }),
   };
 }
 

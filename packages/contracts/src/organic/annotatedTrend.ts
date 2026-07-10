@@ -1,8 +1,8 @@
 // The canonical "post activity" join: each daily trend point annotated with the
-// Instagram posts published that calendar day. One source of truth consumed by
-// the Frontend reporting charts (to demarcate when posts happened on the metric
-// graph) and by the MCP analytics tool (so agents can read posts-joined-to-trends
-// instead of trends alone).
+// posts published that calendar day (any organic platform). One source of truth
+// consumed by the Frontend reporting charts (to demarcate when posts happened on
+// the metric graph) and by the MCP analytics tool (so agents can read
+// posts-joined-to-trends instead of trends alone).
 //
 // Wire fields stay loose (strings, nullable/optional; no strict enums or url()).
 // Meta can emit unexpected values and the Backend builds these from unknown cached

@@ -12,6 +12,12 @@ export const agentMentionReferenceTypeSchema = z.enum([
   'link',
   'skill',
   'document',
+  // Dashboard performance grabs (organic metrics / What's Working / insight digests).
+  // User-selected so the agent is grounded on a specific measured insight, not only
+  // the auto static digests.
+  'creative_insight',
+  'organic_insight',
+  'kpi',
 ])
 
 export const agentMentionReferenceSourceSchema = z.enum(['organic', 'jaina'])

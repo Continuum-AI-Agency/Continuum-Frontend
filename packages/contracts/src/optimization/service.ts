@@ -20,9 +20,14 @@ import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
  *  instead of a misleading $0.00 change. */
 export type FreezeReason = z.infer<typeof FreezeReasonSchema>;
 
-/** Per-portfolio autonomy dial. `recommend` proposes; `autopilot` auto-applies
- *  budget within the engine's guardrails. Pauses always need approval in both. */
-export const ApplyModeSchema = z.enum(['recommend', 'autopilot']);
+/** Per-portfolio autonomy dial (bottom → top):
+ *  - `observe`   — ingest + score + dashboard approvals only; **no Meta writes ever**
+ *                  (hard refuse on cycle apply, human apply, and approved-item apply).
+ *  - `recommend` — proposes budgets; human apply may write after explicit approval.
+ *  - `autopilot` — auto-applies budget within guardrails; large moves held for approval.
+ *  Pause/fatigue recommendations always need dashboard approval in every mode and never
+ *  auto-write to Meta. */
+export const ApplyModeSchema = z.enum(['observe', 'recommend', 'autopilot']);
 export type ApplyMode = z.infer<typeof ApplyModeSchema>;
 
 export const OptimizationModeSchema = z.enum(['efficiency', 'balanced', 'scale']);
@@ -33,6 +38,89 @@ export type OptimizationModeDto = z.infer<typeof OptimizationModeSchema>;
  *  portfolio; the engine + membership RPCs are entity-agnostic. */
 export const PortfolioLevelSchema = z.enum(['adset', 'campaign']);
 export type PortfolioLevel = z.infer<typeof PortfolioLevelSchema>;
+
+/** The objective-specific efficiency language used everywhere an optimizer
+ * portfolio is rendered. `denominatorMultiplier` keeps awareness honest: Meta
+ * provides impressions, while operators reason about CPM (cost per thousand),
+ * not cost per one impression. */
+export const OptimizationMetricDefinitionSchema = z.object({
+  objective: OptimizationObjectiveSchema,
+  kpiField: z.enum([
+    'purchases',
+    'appInstalls',
+    'signups',
+    'leads',
+    'landingPageViews',
+    'impressions',
+  ]),
+  resultLabel: z.string(),
+  costLabel: z.string(),
+  targetLabel: z.string(),
+  denominatorMultiplier: z.number().positive(),
+});
+export type OptimizationMetricDefinition = z.infer<typeof OptimizationMetricDefinitionSchema>;
+
+const OPTIMIZATION_METRIC_DEFINITIONS: Record<
+  z.infer<typeof OptimizationObjectiveSchema>,
+  OptimizationMetricDefinition
+> = {
+  purchase: {
+    objective: 'purchase',
+    kpiField: 'purchases',
+    resultLabel: 'Purchases',
+    costLabel: 'CPA',
+    targetLabel: 'Target CPA',
+    denominatorMultiplier: 1,
+  },
+  app_install: {
+    objective: 'app_install',
+    kpiField: 'appInstalls',
+    resultLabel: 'Installs',
+    costLabel: 'CPI',
+    targetLabel: 'Target CPI',
+    denominatorMultiplier: 1,
+  },
+  signup: {
+    objective: 'signup',
+    kpiField: 'signups',
+    resultLabel: 'Sign-ups',
+    costLabel: 'Cost per sign-up',
+    targetLabel: 'Target cost per sign-up',
+    denominatorMultiplier: 1,
+  },
+  lead: {
+    objective: 'lead',
+    kpiField: 'leads',
+    resultLabel: 'Leads',
+    costLabel: 'CPL',
+    targetLabel: 'Target CPL',
+    denominatorMultiplier: 1,
+  },
+  traffic: {
+    objective: 'traffic',
+    kpiField: 'landingPageViews',
+    resultLabel: 'Landing page views',
+    costLabel: 'Cost per LPV',
+    targetLabel: 'Target cost per LPV',
+    denominatorMultiplier: 1,
+  },
+  awareness: {
+    objective: 'awareness',
+    kpiField: 'impressions',
+    resultLabel: 'Impressions',
+    costLabel: 'CPM',
+    targetLabel: 'Target CPM',
+    denominatorMultiplier: 1_000,
+  },
+};
+
+/** Returns a safe purchase default for legacy or malformed portfolio records. */
+export function getOptimizationMetricDefinition(
+  objective: string | null | undefined,
+): OptimizationMetricDefinition {
+  const parsed = OptimizationObjectiveSchema.safeParse(objective);
+  return OPTIMIZATION_METRIC_DEFINITIONS[parsed.success ? parsed.data : 'purchase'];
+}
 
 export const RecommendationStatusSchema = z.enum(['pending', 'approved', 'rejected', 'applied']);
 export type RecommendationStatus = z.infer<typeof RecommendationStatusSchema>;
@@ -450,10 +538,11 @@ export type ConvertCboResponse = z.infer<typeof ConvertCboResponseSchema>;
 /** Request to apply a scored run's proposed ad-set budgets on Meta (optimizer-apply-run
  *  edge → service /apply). The manual "Apply proposed budgets" action for a portfolio in
  *  recommend mode — the human approval is the autonomy gate (no apply_mode flip needed).
- *  `run_id` (optional) pins the apply to the run the user is looking at; if it no longer
- *  matches the latest run the apply is refused (stale). `dryRun` (default true) returns
- *  the would-write set with ZERO writes to Meta — the FE previews before the real apply,
- *  which stays gated until the sandbox-apply bench passes. */
+ *  Observe-mode portfolios hard-refuse real applies (`reason: 'observe_mode'`) even with
+ *  dryRun:false. `run_id` (optional) pins the apply to the run the user is looking at; if
+ *  it no longer matches the latest run the apply is refused (stale). `dryRun` (default true)
+ *  returns the would-write set with ZERO writes; `dryRun:false` is the real Meta apply for
+ *  recommend-mode human approval (FE Apply budgets + Apply N approved). */
 export const ApplyRunRequestSchema = z.object({
   portfolio_id: z.string().uuid(),
   brandId: z.string().uuid().optional(),
@@ -645,9 +734,11 @@ export const AdDailyTrendsResponseSchema = z.object({
 });
 export type AdDailyTrendsResponse = z.infer<typeof AdDailyTrendsResponseSchema>;
 
-/** One point of optimizer_get_cpa_series — portfolio spend/conversions per cycle,
- *  aggregated across ad sets for each trailing window. FE derives CPA = spend/conv. */
-export const CpaSeriesPointSchema = z.object({
+/** One point of optimizer_get_cpa_series — portfolio spend/objective-results per
+ * cycle, aggregated across ad sets for each trailing window. The established
+ * `conv_d*` wire keys remain for compatibility; their semantic is determined by
+ * the portfolio objective through {@link getOptimizationMetricDefinition}. */
+export const EfficiencySeriesPointSchema = z.object({
   cycle_ts: z.string(),
   spend_d3: z.number(),
   conv_d3: z.number(),
@@ -657,7 +748,12 @@ export const CpaSeriesPointSchema = z.object({
   conv_d14: z.number(),
   adsets: z.number().int().nonnegative(),
 });
-export type CpaSeriesPoint = z.infer<typeof CpaSeriesPointSchema>;
+export type EfficiencySeriesPoint = z.infer<typeof EfficiencySeriesPointSchema>;
+
+/** @deprecated Prefer EfficiencySeriesPoint. Kept for existing RPC consumers. */
+export const CpaSeriesPointSchema = EfficiencySeriesPointSchema;
+/** @deprecated Prefer EfficiencySeriesPoint. Kept for existing RPC consumers. */
+export type CpaSeriesPoint = EfficiencySeriesPoint;
 
 /** One cell of optimizer_get_angle_matrix — spend/conversions for an
  *  (audience_type × communication angle) combination in a portfolio. FE pivots

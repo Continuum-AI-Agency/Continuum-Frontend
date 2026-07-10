@@ -24,17 +24,30 @@ function suggestion(overrides: Partial<PortfolioSuggestion> = {}): PortfolioSugg
 }
 
 describe('suggestionToPortfolioConfig', () => {
-  test("forces apply_mode='recommend' and carries objective/level/mode/daily_total", () => {
+  test("defaults apply_mode='observe' (soak-first) and carries objective/level/mode/daily_total", () => {
     const cfg = suggestionToPortfolioConfig(suggestion({ mode: 'scale' }));
     expect(cfg).toMatchObject({
       name: 'Prospecting — Purchases',
       objective: 'purchase',
       level: 'adset',
       mode: 'scale',
-      apply_mode: 'recommend',
+      apply_mode: 'observe',
       daily_total: 500,
     });
     expect('cpa_target' in cfg).toBe(false);
+  });
+
+  test("accepts apply_mode='recommend' for human-in-the-loop create", () => {
+    const cfg = suggestionToPortfolioConfig(suggestion(), { apply_mode: 'recommend' });
+    expect(cfg.apply_mode).toBe('recommend');
+    const req = suggestionToCreateRequest({
+      brand_id: UUID,
+      ad_account_id: 'act_1',
+      suggestion: suggestion(),
+      apply_mode: 'recommend',
+    });
+    expect(req.config.apply_mode).toBe('recommend');
+    expect(() => CreatePortfolioRequestSchema.parse(req)).not.toThrow();
   });
 
   test('carries cpa_target only when the suggestion set one', () => {
@@ -51,7 +64,7 @@ describe('suggestionToPortfolioConfig', () => {
       suggestion: suggestion({ cpa_target: 30 }),
     });
     expect(() => CreatePortfolioRequestSchema.parse(req)).not.toThrow();
-    expect(req.config.apply_mode).toBe('recommend');
+    expect(req.config.apply_mode).toBe('observe');
   });
 });
 
