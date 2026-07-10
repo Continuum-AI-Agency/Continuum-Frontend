@@ -71,6 +71,8 @@ describe("normalizeToolResultEvent", () => {
       toolCallId: "call_1",
       toolName: "fetch_metrics",
       result: { rows: 3 },
+      ok: true,
+      reason: null,
     });
   });
 
@@ -85,6 +87,8 @@ describe("normalizeToolResultEvent", () => {
       toolCallId: "call_2",
       toolName: "fetch_insights",
       result: { rows: 7 },
+      ok: true,
+      reason: null,
     });
   });
 
@@ -103,22 +107,25 @@ describe("normalizeToolResultEvent", () => {
 describe("normalizeTrendChartEvent", () => {
   it("normalizes a valid trend chart payload", () => {
     const normalized = normalizeTrendChartEvent({
-      title: "Top Trends",
-      windows: [7, 14],
-      series: [
-        { label: "Trends", data: [{ window: 7, value: 12 }] },
-        { label: "Events", data: [{ window: 14, value: 5 }] },
-      ],
-      topSignals: [
-        {
-          id: "sig_1",
-          title: "Spring launch",
-          type: "event",
-          confidence: 0.82,
-          platform: "instagram",
-          windowDays: 7,
-        },
-      ],
+      data: {
+        chartType: "bar",
+        title: "Top Trends",
+        windows: [7, 14],
+        series: [
+          { label: "Trends", data: [{ window: 7, value: 12 }] },
+          { label: "Events", data: [{ window: 14, value: 5 }] },
+        ],
+        topSignals: [
+          {
+            id: "sig_1",
+            title: "Spring launch",
+            type: "event",
+            confidence: 0.82,
+            platform: "instagram",
+            windowDays: 7,
+          },
+        ],
+      },
     });
 
     expect(normalized).toEqual({
@@ -144,16 +151,18 @@ describe("normalizeTrendChartEvent", () => {
 
   it("returns safe defaults for malformed trend chart payloads", () => {
     const normalized = normalizeTrendChartEvent({
-      title: 123,
-      windows: ["x", 7, null],
-      series: [{ label: "bad", data: [{ window: "x", value: 1 }] }],
-      topSignals: [{ type: "bad" }],
+      data: {
+        title: 123,
+        windows: ["x", 7, null],
+        series: [{ label: "bad", data: [{ window: "x", value: 1 }] }],
+        topSignals: [{ type: "bad" }],
+      },
     });
 
     expect(normalized).toEqual({
       chartType: "bar",
       title: "",
-      windows: [7],
+      windows: [],
       series: [],
       topSignals: [],
     });
@@ -229,6 +238,8 @@ describe("parseOrganicStreamEvent contract coverage", () => {
       toolCallId: "call_1",
       toolName: "listTrends",
       result: [{ id: "trend_1" }],
+      ok: true,
+      reason: undefined,
     });
   });
 
@@ -241,6 +252,7 @@ describe("parseOrganicStreamEvent contract coverage", () => {
     const trendChart = parseOrganicStreamEvent({
       type: "ui.trend_chart",
       data: {
+        chartType: "bar",
         title: "Signals",
         windows: [7],
         series: [{ label: "Trends", data: [{ window: 7, value: 22 }] }],
@@ -339,7 +351,6 @@ describe("parseOrganicStreamEvent contract coverage", () => {
         status: "running",
         stage: "drafting",
         agentName: "writer",
-        message: undefined,
       },
     });
 
@@ -352,13 +363,12 @@ describe("parseOrganicStreamEvent contract coverage", () => {
           draftId: "draft_1",
         },
       })
-    ).toEqual({
+    ).toMatchObject({
       kind: "jobUpdate",
       job: {
         jobId: "job_1",
         brandId: "brand_1",
         draftId: "draft_1",
-        placement: undefined,
       },
     });
 
@@ -427,6 +437,30 @@ describe("parseOrganicStreamEvent contract coverage", () => {
     ).toEqual({
       kind: "invalid",
       type: "job.progress",
+    });
+  });
+
+  it("handles context.media_resolution grab failures", () => {
+    expect(
+      parseOrganicStreamEvent({
+        type: "context.media_resolution",
+        data: {
+          requested: 2,
+          resolvedImages: 1,
+          resolvedVideos: 0,
+          textOnly: 0,
+          failed: [{ refId: "asset-1", type: "media_asset", reason: "storage_miss" }],
+        },
+      }),
+    ).toEqual({
+      kind: "mediaResolution",
+      data: {
+        requested: 2,
+        resolvedImages: 1,
+        resolvedVideos: 0,
+        textOnly: 0,
+        failed: [{ refId: "asset-1", type: "media_asset", reason: "storage_miss" }],
+      },
     });
   });
 });

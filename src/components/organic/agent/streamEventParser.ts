@@ -99,6 +99,16 @@ export type ParsedOrganicStreamEvent =
   | { kind: 'toolApproval'; approval: ToolApproval }
   | { kind: 'bulkRun'; run: ParsedBulkRun }
   | { kind: 'mediaSearchResults'; frame: MediaSearchResultsFrame }
+  | {
+      kind: 'mediaResolution';
+      data: {
+        requested: number;
+        resolvedImages: number;
+        resolvedVideos: number;
+        textOnly: number;
+        failed: Array<{ refId: string; type: string; reason: string }>;
+      };
+    }
   | { kind: 'ignored'; type?: string }
   | { kind: 'invalid'; type?: string };
 
@@ -786,6 +796,30 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       return result.success
         ? { kind: 'mediaSearchResults', frame: result.data }
         : { kind: 'invalid', type };
+    }
+    case 'context.media_resolution': {
+      const payload = getEventPayload(frame);
+      const failedRaw = Array.isArray(payload.failed) ? payload.failed : [];
+      const failed = failedRaw
+        .map((item) => {
+          if (!isRecord(item)) return null;
+          const refId = readNonEmptyString(item.refId);
+          const failType = readNonEmptyString(item.type) ?? 'unknown';
+          const reason = readNonEmptyString(item.reason) ?? 'unknown';
+          if (!refId) return null;
+          return { refId, type: failType, reason };
+        })
+        .filter((item): item is { refId: string; type: string; reason: string } => item !== null);
+      return {
+        kind: 'mediaResolution',
+        data: {
+          requested: typeof payload.requested === 'number' ? payload.requested : 0,
+          resolvedImages: typeof payload.resolvedImages === 'number' ? payload.resolvedImages : 0,
+          resolvedVideos: typeof payload.resolvedVideos === 'number' ? payload.resolvedVideos : 0,
+          textOnly: typeof payload.textOnly === 'number' ? payload.textOnly : 0,
+          failed,
+        },
+      };
     }
     default:
       return { kind: 'ignored', type };

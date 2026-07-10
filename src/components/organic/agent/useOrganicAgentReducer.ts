@@ -17,6 +17,20 @@ import type { MediaSearchResultsFrame } from "@continuum/contracts"
 
 export type BulkRunRef = { runId: string; planId: string; total: number }
 
+export type MediaResolutionFailure = {
+  refId: string
+  type: string
+  reason: string
+}
+
+export type MediaResolutionReport = {
+  requested: number
+  resolvedImages: number
+  resolvedVideos: number
+  textOnly: number
+  failed: MediaResolutionFailure[]
+}
+
 export type PanelState = {
   sessionId: string | null
   messages: ConversationMessage[]
@@ -28,6 +42,8 @@ export type PanelState = {
   pendingToolApprovals: ToolApproval[]
   bulkRuns: Record<string, BulkRunRef>
   streamingMessageId: string | null
+  /** Non-fatal grab misses for the latest turn (surfaced as a loud UI warning). */
+  mediaResolution: MediaResolutionReport | null
 }
 
 export type PanelAction =
@@ -52,6 +68,8 @@ export type PanelAction =
   | { type: "TOOL_APPROVAL_ADD"; approval: ToolApproval }
   | { type: "TOOL_APPROVAL_RESOLVE"; approvalId: string }
   | { type: "BULK_RUN_START"; run: BulkRunRef }
+  | { type: "MEDIA_RESOLUTION"; report: MediaResolutionReport }
+  | { type: "CLEAR_MEDIA_RESOLUTION" }
   | { type: "SESSION_SWITCH"; sessionId: string; messages: ConversationMessage[] }
   | { type: "LOAD_MESSAGES_START" }
 
@@ -164,6 +182,7 @@ export function initialPanelState(): PanelState {
     pendingToolApprovals: [],
     bulkRuns: {},
     streamingMessageId: null,
+    mediaResolution: null,
   }
 }
 
@@ -196,8 +215,15 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         ],
         streamingMessageId: streamingId,
         inputValue: "",
+        mediaResolution: null,
       }
     }
+
+    case "MEDIA_RESOLUTION":
+      return { ...state, mediaResolution: action.report }
+
+    case "CLEAR_MEDIA_RESOLUTION":
+      return { ...state, mediaResolution: null }
 
     case "BEGIN_STREAMING": {
       const streamingId = newAssistantMessageId()

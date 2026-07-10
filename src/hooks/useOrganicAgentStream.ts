@@ -176,6 +176,10 @@ export function useOrganicAgentStream(
             if (mode === "control") break;
             dispatch({ type: "STREAM_MEDIA_SEARCH_RESULTS", frame: parsed.frame });
             break;
+          case "mediaResolution":
+            if (mode === "control") break;
+            dispatch({ type: "MEDIA_RESOLUTION", report: parsed.data });
+            break;
           case "runStarted":
             opts?.onRunStarted?.(parsed.runId);
             break;
