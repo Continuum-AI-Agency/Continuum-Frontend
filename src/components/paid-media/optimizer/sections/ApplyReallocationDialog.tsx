@@ -1,14 +1,12 @@
 'use client';
 
 // "Apply proposed budgets" for a recommend-mode portfolio — the manual, one-time apply
-// of a scored run's reallocation. Money safety mirrors the CBO convert: the apply edge
-// does the real Meta write, but the FE only ever calls it with dryRun:true (a PREVIEW of
-// the current→proposed moves, zero writes). The dialog's "Apply" action is disabled until
-// the sandbox-apply bench validates the real write on a Meta test account (un-gated in a
-// follow-up PR — no env flag).
+// of a scored run's reallocation. Opens with a dry-run preview (zero Meta writes), then
+// the operator confirms with a real apply (dryRun:false → optimizer-apply-run → service).
+// Observe portfolios hard-refuse on the service; this control only mounts in recommend.
 
 import { Loader2Icon, TriangleAlertIcon, WandSparklesIcon } from 'lucide-react';
-import type * as React from 'react';
+import * as React from 'react';
 
 import {
   AlertDialog,
@@ -40,25 +38,86 @@ export function ApplyReallocationDialog({
   currency,
 }: ApplyReallocationDialogProps) {
   const apply = useApplyRun();
+  const [open, setOpen] = React.useState(false);
+  const [phase, setPhase] = React.useState<'preview' | 'applying' | 'done' | 'error'>('preview');
+  const [resultNote, setResultNote] = React.useState<string | null>(null);
 
   // Fresh dryRun preview each time the dialog opens (the latest run may have changed).
   const requestPreview = () => {
+    setPhase('preview');
+    setResultNote(null);
     apply.mutate({ portfolio_id: portfolioId, brandId, accountId, run_id: runId, dryRun: true });
   };
 
   const preview = apply.data;
-  const would = preview?.ok ? preview.would : [];
+  const would = preview?.ok && preview.dryRun !== false ? preview.would : [];
+  const canApply =
+    phase === 'preview' && preview?.ok === true && would.length > 0 && !apply.isPending;
+
+  const handleApply = () => {
+    setPhase('applying');
+    setResultNote(null);
+    apply.mutate(
+      {
+        portfolio_id: portfolioId,
+        brandId,
+        accountId,
+        run_id: runId,
+        dryRun: false,
+      },
+      {
+        onSuccess: (data) => {
+          if (!data) {
+            setPhase('error');
+            setResultNote('Could not parse the apply response.');
+            return;
+          }
+          if (data.reason === 'observe_mode') {
+            setPhase('error');
+            setResultNote(
+              'This portfolio is in Observe mode — Meta writes are blocked. Switch to Recommend in Manage.',
+            );
+            return;
+          }
+          if (data.reason === 'stale_run') {
+            setPhase('error');
+            setResultNote('A newer cycle landed — reopen to apply the latest proposals.');
+            return;
+          }
+          if (!data.ok) {
+            setPhase('error');
+            setResultNote(data.error?.trim() || data.reason || 'Apply failed.');
+            return;
+          }
+          setPhase('done');
+          setResultNote(
+            `Applied ${data.applied ?? 0}` +
+              (data.failed ? ` · ${data.failed} failed` : '') +
+              (data.deduped ? ` · ${data.deduped} already applied` : ''),
+          );
+        },
+        onError: (err) => {
+          setPhase('error');
+          setResultNote(err instanceof Error ? err.message : 'Apply failed.');
+        },
+      },
+    );
+  };
 
   return (
-    <AlertDialog>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) requestPreview();
+        else {
+          setPhase('preview');
+          setResultNote(null);
+        }
+      }}
+    >
       <AlertDialogTrigger asChild>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-          onClick={requestPreview}
-        >
+        <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 gap-1.5 px-2 text-xs">
           <WandSparklesIcon className="size-3.5" />
           Apply budgets
         </Button>
@@ -67,28 +126,54 @@ export function ApplyReallocationDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Apply the proposed budgets</AlertDialogTitle>
           <AlertDialogDescription>
-            Preview — applying is validated on a Meta test account first. These are the current →
-            proposed daily budgets the optimizer would set for this portfolio&rsquo;s ad sets.
+            Review the current → proposed daily budgets, then apply them to Meta. This writes real
+            ad-set budgets for this portfolio. Observe mode will refuse the write.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <ApplyPreviewBody
-          isPending={apply.isPending}
-          isError={apply.isError}
-          preview={preview}
-          would={would}
-          currency={currency}
-        />
-
-        <p className="text-2xs text-muted-foreground">
-          Applying is disabled while the real write is validated on a Meta test account.
-        </p>
+        {phase === 'applying' ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+            Writing budgets to Meta…
+          </p>
+        ) : phase === 'done' || phase === 'error' ? (
+          <p
+            className={
+              phase === 'error'
+                ? 'flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'
+                : 'rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success'
+            }
+          >
+            {phase === 'error' ? (
+              <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
+            ) : null}
+            <span>{resultNote}</span>
+          </p>
+        ) : (
+          <ApplyPreviewBody
+            isPending={apply.isPending}
+            isError={apply.isError}
+            preview={preview}
+            would={would}
+            currency={currency}
+          />
+        )}
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button type="button" disabled aria-disabled="true" className="gap-1.5">
-            Apply
-          </Button>
+          <AlertDialogCancel>{phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
+          {phase !== 'done' ? (
+            <Button
+              type="button"
+              className="gap-1.5"
+              disabled={!canApply || phase === 'applying'}
+              onClick={handleApply}
+            >
+              {phase === 'applying' ? (
+                <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+              ) : null}
+              Apply {would.length > 0 ? `${would.length} moves` : ''}
+            </Button>
+          ) : null}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -130,7 +215,9 @@ function ApplyPreviewBody({
           ? 'This portfolio has a newer cycle — reopen to see the latest moves.'
           : preview.reason === 'no_cycle'
             ? 'No cycle has scored this portfolio yet — run one first.'
-            : (preview.error?.trim() ?? "Couldn't compute the apply preview.")}
+            : preview.reason === 'observe_mode'
+              ? 'Observe mode blocks Meta writes. Switch to Recommend in Manage first.'
+              : (preview.error?.trim() ?? "Couldn't compute the apply preview.")}
       </InlineError>
     );
   }

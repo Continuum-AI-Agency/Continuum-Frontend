@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  applyModePill,
   confidenceBand,
   freezeLabel,
   partitionHeldItems,
@@ -138,6 +139,21 @@ describe('recommendationLabel', () => {
 
   it('humanizes unknown kinds', () => {
     expect(recommendationLabel('some_new_kind').label).toBe('some new kind');
+  });
+});
+
+describe('applyModePill', () => {
+  it('maps the three autonomy tiers to short labeled identifiers', () => {
+    expect(applyModePill('observe')).toEqual({
+      label: 'Observe',
+      variant: 'muted',
+      indicator: 'info',
+    });
+    expect(applyModePill('recommend')?.label).toBe('Recommend');
+    expect(applyModePill('recommend')?.variant).toBe('violet');
+    expect(applyModePill('autopilot')?.label).toBe('Autopilot');
+    expect(applyModePill('autopilot')?.variant).toBe('success');
+    expect(applyModePill('yolo')).toBeNull();
   });
 });
 

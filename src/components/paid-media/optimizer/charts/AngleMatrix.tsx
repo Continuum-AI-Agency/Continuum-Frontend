@@ -9,20 +9,22 @@
 // conversions (engine math — nothing lies). Cell fill rides the shared semantic
 // good→bad ramp (cpaHeatFill) so it adapts to light/dark automatically.
 
-import type { AngleMatrixCell } from '@continuum/contracts';
+import { type AngleMatrixCell, getOptimizationMetricDefinition } from '@continuum/contracts';
 
-import { formatCpa, humanize } from '../format';
+import { deriveEfficiency, formatCpa, humanize } from '../format';
 import { ChartEmpty } from './ChartStates';
 import { cpaHeatFill } from './chartScale';
 
 type AngleMatrixProps = {
   cells: AngleMatrixCell[];
   currency?: string | null;
+  objective?: string | null;
 };
 
 const AUDIENCE_ORDER = ['prospecting', 'retargeting', 'remarketing', 'unknown'];
 
-export function AngleMatrix({ cells, currency }: AngleMatrixProps) {
+export function AngleMatrix({ cells, currency, objective }: AngleMatrixProps) {
+  const metric = getOptimizationMetricDefinition(objective);
   if (cells.length === 0) {
     return (
       <ChartEmpty message="No audience data yet — the matrix fills after the first scored cycle." />
@@ -39,7 +41,7 @@ export function AngleMatrix({ cells, currency }: AngleMatrixProps) {
   for (const cell of cells) byKey.set(`${cell.audience_type}::${cell.angle}`, cell);
 
   const cpas = cells
-    .map((cell) => (cell.conversions > 0 ? cell.spend / cell.conversions : null))
+    .map((cell) => deriveEfficiency(cell.spend, cell.conversions, metric.denominatorMultiplier))
     .filter((value): value is number => value != null);
   const minCpa = cpas.length ? Math.min(...cpas) : 0;
   const maxCpa = cpas.length ? Math.max(...cpas) : 1;
@@ -67,6 +69,8 @@ export function AngleMatrix({ cells, currency }: AngleMatrixProps) {
               minCpa={minCpa}
               maxCpa={maxCpa}
               currency={currency}
+              costLabel={metric.costLabel}
+              denominatorMultiplier={metric.denominatorMultiplier}
             />
           ))}
         </div>
@@ -88,6 +92,8 @@ function MatrixRow({
   minCpa,
   maxCpa,
   currency,
+  costLabel,
+  denominatorMultiplier,
 }: {
   audience: string;
   angles: string[];
@@ -95,6 +101,8 @@ function MatrixRow({
   minCpa: number;
   maxCpa: number;
   currency?: string | null;
+  costLabel: string;
+  denominatorMultiplier: number;
 }) {
   return (
     <>
@@ -103,11 +111,13 @@ function MatrixRow({
       </div>
       {angles.map((angle) => {
         const cell = byKey.get(`${audience}::${angle}`);
-        const cpa = cell && cell.conversions > 0 ? cell.spend / cell.conversions : null;
+        const cpa = cell
+          ? deriveEfficiency(cell.spend, cell.conversions, denominatorMultiplier)
+          : null;
         const ratio = cpa == null ? null : maxCpa > minCpa ? (cpa - minCpa) / (maxCpa - minCpa) : 0;
         const label =
           cpa != null
-            ? `${humanize(audience)}, ${angle === 'untagged' ? 'untagged' : humanize(angle)}: ${formatCpa(cpa, currency)} CPA across ${cell?.adsets ?? 0} ad sets`
+            ? `${humanize(audience)}, ${angle === 'untagged' ? 'untagged' : humanize(angle)}: ${formatCpa(cpa, currency)} ${costLabel} across ${cell?.adsets ?? 0} ad sets`
             : `${humanize(audience)}, ${angle === 'untagged' ? 'untagged' : humanize(angle)}: no data`;
         return (
           <div

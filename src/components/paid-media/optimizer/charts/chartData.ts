@@ -5,15 +5,21 @@
 
 import type { CpaSeriesPoint, CycleItemRow, PortfolioListItem } from '@continuum/contracts';
 
-import { deriveCpa, humanize } from '../format';
+import { deriveEfficiency, humanize } from '../format';
 
 export type CpaTrendPoint = { date: Date; cpa: number };
 
 /** CpaSeriesPoint[] → chronological {date, cpa} points on the 7-day window,
  *  dropping cycles with no conversions (CPA undefined). */
-export function buildCpaTrendPoints(series: CpaSeriesPoint[]): CpaTrendPoint[] {
+export function buildCpaTrendPoints(
+  series: CpaSeriesPoint[],
+  denominatorMultiplier = 1,
+): CpaTrendPoint[] {
   return series
-    .map((point) => ({ ts: point.cycle_ts, cpa: deriveCpa(point.spend_d7, point.conv_d7) }))
+    .map((point) => ({
+      ts: point.cycle_ts,
+      cpa: deriveEfficiency(point.spend_d7, point.conv_d7, denominatorMultiplier),
+    }))
     .filter((point): point is { ts: string; cpa: number } => point.cpa != null)
     .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
     .map((point) => ({ date: new Date(point.ts), cpa: Math.round(point.cpa) }));

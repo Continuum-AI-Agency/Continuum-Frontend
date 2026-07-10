@@ -20,9 +20,15 @@ type CpaConfidenceBarProps = {
   item: CycleItemRow;
   maxCpa: number;
   currency?: string | null;
+  denominatorMultiplier?: number;
 };
 
-export function CpaConfidenceBar({ item, maxCpa, currency }: CpaConfidenceBarProps) {
+export function CpaConfidenceBar({
+  item,
+  maxCpa,
+  currency,
+  denominatorMultiplier = 1,
+}: CpaConfidenceBarProps) {
   const freezeReason = item.diagnostics?.freezeReason;
 
   if (freezeReason) {
@@ -40,9 +46,9 @@ export function CpaConfidenceBar({ item, maxCpa, currency }: CpaConfidenceBarPro
   }
 
   const ci = item.diagnostics?.ci ?? null;
-  const cpa = ci?.cpa ?? null;
-  const lo = ci?.lo ?? null;
-  const hi = ci?.hi ?? null;
+  const cpa = ci?.cpa != null ? ci.cpa * denominatorMultiplier : null;
+  const lo = ci?.lo != null ? ci.lo * denominatorMultiplier : null;
+  const hi = ci?.hi != null ? ci.hi * denominatorMultiplier : null;
   const events = ci?.events ?? null;
 
   const hasInterval = lo != null && hi != null && hi >= lo;

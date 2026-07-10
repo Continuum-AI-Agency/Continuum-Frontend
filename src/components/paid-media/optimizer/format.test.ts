@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
-import { currencySymbol, deriveCpa, formatCpa, formatCurrency, humanize } from './format';
+import {
+  currencySymbol,
+  deriveCpa,
+  deriveEfficiency,
+  formatCpa,
+  formatCurrency,
+  humanize,
+} from './format';
 
 describe('formatCurrency', () => {
   it('formats whole-dollar USD', () => {
@@ -49,11 +56,23 @@ describe('deriveCpa', () => {
   });
 });
 
+describe('deriveEfficiency', () => {
+  it('uses the denominator multiplier for CPM while preserving zero-result safety', () => {
+    expect(deriveEfficiency(120, 10_000, 1_000)).toBe(12);
+    expect(deriveEfficiency(120, 0, 1_000)).toBeNull();
+  });
+});
+
 describe('humanize', () => {
   it('title-cases and de-underscores', () => {
     expect(humanize('app_install')).toBe('App install');
   });
   it('returns a dash for empty', () => {
     expect(humanize(null)).toBe('—');
+  });
+  it('labels apply-mode tiers with product copy', () => {
+    expect(humanize('observe')).toBe('Observe · no writes');
+    expect(humanize('recommend')).toBe('Recommend');
+    expect(humanize('autopilot')).toBe('Autopilot');
   });
 });

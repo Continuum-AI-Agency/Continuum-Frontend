@@ -8,23 +8,23 @@
 //                       so autopilot refused to write it without you.
 //
 // Approving records the decision (optimizer_request_apply_item -> apply_status
-// 'approved_pending' + a portfolio_audits row). It is a DB-only write: nothing reaches Meta.
-// Executing the approved set is a real Meta write and stays disabled until the sandbox-apply
-// bench validates that write on a Meta test ad account — the same gate as every other Apply
-// button in this tab. Approved items simply wait; they are never silently dropped.
+// 'approved_pending'). "Apply N approved" then executes those rows via
+// optimizer-apply-approved (dryRun:false) — real Meta budget writes, ledger-guarded.
 
 import type { CycleItemRow } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '../format';
 import { partitionHeldItems } from '../reportModel';
-import { useOptimizerMutations } from '../useOptimizerData';
+import { useApplyApproved, useOptimizerMutations } from '../useOptimizerData';
 
 type HeldChangesPanelProps = {
   brandId: string;
   adAccountId: string;
+  portfolioId: string;
   runId: string | null;
   items: CycleItemRow[];
   currency?: string | null;
@@ -33,14 +33,50 @@ type HeldChangesPanelProps = {
 export function HeldChangesPanel({
   brandId,
   adAccountId,
+  portfolioId,
   runId,
   items,
   currency,
 }: HeldChangesPanelProps) {
   const { requestApply } = useOptimizerMutations(brandId, adAccountId);
+  const applyApproved = useApplyApproved();
+  const [applyNote, setApplyNote] = React.useState<string | null>(null);
 
   const { held, approved } = partitionHeldItems(items);
   if (held.length === 0 && approved.length === 0) return null;
+
+  const handleApplyApproved = () => {
+    setApplyNote(null);
+    applyApproved.mutate(
+      {
+        portfolio_id: portfolioId,
+        brandId,
+        accountId: adAccountId,
+        run_id: runId ?? undefined,
+        dryRun: false,
+      },
+      {
+        onSuccess: (data) => {
+          if (!data?.ok) {
+            setApplyNote(
+              data?.reason === 'observe_mode'
+                ? 'Observe mode blocks Meta writes.'
+                : (data?.error ?? data?.reason ?? 'Apply approved failed.'),
+            );
+            return;
+          }
+          setApplyNote(
+            `Applied ${data.applied ?? 0}` +
+              (data.failed ? ` · ${data.failed} failed` : '') +
+              (data.deduped ? ` · ${data.deduped} already applied` : ''),
+          );
+        },
+        onError: (err) => {
+          setApplyNote(err instanceof Error ? err.message : 'Apply approved failed.');
+        },
+      },
+    );
+  };
 
   return (
     <div className="space-y-2.5 rounded-lg border border-border/70 bg-card p-4">
@@ -48,7 +84,7 @@ export function HeldChangesPanel({
         <h3 className="text-sm font-semibold tracking-tight">Held for your approval</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Autopilot scored these but the change is larger than this portfolio&apos;s per-cycle cap,
-          so it did not write them. Approving records your decision.
+          so it did not write them. Approve each change, then apply the approved set to Meta.
         </p>
       </div>
 
@@ -119,17 +155,18 @@ export function HeldChangesPanel({
 
       {approved.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-          <p className="text-2xs text-muted-foreground italic">
-            Applying approved changes is disabled while the real Meta write is validated on a test
-            ad account. Your approvals are recorded and will run once it is enabled.
+          <p className="text-2xs text-muted-foreground">
+            {applyNote ??
+              `Ready to write ${approved.length} approved change${approved.length === 1 ? '' : 's'} to Meta.`}
           </p>
           <Button
             type="button"
             size="sm"
-            disabled
-            aria-disabled="true"
-            className="h-7 px-3 text-xs"
+            className="h-7 gap-1.5 px-3 text-xs"
+            disabled={applyApproved.isPending || !runId}
+            onClick={handleApplyApproved}
           >
+            {applyApproved.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
             Apply {approved.length} approved
           </Button>
         </div>

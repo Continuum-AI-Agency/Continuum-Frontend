@@ -196,6 +196,11 @@ describe('buildCpaHeroPoints', () => {
     // Earlier cycles carry no actions.
     expect(points[0].actions).toEqual([]);
   });
+
+  it('uses the supplied multiplier when an objective is priced as CPM', () => {
+    const [point] = buildCpaHeroPoints([cpaSeriesTrend[0]], {}, 1_000);
+    expect(point?.cpa).toBe(40_000); // $800 / 20 impressions × 1,000
+  });
 });
 
 describe('buildCycleActionMap', () => {

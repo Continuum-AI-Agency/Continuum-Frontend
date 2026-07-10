@@ -8,6 +8,7 @@
 
 import {
   type ApplyMode,
+  getOptimizationMetricDefinition,
   type OptimizationModeDto,
   type PortfolioLevel,
   type PortfolioListItem,
@@ -39,6 +40,7 @@ import {
 } from '@/components/ui/select';
 import { currencySymbol, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
+import { applyModeExplainer, applyModePill } from '../reportModel';
 import {
   useOptimizerAccountSnapshots,
   useOptimizerEnrolledAdsets,
@@ -46,7 +48,8 @@ import {
 } from '../useOptimizerData';
 
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
-const APPLY_MODES: ApplyMode[] = ['recommend', 'autopilot'];
+/** Bottom → top: observe (no Meta writes) · recommend (human apply) · autopilot. */
+const APPLY_MODES: ApplyMode[] = ['observe', 'recommend', 'autopilot'];
 
 type PortfolioManagePanelProps = {
   brandId: string;
@@ -94,6 +97,7 @@ export function PortfolioManagePanel({
   const [selection, setSelection] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const metric = getOptimizationMetricDefinition(portfolio.objective);
 
   const enrolledIds = useMemo(
     () => enrolledRead.data.map((row) => row.adset_id),
@@ -111,7 +115,7 @@ export function PortfolioManagePanel({
       next.daily_total = daily;
     }
     const cpa = Number.parseFloat(cpaTarget);
-    if (Number.isFinite(cpa) && cpa > 0) next.cpa_target = cpa;
+    if (Number.isFinite(cpa) && cpa > 0) next.cpa_target = cpa / metric.denominatorMultiplier;
     const maxDaily = Number.parseFloat(maxDailyApply);
     if (Number.isFinite(maxDaily) && maxDaily >= 0) {
       next.max_daily_apply_minor = toMinorUnits(maxDaily, currency);
@@ -129,6 +133,7 @@ export function PortfolioManagePanel({
     maxChangePct,
     portfolio,
     currency,
+    metric.denominatorMultiplier,
   ]);
 
   // Autopilot writes real budgets to Meta, and the apply layer reads an absent cap as
@@ -229,7 +234,7 @@ export function PortfolioManagePanel({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Apply mode</Label>
+          <Label>Autonomy tier</Label>
           <Select
             value={applyMode}
             onValueChange={(value) => handleApplyModeChange(value as ApplyMode)}
@@ -244,11 +249,16 @@ export function PortfolioManagePanel({
                   value={value}
                   disabled={value === 'autopilot' && !guardrailsReady}
                 >
-                  {humanize(value)}
+                  {applyModePill(value)?.label ?? humanize(value)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className="text-2xs text-muted-foreground">{applyModeExplainer(applyMode)}</p>
+          <p className="text-2xs text-muted-foreground">
+            Observe = soak metrics only · Recommend = human apply · Autopilot = auto budgets. Stop
+            pauses autopilot writes without leaving the mode.
+          </p>
           {!guardrailsReady && applyMode !== 'autopilot' ? (
             <p className="text-2xs text-muted-foreground">
               Set both autopilot guardrails below to enable autopilot.
@@ -265,7 +275,9 @@ export function PortfolioManagePanel({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`manage-cpa-${portfolio.id}`}>CPA target ({symbol})</Label>
+          <Label htmlFor={`manage-cpa-${portfolio.id}`}>
+            {metric.targetLabel} ({symbol})
+          </Label>
           <Input
             id={`manage-cpa-${portfolio.id}`}
             inputMode="decimal"
@@ -285,18 +297,18 @@ export function PortfolioManagePanel({
               over the % cap is held for your approval instead of being auto-applied.
             </p>
           </div>
-          {portfolio.apply_mode === 'autopilot' ? (
+          {portfolio.apply_mode === 'autopilot' || applyMode === 'autopilot' ? (
             <Button
               type="button"
               variant={isPaused ? 'default' : 'outline'}
               size="sm"
               className="gap-1.5"
-              disabled={setPaused.isPending}
+              disabled={setPaused.isPending || portfolio.apply_mode !== 'autopilot'}
               onClick={() =>
                 setPaused.mutate({
                   portfolio_id: portfolio.id,
                   paused: !isPaused,
-                  reason: isPaused ? undefined : 'Paused from Manage panel',
+                  reason: isPaused ? undefined : 'Stopped from Manage panel',
                 })
               }
             >
@@ -307,13 +319,13 @@ export function PortfolioManagePanel({
               ) : (
                 <Pause className="size-3.5" />
               )}
-              {isPaused ? 'Resume autopilot' : 'Pause autopilot'}
+              {isPaused ? 'Resume' : 'Stop'}
             </Button>
           ) : null}
         </div>
-        {isPaused ? (
+        {isPaused && portfolio.apply_mode === 'autopilot' ? (
           <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs text-amber-600 dark:text-amber-400">
-            Autopilot is paused — no autonomous budget writes until you resume.
+            Stopped — no autonomous budget writes until you resume. Ingest and scoring still run.
           </p>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">

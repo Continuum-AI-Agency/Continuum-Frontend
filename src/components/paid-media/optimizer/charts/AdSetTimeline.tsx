@@ -13,8 +13,10 @@ import { Area, AreaChart } from '@/components/charts/area-chart';
 import { Grid } from '@/components/charts/grid';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { formatCpa, formatCurrency } from '../format';
+import type { OptimizerAdMetric } from '../useOptimizerUrlState';
 import { ChartEmpty } from './ChartStates';
 import { CreativeHoverCard } from './CreativeHoverCard';
 import { type AdMetric, mergeAdDailyByMetric } from './vizData';
@@ -46,11 +48,29 @@ type AdSetTimelineProps = {
   ads?: AdsetAd[];
   angles?: PaidAdAngle[];
   currency?: string | null;
+  metric?: OptimizerAdMetric;
+  onMetricChange?: (metric: OptimizerAdMetric) => void;
 };
 
-export function AdSetTimeline({ trends, ads = [], angles = [], currency }: AdSetTimelineProps) {
+function toUrlMetric(metric: AdMetric): OptimizerAdMetric {
+  return metric === 'cpa' ? 'cost' : metric;
+}
+
+function fromUrlMetric(metric: OptimizerAdMetric | undefined): AdMetric {
+  return metric === 'cost' ? 'cpa' : (metric ?? 'spend');
+}
+
+export function AdSetTimeline({
+  trends,
+  ads = [],
+  angles = [],
+  currency,
+  metric: metricProp,
+  onMetricChange,
+}: AdSetTimelineProps) {
   const chartable = useMemo(() => trends.filter((trend) => trend.series.length >= 2), [trends]);
-  const [metric, setMetric] = useState<AdMetric>('spend');
+  const [localMetric, setLocalMetric] = useState<AdMetric>('spend');
+  const metric = metricProp ? fromUrlMetric(metricProp) : localMetric;
   const [active, setActive] = useState<Set<string>>(
     () => new Set(chartable.slice(0, 5).map((trend) => trend.ad_id)),
   );
@@ -86,27 +106,34 @@ export function AdSetTimeline({ trends, ads = [], angles = [], currency }: AdSet
       else next.add(adId);
       return next;
     });
+  const selectMetric = (value: string) => {
+    if (!METRICS.some((option) => option.key === value)) return;
+    const next = value as AdMetric;
+    setLocalMetric(next);
+    onMetricChange?.(toUrlMetric(next));
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-md border border-border p-0.5">
+        <ToggleGroup
+          aria-label="Creative chart metric"
+          className="justify-start rounded-md border border-border p-0.5"
+          onValueChange={selectMetric}
+          type="single"
+          value={metric}
+        >
           {METRICS.map((option) => (
-            <button
-              className={cn(
-                'rounded px-2 py-1 font-medium text-xs transition-colors',
-                metric === option.key
-                  ? 'bg-secondary text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
+            <ToggleGroupItem
+              aria-label={`Show ${option.label}`}
+              className="h-6 rounded px-2 text-xs data-[state=on]:bg-secondary data-[state=on]:text-foreground"
               key={option.key}
-              onClick={() => setMetric(option.key)}
-              type="button"
+              value={option.key}
             >
               {option.label}
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
         <span className="text-3xs text-muted-foreground">
           {active.size} of {chartable.length} creatives
         </span>

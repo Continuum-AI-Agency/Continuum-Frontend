@@ -9,13 +9,16 @@
 // profitability. Every panel degrades to its own empty state, so a portfolio with
 // thin data still reads as one coherent instrument rather than blank space.
 
-import type { CycleItemRow, PortfolioLevel, PortfolioListItem } from '@continuum/contracts';
+import {
+  type CycleItemRow,
+  getOptimizationMetricDefinition,
+  type PortfolioLevel,
+  type PortfolioListItem,
+} from '@continuum/contracts';
 import { ArrowLeftIcon, RefreshCwIcon } from 'lucide-react';
-import { useState } from 'react';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { usePollWhile } from '@/lib/paid-media/optimizerStore';
 import { cn } from '@/lib/utils';
 import { AdSetTimeline } from '../charts/AdSetTimeline';
 import { AdsetActionMenu } from '../charts/AdsetActionMenu';
@@ -28,6 +31,7 @@ import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { ScoreRadar } from '../charts/ScoreRadar';
 import { adSetRoasSeries, buildCycleActionMap, sumFunnelWindow } from '../charts/vizData';
+import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { applyModeExplainer, confidenceBand, parseReport } from '../reportModel';
 import {
@@ -37,9 +41,11 @@ import {
   useOptimizerAngleMatrix,
   useOptimizerCpaSeries,
   useOptimizerEnrolledAdsets,
+  useOptimizerFirstRunPoll,
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import type { OptimizerAdMetric } from '../useOptimizerUrlState';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { HeldChangesPanel } from './HeldChangesPanel';
@@ -51,6 +57,10 @@ type PortfolioDetailWorkspaceProps = {
   adAccountId: string;
   currency?: string | null;
   onClose: () => void;
+  selectedAdsetId: string | null;
+  onSelectAdset: (adsetId: string | null) => void;
+  chartMetric: OptimizerAdMetric;
+  onMetricChange: (metric: OptimizerAdMetric) => void;
 };
 
 function ciCpa(item: CycleItemRow): number | null {
@@ -63,6 +73,10 @@ export function PortfolioDetailWorkspace({
   adAccountId,
   currency,
   onClose,
+  selectedAdsetId,
+  onSelectAdset,
+  chartMetric,
+  onMetricChange,
 }: PortfolioDetailWorkspaceProps) {
   // Campaign portfolios enroll campaigns: read the matching snapshot scope so the
   // conversion-funnel sum (keyed by the enrolled entity id) resolves. The cycle
@@ -82,10 +96,11 @@ export function PortfolioDetailWorkspace({
   // and the scheduler backstops it (next_realloc_at=now), so poll the performance
   // read until the first result lands rather than leaving the user on empty panels.
   const awaitingFirstCycle = !latestRun;
-  usePollWhile(awaitingFirstCycle, performanceQuery.refetch);
+  useOptimizerFirstRunPoll(awaitingFirstCycle, performanceQuery.refetch);
   const confidence = confidenceBand(latestRun?.confidence?.band);
   // Offer the manual apply only when there are actual moves and the portfolio is in
-  // recommend mode (autopilot applies automatically). runId pins the apply to this run.
+  // recommend mode (observe hard-halts Meta writes; autopilot applies automatically).
+  // runId pins the apply to this run.
   const reallocation = splitReallocation(items);
   const movedCount = reallocation.gaining.length + reallocation.losing.length;
   const canApplyReallocation = portfolio.apply_mode === 'recommend' && movedCount > 0;
@@ -93,16 +108,20 @@ export function PortfolioDetailWorkspace({
   const confidenceScore = latestRun?.confidence?.score;
   const actionsByTs = buildCycleActionMap(report);
   const pacing = (latestRun as { pacing?: unknown } | null)?.pacing ?? null;
+  const metric = getOptimizationMetricDefinition(portfolio.objective);
 
   const funnelWindow = sumFunnelWindow(
     snapshotsQuery.data,
     enrolledQuery.data.map((adset) => adset.adset_id),
   );
-  const maxCiCpa = items.reduce((max, item) => Math.max(max, ciCpa(item) ?? 0), 0) || 1;
+  const maxCiCpa =
+    items.reduce(
+      (max, item) => Math.max(max, (ciCpa(item) ?? 0) * metric.denominatorMultiplier),
+      0,
+    ) || 1;
 
-  const [selectedAdset, setSelectedAdset] = useState<string | null>(null);
-  const dailyTrendsQuery = useOptimizerAdDailyTrends(brandId, adAccountId, selectedAdset);
-  const adsetAdsQuery = useOptimizerAdsetAds(brandId, adAccountId, selectedAdset);
+  const dailyTrendsQuery = useOptimizerAdDailyTrends(brandId, adAccountId, selectedAdsetId);
+  const adsetAdsQuery = useOptimizerAdsetAds(brandId, adAccountId, selectedAdsetId);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -132,9 +151,10 @@ export function PortfolioDetailWorkspace({
                 <Badge className="text-3xs" variant="teal">
                   {humanize(portfolio.mode)}
                 </Badge>
-                <Badge className="text-3xs" variant="outline">
-                  {humanize(portfolio.apply_mode)}
-                </Badge>
+                <ApplyModePill
+                  applyMode={portfolio.apply_mode}
+                  autopilotPaused={portfolio.autopilot_paused}
+                />
               </h2>
               <p className="text-3xs text-muted-foreground">
                 {humanize(portfolio.objective)} · right-click for actions
@@ -189,14 +209,18 @@ export function PortfolioDetailWorkspace({
               hover a cycle for its metrics + actions
             </span>
           }
-          title="CPA timeline"
+          title={`${metric.costLabel} timeline`}
         >
           <CpaHeroTimeline
             actionsByTs={actionsByTs}
             confidenceBand={latestRun?.confidence?.band}
             currency={currency}
+            objective={portfolio.objective}
             series={cpaSeriesQuery.data}
-            targetCpa={(portfolio as { cpa_target?: number | null }).cpa_target ?? null}
+            targetCpa={
+              ((portfolio as { cpa_target?: number | null }).cpa_target ?? 0) *
+                metric.denominatorMultiplier || null
+            }
           />
         </OptimizerPanel>
 
@@ -252,16 +276,23 @@ export function PortfolioDetailWorkspace({
               brandId={brandId}
               currency={currency}
               items={items}
+              portfolioId={portfolio.id}
               runId={latestRunId ?? null}
             />
           </OptimizerPanel>
           <OptimizerPanel
             meta={
-              <span className="text-3xs text-muted-foreground">CPA per audience &amp; angle</span>
+              <span className="text-3xs text-muted-foreground">
+                {metric.costLabel} per audience &amp; angle
+              </span>
             }
             title="Audience × angle"
           >
-            <AngleMatrix cells={angleMatrixQuery.data} currency={currency} />
+            <AngleMatrix
+              cells={angleMatrixQuery.data}
+              currency={currency}
+              objective={portfolio.objective}
+            />
           </OptimizerPanel>
         </div>
 
@@ -272,7 +303,7 @@ export function PortfolioDetailWorkspace({
               click an ad set to drill in · 95% CI
             </span>
           }
-          title="CPA per ad set"
+          title={`${metric.costLabel} per ad set`}
         >
           {items.length === 0 ? (
             <p className="text-muted-foreground text-xs">No scored ad sets in the latest cycle.</p>
@@ -286,24 +317,31 @@ export function PortfolioDetailWorkspace({
                 <button
                   className={cn(
                     'w-full rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40',
-                    selectedAdset === item.adset_id && 'bg-muted/60 ring-1 ring-ring',
+                    selectedAdsetId === item.adset_id && 'bg-muted/60 ring-1 ring-ring',
                   )}
-                  onClick={() => setSelectedAdset(item.adset_id)}
+                  onClick={() =>
+                    onSelectAdset(selectedAdsetId === item.adset_id ? null : item.adset_id)
+                  }
                   type="button"
                 >
-                  <CpaConfidenceBar currency={currency} item={item} maxCpa={maxCiCpa} />
+                  <CpaConfidenceBar
+                    currency={currency}
+                    denominatorMultiplier={metric.denominatorMultiplier}
+                    item={item}
+                    maxCpa={maxCiCpa}
+                  />
                 </button>
               </AdsetActionMenu>
             ))
           )}
         </OptimizerPanel>
 
-        {selectedAdset ? (
+        {selectedAdsetId ? (
           <>
             <OptimizerPanel
               meta={
                 <span className="text-3xs text-muted-foreground">
-                  {selectedAdset.split('::').pop()}
+                  {selectedAdsetId.split('::').pop()}
                 </span>
               }
               title="Creatives"
@@ -311,6 +349,8 @@ export function PortfolioDetailWorkspace({
               <AdSetTimeline
                 ads={adsetAdsQuery.data}
                 currency={currency}
+                metric={chartMetric}
+                onMetricChange={onMetricChange}
                 trends={dailyTrendsQuery.data}
               />
             </OptimizerPanel>

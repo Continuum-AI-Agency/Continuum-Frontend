@@ -4,13 +4,12 @@ import { cleanup, render } from '@testing-library/react';
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
-// Stub the visx AreaChart container (needs ResizeObserver). It ignores its
+// Stub the BKLit ComposedChart container (needs ResizeObserver). It ignores its
 // children, so the projection line, terminal marker, action pins and tooltip
 // never render (no chart context needed) — we assert the projected-CPA header and
 // the empty-vs-populated switch, which is the hero's own chrome.
-mock.module('@/components/charts/area-chart', () => ({
-  AreaChart: () => <div data-testid="hero-chart" />,
-  Area: () => null,
+mock.module('@/components/charts/composed-chart', () => ({
+  ComposedChart: () => <div data-testid="hero-chart" />,
 }));
 
 import { cpaSeriesSparse, cpaSeriesTrend } from './__fixtures__/optimizerFixtures';

@@ -1,22 +1,26 @@
 'use client';
 
-// The Portfolio-detail HERO: a CPA-over-cycles timeline that carries the whole
-// story in one interaction. The solid area is actual CPA (engine-derived
-// spend/conversions); a dashed ProjectionLine continues it toward the target (or
+// The Portfolio-detail HERO: an objective-cost-over-cycles timeline that carries
+// the whole story in one interaction. The cost line is engine-derived from
+// spend/results and the bar layer shows relative spend volume; a dashed
+// ProjectionLine continues the cost line toward the target (or
 // the recent trend) with a hollow terminal marker at the actual→projected hand-off;
 // pins on the axis mark cycles where the optimizer acted; and hovering any cycle
-// opens a rich card with that cycle's CPA + spend + conversions AND the actions
+// opens a rich card with that cycle's cost + spend + results AND the actions
 // taken — metrics and pinned events in one panel, the reference-screenshot pattern.
 
-import type { CpaSeriesPoint } from '@continuum/contracts';
+import { type CpaSeriesPoint, getOptimizationMetricDefinition } from '@continuum/contracts';
 import { ZapIcon } from 'lucide-react';
-import { Area, AreaChart } from '@/components/charts/area-chart';
 import { useChartStable } from '@/components/charts/chart-context';
+import { ComposedChart } from '@/components/charts/composed-chart';
 import { Grid } from '@/components/charts/grid';
+import { Line } from '@/components/charts/line';
 import { LineSeriesTerminalMarker } from '@/components/charts/line-series-terminal-marker';
 import { ProjectionLine } from '@/components/charts/projection-line';
+import { SeriesBar } from '@/components/charts/series-bar';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
+import { YAxis } from '@/components/charts/y-axis';
 import { formatCpa, formatCurrency } from '../format';
 import { confidenceBand as bandMeta } from '../reportModel';
 import { ChartEmpty } from './ChartStates';
@@ -35,6 +39,7 @@ type CpaHeroTimelineProps = {
   targetCpa?: number | null;
   currency?: string | null;
   confidenceBand?: string | null;
+  objective?: string | null;
 };
 
 export function CpaHeroTimeline({
@@ -43,11 +48,15 @@ export function CpaHeroTimeline({
   targetCpa,
   currency,
   confidenceBand,
+  objective,
 }: CpaHeroTimelineProps) {
-  const points = buildCpaHeroPoints(series, actionsByTs);
+  const metric = getOptimizationMetricDefinition(objective);
+  const points = buildCpaHeroPoints(series, actionsByTs, metric.denominatorMultiplier);
 
   if (points.length < 2) {
-    return <ChartEmpty message="The CPA timeline appears after a few scored cycles." />;
+    return (
+      <ChartEmpty message={`The ${metric.costLabel} timeline appears after a few scored cycles.`} />
+    );
   }
 
   const projection = buildCpaProjection(
@@ -64,7 +73,7 @@ export function CpaHeroTimeline({
       {hasProjection && last != null && projectedEnd != null ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
-            Projected CPA{' '}
+            Projected {metric.costLabel}{' '}
             <span className="font-data font-medium text-foreground tabular-nums">
               {formatCpa(last, currency)} → {formatCpa(projectedEnd, currency)}
             </span>
@@ -78,14 +87,15 @@ export function CpaHeroTimeline({
         </div>
       ) : null}
 
-      <AreaChart
+      <ComposedChart
         aspectRatio="5 / 2"
         data={points}
-        margin={{ top: 16, right: 18, bottom: 26, left: 18 }}
+        margin={{ top: 16, right: 18, bottom: 26, left: 52 }}
         xDataKey="date"
       >
         <Grid horizontal />
-        <Area dataKey="cpa" fill="var(--chart-1)" fillOpacity={0.16} strokeWidth={2.5} />
+        <SeriesBar dataKey="spendIndex" fill="var(--chart-1)" radius={3} />
+        <Line dataKey="cpa" stroke="var(--chart-2)" strokeWidth={2.5} />
         {hasProjection ? (
           <>
             <ProjectionLine
@@ -95,21 +105,27 @@ export function CpaHeroTimeline({
               stroke="var(--chart-4)"
               strokeDasharray="6,4"
             />
-            <LineSeriesTerminalMarker dataKey="cpa" radius={5} stroke="var(--chart-1)" />
+            <LineSeriesTerminalMarker dataKey="cpa" radius={5} stroke="var(--chart-2)" />
           </>
         ) : null}
         <CycleActionPins points={points} />
         <XAxis />
+        <YAxis formatValue={(value) => formatCpa(value, currency)} numTicks={4} />
         <ChartTooltip
           content={({ point }) => (
-            <HeroTooltip currency={currency} point={point as unknown as CpaHeroPoint} />
+            <HeroTooltip
+              costLabel={metric.costLabel}
+              currency={currency}
+              point={point as unknown as CpaHeroPoint}
+              resultLabel={metric.resultLabel}
+            />
           )}
-          indicatorColor="var(--chart-1)"
+          indicatorColor="var(--chart-2)"
           matchCrosshair
         />
-      </AreaChart>
+      </ComposedChart>
 
-      <HeroLegend hasProjection={hasProjection} />
+      <HeroLegend costLabel={metric.costLabel} hasProjection={hasProjection} />
     </div>
   );
 }
@@ -151,21 +167,33 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
   );
 }
 
-function HeroTooltip({ point, currency }: { point: CpaHeroPoint; currency?: string | null }) {
+function HeroTooltip({
+  point,
+  currency,
+  costLabel,
+  resultLabel,
+}: {
+  point: CpaHeroPoint;
+  currency?: string | null;
+  costLabel: string;
+  resultLabel: string;
+}) {
   return (
     <div className="min-w-[184px] space-y-2 p-1">
       <div className="text-3xs text-muted-foreground uppercase tracking-wide">
         {point.date instanceof Date ? dayFmt.format(point.date) : ''}
       </div>
       <div className="flex items-baseline justify-between gap-4">
-        <span className="text-xs text-muted-foreground">CPA</span>
+        <span className="text-xs text-muted-foreground">{costLabel}</span>
         <span className="font-data font-semibold text-base text-foreground tabular-nums">
           {formatCpa(point.cpa, currency)}
         </span>
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
         <span>spend {formatCurrency(point.spend, currency)}</span>
-        <span>{Math.round(point.conv)} conv</span>
+        <span>
+          {Math.round(point.conv)} {resultLabel.toLowerCase()}
+        </span>
       </div>
       {point.actions.length > 0 ? (
         <div className="space-y-1 border-border/60 border-t pt-1.5">
@@ -185,12 +213,19 @@ function HeroTooltip({ point, currency }: { point: CpaHeroPoint; currency?: stri
   );
 }
 
-function HeroLegend({ hasProjection }: { hasProjection: boolean }) {
+function HeroLegend({ hasProjection, costLabel }: { hasProjection: boolean; costLabel: string }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-3xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-1)' }} />
-        CPA (actual)
+        <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-2)' }} />
+        {costLabel} (actual)
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="h-2 w-3 rounded-sm"
+          style={{ background: 'color-mix(in srgb, var(--chart-1) 45%, transparent)' }}
+        />
+        Spend volume
       </span>
       {hasProjection ? (
         <span className="inline-flex items-center gap-1.5">

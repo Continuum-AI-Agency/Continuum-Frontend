@@ -10,7 +10,7 @@
 // warning tokens directly (falling CPA = success) rather than DeltaBadge, whose
 // up-is-good arrow/color would mislabel a falling CPA.
 
-import type { CpaSeriesPoint } from '@continuum/contracts';
+import { type CpaSeriesPoint, getOptimizationMetricDefinition } from '@continuum/contracts';
 import { TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
 
 import { Area, AreaChart } from '@/components/charts/area-chart';
@@ -22,14 +22,16 @@ import { buildCpaTrendPoints, cpaTrendSummary } from './chartData';
 type CpaTrendChartProps = {
   series: CpaSeriesPoint[];
   currency?: string | null;
+  objective?: string | null;
 };
 
-export function CpaTrendChart({ series, currency }: CpaTrendChartProps) {
-  const points = buildCpaTrendPoints(series);
+export function CpaTrendChart({ series, currency, objective }: CpaTrendChartProps) {
+  const metric = getOptimizationMetricDefinition(objective);
+  const points = buildCpaTrendPoints(series, metric.denominatorMultiplier);
   const summary = cpaTrendSummary(points);
 
   if (!summary) {
-    return <ChartEmpty message="CPA trend appears after a few scored cycles." />;
+    return <ChartEmpty message={`${metric.costLabel} trend appears after a few scored cycles.`} />;
   }
 
   const { last, deltaPct } = summary;
@@ -39,7 +41,9 @@ export function CpaTrendChart({ series, currency }: CpaTrendChartProps) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">CPA trend · {points.length} cycles</span>
+        <span className="text-xs text-muted-foreground">
+          {metric.costLabel} trend · {points.length} cycles
+        </span>
         <span
           className={cn(
             'inline-flex items-center gap-1 text-xs font-medium tabular-nums',

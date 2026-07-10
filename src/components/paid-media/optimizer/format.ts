@@ -53,15 +53,29 @@ function normalizeCurrency(currency: string | null | undefined): string {
   return trimmed.length === 3 ? trimmed : FALLBACK_CURRENCY;
 }
 
-/** Derive CPA from spend / conversions, guarding against divide-by-zero. */
-export function deriveCpa(spend: number, conversions: number): number | null {
+/** Derive an objective's cost efficiency from spend / result count. Awareness
+ * uses a 1,000x multiplier so its result is CPM rather than cost per impression. */
+export function deriveEfficiency(
+  spend: number,
+  conversions: number,
+  denominatorMultiplier = 1,
+): number | null {
   if (conversions <= 0) return null;
-  return spend / conversions;
+  return (spend / conversions) * denominatorMultiplier;
+}
+
+/** @deprecated Prefer deriveEfficiency. Kept for existing CPA-only transforms. */
+export function deriveCpa(spend: number, conversions: number): number | null {
+  return deriveEfficiency(spend, conversions);
 }
 
 /** Title-case a loose DB string like "app_install" → "App install". */
 export function humanize(value: string | null | undefined): string {
   if (!value) return '—';
+  // Apply-mode tiers get product labels (observe is the no-write bottom tier).
+  if (value === 'observe') return 'Observe · no writes';
+  if (value === 'recommend') return 'Recommend';
+  if (value === 'autopilot') return 'Autopilot';
   const spaced = value.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }

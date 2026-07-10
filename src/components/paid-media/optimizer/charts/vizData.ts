@@ -13,7 +13,7 @@ import type {
 } from '@continuum/contracts';
 import { intFmt } from '@/components/charts/chart-formatters';
 import { buildProjectionPath, type ProjectionPoint } from '@/components/charts/projection-utils';
-import { deriveCpa } from '../format';
+import { deriveEfficiency } from '../format';
 import type { CpaTrendPoint } from './chartData';
 import { stepHeatFill } from './vizTokens';
 
@@ -263,6 +263,9 @@ export type CpaHeroPoint = {
   date: Date;
   cpa: number;
   spend: number;
+  /** Spend is normalized onto the cost scale only for the shared-axis bar layer.
+   * Tooltips always expose the unscaled spend value. */
+  spendIndex: number;
   conv: number;
   ts: string;
   actions: string[];
@@ -271,13 +274,14 @@ export type CpaHeroPoint = {
 export function buildCpaHeroPoints(
   series: CpaSeriesPoint[],
   actionsByTs: Record<string, string[]> = {},
+  denominatorMultiplier = 1,
 ): CpaHeroPoint[] {
-  return series
+  const actual = series
     .map((point) => ({
       ts: point.cycle_ts,
       spend: point.spend_d7,
       conv: point.conv_d7,
-      cpa: deriveCpa(point.spend_d7, point.conv_d7),
+      cpa: deriveEfficiency(point.spend_d7, point.conv_d7, denominatorMultiplier),
     }))
     .filter(
       (point): point is { ts: string; spend: number; conv: number; cpa: number } =>
@@ -292,6 +296,13 @@ export function buildCpaHeroPoints(
       ts: point.ts,
       actions: actionsByTs[point.ts] ?? [],
     }));
+
+  const maxSpend = Math.max(...actual.map((point) => point.spend), 1);
+  const maxCost = Math.max(...actual.map((point) => point.cpa), 1);
+  return actual.map((point) => ({
+    ...point,
+    spendIndex: (point.spend / maxSpend) * maxCost,
+  }));
 }
 
 /** Optimizer actions per cycle from a parsed report, keyed by the run's cycle_ts,

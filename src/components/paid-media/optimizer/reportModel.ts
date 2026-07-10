@@ -163,10 +163,37 @@ export function severityBadgeVariant(
   }
 }
 
-/** One-line legend making the recommend↔autopilot boundary explicit at the point a
- *  user reads a proposed reallocation (today the distinction is only an implicit badge). */
+/** One-line legend making the observe↔recommend↔autopilot boundary explicit at the
+ *  point a user reads a proposed reallocation. */
 export function applyModeExplainer(applyMode: string | null | undefined): string {
-  return (applyMode ?? '').toLowerCase() === 'autopilot'
-    ? 'Autopilot — budgets are applied automatically within guardrails; pauses always need your approval.'
-    : 'Recommend — these are proposals; nothing changes automatically. Apply them below, or switch to Autopilot.';
+  const mode = (applyMode ?? '').toLowerCase();
+  if (mode === 'observe') {
+    return 'Observe — soak tier. Ingest metrics and score every cycle; no Meta budget writes.';
+  }
+  if (mode === 'autopilot') {
+    return 'Autopilot — budgets are applied automatically within guardrails. Use Stop to halt writes without leaving this mode.';
+  }
+  if (mode === 'recommend') {
+    return 'Recommend — proposals only until a human applies. Promote from Observe when ready for human-in-the-loop.';
+  }
+  return 'Unknown apply mode.';
+}
+
+/** Dense pill metadata for the portfolio apply-mode identifier (ApplyModePill).
+ *  Bottom→top tiers get distinct tones so autonomy is scannable next to mode/level chips. */
+export function applyModePill(applyMode: string | null | undefined): {
+  label: string;
+  variant: 'muted' | 'violet' | 'success';
+  indicator: 'info' | 'success' | 'warning';
+} | null {
+  switch ((applyMode ?? '').toLowerCase()) {
+    case 'observe':
+      return { label: 'Observe', variant: 'muted', indicator: 'info' };
+    case 'recommend':
+      return { label: 'Recommend', variant: 'violet', indicator: 'info' };
+    case 'autopilot':
+      return { label: 'Autopilot', variant: 'success', indicator: 'success' };
+    default:
+      return null;
+  }
 }

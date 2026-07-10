@@ -15,12 +15,17 @@
 
 import type {
   AdSetSnapshot,
+  ApplyMode,
   OptimizationModeDto,
   OptimizationObjective,
   PortfolioLevel,
   PortfolioSuggestion,
 } from '@continuum/contracts';
-import { suggestionToEnrollRequest, suggestionToPortfolioConfig } from '@continuum/contracts';
+import {
+  getOptimizationMetricDefinition,
+  suggestionToEnrollRequest,
+  suggestionToPortfolioConfig,
+} from '@continuum/contracts';
 import {
   CheckCircle2Icon,
   ChevronDownIcon,
@@ -43,7 +48,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { currencySymbol, deriveCpa, formatCpa, formatCurrency, humanize } from '../format';
+import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
+import { applyModeExplainer, applyModePill } from '../reportModel';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildCboCampaignSections } from '../picker/campaignGroups';
 import {
@@ -160,9 +166,19 @@ export function PortfolioSetup({
     // Base config from the SHARED builder (@continuum/contracts) so onboarding and the
     // Jaina/MCP agents produce the identical portfolio config; the FE then pins `level`
     // (optimizer is ad-set-level here) and applies the optional objective/mode override.
+    // Soak-first: suggestion creates start in observe (metric ingest + score, no Meta
+    // writes). Operators promote to recommend/autopilot from Manage when ready.
+    const suggestedConfig = suggestionToPortfolioConfig(suggestion, { apply_mode: 'observe' });
+    // A target belongs to the objective that produced it. If an operator changes
+    // that objective before creating, start without a target rather than silently
+    // carrying (for example) a purchase CPA into an awareness CPM portfolio.
+    const { cpa_target: suggestedTarget, ...configWithoutTarget } = suggestedConfig;
+    const objectiveChanged = override?.objective && override.objective !== suggestion.objective;
     const config = {
-      ...suggestionToPortfolioConfig(suggestion),
+      ...configWithoutTarget,
+      ...(!objectiveChanged && suggestedTarget != null ? { cpa_target: suggestedTarget } : {}),
       level,
+      apply_mode: 'observe' as const,
       ...(override ? { objective: override.objective, mode: override.mode } : {}),
     };
     create.mutate(
@@ -368,7 +384,12 @@ function SuggestionRow({
   // mode follows the objective (same map the server uses).
   const [objective, setObjective] = React.useState<OptimizationObjective>(suggestion.objective);
   const mode = DEFAULT_MODE_BY_OBJECTIVE[objective];
-  const cpa = deriveCpa(suggestion.summary.spend14, suggestion.summary.conv14);
+  const metric = getOptimizationMetricDefinition(objective);
+  const cpa = deriveEfficiency(
+    suggestion.summary.spend14,
+    suggestion.summary.conv14,
+    metric.denominatorMultiplier,
+  );
   const canPreview = snapshots.length > 0;
   // Nudge toward Traffic when a conversion objective has no tracked conversions — that
   // combination scores as pause-all / Low confidence and gives the user no value.
@@ -387,7 +408,7 @@ function SuggestionRow({
           <p className="mt-1 text-xs text-muted-foreground">
             {suggestion.summary.adsets} ad sets · {formatCurrency(suggestion.daily_total, currency)}
             /d
-            {cpa != null ? ` · CPA ${formatCpa(cpa, currency)}` : ''}
+            {cpa != null ? ` · ${metric.costLabel} ${formatCpa(cpa, currency)}` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -480,6 +501,9 @@ export function PortfolioCreateForm({
   const [name, setName] = React.useState('');
   const [objective, setObjective] = React.useState<OptimizationObjective>('purchase');
   const [mode, setMode] = React.useState<OptimizationModeDto>('balanced');
+  // Create-time autonomy: observe (soak metrics) or recommend (human apply). Autopilot
+  // requires guardrails and is armed only from Manage after create.
+  const [applyMode, setApplyMode] = React.useState<ApplyMode>('observe');
   const [dailyTotal, setDailyTotal] = React.useState('');
   const [cpaTarget, setCpaTarget] = React.useState('');
   const [selectedAdsetIds, setSelectedAdsetIds] = React.useState<string[]>([]);
@@ -501,6 +525,7 @@ export function PortfolioCreateForm({
   // scores. Enrollment is what makes a portfolio real, so it is required to create one.
   const canSubmit = name.trim().length > 0 && effectiveDaily > 0 && selectedAdsetIds.length > 0;
   const busy = create.isPending || enroll.isPending;
+  const metric = getOptimizationMetricDefinition(objective);
 
   const handleCreate = () => {
     if (!canSubmit) return;
@@ -514,9 +539,11 @@ export function PortfolioCreateForm({
           objective,
           level,
           mode,
-          apply_mode: 'recommend',
+          apply_mode: applyMode,
           daily_total: effectiveDaily,
-          ...(Number.isFinite(cpaValue) && cpaValue > 0 ? { cpa_target: cpaValue } : {}),
+          ...(Number.isFinite(cpaValue) && cpaValue > 0
+            ? { cpa_target: cpaValue / metric.denominatorMultiplier }
+            : {}),
         },
       },
       {
@@ -534,6 +561,7 @@ export function PortfolioCreateForm({
                 setDailyTotal('');
                 setCpaTarget('');
                 setSelectedAdsetIds([]);
+                setApplyMode('observe');
                 onCreated?.(portfolio_id);
               },
             },
@@ -604,16 +632,25 @@ export function PortfolioCreateForm({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
-            <Label>Apply mode</Label>
-            {/* A new portfolio is always recommend-only. Autopilot writes real budgets to
-                Meta and may only be armed once both guardrails are set, which happens in the
-                Manage panel — the DB refuses an autopilot portfolio without them. */}
-            <div className="flex h-9 items-center rounded-md border border-border/60 bg-muted/30 px-3 text-sm">
-              Recommend
-            </div>
-            <p className="text-2xs text-muted-foreground">
-              Turn on autopilot from Manage, after setting guardrails.
-            </p>
+            <Label>Autonomy tier</Label>
+            {/* Create offers observe (soak) and recommend (HITL). Autopilot needs guardrails
+                and is armed only from Manage — the DB refuses unguarded autopilot. */}
+            <Select
+              value={applyMode}
+              onValueChange={(value) => setApplyMode(value as ApplyMode)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(['observe', 'recommend'] as const).map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {applyModePill(value)?.label ?? humanize(value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-2xs text-muted-foreground">{applyModeExplainer(applyMode)}</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="optimizer-daily-total">Daily budget ({symbol})</Label>
@@ -626,13 +663,15 @@ export function PortfolioCreateForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="optimizer-cpa-target">CPA target ({symbol}, optional)</Label>
+            <Label htmlFor="optimizer-cpa-target">
+              {metric.targetLabel} ({symbol}, optional)
+            </Label>
             <Input
               id="optimizer-cpa-target"
               inputMode="decimal"
               value={cpaTarget}
               onChange={(event) => setCpaTarget(event.target.value)}
-              placeholder="40"
+              placeholder={metric.costLabel === 'CPM' ? '12' : '40'}
             />
           </div>
         </div>

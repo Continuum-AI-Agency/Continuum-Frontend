@@ -8,6 +8,7 @@ import type { PortfolioListItem } from '@continuum/contracts';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 
 type PortfolioRowCardProps = {
@@ -46,9 +47,10 @@ export function PortfolioRowCard({
           <Badge variant="teal" className="text-3xs font-medium">
             {humanize(portfolio.mode)}
           </Badge>
-          <Badge variant="outline" className="text-3xs font-medium">
-            {humanize(portfolio.apply_mode)}
-          </Badge>
+          <ApplyModePill
+            applyMode={portfolio.apply_mode}
+            autopilotPaused={portfolio.autopilot_paused}
+          />
           <span>· {portfolio.adset_count} ad sets</span>
         </div>
       </div>

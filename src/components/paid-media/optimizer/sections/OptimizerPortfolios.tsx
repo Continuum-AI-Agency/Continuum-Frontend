@@ -12,8 +12,8 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useOptimizerStore } from '@/lib/paid-media/optimizerStore';
 import { cn } from '@/lib/utils';
+import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { useOptimizerArchivedPortfolios, useOptimizerMutations } from '../useOptimizerData';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
@@ -24,9 +24,9 @@ type OptimizerPortfoliosProps = {
   brandId: string;
   adAccountId: string;
   portfolios: PortfolioListItem[];
-  selectedPortfolioId: string | null;
   currency?: string | null;
   onCreated?: (portfolioId: string) => void;
+  onOpenDetail: (portfolioId: string) => void;
 };
 
 type CardPanel = 'performance' | 'manage' | null;
@@ -37,15 +37,16 @@ function PortfolioCard({
   portfolio,
   currency,
   defaultOpen,
+  onOpenDetail,
 }: {
   brandId: string;
   adAccountId: string;
   portfolio: PortfolioListItem;
   currency?: string | null;
   defaultOpen: boolean;
+  onOpenDetail: (portfolioId: string) => void;
 }) {
   const [panel, setPanel] = useState<CardPanel>(defaultOpen ? 'performance' : null);
-  const openDetail = useOptimizerStore((state) => state.setDetailPortfolioId);
   const toggle = (next: Exclude<CardPanel, null>) =>
     setPanel((current) => (current === next ? null : next));
 
@@ -61,9 +62,10 @@ function PortfolioCard({
             <Badge variant="teal" className="text-3xs">
               {humanize(portfolio.mode)}
             </Badge>
-            <Badge variant="outline" className="text-3xs">
-              {humanize(portfolio.apply_mode)}
-            </Badge>
+            <ApplyModePill
+              applyMode={portfolio.apply_mode}
+              autopilotPaused={portfolio.autopilot_paused}
+            />
             {portfolio.pending_recommendations > 0 ? (
               <Badge variant="secondary" className="text-3xs">
                 {portfolio.pending_recommendations} pending
@@ -80,7 +82,7 @@ function PortfolioCard({
           <Button
             aria-label={`Open ${portfolio.name} detail`}
             className="h-7 gap-1.5 px-2 text-xs"
-            onClick={() => openDetail(portfolio.id)}
+            onClick={() => onOpenDetail(portfolio.id)}
             size="sm"
             type="button"
             variant="ghost"
@@ -136,6 +138,7 @@ function PortfolioCard({
               adAccountId={adAccountId}
               currency={currency}
               applyMode={portfolio.apply_mode}
+              objective={portfolio.objective}
             />
           ) : (
             <PortfolioManagePanel
@@ -218,9 +221,9 @@ export function OptimizerPortfolios({
   brandId,
   adAccountId,
   portfolios,
-  selectedPortfolioId,
   currency,
   onCreated,
+  onOpenDetail,
 }: OptimizerPortfoliosProps) {
   const [creating, setCreating] = useState(false);
 
@@ -264,7 +267,8 @@ export function OptimizerPortfolios({
             adAccountId={adAccountId}
             portfolio={portfolio}
             currency={currency}
-            defaultOpen={portfolio.id === selectedPortfolioId}
+            defaultOpen={false}
+            onOpenDetail={onOpenDetail}
           />
         ))}
       </div>

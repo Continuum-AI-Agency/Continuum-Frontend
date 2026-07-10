@@ -7,12 +7,11 @@
 // "Performance" disclosure. Panels ride the shared OptimizerPanel (calm-dense
 // SectionHeader + rounded-lg); offline notices use the warning token.
 
-import type { CycleItemRow } from '@continuum/contracts';
+import { type CycleItemRow, getOptimizationMetricDefinition } from '@continuum/contracts';
 import { RefreshCwIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePollWhile } from '@/lib/paid-media/optimizerStore';
 import { cn } from '@/lib/utils';
 import { AngleMatrix } from '../charts/AngleMatrix';
 import { ConfidenceGauge } from '../charts/ConfidenceGauge';
@@ -23,6 +22,7 @@ import { applyModeExplainer, confidenceBand, parseReport } from '../reportModel'
 import {
   useOptimizerAngleMatrix,
   useOptimizerCpaSeries,
+  useOptimizerFirstRunPoll,
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
@@ -38,6 +38,7 @@ type PortfolioPerformancePanelProps = {
   // The portfolio's autonomy tier, so the reallocation panel can state whether these
   // moves are proposals (recommend) or auto-applied (autopilot).
   applyMode?: string | null;
+  objective?: string | null;
 };
 
 function ciCpa(item: CycleItemRow): number | null {
@@ -50,6 +51,7 @@ export function PortfolioPerformancePanel({
   adAccountId,
   currency,
   applyMode,
+  objective,
 }: PortfolioPerformancePanelProps) {
   const performanceQuery = useOptimizerPerformance(portfolioId);
   const cpaSeriesQuery = useOptimizerCpaSeries(portfolioId);
@@ -64,11 +66,16 @@ export function PortfolioPerformancePanel({
   const latestRun = report?.latest_run ?? null;
   // Await the first cycle of a freshly-enrolled portfolio (scheduler + the create
   // path's kicked run land it) — poll until it appears instead of sitting empty.
-  usePollWhile(!latestRun, performanceQuery.refetch);
+  useOptimizerFirstRunPoll(!latestRun, performanceQuery.refetch);
   const confidence = confidenceBand(latestRun?.confidence?.band);
   const confidenceScore = latestRun?.confidence?.score;
+  const metric = getOptimizationMetricDefinition(objective);
 
-  const maxCiCpa = items.reduce((max, item) => Math.max(max, ciCpa(item) ?? 0), 0) || 1;
+  const maxCiCpa =
+    items.reduce(
+      (max, item) => Math.max(max, (ciCpa(item) ?? 0) * metric.denominatorMultiplier),
+      0,
+    ) || 1;
   const runUnreachable = run.isError || (run.isSuccess && run.data == null && !run.isPending);
 
   if (performanceQuery.isLoading) {
@@ -136,8 +143,8 @@ export function PortfolioPerformancePanel({
         </div>
       </OptimizerPanel>
 
-      <OptimizerPanel title="CPA trend">
-        <CpaTrendChart series={cpaSeriesQuery.data} currency={currency} />
+      <OptimizerPanel title={`${metric.costLabel} trend`}>
+        <CpaTrendChart currency={currency} objective={objective} series={cpaSeriesQuery.data} />
       </OptimizerPanel>
 
       <OptimizerPanel title="Reallocation" bodyClassName="space-y-4">
@@ -147,7 +154,7 @@ export function PortfolioPerformancePanel({
       </OptimizerPanel>
 
       <OptimizerPanel
-        title="CPA per ad set"
+        title={`${metric.costLabel} per ad set`}
         meta={
           <span className="text-3xs text-muted-foreground">95% CI · narrower = more events</span>
         }
@@ -162,6 +169,7 @@ export function PortfolioPerformancePanel({
               item={item}
               maxCpa={maxCiCpa}
               currency={currency}
+              denominatorMultiplier={metric.denominatorMultiplier}
             />
           ))
         )}
@@ -169,9 +177,13 @@ export function PortfolioPerformancePanel({
 
       <OptimizerPanel
         title="Audience × angle"
-        meta={<span className="text-3xs text-muted-foreground">CPA per audience &amp; angle</span>}
+        meta={
+          <span className="text-3xs text-muted-foreground">
+            {metric.costLabel} per audience &amp; angle
+          </span>
+        }
       >
-        <AngleMatrix cells={angleMatrixQuery.data} currency={currency} />
+        <AngleMatrix cells={angleMatrixQuery.data} currency={currency} objective={objective} />
       </OptimizerPanel>
 
       {recommendations.length > 0 ? (

@@ -21,6 +21,7 @@ import {
   AdSetSnapshotSchema,
   AngleMatrixCellSchema,
   CpaSeriesPointSchema,
+  getOptimizationMetricDefinition,
   ParsedCycleRunReportSchema,
   RunConfidenceSchema,
 } from '@continuum/contracts';
@@ -298,6 +299,12 @@ const heroPoints = buildCpaHeroPoints(cpaSeries, actionsByTs);
 assert(
   heroPoints.length === 4 && heroPoints.at(-1)?.cpa === 25,
   'hero points derive CPA = spend/conv',
+);
+const awarenessMetric = getOptimizationMetricDefinition('awareness');
+const cpmHeroPoints = buildCpaHeroPoints(cpaSeries, {}, awarenessMetric.denominatorMultiplier);
+assert(
+  awarenessMetric.costLabel === 'CPM' && cpmHeroPoints.at(-1)?.cpa === 25_000,
+  'objective metric maps awareness to CPM without changing the conv_d* wire shape',
 );
 assert(
   (heroPoints.at(-1)?.actions.length ?? 0) >= 2,
