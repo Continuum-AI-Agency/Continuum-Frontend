@@ -145,7 +145,10 @@ export function OrganicCreativesTable({
       {
         id: 'creative',
         header: 'Creative',
-        cellClassName: 'min-w-40',
+        // max-w-0 + w-full is the table-layout trick that lets this column take
+        // remaining width without expanding the table past the panel (which
+        // would enable overflow-x-auto). Content truncates instead of scrolling.
+        cellClassName: 'min-w-0 max-w-0 w-full overflow-hidden',
         // The lazily-fetched fresh detail (when it lands) beats the bulk row's
         // baked-in thumbnail/name, which can already be stale by render time
         // (see useOrganicPostDetail). Both feed the same PostQuickLook hovercard
@@ -165,7 +168,7 @@ export function OrganicCreativesTable({
               }}
             >
               <HoverCardTrigger asChild>
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden">
                   {thumbnailUrl ? (
                     <LeaderboardThumbnail
                       src={thumbnailUrl}
@@ -173,8 +176,10 @@ export function OrganicCreativesTable({
                       fallbackSeed={row.name}
                     />
                   ) : null}
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <p className="truncate text-sm text-foreground">{row.name}</p>
+                  <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
+                    <p className="min-w-0 flex-1 truncate text-sm text-foreground" title={row.name}>
+                      {row.name}
+                    </p>
                     {row.mediaType ? (
                       <span className="shrink-0 text-2xs uppercase tracking-wide text-muted-foreground">
                         {row.mediaType}

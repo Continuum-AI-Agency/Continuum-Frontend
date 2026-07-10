@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { normalizeInstagramOrganicMetricsResponse } from "@/lib/organic-metrics/normalize";
 import {
   organicAnalyticsScopeSchema,
   organicDateRangePresetSchema,
+  organicMetricsResponseSchema,
 } from "@/lib/schemas/organicMetrics";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -70,8 +70,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const normalized = normalizeInstagramOrganicMetricsResponse(data);
-    return NextResponse.json(normalized);
+    // YouTube edge payloads are already in the shared organic response shape
+    // (platform: "youtube", all-optional metrics bag). Do not run them through
+    // the Instagram normalizer — that path is Instagram-shaped and surfaces
+    // misleading Zod issues (expected platform "instagram", IG metric fields).
+    //
+    // Stamp the *request* preset onto the response: the shared cache is keyed
+    // by date window, not preset string, so a poisoned row written under an
+    // alias like `last_30_days` can be served for a later `last_7d` request
+    // that happens to share the same since/until.
+    const stamped =
+      data && typeof data === "object"
+        ? {
+            ...(data as Record<string, unknown>),
+            range: {
+              ...((data as { range?: Record<string, unknown> }).range ?? {}),
+              preset: parsed.data.range.preset,
+            },
+          }
+        : data;
+    return NextResponse.json(organicMetricsResponseSchema.parse(stamped));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load YouTube organic analytics";
     return NextResponse.json({ error: message }, { status: 500 });
