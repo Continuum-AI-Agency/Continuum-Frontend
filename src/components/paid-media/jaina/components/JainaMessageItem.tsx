@@ -6,6 +6,7 @@ import * as React from 'react';
 import { Checkpoint, CheckpointIcon } from '@/components/ai-elements/checkpoint';
 import { MentionifiedText } from '@/components/ai-elements/mentionified-text';
 import { Message } from '@/components/ai-elements/message';
+import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
@@ -200,6 +201,11 @@ export function JainaMessageItem({
         {message.role === 'user' ? (
           <span className="text-sm font-medium whitespace-pre-wrap">
             <MentionifiedText text={message.content} references={message.metadata?.references} />
+            <AutomatePromptAction
+              agent="jaina"
+              prompt={message.content}
+              className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
+            />
           </span>
         ) : (
           <>

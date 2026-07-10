@@ -42,6 +42,7 @@ import {
   QueueSectionLabel,
   QueueSectionTrigger,
 } from '@/components/ai-elements/queue';
+import { AutomationSheets } from '@/components/automations/AutomationSheets';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useJainaChatStream } from '@/hooks/useJainaChatStream';
@@ -2793,10 +2794,12 @@ export function JainaChatSurface({
             isStreaming || isConversationSwitching || Boolean(deletingSessionId)
           }
           deletingSessionId={deletingSessionId}
+          brandId={brandProfileId}
           onCreateConversation={handleClearConversation}
           onSelectConversation={handleSelectConversation}
           onDeleteConversation={handleDeleteConversation}
         />
+        <AutomationSheets agent="jaina" brandId={brandProfileId ?? null} />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-hidden">
