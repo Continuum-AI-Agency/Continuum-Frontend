@@ -14,7 +14,16 @@ export type {
   OrganicPostBreakdownPoint,
 } from "@continuum/contracts";
 
-export const organicDateRangePresetSchema = z.enum([
+// Meta demographic timeframes and other long-form aliases occasionally leak into
+// organic analytics responses (and older cache rows). Coerce them onto the
+// dashboard's canonical presets before the enum check.
+const ORGANIC_DATE_RANGE_PRESET_ALIASES: Record<string, string> = {
+  last_7_days: "last_7d",
+  last_14_days: "last_14d",
+  last_30_days: "last_30d",
+};
+
+const organicDateRangePresetEnum = z.enum([
   "today",
   "yesterday",
   "previous_day",
@@ -25,7 +34,12 @@ export const organicDateRangePresetSchema = z.enum([
   "custom",
 ]);
 
-export type OrganicDateRangePreset = z.infer<typeof organicDateRangePresetSchema>;
+export const organicDateRangePresetSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  return ORGANIC_DATE_RANGE_PRESET_ALIASES[value] ?? value;
+}, organicDateRangePresetEnum);
+
+export type OrganicDateRangePreset = z.infer<typeof organicDateRangePresetEnum>;
 
 export const organicRangeSchema = z.object({
   preset: organicDateRangePresetSchema,

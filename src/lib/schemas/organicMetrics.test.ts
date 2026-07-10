@@ -62,4 +62,54 @@ describe("organic metrics platform schemas", () => {
 
     assert.equal(parsed.data.platform, "linkedin");
   });
+
+  test("union schema accepts youtube organic analytics edge payloads", () => {
+    const parsed = organicMetricsResponseSchema.safeParse({
+      ...basePayload(),
+      platform: "youtube",
+      metrics: {
+        subscribers: 0,
+        views: 1,
+        videoCount: 0,
+        likes: 0,
+        comments: 0,
+        newFollowers: 0,
+        totalInteractions: 0,
+        hookRate: 99.43,
+      },
+      comparison: {
+        views: { current: 1, previous: 0, percentageChange: 0 },
+        likes: { current: 0, previous: 0, percentageChange: 0 },
+      },
+      posts: [
+        {
+          id: "vid-1",
+          title: "Sample short",
+          mediaProductType: "SHORTS",
+          metrics: { views: 1, likes: 0, comments: 0, hookRate: 99.43 },
+        },
+      ],
+    });
+
+    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    if (!parsed.success) return;
+    assert.equal(parsed.data.platform, "youtube");
+  });
+
+  test("coerces Meta-style last_30_days preset aliases on response range", () => {
+    const parsed = organicMetricsResponseSchema.safeParse({
+      ...basePayload(),
+      platform: "youtube",
+      range: {
+        preset: "last_30_days",
+        since: "2026-06-09",
+        until: "2026-07-08",
+      },
+      metrics: { views: 1, subscribers: 0 },
+    });
+
+    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    if (!parsed.success) return;
+    assert.equal(parsed.data.range.preset, "last_30d");
+  });
 });
