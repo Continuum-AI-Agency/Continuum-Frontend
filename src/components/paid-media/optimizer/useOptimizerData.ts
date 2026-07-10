@@ -1,16 +1,10 @@
 'use client';
 
-// Data layer for the Paid Media Optimizer surface. Reads flow through the
-// authenticated optimizer RPCs / edge functions and are cached in the Zustand
-// optimizer store with a 30-minute TTL (see optimizerStore.ts) — switching
-// sub-tabs or re-mounting the tab serves the cached graph data instead of
-// re-hitting the network. Every read is wrapped so an unreachable/404 backend
-// (some edge functions deploy later) resolves to an empty read model rather than
-// throwing — the OptimizerTab then renders its onboarding/empty state.
-//
-// Writes go through React Query mutations (enroll, run, create, set-status); on
-// success they mark the affected cache keys stale so the next read refreshes.
-// All shapes come from @continuum/contracts (root entry) — no parallel unions.
+// Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
+// Edge read is owned by React Query: the cache has deliberate freshness windows,
+// errors remain visible, and mutations invalidate the same query keys. There is
+// no second client cache, so account/brand changes cannot show stale optimizer
+// data from a previous workspace.
 
 import {
   type AdAccount,
@@ -54,9 +48,9 @@ import {
   SuggestResultSchema,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef } from 'react';
 import { z } from 'zod';
-import { useCachedRead, useOptimizerStore } from '@/lib/paid-media/optimizerStore';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { recommendationInsightKey } from './insightKey';
 
@@ -101,35 +95,37 @@ function pgErrorCode(error: unknown): string | null {
   return null;
 }
 
-// ── Cache keys (shared by the store reads and the mutation invalidations) ─────
+// ── Query keys ──────────────────────────────────────────────────────────────
 
-export const cacheKeys = {
+export const optimizerQueryKeys = {
+  root: ['optimizer'] as const,
+  portfoliosRoot: ['optimizer', 'portfolios'] as const,
   portfolios: (brandId: string, adAccountId: string | null) =>
-    `portfolios:${brandId}:${adAccountId ?? 'all'}`,
-  adAccounts: (brandId: string) => `adAccounts:${brandId}`,
-  performance: (portfolioId: string) => `performance:${portfolioId}`,
-  cpaSeries: (portfolioId: string) => `cpaSeries:${portfolioId}`,
-  angleMatrix: (portfolioId: string) => `angleMatrix:${portfolioId}`,
-  renewals: (brandId: string) => `renewals:${brandId}`,
-  logs: (brandId: string) => `logs:${brandId}`,
+    ['optimizer', 'portfolios', brandId, adAccountId ?? 'all'] as const,
+  adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
+  performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
+  cpaSeries: (portfolioId: string) => ['optimizer', 'efficiency-series', portfolioId] as const,
+  angleMatrix: (portfolioId: string) => ['optimizer', 'angle-matrix', portfolioId] as const,
+  renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
+  logs: (brandId: string) => ['optimizer', 'logs', brandId] as const,
   suggestions: (brandId: string, adAccountId: string | null, level: PortfolioLevel = 'adset') =>
-    `suggestions:${brandId}:${adAccountId ?? 'all'}:${level}`,
+    ['optimizer', 'suggestions', brandId, adAccountId ?? 'all', level] as const,
   accountSnapshots: (
     brandId: string,
     adAccountId: string | null,
     level: PortfolioLevel = 'adset',
-  ) => `snapshots:${brandId}:${adAccountId ?? 'all'}:${level}`,
-  enrolledAdsets: (portfolioId: string) => `enrolledAdsets:${portfolioId}`,
+  ) => ['optimizer', 'snapshots', brandId, adAccountId ?? 'all', level] as const,
+  enrolledAdsets: (portfolioId: string) => ['optimizer', 'enrolled-adsets', portfolioId] as const,
   archivedPortfolios: (brandId: string, adAccountId: string | null) =>
-    `archived:${brandId}:${adAccountId ?? 'all'}`,
-  adsetAds: (adsetId: string) => `adsetAds:${adsetId}`,
-  adDailyTrends: (adsetId: string) => `adDailyTrends:${adsetId}`,
-  insight: (insightKey: string) => `insight:${insightKey}`,
+    ['optimizer', 'archived', brandId, adAccountId ?? 'all'] as const,
+  adsetAds: (adsetId: string) => ['optimizer', 'adset-ads', adsetId] as const,
+  adDailyTrends: (adsetId: string) => ['optimizer', 'ad-daily-trends', adsetId] as const,
+  insight: (insightKey: string) => ['optimizer', 'insight', insightKey] as const,
 };
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 // These THROW when the backend is unreachable/errors (network failure, an
-// unwired edge on a local stack, a hung request) so useCachedRead can record an
+// unwired edge on a local stack, a hung request) so React Query can record an
 // error state and the surface can show an "optimizer offline" signal instead of
 // an infinite skeleton. A successful-but-EMPTY read still resolves to the empty
 // model (that's a legitimate "no data yet" state, not an outage), and malformed
@@ -386,9 +382,9 @@ async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboRespons
 }
 
 /** Apply (or preview) a scored run's proposed ad-set budgets on Meta via the
- *  optimizer-apply-run edge. `dryRun` (default true) returns the would-write set with ZERO
- *  writes — the FE previews them; the real apply (`dryRun:false`) stays gated in the UI
- *  until the sandbox-apply bench passes. Returns null when the response is malformed. */
+ *  optimizer-apply-run edge. `dryRun:true` (default) returns the would-write set with
+ *  ZERO writes; `dryRun:false` performs the real Meta write (recommend-mode human apply).
+ *  Observe portfolios hard-refuse on the service (`reason: observe_mode`). */
 async function applyRunBudgets(request: ApplyRunRequest): Promise<ApplyRunResponse | null> {
   const { data, error } = await getClient().functions.invoke('optimizer-apply-run', {
     body: {
@@ -397,9 +393,26 @@ async function applyRunBudgets(request: ApplyRunRequest): Promise<ApplyRunRespon
       ...(request.accountId ? { accountId: request.accountId } : {}),
       ...(request.run_id ? { run_id: request.run_id } : {}),
       dryRun: request.dryRun ?? true,
+      ...(request.authorized_by ? { authorized_by: request.authorized_by } : {}),
     },
   });
   if (error) throw new Error('optimizer-apply-run unreachable');
+  const parsed = ApplyRunResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Execute cycle items marked approved_pending (held → human approved) via
+ *  optimizer-apply-approved → service /apply/approved. Same response envelope as apply-run. */
+async function applyApprovedBudgets(request: ApplyRunRequest): Promise<ApplyRunResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-approved', {
+    body: {
+      portfolio_id: request.portfolio_id,
+      ...(request.brandId ? { brandId: request.brandId } : {}),
+      ...(request.accountId ? { accountId: request.accountId } : {}),
+      dryRun: request.dryRun ?? true,
+    },
+  });
+  if (error) throw new Error('optimizer-apply-approved unreachable');
   const parsed = ApplyRunResponseSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
 }
@@ -498,7 +511,7 @@ async function restorePortfolio(input: { portfolio_id: string; name: string }): 
   }
 }
 
-// ── Read hooks (cache-first, 30-minute TTL) ──────────────────────────────────
+// ── Read hooks (React Query) ─────────────────────────────────────────────────
 
 const EMPTY_PORTFOLIOS: PortfolioListItem[] = [];
 const EMPTY_ACCOUNTS: AdAccount[] = [];
@@ -511,20 +524,85 @@ const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ADS: AdsetAd[] = [];
 const EMPTY_AD_TRENDS: AdDailyTrend[] = [];
 
+const FIVE_MINUTES = 5 * 60 * 1_000;
+const TEN_MINUTES = 10 * 60 * 1_000;
+const THIRTY_MINUTES = 30 * 60 * 1_000;
+const READ_TIMEOUT_MS = 8_000;
+
+/** Supabase can hold a socket open without resolving when a locally-unwired Edge
+ * function is selected. Bound the read so a panel reaches its retry state instead
+ * of presenting an infinite skeleton. */
+function withReadTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(
+      () => reject(new Error('optimizer_read_timeout')),
+      READ_TIMEOUT_MS,
+    );
+    promise.then(
+      (value) => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+type OptimizerReadOptions<T> = {
+  queryKey: readonly unknown[];
+  queryFn: () => Promise<T>;
+  empty: T;
+  enabled: boolean;
+  staleTime: number;
+  gcTime?: number;
+  refetchInterval?: number | false;
+};
+
+/** A small query adapter keeps the existing surface ergonomics (`data` is always
+ * a renderable model) while React Query owns request lifecycle, retries and cache. */
+function useOptimizerRead<T>({
+  queryKey,
+  queryFn,
+  empty,
+  enabled,
+  staleTime,
+  gcTime = THIRTY_MINUTES,
+  refetchInterval = false,
+}: OptimizerReadOptions<T>) {
+  const query = useQuery({
+    queryKey,
+    queryFn: () => withReadTimeout(queryFn()),
+    enabled,
+    staleTime,
+    gcTime,
+    refetchInterval,
+    retry: 1,
+  });
+
+  return { ...query, data: query.data ?? empty };
+}
+
 export function useOptimizerPortfolios(brandId: string, adAccountId: string | null) {
-  return useCachedRead<PortfolioListItem[]>(
-    brandId ? cacheKeys.portfolios(brandId, adAccountId) : null,
-    () => fetchPortfolios(brandId, adAccountId),
-    EMPTY_PORTFOLIOS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
+    queryFn: () => fetchPortfolios(brandId, adAccountId),
+    empty: EMPTY_PORTFOLIOS,
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 export function useOptimizerAdAccounts(brandId: string) {
-  return useCachedRead<AdAccount[]>(
-    brandId ? cacheKeys.adAccounts(brandId) : null,
-    () => fetchAdAccounts(brandId),
-    EMPTY_ACCOUNTS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.adAccounts(brandId),
+    queryFn: () => fetchAdAccounts(brandId),
+    empty: EMPTY_ACCOUNTS,
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 /** Resolve the display currency for a specific ad account (falls back to USD in
@@ -536,43 +614,54 @@ export function useAdAccountCurrency(brandId: string, adAccountId: string | null
 }
 
 export function useOptimizerPerformance(portfolioId: string | null) {
-  return useCachedRead<CycleRunReport | null>(
-    portfolioId ? cacheKeys.performance(portfolioId) : null,
-    () => fetchPerformance(portfolioId as string),
-    null,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.performance(portfolioId ?? 'none'),
+    queryFn: () => fetchPerformance(portfolioId as string),
+    empty: null,
+    enabled: Boolean(portfolioId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 export function useOptimizerCpaSeries(portfolioId: string | null) {
-  return useCachedRead<CpaSeriesPoint[]>(
-    portfolioId ? cacheKeys.cpaSeries(portfolioId) : null,
-    () => fetchCpaSeries(portfolioId as string),
-    EMPTY_CPA,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.cpaSeries(portfolioId ?? 'none'),
+    queryFn: () => fetchCpaSeries(portfolioId as string),
+    empty: EMPTY_CPA,
+    enabled: Boolean(portfolioId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 export function useOptimizerAngleMatrix(portfolioId: string | null) {
-  return useCachedRead<AngleMatrixCell[]>(
-    portfolioId ? cacheKeys.angleMatrix(portfolioId) : null,
-    () => fetchAngleMatrix(portfolioId as string),
-    EMPTY_ANGLES,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.angleMatrix(portfolioId ?? 'none'),
+    queryFn: () => fetchAngleMatrix(portfolioId as string),
+    empty: EMPTY_ANGLES,
+    enabled: Boolean(portfolioId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 export function useOptimizerRenewals(brandId: string) {
-  return useCachedRead<RenewalTask[]>(
-    brandId ? cacheKeys.renewals(brandId) : null,
-    () => fetchRenewals(brandId),
-    EMPTY_RENEWALS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.renewals(brandId),
+    queryFn: () => fetchRenewals(brandId),
+    empty: EMPTY_RENEWALS,
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 export function useOptimizerLogs(brandId: string) {
-  return useCachedRead<OptimizerLogRow[]>(
-    brandId ? cacheKeys.logs(brandId) : null,
-    () => fetchLogs(brandId),
-    EMPTY_LOGS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.logs(brandId),
+    queryFn: () => fetchLogs(brandId),
+    empty: EMPTY_LOGS,
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
 }
 
 export function useOptimizerSuggestions(
@@ -580,11 +669,13 @@ export function useOptimizerSuggestions(
   adAccountId: string | null,
   level: PortfolioLevel = 'adset',
 ) {
-  return useCachedRead<SuggestResult | null>(
-    brandId && adAccountId ? cacheKeys.suggestions(brandId, adAccountId, level) : null,
-    () => fetchSuggestions(brandId, adAccountId as string, level),
-    null,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.suggestions(brandId, adAccountId, level),
+    queryFn: () => fetchSuggestions(brandId, adAccountId as string, level),
+    empty: null,
+    enabled: Boolean(brandId && adAccountId),
+    staleTime: TEN_MINUTES,
+  });
 }
 
 /** The account's snapshots (engine input) — powers the client-side "what-if"
@@ -596,30 +687,36 @@ export function useOptimizerAccountSnapshots(
   level: PortfolioLevel = 'adset',
 ) {
   const scope = level === 'campaign' ? 'campaign_snapshots' : 'adset_snapshots';
-  return useCachedRead<AdSetSnapshot[]>(
-    brandId && adAccountId ? cacheKeys.accountSnapshots(brandId, adAccountId, level) : null,
-    () => fetchAccountSnapshots(brandId, adAccountId as string, scope),
-    EMPTY_SNAPSHOTS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
+    queryFn: () => fetchAccountSnapshots(brandId, adAccountId as string, scope),
+    empty: EMPTY_SNAPSHOTS,
+    enabled: Boolean(brandId && adAccountId),
+    staleTime: TEN_MINUTES,
+  });
 }
 
 /** The ad sets enrolled in a portfolio — powers the manage panel's pre-selection
  *  and add/remove diff. */
 export function useOptimizerEnrolledAdsets(portfolioId: string | null) {
-  return useCachedRead<PortfolioAdset[]>(
-    portfolioId ? cacheKeys.enrolledAdsets(portfolioId) : null,
-    () => fetchEnrolledAdsets(portfolioId as string),
-    EMPTY_ENROLLED,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId ?? 'none'),
+    queryFn: () => fetchEnrolledAdsets(portfolioId as string),
+    empty: EMPTY_ENROLLED,
+    enabled: Boolean(portfolioId),
+    staleTime: TEN_MINUTES,
+  });
 }
 
 /** Archived portfolios for the "Archived" view. */
 export function useOptimizerArchivedPortfolios(brandId: string, adAccountId: string | null) {
-  return useCachedRead<PortfolioListItem[]>(
-    brandId ? cacheKeys.archivedPortfolios(brandId, adAccountId) : null,
-    () => fetchArchivedPortfolios(brandId, adAccountId),
-    EMPTY_PORTFOLIOS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.archivedPortfolios(brandId, adAccountId),
+    queryFn: () => fetchArchivedPortfolios(brandId, adAccountId),
+    empty: EMPTY_PORTFOLIOS,
+    enabled: Boolean(brandId),
+    staleTime: FIVE_MINUTES,
+  });
 }
 
 /** The ads inside one ad set — lazy: pass adsetId=null to keep the read disabled
@@ -629,11 +726,13 @@ export function useOptimizerAdsetAds(
   accountId: string | null,
   adsetId: string | null,
 ) {
-  return useCachedRead<AdsetAd[]>(
-    brandId && accountId && adsetId ? cacheKeys.adsetAds(adsetId) : null,
-    () => fetchAdsetAds(brandId, accountId as string, adsetId as string),
-    EMPTY_ADS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.adsetAds(adsetId ?? 'none'),
+    queryFn: () => fetchAdsetAds(brandId, accountId as string, adsetId as string),
+    empty: EMPTY_ADS,
+    enabled: Boolean(brandId && accountId && adsetId),
+    staleTime: TEN_MINUTES,
+  });
 }
 
 /** Per-ad daily trends for one ad set — lazy: pass adsetId=null to keep the read
@@ -644,11 +743,13 @@ export function useOptimizerAdDailyTrends(
   accountId: string | null,
   adsetId: string | null,
 ) {
-  return useCachedRead<AdDailyTrend[]>(
-    brandId && accountId && adsetId ? cacheKeys.adDailyTrends(adsetId) : null,
-    () => fetchAdDailyTrends(brandId, accountId as string, adsetId as string),
-    EMPTY_AD_TRENDS,
-  );
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.adDailyTrends(adsetId ?? 'none'),
+    queryFn: () => fetchAdDailyTrends(brandId, accountId as string, adsetId as string),
+    empty: EMPTY_AD_TRENDS,
+    enabled: Boolean(brandId && accountId && adsetId),
+    staleTime: TEN_MINUTES,
+  });
 }
 
 /** Generate/fetch a plain-language insight for one recommendation via the
@@ -683,9 +784,9 @@ export function useOptimizerInsight(
   enabled: boolean,
 ) {
   const insightKey = recommendationInsightKey(input);
-  return useCachedRead<OptimizerInsightResponse | null>(
-    enabled && input.brandId && input.reason ? cacheKeys.insight(insightKey) : null,
-    () =>
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.insight(insightKey),
+    queryFn: () =>
       fetchOptimizerInsight({
         brandId: input.brandId,
         insightKey,
@@ -695,108 +796,112 @@ export function useOptimizerInsight(
         trigger: input.trigger,
         severity: input.severity ?? null,
       }),
-    null,
-  );
+    empty: null,
+    enabled: Boolean(enabled && input.brandId && input.reason),
+    staleTime: THIRTY_MINUTES,
+  });
 }
 
-// ── Mutations (React Query for lifecycle; invalidate the store on success) ────
+/** Poll a freshly-enrolled portfolio every five seconds for at most two minutes.
+ * The scheduler remains the source of truth; polling only removes the manual
+ * refresh tax while its first real cycle lands. */
+export function useOptimizerFirstRunPoll(active: boolean, refetch: () => unknown): void {
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+
+  useEffect(() => {
+    if (!active) return;
+    const interval = window.setInterval(() => {
+      void refetchRef.current();
+    }, 5_000);
+    const stop = window.setTimeout(() => window.clearInterval(interval), 120_000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(stop);
+    };
+  }, [active]);
+}
+
+/** Warm the lightweight overview reads before the Optimization tab mounts. */
+export function usePrefetchOptimizerOverview(brandId: string, adAccountId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useCallback(() => {
+    if (!brandId) return;
+    void queryClient.prefetchQuery({
+      queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
+      queryFn: () => withReadTimeout(fetchPortfolios(brandId, adAccountId)),
+      staleTime: FIVE_MINUTES,
+    });
+    void queryClient.prefetchQuery({
+      queryKey: optimizerQueryKeys.renewals(brandId),
+      queryFn: () => withReadTimeout(fetchRenewals(brandId)),
+      staleTime: FIVE_MINUTES,
+    });
+  }, [adAccountId, brandId, queryClient]);
+}
+
+// ── Mutations ───────────────────────────────────────────────────────────────
 
 export function useOptimizerMutations(brandId: string, adAccountId: string | null) {
-  const markStale = useOptimizerStore((state) => state.markStale);
-
-  const invalidatePortfolios = () =>
-    markStale((key) => key.startsWith('portfolios:') || key.startsWith(`suggestions:${brandId}`));
+  const queryClient = useQueryClient();
+  const invalidateOptimizer = () =>
+    queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
 
   const create = useMutation({
     mutationFn: createPortfolio,
-    onSuccess: invalidatePortfolios,
+    onSuccess: invalidateOptimizer,
   });
 
   const enroll = useMutation({
     mutationFn: enrollAdsets,
-    onSuccess: (_data, request) =>
-      markStale(
-        (key) =>
-          key.startsWith('portfolios:') ||
-          key === cacheKeys.performance(request.portfolio_id) ||
-          key === cacheKeys.enrolledAdsets(request.portfolio_id),
-      ),
+    onSuccess: invalidateOptimizer,
   });
 
   const update = useMutation({
     mutationFn: updatePortfolio,
-    onSuccess: (_data, input) =>
-      markStale(
-        (key) =>
-          key.startsWith('portfolios:') ||
-          key.startsWith('archived:') ||
-          key === cacheKeys.performance(input.portfolio_id),
-      ),
+    onSuccess: invalidateOptimizer,
   });
 
   const unenroll = useMutation({
     mutationFn: unenrollAdset,
-    onSuccess: (_data, input) =>
-      markStale(
-        (key) =>
-          key.startsWith('portfolios:') ||
-          key === cacheKeys.performance(input.portfolio_id) ||
-          key === cacheKeys.enrolledAdsets(input.portfolio_id),
-      ),
+    onSuccess: invalidateOptimizer,
   });
 
   const archive = useMutation({
     mutationFn: archivePortfolio,
-    onSuccess: () =>
-      markStale((key) => key.startsWith('portfolios:') || key.startsWith('archived:')),
+    onSuccess: invalidateOptimizer,
   });
 
   const restore = useMutation({
     mutationFn: restorePortfolio,
-    onSuccess: () =>
-      markStale((key) => key.startsWith('portfolios:') || key.startsWith('archived:')),
+    onSuccess: invalidateOptimizer,
   });
 
   const run = useMutation({
     mutationFn: (portfolioId: string) => runCycle(portfolioId, brandId, adAccountId),
-    onSuccess: (_data, portfolioId) =>
-      markStale(
-        (key) =>
-          key.startsWith('portfolios:') ||
-          key === cacheKeys.performance(portfolioId) ||
-          key === cacheKeys.cpaSeries(portfolioId) ||
-          key === cacheKeys.angleMatrix(portfolioId),
-      ),
+    onSuccess: invalidateOptimizer,
   });
 
   const setStatus = useMutation({
     mutationFn: setRecommendationStatus,
-    onSuccess: () =>
-      markStale(
-        (key) =>
-          key.startsWith('performance:') ||
-          key.startsWith('portfolios:') ||
-          key === cacheKeys.renewals(brandId),
-      ),
+    onSuccess: invalidateOptimizer,
   });
 
   const renewal = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: string }) =>
       setRenewalTaskStatus(taskId, status),
-    onSuccess: () => markStale((key) => key === cacheKeys.renewals(brandId)),
+    onSuccess: invalidateOptimizer,
   });
 
   const setPaused = useMutation({
     mutationFn: setAutopilotPaused,
-    onSuccess: (_data, input) =>
-      markStale(
-        (key) => key.startsWith('portfolios:') || key === cacheKeys.performance(input.portfolio_id),
-      ),
+    onSuccess: invalidateOptimizer,
   });
 
   const requestApply = useMutation({
     mutationFn: requestApplyItem,
-    onSuccess: () => markStale((key) => key.startsWith('performance:')),
+    onSuccess: invalidateOptimizer,
   });
 
   return {
@@ -820,32 +925,47 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
  *  (`dryRun:false`, un-gated after the sandbox bench) makes the campaign's ad sets
  *  ABO — so a real success marks the account snapshots + suggestions stale so the
  *  now-optimizable ad sets reappear. A dry-run preview writes nothing and skips it. */
-export function useConvertCbo(brandId: string) {
-  const markStale = useOptimizerStore((state) => state.markStale);
+export function useConvertCbo(_brandId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: convertCbo,
     onSuccess: (data) => {
       if (data?.ok && data.dryRun !== true) {
-        markStale(
-          (key) =>
-            key.startsWith(`snapshots:${brandId}`) || key.startsWith(`suggestions:${brandId}`),
-        );
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
       }
     },
   });
 }
 
-/** Preview or apply a portfolio's proposed reallocation. Instantiated per portfolio so
- *  each keeps its own pending/preview/error state. The FE calls it with `dryRun:true` for
- *  the preview; a real apply (`dryRun:false`, un-gated after the sandbox bench) changed
- *  budgets on Meta, so it marks that portfolio's performance report stale. */
+/** Preview or apply a portfolio's proposed reallocation. Instantiated per dialog so
+ *  each keeps its own pending/preview/error state. dryRun:true = preview; dryRun:false
+ *  writes budgets on Meta and invalidates the performance report. */
 export function useApplyRun() {
-  const markStale = useOptimizerStore((state) => state.markStale);
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: applyRunBudgets,
     onSuccess: (data, request) => {
       if (data?.ok && data.dryRun !== true) {
-        markStale((key) => key === cacheKeys.performance(request.portfolio_id));
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.performance(request.portfolio_id),
+        });
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+      }
+    },
+  });
+}
+
+/** Apply human-approved held budget changes (approved_pending → Meta). */
+export function useApplyApproved() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: applyApprovedBudgets,
+    onSuccess: (data, request) => {
+      if (data?.ok && data.dryRun !== true) {
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.performance(request.portfolio_id),
+        });
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
       }
     },
   });

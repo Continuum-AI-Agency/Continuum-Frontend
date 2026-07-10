@@ -6,8 +6,8 @@
 // (Overview / Portfolios / Actions / Logs) plus an onboarding/empty state when
 // the brand has no portfolios yet (or the optimizer backend is not reachable —
 // its edge functions deploy later, so reads degrade to onboarding rather than
-// erroring). View state + the read datasets live in the optimizer Zustand store
-// (30-min TTL) so re-mounting the tab does not re-fetch every time.
+// erroring). Navigation is URL-backed; authenticated reads use React Query with
+// per-surface freshness windows, so re-mounts are fast without a second cache.
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import {
@@ -17,11 +17,9 @@ import {
   RefreshCwIcon,
   ScrollTextIcon,
 } from 'lucide-react';
-import { useShallow } from 'zustand/react/shallow';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useOptimizerStore } from '@/lib/paid-media/optimizerStore';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { OptimizerActions } from './sections/OptimizerActions';
 import { OptimizerLogs } from './sections/OptimizerLogs';
@@ -35,6 +33,7 @@ import {
   useOptimizerPortfolios,
   useOptimizerRenewals,
 } from './useOptimizerData';
+import { useOptimizerUrlState } from './useOptimizerUrlState';
 
 type OptimizerTabProps = {
   brandId: string;
@@ -63,21 +62,15 @@ function OptimizerSkeleton() {
 export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabProps) {
   const {
     view,
+    portfolioId,
+    adsetId,
+    metric,
+    openPortfolio,
+    closePortfolio,
+    setAdset,
+    setMetric,
     setView,
-    selectedPortfolioId,
-    setSelectedPortfolioId,
-    detailPortfolioId,
-    setDetailPortfolioId,
-  } = useOptimizerStore(
-    useShallow((state) => ({
-      view: state.view,
-      setView: state.setView,
-      selectedPortfolioId: state.selectedPortfolioId,
-      setSelectedPortfolioId: state.setSelectedPortfolioId,
-      detailPortfolioId: state.detailPortfolioId,
-      setDetailPortfolioId: state.setDetailPortfolioId,
-    })),
-  );
+  } = useOptimizerUrlState();
 
   const portfoliosQuery = useOptimizerPortfolios(brandId, adAccountId);
   const renewalsQuery = useOptimizerRenewals(brandId);
@@ -88,8 +81,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
   const renewalCount = renewalsQuery.data.length;
 
   const handleSelectPortfolio = (portfolioId: string) => {
-    setSelectedPortfolioId(portfolioId);
-    setView('portfolios');
+    openPortfolio(portfolioId);
   };
 
   // After a portfolio is created + enrolled, land the user on its detail workspace
@@ -97,8 +89,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
   // and the scheduler backstops it) — the natural end of onboarding, instead of an
   // empty Overview. The refetch pulls the new portfolio into the list so detail resolves.
   const handlePortfolioCreated = (portfolioId: string) => {
-    setDetailPortfolioId(portfolioId);
-    portfoliosQuery.refetch();
+    void portfoliosQuery.refetch().then(() => openPortfolio(portfolioId));
   };
 
   if (portfoliosQuery.isLoading) {
@@ -133,8 +124,8 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
   // A portfolio opened for full-screen detail replaces the tab body with its own
   // command-center workspace (hero timeline + drill-ins). Guarded by find() so a
   // stale id (e.g. after an account switch) falls back to the tabbed view.
-  const detailPortfolio = detailPortfolioId
-    ? portfolios.find((portfolio) => portfolio.id === detailPortfolioId)
+  const detailPortfolio = portfolioId
+    ? portfolios.find((portfolio) => portfolio.id === portfolioId)
     : undefined;
   if (detailPortfolio) {
     return (
@@ -143,8 +134,12 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
           adAccountId={adAccountId}
           brandId={brandId}
           currency={currency}
-          onClose={() => setDetailPortfolioId(null)}
+          chartMetric={metric}
+          onClose={closePortfolio}
+          onMetricChange={setMetric}
+          onSelectAdset={setAdset}
           portfolio={detailPortfolio}
+          selectedAdsetId={adsetId}
         />
       </section>
     );
@@ -213,9 +208,9 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
             brandId={brandId}
             adAccountId={adAccountId}
             portfolios={portfolios}
-            selectedPortfolioId={selectedPortfolioId ?? portfolios[0]?.id ?? null}
             currency={currency}
             onCreated={handlePortfolioCreated}
+            onOpenDetail={openPortfolio}
           />
         </TabsContent>
 

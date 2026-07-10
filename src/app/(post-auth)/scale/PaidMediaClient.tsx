@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
+import { usePrefetchOptimizerOverview } from '@/components/paid-media/optimizer/useOptimizerData';
 import { PaidSetupDiagnostics } from '@/components/paid-media/PaidSetupDiagnostics';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,31 @@ function JainaSkeleton() {
   );
 }
 
+function OptimizerSurfaceSkeleton() {
+  return (
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
+      <div className="flex items-center justify-between border-border/70 border-b px-4 py-3">
+        <Skeleton className="h-5 w-28 rounded-md" />
+        <Skeleton className="h-8 w-72 rounded-md" />
+      </div>
+      <div className="min-h-0 space-y-3 overflow-hidden p-3">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+        </div>
+        <Skeleton className="h-[min(20rem,45vh)] rounded-lg" />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <Skeleton className="h-36 rounded-lg" />
+          <Skeleton className="h-36 rounded-lg" />
+          <Skeleton className="h-36 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const PaidMediaDashboard = dynamic(
   () =>
     import('@/components/paid-media/dashboard/PaidMediaDashboard').then(
@@ -84,7 +110,7 @@ const ReportJobsBell = dynamic(
 // for where it should be re-surfaced) but is no longer wired into this slot.
 const OptimizerTab = dynamic(
   () => import('@/components/paid-media/optimizer/OptimizerTab').then((mod) => mod.OptimizerTab),
-  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> },
+  { ssr: false, loading: () => <OptimizerSurfaceSkeleton /> },
 );
 
 type PaidMediaClientPageProps = {
@@ -112,6 +138,7 @@ export default function PaidMediaClientPage({
   );
   const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
+  const prefetchOptimizerOverview = usePrefetchOptimizerOverview(brandProfileId, selectedAdAccount);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
   const handlePlatformChange = React.useCallback((next: PaidMediaPlatform) => {
@@ -379,9 +406,11 @@ export default function PaidMediaClientPage({
                 className="px-3 text-xs"
                 onMouseEnter={() => {
                   void import('@/components/paid-media/optimizer/OptimizerTab');
+                  prefetchOptimizerOverview();
                 }}
                 onFocus={() => {
                   void import('@/components/paid-media/optimizer/OptimizerTab');
+                  prefetchOptimizerOverview();
                 }}
               >
                 Optimization
