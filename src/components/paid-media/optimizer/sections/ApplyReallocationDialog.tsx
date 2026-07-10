@@ -117,7 +117,12 @@ export function ApplyReallocationDialog({
       }}
     >
       <AlertDialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 gap-1.5 px-2 text-xs">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+        >
           <WandSparklesIcon className="size-3.5" />
           Apply budgets
         </Button>
@@ -144,9 +149,7 @@ export function ApplyReallocationDialog({
                 : 'rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success'
             }
           >
-            {phase === 'error' ? (
-              <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
-            ) : null}
+            {phase === 'error' ? <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" /> : null}
             <span>{resultNote}</span>
           </p>
         ) : (
@@ -162,12 +165,7 @@ export function ApplyReallocationDialog({
         <AlertDialogFooter>
           <AlertDialogCancel>{phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
           {phase !== 'done' ? (
-            <Button
-              type="button"
-              className="gap-1.5"
-              disabled={!canApply || phase === 'applying'}
-              onClick={handleApply}
-            >
+            <Button type="button" className="gap-1.5" disabled={!canApply} onClick={handleApply}>
               {phase === 'applying' ? (
                 <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
               ) : null}

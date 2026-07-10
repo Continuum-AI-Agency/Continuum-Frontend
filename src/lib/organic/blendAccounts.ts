@@ -7,18 +7,18 @@ import type {
   OrganicMetricId,
   OrganicMetricPlatform,
   OrganicMetrics,
-} from "@continuum/contracts";
-import { getOrganicMetric, isMetricAvailableOnPlatform } from "@continuum/contracts";
+} from '@continuum/contracts';
+import { getOrganicMetric, isMetricAvailableOnPlatform } from '@continuum/contracts';
 import {
   metricValueForAccount,
-  trendSeriesForMetric,
   type SnapshotAccountResult,
   type TrendSeriesPoint,
-} from "@/lib/organic/brandOrganicSnapshot";
+  trendSeriesForMetric,
+} from '@/lib/organic/brandOrganicSnapshot';
 
-export type SeriesMode = "decompose" | "blend" | "both";
+export type SeriesMode = 'decompose' | 'blend' | 'both';
 
-export type ChartSeriesKind = "account" | "platform_blend" | "selection_blend";
+export type ChartSeriesKind = 'account' | 'platform_blend' | 'selection_blend';
 
 export type ChartSeriesDef = {
   key: string;
@@ -31,17 +31,20 @@ export type ChartSeriesDef = {
 };
 
 export const SERIES_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "hsl(var(--primary))",
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+  'hsl(var(--primary))',
 ] as const;
 
-export const BLEND_COLOR = "var(--foreground)";
+export const BLEND_COLOR = 'var(--foreground)';
 
-export function accountSeriesKey(platform: OrganicMetricPlatform, integrationAccountId: string): string {
+export function accountSeriesKey(
+  platform: OrganicMetricPlatform,
+  integrationAccountId: string,
+): string {
   return `${platform}:${integrationAccountId}`;
 }
 
@@ -49,16 +52,16 @@ export function platformBlendKey(platform: OrganicMetricPlatform): string {
   return `blend:${platform}`;
 }
 
-export const SELECTION_BLEND_KEY = "blend:selection";
+export const SELECTION_BLEND_KEY = 'blend:selection';
 
 export type BlendMetricResult =
   | {
-      kind: "sum";
+      kind: 'sum';
       total: number;
       comparison: MetricComparison | null;
       trends: TrendSeriesPoint[];
     }
-  | { kind: "unsupported" };
+  | { kind: 'unsupported' };
 
 function percentageChange(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
@@ -98,13 +101,13 @@ export function blendMetric(
   accounts: SnapshotAccountResult[],
   metricId: OrganicMetricId,
 ): BlendMetricResult {
-  if (!isSummable(metricId)) return { kind: "unsupported" };
-  if (accounts.length === 0) return { kind: "unsupported" };
+  if (!isSummable(metricId)) return { kind: 'unsupported' };
+  if (accounts.length === 0) return { kind: 'unsupported' };
 
   const eligible = accounts.filter((account) =>
     isMetricAvailableOnPlatform(metricId, account.platform),
   );
-  if (eligible.length === 0) return { kind: "unsupported" };
+  if (eligible.length === 0) return { kind: 'unsupported' };
 
   let total = 0;
   let hasTotal = false;
@@ -118,23 +121,23 @@ export function blendMetric(
       hasTotal = true;
     }
     const cmp = account.comparison?.[metricId];
-    if (cmp && typeof cmp.previous === "number" && Number.isFinite(cmp.previous)) {
+    if (cmp && typeof cmp.previous === 'number' && Number.isFinite(cmp.previous)) {
       previousSum += cmp.previous;
       hasPrevious = true;
-    } else if (cmp && typeof cmp.current === "number" && Number.isFinite(cmp.current)) {
+    } else if (cmp && typeof cmp.current === 'number' && Number.isFinite(cmp.current)) {
       // Fall back: if only current is known, still accumulate previous when present
       // via current-only rows as 0 previous would skew — skip incomplete rows.
     }
   }
 
-  if (!hasTotal) return { kind: "unsupported" };
+  if (!hasTotal) return { kind: 'unsupported' };
 
   // Prefer summing comparison.current when present (should match headline totals).
   let currentFromCmp = 0;
   let cmpCurrentCount = 0;
   for (const account of eligible) {
     const cmp = account.comparison?.[metricId];
-    if (cmp && typeof cmp.current === "number" && Number.isFinite(cmp.current)) {
+    if (cmp && typeof cmp.current === 'number' && Number.isFinite(cmp.current)) {
       currentFromCmp += cmp.current;
       cmpCurrentCount += 1;
     }
@@ -151,7 +154,7 @@ export function blendMetric(
       : null;
 
   return {
-    kind: "sum",
+    kind: 'sum',
     total: current,
     comparison,
     trends: blendTrendSeries(eligible, metricId),
@@ -175,7 +178,7 @@ export function blendPlatformAccounts(
   accounts: SnapshotAccountResult[],
   metricId: OrganicMetricId,
 ): BlendMetricResult {
-  if (accounts.length === 0) return { kind: "unsupported" };
+  if (accounts.length === 0) return { kind: 'unsupported' };
   const platform = accounts[0]!.platform;
   if (!accounts.every((a) => a.platform === platform)) {
     // Still blend only same-platform subset
@@ -204,7 +207,7 @@ export function blendAccountSnapshot(
 
   for (const metricId of metricIds) {
     const result = blendMetric(same, metricId);
-    if (result.kind !== "sum") continue;
+    if (result.kind !== 'sum') continue;
     metrics[metricId] = result.total;
     if (result.comparison) comparisons[metricId] = result.comparison;
   }
@@ -218,11 +221,11 @@ export function blendAccountSnapshot(
 }
 
 const PLATFORM_LABELS: Record<OrganicMetricPlatform, string> = {
-  instagram: "Instagram",
-  facebook: "Facebook",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  linkedin: "LinkedIn",
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  linkedin: 'LinkedIn',
 };
 
 export function buildSeriesSet(input: {
@@ -238,7 +241,7 @@ export function buildSeriesSet(input: {
   const colorFor = (key: string, index: number) =>
     colorByKey?.get(key) ?? SERIES_COLORS[index % SERIES_COLORS.length]!;
 
-  if (mode === "decompose" || mode === "both") {
+  if (mode === 'decompose' || mode === 'both') {
     accounts.forEach((account, index) => {
       if (!isMetricAvailableOnPlatform(metricId, account.platform)) return;
       const key = accountSeriesKey(account.platform, account.integrationAccountId);
@@ -246,7 +249,7 @@ export function buildSeriesSet(input: {
       if (points.length === 0) return;
       series.push({
         key,
-        kind: "account",
+        kind: 'account',
         label: `${PLATFORM_LABELS[account.platform]} · ${account.name}`,
         platform: account.platform,
         color: colorFor(key, index),
@@ -256,7 +259,7 @@ export function buildSeriesSet(input: {
     });
   }
 
-  if (mode === "blend" || mode === "both") {
+  if (mode === 'blend' || mode === 'both') {
     const byPlatform = groupAccountsByPlatform(accounts);
     let blendIndex = 0;
     for (const [platform, platformAccounts] of byPlatform) {
@@ -267,14 +270,14 @@ export function buildSeriesSet(input: {
       // Blend tab is never empty — identity with that account's metrics.
       // In Both mode with one account, skip the duplicate dashed line.
       if (platformAccounts.length === 1) {
-        if (mode === "both") continue;
+        if (mode === 'both') continue;
         const only = platformAccounts[0]!;
         const key = platformBlendKey(platform);
         const points = trendSeriesForMetric(only, metricId);
         if (points.length === 0) continue;
         series.push({
           key,
-          kind: "platform_blend",
+          kind: 'platform_blend',
           label: `${PLATFORM_LABELS[platform]} (all)`,
           platform,
           color: colorFor(key, accounts.length + blendIndex),
@@ -286,11 +289,11 @@ export function buildSeriesSet(input: {
       }
 
       const blended = blendMetric(platformAccounts, metricId);
-      if (blended.kind !== "sum" || blended.trends.length === 0) continue;
+      if (blended.kind !== 'sum' || blended.trends.length === 0) continue;
       const key = platformBlendKey(platform);
       series.push({
         key,
-        kind: "platform_blend",
+        kind: 'platform_blend',
         label: `${PLATFORM_LABELS[platform]} (all · ${platformAccounts.length})`,
         platform,
         color: colorFor(key, accounts.length + blendIndex),
@@ -303,27 +306,27 @@ export function buildSeriesSet(input: {
     // Selection-wide blend: multi-platform, or single-platform multi-account.
     // One account total → selection blend is identity; only emit in Blend mode
     // so the user can still pick "top-level blend" and see the same numbers.
-    if (byPlatform.size > 1 || (accounts.length >= 2 && mode !== "decompose")) {
+    if (byPlatform.size > 1 || accounts.length >= 2) {
       const blended = blendMetric(accounts, metricId);
-      if (blended.kind === "sum" && blended.trends.length > 0) {
+      if (blended.kind === 'sum' && blended.trends.length > 0) {
         series.push({
           key: SELECTION_BLEND_KEY,
-          kind: "selection_blend",
-          label: "All selected (Σ)",
+          kind: 'selection_blend',
+          label: 'All selected (Σ)',
           color: BLEND_COLOR,
           dashed: true,
           points: blended.trends,
         });
       }
-    } else if (mode === "blend" && accounts.length === 1) {
+    } else if (mode === 'blend' && accounts.length === 1) {
       const only = accounts[0]!;
       if (isMetricAvailableOnPlatform(metricId, only.platform)) {
         const points = trendSeriesForMetric(only, metricId);
         if (points.length > 0) {
           series.push({
             key: SELECTION_BLEND_KEY,
-            kind: "selection_blend",
-            label: "All selected (Σ)",
+            kind: 'selection_blend',
+            label: 'All selected (Σ)',
             color: BLEND_COLOR,
             dashed: true,
             points,
@@ -358,9 +361,7 @@ export function assignSeriesColors(keys: string[]): Map<string, string> {
   return map;
 }
 
-export function blendedMetricsBag(
-  accounts: SnapshotAccountResult[],
-): OrganicMetrics {
+export function blendedMetricsBag(accounts: SnapshotAccountResult[]): OrganicMetrics {
   const out: OrganicMetrics = {};
   if (accounts.length === 0) return out;
 
@@ -373,7 +374,7 @@ export function blendedMetricsBag(
 
   for (const metricId of metricIds) {
     const result = blendMetric(accounts, metricId);
-    if (result.kind === "sum") {
+    if (result.kind === 'sum') {
       (out as Record<string, number>)[metricId] = result.total;
     }
   }
