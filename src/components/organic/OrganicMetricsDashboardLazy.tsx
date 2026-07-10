@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { OrganicAccountOption } from "@/components/organic/OrganicMetricsDashboard";
+import type {
+  OrganicAccountOption,
+  OrganicMetricsBrandInsights,
+} from "@/components/organic/OrganicMetricsDashboard";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 
 const OrganicMetricsDashboardDynamic = dynamic(
@@ -22,6 +25,7 @@ type Props = {
     linkedin: OrganicAccountOption[];
   };
   initialPlatform?: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin";
+  brandInsights?: OrganicMetricsBrandInsights | null;
 };
 
 export function OrganicMetricsDashboardLazy(props: Props) {

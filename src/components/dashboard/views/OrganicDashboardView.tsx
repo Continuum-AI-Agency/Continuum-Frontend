@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
+import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { DashboardBriefing } from "@/components/dashboard/briefing/DashboardBriefing";
 import { OrganicCreativesTable } from "@/components/dashboard/briefing/OrganicCreativesTable";
@@ -85,7 +86,14 @@ export function OrganicDashboardView({
           country={trendsAndEvents.country}
           generatedAt={generatedAt}
           status={trendsAndEvents.status ?? insightsStatus}
-          actionSlot={<ModuleShortcutLink href="/organic?tab=metrics" label="Trends" />}
+          actionSlot={<ModuleShortcutLink href="/organic?tab=metrics" label="Open metrics" />}
+          statusSlot={
+            <BrandInsightsGenerateButton
+              brandId={brandId}
+              lastGeneratedAt={generatedAt}
+              force
+            />
+          }
         />
       </section>
 

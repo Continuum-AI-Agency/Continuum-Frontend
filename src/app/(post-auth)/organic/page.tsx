@@ -329,6 +329,23 @@ async function OrganicContent({
             brandId={brandProfileId}
             accountsByPlatform={metricAccountsByPlatform}
             initialPlatform={initialMetricsPlatform}
+            brandInsights={
+              insights
+                ? {
+                    trendsAndEvents: insights.data.trendsAndEvents,
+                    questionsByNiche: insights.data.questionsByNiche,
+                    generatedAt:
+                      insights.data.trendsAndEvents.generatedAt ?? insights.generatedAt,
+                    status: insights.data.trendsAndEvents.status ?? insights.status,
+                  }
+                : {
+                    trendsAndEvents: {
+                      trends: [],
+                      events: [],
+                    },
+                    questionsByNiche: { questionsByNiche: {} },
+                  }
+            }
           />
         )}
         metricsPrefetchParams={{

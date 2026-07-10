@@ -65,8 +65,8 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
   const buttonLabel = useMemo(() => {
     if (generationId) return "Generating…";
     if (isPending) return "Starting…";
-    if (force) return "Refresh";
-    return isStale ? "Regenerate" : "Refresh";
+    if (force) return "Refresh Trends";
+    return isStale ? "Regenerate Trends" : "Refresh Trends";
   }, [generationId, isPending, isStale, force]);
 
   // Relative age caption, hidden while a run is in flight (the progress row

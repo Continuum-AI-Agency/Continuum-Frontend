@@ -6,105 +6,101 @@
 // can wire "show a reason iff the control is disabled" without drifting.
 
 export type DisabledHint = {
-  reason: string
-  unlocks?: string
-}
+  reason: string;
+  unlocks?: string;
+};
 
-export function describeAddPlaceholderBlock(input: {
-  isGenerating: boolean
-}): DisabledHint | null {
+export function describeAddPlaceholderBlock(input: { isGenerating: boolean }): DisabledHint | null {
   if (input.isGenerating) {
     return {
-      reason:
-        "Generation is running. Adding placeholders is paused until it finishes.",
-    }
+      reason: 'Generation is running. Adding placeholders is paused until it finishes.',
+    };
   }
-  return null
+  return null;
 }
 
 export function describeGenerateBlock(input: {
-  isGenerating: boolean
-  seededDraftCount: number
+  isGenerating: boolean;
+  seededDraftCount: number;
 }): DisabledHint | null {
   if (input.isGenerating) {
-    return { reason: "Generation is already running." }
+    return { reason: 'Generation is already running.' };
   }
   if (input.seededDraftCount === 0) {
     return {
-      reason: "Add at least one placeholder to the calendar first.",
-      unlocks: "AI drafts written from your Brand Book",
-    }
+      reason: 'Add at least one placeholder to the calendar first.',
+      unlocks: 'AI drafts written from your Brand Book',
+    };
   }
-  return null
+  return null;
 }
 
 export function describeClearBlock(input: {
-  isGenerating: boolean
-  draftsCount: number
+  isGenerating: boolean;
+  draftsCount: number;
 }): DisabledHint | null {
   if (input.isGenerating) {
     return {
-      reason: "Generation is running. Clearing is paused until it finishes.",
-    }
+      reason: 'Generation is running. Clearing is paused until it finishes.',
+    };
   }
   if (input.draftsCount === 0) {
-    return { reason: "There are no drafts on the calendar to clear yet." }
+    return { reason: 'There are no drafts on the calendar to clear yet.' };
   }
-  return null
+  return null;
 }
 
 export function describeRefreshBlock(input: {
-  hasAccount: boolean
-  isLoading: boolean
-  platformLabel: string
+  hasAccount: boolean;
+  isLoading: boolean;
+  platformLabel: string;
 }): DisabledHint | null {
   if (!input.hasAccount) {
     return {
       reason: `Connect and select a ${input.platformLabel} account to refresh analytics.`,
-      unlocks: "live account and post metrics",
-    }
+      unlocks: 'live account and post metrics',
+    };
   }
   if (input.isLoading) {
-    return { reason: "Analytics are already refreshing." }
+    return { reason: 'Analytics are already refreshing.' };
   }
-  return null
+  return null;
 }
 
 export function describeExportBlock(input: {
-  hasAccount: boolean
-  isLoading: boolean
-  isExporting: boolean
-  platformLabel: string
+  hasAccount: boolean;
+  isLoading: boolean;
+  isExporting: boolean;
+  platformLabel: string;
 }): DisabledHint | null {
   if (!input.hasAccount) {
     return {
-      reason: `Connect and select a ${input.platformLabel} account to export a report.`,
-      unlocks: "CSV and HTML reports",
-    }
+      reason: `Connect and select a ${input.platformLabel} account to export or email a report.`,
+      unlocks: 'CSV, HTML, and Continuum Report email',
+    };
   }
   if (input.isExporting) {
-    return { reason: "An export is already in progress." }
+    return { reason: 'A report is already being prepared.' };
   }
   if (input.isLoading) {
-    return { reason: "Wait for analytics to finish loading before exporting." }
+    return { reason: 'Wait for analytics to finish loading before exporting or emailing.' };
   }
-  return null
+  return null;
 }
 
 export function describeComposerBlock(input: {
-  isStreaming: boolean
-  hasSession: boolean
+  isStreaming: boolean;
+  hasSession: boolean;
 }): DisabledHint | null {
   if (input.isStreaming) {
     return {
-      reason:
-        "The agent is responding. It'll be ready for your next message in a moment.",
-    }
+      reason: "The agent is responding. It'll be ready for your next message in a moment.",
+    };
   }
   if (!input.hasSession) {
     return {
-      reason: "Getting your workspace ready. Starters unlock in a moment.",
-    }
+      reason: 'Getting your workspace ready. Starters unlock in a moment.',
+    };
   }
-  return null
+  return null;
 }
