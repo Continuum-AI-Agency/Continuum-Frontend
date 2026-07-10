@@ -5,7 +5,8 @@
 // vertical recharts ReferenceLine per calendar day that had published posts,
 // color-coded by content type, with a hover card listing that day's posts. Reused
 // by the dashboard reporting widget and the full analytics account chart so the
-// demarcation looks and behaves identically on both.
+// demarcation looks and behaves identically on both platforms (Instagram, YouTube,
+// TikTok, LinkedIn, Facebook, …).
 //
 // recharts only detects ReferenceLine when it is a direct/array child of the chart
 // (a wrapper component is ignored), so this exposes a function that returns the
@@ -22,36 +23,63 @@ import { ReferenceLine } from "recharts";
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
-type ContentType = "reel" | "post" | "story";
+// Platform-neutral content kinds shown on flag labels / colors. Product-type
+// strings from each fetcher (REELS, SHORTS, LINKEDIN_POST, …) collapse into these.
+export type PostContentType = "reel" | "short" | "story" | "video" | "post";
 
-const CONTENT_TYPE_COLOR: Record<ContentType, string> = {
+const CONTENT_TYPE_COLOR: Record<PostContentType, string> = {
   reel: "var(--color-primary)",
+  short: "var(--color-primary)",
   post: "var(--color-secondary)",
   story: "var(--chart-3)",
+  video: "var(--chart-2)",
 };
 
-const CONTENT_TYPE_LABEL: Record<ContentType, string> = {
+const CONTENT_TYPE_LABEL: Record<PostContentType, string> = {
   reel: "Reel",
+  short: "Short",
   post: "Post",
   story: "Story",
+  video: "Video",
 };
 
 const MIXED_COLOR = "var(--color-muted-foreground)";
 
-function classifyContentType(post: OrganicPostSummary): ContentType {
+// Map a post's platform-native type fields onto a display kind. Prefer
+// mediaProductType (Instagram REELS/FEED/STORY, YouTube SHORTS/VIDEO, LinkedIn
+// LINKEDIN_POST, Facebook status_type) and fall back to mediaType.
+export function classifyPostContentType(post: OrganicPostSummary): PostContentType {
   const productType = (post.mediaProductType ?? "").toUpperCase();
-  if (productType === "REELS") return "reel";
-  if (productType === "STORY") return "story";
-  if (productType === "FEED") return "post";
+  if (productType === "REELS" || productType === "REEL") return "reel";
+  if (productType === "STORY" || productType === "STORIES") return "story";
+  if (productType === "SHORTS") return "short";
+  // YouTube long-form (and any fetcher that stamps VIDEO as the product type).
+  if (productType === "VIDEO" || productType === "VIDEO_ON_DEMAND") return "video";
+  if (
+    productType === "FEED" ||
+    productType === "POST" ||
+    productType === "LINKEDIN_POST" ||
+    productType === "CAROUSEL" ||
+    productType === "CAROUSEL_ALBUM"
+  ) {
+    return "post";
+  }
+
   const mediaType = (post.mediaType ?? "").toUpperCase();
-  if (mediaType === "VIDEO") return "reel";
+  // Bare VIDEO with no product type: Instagram reels sometimes omit product type,
+  // but TikTok/YouTube-ish payloads also land here. Prefer "video" as the neutral
+  // multi-platform label; explicit REELS/SHORTS above still win when present.
+  if (mediaType === "VIDEO") return "video";
+  if (mediaType === "IMAGE" || mediaType === "CAROUSEL_ALBUM" || mediaType === "CAROUSEL") {
+    return "post";
+  }
   return "post";
 }
 
 // One color for a marker: the shared content type when the day is homogeneous,
 // otherwise a neutral line (the hover card still shows each post's own color).
 function dayMarkerColor(day: AnnotatedDailyTrend): string {
-  const types = new Set(day.publishedPosts.map(classifyContentType));
+  const types = new Set(day.publishedPosts.map(classifyPostContentType));
   if (types.size === 1) {
     const [only] = [...types];
     return CONTENT_TYPE_COLOR[only];
@@ -86,7 +114,7 @@ function formatDayHeading(date: string): string {
 }
 
 function PostRow({ post }: { post: OrganicPostSummary }) {
-  const type = classifyContentType(post);
+  const type = classifyPostContentType(post);
   const thumbnail = post.thumbnailUrl ?? post.mediaUrl ?? null;
   const time = formatTime(post.timestamp);
   const caption = (post.caption ?? "").trim();
