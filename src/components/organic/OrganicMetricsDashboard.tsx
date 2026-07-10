@@ -1980,6 +1980,20 @@ export function OrganicMetricsDashboard({
             ? accountsByPlatform.linkedin
             : accountsByPlatform.instagram;
 
+  // MetricsScopeSelector/OrganicCompareView tag each account with its platform
+  // (needed to flatten across platforms in Compare mode); the dashboard's own
+  // accountsByPlatform keeps platform implicit in which array an account is in.
+  const scopeAccountsByPlatform: ScopeAccountsByPlatform = React.useMemo(
+    () => ({
+      instagram: accountsByPlatform.instagram.map((a) => ({ ...a, platform: 'instagram' })),
+      facebook: accountsByPlatform.facebook.map((a) => ({ ...a, platform: 'facebook' })),
+      tiktok: accountsByPlatform.tiktok.map((a) => ({ ...a, platform: 'tiktok' })),
+      youtube: accountsByPlatform.youtube.map((a) => ({ ...a, platform: 'youtube' })),
+      linkedin: accountsByPlatform.linkedin.map((a) => ({ ...a, platform: 'linkedin' })),
+    }),
+    [accountsByPlatform],
+  );
+
   const selectedAccountId =
     platform === 'facebook'
       ? selectedAccountByPlatform.facebook
@@ -2671,7 +2685,7 @@ export function OrganicMetricsDashboard({
           <div className="mb-3">
             <MetricsScopeSelector
               mode="single"
-              accountsByPlatform={accountsByPlatform}
+              accountsByPlatform={scopeAccountsByPlatform}
               platform={platform}
               onPlatformChange={(next) => {
                 startTransition(() => {
@@ -2700,7 +2714,7 @@ export function OrganicMetricsDashboard({
         {viewMode === 'compare' ? (
           <OrganicCompareView
             brandId={brandId}
-            accountsByPlatform={accountsByPlatform}
+            accountsByPlatform={scopeAccountsByPlatform}
             rangePreset={rangePreset}
             reloadTick={reloadTick}
             forceRefreshOnTick
