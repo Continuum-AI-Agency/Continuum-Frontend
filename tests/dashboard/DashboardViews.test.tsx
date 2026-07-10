@@ -17,12 +17,69 @@ mock.module("@/components/dashboard/InstagramOrganicReportingWidget", () => ({
   InstagramOrganicReportingWidget: () => <div data-testid="organic-widget">Organic Widget</div>,
 }));
 
+mock.module("@/components/dashboard/DashboardWarmOnMount", () => ({
+  DashboardWarmOnMount: () => null,
+}));
+
+mock.module("@/components/dashboard/SendPulseButton", () => ({
+  SendPulseButton: () => null,
+}));
+
+mock.module("@/components/dashboard/competitor/CompetitorOrganicTable", () => ({
+  CompetitorOrganicTable: () => <div data-testid="competitor-organic">Competitor Organic</div>,
+}));
+
+mock.module("@/components/dashboard/competitor/CompetitorAdsTable", () => ({
+  CompetitorAdsTable: () => <div data-testid="competitor-ads">Competitor Ads</div>,
+}));
+
+mock.module("@/components/dashboard/briefing/PaidMetricStrip", () => ({
+  PaidMetricStrip: () => <div data-testid="paid-metric-strip">Paid Metrics</div>,
+}));
+
+mock.module("@/components/dashboard/briefing/PaidInsightsList", () => ({
+  PaidInsightsList: () => <div data-testid="paid-insights">Paid Insights</div>,
+}));
+
+mock.module("@/components/dashboard/briefing/PaidEntityTable", () => ({
+  PaidEntityTable: () => <div data-testid="paid-entities">Paid Entities</div>,
+}));
+
+mock.module("@/components/approvals/PendingActivityTabs", () => ({
+  PendingActivityTabs: () => null,
+}));
+
+mock.module("@/components/dashboard/briefing/OrganicMetricStrip", () => ({
+  OrganicMetricStrip: () => <div data-testid="organic-metric-strip">Metric Strip</div>,
+}));
+
+mock.module("@/components/dashboard/briefing/OrganicInsightsList", () => ({
+  OrganicInsightsList: () => <div data-testid="organic-insights">Insights</div>,
+}));
+
+mock.module("@/components/dashboard/briefing/OrganicCreativesTable", () => ({
+  OrganicCreativesTable: () => <div data-testid="organic-creatives">Creatives</div>,
+}));
+
 mock.module("@/components/brand-insights/BrandTrendsPanel", () => ({
-  BrandTrendsPanel: () => <div data-testid="trends-panel">Trends Panel</div>,
+  BrandTrendsPanel: ({
+    statusSlot,
+  }: {
+    statusSlot?: React.ReactNode;
+  }) => (
+    <div data-testid="trends-panel">
+      Trends Panel
+      {statusSlot}
+    </div>
+  ),
 }));
 
 mock.module("@/components/brand-insights/BrandInsightsGenerateButton", () => ({
-  BrandInsightsGenerateButton: () => <button data-testid="generate-btn">Generate</button>,
+  BrandInsightsGenerateButton: () => (
+    <button type="button" data-testid="generate-btn">
+      Refresh Trends
+    </button>
+  ),
 }));
 
 describe("DashboardViews", () => {
@@ -31,16 +88,16 @@ describe("DashboardViews", () => {
   });
 
   describe("PaidDashboardView", () => {
-    test("renders PaidMediaReportingWidget and DCOActionsWidget", () => {
+    test("renders paid overview and DCO actions rail", () => {
       render(<PaidDashboardView brandId="test-brand-id" />);
 
-      expect(screen.getByTestId("paid-media-widget")).toBeTruthy();
-      expect(screen.getByTestId("dco-actions-widget")).toBeTruthy();
+      expect(screen.getByText("Overview")).toBeTruthy();
+      expect(screen.getByLabelText("Hide DCO actions")).toBeTruthy();
     });
   });
 
   describe("OrganicDashboardView", () => {
-    test("renders Organic Widget and Trends Panel", () => {
+    test("renders Trends Panel with Refresh Trends control", () => {
       const mockTrendsData = {
         trends: [],
         events: [],
@@ -67,8 +124,9 @@ describe("DashboardViews", () => {
         />
       );
 
-      expect(screen.getByTestId("organic-widget")).toBeTruthy();
       expect(screen.getByTestId("trends-panel")).toBeTruthy();
+      // Overview header + BrandTrendsPanel statusSlot both mount the control.
+      expect(screen.getAllByTestId("generate-btn").length).toBeGreaterThanOrEqual(2);
     });
   });
 });

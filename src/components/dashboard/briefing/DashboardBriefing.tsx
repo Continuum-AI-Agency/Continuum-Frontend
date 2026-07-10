@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BrandInsightsGenerateButton } from '@/components/brand-insights/BrandInsightsGenerateButton';
+import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
 
 type DashboardBriefingProps = {
   brandId: string;
@@ -29,12 +30,15 @@ export function DashboardBriefing({
           <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
           <p className="text-xs text-muted-foreground">Your weekly signal. Pick your next move.</p>
         </div>
-        <BrandInsightsGenerateButton
-          brandId={brandId}
-          lastGeneratedAt={lastGeneratedAt}
-          subtle
-          force
-        />
+        <div className="flex items-center gap-2">
+          <SendPulseButton brandId={brandId} />
+          <BrandInsightsGenerateButton
+            brandId={brandId}
+            lastGeneratedAt={lastGeneratedAt}
+            subtle
+            force
+          />
+        </div>
       </div>
 
       {metricStripSlot}

@@ -6,6 +6,7 @@ import {
   setPulseRecipientAction,
   updatePulseOptInAction,
 } from '@/app/(post-auth)/settings/actions';
+import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -86,9 +87,12 @@ export function BrandPulseSection({
       </div>
 
       <div className={optIn ? undefined : 'pointer-events-none opacity-50'}>
-        <p className="mb-2 block text-xs text-muted-foreground">
-          Recipients — the owner always receives it. Tag other members to include them.
-        </p>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Recipients — the owner always receives it. Tag other members to include them.
+          </p>
+          <SendPulseButton brandId={brandId} />
+        </div>
         <div className="space-y-2">
           {recipients.map((member) => {
             const isOwner = ownerUserId ? member.userId === ownerUserId : member.role === 'owner';

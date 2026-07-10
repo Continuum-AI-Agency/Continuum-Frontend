@@ -10,6 +10,7 @@ import { PaidMetricStrip } from '@/components/dashboard/briefing/PaidMetricStrip
 import { PaidScopeToggle } from '@/components/dashboard/briefing/PaidScopeToggle';
 import { CompetitorAdsTable } from '@/components/dashboard/competitor/CompetitorAdsTable';
 import { DashboardWarmOnMount } from '@/components/dashboard/DashboardWarmOnMount';
+import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
@@ -263,11 +264,14 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
     <div className="flex min-w-0 flex-col gap-[var(--app-shell-gap)]">
       <DashboardWarmOnMount brandId={brandId} isCold={false} />
       <section className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
-          <p className="text-xs text-muted-foreground">
-            Your paid performance at a glance. Pick your next move.
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
+            <p className="text-xs text-muted-foreground">
+              Your paid performance at a glance. Pick your next move.
+            </p>
+          </div>
+          <SendPulseButton brandId={brandId} />
         </div>
         <PaidMetricStrip brandId={brandId} adAccountId={selectedAccountId} />
         <div
