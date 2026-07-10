@@ -75,4 +75,24 @@ describe('OrganicAwarenessReportView', () => {
     const link = screen.getByRole('link', { name: /open reel/i });
     expect(link.getAttribute('href')).toBe('https://instagram.com/reel/abc');
   });
+
+  it('surfaces a live caption snippet when the matching bulk post is provided', () => {
+    render(
+      <OrganicAwarenessReportView
+        report={report}
+        posts={[
+          {
+            id: '1',
+            timestamp: '2026-06-09T12:00:00.000Z',
+            caption: 'Hard cut into a question that keeps people watching',
+            mediaProductType: 'REELS',
+            metrics: { views: 900, hookRate: 80 },
+          },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText(/Hard cut into a question that keeps people watching/i),
+    ).toBeDefined();
+  });
 });

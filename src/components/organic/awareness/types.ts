@@ -3,6 +3,8 @@
 // describe the concrete shape the renderer expects and keep the sub-components in
 // sync with the get-organic-insights assembler (awareness.ts).
 
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
+
 export type AwarenessTopPost = {
   id: string;
   mediaProductType: string | null;
@@ -39,4 +41,30 @@ export function postKindLabel(post: {
   if (raw.includes('feed') || raw.includes('image')) return 'Post';
   if (raw.includes('video')) return 'Video';
   return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+// Prefer live gallery/detail fields over the (often sparse or stale) awareness
+// snapshot so the hover card can show caption + a still-valid thumbnail.
+export function enrichAwarenessTopPost(
+  post: AwarenessTopPost,
+  live: OrganicPost | null | undefined,
+): AwarenessTopPost {
+  if (!live) return post;
+  const liveThumb =
+    live.thumbnailUrl ??
+    live.mediaUrl ??
+    live.carouselMedia?.[0]?.thumbnailUrl ??
+    live.carouselMedia?.[0]?.mediaUrl ??
+    null;
+  return {
+    ...post,
+    mediaProductType: post.mediaProductType ?? live.mediaProductType ?? live.mediaType ?? null,
+    mediaType: post.mediaType ?? live.mediaType ?? null,
+    permalink: post.permalink ?? live.permalink ?? null,
+    thumbnailUrl: post.thumbnailUrl || liveThumb,
+    caption: post.caption?.trim() ? post.caption : (live.caption ?? live.title ?? null),
+    timestamp: post.timestamp ?? live.timestamp ?? null,
+    views: post.views ?? live.metrics?.views ?? null,
+    reach: post.reach ?? live.metrics?.reach ?? null,
+  };
 }

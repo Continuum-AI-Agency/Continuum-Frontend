@@ -11,6 +11,8 @@ import * as React from 'react';
 
 import { PillDelta } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useOrganicPostDetail } from '@/hooks/useOrganicPostDetail';
+import type { OrganicPlatform, OrganicPost } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
 import { AwarenessTopPostRow } from './awareness/AwarenessTopPostRow';
 import type { AwarenessContentTypeRow, AwarenessTopPost } from './awareness/types';
@@ -18,6 +20,11 @@ import type { AwarenessContentTypeRow, AwarenessTopPost } from './awareness/type
 const nf = new Intl.NumberFormat('en-US');
 
 type Comparison = Record<string, { percentageChange?: number } | undefined> | null | undefined;
+
+type PostDetailPlatform = Extract<
+  OrganicPlatform,
+  'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'
+>;
 
 function deltaFor(comparison: Comparison, keys: string[]): number | null {
   if (!comparison) return null;
@@ -74,7 +81,19 @@ function SummaryBlock({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-function TopPostsBlock({ posts }: { posts: AwarenessTopPost[] }) {
+function TopPostsBlock({
+  posts,
+  postsById,
+  postDetailsById,
+  loadingPostId,
+  onRequestDetail,
+}: {
+  posts: AwarenessTopPost[];
+  postsById: Map<string, OrganicPost>;
+  postDetailsById: Record<string, OrganicPost>;
+  loadingPostId: string | null;
+  onRequestDetail?: (postId: string) => void;
+}) {
   if (posts.length === 0) {
     return (
       <span className="text-xs text-muted-foreground">
@@ -84,9 +103,19 @@ function TopPostsBlock({ posts }: { posts: AwarenessTopPost[] }) {
   }
   return (
     <div className="flex flex-col divide-y divide-border/40">
-      {posts.map((post, index) => (
-        <AwarenessTopPostRow key={post.id || index} post={post} rank={index + 1} />
-      ))}
+      {posts.map((post, index) => {
+        const livePost = postDetailsById[post.id] ?? postsById.get(post.id) ?? null;
+        return (
+          <AwarenessTopPostRow
+            key={post.id || index}
+            post={post}
+            rank={index + 1}
+            livePost={livePost}
+            loadingDetail={loadingPostId === post.id}
+            onRequestDetail={onRequestDetail}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -162,13 +191,31 @@ function NarrativeBlock({ lines }: { lines: string[] }) {
   );
 }
 
-function AwarenessSection({ block }: { block: OrganicAwarenessBlock }) {
+function AwarenessSection({
+  block,
+  postsById,
+  postDetailsById,
+  loadingPostId,
+  onRequestDetail,
+}: {
+  block: OrganicAwarenessBlock;
+  postsById: Map<string, OrganicPost>;
+  postDetailsById: Record<string, OrganicPost>;
+  loadingPostId: string | null;
+  onRequestDetail?: (postId: string) => void;
+}) {
   const data = (block.data ?? {}) as Record<string, unknown>;
   const body =
     block.category === 'summary' ? (
       <SummaryBlock data={data} />
     ) : block.category === 'top_posts' ? (
-      <TopPostsBlock posts={(block.data as AwarenessTopPost[]) ?? []} />
+      <TopPostsBlock
+        posts={(block.data as AwarenessTopPost[]) ?? []}
+        postsById={postsById}
+        postDetailsById={postDetailsById}
+        loadingPostId={loadingPostId}
+        onRequestDetail={onRequestDetail}
+      />
     ) : block.category === 'content_type' ? (
       <ContentTypeBlock rows={(block.data as AwarenessContentTypeRow[]) ?? []} />
     ) : block.category === 'narrative' ? (
@@ -189,12 +236,44 @@ export function OrganicAwarenessReportView({
   report,
   isRefreshing = false,
   onRefresh,
+  brandId,
+  integrationAccountId,
+  platform,
+  posts = [],
 }: {
   report: OrganicAwarenessReportPayload | null;
   isRefreshing?: boolean;
   onRefresh?: () => void;
+  // Optional account context so top-post rows can hydrate a live caption +
+  // thumbnail on hover (awareness snapshots often omit them or carry expired
+  // signed CDN URLs).
+  brandId?: string;
+  integrationAccountId?: string | null;
+  platform?: PostDetailPlatform;
+  posts?: OrganicPost[];
 }) {
   const [open, setOpen] = React.useState(true);
+
+  const canHydratePosts = Boolean(brandId && integrationAccountId && platform);
+  const { requestPostDetail, loadingPostId, postDetailsById } = useOrganicPostDetail({
+    brandId: brandId ?? '',
+    platform: platform ?? 'instagram',
+    integrationAccountId: canHydratePosts ? (integrationAccountId ?? null) : null,
+  });
+
+  const postsById = React.useMemo(() => {
+    const map = new Map<string, OrganicPost>();
+    for (const post of posts) map.set(post.id, post);
+    return map;
+  }, [posts]);
+
+  const handleRequestDetail = React.useCallback(
+    (postId: string) => {
+      if (!canHydratePosts) return;
+      void requestPostDetail(postId);
+    },
+    [canHydratePosts, requestPostDetail],
+  );
 
   if (!report) {
     return (
@@ -248,7 +327,14 @@ export function OrganicAwarenessReportView({
           <TooltipProvider delayDuration={200}>
             <div className="mt-3 divide-y divide-subtle/60">
               {report.blocks.map((block, index) => (
-                <AwarenessSection key={`${block.category}-${index}`} block={block} />
+                <AwarenessSection
+                  key={`${block.category}-${index}`}
+                  block={block}
+                  postsById={postsById}
+                  postDetailsById={postDetailsById}
+                  loadingPostId={loadingPostId}
+                  onRequestDetail={handleRequestDetail}
+                />
               ))}
             </div>
           </TooltipProvider>
