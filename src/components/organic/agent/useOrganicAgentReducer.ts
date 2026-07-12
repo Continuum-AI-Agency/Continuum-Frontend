@@ -9,76 +9,93 @@ import type {
   ToolApproval,
   ToolCallEvent,
   UiCard,
-} from "./types"
-import { PIPELINE_STAGES } from "./types"
-import type { ParsedPipelineStage, ParsedPlanStatus } from "./streamEventParser"
-import type { AgentMentionMetadata } from "@/lib/agent-references"
-import type { MediaSearchResultsFrame } from "@continuum/contracts"
+} from './types';
+import { PIPELINE_STAGES } from './types';
 
-export type BulkRunRef = { runId: string; planId: string; total: number }
+export type BulkRunRef = { runId: string; planId: string; total: number };
 
 export type MediaResolutionFailure = {
-  refId: string
-  type: string
-  reason: string
-}
+  refId: string;
+  type: string;
+  reason: string;
+};
 
 export type MediaResolutionReport = {
-  requested: number
-  resolvedImages: number
-  resolvedVideos: number
-  textOnly: number
-  failed: MediaResolutionFailure[]
-}
+  requested: number;
+  resolvedImages: number;
+  resolvedVideos: number;
+  textOnly: number;
+  failed: MediaResolutionFailure[];
+};
 
 export type PanelState = {
-  sessionId: string | null
-  messages: ConversationMessage[]
-  inputValue: string
-  isHydrated: boolean
-  jobs: Record<string, AgentJobState>
-  pipeline: Record<string, PipelineCardState>
-  planItemStatus: Record<string, PlanItemStatus>
-  pendingToolApprovals: ToolApproval[]
-  bulkRuns: Record<string, BulkRunRef>
-  streamingMessageId: string | null
+  sessionId: string | null;
+  messages: ConversationMessage[];
+  inputValue: string;
+  isHydrated: boolean;
+  jobs: Record<string, AgentJobState>;
+  pipeline: Record<string, PipelineCardState>;
+  planItemStatus: Record<string, PlanItemStatus>;
+  pendingToolApprovals: ToolApproval[];
+  bulkRuns: Record<string, BulkRunRef>;
+  streamingMessageId: string | null;
   /** Non-fatal grab misses for the latest turn (surfaced as a loud UI warning). */
-  mediaResolution: MediaResolutionReport | null
-}
+  mediaResolution: MediaResolutionReport | null;
+  /**
+   * How many runs are ahead of this turn on the same session, or null when it is running.
+   * One run at a time per session is fenced Backend-side; a queued turn is waiting, not
+   * hung, and the UI must be able to say which.
+   */
+  queuedAheadOf: number | null;
+};
 
 export type PanelAction =
-  | { type: "SESSION_INIT"; sessionId: string }
-  | { type: "HYDRATE_JOBS"; jobs: AgentJobState[] }
-  | { type: "SET_INPUT"; value: string }
-  | { type: "SUBMIT_USER_MESSAGE"; content: string; messageId: string; metadata?: AgentMentionMetadata }
-  | { type: "BEGIN_STREAMING" }
-  | { type: "STREAM_DELTA"; delta: string }
-  | { type: "STREAM_TOOL_CALL"; event: ToolCallEvent }
-  | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown; ok?: boolean; reason?: string }
-  | { type: "STREAM_COMPLETE" }
-  | { type: "STREAM_ERROR"; error: string }
-  | { type: "RETRY_FROM_ASSISTANT"; assistantMessageId: string }
-  | { type: "STREAM_UI_CARD"; card: UiCard }
-  | { type: "STREAM_MEDIA_SEARCH_RESULTS"; frame: MediaSearchResultsFrame }
-  | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
-  | { type: "DRAFT_BLUEPRINT"; draftId: string; previews: string[] }
-  | { type: "PIPELINE_STAGE"; event: ParsedPipelineStage }
-  | { type: "PIPELINE_CARD"; card: Partial<PipelineCardState> & { jobId: string } }
-  | { type: "PLAN_STATUS"; event: ParsedPlanStatus }
-  | { type: "TOOL_APPROVAL_ADD"; approval: ToolApproval }
-  | { type: "TOOL_APPROVAL_RESOLVE"; approvalId: string }
-  | { type: "BULK_RUN_START"; run: BulkRunRef }
-  | { type: "MEDIA_RESOLUTION"; report: MediaResolutionReport }
-  | { type: "CLEAR_MEDIA_RESOLUTION" }
-  | { type: "SESSION_SWITCH"; sessionId: string; messages: ConversationMessage[] }
-  | { type: "LOAD_MESSAGES_START" }
+  | { type: 'SESSION_INIT'; sessionId: string }
+  | { type: 'HYDRATE_JOBS'; jobs: AgentJobState[] }
+  | { type: 'SET_INPUT'; value: string }
+  | {
+      type: 'SUBMIT_USER_MESSAGE';
+      content: string;
+      messageId: string;
+      metadata?: AgentMentionMetadata;
+    }
+  | { type: 'BEGIN_STREAMING' }
+  | { type: 'STREAM_DELTA'; delta: string }
+  | { type: 'STREAM_TOOL_CALL'; event: ToolCallEvent }
+  | {
+      type: 'STREAM_TOOL_RESULT';
+      toolCallId: string;
+      result: unknown;
+      ok?: boolean;
+      reason?: string;
+    }
+  | { type: 'STREAM_COMPLETE' }
+  | { type: 'STREAM_ERROR'; error: string }
+  | { type: 'STREAM_QUEUED'; aheadOf: number }
+  | { type: 'RETRY_FROM_ASSISTANT'; assistantMessageId: string }
+  | { type: 'STREAM_UI_CARD'; card: UiCard }
+  | { type: 'STREAM_MEDIA_SEARCH_RESULTS'; frame: MediaSearchResultsFrame }
+  | { type: 'JOB_UPDATE'; job: Partial<AgentJobState> & { jobId: string } }
+  | { type: 'DRAFT_BLUEPRINT'; draftId: string; previews: string[] }
+  | { type: 'PIPELINE_STAGE'; event: ParsedPipelineStage }
+  | { type: 'PIPELINE_CARD'; card: Partial<PipelineCardState> & { jobId: string } }
+  | { type: 'PLAN_STATUS'; event: ParsedPlanStatus }
+  | { type: 'TOOL_APPROVAL_ADD'; approval: ToolApproval }
+  | { type: 'TOOL_APPROVAL_RESOLVE'; approvalId: string }
+  | { type: 'BULK_RUN_START'; run: BulkRunRef }
+  | { type: 'MEDIA_RESOLUTION'; report: MediaResolutionReport }
+  | { type: 'CLEAR_MEDIA_RESOLUTION' }
+  | { type: 'SESSION_SWITCH'; sessionId: string; messages: ConversationMessage[] }
+  | { type: 'PREPEND_MESSAGES'; messages: ConversationMessage[] }
+  | { type: 'LOAD_MESSAGES_START' }
+  | { type: 'SYNC_GENERATION_SUMMARIES'; summaries: OrganicGenerationSummary[] };
 
-const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES
+const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES;
 
 // Unique per assistant turn. A random suffix avoids same-millisecond collisions
 // (two turns opened in the same tick would otherwise share an id and a React key).
 function newAssistantMessageId(): string {
-  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-assistant`
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-assistant`;
 }
 
 function buildStages(
@@ -183,84 +200,103 @@ export function initialPanelState(): PanelState {
     bulkRuns: {},
     streamingMessageId: null,
     mediaResolution: null,
-  }
+    queuedAheadOf: null,
+  };
 }
 
 export function panelReducer(state: PanelState, action: PanelAction): PanelState {
   switch (action.type) {
-    case "SESSION_INIT":
-      return { ...state, sessionId: action.sessionId }
+    case 'SESSION_INIT':
+      return { ...state, sessionId: action.sessionId };
 
-    case "HYDRATE_JOBS": {
-      const merged = { ...state.jobs }
-      const jobs = Array.isArray(action.jobs) ? action.jobs : []
+    case 'HYDRATE_JOBS': {
+      const merged = { ...state.jobs };
+      let pipeline = state.pipeline;
+      const jobs = Array.isArray(action.jobs) ? action.jobs : [];
       for (const job of jobs) {
-        if (!job || typeof job.jobId !== "string") continue
-        merged[job.jobId] = job
+        if (!job || typeof job.jobId !== 'string') continue;
+        merged[job.jobId] = job;
+        // Seed/refresh the inline pipeline card from the durable row. Persisted
+        // message ui_cards only hold intra-turn frames — the worker's cards land
+        // after the chat stream closes — so tool-dispatched jobs (toolCallId) get
+        // their card here, and any restored card converges to the durable status.
+        const durable = job as AgentJobState & DurableJobLike & { progress?: unknown };
+        if (!durable.toolCallId && !pipeline[job.jobId]) continue;
+        const progress =
+          durable.progress && typeof durable.progress === 'object'
+            ? (durable.progress as { stage?: unknown; pct?: unknown })
+            : undefined;
+        const card = pipelineCardFromDurableJob({
+          ...durable,
+          stage: durable.stage ?? (typeof progress?.stage === 'string' ? progress.stage : null),
+          pct: durable.pct ?? (typeof progress?.pct === 'number' ? progress.pct : null),
+        });
+        pipeline = { ...pipeline, [job.jobId]: applyPipelineCard(pipeline[job.jobId], card) };
       }
-      return { ...state, jobs: merged, isHydrated: true }
+      return { ...state, jobs: merged, pipeline, isHydrated: true };
     }
 
-    case "SET_INPUT":
-      return { ...state, inputValue: action.value }
+    case 'SET_INPUT':
+      return { ...state, inputValue: action.value };
 
-    case "SUBMIT_USER_MESSAGE": {
-      const streamingId = newAssistantMessageId()
+    case 'SUBMIT_USER_MESSAGE': {
+      const streamingId = newAssistantMessageId();
       return {
         ...state,
         messages: [
           ...state.messages,
-          { id: action.messageId, role: "user", content: action.content, metadata: action.metadata },
-          { id: streamingId, role: "assistant", content: "" },
+          {
+            id: action.messageId,
+            role: 'user',
+            content: action.content,
+            metadata: action.metadata,
+          },
+          { id: streamingId, role: 'assistant', content: '' },
         ],
         streamingMessageId: streamingId,
-        inputValue: "",
+        inputValue: '',
         mediaResolution: null,
-      }
+        queuedAheadOf: null,
+      };
     }
 
-    case "MEDIA_RESOLUTION":
-      return { ...state, mediaResolution: action.report }
+    case 'MEDIA_RESOLUTION':
+      return { ...state, mediaResolution: action.report };
 
-    case "CLEAR_MEDIA_RESOLUTION":
-      return { ...state, mediaResolution: null }
+    case 'CLEAR_MEDIA_RESOLUTION':
+      return { ...state, mediaResolution: null };
 
-    case "BEGIN_STREAMING": {
-      const streamingId = newAssistantMessageId()
+    case 'BEGIN_STREAMING': {
+      const streamingId = newAssistantMessageId();
       return {
         ...state,
-        messages: [
-          ...state.messages,
-          { id: streamingId, role: "assistant" as const, content: "" },
-        ],
+        messages: [...state.messages, { id: streamingId, role: 'assistant' as const, content: '' }],
         streamingMessageId: streamingId,
-      }
+      };
     }
 
-    case "STREAM_DELTA":
-      if (!state.streamingMessageId) return state
+    case 'STREAM_DELTA':
+      if (!state.streamingMessageId) return state;
       return {
         ...state,
         messages: state.messages.map((m) =>
-          m.id === state.streamingMessageId
-            ? { ...m, content: m.content + action.delta }
-            : m
+          m.id === state.streamingMessageId ? { ...m, content: m.content + action.delta } : m,
         ),
-      }
+      };
 
-    case "STREAM_TOOL_CALL":
-      if (!state.streamingMessageId) return state
+    case 'STREAM_TOOL_CALL':
+      if (!state.streamingMessageId) return state;
       return {
         ...state,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
             ? { ...m, toolCalls: [...(m.toolCalls ?? []), action.event] }
-            : m
+            : m,
         ),
-      }
+      };
 
-    case "STREAM_TOOL_RESULT":
-      if (!state.streamingMessageId) return state
+    case 'STREAM_TOOL_RESULT':
+      if (!state.streamingMessageId) return state;
       return {
         ...state,
         messages: state.messages.map((m) =>
@@ -270,64 +306,67 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                 toolCalls: (m.toolCalls ?? []).map((tc) =>
                   tc.toolCallId === action.toolCallId
                     ? { ...tc, result: action.result, ok: action.ok, reason: action.reason }
-                    : tc
+                    : tc,
                 ),
               }
-            : m
+            : m,
         ),
-      }
+      };
 
-    case "STREAM_UI_CARD":
-      if (!state.streamingMessageId) return state
+    case 'STREAM_UI_CARD':
+      if (!state.streamingMessageId) return state;
       return {
         ...state,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
             ? { ...m, uiCards: [...(m.uiCards ?? []), action.card] }
-            : m
+            : m,
         ),
-      }
+      };
 
-    case "STREAM_MEDIA_SEARCH_RESULTS":
-      if (!state.streamingMessageId) return state
+    case 'STREAM_MEDIA_SEARCH_RESULTS':
+      if (!state.streamingMessageId) return state;
       return {
         ...state,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
             ? { ...m, mediaSearchResults: [...(m.mediaSearchResults ?? []), action.frame] }
-            : m
+            : m,
         ),
-      }
+      };
 
-    case "STREAM_COMPLETE":
-      return { ...state, streamingMessageId: null }
+    case 'STREAM_QUEUED':
+      return { ...state, queuedAheadOf: action.aheadOf };
 
-    case "STREAM_ERROR":
+    case 'STREAM_COMPLETE':
+      return { ...state, streamingMessageId: null, queuedAheadOf: null };
+
+    case 'STREAM_ERROR':
       return {
         ...state,
         streamingMessageId: null,
         messages: state.messages.map((m) =>
-          m.id === state.streamingMessageId ? { ...m, error: action.error } : m
+          m.id === state.streamingMessageId ? { ...m, error: action.error } : m,
         ),
-      }
+      };
 
-    case "RETRY_FROM_ASSISTANT": {
+    case 'RETRY_FROM_ASSISTANT': {
       // Drop the failed/stale assistant turn (and anything after it) and re-open
       // a fresh empty assistant message; the caller re-runs the prior user turn.
-      const idx = state.messages.findIndex((m) => m.id === action.assistantMessageId)
-      if (idx === -1) return state
-      const streamingId = newAssistantMessageId()
+      const idx = state.messages.findIndex((m) => m.id === action.assistantMessageId);
+      if (idx === -1) return state;
+      const streamingId = newAssistantMessageId();
       return {
         ...state,
         messages: [
           ...state.messages.slice(0, idx),
-          { id: streamingId, role: "assistant" as const, content: "" },
+          { id: streamingId, role: 'assistant' as const, content: '' },
         ],
         streamingMessageId: streamingId,
-      }
+      };
     }
 
-    case "JOB_UPDATE":
+    case 'JOB_UPDATE':
       return {
         ...state,
         jobs: {

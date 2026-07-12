@@ -656,10 +656,16 @@ const agentRunStartedSchema = z.object({
 });
 
 /**
- * Emitted as the first frame of an Organic chat stream. Carries the runId
- * the FE needs to reconnect via GET /api/organic/agent/runs/:runId/events
- * after a transport interruption. Distinct from agent.run_started, which
- * carries a per-tool jobId mid-stream.
+ * Seq 0 of every Organic chat stream. Carries the runId that names the DURABLE run this
+ * stream is a view of — it is what a client re-attaches with, via
+ * GET /api/organic/agent/runs/:runId/events?after_seq=N, after a transport interruption OR
+ * a navigation away. The canonical shape lives in the shared run contract
+ * (`agentChatStartedFrameSchema`, `AGENT_CHAT_STARTED`); Jaina emits the identical frame.
+ *
+ * DO NOT confuse this with `agent.run_started`, which is a DIFFERENT frame in this same
+ * union: that one fires mid-stream and carries a per-tool jobId for job-card tracking. The
+ * homonym is why the cross-agent lifecycle frame is named `chat_started` rather than the
+ * more obvious `run_started` — reusing that literal would shadow the job frame.
  */
 const agentChatStartedSchema = z.object({
   type: z.literal('agent.chat_started'),

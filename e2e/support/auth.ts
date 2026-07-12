@@ -173,12 +173,49 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
   return buildStorageState(rawSessionJson);
 }
 
+/**
+ * The same real GoTrue flow, but returning the raw access token instead of browser cookies —
+ * for benches that call the Backend over HTTP directly rather than driving a page.
+ */
+export async function mintAccessTokenForEmail(email: string): Promise<string> {
+  const admin = createAdminClient();
+  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const anonKey = resolveAnonKey();
+
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+  });
+  if (linkError) {
+    throw new Error(`[e2e/auth] generateLink failed for ${email}: ${linkError.message}`);
+  }
+  const hashedToken = linkData.properties?.hashed_token;
+  if (!hashedToken) {
+    throw new Error(`[e2e/auth] generateLink returned no hashed_token for ${email}.`);
+  }
+
+  const anon = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { data, error } = await anon.auth.verifyOtp({
+    token_hash: hashedToken,
+    type: 'magiclink',
+  });
+  if (error || !data.session?.access_token) {
+    throw new Error(`[e2e/auth] verifyOtp failed for ${email}: ${error?.message ?? 'no session'}`);
+  }
+
+  return data.session.access_token;
+}
+
 // Creates an ephemeral confirmed user (test-only domain) with the requested
 // admin flag stamped into app_metadata, then mints its session. Use for
 // admin-gate specs (admin vs non-admin) and no-brand onboarding-redirect specs.
-export async function mintSession({ isAdmin }: MintSessionOptions): Promise<PlaywrightStorageState> {
+export async function mintSession({
+  isAdmin,
+}: MintSessionOptions): Promise<PlaywrightStorageState> {
   const admin = createAdminClient();
-  const email = `e2e-${isAdmin ? "admin" : "user"}-${crypto.randomUUID()}@continuum-e2e.test`;
+  const email = `e2e-${isAdmin ? 'admin' : 'user'}-${crypto.randomUUID()}@continuum-e2e.test`;
 
   const { error: createError } = await admin.auth.admin.createUser({
     email,

@@ -1,3 +1,4 @@
+export * from './agents/index';
 export * from './ai-studio/index';
 export * from './analytics/index';
 export * from './automations/index';

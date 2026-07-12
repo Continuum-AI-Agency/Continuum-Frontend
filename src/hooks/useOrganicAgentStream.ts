@@ -1,47 +1,52 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
-import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
-import type { AgentChatInput } from "@/components/organic/agent/types";
-import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
+import { AGENT_CHAT_STARTED, AGENT_RUN_QUEUED } from '@continuum/contracts';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  parseOrganicStreamEvent,
-  postListCardFromToolResult,
-} from "@/components/organic/agent/streamEventParser";
-import { useCalendarStore } from "@/lib/organic/store";
+  applyOrganicFrame,
+  type OrganicFrameHandlers,
+} from '@/components/organic/agent/applyOrganicFrame';
+import type { AgentChatInput } from '@/components/organic/agent/types';
+import type { PanelAction } from '@/components/organic/agent/useOrganicAgentReducer';
+import { useAgentRunStore } from '@/lib/agents/runStore';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
 
 const RECONNECT_BACKOFF_MS = 750;
 const MAX_RECONNECT_ATTEMPTS = 5;
-
-// Tools that mutate a draft's lifecycle state in a way the planner/calendar must
-// reflect immediately (status, scheduling, deletion). A successful call should
-// refetch the calendar so the Scheduled/Draft counts match what the agent did,
-// instead of drifting until the next realtime event.
-const CALENDAR_MUTATING_TOOLS = new Set([
-  "approveDraft",
-  "updateDraft",
-  "publishDraft",
-  "createDraft",
-]);
 
 type OrganicAgentStreamOptions = {
   onRunStarted?: (runId: string) => void;
   onCalendarDraftSignal?: (event: Record<string, unknown>) => void;
 };
 
-type StreamMode = "chat" | "control";
+type StreamMode = 'chat' | 'control';
 
 export function useOrganicAgentStream(
   dispatch: React.Dispatch<PanelAction>,
-  opts?: OrganicAgentStreamOptions
+  opts?: OrganicAgentStreamOptions,
 ) {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const controlAbortRefs = useRef<Set<AbortController>>(new Set());
 
-  const cancel = useCallback(() => {
+  const runIdRef = useRef<string | null>(null);
+
+  const frameHandlers: OrganicFrameHandlers = {
+    onCalendarDraftSignal: (event) => opts?.onCalendarDraftSignal?.(event),
+    onJobRunStarted: (runId) => opts?.onRunStarted?.(runId),
+  };
+
+  /**
+   * Tear down the LOCAL view of the run — the NDJSON reader — without stopping the run.
+   *
+   * This is the whole point of the detached model: the socket is one view, not the run.
+   * The app-level store keeps tailing the durable log over Realtime, so a closed reader
+   * (an unmount, a navigation) loses nothing.
+   */
+  const detach = useCallback(() => {
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
     abortRef.current = null;
@@ -49,24 +54,51 @@ export function useOrganicAgentStream(
     setIsStreaming(false);
   }, []);
 
+  /**
+   * Actually STOP the run — what the user means by pressing stop. Aborting the local reader
+   * alone would just hide a run that keeps burning tokens, which is exactly the bug the old
+   * DB-only cancel had on the Backend.
+   */
+  const cancel = useCallback(async () => {
+    const runId = runIdRef.current;
+    detach();
+    if (!runId) return;
+
+    try {
+      const token = await getBrowserAccessToken();
+      if (!token) return;
+      await fetch(`${getApiBaseUrl()}/api/organic/agent/runs/${runId}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // The run row is the source of truth; a failed cancel surfaces as the run continuing.
+    }
+  }, [detach]);
+
+  // Unmount detaches the view. It does NOT cancel: this cleanup used to abort the run's
+  // only reader, which — together with the Backend aborting on socket close — is why
+  // navigating away silently killed a turn mid-sentence.
   useEffect(
     () => () => {
-      cancel();
+      detach();
       for (const controller of controlAbortRefs.current) controller.abort();
       controlAbortRefs.current.clear();
     },
-    [cancel]
+    [detach],
   );
 
   const runStream = useCallback(
     async (input: AgentChatInput, mode: StreamMode): Promise<{ error?: string }> => {
-      if (mode === "chat") {
-        cancel();
+      if (mode === 'chat') {
+        // Detach any previous view; do not cancel the run behind it.
+        detach();
+        runIdRef.current = null;
         setIsStreaming(true);
       }
 
       const controller = new AbortController();
-      if (mode === "chat") {
+      if (mode === 'chat') {
         abortRef.current = controller;
       } else {
         controlAbortRefs.current.add(controller);
@@ -77,125 +109,51 @@ export function useOrganicAgentStream(
       let terminal = false;
 
       const dispatchParsed = (event: Record<string, unknown>): void => {
-        const type = typeof event.type === "string" ? event.type : undefined;
+        const type = typeof event.type === 'string' ? event.type : undefined;
 
-        // Capture the runId from agent.chat_started; this is the
-        // first frame the Backend emits when the chat path opens a
-        // resumable run. Reconnect needs it.
-        if (type === "agent.chat_started" && !chatRunId) {
+        // The seq-0 frame that names the durable run this stream is a view of. Registering
+        // it in the app-level store is what lets the run outlive this component: the store
+        // tails it over Realtime from here on, so unmounting the panel (or navigating away
+        // entirely) no longer ends the run's client side.
+        if (type === AGENT_CHAT_STARTED && !chatRunId) {
           const data = event.data as { runId?: unknown; sessionId?: unknown } | undefined;
-          const runIdFromEvent = typeof data?.runId === "string" ? data.runId : null;
+          const runIdFromEvent = typeof data?.runId === 'string' ? data.runId : null;
+          const sessionIdFromEvent =
+            typeof data?.sessionId === 'string' ? data.sessionId : input.sessionId;
           if (runIdFromEvent) {
             chatRunId = runIdFromEvent;
+            runIdRef.current = runIdFromEvent;
+            useAgentRunStore.getState().upsertRun({
+              runId: runIdFromEvent,
+              agent: 'organic',
+              sessionId: sessionIdFromEvent ?? '',
+              brandId: input.brandId,
+              status: 'running',
+              createdAt: new Date().toISOString(),
+            });
             opts?.onRunStarted?.(runIdFromEvent);
           }
           return;
         }
 
-        const parsed = parseOrganicStreamEvent(event);
+        // Fenced behind another run on this session. Unenveloped (no seq) by design, so it
+        // cannot collide with the seq-0 run-started frame.
+        if (type === AGENT_RUN_QUEUED) {
+          const data = event.data as { aheadOf?: unknown } | undefined;
+          dispatch({
+            type: 'STREAM_QUEUED',
+            aheadOf: typeof data?.aheadOf === 'number' ? data.aheadOf : 1,
+          });
+          return;
+        }
 
-        switch (parsed.kind) {
-          case "delta":
-            if (mode === "control") break;
-            dispatch({ type: "STREAM_DELTA", delta: parsed.delta });
-            break;
-          case "toolCall":
-            if (mode === "control") break;
-            dispatch({ type: "STREAM_TOOL_CALL", event: parsed.event });
-            break;
-          case "toolResult": {
-            if (mode === "control") break;
-            dispatch({
-              type: "STREAM_TOOL_RESULT",
-              toolCallId: parsed.toolCallId,
-              result: parsed.result,
-              ok: parsed.ok,
-              reason: parsed.reason,
-            });
-            // Reconcile the calendar with a lifecycle mutation that actually
-            // succeeded, so the Scheduled/Draft counts reflect the write the
-            // agent just reported (e.g. approve = schedule).
-            if (parsed.ok !== false && CALENDAR_MUTATING_TOOLS.has(parsed.toolName)) {
-              useCalendarStore.getState().requestCalendarRefetch();
-            }
-            const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);
-            if (postCard) dispatch({ type: "STREAM_UI_CARD", card: postCard });
-            break;
-          }
-          case "error":
-            if (mode === "chat") dispatch({ type: "STREAM_ERROR", error: parsed.message });
-            terminal = true;
-            break;
-          case "complete":
-            if (mode === "chat") dispatch({ type: "STREAM_COMPLETE" });
-            terminal = true;
-            break;
-          case "uiCard":
-            if (mode === "control") break;
-            dispatch({ type: "STREAM_UI_CARD", card: parsed.card });
-            break;
-          case "postCard":
-            dispatch({
-              type: "JOB_UPDATE",
-              job: { jobId: parsed.card.jobId, brandId: parsed.card.brandId, uiPostCard: parsed.card },
-            });
-            break;
-          case "jobUpdate":
-            dispatch({ type: "JOB_UPDATE", job: parsed.job });
-            if (
-              type === "draft.text_ready" ||
-              type === "draft.ready" ||
-              type === "job.completed"
-            ) {
-              opts?.onCalendarDraftSignal?.(event);
-            }
-            break;
-          case "draftBlueprint":
-            dispatch({ type: "DRAFT_BLUEPRINT", draftId: parsed.draftId, previews: parsed.previews });
-            break;
-          case "pipelineStage":
-            dispatch({ type: "PIPELINE_STAGE", event: parsed.event });
-            break;
-          case "pipelineCard":
-            dispatch({ type: "PIPELINE_CARD", card: parsed.card });
-            break;
-          case "planStatus":
-            dispatch({ type: "PLAN_STATUS", event: parsed.event });
-            break;
-          case "toolApproval":
-            if (mode === "control") break;
-            dispatch({ type: "TOOL_APPROVAL_ADD", approval: parsed.approval });
-            break;
-          case "bulkRun":
-            dispatch({
-              type: "BULK_RUN_START",
-              run: { runId: parsed.run.runId, planId: parsed.run.planId, total: parsed.run.total },
-            });
-            break;
-          case "mediaSearchResults":
-            if (mode === "control") break;
-            dispatch({ type: "STREAM_MEDIA_SEARCH_RESULTS", frame: parsed.frame });
-            break;
-          case "mediaResolution":
-            if (mode === "control") break;
-            dispatch({ type: "MEDIA_RESOLUTION", report: parsed.data });
-            break;
-          case "runStarted":
-            opts?.onRunStarted?.(parsed.runId);
-            break;
-          case "ignored":
-            break;
-          case "invalid":
-            console.warn("[organic-agent-stream] Invalid event payload ignored", {
-              type: parsed.type ?? type,
-              payload: event,
-            });
-            break;
+        if (applyOrganicFrame(event, dispatch, mode, frameHandlers)) {
+          terminal = true;
         }
       };
 
       const consumeReader = async (
-        reader: ReadableStreamDefaultReader<Uint8Array>
+        reader: ReadableStreamDefaultReader<Uint8Array>,
       ): Promise<void> => {
         await readNdjsonStream({
           reader,
@@ -244,28 +202,34 @@ export function useOrganicAgentStream(
             weekStart: input.weekStart,
             timezone: input.timezone,
             platformAccountIds: input.platformAccountIds,
+            images: input.images,
           }),
           signal: controller.signal,
         });
 
         if (!response.ok || !response.body) {
-          const detail = await response.text().catch(() => "Failed to start stream.");
-          throw new Error(detail || "Failed to start stream.");
+          const detail = await response.text().catch(() => 'Failed to start stream.');
+          throw new Error(detail || 'Failed to start stream.');
         }
 
         const initialReader = response.body.getReader();
-        if (mode === "chat") readerRef.current = initialReader;
+        if (mode === 'chat') readerRef.current = initialReader;
         await consumeReader(initialReader);
 
         // Stream closed. If we never saw a terminal frame and we have a
         // runId, the connection dropped mid-turn — reconnect via the
         // resumable GET endpoint and continue from the last-seen seq.
         let attempts = 0;
-        while (!terminal && !controller.signal.aborted && chatRunId && attempts < MAX_RECONNECT_ATTEMPTS) {
+        while (
+          !terminal &&
+          !controller.signal.aborted &&
+          chatRunId &&
+          attempts < MAX_RECONNECT_ATTEMPTS
+        ) {
           attempts += 1;
           await new Promise<void>((resolve) => {
             const timeout = setTimeout(resolve, RECONNECT_BACKOFF_MS * attempts);
-            controller.signal.addEventListener("abort", () => {
+            controller.signal.addEventListener('abort', () => {
               clearTimeout(timeout);
               resolve();
             });
@@ -316,11 +280,14 @@ export function useOrganicAgentStream(
     // Match original hook contract: opts is captured by closure rather than
     // listed as a dep so consumers don't have to memoize the options object.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dispatch, cancel]
+    [dispatch, detach],
   );
 
-  const start = useCallback((input: AgentChatInput) => runStream(input, "chat"), [runStream]);
-  const startControl = useCallback((input: AgentChatInput) => runStream(input, "control"), [runStream]);
+  const start = useCallback((input: AgentChatInput) => runStream(input, 'chat'), [runStream]);
+  const startControl = useCallback(
+    (input: AgentChatInput) => runStream(input, 'control'),
+    [runStream],
+  );
 
   return { start, startControl, cancel, isStreaming };
 }

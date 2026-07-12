@@ -19,11 +19,14 @@
     "optimizer:viz:bench": "bun run src/components/paid-media/optimizer/charts/optimizer-viz.bench.ts",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "organic:metrics:compare:e2e": "playwright test e2e/organic-metrics-compare.spec.ts",
+    "library:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/library-poster-transcript.spec.ts e2e/library-range-comments-editor.spec.ts",
     "supabase:gen:types": "node scripts/generate-supabase-types.mjs",
     "generate:types": "node scripts/generate-supabase-types.mjs",
     "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.mjs",
     "check-cache": "node scripts/check-cache.mjs",
-    "cache:clear": "rm -rf .next/cache node_modules/.cache"
+    "cache:clear": "rm -rf .next/cache node_modules/.cache",
+    "chat:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/chat-shell.spec.ts --workers=1",
+    "agent:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/agent-runs.bench.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.17",
