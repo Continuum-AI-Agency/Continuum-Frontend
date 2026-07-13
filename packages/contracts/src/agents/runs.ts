@@ -162,6 +162,34 @@ export const agentRunQueuedFrameSchema = z.object({
 export type AgentRunQueuedFrame = z.infer<typeof agentRunQueuedFrameSchema>;
 
 /**
+ * The frames that END a run, and the status each implies.
+ *
+ * A run's terminal status has to be derivable from its LOG, not just from a status
+ * endpoint, because the log is the only thing a detached client is subscribed to. Without
+ * this, a client tailing a run it navigated away from never learns the run finished: it
+ * keeps the Realtime channel open forever and never tells the user the work is done.
+ *
+ * Both agents emit `response.done`; Organic adds `response.error`/`response.cancelled` and
+ * Jaina emits a bare `error`.
+ */
+export const TERMINAL_RUN_FRAME_STATUS: Readonly<Record<string, AgentRunStatus>> = {
+  'response.done': 'completed',
+  'response.error': 'failed',
+  'response.cancelled': 'cancelled',
+  error: 'failed',
+};
+
+/**
+ * The status implied by a frame, or null if the frame does not end the run.
+ *
+ * Callers should apply the LAST terminal frame in the log, not the first: Organic emits a
+ * non-fatal `response.error` for a background-job drain timeout and then still finishes the
+ * turn, so an earlier `failed` must be allowed to lose to a later `completed`.
+ */
+export const runStatusFromFrameType = (type: string): AgentRunStatus | null =>
+  TERMINAL_RUN_FRAME_STATUS[type] ?? null;
+
+/**
  * Merge older/live events into an existing log, keeping it seq-ordered and
  * duplicate-free. The live NDJSON stream and the durable replay overlap by design
  * (a re-attach re-reads the boundary frame), so dedupe is not an optimization —

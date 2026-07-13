@@ -10,6 +10,7 @@ import {
   isTerminalAgentRunStatus,
   mergeAgentRunEvents,
   normalizeAgentRunStatus,
+  runStatusFromFrameType,
 } from './runs';
 
 const event = (seq: number, type = 'response.output_text.delta'): AgentRunEventDto => ({
@@ -127,5 +128,24 @@ describe('agentRunDtoSchema', () => {
       });
       expect(parsed.success).toBe(true);
     }
+  });
+});
+
+describe('runStatusFromFrameType', () => {
+  // A detached client is subscribed to the LOG, not to a status endpoint — so the run's
+  // ending has to be readable from the frames themselves, or it never learns the run finished.
+  it('reads the run outcome off its terminal frame', () => {
+    expect(runStatusFromFrameType('response.done')).toBe('completed');
+    expect(runStatusFromFrameType('response.error')).toBe('failed');
+    expect(runStatusFromFrameType('response.cancelled')).toBe('cancelled');
+  });
+
+  it("understands Jaina's bare error frame", () => {
+    expect(runStatusFromFrameType('error')).toBe('failed');
+  });
+
+  it('says nothing about a frame that does not end the run', () => {
+    expect(runStatusFromFrameType('response.output_text.delta')).toBeNull();
+    expect(runStatusFromFrameType('ui.plan_card')).toBeNull();
   });
 });

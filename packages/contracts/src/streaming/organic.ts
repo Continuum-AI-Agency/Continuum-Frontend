@@ -838,12 +838,22 @@ const contextMediaResolutionSchema = z.object({
     .loose(),
 });
 
+/**
+ * The turn was CANCELLED, not broken. Distinct from response.error so a run the user stopped
+ * on purpose is not rendered — or recorded — as a failure.
+ */
+const responseCancelledSchema = z.object({
+  type: z.literal('response.cancelled'),
+  data: z.object({ message: z.string() }).loose(),
+});
+
 export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   responseCreatedSchema,
   responseOutputTextDeltaSchema,
   responseOutputTextDoneSchema,
   responseDoneSchema,
   responseErrorSchema,
+  responseCancelledSchema,
   responseSourceSchema,
   toolCallSchema,
   toolResultSchema,

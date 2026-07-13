@@ -37,14 +37,16 @@ describe('upsertRun', () => {
     expect(isSessionStreaming('sess_1')(useAgentRunStore.getState())).toBe(true);
   });
 
-  // Otherwise the next turn on this session would be mistaken for a re-attach to the
-  // finished one, and the composer would never re-enable.
-  it('releases the session once the run reaches a terminal status', () => {
+  // A session stays bound to its latest run even once that run is finished: a panel
+  // projecting it still has to fold the terminal frame, which is what stops the message
+  // rendering as streaming. "Is anything happening?" is a question about STATUS, not about
+  // whether a run is bound.
+  it('keeps a finished run bound, but stops reporting the session as streaming', () => {
     const store = useAgentRunStore.getState();
     store.upsertRun(run());
     store.upsertRun(run({ status: 'completed' }));
 
-    expect(selectRunForSession('sess_1')(useAgentRunStore.getState())).toBeUndefined();
+    expect(selectRunForSession('sess_1')(useAgentRunStore.getState())?.run.runId).toBe('run_1');
     expect(isSessionStreaming('sess_1')(useAgentRunStore.getState())).toBe(false);
   });
 
@@ -110,5 +112,66 @@ describe('selectLiveRuns', () => {
 
     expect(selectEventsForSession('sess_o')(useAgentRunStore.getState())).toHaveLength(1);
     expect(selectEventsForSession('sess_j')(useAgentRunStore.getState())).toHaveLength(1);
+  });
+});
+
+describe('terminal detection from the frame log', () => {
+  // The bug this fixes: nothing marked a run terminal, so a run you navigated away from
+  // never finished as far as the app was concerned — its Realtime channel stayed open
+  // forever and the completion toast never fired.
+  it('settles a run when its log carries response.done', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run());
+    store.appendEvents('run_1', [event(0), event(1, 'response.done')]);
+
+    expect(useAgentRunStore.getState().runs.run_1?.run.status).toBe('completed');
+    expect(isSessionStreaming('sess_1')(useAgentRunStore.getState())).toBe(false);
+  });
+
+  it('stops tailing a settled run', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run());
+    expect(selectLiveRuns(useAgentRunStore.getState())).toHaveLength(1);
+
+    store.appendEvents('run_1', [event(1, 'response.done')]);
+    expect(selectLiveRuns(useAgentRunStore.getState())).toHaveLength(0);
+  });
+
+  it('records a cancelled run as cancelled, not failed', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run());
+    store.appendEvents('run_1', [event(1, 'response.cancelled')]);
+
+    expect(useAgentRunStore.getState().runs.run_1?.run.status).toBe('cancelled');
+  });
+
+  // Organic emits a NON-FATAL response.error when a background-job drain times out and then
+  // still finishes the turn. Taking the first terminal frame would report that turn failed.
+  it('lets a later completion beat an earlier non-fatal error', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run());
+    store.appendEvents('run_1', [event(1, 'response.error'), event(2, 'response.done')]);
+
+    expect(useAgentRunStore.getState().runs.run_1?.run.status).toBe('completed');
+  });
+
+  // A projecting panel still has to fold the terminal frame — it is what stops the message
+  // rendering as streaming — and it can only do that while it can still find the run.
+  it('keeps the session bound to a settled run so a projection can finish folding it', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run());
+    store.appendEvents('run_1', [event(1, 'response.done')]);
+
+    expect(selectRunForSession('sess_1')(useAgentRunStore.getState())?.run.runId).toBe('run_1');
+  });
+
+  it('rebinds the session when the next turn starts its own run', () => {
+    const store = useAgentRunStore.getState();
+    store.upsertRun(run());
+    store.appendEvents('run_1', [event(1, 'response.done')]);
+    store.upsertRun(run({ runId: 'run_2' }));
+
+    expect(selectRunForSession('sess_1')(useAgentRunStore.getState())?.run.runId).toBe('run_2');
+    expect(isSessionStreaming('sess_1')(useAgentRunStore.getState())).toBe(true);
   });
 });

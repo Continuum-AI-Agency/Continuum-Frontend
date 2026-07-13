@@ -3,18 +3,27 @@
 import type { Skill } from '@continuum/contracts';
 import { RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Conversation } from '@/components/ai-elements/conversation';
-import { MentionifiedText } from '@/components/ai-elements/mentionified-text';
-import { Message } from '@/components/ai-elements/message';
-import { PromptInput } from '@/components/ai-elements/prompt-input';
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import type { Attachment } from '@/components/chat/attachments';
+import { ChatMarker } from '@/components/chat/ChatMarker';
+import { ChatMessage } from '@/components/chat/ChatMessage';
+import { ChatTranscript } from '@/components/chat/ChatTranscript';
+import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
+import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
+import { MentionifiedText } from '@/components/chat/mentionified-text';
+import { PromptInput } from '@/components/chat/prompt-input';
+import { useChatAttachments } from '@/components/chat/useChatAttachments';
+import { useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunStream';
+import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
+import { useAgentRunStore } from '@/lib/agents/runStore';
+import { useProjectedRun } from './useProjectedRun';
 import { useSession } from '@/hooks/useSession';
 import {
   fetchCreativeInsightSuggestions,
@@ -291,10 +300,29 @@ export function OrganicAgentPanel({
     // Fetch-all reload pulls in the new draft wherever it landed.
     requestCalendarRefetch();
   }, [requestCalendarRefetch]);
-  const { start, startControl, cancel, isStreaming } = useOrganicAgentStream(dispatch, {
+  const { start, startControl, cancel, isStreaming, liveRunId } = useOrganicAgentStream(dispatch, {
     onRunStarted: attachRun,
     onCalendarDraftSignal: handleCalendarDraftSignal,
   });
+
+  // Render a turn that was already in flight when we got here — you sent a message,
+  // navigated away, and came back. The app-level store kept tailing the run the whole time;
+  // this folds its frames into the transcript. Without it the panel hydrates from history,
+  // which has no assistant message yet (that is only persisted when the run ENDS), and shows
+  // a question with no answer and no sign anything is happening.
+  useProjectedRun({
+    sessionId: state.sessionId,
+    dispatch,
+    isHydrated: state.isHydrated,
+    liveRunId,
+  });
+
+  // Suppress the completion toast for the conversation the user is actually watching.
+  const setViewingSession = useAgentRunStore((s) => s.setViewingSession);
+  useEffect(() => {
+    setViewingSession(state.sessionId);
+    return () => setViewingSession(null);
+  }, [state.sessionId, setViewingSession]);
   const { user } = useSession();
   const addDraft = useCalendarStore((s) => s.addDraft);
   const upsertGeneration = useCalendarStore((s) => s.upsertGeneration);
@@ -348,17 +376,70 @@ export function OrganicAgentPanel({
     deleteSession,
   } = useOrganicSessions(brandId, user?.id ?? null);
 
+  const attachments = useChatAttachments({ brandId, sessionId: activeSessionId });
+
+  const anchors = useMemo(
+    () => deriveOrganicAnchors(state.messages, state.pipeline),
+    [state.messages, state.pipeline],
+  );
+
+  // A restored page carries more than messages: the cards and bulk runs it replays have to reach
+  // the reducer too, whether the page is the first one or an older one paged in behind the cursor.
+  const applyRestoredPage = useCallback(
+    (messages: OrganicSessionMessage[], into: 'SESSION_SWITCH' | 'PREPEND_MESSAGES') => {
+      const restored = restoreSessionFromMessages(messages);
+      if (into === 'SESSION_SWITCH') {
+        dispatch({
+          type: 'SESSION_SWITCH',
+          sessionId: activeSessionId ?? '',
+          messages: restored.messages,
+        });
+      } else {
+        dispatch({ type: 'PREPEND_MESSAGES', messages: restored.messages });
+      }
+      restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
+      restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+    },
+    [activeSessionId],
+  );
+
+  const { hasEarlier, isLoadingEarlier, loadEarlier, setEarlierCursor } =
+    useEarlierHistory<OrganicSessionMessage>({
+      fetchPage: useCallback(
+        async (cursor) => {
+          if (!activeSessionId) return null;
+          const page = await fetchOrganicSessionMessagePage(activeSessionId, brandId, cursor);
+          return { items: page.messages, nextCursor: page.nextCursor };
+        },
+        [activeSessionId, brandId],
+      ),
+      applyPage: useCallback(
+        (messages: OrganicSessionMessage[]) => applyRestoredPage(messages, 'PREPEND_MESSAGES'),
+        [applyRestoredPage],
+      ),
+    });
+
   // Load messages when activeSessionId is set by the hook on initial fetch
   useEffect(() => {
     if (!activeSessionId) return;
-    selectSession(activeSessionId).then((msgs) => {
-      const restored = restoreSessionFromMessages(msgs);
-      dispatch({ type: 'SESSION_SWITCH', sessionId: activeSessionId, messages: restored.messages });
-      restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
-      restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+    selectSession(activeSessionId).then((page) => {
+      applyRestoredPage(page.messages, 'SESSION_SWITCH');
+      setEarlierCursor(page.nextCursor);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId]);
+
+  // Converge this session's jobs + inline pipeline cards to the durable job rows.
+  // The worker emits its ui.pipeline_card frames minutes after the chat stream
+  // closes, so an OPEN chat only converges through this brand-wide summaries feed
+  // (React Query cache shared with the ticker; Realtime invalidation + a polling
+  // refetch while jobs run keep it fresh). The reducer ignores summaries for jobs
+  // this session doesn't know.
+  const { summaries: generationSummaries } = useGenerationSummaries(brandId);
+  useEffect(() => {
+    if (generationSummaries.length === 0) return;
+    dispatch({ type: 'SYNC_GENERATION_SUMMARIES', summaries: generationSummaries });
+  }, [generationSummaries]);
 
   // Rehydrate jobs from previous session — skip for new unsaved sessions
   useEffect(() => {
@@ -439,11 +520,12 @@ export function OrganicAgentPanel({
       if (isStreaming) return;
       clearGenerations();
       dispatch({ type: 'LOAD_MESSAGES_START' });
-      const msgs = await selectSession(sessionId);
-      const restored = restoreSessionFromMessages(msgs);
+      const page = await selectSession(sessionId);
+      const restored = restoreSessionFromMessages(page.messages);
       dispatch({ type: 'SESSION_SWITCH', sessionId, messages: restored.messages });
       restored.pipelineCards.forEach((card) => dispatch({ type: 'PIPELINE_CARD', card }));
       restored.bulkRuns.forEach((run) => dispatch({ type: 'BULK_RUN_START', run }));
+      setEarlierCursor(page.nextCursor);
     },
     [isStreaming, selectSession, clearGenerations],
   );
@@ -487,13 +569,31 @@ export function OrganicAgentPanel({
   );
 
   const handleSubmit = useCallback(
-    (value: string, references: AgentMentionReference[] = []) => {
+    (
+      value: string,
+      submittedAttachments: Attachment[] = [],
+      references: AgentMentionReference[] = [],
+    ) => {
       const currentSessionId = state.sessionId ?? activeSessionId;
       if (!value.trim() || !currentSessionId || isStreaming) return;
 
       const content = value.trim();
       const messageId = crypto.randomUUID();
-      const metadata = references.length > 0 ? { references } : undefined;
+      const images = submittedAttachments
+        .filter((attachment) => attachment.status === 'ready' && attachment.url)
+        .map((attachment) => ({
+          url: attachment.url as string,
+          name: attachment.name,
+          mediaType: attachment.type,
+          storagePath: attachment.storagePath,
+        }));
+      // Same shape the backend persists on the user turn, so the live transcript and a resumed one
+      // render the attachment identically.
+      const metadata =
+        references.length > 0 || images.length > 0
+          ? { references, ...(images.length > 0 ? { attachments: images } : {}) }
+          : undefined;
+
       dispatch({ type: 'SUBMIT_USER_MESSAGE', content, messageId, metadata });
 
       start({
@@ -557,6 +657,7 @@ export function OrganicAgentPanel({
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         platformAccountIds,
+        images,
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {});
@@ -1322,21 +1423,33 @@ export function OrganicAgentPanel({
                           <AgentWorkingIndicator />
                         ) : null
                       ) : (
-                        <p className="group whitespace-pre-wrap text-base leading-relaxed">
-                          <MentionifiedText
-                            text={msg.content}
-                            references={msg.metadata?.references}
+                        <>
+                          <p className="group whitespace-pre-wrap text-base leading-relaxed">
+                            <MentionifiedText
+                              text={msg.content}
+                              references={msg.metadata?.references}
+                            />
+                            <AutomatePromptAction
+                              agent="organic"
+                              prompt={msg.content}
+                              className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
+                            />
+                          </p>
+                          <ChatMediaGrid
+                            items={mediaFromPersistedAttachments(msg.id, msg.metadata?.attachments)}
+                            lightboxTitle="Attachment"
                           />
-                          <AutomatePromptAction
-                            agent="organic"
-                            prompt={msg.content}
-                            className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
-                          />
-                        </p>
+                        </>
                       )}
                       <OrganicThinkingPanel
                         toolCalls={msg.toolCalls ?? []}
                         isStreaming={msg.id === state.streamingMessageId}
+                      />
+                      <ToolCallPipelineCards
+                        toolCalls={msg.toolCalls ?? []}
+                        cardsByToolCallId={pipelineCardsByToolCallId}
+                        onEnrichDraft={handleEnrichDraftFromChat}
+                        onGenerateMedia={handleGenerateMediaFromChat}
                       />
                       <ActiveStagesPanel
                         stages={msg.id === state.streamingMessageId ? activeStages : []}
@@ -1592,7 +1705,8 @@ export function OrganicAgentPanel({
             </div>
           ) : null}
           <PromptInput
-            onSubmit={(value, _attachments, references) => handleSubmit(value, references)}
+            onSubmit={(value, submitted, references) => handleSubmit(value, submitted, references)}
+            attachments={attachments}
             disabled={inputDisabled}
             isStreaming={isStreaming}
             onStop={cancel}

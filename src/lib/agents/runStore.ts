@@ -24,10 +24,28 @@ import {
   type AgentKind,
   type AgentRunDto,
   type AgentRunEventDto,
+  type AgentRunStatus,
   isTerminalAgentRunStatus,
   mergeAgentRunEvents,
+  runStatusFromFrameType,
 } from '@continuum/contracts';
 import { create } from 'zustand';
+
+/**
+ * The status implied by the LAST terminal frame in the log, or null while the run is still
+ * going.
+ *
+ * Last, not first: Organic emits a non-fatal `response.error` when a background-job drain
+ * times out and then still finishes the turn, so an earlier `failed` has to be allowed to
+ * lose to a later `completed`.
+ */
+const terminalStatusOf = (events: readonly AgentRunEventDto[]): AgentRunStatus | null => {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const status = runStatusFromFrameType(events[i]?.type ?? '');
+    if (status) return status;
+  }
+  return null;
+};
 
 export type AgentRunRecord = {
   run: AgentRunDto;
@@ -89,26 +107,35 @@ export const useAgentRunStore = create<AgentRunStoreState>()((set) => ({
             lastSeq: existing?.lastSeq ?? -1,
           },
         },
-        activeRunIdBySession,
+        activeRunIdBySession: { ...state.activeRunIdBySession, [run.sessionId]: run.runId },
       };
     }),
 
   appendEvents: (runId, incoming) =>
     set((state) => {
       const existing = state.runs[runId];
-      // A frame can arrive before the run row does (the seq-0 agent.run_started frame IS
+      // A frame can arrive before the run row does (the seq-0 agent.chat_started frame IS
       // how we learn the run exists). Dropping it would lose the start of the turn.
       const events = mergeAgentRunEvents(existing?.events ?? [], incoming);
       if (existing && events === existing.events) return state;
 
       const lastSeq = events.length > 0 ? (events[events.length - 1]?.seq ?? -1) : -1;
+      const run = existing?.run ?? pendingRun(runId);
+
+      // The LOG is the only thing a detached client is subscribed to, so the run's ENDING
+      // has to be readable from it. Without this, a run you navigated away from never
+      // finishes as far as the app is concerned: its Realtime channel stays open forever
+      // and the completion toast never fires.
+      //
+      // The session binding is deliberately NOT cleared here. A panel projecting this run
+      // still has to fold the terminal frame (it is what stops the message rendering as
+      // streaming), and it can only do that while it can still find the run.
+      const status = terminalStatusOf(events) ?? run.status;
 
       return {
         runs: {
           ...state.runs,
-          [runId]: existing
-            ? { ...existing, events, lastSeq }
-            : { run: pendingRun(runId), events, lastSeq },
+          [runId]: { run: status === run.status ? run : { ...run, status }, events, lastSeq },
         },
       };
     }),

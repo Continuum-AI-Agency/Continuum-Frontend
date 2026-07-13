@@ -706,6 +706,10 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       };
     case 'response.done':
       return { kind: 'complete' };
+    // The user stopped the run. It ended, but it did not fail — surfacing it as an error
+    // would put a red banner on a turn they cancelled on purpose.
+    case 'response.cancelled':
+      return { kind: 'complete' };
     case 'response.error': {
       const payload = getEventPayload(frame);
       const message = readNonEmptyString(payload.message) ?? 'Unknown stream error';

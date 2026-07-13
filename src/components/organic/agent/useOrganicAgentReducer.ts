@@ -72,6 +72,7 @@ export type PanelAction =
   | { type: 'STREAM_COMPLETE' }
   | { type: 'STREAM_ERROR'; error: string }
   | { type: 'STREAM_QUEUED'; aheadOf: number }
+  | { type: 'RESUME_STREAMING'; messageId: string }
   | { type: 'RETRY_FROM_ASSISTANT'; assistantMessageId: string }
   | { type: 'STREAM_UI_CARD'; card: UiCard }
   | { type: 'STREAM_MEDIA_SEARCH_RESULTS'; frame: MediaSearchResultsFrame }
@@ -337,6 +338,23 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
 
     case 'STREAM_QUEUED':
       return { ...state, queuedAheadOf: action.aheadOf };
+
+    // Re-attaching to a run that is STILL GOING — you sent a turn, navigated away, and came
+    // back. The user message was persisted before the run started, so history already has
+    // it; what is missing is the assistant turn, which is only persisted when the run ends.
+    // This opens an empty assistant message for the run's frames to stream into, exactly as
+    // SEND_MESSAGE does for a turn you started here. Keyed by runId so re-projecting the
+    // same run cannot open a second one.
+    case 'RESUME_STREAMING': {
+      if (state.messages.some((m) => m.id === action.messageId)) {
+        return { ...state, streamingMessageId: action.messageId };
+      }
+      return {
+        ...state,
+        messages: [...state.messages, { id: action.messageId, role: 'assistant', content: '' }],
+        streamingMessageId: action.messageId,
+      };
+    }
 
     case 'STREAM_COMPLETE':
       return { ...state, streamingMessageId: null, queuedAheadOf: null };

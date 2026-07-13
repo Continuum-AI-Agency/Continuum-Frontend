@@ -33,6 +33,9 @@ export function useOrganicAgentStream(
   const controlAbortRefs = useRef<Set<AbortController>>(new Set());
 
   const runIdRef = useRef<string | null>(null);
+  // Reactive twin of runIdRef: the store projection is an effect, so it needs the owned
+  // runId to be state, not a ref, or it never re-evaluates when the run changes.
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
 
   const frameHandlers: OrganicFrameHandlers = {
     onCalendarDraftSignal: (event) => opts?.onCalendarDraftSignal?.(event),
@@ -289,5 +292,7 @@ export function useOrganicAgentStream(
     [runStream],
   );
 
-  return { start, startControl, cancel, isStreaming };
+  // The run THIS reader owns. The store projection uses it to stay off the run we are already
+  // folding — exactly one folder per run, or every delta lands twice.
+  return { start, startControl, cancel, isStreaming, liveRunId };
 }

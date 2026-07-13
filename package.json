@@ -26,7 +26,9 @@
     "check-cache": "node scripts/check-cache.mjs",
     "cache:clear": "rm -rf .next/cache node_modules/.cache",
     "chat:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/chat-shell.spec.ts --workers=1",
-    "agent:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/agent-runs.bench.ts"
+    "projection:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/mid-run-projection.spec.ts --workers=1",
+    "agent:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/agent-runs.bench.ts",
+    "jaina:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/jaina-runs.bench.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.17",
