@@ -1,29 +1,40 @@
-import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from "@/components/organic/primitives/types"
-import { UNSCHEDULED_DAY_ID, makeCalendarDay } from "@/components/organic/primitives/calendar-utils"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
-import { isOrganicPlatformKey } from "@/lib/organic/platforms"
-import { deriveOrganicMediaStage, organicMediaStageSchema, type OrganicMediaStage } from "@continuum/contracts"
+import {
+  deriveOrganicMediaStage,
+  type OrganicMediaStage,
+  organicMediaStageSchema,
+} from '@continuum/contracts';
+import {
+  makeCalendarDay,
+  UNSCHEDULED_DAY_ID,
+} from '@/components/organic/primitives/calendar-utils';
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicDraftStatus,
+} from '@/components/organic/primitives/types';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 
-type PersistedDraftStatus = "draft" | "scheduled" | "published" | "failed" | "placeholder"
+type PersistedDraftStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'placeholder';
 
 function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
+  return Array.isArray(value) ? value : [];
 }
 
 type HyperframeMediaSuggestion = NonNullable<
-  NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["hyperframe"]
->
+  NonNullable<OrganicCalendarDraft['mediaSuggestion']>['hyperframe']
+>;
 
 function restoreHyperframe(value: unknown): HyperframeMediaSuggestion | undefined {
-  const obj = asRecord(value)
-  if (Object.keys(obj).length === 0) return undefined
-  const mp4StatusRaw = readString(obj.mp4Status)
+  const obj = asRecord(value);
+  if (Object.keys(obj).length === 0) return undefined;
+  const mp4StatusRaw = readString(obj.mp4Status);
   const mp4Status =
-    mp4StatusRaw === "pending" || mp4StatusRaw === "ready" || mp4StatusRaw === "failed"
+    mp4StatusRaw === 'pending' || mp4StatusRaw === 'ready' || mp4StatusRaw === 'failed'
       ? mp4StatusRaw
-      : null
+      : null;
   return {
-    generated: typeof obj.generated === "boolean" ? obj.generated : null,
+    generated: typeof obj.generated === 'boolean' ? obj.generated : null,
     compositionId: readString(obj.compositionId) ?? null,
     bucket: readString(obj.bucket) ?? null,
     htmlPath: readString(obj.htmlPath) ?? null,
@@ -36,27 +47,31 @@ function restoreHyperframe(value: unknown): HyperframeMediaSuggestion | undefine
     mp4Status,
     error: readString(obj.error) ?? null,
     spec: obj.spec ?? null,
-  }
+  };
 }
 
-type ReelMediaSuggestion = NonNullable<NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["reel"]>
+type ReelMediaSuggestion = NonNullable<
+  NonNullable<OrganicCalendarDraft['mediaSuggestion']>['reel']
+>;
 
 function restoreReel(value: unknown): ReelMediaSuggestion | undefined {
-  const obj = asRecord(value)
-  if (Object.keys(obj).length === 0) return undefined
-  const roleOf = (raw: unknown): "hook" | "body" | "cta" | null => {
-    const r = readString(raw)
-    return r === "hook" || r === "body" || r === "cta" ? r : null
-  }
+  const obj = asRecord(value);
+  if (Object.keys(obj).length === 0) return undefined;
+  const roleOf = (raw: unknown): 'hook' | 'body' | 'cta' | null => {
+    const r = readString(raw);
+    return r === 'hook' || r === 'body' || r === 'cta' ? r : null;
+  };
   return {
-    generated: typeof obj.generated === "boolean" ? obj.generated : null,
+    generated: typeof obj.generated === 'boolean' ? obj.generated : null,
     url: readString(obj.url) ?? null,
     bucket: readString(obj.bucket) ?? null,
     signedUrl: readString(obj.signedUrl) ?? null,
     mimeType: readString(obj.mimeType) ?? null,
     durationSec: readNumber(obj.durationSec) ?? null,
     scenes: asArray(obj.scenes)
-      .filter((s): s is Record<string, unknown> => Boolean(s && typeof s === "object" && !Array.isArray(s)))
+      .filter((s): s is Record<string, unknown> =>
+        Boolean(s && typeof s === 'object' && !Array.isArray(s)),
+      )
       .map((scene) => ({
         index: readNumber(scene.index) ?? null,
         role: roleOf(scene.role),
@@ -68,28 +83,28 @@ function restoreReel(value: unknown): ReelMediaSuggestion | undefined {
         error: readString(scene.error) ?? null,
       })),
     error: readString(obj.error) ?? null,
-  }
+  };
 }
 
 function restoreStoryboard(
   value: unknown,
-): NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["storyboard"] {
-  const arr = asArray(value).filter(
-    (a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a)),
-  )
-  if (arr.length === 0) return undefined
+): NonNullable<OrganicCalendarDraft['mediaSuggestion']>['storyboard'] {
+  const arr = asArray(value).filter((a): a is Record<string, unknown> =>
+    Boolean(a && typeof a === 'object' && !Array.isArray(a)),
+  );
+  if (arr.length === 0) return undefined;
   return arr.map((item) => ({
     role: readString(item.role) ?? null,
     bucket: readString(item.bucket) ?? null,
     storagePath: readString(item.storagePath) ?? null,
     storageUrl: readString(item.storageUrl) ?? null,
     format: readString(item.format) ?? null,
-  }))
+  }));
 }
 
-function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSuggestion"] {
-  const obj = asRecord(value)
-  if (Object.keys(obj).length === 0) return undefined
+function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft['mediaSuggestion'] {
+  const obj = asRecord(value);
+  if (Object.keys(obj).length === 0) return undefined;
   return {
     provider: readString(obj.provider) ?? null,
     model: readString(obj.model) ?? null,
@@ -98,18 +113,25 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSugg
     width: readNumber(obj.width) ?? null,
     height: readNumber(obj.height) ?? null,
     assetUrl: readString(obj.assetUrl) ?? readString(obj.url) ?? readString(obj.signedUrl) ?? null,
+    // The durable pair (bucket + storage path). Keep them: they are what lets a scheduled
+    // publish re-stage the media days later, long after any signed URL has expired.
+    url: readString(obj.url) ?? null,
+    bucket: readString(obj.bucket) ?? null,
+    signedUrl: readString(obj.signedUrl) ?? null,
     // Preserve mediaStatus so a 'user_supplied' attach/apply survives the round-trip
     // — both the attach-wins guard and the refetch-merge protection key off it.
     mediaStatus: (readString(obj.mediaStatus) ?? undefined) as NonNullable<
-      OrganicCalendarDraft["mediaSuggestion"]
-    >["mediaStatus"],
+      OrganicCalendarDraft['mediaSuggestion']
+    >['mediaStatus'],
     alt: readString(obj.alt) ?? null,
     hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
     reel: restoreReel(obj.reel) ?? null,
     storyboard: restoreStoryboard(obj.storyboard),
     // assetBase64 intentionally excluded — too large for Supabase round-trips
     assets: asArray(obj.assets)
-      .filter((a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a)))
+      .filter((a): a is Record<string, unknown> =>
+        Boolean(a && typeof a === 'object' && !Array.isArray(a)),
+      )
       .map((item) => ({
         role: readString(item.role) ?? null,
         order: readNumber(item.order) ?? null,
@@ -118,167 +140,172 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSugg
         prompt: readString(item.prompt) ?? null,
         width: readNumber(item.width) ?? null,
         height: readNumber(item.height) ?? null,
-        // assetBase64 intentionally excluded
+        // Carry the slide's own URLs through. Dropping them left a refetched carousel with
+        // slides that had no addressable media at all — the publish body could not name them,
+        // so the post went out as a single image.
+        url: readString(item.url) ?? null,
+        assetUrl: readString(item.assetUrl) ?? null,
+        signedUrl: readString(item.signedUrl) ?? null,
+        bucket: readString(item.bucket) ?? null,
+        // assetBase64 intentionally excluded — too large for Supabase round-trips
         mimeType: readString(item.mimeType) ?? null,
         error: readString(item.error) ?? null,
       })),
-  }
+  };
 }
 
-function restorePublishingAssets(value: unknown): OrganicCalendarDraft["publishingAssets"] {
-  const arr = asArray(value).filter(
-    (a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a))
-  )
-  if (arr.length === 0) return undefined
+function restorePublishingAssets(value: unknown): OrganicCalendarDraft['publishingAssets'] {
+  const arr = asArray(value).filter((a): a is Record<string, unknown> =>
+    Boolean(a && typeof a === 'object' && !Array.isArray(a)),
+  );
+  if (arr.length === 0) return undefined;
   return arr.map((item) => ({
-    role: readString(item.role) ?? "primary",
-    kind: readString(item.kind) === "video" ? ("video" as const) : ("image" as const),
+    role: readString(item.role) ?? 'primary',
+    kind: readString(item.kind) === 'video' ? ('video' as const) : ('image' as const),
     slideIndex: readNumber(item.slideIndex) ?? undefined,
     assetId: readString(item.assetId) ?? null,
     bucket: readString(item.bucket) ?? null,
-    storagePath: readString(item.storagePath) ?? "",
-    storageUrl: readString(item.storageUrl) ?? "",
+    storagePath: readString(item.storagePath) ?? '',
+    storageUrl: readString(item.storageUrl) ?? '',
     mimeType: readString(item.mimeType) ?? undefined,
     width: readNumber(item.width) ?? undefined,
     height: readNumber(item.height) ?? undefined,
-  }))
+  }));
 }
 
-function restoreHashtags(value: unknown): OrganicCalendarDraft["hashtags"] {
-  const obj = asRecord(value)
-  if (Object.keys(obj).length === 0) return undefined
-  const high = readStringArray(obj.high)
-  const medium = readStringArray(obj.medium)
-  const low = readStringArray(obj.low)
-  if (high.length === 0 && medium.length === 0 && low.length === 0) return undefined
-  return { high, medium, low }
+function restoreHashtags(value: unknown): OrganicCalendarDraft['hashtags'] {
+  const obj = asRecord(value);
+  if (Object.keys(obj).length === 0) return undefined;
+  const high = readStringArray(obj.high);
+  const medium = readStringArray(obj.medium);
+  const low = readStringArray(obj.low);
+  if (high.length === 0 && medium.length === 0 && low.length === 0) return undefined;
+  return { high, medium, low };
 }
 
-function restoreAssetHints(value: unknown): OrganicCalendarDraft["assetHints"] {
-  const arr = asArray(value).filter(
-    (a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a))
-  )
-  if (arr.length === 0) return undefined
+function restoreAssetHints(value: unknown): OrganicCalendarDraft['assetHints'] {
+  const arr = asArray(value).filter((a): a is Record<string, unknown> =>
+    Boolean(a && typeof a === 'object' && !Array.isArray(a)),
+  );
+  if (arr.length === 0) return undefined;
   return arr.map((item) => ({
-    role: readString(item.role) ?? "",
-    suggestion: readString(item.suggestion) ?? "",
-  }))
+    role: readString(item.role) ?? '',
+    suggestion: readString(item.suggestion) ?? '',
+  }));
 }
 
 export type PersistedOrganicDraftRow = {
-  id: string
-  status: string | null
-  scheduled_date: string | null
-  slot_data: unknown
-  platform_account_id: string | null
-  instagram_post_id?: string | null
-  updated_at?: string | null
+  id: string;
+  status: string | null;
+  scheduled_date: string | null;
+  slot_data: unknown;
+  platform_account_id: string | null;
+  instagram_post_id?: string | null;
+  updated_at?: string | null;
   // Backend-generated drafts (createPost + bulk) carry the rich content here
   // (the CalendarPlacement) rather than in slot_data.draftSnapshot.
-  content_json?: unknown
+  content_json?: unknown;
   // Non-null for drafts that belong to a bulk plan — the "planned" provenance tag.
-  content_plan_id?: string | null
+  content_plan_id?: string | null;
   // Authoritative enrichment ladder stamped by the backend on every persist.
   // Legacy rows (pre-column) are null; we derive a fallback from content_json.
-  media_stage?: string | null
+  media_stage?: string | null;
   // Immutable per-brand identity (UNIQUE (brand_id, client_key)). Legacy rows are
   // null; we fall back to the snapshot/row id when mapping.
-  client_key?: string | null
-}
+  client_key?: string | null;
+};
 
 export type PersistedDraftWritePayload = {
-  brand_id: string
+  brand_id: string;
   // First-class platform keying column (mirrors the backend persist path) so the
   // planner can key drafts by (brand_id, platform, scheduled_date).
-  platform: string
-  platform_account_id: string
-  status: PersistedDraftStatus
-  scheduled_date: string | null
-  slot_data: Record<string, unknown>
+  platform: string;
+  platform_account_id: string;
+  status: PersistedDraftStatus;
+  scheduled_date: string | null;
+  slot_data: Record<string, unknown>;
   // Canonical per-brand identity for UPSERT (brand_id, client_key) — keeps the
   // autosave from inserting a second row for the same logical draft.
-  client_key: string
-}
+  client_key: string;
+};
 
 export type PersistedCalendarEntry = {
-  dayId: string
-  draft: OrganicCalendarDraft
-}
+  dayId: string;
+  draft: OrganicCalendarDraft;
+};
 
-const FALLBACK_PLATFORM: OrganicPlatformKey = "instagram"
-const UNASSIGNED_PLATFORM_ACCOUNT_ID = "unassigned"
+const FALLBACK_PLATFORM: OrganicPlatformKey = 'instagram';
+const UNASSIGNED_PLATFORM_ACCOUNT_ID = 'unassigned';
 const PERSISTABLE_STATUS_SET = new Set<PersistedDraftStatus>([
-  "draft",
-  "scheduled",
-  "published",
-  "failed",
-  "placeholder",
-])
+  'draft',
+  'scheduled',
+  'published',
+  'failed',
+  'placeholder',
+]);
 
 function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  return value as Record<string, unknown>
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }
 
 function readString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
 function readNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function normalizeLocalStatus(status: OrganicDraftStatus): PersistedDraftStatus {
-  if (status === "streaming") return "draft"
+  if (status === 'streaming') return 'draft';
   if (
-    status === "draft" ||
-    status === "scheduled" ||
-    status === "published" ||
-    status === "failed" ||
-    status === "placeholder"
+    status === 'draft' ||
+    status === 'scheduled' ||
+    status === 'published' ||
+    status === 'failed' ||
+    status === 'placeholder'
   ) {
-    return status
+    return status;
   }
-  return "draft"
+  return 'draft';
 }
 
 export function normalizePersistedStatus(status: unknown): PersistedDraftStatus {
-  if (typeof status === "string" && PERSISTABLE_STATUS_SET.has(status as PersistedDraftStatus)) {
-    return status as PersistedDraftStatus
+  if (typeof status === 'string' && PERSISTABLE_STATUS_SET.has(status as PersistedDraftStatus)) {
+    return status as PersistedDraftStatus;
   }
-  return "draft"
+  return 'draft';
 }
 
 function normalizePlatform(value: unknown): OrganicPlatformKey {
-  if (typeof value === "string" && isOrganicPlatformKey(value)) {
-    return value
+  if (typeof value === 'string' && isOrganicPlatformKey(value)) {
+    return value;
   }
-  return FALLBACK_PLATFORM
+  return FALLBACK_PLATFORM;
 }
 
 /** Derive a "h:mm AM/PM" label from an ISO/timestamptz string's time part. */
 function formatIsoTimeLabel(iso: string | null): string | null {
-  if (!iso) return null
-  const match = iso.match(/[T ](\d{2}):(\d{2})/)
-  if (!match) return null
-  let hour = Number(match[1])
-  const minute = match[2]
-  const meridiem = hour >= 12 ? "PM" : "AM"
-  hour = hour % 12 || 12
-  return `${hour}:${minute} ${meridiem}`
+  if (!iso) return null;
+  const match = iso.match(/[T ](\d{2}):(\d{2})/);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const meridiem = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12 || 12;
+  return `${hour}:${minute} ${meridiem}`;
 }
 
 function mapSlotDataDraftId(slotData: Record<string, unknown>, rowId: string): string {
   return (
-    readString(slotData.placementId) ??
-    readString(asRecord(slotData.draftSnapshot).id) ??
-    rowId
-  )
+    readString(slotData.placementId) ?? readString(asRecord(slotData.draftSnapshot).id) ?? rowId
+  );
 }
 
 /**
@@ -288,52 +315,50 @@ function mapSlotDataDraftId(slotData: Record<string, unknown>, rowId: string): s
  * the UNSCHEDULED sentinel so they surface in the list instead of vanishing.
  */
 export function resolvePersistedRowDayId(row: PersistedOrganicDraftRow): string {
-  const slotData = asRecord(row.slot_data)
-  const scheduleData = asRecord(slotData.schedule)
-  const placementSchedule = asRecord(asRecord(row.content_json).schedule)
-  const scheduledIso = readString(row.scheduled_date)
+  const slotData = asRecord(row.slot_data);
+  const scheduleData = asRecord(slotData.schedule);
+  const placementSchedule = asRecord(asRecord(row.content_json).schedule);
+  const scheduledIso = readString(row.scheduled_date);
   return (
     readString(slotData.dayId) ??
     readString(scheduleData.dayId) ??
     readString(placementSchedule.dayId) ??
     (scheduledIso ? scheduledIso.slice(0, 10) : null) ??
     UNSCHEDULED_DAY_ID
-  )
+  );
 }
 
 export function isDayIdInWeekRange(dayId: string, weekStartId: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dayId) || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartId)) {
-    return false
+    return false;
   }
 
-  const [year, month, day] = dayId.split("-").map(Number)
-  const [weekYear, weekMonth, weekDay] = weekStartId.split("-").map(Number)
-  const currentUtc = Date.UTC(year, month - 1, day)
-  const weekUtc = Date.UTC(weekYear, weekMonth - 1, weekDay)
-  const diffDays = Math.floor((currentUtc - weekUtc) / 86_400_000)
-  return diffDays >= 0 && diffDays <= 6
+  const [year, month, day] = dayId.split('-').map(Number);
+  const [weekYear, weekMonth, weekDay] = weekStartId.split('-').map(Number);
+  const currentUtc = Date.UTC(year, month - 1, day);
+  const weekUtc = Date.UTC(weekYear, weekMonth - 1, weekDay);
+  const diffDays = Math.floor((currentUtc - weekUtc) / 86_400_000);
+  return diffDays >= 0 && diffDays <= 6;
 }
 
 export function buildPersistedDraftPayload(args: {
-  brandId: string
-  weekStartId: string
-  dayId: string
-  draft: OrganicCalendarDraft
-  platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>
+  brandId: string;
+  weekStartId: string;
+  dayId: string;
+  draft: OrganicCalendarDraft;
+  platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
 }): PersistedDraftWritePayload {
-  const { brandId, weekStartId, dayId, draft, platformAccountIds = {} } = args
-  const primaryPlatform = normalizePlatform(draft.platforms[0])
+  const { brandId, weekStartId, dayId, draft, platformAccountIds = {} } = args;
+  const primaryPlatform = normalizePlatform(draft.platforms[0]);
   const platformAccountId =
-    draft.targetAccountId ??
-    platformAccountIds[primaryPlatform] ??
-    UNASSIGNED_PLATFORM_ACCOUNT_ID
+    draft.targetAccountId ?? platformAccountIds[primaryPlatform] ?? UNASSIGNED_PLATFORM_ACCOUNT_ID;
 
-  const status = normalizeLocalStatus(draft.status)
+  const status = normalizeLocalStatus(draft.status);
   const snapshot: OrganicCalendarDraft = {
     ...draft,
     status,
     backendDraftId: undefined,
-  }
+  };
 
   return {
     brand_id: brandId,
@@ -350,11 +375,14 @@ export function buildPersistedDraftPayload(args: {
       dayId,
       timeLabel: draft.timeLabel,
       platform: primaryPlatform,
+      // First-class: the enrichment ladder's generate-copy route grounds generation on
+      // this trend. It must not have to reach into draftSnapshot, a frontend blob.
+      trendId: draft.seedTrendId ?? null,
       draftSnapshot: snapshot,
       caption: draft.captionPreview,
       title: draft.title,
     },
-  }
+  };
 }
 
 /**
@@ -371,127 +399,129 @@ export function buildPersistedDraftPayload(args: {
  */
 export function mergeUnsavedLocalDrafts(
   serverDays: OrganicCalendarDay[],
-  localDays: OrganicCalendarDay[]
+  localDays: OrganicCalendarDay[],
 ): OrganicCalendarDay[] {
   // Index server rows on EVERY identity axis. A logical draft can appear locally
   // as an optimistic copy whose `id` differs from the server row's mapped id; the
   // canonical link is `clientKey`. Deduping by id alone let the optimistic copy
   // survive and the autosave re-INSERT it — the duplicate-posts bug.
-  const serverDraftIds = new Set<string>()
-  const serverBackendIds = new Set<string>()
-  const serverClientKeys = new Set<string>()
+  const serverDraftIds = new Set<string>();
+  const serverBackendIds = new Set<string>();
+  const serverClientKeys = new Set<string>();
   serverDays.forEach((day) =>
     day.slots.forEach((slot) => {
-      serverDraftIds.add(slot.id)
-      if (slot.backendDraftId) serverBackendIds.add(slot.backendDraftId)
-      if (slot.clientKey) serverClientKeys.add(slot.clientKey)
+      serverDraftIds.add(slot.id);
+      if (slot.backendDraftId) serverBackendIds.add(slot.backendDraftId);
+      if (slot.clientKey) serverClientKeys.add(slot.clientKey);
     }),
-  )
+  );
 
   // A draft the user gave their own creative (AI Studio apply / manual attach) is
   // marked 'user_supplied'. The server row for an agent draft still carries the
   // OLD generated creative, so a refetch would clobber the applied one. Keep the
   // local user-supplied media (keyed on every identity axis) and splice it back
   // onto the matching server slot so the applied creative does not flicker away.
-  const userSuppliedLocal = new Map<string, OrganicCalendarDraft>()
+  const userSuppliedLocal = new Map<string, OrganicCalendarDraft>();
   for (const localDay of localDays) {
     for (const draft of localDay.slots) {
-      if (draft.mediaSuggestion?.mediaStatus !== "user_supplied") continue
-      if (draft.backendDraftId) userSuppliedLocal.set(draft.backendDraftId, draft)
-      if (draft.clientKey) userSuppliedLocal.set(draft.clientKey, draft)
+      if (draft.mediaSuggestion?.mediaStatus !== 'user_supplied') continue;
+      if (draft.backendDraftId) userSuppliedLocal.set(draft.backendDraftId, draft);
+      if (draft.clientKey) userSuppliedLocal.set(draft.clientKey, draft);
     }
   }
   const preserveUserSuppliedMedia = (slot: OrganicCalendarDraft): OrganicCalendarDraft => {
     const local =
       (slot.backendDraftId ? userSuppliedLocal.get(slot.backendDraftId) : undefined) ??
-      (slot.clientKey ? userSuppliedLocal.get(slot.clientKey) : undefined)
-    if (!local) return slot
+      (slot.clientKey ? userSuppliedLocal.get(slot.clientKey) : undefined);
+    if (!local) return slot;
     return {
       ...slot,
       mediaSuggestion: local.mediaSuggestion,
       publishingAssets: local.publishingAssets,
       mediaCount: local.mediaCount,
-    }
-  }
+    };
+  };
   const serverDaysWithLocalMedia =
     userSuppliedLocal.size === 0
       ? serverDays
-      : serverDays.map((day) => ({ ...day, slots: day.slots.map(preserveUserSuppliedMedia) }))
+      : serverDays.map((day) => ({ ...day, slots: day.slots.map(preserveUserSuppliedMedia) }));
 
-  const unsavedByDayId = new Map<string, OrganicCalendarDraft[]>()
+  const unsavedByDayId = new Map<string, OrganicCalendarDraft[]>();
   for (const localDay of localDays) {
     for (const draft of localDay.slots) {
-      if (draft.backendDraftId) continue
-      if (serverDraftIds.has(draft.id)) continue
+      if (draft.backendDraftId) continue;
+      if (serverDraftIds.has(draft.id)) continue;
       // Already represented server-side under the canonical key — not unsaved.
-      if (draft.clientKey && serverClientKeys.has(draft.clientKey)) continue
-      if (draft.clientKey && serverBackendIds.has(draft.clientKey)) continue
-      const pending = unsavedByDayId.get(localDay.id) ?? []
-      pending.push(draft)
-      unsavedByDayId.set(localDay.id, pending)
+      if (draft.clientKey && serverClientKeys.has(draft.clientKey)) continue;
+      if (draft.clientKey && serverBackendIds.has(draft.clientKey)) continue;
+      const pending = unsavedByDayId.get(localDay.id) ?? [];
+      pending.push(draft);
+      unsavedByDayId.set(localDay.id, pending);
     }
   }
 
-  if (unsavedByDayId.size === 0) return serverDaysWithLocalMedia
+  if (unsavedByDayId.size === 0) return serverDaysWithLocalMedia;
 
-  const serverDayIds = new Set(serverDaysWithLocalMedia.map((day) => day.id))
+  const serverDayIds = new Set(serverDaysWithLocalMedia.map((day) => day.id));
   const merged = serverDaysWithLocalMedia.map((day) => {
-    const pending = unsavedByDayId.get(day.id)
-    return pending ? { ...day, slots: [...day.slots, ...pending] } : day
-  })
+    const pending = unsavedByDayId.get(day.id);
+    return pending ? { ...day, slots: [...day.slots, ...pending] } : day;
+  });
 
-  const localById = new Map(localDays.map((day) => [day.id, day]))
+  const localById = new Map(localDays.map((day) => [day.id, day]));
   for (const [dayId, pending] of unsavedByDayId) {
-    if (serverDayIds.has(dayId)) continue
-    const base = localById.get(dayId)
-    merged.push(base ? { ...base, slots: [...pending] } : { ...makeCalendarDay(dayId), slots: [...pending] })
+    if (serverDayIds.has(dayId)) continue;
+    const base = localById.get(dayId);
+    merged.push(
+      base ? { ...base, slots: [...pending] } : { ...makeCalendarDay(dayId), slots: [...pending] },
+    );
   }
-  return merged
+  return merged;
 }
 
 // Server-owned provenance. The agent/MCP pre-mint writes origin at slot_data.origin
 // (top level); the manual flow writes it under draftSnapshot.origin. 'mcp' collapses
 // to 'agent' — both are server-owned (the browser autosave must never write them).
-function resolveDraftOrigin(value: unknown): OrganicCalendarDraft["origin"] {
-  if (value === "manual") return "manual"
-  if (value === "agent" || value === "mcp") return "agent"
-  return undefined
+function resolveDraftOrigin(value: unknown): OrganicCalendarDraft['origin'] {
+  if (value === 'manual') return 'manual';
+  if (value === 'agent' || value === 'mcp') return 'agent';
+  return undefined;
 }
 
 function resolveMediaStage(
   columnValue: string | null | undefined,
   placement: Record<string, unknown>,
 ): OrganicMediaStage {
-  const parsed = organicMediaStageSchema.safeParse(columnValue)
-  if (parsed.success) return parsed.data
+  const parsed = organicMediaStageSchema.safeParse(columnValue);
+  if (parsed.success) return parsed.data;
   // Legacy rows predate the column: derive from the durable placement signals.
-  return deriveOrganicMediaStage(placement as Parameters<typeof deriveOrganicMediaStage>[0])
+  return deriveOrganicMediaStage(placement as Parameters<typeof deriveOrganicMediaStage>[0]);
 }
 
 export function mapPersistedRowToCalendarEntry(
   row: PersistedOrganicDraftRow,
-  days: OrganicCalendarDay[]
+  days: OrganicCalendarDay[],
 ): PersistedCalendarEntry | null {
-  if (!row.id) return null
+  if (!row.id) return null;
 
-  const slotData = asRecord(row.slot_data)
-  const snapshot = asRecord(slotData.draftSnapshot)
+  const slotData = asRecord(row.slot_data);
+  const snapshot = asRecord(slotData.draftSnapshot);
   // Backend-generated drafts (createPost + bulk) have no draftSnapshot; their
   // content lives in content_json (the CalendarPlacement). Resolve from both
   // shapes so generated content places on the grid instead of being dropped.
-  const placement = asRecord(row.content_json)
-  const placementContent = asRecord(placement.content)
-  const placementCopy = asRecord(placement.copy)
-  const placementPlatform = asRecord(placement.platform)
-  const placementCreative = asRecord(placement.creative)
-  const scheduledIso = readString(row.scheduled_date)
+  const placement = asRecord(row.content_json);
+  const placementContent = asRecord(placement.content);
+  const placementCopy = asRecord(placement.copy);
+  const placementPlatform = asRecord(placement.platform);
+  const placementCreative = asRecord(placement.creative);
+  const scheduledIso = readString(row.scheduled_date);
 
-  const dayId = resolvePersistedRowDayId(row)
-  const day = days.find((item) => item.id === dayId)
-  if (!day) return null
-  const isUnscheduled = dayId === UNSCHEDULED_DAY_ID
+  const dayId = resolvePersistedRowDayId(row);
+  const day = days.find((item) => item.id === dayId);
+  if (!day) return null;
+  const isUnscheduled = dayId === UNSCHEDULED_DAY_ID;
 
-  const snapshotPlatforms = readStringArray(snapshot.platforms)
+  const snapshotPlatforms = readStringArray(snapshot.platforms);
   const platforms =
     snapshotPlatforms.length > 0
       ? snapshotPlatforms.map((platform) => normalizePlatform(platform))
@@ -501,9 +531,9 @@ export function mapPersistedRowToCalendarEntry(
               slotData.platform ??
               placementPlatform.name,
           ),
-        ]
+        ];
 
-  const draftId = mapSlotDataDraftId(slotData, row.id)
+  const draftId = mapSlotDataDraftId(slotData, row.id);
 
   const draft: OrganicCalendarDraft = {
     id: draftId,
@@ -514,43 +544,48 @@ export function mapPersistedRowToCalendarEntry(
       readString(snapshot.title) ??
       readString(slotData.title) ??
       readString(placementContent.titleTopic) ??
-      "Saved draft",
-    summary: readString(snapshot.summary) ?? "",
+      'Saved draft',
+    summary: readString(snapshot.summary) ?? '',
     timeLabel:
       readString(slotData.timeLabel) ??
       readString(snapshot.timeLabel) ??
       formatIsoTimeLabel(scheduledIso) ??
       day.suggestedTimes[0] ??
-      "9:00 AM",
-    dateLabel: isUnscheduled ? "" : `${day.label}, ${day.dateLabel}`,
+      '9:00 AM',
+    dateLabel: isUnscheduled ? '' : `${day.label}, ${day.dateLabel}`,
     status: normalizePersistedStatus(row.status),
     mediaStage: resolveMediaStage(row.media_stage, placement),
+    // A non-empty content_json is the backend's own "this draft has generated copy"
+    // signal — the same predicate the generate-copy route's precondition uses.
+    hasCopy: Object.keys(placement).length > 0,
     platforms,
     contentPlanId: readString(row.content_plan_id) ?? null,
-    format: readString(snapshot.format) ?? readString(placementContent.format) ?? "Post",
-    objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? "Draft",
+    format: readString(snapshot.format) ?? readString(placementContent.format) ?? 'Post',
+    objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? 'Draft',
     captionPreview:
       readString(snapshot.captionPreview) ??
       readString(slotData.caption) ??
       readString(placementCopy.caption) ??
-      "",
+      '',
     tags: readStringArray(snapshot.tags),
     mediaCount: readNumber(snapshot.mediaCount) ?? 1,
     seedTrendId: readString(snapshot.seedTrendId) ?? undefined,
     origin: resolveDraftOrigin(snapshot.origin ?? slotData.origin),
-    targetAccountId: readString(snapshot.targetAccountId) ?? readString(row.platform_account_id) ?? undefined,
+    targetAccountId:
+      readString(snapshot.targetAccountId) ?? readString(row.platform_account_id) ?? undefined,
     creativeIdea: readString(snapshot.creativeIdea) ?? undefined,
     titleTopic: readString(snapshot.titleTopic) ?? undefined,
     target: readString(snapshot.target) ?? undefined,
     tone: readString(snapshot.tone) ?? undefined,
     cta: readString(snapshot.cta) ?? undefined,
     generationError: readString(snapshot.generationError) ?? undefined,
-    instagram_post_id: readString(snapshot.instagram_post_id) ?? readString(row.instagram_post_id) ?? null,
+    instagram_post_id:
+      readString(snapshot.instagram_post_id) ?? readString(row.instagram_post_id) ?? null,
     creativeDirectionPrompt: readString(snapshot.creativeDirectionPrompt) ?? undefined,
     thumbnailPrompt: readString(snapshot.thumbnailPrompt) ?? undefined,
     location: readString(snapshot.location) ?? undefined,
     slideCount: readNumber(snapshot.slideCount) ?? undefined,
-    adjusted: typeof snapshot.adjusted === "boolean" ? snapshot.adjusted : undefined,
+    adjusted: typeof snapshot.adjusted === 'boolean' ? snapshot.adjusted : undefined,
     generationAttempts: readNumber(snapshot.generationAttempts) ?? undefined,
     mediaSuggestion: restoreMediaSuggestion(
       Object.keys(asRecord(snapshot.mediaSuggestion)).length > 0
@@ -562,9 +597,11 @@ export function mapPersistedRowToCalendarEntry(
         ? snapshot.publishingAssets
         : placement.publishingAssets,
     ),
-    hashtags: restoreHashtags(snapshot.hashtags),
+    // Agent drafts have no draftSnapshot — their copy lives in content_json. Reading only the
+    // snapshot is why they published with a caption but no hashtag block.
+    hashtags: restoreHashtags(snapshot.hashtags) ?? restoreHashtags(placementCopy.hashtags),
     assetHints: restoreAssetHints(snapshot.assetHints),
-  }
+  };
 
-  return { dayId, draft }
+  return { dayId, draft };
 }

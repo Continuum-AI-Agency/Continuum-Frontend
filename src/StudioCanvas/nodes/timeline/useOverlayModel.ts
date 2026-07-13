@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
-import { useStudioStore } from '../../stores/useStudioStore';
-import type { TimelineEditorNodeData, TimelineItem, TimelineTrack } from '../../types';
+import type { TimelineItem, TimelineTrack } from '../../types';
 import type { ClipEffectSpec } from '../../utils/render/effectSpec';
+import type { TimelineEditorAdapter } from './adapter';
 import {
   addOverlayTrack,
   allOverlayItems,
@@ -32,9 +32,9 @@ import {
 } from './useTimelineEditorModel';
 
 // Editing model for overlay-track items. Mirrors useTimelineEditorModel's
-// write-through pattern (updateNode + triggerSave, resetting the render gate) but
-// operates on data.overlayTracks. Reuses the base item mutations so trim/still/
-// effects behave identically for overlays.
+// write-through pattern (patch the host document, resetting the render gate) but
+// operates on the document's overlayTracks. Reuses the base item mutations so
+// trim/still/effects behave identically for overlays.
 
 export interface OverlayModel {
   laneItems: OverlayLaneItem[];
@@ -59,27 +59,22 @@ export interface OverlayModel {
 }
 
 export function useOverlayModel(params: {
-  nodeId: string;
+  adapter: TimelineEditorAdapter;
   tracks: TimelineTrack[];
   sourceDurations: Map<string, number>;
   labelFor: (sourceNodeId: string) => string;
 }): OverlayModel {
-  const { nodeId, tracks, sourceDurations, labelFor } = params;
-  const updateNode = useStudioStore((state) => state.updateNode);
-  const triggerSave = useStudioStore((state) => state.triggerSave);
+  const { adapter, tracks, sourceDurations, labelFor } = params;
+  const patchDocument = adapter.patchDocument;
 
   const write = useCallback(
     (updater: (tracks: TimelineTrack[]) => TimelineTrack[]) => {
-      updateNode(nodeId, (node) => {
-        const data = node.data as TimelineEditorNodeData;
-        return {
-          ...node,
-          data: { ...data, overlayTracks: updater(resolveOverlayTracks(data)), committed: false },
-        };
-      });
-      triggerSave();
+      patchDocument((document) => ({
+        ...document,
+        overlayTracks: updater(resolveOverlayTracks(document)),
+      }));
     },
-    [nodeId, triggerSave, updateNode],
+    [patchDocument],
   );
 
   const sourceDurationOf = useCallback(

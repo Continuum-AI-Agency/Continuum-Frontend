@@ -1,5 +1,7 @@
 "use client";
 
+// House-modified: diverged from the upstream ai-elements component of the same name.
+// Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import * as React from "react";
 import { ArrowDown } from "lucide-react";
 

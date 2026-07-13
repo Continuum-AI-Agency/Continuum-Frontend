@@ -12,7 +12,7 @@ import type {
 // the lean shape returned by `get` and every edit confirmation.
 
 const FREE_TEXT_KEYS = new Set(['value', 'prompt', 'positivePrompt', 'negativePrompt']);
-const FREE_TEXT_CAP = 160;
+export const FREE_TEXT_CAP = 160;
 
 // Hard ceilings on how much of a canvas reaches the agent. A workflow can grow
 // without bound; the context window cannot. When either ceiling engages the
@@ -38,8 +38,8 @@ export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   veoFast: ['model', 'prompt', 'negativePrompt', 'aspectRatio', 'durationSeconds', 'resolution'],
   omniGen: ['model', 'prompt', 'aspectRatio'],
   extendVideo: ['prompt'],
-  videoEditor: ['outputFormat'],
-  timelineEditor: ['outputFormat'],
+  videoEditor: ['outputFormat', 'clipSlots'],
+  timelineEditor: ['outputFormat', 'items'],
   publishToPlanner: ['platform', 'status', 'scheduledAt'],
   image: ['fileName', 'referenceType', 'aspectRatio'],
   video: ['fileName'],
@@ -67,6 +67,13 @@ export interface ProjectedTruncation {
   edges_omitted: number;
 }
 
+/** Present when the projection was scoped — the viewport, not the whole canvas. */
+export interface ProjectedScope {
+  focus: string[];
+  hops: number;
+  nodes_in_scope: number;
+}
+
 export interface ProjectedGraph {
   node_count: number;
   edge_count: number;
@@ -75,11 +82,72 @@ export interface ProjectedGraph {
   wiring: string[];
   attachments: ProjectedAttachment[];
   truncated?: ProjectedTruncation;
+  scope?: ProjectedScope;
 }
 
 interface ProjectionInput {
   nodes: Array<GraphNodeLike & { type?: string }>;
   edges: GraphEdgeLike[];
+}
+
+export interface ProjectionScopeOptions {
+  /** Node ids to centre the viewport on. Unknown ids are ignored. */
+  focus?: string[];
+  /** How many wiring hops out from the focus to include (undirected). Default 1. */
+  hops?: number;
+  /** Case-insensitive match on id, type, label, and free-text config → focus set. */
+  query?: string;
+}
+
+const SCOPE_TEXT_KEYS = ['label', 'value', 'prompt', 'positivePrompt', 'fileName'] as const;
+
+/**
+ * Find the node ids a natural-language locator refers to — "the publish node",
+ * "hero" — without projecting any config. The cheap first hop on a big canvas.
+ */
+export function findNodeIds(graph: ProjectionInput, query: string): string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return graph.nodes
+    .filter((node) => {
+      if (node.id.toLowerCase().includes(needle)) return true;
+      if ((node.type ?? '').toLowerCase().includes(needle)) return true;
+      const data = node.data ?? {};
+      return SCOPE_TEXT_KEYS.some((key) => {
+        const value = data[key];
+        return typeof value === 'string' && value.toLowerCase().includes(needle);
+      });
+    })
+    .map((node) => node.id);
+}
+
+/**
+ * The subgraph within `hops` undirected wiring hops of `focus`. Edges are kept
+ * only when BOTH endpoints are in scope, so scoped wiring never dangles.
+ */
+export function selectSubgraph(
+  graph: ProjectionInput,
+  focus: string[],
+  hops: number,
+): ProjectionInput {
+  const known = new Set(graph.nodes.map((n) => n.id));
+  let frontier = new Set(focus.filter((id) => known.has(id)));
+  const inScope = new Set(frontier);
+
+  for (let hop = 0; hop < hops && frontier.size > 0; hop += 1) {
+    const next = new Set<string>();
+    for (const edge of graph.edges) {
+      if (frontier.has(edge.source) && !inScope.has(edge.target)) next.add(edge.target);
+      if (frontier.has(edge.target) && !inScope.has(edge.source)) next.add(edge.source);
+    }
+    for (const id of next) inScope.add(id);
+    frontier = next;
+  }
+
+  return {
+    nodes: graph.nodes.filter((n) => inScope.has(n.id)),
+    edges: graph.edges.filter((e) => inScope.has(e.source) && inScope.has(e.target)),
+  };
 }
 
 function capText(value: string): string {
@@ -95,6 +163,30 @@ function isEmpty(value: unknown): boolean {
   );
 }
 
+// Raw timeline items / clip slots carry ids, effect specs and keyframes the agent
+// cannot use; compact them to the placement facts it can. Timeline items render as
+// `<order>:<sourceNodeId>[@trimStart-trimEnd s]` — enough to see, verify and re-emit
+// the cut via set_timeline.
+const CONFIG_TRANSFORMS: Record<string, (value: unknown) => unknown> = {
+  'timelineEditor.items': (value) => {
+    if (!Array.isArray(value)) return undefined;
+    return value.map((item) => {
+      const it = item as {
+        order?: number;
+        sourceNodeId?: string;
+        trimStartSec?: number;
+        trimEndSec?: number;
+      };
+      const trims =
+        it.trimStartSec !== undefined || it.trimEndSec !== undefined
+          ? `@${it.trimStartSec ?? 0}-${it.trimEndSec ?? ''}s`
+          : '';
+      return `${it.order ?? 0}:${it.sourceNodeId ?? '?'}${trims}`;
+    });
+  },
+  'videoEditor.clipSlots': (value) => (Array.isArray(value) ? value.length : undefined),
+};
+
 function projectConfig(
   type: string,
   data: Record<string, unknown>,
@@ -105,6 +197,9 @@ function projectConfig(
     let value = data[key];
     if (isEmpty(value)) continue;
     if (FREE_TEXT_KEYS.has(key) && typeof value === 'string') value = capText(value);
+    const transform = CONFIG_TRANSFORMS[`${type}.${key}`];
+    if (transform) value = transform(value);
+    if (isEmpty(value)) continue;
     config[key] = value;
   }
   return Object.keys(config).length > 0 ? config : undefined;
@@ -165,14 +260,33 @@ function attachmentFor(
   return undefined;
 }
 
-export function projectGraphForAgent(graph: ProjectionInput): ProjectedGraph {
+export function projectGraphForAgent(
+  graph: ProjectionInput,
+  scopeOptions?: ProjectionScopeOptions,
+): ProjectedGraph {
+  // Whole-graph facts are computed BEFORE any scoping: a scoped viewport must
+  // never mislead the agent about the size of the canvas it is editing.
   const nodeTypes: Record<string, number> = {};
   for (const node of graph.nodes) {
     const type = node.type ?? 'unknown';
     nodeTypes[type] = (nodeTypes[type] ?? 0) + 1;
   }
+  const totalNodes = graph.nodes.length;
+  const totalEdges = graph.edges.length;
 
-  const window = graph.nodes.slice(0, MAX_PROJECTED_NODES);
+  let scoped = graph;
+  let scope: ProjectedScope | undefined;
+  if (scopeOptions) {
+    const fromQuery = scopeOptions.query ? findNodeIds(graph, scopeOptions.query) : [];
+    const focus = [...new Set([...(scopeOptions.focus ?? []), ...fromQuery])];
+    if (focus.length > 0) {
+      const hops = Math.max(0, Math.min(scopeOptions.hops ?? 1, 3));
+      scoped = selectSubgraph(graph, focus, hops);
+      scope = { focus, hops, nodes_in_scope: scoped.nodes.length };
+    }
+  }
+
+  const window = scoped.nodes.slice(0, MAX_PROJECTED_NODES);
   const nodes: ProjectedNode[] = [];
   const attachments: ProjectedAttachment[] = [];
 
@@ -190,16 +304,19 @@ export function projectGraphForAgent(graph: ProjectionInput): ProjectedGraph {
     if (attachment) attachments.push(attachment);
   }
 
-  const wiring = graph.edges
+  const wiring = scoped.edges
     .slice(0, MAX_PROJECTED_WIRING)
     .map((e) => `${e.source}.${e.sourceHandle ?? 'out'} → ${e.target}.${e.targetHandle ?? 'in'}`);
 
-  const nodesOmitted = graph.nodes.length - nodes.length;
-  const edgesOmitted = graph.edges.length - wiring.length;
+  // `truncated` reports what the WINDOW dropped from what was requested (the
+  // scope if one engaged, else the whole graph) — scoping itself is not
+  // truncation, and `scope` already says how much of the canvas is in view.
+  const nodesOmitted = scoped.nodes.length - nodes.length;
+  const edgesOmitted = scoped.edges.length - wiring.length;
 
   const projection: ProjectedGraph = {
-    node_count: graph.nodes.length,
-    edge_count: graph.edges.length,
+    node_count: totalNodes,
+    edge_count: totalEdges,
     node_types: nodeTypes,
     nodes,
     wiring,
@@ -208,5 +325,6 @@ export function projectGraphForAgent(graph: ProjectionInput): ProjectedGraph {
   if (nodesOmitted > 0 || edgesOmitted > 0) {
     projection.truncated = { nodes_omitted: nodesOmitted, edges_omitted: edgesOmitted };
   }
+  if (scope) projection.scope = scope;
   return projection;
 }

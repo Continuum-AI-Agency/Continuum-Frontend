@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
   brandInsightsAudienceSchema,
@@ -6,6 +6,7 @@ import {
   brandInsightsBrandVoiceSchema,
   brandInsightsCompetitorSchema,
   brandInsightsDataSchema,
+  brandInsightsEventSchema,
   brandInsightsGenerationResponseSchema,
   brandInsightsJobStreamSchema,
   brandInsightsProfileSchema,
@@ -16,22 +17,19 @@ import {
   brandInsightsStatusResponseSchema,
   brandInsightsTaskStatusSchema,
   brandInsightsTrendSchema,
-  brandInsightsEventSchema,
   brandInsightsTrendsAndEventsSchema,
-} from "@/lib/schemas/brandInsights";
+} from '@/lib/schemas/brandInsights';
 
 // Accept either ISO-8601 timestamps (with "T") or Postgres-style timestamps with a space.
-const isoDateSchema = z
-  .string()
-  .transform((value, ctx) => {
-    const normalized = value.replace(" ", "T");
-    const parsed = new Date(normalized);
-    if (Number.isNaN(parsed.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected ISO timestamp" });
-      return z.NEVER;
-    }
-    return normalized;
-  });
+const isoDateSchema = z.string().transform((value, ctx) => {
+  const normalized = value.replace(' ', 'T');
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Expected ISO timestamp' });
+    return z.NEVER;
+  }
+  return normalized;
+});
 
 const backendPlatformRecommendationSchema = z
   .object({
@@ -234,6 +232,28 @@ const backendReadWindowSchema = z
   })
   .passthrough();
 
+const backendReadWeekSummarySchema = z.object({
+  week_start_date: z.string().nullish(),
+  generation_count: z.number().int().nonnegative().nullish(),
+  regeneration_count: z.number().int().nonnegative().nullish(),
+  latest_generation_id: z.string().nullish(),
+  latest_completed_at: isoDateSchema.nullish(),
+});
+
+const backendReadWeekSchema = z
+  .object({
+    week_start_date: z.string().nullish(),
+    generation_count: z.number().int().nonnegative().nullish(),
+    generations: z.array(backendReadGenerationSchema).default([]),
+  })
+  .passthrough();
+
+const backendGenerationInsightsSnapshotSchema = z.object({
+  trends: z.array(backendTrendSchema).default([]),
+  events: z.array(backendEventSchema).default([]),
+  questions: z.array(backendQuestionSchema).default([]),
+});
+
 const backendReadDataSchema = z
   .object({
     status: z.string().nullish(),
@@ -249,6 +269,8 @@ const backendReadDataSchema = z
     generation: backendReadGenerationSchema.nullish(),
     generation_insights: z.unknown().nullish(),
     generationInsights: z.unknown().nullish(),
+    week: backendReadWeekSchema.nullish(),
+    weeks: z.array(backendReadWeekSummarySchema).default([]),
   })
   .passthrough()
   .refine(
@@ -257,7 +279,7 @@ const backendReadDataSchema = z
       Boolean(data.windows_days ?? data.windowsDays) ||
       Boolean(data.generation_insights ?? data.generationInsights) ||
       data.windows.length > 0,
-    { message: "Payload is not a trends read envelope" }
+    { message: 'Payload is not a trends read envelope' },
   );
 
 const backendReadResponseSchema = z.object({
@@ -527,7 +549,7 @@ const backendProfileDataSchema = z.object({
 });
 
 const backendProfileResponseSchema = z.object({
-  status: z.enum(["success", "onboarding_required"]).or(z.string()),
+  status: z.enum(['success', 'onboarding_required']).or(z.string()),
   data: backendProfileDataSchema.nullish(),
 });
 
@@ -540,7 +562,7 @@ function normalizeStrings(values?: Array<string | null | undefined>) {
 
 function normalizeTimestamp(value?: string | null): string | undefined {
   if (!value) return undefined;
-  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return undefined;
   return normalized;
@@ -548,23 +570,25 @@ function normalizeTimestamp(value?: string | null): string | undefined {
 
 function normalizeUnknownMessage(value: unknown): string | undefined {
   if (value == null) return undefined;
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
   }
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
   if (Array.isArray(value)) {
-    const pieces = value.map((entry) => normalizeUnknownMessage(entry)).filter((entry): entry is string => Boolean(entry));
-    if (pieces.length > 0) return pieces.join("; ");
+    const pieces = value
+      .map((entry) => normalizeUnknownMessage(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    if (pieces.length > 0) return pieces.join('; ');
     try {
       return JSON.stringify(value);
     } catch {
       return undefined;
     }
   }
-  if (typeof value === "object") {
+  if (typeof value === 'object') {
     const asRecord = value as Record<string, unknown>;
     const message = normalizeUnknownMessage(asRecord.message);
     if (message) return message;
@@ -584,7 +608,9 @@ function normalizeUnknownMessage(value: unknown): string | undefined {
 
 function mapCounts(payload?: z.infer<typeof backendTotalsSchema> | null) {
   if (!payload) return undefined;
-  const hasCounts = [payload.trends, payload.events, payload.questions].some((value) => typeof value === "number");
+  const hasCounts = [payload.trends, payload.events, payload.questions].some(
+    (value) => typeof value === 'number',
+  );
   if (!hasCounts) return undefined;
 
   return {
@@ -595,15 +621,15 @@ function mapCounts(payload?: z.infer<typeof backendTotalsSchema> | null) {
 }
 
 function mapRuntime(raw: unknown) {
-  if (!raw || typeof raw !== "object") return undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
   const record = raw as Record<string, unknown>;
   const pick = (snake: string, camel: string) => {
     const value = record[snake] ?? record[camel];
-    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   };
-  const elapsedMs = pick("elapsed_ms", "elapsedMs");
-  const remainingMs = pick("remaining_ms", "remainingMs");
-  const maxDurationMs = pick("max_duration_ms", "maxDurationMs");
+  const elapsedMs = pick('elapsed_ms', 'elapsedMs');
+  const remainingMs = pick('remaining_ms', 'remainingMs');
+  const maxDurationMs = pick('max_duration_ms', 'maxDurationMs');
   if (elapsedMs === undefined && remainingMs === undefined && maxDurationMs === undefined) {
     return undefined;
   }
@@ -622,7 +648,7 @@ function mapStream(payload?: z.infer<typeof backendStreamSchema> | null) {
   const latestMessageId = payload.latest_message_id ?? payload.latestMessageId ?? null;
 
   return brandInsightsJobStreamSchema.parse({
-    transport: payload.transport === "sse" ? "sse" : "sse",
+    transport: payload.transport === 'sse' ? 'sse' : 'sse',
     channel,
     queueName: payload.queue_name ?? payload.queueName ?? undefined,
     latestMessageId,
@@ -630,10 +656,10 @@ function mapStream(payload?: z.infer<typeof backendStreamSchema> | null) {
 }
 
 function normalizeJobStatus(value?: string | null) {
-  if (!value) return "error";
+  if (!value) return 'error';
   const normalized = value.toLowerCase();
   const parsed = brandInsightsTaskStatusSchema.safeParse(normalized);
-  return parsed.success ? parsed.data : "error";
+  return parsed.success ? parsed.data : 'error';
 }
 
 type InsightCommon = {
@@ -662,7 +688,9 @@ function pickRecommendedPlatforms(insight: InsightCommon): string[] | undefined 
   if (direct && direct.length > 0) return direct;
   const meta = insight.metadata;
   if (meta && Array.isArray(meta.recommended_platforms)) {
-    return (meta.recommended_platforms as unknown[]).filter((value): value is string => typeof value === "string");
+    return (meta.recommended_platforms as unknown[]).filter(
+      (value): value is string => typeof value === 'string',
+    );
   }
   return undefined;
 }
@@ -673,20 +701,23 @@ function pickPlatformRecommendations(insight: InsightCommon) {
   const fromMeta = insight.metadata?.platform_recommendations;
   if (!Array.isArray(fromMeta)) return undefined;
   return fromMeta
-    .filter((value): value is { platform: unknown; reason: unknown } => typeof value === "object" && value !== null)
+    .filter(
+      (value): value is { platform: unknown; reason: unknown } =>
+        typeof value === 'object' && value !== null,
+    )
     .map((entry) => ({
-      platform: typeof entry.platform === "string" ? entry.platform : "",
-      reason: typeof entry.reason === "string" ? entry.reason : "",
+      platform: typeof entry.platform === 'string' ? entry.platform : '',
+      reason: typeof entry.reason === 'string' ? entry.reason : '',
     }))
     .filter((entry) => entry.platform.length > 0);
 }
 
 function pickPlatformDistribution(metadata: Record<string, unknown> | null | undefined) {
   const raw = metadata?.platform_distribution;
-  if (!raw || typeof raw !== "object") return undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
   const result: Record<string, number> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof value === "number") result[key] = value;
+    if (typeof value === 'number') result[key] = value;
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }
@@ -699,7 +730,7 @@ function mapTrend(trend: z.infer<typeof backendTrendSchema>) {
     relevanceToBrand: trend.relevance_to_brand ?? trend.relevanceToBrand ?? undefined,
     source: trend.source ?? undefined,
     sourceUrl: trend.source_url ?? trend.sourceUrl ?? undefined,
-    confidence: typeof trend.confidence === "number" ? trend.confidence : undefined,
+    confidence: typeof trend.confidence === 'number' ? trend.confidence : undefined,
     analysisTags: trend.analysis_tags ?? trend.analysisTags ?? undefined,
     sourceSignalCount: trend.source_signal_count ?? trend.sourceSignalCount ?? undefined,
     signalWindowStart: trend.signal_window_start ?? trend.signalWindowStart ?? undefined,
@@ -723,7 +754,7 @@ function mapEvent(event: z.infer<typeof backendEventSchema>) {
     source: event.source ?? undefined,
     sourceUrl: event.source_url ?? event.sourceUrl ?? undefined,
     relevanceToBrand: event.relevance_to_brand ?? event.relevanceToBrand ?? undefined,
-    confidence: typeof event.confidence === "number" ? event.confidence : undefined,
+    confidence: typeof event.confidence === 'number' ? event.confidence : undefined,
     analysisTags: event.analysis_tags ?? event.analysisTags ?? undefined,
     sourceSignalCount: event.source_signal_count ?? event.sourceSignalCount ?? undefined,
     signalWindowStart: event.signal_window_start ?? event.signalWindowStart ?? undefined,
@@ -741,37 +772,42 @@ function mapQuestion(question: z.infer<typeof backendQuestionSchema>) {
   const contentTypeSuggestion =
     question.content_type_suggestion ??
     question.contentTypeSuggestion ??
-    (typeof question.metadata?.content_type_suggestion === "string"
+    (typeof question.metadata?.content_type_suggestion === 'string'
       ? (question.metadata.content_type_suggestion as string)
       : undefined);
   return brandInsightsQuestionSchema.parse({
     id: question.id,
-    question: questionText ?? "",
-    socialPlatform: question.social_platform ?? question.socialPlatform ?? question.platform ?? undefined,
+    question: questionText ?? '',
+    socialPlatform:
+      question.social_platform ?? question.socialPlatform ?? question.platform ?? undefined,
     socialPlatforms: question.social_platforms ?? question.socialPlatforms ?? undefined,
     contentTypeSuggestion,
     whyRelevant: question.why_relevant ?? question.whyRelevant ?? undefined,
     niche: question.niche ?? question.audience_niche ?? question.audienceNiche ?? undefined,
-    confidence: typeof question.confidence === "number" ? question.confidence : undefined,
+    confidence: typeof question.confidence === 'number' ? question.confidence : undefined,
     analysisTags: question.analysis_tags ?? question.analysisTags ?? undefined,
     sourceSignalCount: question.source_signal_count ?? question.sourceSignalCount ?? undefined,
     recommendedPlatforms: pickRecommendedPlatforms(question as unknown as InsightCommon),
     platformRecommendations: pickPlatformRecommendations(question as unknown as InsightCommon),
     platformDistribution:
-      question.platform_distribution ?? question.platformDistribution ?? pickPlatformDistribution(question.metadata),
+      question.platform_distribution ??
+      question.platformDistribution ??
+      pickPlatformDistribution(question.metadata),
     isSelected: question.is_selected ?? question.isSelected ?? false,
     timesUsed: question.times_used ?? question.timesUsed ?? 0,
   });
 }
 
 function mapQuestionsByNiche(payload: z.infer<typeof backendQuestionsByNicheSchema>) {
-  const questionsByNiche: Record<string, z.infer<typeof brandInsightsQuestionsByNicheSchema>["questionsByNiche"][string]> =
-    {};
+  const questionsByNiche: Record<
+    string,
+    z.infer<typeof brandInsightsQuestionsByNicheSchema>['questionsByNiche'][string]
+  > = {};
   let totalQuestions = 0;
 
   const sourceMap = payload.questions_by_niche ?? payload.questionsByNiche ?? {};
   Object.entries(sourceMap).forEach(([niche, value]) => {
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       questionsByNiche[niche] = {
         questions: [],
         totalGenerated: 0,
@@ -780,10 +816,10 @@ function mapQuestionsByNiche(payload: z.infer<typeof backendQuestionsByNicheSche
     }
 
     const parsed = backendNicheQuestionsSchema.parse(value);
-    const stats = "stats" in parsed ? parsed.stats : undefined;
+    const stats = 'stats' in parsed ? parsed.stats : undefined;
     const totalGenerated =
       parsed.total_generated ??
-      ("totalGenerated" in parsed ? parsed.totalGenerated : undefined) ??
+      ('totalGenerated' in parsed ? parsed.totalGenerated : undefined) ??
       stats?.count ??
       undefined;
     const questions = parsed.questions.map(mapQuestion);
@@ -802,8 +838,10 @@ function mapQuestionsByNiche(payload: z.infer<typeof backendQuestionsByNicheSche
     summary:
       payload.summary || nichesCount > 0
         ? {
-            totalNiches: payload.summary?.total_niches ?? payload.summary?.totalNiches ?? nichesCount,
-            totalQuestions: payload.summary?.total_questions ?? payload.summary?.totalQuestions ?? totalQuestions,
+            totalNiches:
+              payload.summary?.total_niches ?? payload.summary?.totalNiches ?? nichesCount,
+            totalQuestions:
+              payload.summary?.total_questions ?? payload.summary?.totalQuestions ?? totalQuestions,
             averagePerNiche:
               payload.summary?.average_per_niche ??
               payload.summary?.averagePerNiche ??
@@ -826,8 +864,8 @@ function mapTrendsAndEvents(payload: z.infer<typeof backendTrendsAndEventsSchema
 }
 
 function mapQuestionsByNicheFromWindow(
-  payload: z.infer<typeof backendReadWindowSchema>,
-  generatedAt?: string
+  payload: Pick<z.infer<typeof backendReadWindowSchema>, 'questions'>,
+  generatedAt?: string,
 ) {
   const grouped = new Map<string, Array<z.infer<typeof backendQuestionSchema>>>();
 
@@ -836,14 +874,16 @@ function mapQuestionsByNicheFromWindow(
       question.niche?.trim() ??
       question.audience_niche?.trim() ??
       question.audienceNiche?.trim() ??
-      "General";
+      'General';
     const questions = grouped.get(niche) ?? [];
     questions.push(question);
     grouped.set(niche, questions);
   });
 
-  const questionsByNiche: Record<string, z.infer<typeof brandInsightsQuestionsByNicheSchema>["questionsByNiche"][string]> =
-    {};
+  const questionsByNiche: Record<
+    string,
+    z.infer<typeof brandInsightsQuestionsByNicheSchema>['questionsByNiche'][string]
+  > = {};
 
   grouped.forEach((questions, niche) => {
     questionsByNiche[niche] = {
@@ -852,7 +892,10 @@ function mapQuestionsByNicheFromWindow(
     };
   });
 
-  const totalQuestions = Array.from(grouped.values()).reduce((total, questions) => total + questions.length, 0);
+  const totalQuestions = Array.from(grouped.values()).reduce(
+    (total, questions) => total + questions.length,
+    0,
+  );
   const totalNiches = grouped.size;
 
   return brandInsightsQuestionsByNicheSchema.parse({
@@ -870,13 +913,16 @@ function mapQuestionsByNicheFromWindow(
   });
 }
 
-function mapTrendsAndEventsFromWindow(payload: z.infer<typeof backendReadWindowSchema>, generatedAt?: string) {
+function mapTrendsAndEventsFromWindow(
+  payload: z.infer<typeof backendReadWindowSchema>,
+  generatedAt?: string,
+) {
   return brandInsightsTrendsAndEventsSchema.parse({
     status: undefined,
     trends: payload.trends.map(mapTrend),
     events: payload.events.map(mapEvent),
     country: undefined,
-    weekAnalyzed: typeof payload.days === "number" ? `${payload.days}d` : undefined,
+    weekAnalyzed: typeof payload.days === 'number' ? `${payload.days}d` : undefined,
     generatedAt,
   });
 }
@@ -906,16 +952,15 @@ function selectReadWindow(windows: Array<z.infer<typeof backendReadWindowSchema>
   if (exactWeek) return exactWeek;
 
   const nonEmpty = windows.find(
-    (window) =>
-      window.trends.length > 0 ||
-      window.events.length > 0 ||
-      window.questions.length > 0
+    (window) => window.trends.length > 0 || window.events.length > 0 || window.questions.length > 0,
   );
   if (nonEmpty) return nonEmpty;
 
-  const sortable = windows.filter((window) => typeof window.days === "number");
+  const sortable = windows.filter((window) => typeof window.days === 'number');
   if (sortable.length === 0) return windows[0];
-  return sortable.sort((a, b) => (a.days ?? Number.MAX_SAFE_INTEGER) - (b.days ?? Number.MAX_SAFE_INTEGER))[0];
+  return sortable.sort(
+    (a, b) => (a.days ?? Number.MAX_SAFE_INTEGER) - (b.days ?? Number.MAX_SAFE_INTEGER),
+  )[0];
 }
 
 function mapLegacyInsightsResponse(payload: z.infer<typeof backendInsightsResponseSchema>) {
@@ -929,13 +974,13 @@ function mapLegacyInsightsResponse(payload: z.infer<typeof backendInsightsRespon
   const weekStartDate = data.week_start_date ?? data.weekStartDate;
 
   if (!generationId || !weekStartDate) {
-    throw new Error("Brand insights payload missing required generation metadata");
+    throw new Error('Brand insights payload missing required generation metadata');
   }
 
   const trendsPayload = data.trends_and_events ?? data.trendsAndEvents;
   const questionsPayload = data.questions_by_niche ?? data.questionsByNiche;
   if (!trendsPayload || !questionsPayload) {
-    throw new Error("Brand insights payload missing trends or questions");
+    throw new Error('Brand insights payload missing trends or questions');
   }
 
   return brandInsightsSchema.parse({
@@ -948,7 +993,8 @@ function mapLegacyInsightsResponse(payload: z.infer<typeof backendInsightsRespon
       country: data.country ?? undefined,
       weekStartDate,
       fromCache: data.from_cache ?? data.fromCache ?? false,
-      selectedSocialPlatforms: data.selected_social_platforms ?? data.selectedSocialPlatforms ?? undefined,
+      selectedSocialPlatforms:
+        data.selected_social_platforms ?? data.selectedSocialPlatforms ?? undefined,
     }),
   });
 }
@@ -962,7 +1008,12 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
   const data = payload.data;
   const anchorTimestamp = normalizeTimestamp(data.anchor_ts ?? data.anchorTs);
   const selectedWindow = selectReadWindow(data.windows);
-  const generationInsights = parseLegacyInsightsData(data.generation_insights ?? data.generationInsights);
+  const generationInsights = parseLegacyInsightsData(
+    data.generation_insights ?? data.generationInsights,
+  );
+  const generationSnapshot = backendGenerationInsightsSnapshotSchema.safeParse(
+    data.generation_insights ?? data.generationInsights,
+  );
 
   const generationId =
     data.generation_id ??
@@ -977,35 +1028,74 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
     generationInsights?.generationId;
 
   const weekStartDate =
+    data.week?.week_start_date ??
     generationInsights?.week_start_date ??
     generationInsights?.weekStartDate ??
     extractDateOnly(selectedWindow?.window_start ?? selectedWindow?.windowStart) ??
     extractDateOnly(anchorTimestamp);
 
   if (!generationId || !weekStartDate) {
-    throw new Error("Brand insights payload missing required generation metadata");
+    throw new Error('Brand insights payload missing required generation metadata');
   }
 
-  const generatedAt = normalizeTimestamp(payload.generated_at ?? payload.generatedAt ?? anchorTimestamp);
-  const legacyTrendsPayload = generationInsights?.trends_and_events ?? generationInsights?.trendsAndEvents;
-  const legacyQuestionsPayload = generationInsights?.questions_by_niche ?? generationInsights?.questionsByNiche;
+  const generatedAt = normalizeTimestamp(
+    payload.generated_at ?? payload.generatedAt ?? anchorTimestamp,
+  );
+  const weeks = data.weeks.flatMap((week) => {
+    if (
+      !week.week_start_date ||
+      !week.latest_generation_id ||
+      typeof week.generation_count !== 'number' ||
+      week.generation_count < 1
+    ) {
+      return [];
+    }
+    return [
+      {
+        weekStartDate: week.week_start_date,
+        generationCount: week.generation_count,
+        regenerationCount: week.regeneration_count ?? 0,
+        latestGenerationId: week.latest_generation_id,
+        latestCompletedAt: normalizeTimestamp(week.latest_completed_at) ?? null,
+      },
+    ];
+  });
+  const latestWeekMetadata = data.week?.generations[0]?.metadata;
+  const generationKind =
+    latestWeekMetadata &&
+    typeof latestWeekMetadata === 'object' &&
+    !Array.isArray(latestWeekMetadata)
+      ? (latestWeekMetadata as Record<string, unknown>).generation_kind
+      : undefined;
+  const legacyTrendsPayload =
+    generationInsights?.trends_and_events ?? generationInsights?.trendsAndEvents;
+  const legacyQuestionsPayload =
+    generationInsights?.questions_by_niche ?? generationInsights?.questionsByNiche;
 
-  const trendsAndEvents = selectedWindow
-    ? mapTrendsAndEventsFromWindow(selectedWindow, generatedAt)
-    : legacyTrendsPayload
-      ? mapTrendsAndEvents(legacyTrendsPayload)
-      : brandInsightsTrendsAndEventsSchema.parse({
-          trends: [],
-          events: [],
-        });
+  const trendsAndEvents = generationSnapshot.success
+    ? brandInsightsTrendsAndEventsSchema.parse({
+        trends: generationSnapshot.data.trends.map(mapTrend),
+        events: generationSnapshot.data.events.map(mapEvent),
+        generatedAt,
+      })
+    : selectedWindow
+      ? mapTrendsAndEventsFromWindow(selectedWindow, generatedAt)
+      : legacyTrendsPayload
+        ? mapTrendsAndEvents(legacyTrendsPayload)
+        : brandInsightsTrendsAndEventsSchema.parse({
+            trends: [],
+            events: [],
+          });
 
-  const questionsByNiche = selectedWindow
-    ? mapQuestionsByNicheFromWindow(selectedWindow, generatedAt)
-    : legacyQuestionsPayload
-      ? mapQuestionsByNiche(legacyQuestionsPayload)
-      : brandInsightsQuestionsByNicheSchema.parse({
-          questionsByNiche: {},
-        });
+  const questionsByNiche = generationSnapshot.success
+    ? mapQuestionsByNicheFromWindow({ questions: generationSnapshot.data.questions }, generatedAt)
+    : selectedWindow
+      ? mapQuestionsByNicheFromWindow(selectedWindow, generatedAt)
+      : legacyQuestionsPayload
+        ? mapQuestionsByNiche(legacyQuestionsPayload)
+        : brandInsightsQuestionsByNicheSchema.parse({
+            questionsByNiche: {},
+          });
 
   return brandInsightsSchema.parse({
     status: payload.status,
@@ -1018,7 +1108,12 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
       weekStartDate,
       fromCache: generationInsights?.from_cache ?? generationInsights?.fromCache ?? false,
       selectedSocialPlatforms:
-        generationInsights?.selected_social_platforms ?? generationInsights?.selectedSocialPlatforms ?? undefined,
+        generationInsights?.selected_social_platforms ??
+        generationInsights?.selectedSocialPlatforms ??
+        undefined,
+      weeks,
+      generationKind: generationKind === 'regeneration' ? 'regeneration' : 'initial',
+      generationCount: data.week?.generation_count ?? undefined,
     }),
   });
 }
@@ -1045,24 +1140,24 @@ export function mapBackendGenerationResponse(payload: unknown) {
 
   const innerJobStatus = data?.status;
   const isRunningJob =
-    parsed.status === "processing" ||
-    parsed.status === "running" ||
-    parsed.status === "pending" ||
-    (parsed.status === "success" &&
-      (innerJobStatus === "running" || innerJobStatus === "pending"));
+    parsed.status === 'processing' ||
+    parsed.status === 'running' ||
+    parsed.status === 'pending' ||
+    (parsed.status === 'success' && (innerJobStatus === 'running' || innerJobStatus === 'pending'));
 
   if (isRunningJob) {
     return brandInsightsGenerationResponseSchema.parse({
-      status: "processing",
-      generationId: data?.generation_id ?? data?.generationId ?? data?.task_id ?? data?.taskId ?? undefined,
+      status: 'processing',
+      generationId:
+        data?.generation_id ?? data?.generationId ?? data?.task_id ?? data?.taskId ?? undefined,
       jobId: data?.job_id ?? data?.jobId ?? undefined,
       jobStatus:
-        data?.status === "pending" ||
-        data?.status === "running" ||
-        data?.status === "completed" ||
-        data?.status === "failed"
+        data?.status === 'pending' ||
+        data?.status === 'running' ||
+        data?.status === 'completed' ||
+        data?.status === 'failed'
           ? data.status
-          : parsed.status === "pending" || parsed.status === "running"
+          : parsed.status === 'pending' || parsed.status === 'running'
             ? parsed.status
             : undefined,
       brandId: data?.brand_id ?? data?.brandId ?? data?.platform_account_id ?? undefined,
@@ -1079,12 +1174,12 @@ export function mapBackendGenerationResponse(payload: unknown) {
     });
   }
 
-  if (parsed.status !== "success") {
+  if (parsed.status !== 'success') {
     throw new Error(parsed.message ?? `Unexpected generation response status: ${parsed.status}`);
   }
 
   return brandInsightsGenerationResponseSchema.parse({
-    status: "success",
+    status: 'success',
     brandId: data?.brand_id ?? data?.brandId ?? data?.platform_account_id ?? undefined,
     generationId: data?.generation_id ?? data?.generationId ?? undefined,
     fromCache: data?.from_cache ?? data?.fromCache ?? false,
@@ -1097,20 +1192,30 @@ export function mapBackendStatusResponse(payload: unknown) {
   const parsed = backendStatusResponseSchema.parse(payload);
   const data = parsed.data;
 
-  const statusSource =
-    data?.status ??
-    (parsed.status === "success" ? undefined : parsed.status);
+  const statusSource = data?.status ?? (parsed.status === 'success' ? undefined : parsed.status);
   const status = normalizeJobStatus(statusSource);
 
-  const progress = data?.progress_percent ?? data?.progressPercent ?? parsed.progress_percent ?? parsed.progressPercent;
+  const progress =
+    data?.progress_percent ??
+    data?.progressPercent ??
+    parsed.progress_percent ??
+    parsed.progressPercent;
   const stage = data?.stage ?? parsed.stage ?? undefined;
-  const stageMessage = data?.stage_message ?? data?.stageMessage ?? parsed.stage_message ?? parsed.stageMessage ?? undefined;
+  const stageMessage =
+    data?.stage_message ??
+    data?.stageMessage ??
+    parsed.stage_message ??
+    parsed.stageMessage ??
+    undefined;
   const totals = data?.totals ?? parsed.totals;
   const startedAt = data?.started_at ?? data?.startedAt ?? parsed.started_at ?? parsed.startedAt;
-  const completedAt = data?.completed_at ?? data?.completedAt ?? parsed.completed_at ?? parsed.completedAt;
-  const weekStartDate = data?.week_start_date ?? data?.weekStartDate ?? parsed.week_start_date ?? parsed.weekStartDate;
+  const completedAt =
+    data?.completed_at ?? data?.completedAt ?? parsed.completed_at ?? parsed.completedAt;
+  const weekStartDate =
+    data?.week_start_date ?? data?.weekStartDate ?? parsed.week_start_date ?? parsed.weekStartDate;
   const errorCode = data?.error_code ?? data?.errorCode ?? parsed.error_code ?? parsed.errorCode;
-  const errorDetail = data?.error_detail ?? data?.errorDetail ?? parsed.error_detail ?? parsed.errorDetail;
+  const errorDetail =
+    data?.error_detail ?? data?.errorDetail ?? parsed.error_detail ?? parsed.errorDetail;
   const warningPayload = data?.warnings ?? parsed.warnings;
   const competitorPayload = data?.competitor ?? parsed.competitor;
   const latestMessageId =
@@ -1145,7 +1250,8 @@ export function mapBackendStatusResponse(payload: unknown) {
       data?.platform_account_id ??
       parsed.platform_account_id ??
       undefined,
-    progressPercent: typeof progress === "number" ? Math.max(0, Math.min(100, progress)) : undefined,
+    progressPercent:
+      typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined,
     stage,
     stageMessage,
     weekStartDate: weekStartDate ?? undefined,
@@ -1163,14 +1269,16 @@ export function mapBackendStatusResponse(payload: unknown) {
     competitor: competitorPayload
       ? {
           status:
-            competitorPayload.status === "success" ||
-            competitorPayload.status === "skipped" ||
-            competitorPayload.status === "error"
+            competitorPayload.status === 'success' ||
+            competitorPayload.status === 'skipped' ||
+            competitorPayload.status === 'error'
               ? competitorPayload.status
               : null,
           sourceRunId: competitorPayload.source_run_id ?? competitorPayload.sourceRunId ?? null,
-          competitorCount: competitorPayload.competitor_count ?? competitorPayload.competitorCount ?? undefined,
-          totalIngested: competitorPayload.total_ingested ?? competitorPayload.totalIngested ?? undefined,
+          competitorCount:
+            competitorPayload.competitor_count ?? competitorPayload.competitorCount ?? undefined,
+          totalIngested:
+            competitorPayload.total_ingested ?? competitorPayload.totalIngested ?? undefined,
           reason: competitorPayload.reason ?? null,
         }
       : undefined,
@@ -1178,9 +1286,9 @@ export function mapBackendStatusResponse(payload: unknown) {
       ? {
           ...stream,
           latestMessageId:
-            typeof latestMessageId === "number" && Number.isFinite(latestMessageId)
+            typeof latestMessageId === 'number' && Number.isFinite(latestMessageId)
               ? latestMessageId
-              : stream.latestMessageId ?? null,
+              : (stream.latestMessageId ?? null),
         }
       : undefined,
     runtime: pickRuntimeFromMetadata(data?.metadata ?? parsed.metadata),
@@ -1207,7 +1315,8 @@ export function mapBackendStatusMessage(payload: unknown) {
     eventType: parsed.event_type ?? parsed.eventType ?? undefined,
     status: parsed.status ?? undefined,
     stage: parsed.stage ?? undefined,
-    progressPercent: typeof progress === "number" ? Math.max(0, Math.min(100, progress)) : undefined,
+    progressPercent:
+      typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined,
     stageMessage: parsed.stage_message ?? parsed.stageMessage ?? undefined,
     runtime: mapRuntime((parsed.payload as Record<string, unknown> | undefined)?.runtime),
     payload: parsed.payload ?? undefined,
@@ -1246,7 +1355,9 @@ function mapAudience(payload?: z.infer<typeof backendAudienceSchema> | null) {
   const segments =
     payload.segments
       ?.map(mapAudienceSegment)
-      .filter((segment): segment is NonNullable<ReturnType<typeof mapAudienceSegment>> => Boolean(segment)) ?? undefined;
+      .filter((segment): segment is NonNullable<ReturnType<typeof mapAudienceSegment>> =>
+        Boolean(segment),
+      ) ?? undefined;
 
   return brandInsightsAudienceSchema.parse({
     summary: payload.summary ?? payload.ideal_customer_persona_summary ?? undefined,
@@ -1256,7 +1367,9 @@ function mapAudience(payload?: z.infer<typeof backendAudienceSchema> | null) {
   });
 }
 
-function mapCompetitors(payload?: z.infer<typeof backendProfileDataSchema>["competitive_landscape"] | null) {
+function mapCompetitors(
+  payload?: z.infer<typeof backendProfileDataSchema>['competitive_landscape'] | null,
+) {
   const competitors = payload?.top_competitors ?? [];
   if (!competitors || competitors.length === 0) return undefined;
 
@@ -1264,14 +1377,11 @@ function mapCompetitors(payload?: z.infer<typeof backendProfileDataSchema>["comp
     .map((competitor) => backendCompetitorSchema.parse(competitor))
     .map((competitor) =>
       brandInsightsCompetitorSchema.parse({
-        name: competitor.name ?? "",
+        name: competitor.name ?? '',
         strategy: competitor.strategy ?? undefined,
         messaging: competitor.messaging ?? undefined,
-        urls: normalizeStrings([
-          ...(competitor.urls ?? []),
-          competitor.primary_url ?? undefined,
-        ]),
-      })
+        urls: normalizeStrings([...(competitor.urls ?? []), competitor.primary_url ?? undefined]),
+      }),
     )
     .filter((competitor) => competitor.name.trim().length > 0);
 
@@ -1291,8 +1401,8 @@ function mapBrandVoice(payload?: z.infer<typeof backendBrandVoiceSchema> | null)
 
 export function mapBackendProfileResponse(payload: unknown) {
   const parsed = backendProfileResponseSchema.parse(payload);
-  if (parsed.status === "onboarding_required") {
-    return brandInsightsProfileSchema.parse({ status: "onboarding_required" });
+  if (parsed.status === 'onboarding_required') {
+    return brandInsightsProfileSchema.parse({ status: 'onboarding_required' });
   }
 
   const data = backendProfileDataSchema.parse(parsed.data);
@@ -1301,7 +1411,7 @@ export function mapBackendProfileResponse(payload: unknown) {
   const niches = normalizeStrings(data.niches ?? foundation?.niches ?? undefined);
 
   return brandInsightsProfileSchema.parse({
-    status: "success",
+    status: 'success',
     brandId: data.brand_id,
     brandSummary: data.brand_summary ?? undefined,
     mission: foundation?.mission ?? undefined,

@@ -3,7 +3,7 @@
 import { RocketIcon } from '@radix-ui/react-icons';
 import { motion } from 'motion/react';
 import React from 'react';
-import type { Attachment } from '@/components/ai-elements/attachments';
+import type { Attachment } from '@/components/chat/attachments';
 
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';

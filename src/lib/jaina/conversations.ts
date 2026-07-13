@@ -1,12 +1,12 @@
-import { z } from "zod";
+import { z } from 'zod';
+import { agentMentionMetadataSchema } from '@/lib/agent-references';
 import {
-  reportAssemblySchema,
   type FrontendCheckpointReport,
   type ReportAssembly,
-} from "./schemas";
-import { agentMentionMetadataSchema } from "@/lib/agent-references";
+  reportAssemblySchema,
+} from './schemas';
 
-export const jainaConversationRoleSchema = z.enum(["user", "assistant"]);
+export const jainaConversationRoleSchema = z.enum(['user', 'assistant']);
 export type JainaConversationRole = z.infer<typeof jainaConversationRoleSchema>;
 
 export const jainaConversationSessionSchema = z.object({
@@ -53,6 +53,8 @@ export type JainaConversationMessage = z.infer<typeof jainaConversationMessageSc
 export const jainaConversationListResponseSchema = z.object({
   sessions: z.array(jainaConversationSessionSchema),
   messages: z.array(jainaConversationMessageSchema).optional(),
+  // created_at to page strictly before; null once the transcript is fully loaded.
+  nextCursor: z.string().nullable().optional(),
 });
 export type JainaConversationListResponse = z.infer<typeof jainaConversationListResponseSchema>;
 
@@ -62,6 +64,7 @@ export const jainaConversationListQuerySchema = z.object({
   sessionId: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   messagesLimit: z.coerce.number().int().min(1).max(500).default(150),
+  before: z.string().min(1).optional(),
 });
 export type JainaConversationListQuery = z.infer<typeof jainaConversationListQuerySchema>;
 
@@ -98,9 +101,7 @@ export const backendConversationSessionSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
 });
-export type BackendConversationSession = z.infer<
-  typeof backendConversationSessionSchema
->;
+export type BackendConversationSession = z.infer<typeof backendConversationSessionSchema>;
 
 export const backendConversationsListResponseSchema = z.object({
   sessions: z.array(backendConversationSessionSchema),
@@ -136,13 +137,13 @@ export const backendConversationMessageSchema = z.object({
   metadata: agentMentionMetadataSchema.nullable().optional(),
   created_at: z.string(),
 });
-export type BackendConversationMessage = z.infer<
-  typeof backendConversationMessageSchema
->;
+export type BackendConversationMessage = z.infer<typeof backendConversationMessageSchema>;
 
 export const backendConversationMessagesResponseSchema = z.object({
   session_id: z.string().min(1),
   messages: z.array(backendConversationMessageSchema),
+  // Absent on a backend that predates pagination, which reads as "no older page".
+  nextCursor: z.string().nullable().optional(),
 });
 export type BackendConversationMessagesResponse = z.infer<
   typeof backendConversationMessagesResponseSchema
@@ -195,29 +196,29 @@ export type JainaConversationRunsHydrationResponse = z.infer<
 >;
 
 function normalizeReportAssemblyForConversationLoad(
-  reportAssembly: ReportAssembly
+  reportAssembly: ReportAssembly,
 ): FrontendCheckpointReport {
   const snapshot = reportAssembly.metrics.map((metric) => ({
     metric: metric.label,
     value: metric.actual,
     change: metric.index_percent,
-    suffix: metric.unit === "%" ? "%" : undefined,
+    suffix: metric.unit === '%' ? '%' : undefined,
     context: `Planned: ${metric.planned}`,
     status:
-      metric.deviation_type === "positive"
-        ? "positive"
-        : metric.deviation_type === "negative"
-          ? "risk"
-          : "neutral",
+      metric.deviation_type === 'positive'
+        ? 'positive'
+        : metric.deviation_type === 'negative'
+          ? 'risk'
+          : 'neutral',
   }));
 
   const recommendations = reportAssembly.recommendations.map((entry) => {
-    if (typeof entry === "string") {
+    if (typeof entry === 'string') {
       return {
         title: entry,
         rationale: entry,
         expected_impact: null,
-        priority: "MEDIUM",
+        priority: 'MEDIUM',
       };
     }
 
@@ -230,7 +231,7 @@ function normalizeReportAssemblyForConversationLoad(
   });
 
   return {
-    language: "en",
+    language: 'en',
     report_title: reportAssembly.header.title,
     executive_summary: reportAssembly.summary.narrative,
     budget: null,
@@ -240,7 +241,7 @@ function normalizeReportAssemblyForConversationLoad(
       {
         heading: reportAssembly.header.title,
         scope: reportAssembly.header.period,
-        summary: reportAssembly.summary.principal_deviation || "",
+        summary: reportAssembly.summary.principal_deviation || '',
         highlights: reportAssembly.insights,
         tables: [],
         actions: recommendations,
@@ -258,9 +259,7 @@ function normalizeReportAssemblyForConversationLoad(
   };
 }
 
-function deriveReportFromConversationMetadata(
-  row: BackendConversationMessage
-): unknown {
+function deriveReportFromConversationMetadata(row: BackendConversationMessage): unknown {
   if (row.report !== undefined) return row.report;
 
   const parsedAssembly = reportAssemblySchema.safeParse(row.report_assembly);
@@ -270,7 +269,7 @@ function deriveReportFromConversationMetadata(
 }
 
 export function mapConversationSessionRow(
-  row: BackendConversationSession
+  row: BackendConversationSession,
 ): JainaConversationSession {
   return {
     sessionId: row.session_id,
@@ -286,7 +285,7 @@ export function mapConversationSessionRow(
 }
 
 export function mapConversationMessageRow(
-  row: BackendConversationMessage
+  row: BackendConversationMessage,
 ): JainaConversationMessage {
   const report = deriveReportFromConversationMetadata(row);
 
@@ -298,18 +297,12 @@ export function mapConversationMessageRow(
     role: row.role,
     content: row.content,
     ...(report !== undefined ? { report } : {}),
-    ...(row.report_assembly !== undefined
-      ? { reportAssembly: row.report_assembly }
-      : {}),
-    ...(typeof row.report_assembly_html === "string"
+    ...(row.report_assembly !== undefined ? { reportAssembly: row.report_assembly } : {}),
+    ...(typeof row.report_assembly_html === 'string'
       ? { reportAssemblyHtml: row.report_assembly_html }
       : {}),
-    ...(typeof row.final_thought === "string"
-      ? { finalThought: row.final_thought }
-      : {}),
-    ...(typeof row.render_as_report === "boolean"
-      ? { renderAsReport: row.render_as_report }
-      : {}),
+    ...(typeof row.final_thought === 'string' ? { finalThought: row.final_thought } : {}),
+    ...(typeof row.render_as_report === 'boolean' ? { renderAsReport: row.render_as_report } : {}),
     ...(Array.isArray(row.reasoning) ? { reasoning: row.reasoning } : {}),
     ...(Array.isArray(row.tool_calls) ? { toolCalls: row.tool_calls } : {}),
     ...(Array.isArray(row.tool_results) ? { toolResults: row.tool_results } : {}),
@@ -324,8 +317,8 @@ export function mapConversationMessageRow(
 }
 
 export function mapConversationCreateResponse(
-  row: CreateConversationSessionResponse
-): Pick<JainaConversationSession, "sessionId" | "brandId" | "adAccountId" | "title"> {
+  row: CreateConversationSessionResponse,
+): Pick<JainaConversationSession, 'sessionId' | 'brandId' | 'adAccountId' | 'title'> {
   return {
     sessionId: row.session_id,
     brandId: row.brand_id ?? null,
@@ -334,9 +327,7 @@ export function mapConversationCreateResponse(
   };
 }
 
-export function mapConversationRunRow(
-  row: BackendConversationRun
-): JainaConversationRun {
+export function mapConversationRunRow(row: BackendConversationRun): JainaConversationRun {
   return {
     id: row.id ?? null,
     runId: row.run_id ?? null,
@@ -352,7 +343,7 @@ export function mapConversationRunRow(
 }
 
 export function toConversationPreview(content: string, maxLength = 160): string {
-  const normalized = content.replace(/\s+/g, " ").trim();
+  const normalized = content.replace(/\s+/g, ' ').trim();
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }

@@ -205,9 +205,16 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
   const brandId = readNonEmptyString(payload.brandId);
   if (!jobId || !brandId) return null;
 
+  // Dispatching tool-call id (when the backend threaded one) so the chat can
+  // group this job's updates under the tool call. Conditionally spread so a
+  // frame without it never clobbers a value merged from an earlier frame.
+  const toolCallId = readNonEmptyString(payload.toolCallId);
+  const withToolCallId = toolCallId ? { toolCallId } : {};
+
   switch (type) {
     case 'job.enqueued':
       return {
+        ...withToolCallId,
         jobId,
         brandId,
         platform: readNonEmptyString(payload.platform) ?? undefined,
@@ -222,6 +229,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
       };
     case 'job.progress':
       return {
+        ...withToolCallId,
         jobId,
         brandId,
         status: 'running' as const,
@@ -232,6 +240,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
     case 'draft.ready':
     case 'draft.text_ready':
       return {
+        ...withToolCallId,
         jobId,
         brandId,
         status: 'running' as const,
@@ -240,6 +249,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
       };
     case 'job.completed':
       return {
+        ...withToolCallId,
         jobId,
         brandId,
         status: 'completed' as const,
@@ -247,6 +257,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
       };
     case 'job.failed':
       return {
+        ...withToolCallId,
         jobId,
         brandId,
         status: 'failed' as const,
@@ -261,12 +272,14 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
       };
     case 'job.cancelled':
       return {
+        ...withToolCallId,
         jobId,
         brandId,
         status: 'cancelled' as const,
       };
     default:
       return {
+        ...withToolCallId,
         jobId,
         brandId,
       };
@@ -442,8 +455,13 @@ function parsePipelineCard(
       }
     : undefined;
 
+  // Conditionally spread so a card frame without toolCallId never clobbers the
+  // value merged from an earlier frame (PIPELINE_CARD does `{ ...base, ...card }`).
+  const toolCallId = readNonEmptyString(payload.toolCallId);
+
   return {
     jobId,
+    ...(toolCallId ? { toolCallId } : {}),
     brandId: readNonEmptyString(payload.brandId) ?? undefined,
     planId: typeof payload.planId === 'string' ? payload.planId : null,
     planItemId: typeof payload.planItemId === 'string' ? payload.planItemId : null,

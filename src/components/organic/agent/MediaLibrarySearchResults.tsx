@@ -2,7 +2,8 @@
 
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
 import { Images } from 'lucide-react';
-import Image from 'next/image';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromLibraryAsset } from '@/components/chat/media/media';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,26 +16,22 @@ function SimilarityBadge({ value }: { value: number }) {
   return <Pill variant={variant}>{pct}% match</Pill>;
 }
 
+// A library hit can be a video, and this used to render its signed MP4 straight into an <img>.
+// The shared primitive branches on kind, so a video gets a real poster frame.
 function MediaThumbnail({ item }: { item: SearchResultItem }) {
-  const url = item.asset.signedUrl ?? item.asset.thumbnailUrl;
-  if (url) {
+  const media = mediaFromLibraryAsset(item.asset);
+
+  if (!media) {
     return (
-      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
-        <Image
-          src={url}
-          alt={item.asset.title ?? 'Media asset'}
-          fill
-          className="object-cover"
-          sizes="64px"
-          unoptimized
-        />
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-muted">
+        <Images className="h-6 w-6 text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-muted">
-      <Images className="h-6 w-6 text-muted-foreground" />
+    <div className="h-16 w-16 shrink-0">
+      <ChatMediaThumb media={media} />
     </div>
   );
 }

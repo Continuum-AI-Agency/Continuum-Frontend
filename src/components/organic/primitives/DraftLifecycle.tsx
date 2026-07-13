@@ -1,7 +1,22 @@
 import { deriveOrganicMediaStage, type OrganicMediaStage } from '@continuum/contracts';
-import { AlertCircle, CheckCircle2, Circle, Info, Library, Wand2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  Info,
+  Library,
+  RotateCcw,
+  Wand2,
+} from 'lucide-react';
 import Image from 'next/image';
 import * as React from 'react';
+import type {
+  DraftLadder,
+  LadderStep,
+  LadderStepState,
+} from '@/components/organic/hooks/useDraftEnrichmentLadder';
+import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { type ReusableMediaItem, summarizeDraftMedia } from '@/lib/organic/draftMediaSummary';
 import type { ReadinessCheck } from '@/lib/organic/draftReadiness';
@@ -78,6 +93,91 @@ export function MediaStagePill({
       )}
       {meta.label}
     </span>
+  );
+}
+
+const STEP_NODE_TONE: Record<LadderStepState, string> = {
+  done: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  running: 'border-primary/40 bg-primary/10 text-primary',
+  current: 'border-primary/40 bg-primary/5 text-primary',
+  locked: 'border-border/60 bg-muted/30 text-muted-foreground/50',
+  failed: 'border-destructive/40 bg-destructive/10 text-destructive',
+};
+
+function LadderStepNode({ step }: { step: LadderStep }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider',
+        STEP_NODE_TONE[step.state],
+      )}
+    >
+      {step.state === 'done' ? (
+        <CheckCircle2 className="size-2.5" aria-hidden />
+      ) : step.state === 'running' ? (
+        <span className="h-1 w-1 animate-pulse rounded-full bg-current" aria-hidden />
+      ) : step.state === 'failed' ? (
+        <AlertCircle className="size-2.5" aria-hidden />
+      ) : (
+        <Circle className="size-2.5" aria-hidden />
+      )}
+      {step.label}
+    </span>
+  );
+}
+
+/**
+ * The enrichment ladder: Copy → Blueprint → Media, with exactly one Build action on the
+ * step the draft can advance to. `compact` renders progress only (the calendar card);
+ * the editor renders the actionable form.
+ */
+export function EnrichmentLadder({
+  ladder,
+  compact = false,
+  className,
+}: {
+  ladder: DraftLadder;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+      {ladder.steps.map((step, index) => (
+        <React.Fragment key={step.id}>
+          {index > 0 && <span className="h-px w-2 bg-border" aria-hidden />}
+          <LadderStepNode step={step} />
+        </React.Fragment>
+      ))}
+
+      {!compact && ladder.actionLabel && (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="ml-1 h-6 px-2 text-2xs"
+          disabled={ladder.isBusy || ladder.disabledReason !== null}
+          onClick={ladder.run}
+        >
+          {ladder.disabledReason ?? ladder.actionLabel}
+          {!ladder.disabledReason && <ArrowRight className="size-3" aria-hidden />}
+        </Button>
+      )}
+
+      {!compact && ladder.canRewriteCopy && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-2xs text-muted-foreground"
+          disabled={ladder.isBusy}
+          onClick={ladder.rewriteCopy}
+          title="Replace the current copy with a fresh generation"
+        >
+          <RotateCcw className="size-3" aria-hidden />
+          Rewrite
+        </Button>
+      )}
+    </div>
   );
 }
 

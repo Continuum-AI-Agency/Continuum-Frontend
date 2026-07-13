@@ -1,5 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createChunks, stringToBase64URL } from "@supabase/ssr";
+import { createChunks, stringToBase64URL } from '@supabase/ssr';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase auth-mint helper for Playwright E2E.
 //
@@ -22,11 +22,11 @@ import { createChunks, stringToBase64URL } from "@supabase/ssr";
 // `mintSession({ isAdmin: true })` yields a session whose claims include
 // `app_metadata.is_admin`, which is what the /admin route gate reads.
 
-const SUPABASE_AUTH_COOKIE_NAME = "sb-auth";
+const SUPABASE_AUTH_COOKIE_NAME = 'sb-auth';
 const COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60; // matches @supabase/ssr DEFAULT_COOKIE_OPTIONS
-const PIZZA_TEST_OWNER_EMAIL = "duanecscott@gmail.com";
+const PIZZA_TEST_OWNER_EMAIL = 'duanecscott@gmail.com';
 
-type SameSite = "Strict" | "Lax" | "None";
+type SameSite = 'Strict' | 'Lax' | 'None';
 
 interface StorageStateCookie {
   name: string;
@@ -85,20 +85,20 @@ function resolveAnonKey(): string {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY;
   if (!key) {
     throw new Error(
-      "[e2e/auth] Missing a Supabase publishable/anon key. Set NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY. See e2e/README.md.",
+      '[e2e/auth] Missing a Supabase publishable/anon key. Set NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY. See e2e/README.md.',
     );
   }
   return key;
 }
 
 function resolveCookieDomain(): string {
-  const baseUrl = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
   return new URL(baseUrl).hostname;
 }
 
 function createAdminClient(): SupabaseClient {
-  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
   return createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -116,11 +116,11 @@ function buildStorageState(rawSessionJson: string): PlaywrightStorageState {
     name: chunk.name,
     value: chunk.value,
     domain,
-    path: "/",
+    path: '/',
     expires,
     httpOnly: false,
     secure: false,
-    sameSite: "Lax",
+    sameSite: 'Lax',
   }));
 
   return { cookies, origins: [] };
@@ -130,11 +130,11 @@ function buildStorageState(rawSessionJson: string): PlaywrightStorageState {
 // session string the browser client would persist, then encodes it as cookies.
 export async function mintSessionForEmail(email: string): Promise<PlaywrightStorageState> {
   const admin = createAdminClient();
-  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const anonKey = resolveAnonKey();
 
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-    type: "magiclink",
+    type: 'magiclink',
     email,
   });
   if (linkError) {
@@ -158,14 +158,15 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
 
   const { data: verifyData, error: verifyError } = await anon.auth.verifyOtp({
     token_hash: hashedToken,
-    type: "magiclink",
+    type: 'magiclink',
   });
   if (verifyError) {
     throw new Error(`[e2e/auth] verifyOtp failed for ${email}: ${verifyError.message}`);
   }
 
   const persisted = sessionStorage.read(SUPABASE_AUTH_COOKIE_NAME);
-  const rawSessionJson = persisted ?? (verifyData.session ? JSON.stringify(verifyData.session) : null);
+  const rawSessionJson =
+    persisted ?? (verifyData.session ? JSON.stringify(verifyData.session) : null);
   if (!rawSessionJson) {
     throw new Error(`[e2e/auth] No session was persisted after verifyOtp for ${email}.`);
   }

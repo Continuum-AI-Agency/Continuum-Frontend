@@ -4,8 +4,10 @@ import {
   applyModePill,
   confidenceBand,
   freezeLabel,
-  partitionHeldItems,
+  isExecutable,
+  notImplementedMessage,
   parseReport,
+  partitionHeldItems,
   recommendationActionCopy,
   recommendationLabel,
 } from './reportModel';
@@ -181,5 +183,39 @@ describe('partitionHeldItems', () => {
     );
     expect(held).toHaveLength(0);
     expect(approved).toHaveLength(0);
+  });
+});
+
+describe('creative-level recommendations — shown, but honestly not actionable yet', () => {
+  it('labels each creative kind as being about ONE AD, not the ad set', () => {
+    expect(recommendationLabel('pause_ad').label).toBe('Pause this ad');
+    expect(recommendationLabel('variate_creative').label).toBe('Make variations of the winner');
+    expect(recommendationLabel('seed_experiment').label).toContain('add variants');
+  });
+
+  it('marks the creative kinds NOT executable — nothing drains them yet', () => {
+    // The engine emits them and the DB stores them, but no drain and no autopilot path exist.
+    // Approving one would set a status, do nothing, and leave a burning ad running while the
+    // queue looked handled.
+    expect(isExecutable('pause_ad')).toBe(false);
+    expect(isExecutable('variate_creative')).toBe(false);
+    expect(isExecutable('seed_experiment')).toBe(false);
+  });
+
+  it('keeps the kinds that DO work executable — this guard must not over-reach', () => {
+    expect(isExecutable('creative_refresh')).toBe(true);
+    expect(isExecutable('audience_expand')).toBe(true);
+    expect(isExecutable('pause')).toBe(true); // advisory, but the status write is real
+  });
+
+  it('says out loud that it cannot act, instead of implying it did', () => {
+    for (const kind of ['pause_ad', 'variate_creative', 'seed_experiment']) {
+      const { advisory } = recommendationActionCopy(kind);
+      expect(advisory).toContain('Not wired up yet');
+      expect(notImplementedMessage(kind)).toMatch(/not built yet/);
+    }
+    // And it still tells the operator what they CAN do about it right now.
+    expect(notImplementedMessage('pause_ad')).toContain('pause it in Meta');
+    expect(notImplementedMessage('variate_creative')).toContain('AI Studio');
   });
 });

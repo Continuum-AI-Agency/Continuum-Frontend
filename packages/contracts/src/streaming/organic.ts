@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
 import {
+  responseCreatedSchema,
+  responseDoneSchema,
+  responseErrorSchema,
+  responseOutputTextDeltaSchema,
+  responseOutputTextDoneSchema,
+  toolCallSchema,
+  toolErrorSchema,
+  toolResultSchema,
+} from './agentFrames';
+import {
   uiBrandBookAppliedFrameSchema,
   uiBrandBookFrameSchema,
   uiBrandBookProposalFrameSchema,
@@ -44,6 +54,10 @@ const jobEventDataSchema = z
     // plan item title / draft topic.
     title: z.string().optional(),
     planItemId: z.string().optional(),
+    // AI SDK tool-call id of the agent tool that dispatched this job (e.g.
+    // generatePosts), so the FE chat can attach the frame's card inline under
+    // that tool call instead of rendering it in a separate track.
+    toolCallId: z.string().nullable().optional(),
     // Canonical job status + media-enrichment stage so the FE derives one label via
     // resolveOrganicGenerationDisplay rather than inferring it from the frame type.
     status: organicGenerationStatusEnum.optional(),
@@ -211,6 +225,10 @@ export const organicGenerationSummarySchema = z
     scheduledAt: z.string().nullable().optional(),
     planId: z.string().nullable().optional(),
     planItemId: z.string().nullable().optional(),
+    // AI SDK tool-call id of the agent tool that dispatched this job (stamped on the
+    // job row's dispatch_context), so the chat can attach/refresh the job's inline
+    // pipeline card under that tool call across reloads and polling refreshes.
+    toolCallId: z.string().nullable().optional(),
     enqueuedAt: z.string().nullable().optional(),
     completedAt: z.string().nullable().optional(),
     error: z.object({ code: z.string().optional(), message: z.string() }).nullable().optional(),
@@ -480,64 +498,9 @@ export const organicPostEnqueuedDataSchema = z
   .loose();
 export type OrganicPostEnqueuedData = z.infer<typeof organicPostEnqueuedDataSchema>;
 
-const responseCreatedSchema = z.object({
-  type: z.literal('response.created'),
-  data: z.object({ responseId: z.string().optional() }).loose(),
-});
-
-const responseOutputTextDeltaSchema = z.object({
-  type: z.literal('response.output_text.delta'),
-  data: z.object({ delta: z.string() }).loose(),
-});
-
-const responseOutputTextDoneSchema = z.object({
-  type: z.literal('response.output_text.done'),
-  data: z.record(z.string(), z.unknown()),
-});
-
-const responseDoneSchema = z.object({
-  type: z.literal('response.done'),
-  data: z.record(z.string(), z.unknown()).optional(),
-});
-
-const responseErrorSchema = z.object({
-  type: z.literal('response.error'),
-  data: z.object({ message: z.string() }).loose(),
-});
-
 const responseSourceSchema = z.object({
   type: z.literal('response.source'),
   data: z.record(z.string(), z.unknown()).optional(),
-});
-
-const toolCallSchema = z.object({
-  type: z.literal('tool.call'),
-  data: z
-    .object({
-      toolCallId: z.string().min(1),
-      toolName: z.string().min(1),
-      args: z.unknown(),
-    })
-    .loose(),
-});
-
-const toolResultSchema = z.object({
-  type: z.literal('tool.result'),
-  data: z
-    .object({
-      toolCallId: z.string().min(1),
-      toolName: z.string().min(1),
-      // `ok` is derived from the tool envelope status on the Backend (see
-      // organic agent.ts) — a tool that returns an `error` envelope without
-      // throwing now reports ok:false here instead of a hardcoded success.
-      ok: z.boolean(),
-      status: z.enum(['success', 'warning', 'error']).optional(),
-      code: z.string().optional(),
-      reason: z.string().optional(),
-      result: z.unknown().optional(),
-      error: z.unknown().optional(),
-    })
-    .loose(),
 });
 
 const toolApprovalRequiredSchema = z.object({
@@ -548,17 +511,6 @@ const toolApprovalRequiredSchema = z.object({
       toolCallId: z.string().min(1),
       toolName: z.string().min(1),
       input: z.unknown(),
-    })
-    .loose(),
-});
-
-const toolErrorSchema = z.object({
-  type: z.literal('tool.error'),
-  data: z
-    .object({
-      toolCallId: z.string().min(1),
-      toolName: z.string().min(1),
-      error: z.string(),
     })
     .loose(),
 });
@@ -673,6 +625,7 @@ const agentChatStartedSchema = z.object({
     .object({
       runId: z.string().min(1),
       sessionId: z.string().min(1),
+      agent: z.enum(['organic', 'jaina']).optional(),
     })
     .loose(),
 });
@@ -776,6 +729,9 @@ const uiPipelineCardSchema = z.object({
       brandId: z.string().min(1),
       planId: z.string().nullable().optional(),
       planItemId: z.string().nullable().optional(),
+      // AI SDK tool-call id of the dispatching agent tool, for inline grouping
+      // of this card under the tool call in the FE chat transcript.
+      toolCallId: z.string().nullable().optional(),
       platform: z.string().optional(),
       status: z.enum(['running', 'completed', 'failed', 'cancelled']),
       currentStage: pipelineStageEnum.optional(),

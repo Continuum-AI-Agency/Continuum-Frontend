@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { ImageOff, Loader2, Play, Search, Wand2 } from "lucide-react"
+import { ImageOff, Loader2, PencilRuler, Play, Search, Wand2 } from "lucide-react"
 import type { MediaAsset } from "@continuum/contracts"
 
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
@@ -90,6 +90,9 @@ export function MediaSelectPopover({
   onGenerate,
   canGenerate = false,
   isGenerating = false,
+  onEnrich,
+  canEnrich = false,
+  isEnriching = false,
 }: {
   brandProfileId: string
   open: boolean
@@ -99,6 +102,10 @@ export function MediaSelectPopover({
   onGenerate?: () => void
   canGenerate?: boolean
   isGenerating?: boolean
+  /** Stage-2 "Enrich (sketch first)" — offered for text-stage drafts beside Generate. */
+  onEnrich?: () => void
+  canEnrich?: boolean
+  isEnriching?: boolean
 }) {
   const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
     useStudioLibraryBrowser(brandProfileId)
@@ -139,6 +146,11 @@ export function MediaSelectPopover({
     onOpenChange(false)
   }
 
+  const handleEnrich = () => {
+    onEnrich?.()
+    onOpenChange(false)
+  }
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
@@ -149,19 +161,35 @@ export function MediaSelectPopover({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Add media
           </p>
-          {canGenerate && onGenerate && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="h-7 gap-1 border-primary/40 bg-primary/10 px-2 text-xs text-primary hover:bg-primary/20"
-            >
-              {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-              Generate
-            </Button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {canEnrich && onEnrich && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleEnrich}
+                disabled={isEnriching}
+                className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                title="Sketch a low-cost blueprint first, then approve it into final media"
+              >
+                {isEnriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilRuler className="h-3.5 w-3.5" />}
+                Enrich (sketch first)
+              </Button>
+            )}
+            {canGenerate && onGenerate && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="h-7 gap-1 border-primary/40 bg-primary/10 px-2 text-xs text-primary hover:bg-primary/20"
+              >
+                {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                Generate
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="relative mb-2">

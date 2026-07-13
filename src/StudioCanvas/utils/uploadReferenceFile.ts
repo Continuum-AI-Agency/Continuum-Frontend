@@ -13,15 +13,15 @@
 // dropped reference also becomes a browsable library asset. Dependencies are
 // injected so the orchestration is testable without the network.
 
-import type { ImageNodeData, VideoNodeData, DocumentNodeData, CanvasDocument } from "../types";
-import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from "@/lib/library/uploadMediaAsset";
+import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
+import type { CanvasDocument, DocumentNodeData, ImageNodeData, VideoNodeData } from '../types';
 
 export const REFERENCE_UPLOAD_BUCKET = MEDIA_LIBRARY_BUCKET;
 
 // Client kill switch (default on). Set NEXT_PUBLIC_AI_STUDIO_UPLOAD_ON_DROP=false
 // to keep dropped files as local base64 only (legacy behavior).
 export const isUploadOnDropEnabled = (): boolean =>
-  process.env.NEXT_PUBLIC_AI_STUDIO_UPLOAD_ON_DROP !== "false";
+  process.env.NEXT_PUBLIC_AI_STUDIO_UPLOAD_ON_DROP !== 'false';
 
 export interface UploadReferenceResult {
   signedUrl: string;
@@ -29,37 +29,46 @@ export interface UploadReferenceResult {
   bucket: string;
 }
 
-type UpdateNodeData = (id: string, data: Partial<ImageNodeData & VideoNodeData & DocumentNodeData>) => void;
+type UpdateNodeData = (
+  id: string,
+  data: Partial<ImageNodeData & VideoNodeData & DocumentNodeData>,
+) => void;
 
 export interface UploadReferenceDeps {
   updateNodeData: UpdateNodeData;
-  uploadAsset?: (params: { file: File; brandId: string }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
+  uploadAsset?: (params: {
+    file: File;
+    brandId: string;
+  }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
 }
 
 export async function uploadReferenceFile(
-  params: { nodeId: string; file: File; brandId: string; field?: "image" | "video" },
+  params: { nodeId: string; file: File; brandId: string; field?: 'image' | 'video' },
   deps: UploadReferenceDeps,
 ): Promise<UploadReferenceResult | null> {
   const { nodeId, file, brandId } = params;
-  const field = params.field ?? "image";
+  const field = params.field ?? 'image';
   const uploadAsset = deps.uploadAsset ?? ((p) => uploadMediaAsset(p));
 
-  deps.updateNodeData(nodeId, { referenceStatus: "processing", referenceError: undefined });
+  deps.updateNodeData(nodeId, { referenceStatus: 'processing', referenceError: undefined });
   try {
-    const { storagePath, signedUrl } = await uploadAsset({ file, brandId });
+    // The upload registers a library asset row; keeping its id on the node is what
+    // lets a generation downstream be credited back to this reference.
+    const { assetId, storagePath, signedUrl } = await uploadAsset({ file, brandId });
     deps.updateNodeData(nodeId, {
       [field]: signedUrl,
+      assetId,
       sourcePath: storagePath,
       bucket: REFERENCE_UPLOAD_BUCKET,
       sourceUrl: signedUrl,
-      referenceStatus: "ready",
+      referenceStatus: 'ready',
       referenceError: undefined,
     } as Partial<ImageNodeData & VideoNodeData>);
     return { signedUrl, storagePath, bucket: REFERENCE_UPLOAD_BUCKET };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Upload failed";
-    console.warn("[studio] uploadReferenceFile failed; keeping local preview", err);
-    deps.updateNodeData(nodeId, { referenceStatus: "error", referenceError: message });
+    const message = err instanceof Error ? err.message : 'Upload failed';
+    console.warn('[studio] uploadReferenceFile failed; keeping local preview', err);
+    deps.updateNodeData(nodeId, { referenceStatus: 'error', referenceError: message });
     return null;
   }
 }
@@ -72,7 +81,10 @@ export async function uploadDocumentReference(
   deps: {
     getDocuments: () => CanvasDocument[];
     updateNodeData: (id: string, data: Partial<DocumentNodeData>) => void;
-    uploadAsset?: (params: { file: File; brandId: string }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
+    uploadAsset?: (params: {
+      file: File;
+      brandId: string;
+    }) => Promise<{ assetId: string; storagePath: string; signedUrl: string }>;
   },
 ): Promise<UploadReferenceResult | null> {
   const { nodeId, docIndex, file, brandId } = params;
@@ -94,7 +106,7 @@ export async function uploadDocumentReference(
     deps.updateNodeData(nodeId, { documents: docs });
     return { signedUrl, storagePath, bucket: REFERENCE_UPLOAD_BUCKET };
   } catch (err) {
-    console.warn("[studio] uploadDocumentReference failed; keeping base64 fallback", err);
+    console.warn('[studio] uploadDocumentReference failed; keeping base64 fallback', err);
     return null;
   }
 }

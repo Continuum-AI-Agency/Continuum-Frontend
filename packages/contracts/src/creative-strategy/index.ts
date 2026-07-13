@@ -9,3 +9,4 @@
 
 export * from './analysis';
 export * from './insight';
+export * from './paid';

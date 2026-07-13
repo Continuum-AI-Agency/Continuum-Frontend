@@ -1,70 +1,83 @@
-import * as React from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion } from 'motion/react';
+import * as React from 'react';
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { cn } from "@/lib/utils"
-import { useCalendarStore } from "@/lib/organic/store"
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { useCalendarStore } from '@/lib/organic/store';
+import { cn } from '@/lib/utils';
+import { AddPostContextMenu } from './AddPostContextMenu';
+import { parseTimeLabelToMinutes } from './calendar-utils';
+import { PlannerCell } from './PlannerCell';
+import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
-  OrganicSeedDragPayload,
   OrganicPlatformTag,
-} from "./types"
-import type { CreatePostOptions, PlannerPlatform } from "./planner-platforms"
-import { PlannerCell } from "./PlannerCell"
-import { parseTimeLabelToMinutes } from "./calendar-utils"
+  OrganicSeedDragPayload,
+} from './types';
 
 type PlannerMatrixProps = {
-  days: OrganicCalendarDay[]
-  platforms: PlannerPlatform[]
-  selectedDraftId: string | null
-  selectedDraftIds: string[]
-  todayId: string
-  onSelectDraft: (id: string) => void
-  onToggleSelection: (id: string) => void
-  onRegenerate: (draftId: string) => void
-  onClearFailure?: (draftId: string) => void
+  days: OrganicCalendarDay[];
+  platforms: PlannerPlatform[];
+  selectedDraftId: string | null;
+  selectedDraftIds: string[];
+  todayId: string;
+  onSelectDraft: (id: string) => void;
+  onToggleSelection: (id: string) => void;
+  onRegenerate: (draftId: string) => void;
+  onClearFailure?: (draftId: string) => void;
+  onEnrich?: (draftId: string) => void;
+  onRealize?: (draftId: string) => void;
   onNativeDrop?: (
     dayId: string,
     time: string,
     data: OrganicSeedDragPayload,
-    platformKey?: OrganicPlatformTag
-  ) => void
-  onCreatePost: (options: CreatePostOptions) => void
-}
+    platformKey?: OrganicPlatformTag,
+  ) => void;
+  onCreatePost: (options: CreatePostOptions) => void;
+};
 
-const EMPTY_DRAFTS: OrganicCalendarDraft[] = []
+const EMPTY_DRAFTS: OrganicCalendarDraft[] = [];
 
 function DayHeader({
+  dayId,
   label,
   dateLabel,
   isToday,
+  onCreatePost,
 }: {
-  label: string
-  dateLabel: string
-  isToday: boolean
+  dayId: string;
+  label: string;
+  dateLabel: string;
+  isToday: boolean;
+  onCreatePost: (options: CreatePostOptions) => void;
 }) {
-  const dayNumber = dateLabel.split(" ").at(-1) ?? dateLabel
+  const dayNumber = dateLabel.split(' ').at(-1) ?? dateLabel;
 
   return (
-    <div className={cn(
-      "sticky top-0 z-20 border-r border-b border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0",
-      isToday ? "bg-primary/[0.05]" : "bg-background/95"
-    )}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      {isToday ? (
-        <span className="mt-1 inline-flex size-6 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-xs font-semibold text-primary">
-          {dayNumber}
-        </span>
-      ) : (
-        <p className="mt-1 text-sm font-semibold text-foreground">{dayNumber}</p>
-      )}
-    </div>
-  )
+    // Right-clicking the day column header offers the day's create actions with no
+    // platform preset — the workspace picks the brand's default platform.
+    <AddPostContextMenu dayId={dayId} onCreatePost={onCreatePost}>
+      <div
+        className={cn(
+          'sticky top-0 z-20 border-r border-b border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0',
+          isToday ? 'bg-primary/[0.05]' : 'bg-background/95',
+        )}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        {isToday ? (
+          <span className="mt-1 inline-flex size-6 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-xs font-semibold text-primary">
+            {dayNumber}
+          </span>
+        ) : (
+          <p className="mt-1 text-sm font-semibold text-foreground">{dayNumber}</p>
+        )}
+      </div>
+    </AddPostContextMenu>
+  );
 }
 
 export function PlannerMatrix({
@@ -77,19 +90,18 @@ export function PlannerMatrix({
   onToggleSelection,
   onRegenerate,
   onClearFailure,
+  onEnrich,
+  onRealize,
   onNativeDrop,
   onCreatePost,
 }: PlannerMatrixProps) {
-  const gridStatus = useCalendarStore((state) => state.gridStatus)
-  const gridProgress = useCalendarStore((state) => state.gridProgress)
+  const gridStatus = useCalendarStore((state) => state.gridStatus);
+  const gridProgress = useCalendarStore((state) => state.gridProgress);
 
-  const selectedDraftIdSet = React.useMemo(
-    () => new Set(selectedDraftIds),
-    [selectedDraftIds]
-  )
+  const selectedDraftIdSet = React.useMemo(() => new Set(selectedDraftIds), [selectedDraftIds]);
 
   const draftsByCell = React.useMemo(() => {
-    const map = new Map<string, OrganicCalendarDraft[]>()
+    const map = new Map<string, OrganicCalendarDraft[]>();
 
     days.forEach((day) => {
       const byPlatform: Record<OrganicPlatformTag, OrganicCalendarDraft[]> = {
@@ -98,44 +110,44 @@ export function PlannerMatrix({
         facebook: [],
         tiktok: [],
         linkedin: [],
-      }
+      };
 
       day.slots.forEach((draft) => {
         if (draft.platforms.length === 0) {
-          byPlatform.instagram.push(draft)
-          return
+          byPlatform.instagram.push(draft);
+          return;
         }
 
         const platforms = new Set(
           draft.platforms.filter(
             (platform): platform is OrganicPlatformTag =>
-              platform === "instagram" || platform === "linkedin"
-          )
-        )
+              platform === 'instagram' || platform === 'linkedin',
+          ),
+        );
 
         platforms.forEach((platform) => {
-          byPlatform[platform].push(draft)
-        })
-      })
+          byPlatform[platform].push(draft);
+        });
+      });
 
-      const schedulablePlatforms: OrganicPlatformTag[] = ["instagram", "linkedin"]
+      const schedulablePlatforms: OrganicPlatformTag[] = ['instagram', 'linkedin'];
       schedulablePlatforms.forEach((platform) => {
         const sorted = [...byPlatform[platform]].sort((a, b) => {
-          const minutesA = parseTimeLabelToMinutes(a.timeLabel) ?? 0
-          const minutesB = parseTimeLabelToMinutes(b.timeLabel) ?? 0
-          return minutesA - minutesB
-        })
-        map.set(`${day.id}::${platform}`, sorted)
-      })
-    })
+          const minutesA = parseTimeLabelToMinutes(a.timeLabel) ?? 0;
+          const minutesB = parseTimeLabelToMinutes(b.timeLabel) ?? 0;
+          return minutesA - minutesB;
+        });
+        map.set(`${day.id}::${platform}`, sorted);
+      });
+    });
 
-    return map
-  }, [days])
+    return map;
+  }, [days]);
 
   return (
     <div className="relative min-h-0 flex-1 overflow-auto rounded-lg ring-1 ring-border/45 bg-background/90">
       <AnimatePresence>
-        {gridStatus === "running" ? (
+        {gridStatus === 'running' ? (
           <motion.div
             key="grid-progress"
             initial={{ opacity: 0, y: -8 }}
@@ -145,7 +157,7 @@ export function PlannerMatrix({
           >
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-xs font-semibold text-primary/80 uppercase tracking-wide">
-                {gridProgress.stage ?? "Generating content"}
+                {gridProgress.stage ?? 'Generating content'}
               </p>
               <span className="text-xs text-muted-foreground">{gridProgress.percent}%</span>
             </div>
@@ -165,9 +177,11 @@ export function PlannerMatrix({
           {days.map((day) => (
             <DayHeader
               key={day.id}
+              dayId={day.id}
               label={day.label}
               dateLabel={day.dateLabel}
               isToday={day.id === todayId}
+              onCreatePost={onCreatePost}
             />
           ))}
 
@@ -175,24 +189,24 @@ export function PlannerMatrix({
             <React.Fragment key={platform.key}>
               <div
                 className={cn(
-                  "sticky left-0 z-10 flex flex-col items-center justify-center border-r border-b border-border/50 bg-background/95 px-1.5 backdrop-blur",
-                  platform.comingSoon ? "gap-0.5 py-1.5" : "gap-1 py-3"
+                  'sticky left-0 z-10 flex flex-col items-center justify-center border-r border-b border-border/50 bg-background/95 px-1.5 backdrop-blur',
+                  platform.comingSoon ? 'gap-0.5 py-1.5' : 'gap-1 py-3',
                 )}
               >
                 <Avatar
                   className={cn(
-                    "border border-border bg-muted/40",
-                    platform.comingSoon ? "size-5" : "size-7"
+                    'border border-border bg-muted/40',
+                    platform.comingSoon ? 'size-5' : 'size-7',
                   )}
                 >
                   <AvatarFallback className="bg-muted text-foreground">
-                    <platform.Icon className={cn(platform.comingSoon ? "size-3" : "size-4")} />
+                    <platform.Icon className={cn(platform.comingSoon ? 'size-3' : 'size-4')} />
                   </AvatarFallback>
                 </Avatar>
                 <span
                   className={cn(
-                    "font-semibold uppercase tracking-wide text-muted-foreground",
-                    platform.comingSoon ? "text-3xs" : "text-xs"
+                    'font-semibold uppercase tracking-wide text-muted-foreground',
+                    platform.comingSoon ? 'text-3xs' : 'text-xs',
                   )}
                 >
                   {platform.label}
@@ -226,15 +240,17 @@ export function PlannerMatrix({
                       onToggleSelection={onToggleSelection}
                       onRegenerate={onRegenerate}
                       onClearFailure={onClearFailure}
+                      onEnrich={onEnrich}
+                      onRealize={onRealize}
                       onNativeDrop={onNativeDrop}
                       onCreatePost={onCreatePost}
                     />
-                  )
+                  );
                 }
 
-                const schedulablePlatformKey = platform.key as OrganicPlatformTag
+                const schedulablePlatformKey = platform.key as OrganicPlatformTag;
                 const cellDrafts =
-                  draftsByCell.get(`${day.id}::${schedulablePlatformKey}`) ?? EMPTY_DRAFTS
+                  draftsByCell.get(`${day.id}::${schedulablePlatformKey}`) ?? EMPTY_DRAFTS;
 
                 return (
                   <PlannerCell
@@ -252,15 +268,17 @@ export function PlannerMatrix({
                     onToggleSelection={onToggleSelection}
                     onRegenerate={onRegenerate}
                     onClearFailure={onClearFailure}
+                    onEnrich={onEnrich}
+                    onRealize={onRealize}
                     onNativeDrop={onNativeDrop}
                     onCreatePost={onCreatePost}
                   />
-                )
+                );
               })}
             </React.Fragment>
           ))}
         </div>
       </div>
     </div>
-  )
+  );
 }

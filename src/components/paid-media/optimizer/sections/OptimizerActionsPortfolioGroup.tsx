@@ -9,7 +9,11 @@ import type { PortfolioListItem } from '@continuum/contracts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import {
+  CREATIVE_RECOMMENDATION_KINDS,
+  isExecutable,
+  notImplementedMessage,
   parseReport,
   recommendationActionCopy,
   severityBadgeVariant,
@@ -58,6 +62,14 @@ export function OptimizerActionsPortfolioGroup({
           // A pause is advisory: approving it never pauses the ad set on Meta, so the
           // primary button reads "Acknowledge", with copy that says the optimizer won't act.
           const { approveLabel, advisory } = recommendationActionCopy(rec.kind);
+          // The creative-level kinds are FOUND but not yet EXECUTABLE (no drain, no autopilot
+          // path). Approving one would set a status, do nothing, and leave a burning ad running
+          // while the queue looked handled — so the action refuses out loud instead. The finding
+          // itself is real and worth showing.
+          const executable = isExecutable(rec.kind);
+          // These name ONE ad inside the ad set. Showing the ad set id alone would give you five
+          // suspects and no defendant.
+          const isCreativeKind = CREATIVE_RECOMMENDATION_KINDS.has(rec.kind);
           return (
             <div
               key={rec.id}
@@ -74,7 +86,19 @@ export function OptimizerActionsPortfolioGroup({
                     severity={rec.severity}
                     trigger={rec.trigger}
                   />{' '}
-                  · <code className="rounded bg-muted px-1 py-0.5 text-xs">{rec.adset_id}</code>
+                  ·{' '}
+                  {isCreativeKind && rec.ad_id ? (
+                    <>
+                      <span className="text-xs font-normal text-muted-foreground">ad</span>{' '}
+                      <code className="rounded bg-muted px-1 py-0.5 text-xs">{rec.ad_id}</code>{' '}
+                      <span className="text-xs font-normal text-muted-foreground">in</span>{' '}
+                      <code className="rounded bg-muted/60 px-1 py-0.5 text-xs text-muted-foreground">
+                        {rec.adset_id}
+                      </code>
+                    </>
+                  ) : (
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs">{rec.adset_id}</code>
+                  )}
                 </p>
                 <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   {rec.severity ? (
@@ -90,6 +114,7 @@ export function OptimizerActionsPortfolioGroup({
                   </Badge>
                   {rec.reason}
                 </p>
+                <RecommendationBrief seed={rec.seed} />
                 {advisory ? (
                   <p className="mt-1 text-2xs text-muted-foreground/80 italic">{advisory}</p>
                 ) : null}
@@ -101,9 +126,15 @@ export function OptimizerActionsPortfolioGroup({
                   variant="secondary"
                   className="h-7 px-3 text-xs"
                   disabled={isBusy}
-                  onClick={() =>
-                    setStatus.mutate({ recommendation_id: rec.id, status: 'approved' })
-                  }
+                  onClick={() => {
+                    // Refuse loudly rather than record a decision we cannot honour. Marking it
+                    // `approved` here would clear it from the queue while the ad kept spending.
+                    if (!executable) {
+                      toast.info(notImplementedMessage(rec.kind));
+                      return;
+                    }
+                    setStatus.mutate({ recommendation_id: rec.id, status: 'approved' });
+                  }}
                 >
                   {approveLabel}
                 </Button>
@@ -124,6 +155,41 @@ export function OptimizerActionsPortfolioGroup({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** The deterministic citations a variation brief is grounded on — the figures a human copies
+ *  into Studio, and the only thing a model downstream is ever allowed to rephrase.
+ *
+ *  Rendered because the advisory tells the user to take the brief there themselves; an
+ *  instruction to use a brief that is not on screen is not an instruction, it is a shrug. */
+function RecommendationBrief({ seed }: { seed?: Record<string, unknown> | null }) {
+  const groundedOn = Array.isArray(seed?.groundedOn) ? (seed.groundedOn as string[]) : [];
+  if (groundedOn.length === 0) return null;
+
+  const rebuildCraft = seed?.rebuildCraft === true;
+
+  return (
+    <div className="mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+      <p className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Grounded on
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {groundedOn.map((line) => (
+          <li key={line} className="text-2xs text-muted-foreground">
+            {line}
+          </li>
+        ))}
+      </ul>
+      {rebuildCraft ? (
+        // The distinction the whole feature turns on: this creative converts best AND Meta
+        // rates its craft below its auction peers. Cloning it would industrialize the penalty.
+        <p className="mt-1.5 text-2xs font-medium text-foreground">
+          Keep the angle — rebuild the execution. Meta rates this creative below its auction
+          peers, so copying it as-is would reproduce what the auction is already penalizing.
+        </p>
+      ) : null}
     </div>
   );
 }

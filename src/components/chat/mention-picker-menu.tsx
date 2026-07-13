@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   MentionSuggestionHover,
   type MentionAnalyticsContext,
-} from "@/components/ai-elements/mention-suggestion-hover";
+} from "@/components/chat/mention-suggestion-hover";
 import type { AgentMentionSuggestion } from "@/lib/agent-references";
 import { cn } from "@/lib/utils";
 

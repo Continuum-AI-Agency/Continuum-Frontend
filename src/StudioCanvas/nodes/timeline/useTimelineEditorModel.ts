@@ -1,14 +1,14 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { useStudioStore } from '../../stores/useStudioStore';
-import type { TimelineEditorNodeData, TimelineItem } from '../../types';
+import type { TimelineItem } from '../../types';
 import { type ClipEffectSpec, speedFor } from '../../utils/render/effectSpec';
 import {
   type ClipTransition,
   computeOutputPlacements,
   overlapInSecFor,
 } from '../../utils/render/transitions';
+import type { TimelineEditorAdapter } from './adapter';
 
 // Pure timeline geometry + mutation helpers for the Video Editor (timelineEditor)
 // single-track sequencer. Placements reference an input-pool source by
@@ -269,14 +269,13 @@ export interface TimelineEditorModel {
 }
 
 export function useTimelineEditorModel(params: {
-  nodeId: string;
+  adapter: TimelineEditorAdapter;
   items: TimelineItem[];
   sourceDurations: Map<string, number>;
   pxPerSec: number;
 }): TimelineEditorModel {
-  const { nodeId, items, sourceDurations, pxPerSec } = params;
-  const updateNode = useStudioStore((state) => state.updateNode);
-  const triggerSave = useStudioStore((state) => state.triggerSave);
+  const { adapter, items, sourceDurations, pxPerSec } = params;
+  const patchDocument = adapter.patchDocument;
 
   const durationFor = useCallback(
     (item: TimelineItem) => effectiveItemDuration(item, sourceDurations.get(item.sourceNodeId)),
@@ -288,21 +287,13 @@ export function useTimelineEditorModel(params: {
     [items, durationFor, pxPerSec],
   );
 
-  // Editing invalidates any prior render: reset the break-point gate so the
+  // Editing invalidates any prior render: the host resets its render gate so the
   // workflow re-parks until the human renders the new timeline.
   const writeItems = useCallback(
     (next: TimelineItem[]) => {
-      updateNode(nodeId, (node) => ({
-        ...node,
-        data: {
-          ...(node.data as TimelineEditorNodeData),
-          items: normalizeOrder(next),
-          committed: false,
-        },
-      }));
-      triggerSave();
+      patchDocument((document) => ({ ...document, items: normalizeOrder(next) }));
     },
-    [nodeId, triggerSave, updateNode],
+    [patchDocument],
   );
 
   const sourceDurationFor = useCallback(

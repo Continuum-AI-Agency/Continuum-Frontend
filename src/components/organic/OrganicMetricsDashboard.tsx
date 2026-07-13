@@ -115,6 +115,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
 import { isAllZeroPost, useOrganicPostDetail } from '@/hooks/useOrganicPostDetail';
 import { kpiMetricToMentionSuggestion } from '@/lib/agent/kpi-mentions';
+import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
 import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
@@ -123,6 +124,7 @@ import { consumePrefetched } from '@/lib/prefetch/organic-metrics-cache';
 import type {
   BrandInsightsQuestionsByNiche,
   BrandInsightsTrendsAndEvents,
+  BrandInsightsWeekSummary,
 } from '@/lib/schemas/brandInsights';
 import type {
   AudienceBreakdown,
@@ -147,6 +149,10 @@ export type OrganicMetricsBrandInsights = {
   questionsByNiche?: BrandInsightsQuestionsByNiche;
   generatedAt?: string;
   status?: string;
+  weekStartDate?: string;
+  weeks?: BrandInsightsWeekSummary[];
+  generationKind?: 'initial' | 'regeneration';
+  generationCount?: number;
 };
 
 type AccountsByPlatform = {
@@ -1919,6 +1925,9 @@ export function OrganicMetricsDashboard({
   initialPlatform = 'instagram',
   brandInsights = null,
 }: Props) {
+  const [visibleBrandInsights, setVisibleBrandInsights] =
+    React.useState<OrganicMetricsBrandInsights | null>(brandInsights);
+  const [isLoadingTrendsWeek, setIsLoadingTrendsWeek] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
   const [platform, setPlatform] = React.useState<MetricsPlatform>(initialPlatform);
   const [viewMode, setViewMode] = React.useState<MetricsViewMode>('account');
@@ -1931,6 +1940,35 @@ export function OrganicMetricsDashboard({
   );
   const [reportEmailOpen, setReportEmailOpen] = React.useState(false);
   const [reportError, setReportError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setVisibleBrandInsights(brandInsights);
+  }, [brandInsights]);
+
+  const selectTrendsWeek = React.useCallback(
+    async (weekStartDate: string) => {
+      if (!weekStartDate || weekStartDate === visibleBrandInsights?.weekStartDate) return;
+      setIsLoadingTrendsWeek(true);
+      try {
+        const result = await fetchBrandInsightsWeek({ brandId, weekStartDate });
+        setVisibleBrandInsights({
+          trendsAndEvents: result.data.trendsAndEvents,
+          questionsByNiche: result.data.questionsByNiche,
+          generatedAt: result.data.trendsAndEvents.generatedAt ?? result.generatedAt,
+          status: result.data.trendsAndEvents.status ?? result.status,
+          weekStartDate: result.data.weekStartDate,
+          weeks: result.data.weeks,
+          generationKind: result.data.generationKind,
+          generationCount: result.data.generationCount,
+        });
+      } catch (error) {
+        setReportError(error instanceof Error ? error.message : 'Unable to load that Trends week.');
+      } finally {
+        setIsLoadingTrendsWeek(false);
+      }
+    },
+    [brandId, visibleBrandInsights?.weekStartDate],
+  );
   const manualRefreshRef = React.useRef(false);
   const setSelection = useAccountSelectionStore((s) => s.setSelection);
   const [postGalleryPosts, setPostGalleryPosts] = React.useState<OrganicPost[]>([]);
@@ -2659,21 +2697,30 @@ export function OrganicMetricsDashboard({
             <AlertDescription>{reportError}</AlertDescription>
           </Alert>
         ) : null}
-        {brandInsights ? (
+        {visibleBrandInsights ? (
           <section className="mb-3" data-tour-id="organic-metrics-brand-trends">
             <BrandTrendsPanel
-              trends={brandInsights.trendsAndEvents.trends}
-              events={brandInsights.trendsAndEvents.events}
-              questionsByNiche={brandInsights.questionsByNiche}
+              trends={visibleBrandInsights.trendsAndEvents.trends}
+              events={visibleBrandInsights.trendsAndEvents.events}
+              questionsByNiche={visibleBrandInsights.questionsByNiche}
               brandId={brandId}
-              country={brandInsights.trendsAndEvents.country}
-              generatedAt={brandInsights.trendsAndEvents.generatedAt ?? brandInsights.generatedAt}
-              status={brandInsights.trendsAndEvents.status ?? brandInsights.status}
+              country={visibleBrandInsights.trendsAndEvents.country}
+              weekStartDate={visibleBrandInsights.weekStartDate}
+              generatedAt={
+                visibleBrandInsights.trendsAndEvents.generatedAt ?? visibleBrandInsights.generatedAt
+              }
+              status={visibleBrandInsights.trendsAndEvents.status ?? visibleBrandInsights.status}
+              weeks={visibleBrandInsights.weeks}
+              generationKind={visibleBrandInsights.generationKind}
+              generationCount={visibleBrandInsights.generationCount}
+              onWeekChange={selectTrendsWeek}
+              isWeekLoading={isLoadingTrendsWeek}
               statusSlot={
                 <BrandInsightsGenerateButton
                   brandId={brandId}
                   lastGeneratedAt={
-                    brandInsights.trendsAndEvents.generatedAt ?? brandInsights.generatedAt
+                    visibleBrandInsights.trendsAndEvents.generatedAt ??
+                    visibleBrandInsights.generatedAt
                   }
                   force
                 />

@@ -1,4 +1,3 @@
-import { Clapperboard, GalleryHorizontalEnd, PencilLine, Sparkles } from 'lucide-react';
 import * as React from 'react';
 
 import {
@@ -8,7 +7,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { CreatePostFormat, CreatePostOptions, PlannerPlatformKey } from './planner-platforms';
+import {
+  type AddPostAction,
+  AddPostActionBody,
+  AI_ONE_SHOT_ACTION,
+  MANUAL_ADD_POST_ACTIONS,
+} from './add-post-actions';
+import type { CreatePostOptions, PlannerPlatformKey } from './planner-platforms';
 
 type AddPostMenuProps = {
   onCreatePost: (options: CreatePostOptions) => void;
@@ -21,25 +26,10 @@ type AddPostMenuProps = {
   align?: 'start' | 'center' | 'end';
 };
 
-const MANUAL_FORMATS: ReadonlyArray<{
-  format: CreatePostFormat;
-  label: string;
-  hint: string;
-  Icon: typeof PencilLine;
-}> = [
-  { format: 'Post', label: 'New post', hint: 'Single image or text', Icon: PencilLine },
-  {
-    format: 'Carousel',
-    label: 'New carousel',
-    hint: 'Multi-slide gallery',
-    Icon: GalleryHorizontalEnd,
-  },
-  { format: 'Reel', label: 'New reel', hint: 'Short-form video', Icon: Clapperboard },
-];
-
 // Shared "+" menu for every calendar surface (toolbar + week/month/list cells).
-// Primary actions seed a real manual draft with the chosen format, which the user
-// edits in the sidebar preview. "Generate with AI" is the secondary agent path.
+// Manual actions seed a real editable draft with the chosen format; the AI
+// one-shot action opens the AiPostComposer. The action list itself lives in
+// add-post-actions so the day-cell right-click menu offers the same set.
 export const AddPostMenu = React.memo(function AddPostMenu({
   onCreatePost,
   children,
@@ -47,37 +37,25 @@ export const AddPostMenu = React.memo(function AddPostMenu({
   platformKey,
   align = 'center',
 }: AddPostMenuProps) {
-  const createManual = React.useCallback(
-    (format: CreatePostFormat) => {
-      onCreatePost({ dayId, platformKey, status: 'draft', mode: 'manual', format });
+  const select = React.useCallback(
+    (options: AddPostAction['options']) => {
+      onCreatePost({ dayId, platformKey, ...options });
     },
     [dayId, platformKey, onCreatePost],
   );
-
-  const handleGenerateWithAi = React.useCallback(() => {
-    onCreatePost({ dayId, platformKey, status: 'placeholder', mode: 'ai' });
-  }, [dayId, platformKey, onCreatePost]);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-52">
-        {MANUAL_FORMATS.map(({ format, label, hint, Icon }) => (
-          <DropdownMenuItem key={format} onSelect={() => createManual(format)}>
-            <Icon className="size-4" />
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">{label}</span>
-              <span className="text-xs text-muted-foreground">{hint}</span>
-            </div>
+        {MANUAL_ADD_POST_ACTIONS.map((action) => (
+          <DropdownMenuItem key={action.id} onSelect={() => select(action.options)}>
+            <AddPostActionBody action={action} />
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleGenerateWithAi}>
-          <Sparkles className="size-4" />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Generate with AI</span>
-            <span className="text-xs text-muted-foreground">Let the agent draft it</span>
-          </div>
+        <DropdownMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>
+          <AddPostActionBody action={AI_ONE_SHOT_ACTION} />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

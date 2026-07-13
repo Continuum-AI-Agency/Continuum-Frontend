@@ -1,29 +1,31 @@
-"use client";
+'use client';
 
-import React, { Suspense } from "react";
-import { useSession } from "@/hooks/useSession";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useToastContext } from "@/components/ui/ToastProvider";
+import { motion, useReducedMotion } from 'motion/react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import React, { Suspense } from 'react';
+import { NotificationsBell } from '@/components/notifications/NotificationsBell';
+import { Separator } from '@/components/ui/separator';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useToastContext } from '@/components/ui/ToastProvider';
+import { useSession } from '@/hooks/useSession';
 import {
   createDashboardWelcomeToastOptions,
   shouldShowDashboardWelcomeToast,
-} from "@/lib/ui/dashboardWelcomeToast";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
-import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./navigation/routes";
-import { motion, useReducedMotion } from "motion/react";
+} from '@/lib/ui/dashboardWelcomeToast';
+import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from './navigation/routes';
 
 function DashboardHeaderInner() {
   useDashboardWelcomeToast();
   useInviteToast();
   const pathname = usePathname();
-  
+
   // Find current route label for breadcrumb
   const allRoutes = [...APP_NAVIGATION, ...APP_NAVIGATION_FOOTER];
-  const currentRoute = allRoutes.find(r => r.href === pathname) 
-    || allRoutes.flatMap(r => r.items || []).find(sub => sub.href === pathname);
+  const currentRoute =
+    allRoutes.find((r) => r.href === pathname) ||
+    allRoutes.flatMap((r) => r.items || []).find((sub) => sub.href === pathname);
 
-  const breadcrumbLabel = currentRoute?.label || "Home";
+  const breadcrumbLabel = currentRoute?.label || 'Home';
   const CurrentIcon = currentRoute?.icon;
   const shouldReduceMotion = useReducedMotion();
 
@@ -37,13 +39,13 @@ function DashboardHeaderInner() {
             aria-hidden="true"
             className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--ring)]"
             animate={
-              shouldReduceMotion
-                ? undefined
-                : { opacity: [1, 0.45, 1], scale: [1, 1.08, 1] }
+              shouldReduceMotion ? undefined : { opacity: [1, 0.45, 1], scale: [1, 1.08, 1] }
             }
-            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
           />
-          {CurrentIcon ? <CurrentIcon className="h-[15px] w-[15px] text-[var(--ring)]" aria-hidden="true" /> : null}
+          {CurrentIcon ? (
+            <CurrentIcon className="h-[15px] w-[15px] text-[var(--ring)]" aria-hidden="true" />
+          ) : null}
           <span className="text-[0.78rem] font-medium tracking-[0.01em] text-[var(--color-foreground)]">
             {breadcrumbLabel}
           </span>
@@ -51,6 +53,7 @@ function DashboardHeaderInner() {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        <NotificationsBell />
       </div>
     </header>
   );
@@ -74,18 +77,18 @@ function useDashboardWelcomeToast() {
   const { user } = useSession();
   const lastShownKeyRef = React.useRef<string | null>(null);
 
-  const displayName = user?.user_metadata?.name || user?.email?.split("@")[0] || null;
+  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || null;
 
   React.useEffect(() => {
     if (!user) return;
     if (!toast) return;
     if (!shouldShowDashboardWelcomeToast(pathname)) return;
 
-    const key = `${pathname}:${displayName ?? "User"}`;
+    const key = `${pathname}:${displayName ?? 'User'}`;
     if (lastShownKeyRef.current === key) return;
     lastShownKeyRef.current = key;
 
-    toast.show(createDashboardWelcomeToastOptions(displayName ?? "User"));
+    toast.show(createDashboardWelcomeToastOptions(displayName ?? 'User'));
   }, [displayName, pathname, toast, user]);
 }
 
@@ -96,42 +99,42 @@ function useInviteToast() {
 
   React.useEffect(() => {
     if (!toast) return;
-    const inviteStatus = searchParams.get("invite");
+    const inviteStatus = searchParams.get('invite');
     if (!inviteStatus) return;
 
-    const messageParam = searchParams.get("message");
-    const key = `${inviteStatus}:${messageParam ?? ""}`;
+    const messageParam = searchParams.get('message');
+    const key = `${inviteStatus}:${messageParam ?? ''}`;
     if (lastShownKeyRef.current === key) return;
     lastShownKeyRef.current = key;
 
-    if (inviteStatus === "accepted") {
+    if (inviteStatus === 'accepted') {
       toast.show({
-        title: "Invite accepted",
+        title: 'Invite accepted',
         description: "You're now a member of this brand.",
-        variant: "success",
+        variant: 'success',
         durationMs: 6000,
       });
-    } else if (inviteStatus === "missing_params") {
+    } else if (inviteStatus === 'missing_params') {
       toast.show({
-        title: "Invite link incomplete",
-        description: "The invite link is missing details. Please request a new invite.",
-        variant: "warning",
+        title: 'Invite link incomplete',
+        description: 'The invite link is missing details. Please request a new invite.',
+        variant: 'warning',
         durationMs: 6000,
       });
-    } else if (inviteStatus === "error") {
+    } else if (inviteStatus === 'error') {
       toast.show({
-        title: "Invite failed",
-        description: messageParam ?? "The invite could not be accepted.",
-        variant: "error",
+        title: 'Invite failed',
+        description: messageParam ?? 'The invite could not be accepted.',
+        variant: 'error',
         durationMs: 7000,
       });
     }
 
-    if (typeof window !== "undefined") {
+    if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
-      url.searchParams.delete("invite");
-      url.searchParams.delete("message");
-      window.history.replaceState({}, "", url.toString());
+      url.searchParams.delete('invite');
+      url.searchParams.delete('message');
+      window.history.replaceState({}, '', url.toString());
     }
   }, [searchParams, toast]);
 }

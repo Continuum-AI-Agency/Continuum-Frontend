@@ -1,35 +1,44 @@
 import 'server-only';
 
-import type { MediaAsset, MediaCollection, MediaKind, MediaSource } from '@continuum/contracts';
+import type {
+  CustomFieldFilter,
+  MediaAsset,
+  MediaCollection,
+  MediaKind,
+  MediaSource,
+} from '@continuum/contracts';
+import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
-import { rowToMediaAsset } from './mapper';
+import { kindMatchOrFilter, paginateByMembership } from './filters';
+import { rowToSignedMediaAsset } from './mapper';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
-import { mintSignedUrls } from './signed-urls';
+import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';
 import { mediaSchema } from './supabase-media';
 
 const PAGE_SIZE = 48;
 
+// Page 0 of the library grid (the RSC seed). Filter semantics, ordering, and
+// offset math MUST stay identical to GET /api/library/assets (page N>0) — the
+// useMediaLibrary loadMore seam counts returned rows to continue from here.
 export async function fetchMediaAssets(
   brandId: string,
-  options: { collectionId?: string; limit?: number; source?: MediaSource; kind?: MediaKind } = {},
+  options: {
+    collectionId?: string;
+    limit?: number;
+    source?: MediaSource;
+    kind?: MediaKind;
+    tags?: readonly string[];
+  } = {},
 ): Promise<MediaAsset[]> {
   const client = await createSupabaseServerClient();
   const limit = options.limit ?? PAGE_SIZE;
 
   let effectiveSource = options.source;
   let effectiveKind = options.kind;
-
-  let query = mediaSchema(client)
-    .from('assets')
-    .select(MEDIA_ASSET_SELECT)
-    .eq('brand_id', brandId)
-    .is('deleted_at', null)
-    // Hide non-cover carousel slides — the cover tile carries the whole group.
-    .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  let assetIds: string[] | null = null;
+  let smartFieldFilters: readonly CustomFieldFilter[] = [];
 
   if (options.collectionId) {
     const { data: collection, error: collectionError } = await mediaSchema(client)
@@ -49,8 +58,14 @@ export async function fetchMediaAssets(
       const smart = resolveSmartQueryFilter(col.smart_query);
       effectiveSource = smart.source ?? options.source;
       effectiveKind = smart.kind ?? options.kind;
+      // A saved field filter must bite on page 0 too. Resolving it only in the
+      // API route (page N>0) would render an unfiltered first page and then
+      // filter every page after it — the grid would show assets that the
+      // collection, by its own definition, excludes.
+      smartFieldFilters = smart.fieldFilters ?? [];
     } else {
-      // Manual collection: constrain by collection_items membership.
+      // Manual collection: constrain by collection_items membership,
+      // position-ordered (same ordering the API route paginates by).
       const { data: items, error: itemsError } = await mediaSchema(client)
         .from('collection_items')
         .select('asset_id')
@@ -62,35 +77,68 @@ export async function fetchMediaAssets(
         return [];
       }
 
-      const assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
+      assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
       if (assetIds.length === 0) return [];
-
-      query = mediaSchema(client)
-        .from('assets')
-        .select(MEDIA_ASSET_SELECT)
-        .in('id', assetIds)
-        .is('deleted_at', null)
-        .limit(limit);
     }
   }
 
-  if (effectiveSource) query = query.eq('source', effectiveSource);
-  if (effectiveKind) query = query.eq('kind', effectiveKind);
+  // Hide non-cover carousel slides — the cover tile carries the whole group.
+  let query = mediaSchema(client)
+    .from('assets')
+    .select(MEDIA_ASSET_SELECT)
+    .eq('brand_id', brandId)
+    .is('deleted_at', null)
+    .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER);
 
-  const { data, error } = await query;
-  if (error) {
-    console.error('[media/fetchers] assets query failed', error);
-    return [];
+  if (effectiveSource) query = query.eq('source', effectiveSource);
+  // Row kind OR a cover row's slide kind — mixed carousels surface under both.
+  if (effectiveKind) query = query.or(kindMatchOrFilter(effectiveKind));
+  if (options.tags && options.tags.length > 0) query = query.contains('tags', options.tags);
+
+  if (smartFieldFilters.length > 0) {
+    try {
+      const resolution = await resolveFieldFilterAssetIds(client, brandId, smartFieldFilters);
+      if (resolution.kind === 'ids') {
+        // An empty allowlist means nothing matched — say so, rather than letting
+        // a `.in('id', [])` degrade into "no constraint" and show everything.
+        if (resolution.ids.length === 0) return [];
+        query = query.in('id', resolution.ids);
+      } else if (resolution.kind === 'exclude' && resolution.ids.length > 0) {
+        query = query.not('id', 'in', `(${resolution.ids.join(',')})`);
+      }
+    } catch (err) {
+      // Fail CLOSED. A collection defined by a field filter must never fall back
+      // to rendering the unfiltered library — showing assets the collection
+      // excludes by definition is worse than showing an empty page.
+      console.error('[media/fetchers] field filter resolution failed', err);
+      return [];
+    }
   }
 
-  const rows = (data ?? []) as unknown as MediaAssetRow[];
+  let rows: MediaAssetRow[];
+  if (assetIds) {
+    const { data, error } = await query.in('id', assetIds);
+    if (error) {
+      console.error('[media/fetchers] assets query failed', error);
+      return [];
+    }
+    const members = (data ?? []) as unknown as MediaAssetRow[];
+    rows = paginateByMembership(members, assetIds, 0, limit).page;
+  } else {
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
+    if (error) {
+      console.error('[media/fetchers] assets query failed', error);
+      return [];
+    }
+    rows = (data ?? []) as unknown as MediaAssetRow[];
+  }
   const signedUrlMap = await mintSignedUrls([
-    ...rows.map((r) => ({ path: r.storage_path, bucket: r.bucket })),
+    ...assetSignablePaths(rows),
     ...carouselSignablePaths(rows),
   ]);
 
   return rows.map((row) => {
-    const asset = rowToMediaAsset(row, signedUrlMap.get(row.storage_path) ?? null);
+    const asset = rowToSignedMediaAsset(row, signedUrlMap);
     const carousel = buildCarousel(row, signedUrlMap);
     return carousel ? { ...asset, carousel } : asset;
   });

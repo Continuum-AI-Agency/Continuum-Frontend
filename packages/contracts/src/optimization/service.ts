@@ -52,6 +52,11 @@ export const OptimizationMetricDefinitionSchema = z.object({
     'leads',
     'landingPageViews',
     'impressions',
+    'conversations',
+    'linkClicks',
+    'thruplays',
+    'postEngagement',
+    'clicks',
   ]),
   resultLabel: z.string(),
   costLabel: z.string(),
@@ -111,6 +116,52 @@ const OPTIMIZATION_METRIC_DEFINITIONS: Record<
     costLabel: 'CPM',
     targetLabel: 'Target CPM',
     denominatorMultiplier: 1_000,
+  },
+  // The currencies real Meta ad sets declare but the original six objectives could not
+  // express. Naming them precisely is the point: a "cost per conversation" rendered as
+  // "CPA" is how a $39.48 messaging thread gets read as a $255.98 failed lead. The labels
+  // mirror KPI_COST_LABEL in ../paid/kpi.ts — one vocabulary, not two.
+  conversations: {
+    objective: 'conversations',
+    kpiField: 'conversations',
+    resultLabel: 'Conversations',
+    costLabel: 'Cost per conversation',
+    targetLabel: 'Target cost per conversation',
+    denominatorMultiplier: 1,
+  },
+  link_clicks: {
+    objective: 'link_clicks',
+    kpiField: 'linkClicks',
+    resultLabel: 'Link clicks',
+    costLabel: 'Cost per link click',
+    targetLabel: 'Target cost per link click',
+    denominatorMultiplier: 1,
+  },
+  thruplays: {
+    objective: 'thruplays',
+    kpiField: 'thruplays',
+    resultLabel: 'ThruPlays',
+    costLabel: 'Cost per ThruPlay',
+    targetLabel: 'Target cost per ThruPlay',
+    denominatorMultiplier: 1,
+  },
+  post_engagement: {
+    objective: 'post_engagement',
+    kpiField: 'postEngagement',
+    resultLabel: 'Engagements',
+    costLabel: 'Cost per engagement',
+    targetLabel: 'Target cost per engagement',
+    denominatorMultiplier: 1,
+  },
+  clicks: {
+    objective: 'clicks',
+    kpiField: 'clicks',
+    resultLabel: 'Clicks',
+    // NOT "CPA". This counts every click including likes and comments — the weakest proxy
+    // there is, and the one an ad that never converted anything looks good on.
+    costLabel: 'Cost per click',
+    targetLabel: 'Target cost per click',
+    denominatorMultiplier: 1,
   },
 };
 
@@ -331,11 +382,19 @@ export const RecommendationRowSchema = z
   .object({
     id: z.string().uuid(),
     adset_id: z.string(),
-    kind: z.string(), // pause | creative_refresh | audience_expand
+    /** The specific AD this is about. Non-null on the creative-level kinds (pause_ad,
+     *  variate_creative); null on the ad-set-level ones. Without it, "your creative is worn
+     *  out" across five creatives gives you five suspects and no defendant. */
+    ad_id: z.string().nullable().optional(),
+    // pause | creative_refresh | audience_expand | pause_ad | variate_creative | seed_experiment
+    kind: z.string(),
     trigger: z.string(),
     severity: z.string().nullable(),
     reason: z.string().nullable(),
     status: z.string(),
+    /** The generation seed on a variate_creative / seed_experiment: the winning creative's
+     *  labels, its Library asset, and the deterministic citations the brief is grounded on. */
+    seed: z.record(z.string(), z.unknown()).nullable().optional(),
     created_at: z.string().optional(),
   })
   .loose();

@@ -26,7 +26,7 @@ type JainaChatInput = {
   sessionId?: string;
   clarificationId?: string;
   userId?: string;
-  images?: Array<{ url: string; name?: string }>;
+  images?: Array<{ url: string; name?: string; mediaType?: string }>;
   references?: AgentMentionReference[];
   planAction?: JainaPlanAction;
   forceReportArtifact?: boolean;

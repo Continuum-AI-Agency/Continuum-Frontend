@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import * as radixIcons from '@radix-ui/react-icons';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
@@ -13,13 +14,17 @@ Object.assign(global.window, {
   TypeError: globalThis.TypeError,
 });
 
+// mock.module is process-wide in bun, so replacing this module outright starves every
+// OTHER spec in the run of the icons it imports (PlayIcon, etc.). Spread the real module
+// and override only the icons this file asserts on. A sync factory over a static import
+// is required: an async importActual factory deadlocks bun's module registry.
 mock.module('@radix-ui/react-icons', () => ({
+  ...radixIcons,
   CheckIcon: () => <span data-testid="check-icon" />,
   Cross2Icon: () => <span data-testid="cross-icon" />,
   ExclamationTriangleIcon: () => <span data-testid="warning-icon" />,
   LightningBoltIcon: () => <span data-testid="lightning-icon" />,
   PlusIcon: () => <span data-testid="plus-icon" />,
-  RocketIcon: () => <span data-testid="rocket-icon" />,
   TrashIcon: () => <span data-testid="trash-icon" />,
 }));
 
@@ -57,15 +62,20 @@ mock.module('@/components/ui/calendar', () => ({
   Calendar: () => <div data-testid="calendar" />,
 }));
 
+// PopoverAnchor is unused here but IS used by specs that share this process (mock.module
+// is process-wide). Omitting it would make their imports fail to resolve.
 mock.module('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PopoverAnchor: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: mock() }),
   useToastContext: () => ({ show: mock() }),
+  // Same reason: sibling specs wrap their tree in the real provider.
+  ToastProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 mock.module('@/components/ui/progress', () => ({
@@ -109,11 +119,9 @@ function defaultProps(overrides?: Partial<CalendarToolbarProps>): CalendarToolba
     onDateRangeChange: mock(),
     selectedTrendCount: 2,
     maxTrendSelections: 5,
-    seededDraftCount: 3,
     isGenerating: false,
     onOpenTrends: mock(),
     onCreatePost: mock(),
-    onGenerate: mock(),
     onClear: mock(),
     draftsCount: 5,
     slotProgress: null,
@@ -205,14 +213,13 @@ describe('CalendarToolbar', () => {
     expect(container.textContent).toContain('retry');
   });
 
-  it('disables the generate button when seededDraftCount is 0', () => {
-    const { container } = render(<CalendarToolbar {...defaultProps({ seededDraftCount: 0 })} />);
+  // Generation is a per-draft action now (the enrichment ladder), not a whole-week
+  // toolbar button that only ever acted on trend-seeded placeholders.
+  it('has no whole-week Generate button', () => {
+    const { container } = render(<CalendarToolbar {...defaultProps()} />);
 
     const buttons = Array.from(container.querySelectorAll('button'));
-    const generateButton = buttons.find((b) => b.textContent?.trim() === 'Generate');
-
-    expect(generateButton).toBeTruthy();
-    expect(generateButton!.disabled).toBe(true);
+    expect(buttons.find((b) => b.textContent?.trim() === 'Generate')).toBeUndefined();
   });
 
   it('shows the timeframe selector only in list view', () => {
@@ -267,12 +274,6 @@ describe('CalendarToolbar', () => {
     expect(onDateRangeChange).toHaveBeenCalledWith(null);
   });
 
-  it('explains why Generate is disabled when no placeholders exist', () => {
-    const { container } = render(<CalendarToolbar {...defaultProps({ seededDraftCount: 0 })} />);
-    expect(container.textContent).toContain('Add at least one placeholder to the calendar first.');
-    expect(container.querySelector('[aria-describedby]')).toBeTruthy();
-  });
-
   it('explains why Clear is disabled when there are no drafts', () => {
     const { container } = render(<CalendarToolbar {...defaultProps({ draftsCount: 0 })} />);
     expect(container.textContent).toContain('There are no drafts on the calendar to clear yet.');
@@ -280,22 +281,19 @@ describe('CalendarToolbar', () => {
 
   it('explains that controls are paused while generation is running', () => {
     const { container } = render(<CalendarToolbar {...defaultProps({ isGenerating: true })} />);
-    expect(container.textContent).toContain('Generation is already running.');
     expect(container.textContent).toContain('Adding placeholders is paused until it finishes.');
   });
 
-  it('shows no disabled reason when Generate and Clear are actionable', () => {
+  it('shows no disabled reason when Clear is actionable', () => {
     const { container } = render(<CalendarToolbar {...defaultProps()} />);
-    expect(container.textContent).not.toContain('Add at least one placeholder');
     expect(container.textContent).not.toContain('no drafts on the calendar');
-    expect(container.textContent).not.toContain('Generation is already running');
+    expect(container.textContent).not.toContain('paused until it finishes');
   });
 
   it('shows planning-mode guidance when the calendar is empty and idle', () => {
     const { container } = render(
       <CalendarToolbar
         {...defaultProps({
-          seededDraftCount: 0,
           draftsCount: 0,
           isGenerating: false,
         })}

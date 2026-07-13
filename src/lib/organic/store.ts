@@ -1,17 +1,20 @@
-import type { PublishPlatform } from "@continuum/contracts";
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import * as storeRegistry from "@/lib/storage/storeRegistry";
-import type { 
-  OrganicCalendarDay, 
-  OrganicCalendarDraft, 
+import type { PublishPlatform } from '@continuum/contracts';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { makeCalendarDay } from '@/components/organic/primitives/calendar-utils';
+import type {
+  EventHistory,
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
   StreamEvent,
-  EventHistory
-} from "@/components/organic/primitives/types";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
-import { makeCalendarDay } from "@/components/organic/primitives/calendar-utils";
+} from '@/components/organic/primitives/types';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import * as storeRegistry from '@/lib/storage/storeRegistry';
 
 export type CalendarDateRange = { from: string; to: string };
+
+/** One of the brand's connected accounts on a platform, as offered by the planner's switcher. */
+export type PlannerAccountOption = { id: string; label: string };
 
 export type GridSlot = {
   slotId: string;
@@ -56,13 +59,13 @@ export type WeeklyGrid = {
 };
 
 export type GridStatus =
-  | "idle"
-  | "running"
-  | "awaiting_approval"
-  | "approved"
-  | "complete"
-  | "complete_with_errors"
-  | "error";
+  | 'idle'
+  | 'running'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'complete'
+  | 'complete_with_errors'
+  | 'error';
 
 export interface ScheduledEvent {
   id: string;
@@ -73,13 +76,13 @@ export interface ScheduledEvent {
   draftId?: string;
 }
 
-export type GenerationStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type GenerationStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 // Three-step checkpoint state for the run-progress surfaces. Ephemeral.
 export type GenerationCheckpoint = {
   textReady?: boolean;
   blueprintReady?: boolean;
-  mediaStatus?: "pending" | "generating" | "ready" | "user_supplied" | "skipped";
+  mediaStatus?: 'pending' | 'generating' | 'ready' | 'user_supplied' | 'skipped';
   awaitingMediaChoice?: boolean;
 };
 
@@ -112,10 +115,22 @@ interface CalendarState {
   days: OrganicCalendarDay[];
   ghosts: Record<string, number>;
   selectedDraftId: string | null;
+  // The day the user last clicked. Context-free create actions (the toolbar "+",
+  // the right-click "New post") target it instead of guessing at the first loaded
+  // day. Deliberately absent from PersistedCalendarState: a focus ring restored
+  // onto an off-screen day would silently misdirect the next "+".
+  focusedDayId: string | null;
   selectedDraftIds: string[];
   selectedTrendIds: string[];
   persistedWeekStartId: string | null;
-  accountContext: { accountIds: Partial<Record<PublishPlatform, string>>; brandId: string | null };
+  // The account each platform publishes to, and every account the brand could publish to.
+  // `accountIds` used to be the brand's alphabetically-first account per platform with no way
+  // to change it — which is how posts went to the wrong profile. The switcher writes here.
+  accountContext: {
+    accountIds: Partial<Record<PublishPlatform, string>>;
+    accountOptions: Partial<Record<PublishPlatform, PlannerAccountOption[]>>;
+    brandId: string | null;
+  };
   gridStatus: GridStatus;
   gridProgress: {
     percent: number;
@@ -127,16 +142,19 @@ interface CalendarState {
   };
   gridError: string | null;
   gridJobId: string | null;
-  placementProgress: Record<string, {
-    percent: number;
-    stage?: string;
-    agentName?: string;
-    message?: string;
-  }>;
+  placementProgress: Record<
+    string,
+    {
+      percent: number;
+      stage?: string;
+      agentName?: string;
+      message?: string;
+    }
+  >;
   generations: Record<string, GenerationEntry>;
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
-  viewMode: "week" | "month" | "list";
+  viewMode: 'week' | 'month' | 'list';
   // Custom timeframe filter for the LIST view (null = show all loaded drafts).
   // A pure view filter over the fully-loaded draft set — never refetches.
   dateRange: CalendarDateRange | null;
@@ -153,7 +171,10 @@ interface CalendarState {
   backlogDrafts: OrganicCalendarDraft[];
 
   setDays: (days: OrganicCalendarDay[]) => void;
-  updateDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
+  updateDraft: (
+    draftId: string,
+    updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
+  ) => void;
   moveDraft: (draftId: string, targetDayId: string) => void;
   bulkMoveDrafts: (draftIds: string[], targetDayId: string) => void;
   addDraft: (dayId: string, draft: OrganicCalendarDraft) => void;
@@ -162,6 +183,7 @@ interface CalendarState {
   // server-side (or confirmed there was nothing to delete).
   clearPendingServerDeletes: (backendIds: string[]) => void;
   setSelectedDraftId: (id: string | null) => void;
+  setFocusedDayId: (id: string | null) => void;
   setSelectedDraftIds: (ids: string[]) => void;
   toggleDraftSelection: (id: string) => void;
   clearDraftSelection: () => void;
@@ -186,12 +208,15 @@ interface CalendarState {
   // lease loss never emits a terminal frame). Keeps the "N generations / N running"
   // counter from drifting upward forever and showing a phantom stuck run.
   pruneGenerations: () => void;
-  setPlacementProgress: (placementId: string, progress: {
-    percent: number;
-    stage?: string;
-    agentName?: string;
-    message?: string;
-  }) => void;
+  setPlacementProgress: (
+    placementId: string,
+    progress: {
+      percent: number;
+      stage?: string;
+      agentName?: string;
+      message?: string;
+    },
+  ) => void;
   clearPlacementProgress: () => void;
   setGhosts: (dayId: string, count: number) => void;
   addEvent: (event: StreamEvent) => void;
@@ -200,28 +225,34 @@ interface CalendarState {
   clearCalendar: () => void;
   resetForBrandSwitch: () => void;
 
-  addScheduledEvent: (date: string, event: Omit<ScheduledEvent, "id">) => void;
+  addScheduledEvent: (date: string, event: Omit<ScheduledEvent, 'id'>) => void;
   updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
   moveEventToDay: (eventId: string, targetDate: string) => void;
-  setViewMode: (mode: "week" | "month" | "list") => void;
+  setViewMode: (mode: 'week' | 'month' | 'list') => void;
   setDateRange: (range: CalendarDateRange | null) => void;
   setShowPlanned: (value: boolean) => void;
   requestCalendarRefetch: () => void;
 
   addBacklogDraft: (draft: OrganicCalendarDraft) => void;
-  updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
+  updateBacklogDraft: (
+    draftId: string,
+    updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
+  ) => void;
   deleteBacklogDraft: (draftId: string) => void;
   promoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
   duplicateDraft: (sourceDraftId: string, targetDayId?: string, newTimeLabel?: string) => void;
   setAccountContext: (ctx: {
     accountIds: Partial<Record<PublishPlatform, string>>;
+    accountOptions?: Partial<Record<PublishPlatform, PlannerAccountOption[]>>;
     brandId: string | null;
   }) => void;
+  /** Point one platform at a different one of the brand's accounts. */
+  selectAccount: (platform: PublishPlatform, accountId: string) => void;
 }
 
 type PersistedCalendarState = Pick<
   CalendarState,
-  "selectedTrendIds" | "persistedWeekStartId" | "viewMode" | "dateRange" | "days" | "backlogDrafts"
+  'selectedTrendIds' | 'persistedWeekStartId' | 'viewMode' | 'dateRange' | 'days' | 'backlogDrafts'
 >;
 
 // Bump when the persisted shape changes in a breaking way.
@@ -245,29 +276,28 @@ export function stripDraftBlobs(draft: OrganicCalendarDraft): OrganicCalendarDra
 }
 
 function sanitizePersistedCalendarState(
-  state: Partial<CalendarState> | undefined
+  state: Partial<CalendarState> | undefined,
 ): PersistedCalendarState {
   const selectedTrendIds = Array.isArray(state?.selectedTrendIds)
-    ? state.selectedTrendIds.filter((id): id is string => typeof id === "string").slice(0, 5)
+    ? state.selectedTrendIds.filter((id): id is string => typeof id === 'string').slice(0, 5)
     : [];
 
   const persistedWeekStartId =
-    typeof state?.persistedWeekStartId === "string" &&
-    state.persistedWeekStartId.trim().length > 0
+    typeof state?.persistedWeekStartId === 'string' && state.persistedWeekStartId.trim().length > 0
       ? state.persistedWeekStartId
       : null;
 
-  const viewMode: "week" | "month" | "list" =
-    state?.viewMode === "week" || state?.viewMode === "month" || state?.viewMode === "list"
+  const viewMode: 'week' | 'month' | 'list' =
+    state?.viewMode === 'week' || state?.viewMode === 'month' || state?.viewMode === 'list'
       ? state.viewMode
-      : "month";
+      : 'month';
 
   const candidateRange = state?.dateRange;
   const dateRange: CalendarDateRange | null =
     candidateRange &&
-    typeof candidateRange === "object" &&
-    typeof candidateRange.from === "string" &&
-    typeof candidateRange.to === "string"
+    typeof candidateRange === 'object' &&
+    typeof candidateRange.from === 'string' &&
+    typeof candidateRange.to === 'string'
       ? { from: candidateRange.from, to: candidateRange.to }
       : null;
 
@@ -289,18 +319,19 @@ export const useCalendarStore = create<CalendarState>()(
       days: [],
       ghosts: {},
       selectedDraftId: null,
+      focusedDayId: null,
       selectedDraftIds: [],
       selectedTrendIds: [],
       persistedWeekStartId: null,
-      accountContext: { accountIds: {}, brandId: null },
-      gridStatus: "idle",
+      accountContext: { accountIds: {}, accountOptions: {}, brandId: null },
+      gridStatus: 'idle',
       gridProgress: { percent: 0 },
       gridError: null,
       gridJobId: null,
       placementProgress: {},
       generations: {},
       scheduledEvents: {},
-      viewMode: "month",
+      viewMode: 'month',
       dateRange: null,
       showPlanned: true,
       calendarRefetchNonce: 0,
@@ -309,7 +340,7 @@ export const useCalendarStore = create<CalendarState>()(
       backlogDrafts: [],
 
       setDays: (days) => set({ days }),
-      
+
       updateDraft: (draftId, updater) =>
         set((state) => ({
           days: state.days.map((day) => ({
@@ -321,7 +352,7 @@ export const useCalendarStore = create<CalendarState>()(
       moveDraft: (draftId, targetDayId) =>
         set((state) => {
           let movedDraft: OrganicCalendarDraft | undefined;
-          
+
           const nextDays = state.days.map((day) => {
             const draftIndex = day.slots.findIndex((s) => s.id === draftId);
             if (draftIndex !== -1) {
@@ -338,7 +369,9 @@ export const useCalendarStore = create<CalendarState>()(
           // (the week grid renders 7 days regardless of what's loaded). Materialize
           // it so the dragged draft isn't lost.
           if (!nextDays.some((day) => day.id === targetDayId)) {
-            return { days: [...nextDays, { ...makeCalendarDay(targetDayId), slots: [movedDraft] }] };
+            return {
+              days: [...nextDays, { ...makeCalendarDay(targetDayId), slots: [movedDraft] }],
+            };
           }
 
           return {
@@ -434,16 +467,19 @@ export const useCalendarStore = create<CalendarState>()(
         }),
 
       setSelectedDraftId: (id) => set({ selectedDraftId: id }),
+
+      setFocusedDayId: (id) => set({ focusedDayId: id }),
       setSelectedDraftIds: (ids) => set({ selectedDraftIds: ids }),
       setPersistedWeekStartId: (weekStartId) => set({ persistedWeekStartId: weekStartId }),
-      
-      toggleDraftSelection: (id) => set((state) => {
-        const next = new Set(state.selectedDraftIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return { selectedDraftIds: Array.from(next) };
-      }),
-      
+
+      toggleDraftSelection: (id) =>
+        set((state) => {
+          const next = new Set(state.selectedDraftIds);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return { selectedDraftIds: Array.from(next) };
+        }),
+
       clearDraftSelection: () => set({ selectedDraftIds: [] }),
 
       toggleTrend: (trendId, maxSelections = 5) =>
@@ -460,8 +496,7 @@ export const useCalendarStore = create<CalendarState>()(
       setGridStatus: (status) =>
         set((state) => ({
           gridStatus: status,
-          eventHistory:
-            status === "running" ? [] : state.eventHistory,
+          eventHistory: status === 'running' ? [] : state.eventHistory,
         })),
       setGridProgress: (progress) => set({ gridProgress: progress }),
       setGridError: (error) => set({ gridError: error }),
@@ -480,7 +515,7 @@ export const useCalendarStore = create<CalendarState>()(
               [entry.jobId]: {
                 ...prev,
                 ...entry,
-                status: entry.status ?? prev?.status ?? "queued",
+                status: entry.status ?? prev?.status ?? 'queued',
                 updatedAt: Date.now(),
               },
             },
@@ -503,9 +538,9 @@ export const useCalendarStore = create<CalendarState>()(
           let changed = false;
           for (const [key, entry] of Object.entries(state.generations)) {
             const terminal =
-              entry.status === "completed" ||
-              entry.status === "failed" ||
-              entry.status === "cancelled";
+              entry.status === 'completed' ||
+              entry.status === 'failed' ||
+              entry.status === 'cancelled';
             const age = now - entry.updatedAt;
             if (terminal && age > TERMINAL_TTL_MS) {
               changed = true;
@@ -524,20 +559,20 @@ export const useCalendarStore = create<CalendarState>()(
           eventHistory: [...state.eventHistory, event].slice(-20),
         })),
       clearEventHistory: () => set({ eventHistory: [] }),
-      
-      setGhosts: (dayId, count) => 
+
+      setGhosts: (dayId, count) =>
         set((state) => ({
-          ghosts: { ...state.ghosts, [dayId]: count }
+          ghosts: { ...state.ghosts, [dayId]: count },
         })),
-        
+
       clearGhosts: () => set({ ghosts: {} }),
-      
+
       clearCalendar: () =>
         set((state) => ({
           days: state.days.map((day) => ({ ...day, slots: [] })),
           selectedDraftId: null,
           selectedDraftIds: [],
-          gridStatus: "idle",
+          gridStatus: 'idle',
           gridProgress: { percent: 0 },
           gridError: null,
           placementProgress: {},
@@ -626,7 +661,7 @@ export const useCalendarStore = create<CalendarState>()(
         set((state) => {
           const draft = state.backlogDrafts.find((d) => d.id === draftId);
           if (!draft) return {};
-          const promoted: OrganicCalendarDraft = { ...draft, timeLabel, status: "draft" };
+          const promoted: OrganicCalendarDraft = { ...draft, timeLabel, status: 'draft' };
           const day = state.days.find((d) => d.id === dayId);
           const dateLabel = day ? `${day.label}, ${day.dateLabel}` : draft.dateLabel;
           return {
@@ -644,7 +679,11 @@ export const useCalendarStore = create<CalendarState>()(
           let sourceDayId: string | undefined;
           for (const day of state.days) {
             const found = day.slots.find((s) => s.id === sourceDraftId);
-            if (found) { sourceDraft = found; sourceDayId = day.id; break; }
+            if (found) {
+              sourceDraft = found;
+              sourceDayId = day.id;
+              break;
+            }
           }
           if (!sourceDraft) return {};
 
@@ -660,11 +699,15 @@ export const useCalendarStore = create<CalendarState>()(
             // identity (override the spread source's) + manual origin so the autosave
             // persists it as its own row instead of colliding with the source.
             clientKey: clonedId,
-            origin: "manual",
-            title: sourceDraft.title.endsWith(" (copy)") ? sourceDraft.title : `${sourceDraft.title} (copy)`,
-            status: "draft",
+            origin: 'manual',
+            title: sourceDraft.title.endsWith(' (copy)')
+              ? sourceDraft.title
+              : `${sourceDraft.title} (copy)`,
+            status: 'draft',
             timeLabel: newTimeLabel ?? sourceDraft.timeLabel,
-            dateLabel: targetDay ? `${targetDay.label}, ${targetDay.dateLabel}` : sourceDraft.dateLabel,
+            dateLabel: targetDay
+              ? `${targetDay.label}, ${targetDay.dateLabel}`
+              : sourceDraft.dateLabel,
             seedTrendId: undefined,
             targetAccountId: undefined,
             generationError: undefined,
@@ -686,18 +729,34 @@ export const useCalendarStore = create<CalendarState>()(
           };
         }),
 
-      setAccountContext: (ctx) => set({ accountContext: ctx }),
+      setAccountContext: (ctx) =>
+        set({
+          accountContext: {
+            accountIds: ctx.accountIds,
+            accountOptions: ctx.accountOptions ?? {},
+            brandId: ctx.brandId,
+          },
+        }),
+
+      selectAccount: (platform, accountId) =>
+        set((state) => ({
+          accountContext: {
+            ...state.accountContext,
+            accountIds: { ...state.accountContext.accountIds, [platform]: accountId },
+          },
+        })),
 
       resetForBrandSwitch: () =>
         set({
           days: [],
           ghosts: {},
           selectedDraftId: null,
+          focusedDayId: null,
           selectedDraftIds: [],
           selectedTrendIds: [],
           persistedWeekStartId: null,
-          accountContext: { accountIds: {}, brandId: null },
-          gridStatus: "idle",
+          accountContext: { accountIds: {}, accountOptions: {}, brandId: null },
+          gridStatus: 'idle',
           gridProgress: { percent: 0 },
           gridError: null,
           gridJobId: null,
@@ -707,12 +766,12 @@ export const useCalendarStore = create<CalendarState>()(
         }),
     }),
     {
-      name: "organic-calendar-storage",
+      name: 'organic-calendar-storage',
       version: CALENDAR_STORE_VERSION,
       // sessionStorage: tab-scoped, survives hard navigation within a session,
       // does not bleed across tabs. Falls back to localStorage in SSR contexts.
       storage: createJSONStorage(() =>
-        typeof window !== "undefined" ? window.sessionStorage : localStorage
+        typeof window !== 'undefined' ? window.sessionStorage : localStorage,
       ),
       partialize: (state) => sanitizePersistedCalendarState(state),
       // v4 -> v5 introduces the month-default redesign + dateRange filter. Reset
@@ -720,25 +779,25 @@ export const useCalendarStore = create<CalendarState>()(
       // primary view; ongoing persists keep whatever the user chooses thereafter.
       migrate: (persistedState) => ({
         ...sanitizePersistedCalendarState(persistedState as Partial<CalendarState>),
-        viewMode: "month" as const,
+        viewMode: 'month' as const,
       }),
-    }
-  )
+    },
+  ),
 );
 
 // Register a teardown so brand switching wipes the calendar's persisted state.
 // The store's storage key is not brand-scoped (would require Zustand re-mount);
 // instead we reset in-memory state and clear the sessionStorage entry on switch.
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   storeRegistry.register({
-    name: "organic-calendar",
+    name: 'organic-calendar',
     teardown: () => {
       try {
         useCalendarStore.getState().resetForBrandSwitch();
-        window.sessionStorage.removeItem("organic-calendar-storage");
+        window.sessionStorage.removeItem('organic-calendar-storage');
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[organic-calendar] teardown failed", error);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[organic-calendar] teardown failed', error);
         }
       }
     },

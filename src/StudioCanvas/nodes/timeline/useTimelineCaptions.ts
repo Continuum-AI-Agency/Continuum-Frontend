@@ -2,17 +2,14 @@ import { useCallback, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { useStudioStore } from '../../stores/useStudioStore';
-import type { StudioNode, TimelineEditorNodeData, TimelineItem } from '../../types';
-import type { NodeOutput } from '../../types/execution';
 import { extractTimelineAudioWav } from '../../utils/clip/extractTimelineAudioWav';
-import { resolveTimelineSources } from '../../utils/splice/resolveClipSources';
+import type { TimelineEditorAdapter } from './adapter';
 import { captionSegmentsToWords } from './captionSegments';
 
 // Auto-captions for the Video Editor: extract the timeline's spoken audio (Mediabunny,
 // output-time WAV), send it to the transcribe-audio-gemini edge function (Gemini 3.1
 // Flash-Lite), split the returned segments into karaoke words, and store them on the
-// node so the render burns them in and the preview shows them. No separate STT/TTS.
+// document so the render burns them in and the preview shows them. No separate STT/TTS.
 
 const TRANSCRIBE_FN = 'transcribe-audio-gemini';
 
@@ -31,30 +28,24 @@ export interface UseTimelineCaptionsResult {
   setCaptionsEnabled: (enabled: boolean) => void;
 }
 
-export function useTimelineCaptions(nodeId: string): UseTimelineCaptionsResult {
-  const updateNode = useStudioStore((state) => state.updateNode);
-  const triggerSave = useStudioStore((state) => state.triggerSave);
+export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimelineCaptionsResult {
+  const { getDocument, patchDocument, resolveSources } = adapter;
   const { show } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Toggling caption visibility cannot change the rendered output, so it must not
+  // invalidate a render that already happened.
   const setCaptionsEnabled = useCallback(
     (enabled: boolean) => {
-      updateNode(nodeId, (current) => ({
-        ...current,
-        data: { ...(current.data as TimelineEditorNodeData), captionsEnabled: enabled },
-      }));
-      triggerSave();
+      patchDocument((document) => ({ ...document, captionsEnabled: enabled }), {
+        invalidatesRender: false,
+      });
     },
-    [nodeId, triggerSave, updateNode],
+    [patchDocument],
   );
 
   const generate = useCallback(async (): Promise<boolean> => {
-    const state = useStudioStore.getState();
-    const nodes = state.nodes as StudioNode[];
-    const edges = state.edges;
-    const node = nodes.find((candidate) => candidate.id === nodeId);
-    const items = ((node?.data as TimelineEditorNodeData | undefined)?.items ??
-      []) as TimelineItem[];
+    const items = getDocument().items;
     if (items.length === 0) {
       show({
         title: 'Nothing to caption',
@@ -66,8 +57,7 @@ export function useTimelineCaptions(nodeId: string): UseTimelineCaptionsResult {
 
     setIsGenerating(true);
     try {
-      const resolvedOutputs = new Map<string, NodeOutput>();
-      const resolved = await resolveTimelineSources(items, edges, nodes, resolvedOutputs, nodeId);
+      const resolved = await resolveSources(items);
       const { blob, durationSec } = await extractTimelineAudioWav(resolved);
       const audioBase64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
 
@@ -117,20 +107,12 @@ export function useTimelineCaptions(nodeId: string): UseTimelineCaptionsResult {
         return false;
       }
 
-      updateNode(nodeId, (current) => {
-        const data = current.data as TimelineEditorNodeData;
-        return {
-          ...current,
-          data: {
-            ...data,
-            captionWords: words,
-            captionsEnabled: true,
-            captionStyle: data.captionStyle ?? DEFAULT_CAPTION_STYLE,
-            committed: false,
-          },
-        };
-      });
-      triggerSave();
+      patchDocument((document) => ({
+        ...document,
+        captionWords: words,
+        captionsEnabled: true,
+        captionStyle: document.captionStyle ?? DEFAULT_CAPTION_STYLE,
+      }));
       show({
         title: 'Captions added',
         description: `${words.length} words transcribed.`,
@@ -144,7 +126,7 @@ export function useTimelineCaptions(nodeId: string): UseTimelineCaptionsResult {
     } finally {
       setIsGenerating(false);
     }
-  }, [nodeId, show, triggerSave, updateNode]);
+  }, [getDocument, patchDocument, resolveSources, show]);
 
   return { generate, isGenerating, setCaptionsEnabled };
 }

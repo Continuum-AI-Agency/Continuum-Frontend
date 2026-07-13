@@ -1,40 +1,39 @@
-import { z } from "zod";
 import {
   eventSignalSchema,
   questionSignalSchema,
   signalPlatformRecommendationSchema,
   trendSignalSchema,
-} from "@continuum/contracts";
+  trendsWeekSummarySchema,
+} from '@continuum/contracts';
+import { z } from 'zod';
 
-export const BRAND_TRENDS_SCHEMA = "brand_trends" as const;
+export const BRAND_TRENDS_SCHEMA = 'brand_trends' as const;
 
 // Accept either ISO-8601 or Postgres-style timestamps and normalize to an ISO-like string.
 function tolerantTimestampSchema(message: string) {
-  return z
-    .string()
-    .transform((value, ctx) => {
-      const withT = value.includes("T") ? value : value.replace(" ", "T");
+  return z.string().transform((value, ctx) => {
+    const withT = value.includes('T') ? value : value.replace(' ', 'T');
 
-      // Ensure timezone separator has a colon (e.g., +00 -> +00:00).
-      const normalized = withT.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+    // Ensure timezone separator has a colon (e.g., +00 -> +00:00).
+    const normalized = withT.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
 
-      const parsed = new Date(normalized);
-      if (Number.isNaN(parsed.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message });
-        return z.NEVER;
-      }
-      return normalized;
-    });
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+      return z.NEVER;
+    }
+    return normalized;
+  });
 }
 
 export const brandInsightsPlatformSchema = z.enum([
-  "instagram",
-  "facebook",
-  "x",
-  "linkedin",
-  "youtube",
-  "tiktok",
-  "reddit_basic",
+  'instagram',
+  'facebook',
+  'x',
+  'linkedin',
+  'youtube',
+  'tiktok',
+  'reddit_basic',
 ]);
 
 // Canonical trend-signal shapes live in @continuum/contracts; re-exported under
@@ -78,7 +77,7 @@ export const brandInsightsQuestionsByNicheSchema = z.object({
       averagePerNiche: z.number().optional(),
     })
     .optional(),
-  generatedAt: tolerantTimestampSchema("generatedAt must be an ISO timestamp").optional(),
+  generatedAt: tolerantTimestampSchema('generatedAt must be an ISO timestamp').optional(),
 });
 
 export const brandInsightsTrendsAndEventsSchema = z.object({
@@ -87,8 +86,10 @@ export const brandInsightsTrendsAndEventsSchema = z.object({
   events: z.array(brandInsightsEventSchema).default([]),
   country: z.string().optional(),
   weekAnalyzed: z.string().optional(),
-  generatedAt: tolerantTimestampSchema("generatedAt must be an ISO timestamp").optional(),
+  generatedAt: tolerantTimestampSchema('generatedAt must be an ISO timestamp').optional(),
 });
+
+export const brandInsightsWeekSummarySchema = trendsWeekSummarySchema;
 
 export const brandInsightsDataSchema = z.object({
   generationId: z.string(),
@@ -98,11 +99,14 @@ export const brandInsightsDataSchema = z.object({
   weekStartDate: z.string(),
   fromCache: z.boolean().default(false),
   selectedSocialPlatforms: z.array(z.string()).optional(),
+  weeks: z.array(brandInsightsWeekSummarySchema).default([]),
+  generationKind: z.enum(['initial', 'regeneration']).optional(),
+  generationCount: z.number().int().positive().optional(),
 });
 
 export const brandInsightsSchema = z.object({
   status: z.string(),
-  generatedAt: tolerantTimestampSchema("generatedAt must be an ISO timestamp").optional(),
+  generatedAt: tolerantTimestampSchema('generatedAt must be an ISO timestamp').optional(),
   data: brandInsightsDataSchema,
 });
 
@@ -113,7 +117,7 @@ export const brandInsightsCountsSchema = z.object({
 });
 
 export const brandInsightsJobStreamSchema = z.object({
-  transport: z.literal("sse"),
+  transport: z.literal('sse'),
   channel: z.string().min(1),
   queueName: z.string().optional(),
   latestMessageId: z.number().int().nonnegative().nullable().optional(),
@@ -126,10 +130,10 @@ export const brandInsightsStrategicDependencySchema = z.object({
 });
 
 export const brandInsightsGenerationQueuedSchema = z.object({
-  status: z.literal("processing"),
+  status: z.literal('processing'),
   generationId: z.string().optional(),
   jobId: z.string().optional(),
-  jobStatus: z.enum(["pending", "running", "completed", "failed"]).optional(),
+  jobStatus: z.enum(['pending', 'running', 'completed', 'failed']).optional(),
   brandId: z.string().optional(),
   dependencyStrategicAnalysis: brandInsightsStrategicDependencySchema.optional(),
   stream: brandInsightsJobStreamSchema.optional(),
@@ -138,7 +142,7 @@ export const brandInsightsGenerationQueuedSchema = z.object({
 });
 
 export const brandInsightsGenerationCachedSchema = z.object({
-  status: z.literal("success"),
+  status: z.literal('success'),
   fromCache: z.boolean().default(false),
   brandId: z.string().optional(),
   generationId: z.string().optional(),
@@ -146,12 +150,19 @@ export const brandInsightsGenerationCachedSchema = z.object({
   message: z.string().optional(),
 });
 
-export const brandInsightsGenerationResponseSchema = z.discriminatedUnion("status", [
+export const brandInsightsGenerationResponseSchema = z.discriminatedUnion('status', [
   brandInsightsGenerationQueuedSchema,
   brandInsightsGenerationCachedSchema,
 ]);
 
-export const brandInsightsTaskStatusSchema = z.enum(["pending", "running", "completed", "failed", "error", "not_found"]);
+export const brandInsightsTaskStatusSchema = z.enum([
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'error',
+  'not_found',
+]);
 
 export const brandInsightsJobStageSchema = z.string().optional();
 
@@ -172,7 +183,7 @@ export const brandInsightsWarningsSchema = z
 
 export const brandInsightsCompetitorJobSchema = z
   .object({
-    status: z.enum(["success", "skipped", "error"]).nullable().optional(),
+    status: z.enum(['success', 'skipped', 'error']).nullable().optional(),
     sourceRunId: z.string().nullable().optional(),
     competitorCount: z.number().int().nonnegative().optional(),
     totalIngested: z.number().int().nonnegative().optional(),
@@ -190,8 +201,8 @@ export const brandInsightsStatusResponseSchema = z.object({
   stage: brandInsightsJobStageSchema,
   stageMessage: z.string().optional(),
   totals: brandInsightsCountsSchema.optional(),
-  startedAt: tolerantTimestampSchema("startedAt must be an ISO timestamp").optional(),
-  completedAt: tolerantTimestampSchema("completedAt must be an ISO timestamp").optional(),
+  startedAt: tolerantTimestampSchema('startedAt must be an ISO timestamp').optional(),
+  completedAt: tolerantTimestampSchema('completedAt must be an ISO timestamp').optional(),
   errorCode: z.string().optional(),
   errorDetail: z.string().optional(),
   warnings: brandInsightsWarningsSchema,
@@ -212,7 +223,7 @@ export const brandInsightsStatusMessageSchema = z.object({
   stageMessage: z.string().optional(),
   runtime: brandInsightsRuntimeSchema.optional(),
   payload: z.record(z.string(), z.unknown()).optional(),
-  createdAt: tolerantTimestampSchema("createdAt must be an ISO timestamp").optional(),
+  createdAt: tolerantTimestampSchema('createdAt must be an ISO timestamp').optional(),
 });
 
 export const brandInsightsAudienceSegmentSchema = z.object({
@@ -242,7 +253,7 @@ export const brandInsightsBrandVoiceSchema = z.object({
 });
 
 export const brandInsightsProfileSchema = z.object({
-  status: z.enum(["success", "onboarding_required"]),
+  status: z.enum(['success', 'onboarding_required']),
   brandId: z.string().optional(),
   brandSummary: z.string().optional(),
   mission: z.string().optional(),
@@ -256,21 +267,21 @@ export const brandInsightsProfileSchema = z.object({
 
 const isoDateOnlySchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "weekStartDate must be a YYYY-MM-DD date");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'weekStartDate must be a YYYY-MM-DD date');
 
 export const brandInsightsGenerationWindowSchema = z.object({
   weekStartDate: isoDateOnlySchema,
-  windowStart: tolerantTimestampSchema("windowStart must be an ISO timestamp"),
-  windowEnd: tolerantTimestampSchema("windowEnd must be an ISO timestamp"),
+  windowStart: tolerantTimestampSchema('windowStart must be an ISO timestamp'),
+  windowEnd: tolerantTimestampSchema('windowEnd must be an ISO timestamp'),
 });
 
 export const brandInsightsGenerateInputSchema = z.object({
-  brandId: z.string().min(1, "brandId is required"),
+  brandId: z.string().min(1, 'brandId is required'),
   forceRegenerate: z.boolean().optional(),
   selectedSocialPlatforms: z.array(brandInsightsPlatformSchema).min(1).optional(),
   weekStartDate: z.string().optional(),
-  windowStart: tolerantTimestampSchema("windowStart must be an ISO timestamp").optional(),
-  windowEnd: tolerantTimestampSchema("windowEnd must be an ISO timestamp").optional(),
+  windowStart: tolerantTimestampSchema('windowStart must be an ISO timestamp').optional(),
+  windowEnd: tolerantTimestampSchema('windowEnd must be an ISO timestamp').optional(),
   maxItemsPerPlatform: z.number().int().positive().optional(),
 });
 
@@ -278,15 +289,20 @@ export type BrandInsightsTrend = z.infer<typeof brandInsightsTrendSchema>;
 export type BrandInsightsEvent = z.infer<typeof brandInsightsEventSchema>;
 export type BrandInsightsQuestion = z.infer<typeof brandInsightsQuestionSchema>;
 export type BrandInsightsCitation = z.infer<typeof brandInsightsCitationSchema>;
-export type BrandInsightsPlatformRecommendation = z.infer<typeof brandInsightsPlatformRecommendationSchema>;
+export type BrandInsightsPlatformRecommendation = z.infer<
+  typeof brandInsightsPlatformRecommendationSchema
+>;
 export type BrandInsightsQuestionsByNiche = z.infer<typeof brandInsightsQuestionsByNicheSchema>;
 export type BrandInsightsTrendsAndEvents = z.infer<typeof brandInsightsTrendsAndEventsSchema>;
 export type BrandInsightsData = z.infer<typeof brandInsightsDataSchema>;
+export type BrandInsightsWeekSummary = z.infer<typeof brandInsightsWeekSummarySchema>;
 export type BrandInsights = z.infer<typeof brandInsightsSchema>;
 export type BrandInsightsPlatform = z.infer<typeof brandInsightsPlatformSchema>;
 export type BrandInsightsCounts = z.infer<typeof brandInsightsCountsSchema>;
 export type BrandInsightsJobStream = z.infer<typeof brandInsightsJobStreamSchema>;
-export type BrandInsightsStrategicDependency = z.infer<typeof brandInsightsStrategicDependencySchema>;
+export type BrandInsightsStrategicDependency = z.infer<
+  typeof brandInsightsStrategicDependencySchema
+>;
 export type BrandInsightsGenerationResponse = z.infer<typeof brandInsightsGenerationResponseSchema>;
 export type BrandInsightsTaskStatus = z.infer<typeof brandInsightsTaskStatusSchema>;
 export type BrandInsightsStatusResponse = z.infer<typeof brandInsightsStatusResponseSchema>;

@@ -1,27 +1,26 @@
-import { Suspense } from "react";
-import { OrganicAgentPanelLazy } from "@/components/organic/agent/OrganicAgentPanelLazy";
-import type { OrganicAgentMentionContext } from "@/components/organic/agent/OrganicAgentPanel";
-
-import { OrganicMetricsDashboardLazy } from "@/components/organic/OrganicMetricsDashboardLazy";
-import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
-import { OrganicNoticeBridge } from "@/components/organic/OrganicNoticeBridge";
-import { OrganicCalendarWorkspace } from "@/components/organic/primitives/OrganicCalendarWorkspace";
+import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
+import type { PlatformKey } from '@/components/onboarding/platforms';
+import type { OrganicAgentMentionContext } from '@/components/organic/agent/OrganicAgentPanel';
+import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
+import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
+import { OrganicNoticeBridge } from '@/components/organic/OrganicNoticeBridge';
+import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs';
+import { OrganicCalendarWorkspace } from '@/components/organic/primitives/OrganicCalendarWorkspace';
+import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
+import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import { ensureOnboardingState } from '@/lib/onboarding/storage';
+import { deriveMetricAccountsByPlatform } from '@/lib/organic/metricAccounts';
 import {
-  ORGANIC_PLATFORMS,
   ORGANIC_MVP_PLATFORM_KEYS,
+  ORGANIC_PLATFORMS,
   type OrganicPlatformKey,
-} from "@/lib/organic/platforms";
-import { type PlatformKey } from "@/components/onboarding/platforms";
-import { ensureOnboardingState } from "@/lib/onboarding/storage";
-import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Trend } from "@/lib/organic/trends";
-import type { BrandInsightsQuestion } from "@/lib/schemas/brandInsights";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { deriveMetricAccountsByPlatform } from "@/lib/organic/metricAccounts";
-import { redirect } from "next/navigation";
-import type { OrganicTrendGroup, OrganicTrendType } from "@/components/organic/primitives/types";
+} from '@/lib/organic/platforms';
+import type { Trend } from '@/lib/organic/trends';
+import type { BrandInsightsQuestion } from '@/lib/schemas/brandInsights';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 type OrganicPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -43,33 +42,39 @@ async function OrganicContent({
 }: {
   initialSelectedDraftId: string | null;
   initialWeekStart: string | null;
-  initialView: "week" | "month" | "list";
+  initialView: 'week' | 'month' | 'list';
 }) {
   const { activeBrandId, brandSummaries } = await getActiveBrandContext();
   if (!activeBrandId) {
-    redirect("/onboarding");
+    redirect('/onboarding');
   }
-  const brandName = brandSummaries?.find(b => b.id === activeBrandId)?.name;
+  const brandName = brandSummaries?.find((b) => b.id === activeBrandId)?.name;
 
   // Run all four in parallel — none depend on each other, only on activeBrandId.
-  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult] = await Promise.allSettled([
-    ensureOnboardingState(activeBrandId),
-    fetchBrandIntegrationSummary(activeBrandId),
-    fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
-    (async () => {
-      const supabase = await createSupabaseServerClient();
-      const { data } = await supabase
-        .schema("brand_profiles")
-        .from("brand_documents")
-        .select("id, name, kind, text_excerpt")
-        .eq("brand_id", activeBrandId)
-        .eq("progress_step", "ready")
-        .order("created_at", { ascending: false });
-      return (data ?? []) as Array<{ id: string; name: string; kind: string | null; text_excerpt: string | null }>;
-    })(),
-  ]);
+  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult] =
+    await Promise.allSettled([
+      ensureOnboardingState(activeBrandId),
+      fetchBrandIntegrationSummary(activeBrandId),
+      fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
+      (async () => {
+        const supabase = await createSupabaseServerClient();
+        const { data } = await supabase
+          .schema('brand_profiles')
+          .from('brand_documents')
+          .select('id, name, kind, text_excerpt')
+          .eq('brand_id', activeBrandId)
+          .eq('progress_step', 'ready')
+          .order('created_at', { ascending: false });
+        return (data ?? []) as Array<{
+          id: string;
+          name: string;
+          kind: string | null;
+          text_excerpt: string | null;
+        }>;
+      })(),
+    ]);
 
-  if (onboardingResult.status === "rejected") {
+  if (onboardingResult.status === 'rejected') {
     throw onboardingResult.reason;
   }
   const { brandId, state: onboarding } = onboardingResult.value;
@@ -77,34 +82,41 @@ async function OrganicContent({
   const mvpPlatformSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
 
   const integrationSummary =
-    integrationSummaryResult.status === "fulfilled" ? integrationSummaryResult.value : null;
-  if (integrationSummaryResult.status === "rejected") {
+    integrationSummaryResult.status === 'fulfilled' ? integrationSummaryResult.value : null;
+  if (integrationSummaryResult.status === 'rejected') {
     console.error(
-      "[OrganicPage] Failed to load integration account summary",
-      integrationSummaryResult.reason
+      '[OrganicPage] Failed to load integration account summary',
+      integrationSummaryResult.reason,
     );
   }
 
-
   const platformAccounts = ORGANIC_PLATFORMS.filter(({ key }) =>
-    mvpPlatformSet.has(key as OrganicPlatformKey)
+    mvpPlatformSet.has(key as OrganicPlatformKey),
   ).map(({ key, label }) => {
     const connection = onboarding.connections[key] ?? { connected: false, accountId: null };
     const summaryAccounts = integrationSummary?.[key as PlatformKey]?.accounts ?? [];
-    
+
     // Platform is considered connected if either the user connected it personally OR the brand has assigned accounts.
     const isConnected = Boolean(connection.connected) || summaryAccounts.length > 0;
-    
-    // Priority for default account ID:
-    // 1. Personal connection account ID
-    // 2. First assigned brand account ID
-    const accountId = connection.accountId ?? (summaryAccounts.length > 0 ? summaryAccounts[0].integrationAccountId : null);
+
+    // The DEFAULT account. It is only a default: the planner's account switcher can point the
+    // platform at any of `options` below. Publishing used to be stuck on this one value, so a
+    // brand with two Instagram profiles could only ever post to whichever sorted first.
+    const accountId =
+      connection.accountId ??
+      (summaryAccounts.length > 0 ? summaryAccounts[0].integrationAccountId : null);
+
+    const options = summaryAccounts.map((account) => ({
+      id: account.integrationAccountId,
+      label: account.alias ?? account.name,
+    }));
 
     return {
       platform: key as OrganicPlatformKey,
       label,
       connected: isConnected,
       accountId,
+      options,
     };
   });
 
@@ -118,20 +130,27 @@ async function OrganicContent({
     }
     return acc;
   }, {});
+
+  // Every account the brand could publish to, per platform — what the switcher offers.
+  const platformAccountOptions = platformAccounts.reduce<
+    Record<string, Array<{ id: string; label: string }>>
+  >((acc, account) => {
+    if (account.connected && account.options.length > 0) {
+      acc[account.platform] = account.options;
+    }
+    return acc;
+  }, {});
   const fallbackPlatforms =
     activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_MVP_PLATFORM_KEYS];
 
   let selectorTrends: Trend[] = [];
   let trendTypes: OrganicTrendType[] = [];
   let insightsError: string | null = null;
-  const brandDocuments = brandDocsResult.status === "fulfilled" ? brandDocsResult.value : [];
+  const brandDocuments = brandDocsResult.status === 'fulfilled' ? brandDocsResult.value : [];
   let organicAgentMentionContext: OrganicAgentMentionContext | undefined;
-  const insights =
-    insightsResult.status === "fulfilled"
-      ? insightsResult.value
-      : null;
+  const insights = insightsResult.status === 'fulfilled' ? insightsResult.value : null;
 
-  if (insightsResult.status === "fulfilled" && insights) {
+  if (insightsResult.status === 'fulfilled' && insights) {
     const brandTrends = insights.data.trendsAndEvents.trends;
     const nicheMap = insights.data.questionsByNiche.questionsByNiche || {};
     const allQuestions = Object.entries(nicheMap).flatMap(([niche, data]) => {
@@ -151,12 +170,15 @@ async function OrganicContent({
     selectorTrends = brandTrends.map((trend) => ({
       id: trend.id,
       title: trend.title,
-      summary: trend.description ?? trend.relevanceToBrand ?? "High-signal topic identified for your brand.",
-      momentum: trend.isSelected ? "rising" : "stable",
+      summary:
+        trend.description ??
+        trend.relevanceToBrand ??
+        'High-signal topic identified for your brand.',
+      momentum: trend.isSelected ? 'rising' : 'stable',
       platforms: fallbackPlatforms,
       tags: trend.source ? [trend.source] : [],
       meta: {
-        kind: "trend" as const,
+        kind: 'trend' as const,
         confidence: trend.confidence,
         source: trend.source,
         sourceUrl: trend.sourceUrl,
@@ -171,16 +193,18 @@ async function OrganicContent({
     }));
 
     const mappedQuestions = allQuestions.map((q) => {
-      const platformKey = q.socialPlatform?.toLowerCase().includes("linkedin") ? "linkedin" : "instagram";
+      const platformKey = q.socialPlatform?.toLowerCase().includes('linkedin')
+        ? 'linkedin'
+        : 'instagram';
       return {
         id: q.id,
         title: q.question,
-        summary: q.whyRelevant ?? q.contentTypeSuggestion ?? "Audience question",
-        momentum: "stable" as const,
+        summary: q.whyRelevant ?? q.contentTypeSuggestion ?? 'Audience question',
+        momentum: 'stable' as const,
         platforms: [platformKey] as OrganicPlatformKey[],
-        tags: ["question", q.niche],
+        tags: ['question', q.niche],
         meta: {
-          kind: "question" as const,
+          kind: 'question' as const,
           confidence: q.confidence,
           relevanceToBrand: q.whyRelevant,
           analysisTags: q.analysisTags,
@@ -197,13 +221,20 @@ async function OrganicContent({
     // Combine trends and questions
     selectorTrends = [...selectorTrends, ...mappedQuestions];
 
-    const momentumGroups = ["rising", "stable", "cooling"] as const;
+    const momentumGroups = ['rising', 'stable', 'cooling'] as const;
     const trendGroups: OrganicTrendGroup[] = momentumGroups
       .map((momentum) => {
-        const items = selectorTrends.filter((t) => t.momentum === momentum && !t.tags.includes("question"));
+        const items = selectorTrends.filter(
+          (t) => t.momentum === momentum && !t.tags.includes('question'),
+        );
         return {
           id: momentum,
-          title: momentum === "rising" ? "Rising Now" : momentum === "stable" ? "Stable Interest" : "Cooling Down",
+          title:
+            momentum === 'rising'
+              ? 'Rising Now'
+              : momentum === 'stable'
+                ? 'Stable Interest'
+                : 'Cooling Down',
           trends: items,
         };
       })
@@ -212,12 +243,12 @@ async function OrganicContent({
     const mappedEvents = insights.data.trendsAndEvents.events.map((e) => ({
       id: e.id,
       title: e.title,
-      summary: e.description ?? e.opportunity ?? "Seasonal event or holiday",
-      momentum: "rising" as const,
+      summary: e.description ?? e.opportunity ?? 'Seasonal event or holiday',
+      momentum: 'rising' as const,
       platforms: fallbackPlatforms,
-      tags: ["event", e.date ?? ""],
+      tags: ['event', e.date ?? ''],
       meta: {
-        kind: "event" as const,
+        kind: 'event' as const,
         confidence: e.confidence,
         source: e.source,
         sourceUrl: e.sourceUrl,
@@ -236,40 +267,50 @@ async function OrganicContent({
     selectorTrends = [...selectorTrends, ...mappedEvents];
 
     trendTypes = [
-      ...(trendGroups.length > 0 
-        ? [{
-            id: "trends",
-            label: "Market Trends",
-            groups: trendGroups,
-          }] 
+      ...(trendGroups.length > 0
+        ? [
+            {
+              id: 'trends',
+              label: 'Market Trends',
+              groups: trendGroups,
+            },
+          ]
         : []),
       ...(mappedEvents.length > 0
-        ? [{
-            id: "events",
-            label: "Key Events",
-            groups: [{
-              id: "all-events",
-              title: "Upcoming Events",
-              trends: mappedEvents,
-            }],
-          }]
+        ? [
+            {
+              id: 'events',
+              label: 'Key Events',
+              groups: [
+                {
+                  id: 'all-events',
+                  title: 'Upcoming Events',
+                  trends: mappedEvents,
+                },
+              ],
+            },
+          ]
         : []),
       ...(mappedQuestions.length > 0
-        ? [{
-            id: "questions",
-            label: "Audience Questions",
-            groups: [{
-              id: "all-questions",
-              title: "Questions by Niche",
-              trends: mappedQuestions,
-            }],
-          }]
-        : [])
+        ? [
+            {
+              id: 'questions',
+              label: 'Audience Questions',
+              groups: [
+                {
+                  id: 'all-questions',
+                  title: 'Questions by Niche',
+                  trends: mappedQuestions,
+                },
+              ],
+            },
+          ]
+        : []),
     ];
-  } else if (insightsResult.status === "rejected") {
+  } else if (insightsResult.status === 'rejected') {
     const reason = insightsResult.reason;
     insightsError =
-      reason instanceof Error ? reason.message : "Unable to load brand insights for this brand.";
+      reason instanceof Error ? reason.message : 'Unable to load brand insights for this brand.';
   }
 
   // If insights failed (or had no data), still surface documents if available.
@@ -293,12 +334,16 @@ async function OrganicContent({
       tiktok: onboarding.connections.tiktok,
     },
   });
-  const initialMetricsPlatform: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin" =
-    metricAccountsByPlatform.instagram.length > 0 ? "instagram"
-    : metricAccountsByPlatform.tiktok.length > 0 ? "tiktok"
-    : metricAccountsByPlatform.youtube.length > 0 ? "youtube"
-    : metricAccountsByPlatform.linkedin.length > 0 ? "linkedin"
-    : "facebook";
+  const initialMetricsPlatform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin' =
+    metricAccountsByPlatform.instagram.length > 0
+      ? 'instagram'
+      : metricAccountsByPlatform.tiktok.length > 0
+        ? 'tiktok'
+        : metricAccountsByPlatform.youtube.length > 0
+          ? 'youtube'
+          : metricAccountsByPlatform.linkedin.length > 0
+            ? 'linkedin'
+            : 'facebook';
 
   return (
     <div className="h-full min-h-0">
@@ -309,12 +354,13 @@ async function OrganicContent({
       />
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
-        plannerSlot={(
+        plannerSlot={
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}
             trends={selectorTrends}
             activePlatforms={fallbackPlatforms}
             platformAccountIds={platformAccountIds}
+            platformAccountOptions={platformAccountOptions}
             maxTrendSelections={5}
             brandProfileId={brandProfileId}
             brandName={brandName}
@@ -323,8 +369,8 @@ async function OrganicContent({
             initialView={initialView}
             postedContentAccountsByPlatform={metricAccountsByPlatform}
           />
-        )}
-        metricsSlot={(
+        }
+        metricsSlot={
           <OrganicMetricsDashboardLazy
             brandId={brandProfileId}
             accountsByPlatform={metricAccountsByPlatform}
@@ -334,9 +380,12 @@ async function OrganicContent({
                 ? {
                     trendsAndEvents: insights.data.trendsAndEvents,
                     questionsByNiche: insights.data.questionsByNiche,
-                    generatedAt:
-                      insights.data.trendsAndEvents.generatedAt ?? insights.generatedAt,
+                    generatedAt: insights.data.trendsAndEvents.generatedAt ?? insights.generatedAt,
                     status: insights.data.trendsAndEvents.status ?? insights.status,
+                    weekStartDate: insights.data.weekStartDate,
+                    weeks: insights.data.weeks,
+                    generationKind: insights.data.generationKind,
+                    generationCount: insights.data.generationCount,
                   }
                 : {
                     trendsAndEvents: {
@@ -347,10 +396,11 @@ async function OrganicContent({
                   }
             }
           />
-        )}
+        }
         metricsPrefetchParams={{
           brandId: brandProfileId,
-          integrationAccountId: metricAccountsByPlatform[initialMetricsPlatform][0]?.integrationAccountId ?? "",
+          integrationAccountId:
+            metricAccountsByPlatform[initialMetricsPlatform][0]?.integrationAccountId ?? '',
           platform: initialMetricsPlatform,
         }}
         agentSlot={
@@ -365,7 +415,7 @@ async function OrganicContent({
   );
 }
 
-const VALID_VIEWS = ["week", "month", "list"] as const
+const VALID_VIEWS = ['week', 'month', 'list'] as const;
 
 export default async function OrganicPage({ searchParams }: OrganicPageProps) {
   const resolvedSearchParams = (searchParams ? await searchParams : undefined) ?? {};
@@ -373,18 +423,18 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
   const initialWeekStartRaw = resolvedSearchParams.weekStartId ?? resolvedSearchParams.weekStart;
   const initialViewRaw = resolvedSearchParams.view;
   const initialSelectedDraftId =
-    typeof initialSelectedDraftIdRaw === "string" && initialSelectedDraftIdRaw.trim().length > 0
+    typeof initialSelectedDraftIdRaw === 'string' && initialSelectedDraftIdRaw.trim().length > 0
       ? initialSelectedDraftIdRaw
       : null;
   const initialWeekStart =
-    typeof initialWeekStartRaw === "string" && initialWeekStartRaw.trim().length > 0
+    typeof initialWeekStartRaw === 'string' && initialWeekStartRaw.trim().length > 0
       ? initialWeekStartRaw
       : null;
-  const initialView: "week" | "month" | "list" =
-    typeof initialViewRaw === "string" &&
+  const initialView: 'week' | 'month' | 'list' =
+    typeof initialViewRaw === 'string' &&
     (VALID_VIEWS as readonly string[]).includes(initialViewRaw)
-      ? (initialViewRaw as "week" | "month" | "list")
-      : "month";
+      ? (initialViewRaw as 'week' | 'month' | 'list')
+      : 'month';
 
   return (
     <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">

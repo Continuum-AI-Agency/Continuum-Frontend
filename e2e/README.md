@@ -10,6 +10,7 @@ the service-role admin API.
 e2e/
 ├── README.md            ← you are here
 ├── smoke.spec.ts        ← unauthenticated shell check (needs only a dev server)
+├── chat-shell.spec.ts   ← chat shell bench (`bun run chat:e2e:bench`) — see below
 └── support/
     └── auth.ts          ← Supabase auth-mint → Playwright storageState helpers
 ```
@@ -100,3 +101,28 @@ Or hoist it for a whole file / project via a fixture or `test.use({ storageState
 - `smoke.spec.ts` is the baseline; later lanes add `admin-gate.spec.ts` and
   `onboarding.spec.ts` on this same harness and helpers.
 - Never print raw tokens or the service-role key in test output.
+
+
+## Chat shell bench (`chat:e2e:bench`)
+
+End-to-end bench for the Organic agent chat shell: history paging, the checkpoint minimap, Marker
+milestones, and composer attachments. It seeds real rows into the local Postgres, reads them back
+through the real Backend, renders them in the real Frontend, and uploads a real image to real
+Supabase Storage — nothing is mocked. It purges its own rows before and after each run.
+
+```bash
+bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
+bun run dev:be                       # Backend on :4000 — the panel reads history from it
+
+# Run against a PRODUCTION build, not `next dev`: the agent panel is a next/dynamic chunk and
+# dev-mode on-demand compilation leaves it unmounted for the life of the test.
+cd Continuum-Frontend
+set -a; . ./.env.local; set +a          # so the bundle points at LOCAL Supabase, not prod
+bun run build && bun run start          # serves :3000, which Playwright reuses
+bun run chat:e2e:bench
+```
+
+**Un-exercised hop:** the bench does not run a live agent turn. It asserts the composer sends a
+populated `images` array carrying a signed URL that actually resolves (200 + image bytes) — the link
+that was broken. The model-side consumption of that image is covered by the Backend unit test
+`App/organic/agent/__tests__/composerImages.spec.ts`.

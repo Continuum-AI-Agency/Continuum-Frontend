@@ -57,6 +57,11 @@ import type {
 } from '@/lib/agent-references';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import {
+  fetchOrganicSessionMessagePage,
+  type OrganicSessionMessage,
+} from '@/lib/organic/agent-sessions';
+import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { useCalendarStore } from '@/lib/organic/store';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
@@ -72,12 +77,14 @@ import { BulkRunPanel } from './BulkRunPanel';
 import { ConceptPlan } from './ConceptPlan';
 import { buildCanvasReference, getCanvasPreview } from './canvasMentions';
 import { resolveConceptPreviewUrl } from './conceptPreview';
+import { deriveOrganicAnchors, milestonesForMessage } from './deriveOrganicAnchors';
 import { JobGrid } from './JobGrid';
 import { MediaLibrarySearchResults } from './MediaLibrarySearchResults';
 import { MessageActions } from './MessageActions';
 import { mapPlacementToDraft } from './mapPlacementToDraft';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
 import { OrganicThinkingPanel } from './OrganicThinkingPanel';
+import { ToolCallPipelineCards } from './PipelinePlacementGrid';
 import { PostContentCardGrid } from './PostContentCardGrid';
 import { restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
@@ -88,6 +95,7 @@ import { TrendChartCard } from './TrendChartCard';
 import type {
   AgentJobState,
   ConversationMessage,
+  PipelineCardState,
   PlanApprovalDecision,
   ToolApproval,
   UiCard,
@@ -334,6 +342,34 @@ export function OrganicAgentPanel({
   const setViewMode = useCalendarStore((s) => s.setViewMode);
   const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const canvasNodes = useStudioStore((s) => s.nodes);
+  // Chat-side approve-through: the same Stage-2 (expandDrafts) / Stage-3
+  // (generateDraftMedia) client fns the planner uses, keyed onto the planner
+  // store's feId when the row is hydrated there (optimistic patches then land on
+  // the visible card); the backend draft id is a safe no-op fallback otherwise.
+  const { generateDraftMedia, expandDrafts } = useGenerateDraftMedia();
+  const resolveCalendarFeId = useCallback((backendDraftId: string): string => {
+    for (const day of useCalendarStore.getState().days) {
+      const hit = day.slots.find(
+        (slot) => slot.backendDraftId === backendDraftId || slot.id === backendDraftId,
+      );
+      if (hit) return hit.id;
+    }
+    return backendDraftId;
+  }, []);
+  const handleEnrichDraftFromChat = useCallback(
+    (draftId: string) => {
+      void expandDrafts(brandId, [{ feId: resolveCalendarFeId(draftId), backendDraftId: draftId }]);
+    },
+    [brandId, expandDrafts, resolveCalendarFeId],
+  );
+  const handleGenerateMediaFromChat = useCallback(
+    (draftId: string, format: string) => {
+      void generateDraftMedia(brandId, [
+        { feId: resolveCalendarFeId(draftId), backendDraftId: draftId, format: format || 'post' },
+      ]);
+    },
+    [brandId, generateDraftMedia, resolveCalendarFeId],
+  );
   const {
     skills: brandSkills,
     templates: brandSkillTemplates,
@@ -604,6 +640,7 @@ export function OrganicAgentPanel({
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         platformAccountIds,
+        images,
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {});
@@ -657,7 +694,6 @@ export function OrganicAgentPanel({
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         platformAccountIds,
-        images,
       })
         .then(() => debouncedRefreshSessions())
         .catch(() => {});
@@ -1030,7 +1066,12 @@ export function OrganicAgentPanel({
   const primaryInsightsAccount = useMemo(() => {
     if (activeMentionPlatform && platformAccountIds[activeMentionPlatform]) {
       return {
-        platform: activeMentionPlatform as 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin',
+        platform: activeMentionPlatform as
+          | 'instagram'
+          | 'facebook'
+          | 'tiktok'
+          | 'youtube'
+          | 'linkedin',
         integrationAccountId: platformAccountIds[activeMentionPlatform],
       };
     }
@@ -1093,7 +1134,9 @@ export function OrganicAgentPanel({
             fetchMediaMentionAssets({ brandId, query, limit: 6 }).catch(
               () => [] as AgentMentionSuggestion[],
             ),
-            fetchCreativeInsightSuggestions({ brandId }).catch(() => [] as AgentMentionSuggestion[]),
+            fetchCreativeInsightSuggestions({ brandId }).catch(
+              () => [] as AgentMentionSuggestion[],
+            ),
             insightsAccount
               ? fetchOrganicInsightSuggestions({
                   brandId,
@@ -1351,6 +1394,20 @@ export function OrganicAgentPanel({
     return card?.stages.filter((s) => s.status !== 'pending') ?? [];
   }, [state.pipeline, state.streamingMessageId]);
 
+  // Pipeline cards grouped by the dispatching tool call (generatePosts threads
+  // its toolCallId onto the worker frames) so each card renders inline under the
+  // tool call in the transcript instead of in a separate track.
+  const pipelineCardsByToolCallId = useMemo(() => {
+    const byToolCallId = new Map<string, PipelineCardState[]>();
+    for (const card of Object.values(state.pipeline)) {
+      if (!card.toolCallId) continue;
+      const cards = byToolCallId.get(card.toolCallId) ?? [];
+      cards.push(card);
+      byToolCallId.set(card.toolCallId, cards);
+    }
+    return byToolCallId;
+  }, [state.pipeline]);
+
   return (
     <div data-tour-id="organic-agent-panel" className="flex h-full min-h-0">
       <OrganicSessionSidebar
@@ -1372,7 +1429,15 @@ export function OrganicAgentPanel({
           </div>
         )}
 
-        <Conversation className="min-h-0 flex-1">
+        <ChatTranscript
+          anchors={anchors}
+          isStreaming={isStreaming}
+          hasEarlier={hasEarlier}
+          isLoadingEarlier={isLoadingEarlier}
+          onLoadEarlier={loadEarlier}
+          className="min-h-0 flex-1"
+          contentClassName="gap-3 p-1"
+        >
           {isLoadingMessages ? (
             <div className="space-y-3 p-3">
               <Skeleton className="h-10 w-3/4" />
@@ -1404,10 +1469,10 @@ export function OrganicAgentPanel({
               ) : null}
             </div>
           ) : (
-            <div className="space-y-3 p-1 pr-1.5">
-              <AnimatePresence initial={false}>
-                {state.messages.map((msg) => (
-                  <Message key={msg.id} role={msg.role}>
+            <>
+              {state.messages.map((msg) => (
+                <Fragment key={msg.id}>
+                  <ChatMessage id={msg.id} role={msg.role} anchor={msg.role === 'user'}>
                     <div className="space-y-2">
                       {msg.role === 'assistant' ? (
                         msg.content ? (
@@ -1523,6 +1588,8 @@ export function OrganicAgentPanel({
                                         setSelectedDraftId(draftId);
                                         setViewMode(target === 'calendar' ? 'month' : 'list');
                                       }}
+                                      onEnrichDraftAction={handleEnrichDraftFromChat}
+                                      onGenerateMediaAction={handleGenerateMediaFromChat}
                                     />
                                   </motion.div>
                                 );
@@ -1636,9 +1703,17 @@ export function OrganicAgentPanel({
                         />
                       ) : null}
                     </div>
-                  </Message>
-                ))}
-              </AnimatePresence>
+                  </ChatMessage>
+                  {milestonesForMessage(msg, state.pipeline).map((milestone) => (
+                    <ChatMarker
+                      key={milestone.id}
+                      id={milestone.id}
+                      kind="milestone"
+                      label={milestone.label}
+                    />
+                  ))}
+                </Fragment>
+              ))}
               {state.pendingToolApprovals.length > 0 && (
                 <div className="flex gap-3 overflow-x-auto pb-1 pl-1">
                   {state.pendingToolApprovals.map((approval) => (
@@ -1652,9 +1727,9 @@ export function OrganicAgentPanel({
                   ))}
                 </div>
               )}
-            </div>
+            </>
           )}
-        </Conversation>
+        </ChatTranscript>
 
         <div className="relative shrink-0">
           {brandId && (

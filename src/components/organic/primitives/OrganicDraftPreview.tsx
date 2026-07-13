@@ -39,10 +39,16 @@ import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
+import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { BlueprintStoryboard, resolveStoryboardFrames } from './BlueprintStoryboard';
 import { CarouselSlideStrip } from './CarouselSlideStrip';
-import { MediaEnrichmentSummary, SchedulingRequirementsHint } from './DraftLifecycle';
+import {
+  EnrichmentLadder,
+  MediaEnrichmentSummary,
+  resolveDraftMediaStage,
+  SchedulingRequirementsHint,
+} from './DraftLifecycle';
 import { EditableCaption, InlinePreviewTextarea } from './EditableCaption';
 import { HyperFramePlayer } from './HyperFramePlayer';
 import { type LightboxItem, MediaLightbox } from './MediaLightbox';
@@ -780,7 +786,7 @@ export function OrganicDraftPreview({
   // Manual drafts construct from scratch (upload + Library, no headless gen).
   const isManual = draft.origin === 'manual';
 
-  const { generateDraftMedia, isGenerating } = useGenerateDraftMedia();
+  const { generateDraftMedia, isGenerating, expandDrafts, isExpanding } = useGenerateDraftMedia();
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -864,6 +870,13 @@ export function OrganicDraftPreview({
     ]);
   }, [brandProfileId, draft.id, draft.backendDraftId, draft.format, generateDraftMedia]);
 
+  // Stage-2 "Enrich (sketch first)": queue a durable blueprint sketch instead of
+  // jumping straight to final pixels. Text-stage secondary action only.
+  const handleEnrichMedia = React.useCallback(() => {
+    if (!brandProfileId || !draft.backendDraftId) return;
+    void expandDrafts(brandProfileId, [{ feId: draft.id, backendDraftId: draft.backendDraftId }]);
+  }, [brandProfileId, draft.id, draft.backendDraftId, expandDrafts]);
+
   const handleDelete = React.useCallback(() => {
     bulkDeleteDrafts([draft.id]);
   }, [bulkDeleteDrafts, draft.id]);
@@ -874,7 +887,22 @@ export function OrganicDraftPreview({
   // Generation requires a persisted backend draft id (autosave assigns one within
   // ~500ms); manual drafts never headless-generate.
   const canGenerate = mediaIsPending && !mediaIsUserSupplied && !isManual && !!draft.backendDraftId;
+  // Enrich is the text-stage sibling of Generate: once a storyboard exists the
+  // BlueprintStoryboard + realize flow is the approval surface instead.
+  const canEnrich = canGenerate && resolveDraftMediaStage(draft) === 'text_only';
   const canMarkScheduled = readiness.ready && !isApproveDisabled;
+
+  // The Media rung delegates to the existing Stage-3 paths: headless realize when the
+  // draft can generate, the library picker otherwise (manual drafts never headless-gen).
+  const handleMediaStep = React.useCallback(() => {
+    if (canGenerate) {
+      handleGenerateMedia();
+      return;
+    }
+    setMediaSelectOpen(true);
+  }, [canGenerate, handleGenerateMedia]);
+
+  const ladder = useDraftEnrichmentLadder(draft, { brandProfileId, onMediaStep: handleMediaStep });
 
   // The media zone, pre-wired with its contextual MediaSelectPopover. Clicking
   // the empty/CTA area (or a carousel "+") opens the library Popover anchored here.
@@ -893,6 +921,9 @@ export function OrganicDraftPreview({
         onGenerate={handleGenerateMedia}
         canGenerate={canGenerate}
         isGenerating={isGenerating}
+        onEnrich={handleEnrichMedia}
+        canEnrich={canEnrich}
+        isEnriching={isExpanding}
         anchor={
           <InteractiveCarouselMediaArea
             draft={draftForPreview}
@@ -1067,6 +1098,7 @@ export function OrganicDraftPreview({
               <SchedulingRequirementsHint checks={readiness.checks} />
             )}
           </div>
+          <EnrichmentLadder ladder={ladder} />
           <MediaEnrichmentSummary
             draft={draft}
             onReuseLibrary={() => setMediaSelectOpen(true)}

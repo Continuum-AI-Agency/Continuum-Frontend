@@ -49,9 +49,9 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
-import { applyModeExplainer, applyModePill } from '../reportModel';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildCboCampaignSections } from '../picker/campaignGroups';
+import { applyModeExplainer, applyModePill } from '../reportModel';
 import {
   useOptimizerAccountSnapshots,
   useOptimizerAdAccounts,
@@ -94,12 +94,20 @@ type PortfolioSetupProps = {
   showAccountHeader?: boolean;
 };
 
+// `clicks` is deliberately absent: it is the engine's internal fallback, not a thing an
+// advertiser chooses to buy. Everything else a Meta ad set can DECLARE is selectable —
+// without `conversations` here, a messaging account could not create a portfolio that
+// prices what it actually buys, and every one of its ad sets would sit frozen.
 const OBJECTIVES: OptimizationObjective[] = [
   'purchase',
   'app_install',
   'signup',
   'lead',
+  'conversations',
   'traffic',
+  'link_clicks',
+  'thruplays',
+  'post_engagement',
   'awareness',
 ];
 const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
@@ -114,6 +122,16 @@ const DEFAULT_MODE_BY_OBJECTIVE: Record<OptimizationObjective, OptimizationModeD
   lead: 'efficiency',
   traffic: 'balanced',
   awareness: 'efficiency',
+  // The objectives whose engine profiles are UNCALIBRATED (see optimization-engine
+  // objectives.ts). We have no backtest telling us how hard these saturate, so they
+  // default to `efficiency` — the mode that treats the planned total as a ceiling and
+  // never force-spends on inventory it cannot vouch for. Guessing on the cautious side
+  // costs a little reach; guessing on the other side costs someone else's money.
+  conversations: 'efficiency',
+  link_clicks: 'efficiency',
+  thruplays: 'efficiency',
+  post_engagement: 'efficiency',
+  clicks: 'efficiency',
 };
 
 // Conversion objectives need tracked events to score; with 0 tracked conversions the
@@ -123,6 +141,9 @@ const CONVERSION_OBJECTIVES = new Set<OptimizationObjective>([
   'app_install',
   'signup',
   'lead',
+  // A messaging thread is a tracked conversion like any other: with none recorded, the
+  // first cycle has nothing to score and the same nudge applies.
+  'conversations',
 ]);
 
 export function PortfolioSetup({
@@ -635,10 +656,7 @@ export function PortfolioCreateForm({
             <Label>Autonomy tier</Label>
             {/* Create offers observe (soak) and recommend (HITL). Autopilot needs guardrails
                 and is armed only from Manage — the DB refuses unguarded autopilot. */}
-            <Select
-              value={applyMode}
-              onValueChange={(value) => setApplyMode(value as ApplyMode)}
-            >
+            <Select value={applyMode} onValueChange={(value) => setApplyMode(value as ApplyMode)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

@@ -162,6 +162,9 @@ function buildMessagesQueryString(query: JainaConversationListQuery) {
   if (query.adAccountId) {
     params.set("ad_account_id", query.adAccountId);
   }
+  if (query.before) {
+    params.set("before", query.before);
+  }
   return params.toString();
 }
 
@@ -250,7 +253,11 @@ export async function GET(request: Request) {
 
     const messages = parsedMessages.data.messages.map(mapConversationMessageRow);
     return NextResponse.json(
-      jainaConversationListResponseSchema.parse({ sessions, messages })
+      jainaConversationListResponseSchema.parse({
+        sessions,
+        messages,
+        nextCursor: parsedMessages.data.nextCursor ?? null,
+      })
     );
   } catch (error) {
     console.error("Error loading Jaina conversations:", error);

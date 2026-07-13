@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  FileIcon,
   ImageOff,
   Layers,
   Loader2,
@@ -22,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { ClipCaptionToggle } from './ClipCaptionToggle';
 import { ClipProgressStrip } from './ClipProgressStrip';
 import { ClipQualityToggle } from './ClipQualityToggle';
+import { fileExtension, formatBytes } from './detail/assetFileMeta';
 import { useClipCaptionPreference } from './hooks/useClipCaptionPreference';
 import { useClipQualityPreference } from './hooks/useClipQualityPreference';
 import { useGenerateClips } from './hooks/useGenerateClips';
@@ -32,14 +34,8 @@ type Props = {
   index?: number;
   showBoundingBoxes?: boolean;
   captionStyle?: CaptionStyle;
+  onOpen?: (asset: MediaAsset) => void;
 };
-
-function formatBytes(bytes: number): string {
-  if (!bytes) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
-}
 
 const BADGE_BASE =
   'absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs';
@@ -65,6 +61,58 @@ function useLazyVideoSrc(src: string | null | undefined, immediate: boolean) {
     return () => ob.disconnect();
   }, [active]);
   return { ref, activeSrc: active && src ? src : undefined };
+}
+
+// A video card with a poster paints the poster and downloads ZERO video bytes —
+// `preload="none"` plus a withheld `src` — until the pointer enters, at which
+// point the real video mounts and plays over the still. A video WITHOUT a poster
+// keeps the old behavior (lazy src + preload="metadata"), so un-postered assets
+// are unchanged rather than broken.
+function VideoThumbnail({
+  asset,
+  priority,
+  onMediaError,
+}: {
+  asset: MediaAsset;
+  priority: boolean;
+  onMediaError: () => void;
+}) {
+  const posterUrl = asset.thumbnailUrl ?? null;
+  const [hovered, setHovered] = useState(false);
+  const hoveredRef = useRef(false);
+  const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority && !posterUrl);
+  const src = !posterUrl || hovered ? activeSrc : undefined;
+
+  return (
+    <>
+      {/* biome-ignore lint/a11y/useMediaCaption: silent grid preview of the user's own creative; no caption track exists */}
+      <video
+        ref={videoRef}
+        src={src}
+        poster={posterUrl ?? undefined}
+        className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+        muted
+        playsInline
+        preload={posterUrl ? 'none' : 'metadata'}
+        onError={onMediaError}
+        onLoadedData={() => {
+          if (hoveredRef.current) void videoRef.current?.play();
+        }}
+        onPointerEnter={() => {
+          hoveredRef.current = true;
+          setHovered(true);
+          if (src) void videoRef.current?.play();
+        }}
+        onPointerLeave={() => {
+          hoveredRef.current = false;
+          videoRef.current?.pause();
+        }}
+      />
+      <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 p-1.5 text-white transition-opacity group-hover:opacity-0">
+        <Play className="size-3 fill-current" />
+      </div>
+    </>
+  );
 }
 
 function StatusBadge({ status }: { status: MediaAsset['status'] }) {
@@ -110,7 +158,23 @@ function Thumbnail({
   priority: boolean;
 }) {
   const [mediaError, setMediaError] = useState(false);
-  const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority);
+
+  if (asset.kind === 'file') {
+    const ext = fileExtension(asset.fileName);
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <FileIcon className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
+        {ext && (
+          <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
+            {ext}
+          </span>
+        )}
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+      </div>
+    );
+  }
 
   if (!asset.signedUrl || mediaError) {
     return (
@@ -122,24 +186,7 @@ function Thumbnail({
 
   if (asset.kind === 'video') {
     return (
-      <>
-        <video
-          ref={videoRef}
-          src={activeSrc}
-          className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-          muted
-          playsInline
-          preload="metadata"
-          onError={() => setMediaError(true)}
-          onPointerEnter={() => {
-            if (activeSrc) videoRef.current?.play();
-          }}
-          onPointerLeave={() => videoRef.current?.pause()}
-        />
-        <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 p-1.5 text-white transition-opacity group-hover:opacity-0">
-          <Play className="size-3 fill-current" />
-        </div>
-      </>
+      <VideoThumbnail asset={asset} priority={priority} onMediaError={() => setMediaError(true)} />
     );
   }
 
@@ -290,11 +337,13 @@ function MediaCardHoverDetail({
               className="object-contain"
             />
           ) : asset.signedUrl && asset.kind === 'video' ? (
+            // biome-ignore lint/a11y/useMediaCaption: silent hover preview of the user's own creative; no caption track exists
             <video
-              src={asset.signedUrl}
+              src={asset.thumbnailUrl ? undefined : asset.signedUrl}
+              poster={asset.thumbnailUrl ?? undefined}
               muted
               playsInline
-              preload="metadata"
+              preload={asset.thumbnailUrl ? 'none' : 'metadata'}
               className="h-full w-full object-contain"
             />
           ) : (
@@ -392,7 +441,13 @@ function GenerateClipsButton({
   );
 }
 
-export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyle }: Props) {
+export function MediaCard({
+  asset,
+  index,
+  showBoundingBoxes = false,
+  captionStyle,
+  onOpen,
+}: Props) {
   const reduceMotion = useReducedMotion();
   const { generate, isGenerating, progress } = useGenerateClips();
   const { quality, setQuality } = useClipQualityPreference();
@@ -409,10 +464,26 @@ export function MediaCard({ asset, index, showBoundingBoxes = false, captionStyl
   return (
     <HoverCard openDelay={150} closeDelay={100}>
       <HoverCardTrigger asChild>
+        {/* The whole card opens the detail takeover; inner controls (clip tools,
+            copy, carousel paging) stopPropagation so they keep their own click.
+            A native <button> cannot wrap those nested controls, hence the role. */}
+        {/* biome-ignore lint/a11y/useSemanticElements: nested interactive controls preclude a native button wrapper */}
         <motion.div
+          role="button"
+          tabIndex={0}
+          aria-label={`Open ${asset.title ?? asset.fileName}`}
+          onClick={() => onOpen?.(asset)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpen?.(asset);
+            }
+          }}
           className={cn(
             'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
             'transition-[border-color] hover:border-foreground/20',
+            onOpen &&
+              'cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
           )}
           whileHover={reduceMotion ? undefined : { y: -2 }}
           transition={{ type: 'spring', duration: 0.3, bounce: 0 }}

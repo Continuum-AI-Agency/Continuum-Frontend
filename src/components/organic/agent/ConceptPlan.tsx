@@ -16,6 +16,8 @@ type Props = {
   onGenerateAllAction: (itemIds: string[]) => void;
   onRejectAction: () => void;
   onViewDraftAction: (draftId: string, target: "calendar" | "list") => void;
+  onEnrichDraftAction?: (draftId: string) => void;
+  onGenerateMediaAction?: (draftId: string, format: string) => void;
 };
 
 // Stable per-card identity so a re-click (a per-card button or the footer)
@@ -37,6 +39,8 @@ export function ConceptPlan({
   onGenerateAllAction,
   onRejectAction,
   onViewDraftAction,
+  onEnrichDraftAction,
+  onGenerateMediaAction,
 }: Props) {
   const [dismissed, setDismissed] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
@@ -107,6 +111,8 @@ export function ConceptPlan({
                 onGenerate={() => onGenerateItemAction(item.itemId, makeClientKey(plan.planId, item.itemId))}
                 onDismiss={() => setDismissedIds((prev) => new Set([...prev, item.itemId]))}
                 onViewDraft={onViewDraftAction}
+                onEnrichDraft={onEnrichDraftAction}
+                onGenerateMedia={onGenerateMediaAction}
               />
             </motion.div>
           ))}

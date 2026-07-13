@@ -66,6 +66,11 @@ export function freezeLabel(
         label: 'Held · lifetime budget',
         hint: 'This campaign has a whole-flight lifetime budget, not a daily one. The optimizer paces and scores in daily terms, so it will not resize a flight it cannot reason about.',
       };
+    case 'kpi_mismatch':
+      return {
+        label: 'Held · different goal',
+        hint: 'This ad set is bidding for a different result than the portfolio prices (for example messaging conversations in a portfolio measured on leads). Ranking them together would compare a cheap event against an expensive one and hand the budget to whichever is cheaper, so it is held instead. Move it to a portfolio that measures what it actually buys.',
+      };
     default:
       if (reason) return { label: 'Held', hint: 'Budget left unchanged on purpose this cycle.' };
       return null;
@@ -99,9 +104,45 @@ export function recommendationLabel(kind: string): { label: string; glyph: strin
       return { label: 'Refresh creative', glyph: '🎨' };
     case 'audience_expand':
       return { label: 'Expand audience', glyph: '👥' };
+    // --- Creative-level kinds. These name ONE AD inside the ad set, not the ad set. ---
+    case 'pause_ad':
+      return { label: 'Pause this ad', glyph: '⏸' };
+    case 'variate_creative':
+      return { label: 'Make variations of the winner', glyph: '✦' };
+    case 'seed_experiment':
+      return { label: 'Nothing to learn from — add variants', glyph: '⚗' };
     default:
       return { label: kind.replace(/_/g, ' '), glyph: '•' };
   }
+}
+
+/** The creative-level kinds: they are about ONE AD inside the ad set, and the row must show
+ *  WHICH. An ad set with five creatives otherwise gives you five suspects and no defendant. */
+export const CREATIVE_RECOMMENDATION_KINDS = new Set([
+  'pause_ad',
+  'variate_creative',
+  'seed_experiment',
+]);
+
+/** Kinds the optimizer generates but CANNOT yet execute or track.
+ *
+ *  The engine emits these, `optimizer.recommendations` stores them (with the ad id and the
+ *  generation seed), and the Meta pause/unpause writer exists and is tested — but nothing yet
+ *  DRAINS an approved one into it, and no renewal task is opened for them. So approving one
+ *  would set a status, do nothing, and leave a burning ad running while the queue looked
+ *  handled. That is worse than not offering the button.
+ *
+ *  Until the drain + autopilot path land, they are SHOWN (the finding is real and useful on its
+ *  own) and their action is disabled with an honest message. Delete an entry from this set in
+ *  the PR that makes it executable — not before. */
+export const NOT_YET_EXECUTABLE_KINDS = new Set([
+  'pause_ad',
+  'variate_creative',
+  'seed_experiment',
+]);
+
+export function isExecutable(kind: string): boolean {
+  return !NOT_YET_EXECUTABLE_KINDS.has(kind);
 }
 
 /** The action copy for a recommendation row. A `pause` is ADVISORY: approving it records
@@ -119,7 +160,36 @@ export function recommendationActionCopy(kind: string): {
         'Advisory — the optimizer never pauses ad sets. Pause it in Meta yourself; this only records your decision.',
     };
   }
+  // Generated and stored, not yet actionable. The button says so rather than pretending.
+  if (kind === 'pause_ad') {
+    return {
+      approveLabel: 'Pause ad',
+      advisory:
+        'Not wired up yet — the optimizer can find this ad but cannot pause it for you. Pause it in Meta yourself for now.',
+    };
+  }
+  if (kind === 'variate_creative' || kind === 'seed_experiment') {
+    return {
+      approveLabel: 'Open in Studio',
+      advisory:
+        'Not wired up yet — the brief below is real, but it does not open Studio for you yet. Take it there yourself for now.',
+    };
+  }
   return { approveLabel: 'Approve', advisory: null };
+}
+
+/** The reason a not-yet-executable action is refused, shown to the user verbatim. */
+export function notImplementedMessage(kind: string): string {
+  switch (kind) {
+    case 'pause_ad':
+      return 'Pausing an ad from here is not built yet. The finding is real — pause it in Meta and it will stop draining the ad set.';
+    case 'variate_creative':
+      return 'Generating variations from here is not built yet. Copy the brief and take it into AI Studio.';
+    case 'seed_experiment':
+      return 'Seeding an experiment from here is not built yet. Add a second creative to this ad set and the optimizer can start telling you which one works.';
+    default:
+      return 'This action is not built yet.';
+  }
 }
 
 /** Recommendation severity → the underline decoration color for the insight anchor.

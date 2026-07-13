@@ -3,7 +3,9 @@
 import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { Scissors } from 'lucide-react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import type React from 'react';
+import type { ReactNode } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
@@ -38,6 +40,7 @@ export function TimelineTrack({
   onTrim,
   onRemove,
   onSplit,
+  commentLane,
 }: {
   layout: TimelineLayout;
   pxPerSec: number;
@@ -56,6 +59,9 @@ export function TimelineTrack({
   onTrim: (itemId: string, range: { startSec?: number; endSec?: number }) => void;
   onRemove: (itemId: string) => void;
   onSplit: (itemId: string, localSec: number) => void;
+  // Review-comment markers, rendered on this track's pixel scale so they scroll
+  // and zoom with the clips. Only the Library host supplies one.
+  commentLane?: ReactNode;
 }) {
   const { setNodeRef } = useDroppable({ id: TIMELINE_DROP_ID });
   const laneRef = useRef<HTMLDivElement>(null);
@@ -150,6 +156,11 @@ export function TimelineTrack({
 
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/60 bg-muted/20">
         <div ref={laneRef} className="relative min-h-full" style={{ width: contentWidth }}>
+          {/* Review markers ride inside the scrolling content, on the same pixel
+              scale as the clips, so a comment stays over the frame it points at
+              when the timeline is zoomed or scrolled. */}
+          {commentLane}
+
           {/* Ruler */}
           <div
             className="relative h-5 border-b border-border/50"

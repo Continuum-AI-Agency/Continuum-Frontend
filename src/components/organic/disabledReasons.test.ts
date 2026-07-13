@@ -5,7 +5,6 @@ import {
   describeClearBlock,
   describeComposerBlock,
   describeExportBlock,
-  describeGenerateBlock,
   describeRefreshBlock,
 } from './disabledReasons';
 
@@ -17,23 +16,6 @@ describe('describeAddPlaceholderBlock', () => {
 
   it('allows adding when idle', () => {
     expect(describeAddPlaceholderBlock({ isGenerating: false })).toBeNull();
-  });
-});
-
-describe('describeGenerateBlock', () => {
-  it('explains that a placeholder is required when none are seeded', () => {
-    const hint = describeGenerateBlock({ isGenerating: false, seededDraftCount: 0 });
-    expect(hint?.reason).toContain('Add at least one placeholder');
-    expect(hint?.unlocks).toContain('Brand Book');
-  });
-
-  it('prefers the running message while generating even with placeholders', () => {
-    const hint = describeGenerateBlock({ isGenerating: true, seededDraftCount: 3 });
-    expect(hint?.reason).toBe('Generation is already running.');
-  });
-
-  it('allows generating when placeholders exist and idle', () => {
-    expect(describeGenerateBlock({ isGenerating: false, seededDraftCount: 2 })).toBeNull();
   });
 });
 

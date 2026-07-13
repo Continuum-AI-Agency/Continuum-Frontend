@@ -40,6 +40,7 @@ import {
   type TimePreset,
   toMetricsRange,
 } from './timeRange';
+import { WhatsWorkingAdsCard } from './whats-working/WhatsWorkingAdsCard';
 
 type Campaign = CampaignPerformanceRow;
 
@@ -528,6 +529,8 @@ export function PaidMediaDashboard({
               onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
               toolbarSlot={dashboardToolbar}
             />
+
+            {platform === 'meta' ? <WhatsWorkingAdsCard brandId={brandId} /> : null}
 
             <div className="min-h-0">
               {platform === 'linkedin' ? (

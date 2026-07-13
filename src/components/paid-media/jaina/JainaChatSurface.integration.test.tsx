@@ -67,7 +67,7 @@ mock.module("@/components/ai-elements/conversation", () => ({
   ),
 }));
 
-mock.module("@/components/ai-elements/prompt-input", () => ({
+mock.module("@/components/chat/prompt-input", () => ({
   PromptInput: ({
     onSubmit,
     disabled,

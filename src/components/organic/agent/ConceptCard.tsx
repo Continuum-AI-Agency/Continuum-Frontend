@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, List, Loader2, RefreshCw, Sparkles, X } from 'lucide-react';
+import { CalendarDays, List, Loader2, PencilRuler, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   type OrganicGenerationStatus,
@@ -9,6 +9,8 @@ import {
   resolveOrganicGenerationDisplay,
 } from '@continuum/contracts';
 import { Progress } from '@/components/ui/progress';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import { cn } from '@/lib/utils';
 import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
 import { resolveConceptPreviewUrl } from './conceptPreview';
@@ -75,6 +77,10 @@ type Props = {
   onGenerate: () => void;
   onDismiss?: () => void;
   onViewDraft?: (draftId: string, target: 'calendar' | 'list') => void;
+  /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
+  onEnrichDraft?: (draftId: string) => void;
+  /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
+  onGenerateMedia?: (draftId: string, format: string) => void;
 };
 
 export function ConceptCard({
@@ -85,6 +91,8 @@ export function ConceptCard({
   onGenerate,
   onDismiss,
   onViewDraft,
+  onEnrichDraft,
+  onGenerateMedia,
 }: Props) {
   const [dispatched, setDispatched] = useState(false);
   // Synchronous latch: setDispatched is async and updates too late to stop a fast
@@ -101,6 +109,20 @@ export function ConceptCard({
   const hasTextDraft = Boolean(draftId && (pipeline?.checkpoint?.textReady || isDone));
   const mediaStatus = pipeline?.checkpoint?.mediaStatus;
   const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
+  // Approve-through media actions: Enrich while only text exists, Generate media
+  // once the blueprint landed. Neither shows once media is final/user-supplied
+  // or already rendering.
+  const mediaSettled =
+    mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
+  const showEnrich = Boolean(
+    onEnrichDraft &&
+      draftId &&
+      pipeline?.checkpoint?.textReady &&
+      !hasPreviewReady &&
+      !mediaSettled,
+  );
+  const showGenerateMedia = Boolean(onGenerateMedia && draftId && hasPreviewReady && !mediaSettled);
+  const [mediaActionSent, setMediaActionSent] = useState(false);
 
   // Clear the latch when a job fails so the retry button can dispatch again; a
   // successful run swaps the card away from the generate button entirely.
@@ -155,11 +177,9 @@ export function ConceptCard({
       {/* ── Image / placeholder ──────────────────────────────── */}
       <div className="relative aspect-square w-full">
         {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image}
-            alt="Preview"
-            className={cn('h-full w-full object-cover', IMAGE_OUTLINE)}
+          <ChatMediaThumb
+            media={mediaFromPreviewUrls('concept', [image], concept.format)[0]}
+            className={cn('rounded-none', IMAGE_OUTLINE)}
           />
         ) : (
           <div className="flex h-full flex-col justify-between bg-gradient-to-br from-muted/80 via-muted/50 to-muted/20 p-3">
@@ -232,6 +252,42 @@ export function ConceptCard({
               <List className="h-3 w-3" />
               List
             </button>
+            {showEnrich && (
+              <>
+                <div className="w-px self-stretch bg-border/40" />
+                <button
+                  type="button"
+                  title="Sketch a low-cost blueprint before final media"
+                  disabled={mediaActionSent}
+                  onClick={() => {
+                    setMediaActionSent(true);
+                    onEnrichDraft?.(draftId);
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <PencilRuler className="h-3 w-3" />
+                  {mediaActionSent ? 'Enriching…' : 'Enrich'}
+                </button>
+              </>
+            )}
+            {showGenerateMedia && (
+              <>
+                <div className="w-px self-stretch bg-border/40" />
+                <button
+                  type="button"
+                  title="Render the final media from the approved blueprint"
+                  disabled={mediaActionSent}
+                  onClick={() => {
+                    setMediaActionSent(true);
+                    onGenerateMedia?.(draftId, concept.format ?? '');
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Wand2 className="h-3 w-3" />
+                  {mediaActionSent ? 'Generating…' : 'Generate media'}
+                </button>
+              </>
+            )}
           </>
         ) : isInFlight ? (
           <div className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-2xs text-muted-foreground/50">

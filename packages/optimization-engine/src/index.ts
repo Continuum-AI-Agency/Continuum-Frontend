@@ -12,9 +12,14 @@ export { confidenceOf, portfolioConfidence } from './confidence';
 export type { DeepPartial, EngineConfig, WindowWeights } from './config';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export { reallocate } from './engine';
+export { DRAG_SPEND_SHARE, evaluateCreative, LAGGARD_COST_MULTIPLE } from './creative';
 export { evaluateFatigue } from './fatigue';
 export type { MetaMetricRow } from './ingest';
 export { META_FIELD_MAP, mapMetaRowToWindowMetrics } from './ingest';
+// First wiring of the DCO-salvage miner: paid-creative-intel corroborates its
+// win-rate categories with lift rules (and fires the `confounded` flag).
+export type { AssociationRule, MinableItem, MiningResult } from './mining/apriori';
+export { mineCreativeCombos } from './mining/apriori';
 export type { ObjectiveProfile } from './objectives';
 export { getObjectiveProfile, OBJECTIVE_PROFILES } from './objectives';
 export { computePacing } from './pacing';

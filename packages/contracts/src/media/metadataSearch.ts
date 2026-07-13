@@ -12,23 +12,27 @@
 
 import { z } from 'zod';
 import {
+  TEXT_EMBEDDING_DIM,
+  TEXT_EMBEDDING_MODEL,
+  TEXT_EMBEDDING_QUERY_TASK_TYPE,
+} from '../embedding/textEmbedding';
+import {
   type AdCreativeAnalysis,
   adCreativeAnalysisSchema,
   boundingBoxSchema,
   type DetectedObject,
   type MediaAsset,
   type MediaKind,
+  type MediaReviewStatus,
   type MediaSource,
   type MediaStatus,
   mediaKindSchema,
+  mediaReviewStatusSchema,
   mediaSourceSchema,
+  type TranscriptSegment,
+  transcriptSegmentSchema,
 } from './asset';
 import { type MediaSearchResultItem, mediaSearchResultItemSchema } from './search';
-import {
-  TEXT_EMBEDDING_DIM,
-  TEXT_EMBEDDING_MODEL,
-  TEXT_EMBEDDING_QUERY_TASK_TYPE,
-} from '../embedding/textEmbedding';
 
 // --- Correctness constants (must match analyze_media's write side) -----------
 
@@ -65,11 +69,17 @@ export const MEDIA_ASSET_SELECT_COLUMNS = [
   'source',
   'origin_ref',
   'status',
+  'review_status',
+  'checksum',
   'title',
   'description',
   'tags',
   'ad_creative_analysis',
   'detected_objects',
+  'transcript',
+  'transcript_segments',
+  'transcript_source',
+  'thumbnail_path',
   'embedding_model',
   'has_image_embedding',
   'created_at',
@@ -90,11 +100,16 @@ export const mediaMetadataSearchInputSchema = z
     tags: z
       .array(z.string().min(1))
       .optional()
-      .describe('Optional tags; an asset matches if it carries ANY of them.'),
+      .describe('Optional tags; an asset matches only if it carries ALL of them.'),
     kind: mediaKindSchema.optional().describe('Optional media type filter (image | video).'),
     source: mediaSourceSchema
       .optional()
       .describe('Optional origin filter (upload, ai_generated, canvas, inspiration, …).'),
+    reviewStatus: mediaReviewStatusSchema
+      .optional()
+      .describe(
+        "Optional review-workflow filter; pass 'approved' to restrict to assets the brand has signed off on.",
+      ),
     limit: z
       .number()
       .int()
@@ -135,11 +150,21 @@ export interface MediaAssetRow {
   source: MediaSource;
   origin_ref: Record<string, unknown> | null;
   status: MediaStatus;
+  review_status: MediaReviewStatus;
+  checksum: string | null;
   title: string | null;
   description: string | null;
   tags: string[] | null;
   ad_creative_analysis: unknown;
   detected_objects: unknown;
+  // v1.5 video-understanding columns. Optional on the interface (not just
+  // nullable) so a caller selecting an older column set still type-checks.
+  transcript?: string | null;
+  transcript_segments?: unknown;
+  transcript_source?: string | null;
+  // v1.6 poster column. Optional for the same reason: an older column set still
+  // type-checks.
+  thumbnail_path?: string | null;
   embedding_model: string | null;
   has_image_embedding: boolean;
   created_at: string;
@@ -187,6 +212,17 @@ function parseAdCreativeAnalysis(raw: unknown): AdCreativeAnalysis | null {
   return parsed.success ? parsed.data : null;
 }
 
+// jsonb, so parsed defensively: a malformed segment is dropped rather than
+// failing the whole row (same rule as detected_objects).
+function parseTranscriptSegments(raw: unknown): TranscriptSegment[] | null {
+  if (raw === null || raw === undefined) return null;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    const parsed = transcriptSegmentSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 // Maps a hydrated DB row + a freshly-minted signed URL into the boundary
 // MediaAsset. Always produces a schema-valid asset (jsonb is parsed
 // defensively) so a single malformed row cannot fail the whole search.
@@ -207,11 +243,17 @@ export function mapMediaRowToAsset(row: MediaAssetRow, signedUrl: string | null)
     source: row.source,
     originRef: row.origin_ref,
     status: row.status,
+    reviewStatus: row.review_status ?? 'none',
+    checksum: row.checksum,
     title: row.title,
     description: row.description,
     tags: normalizeTags(row.tags),
     detectedObjects: parseDetectedObjects(row.detected_objects),
     adCreativeAnalysis: parseAdCreativeAnalysis(row.ad_creative_analysis),
+    transcript: row.transcript ?? null,
+    transcriptSegments: parseTranscriptSegments(row.transcript_segments),
+    transcriptSource: row.transcript_source ?? null,
+    thumbnailPath: row.thumbnail_path ?? null,
     embeddingModel: row.embedding_model,
     hasImageEmbedding: row.has_image_embedding,
     createdAt: row.created_at,
@@ -221,10 +263,13 @@ export function mapMediaRowToAsset(row: MediaAssetRow, signedUrl: string | null)
   };
 }
 
+// ALL-of: the asset must carry every requested tag. This matches the Library UI
+// (tag chips narrow) and the `filter_tags` RPC arg (`tags @> filter_tags`), so
+// the same tag input returns the same set to an agent and to a person.
 export function assetMatchesTags(rowTags: string[], requestedTags: string[] | undefined): boolean {
   if (!requestedTags?.length) return true;
   const owned = new Set(rowTags.map((tag) => tag.toLowerCase()));
-  return requestedTags.some((tag) => owned.has(tag.toLowerCase()));
+  return requestedTags.every((tag) => owned.has(tag.toLowerCase()));
 }
 
 // --- Dependency-injected orchestration core ---------------------------------
@@ -253,6 +298,20 @@ export interface MediaMetadataSearchDeps {
 // Pure orchestration: embed → semantic match (lexical fallback) → hydrate →
 // tag-filter → map + mint. The result preserves match ranking order. Never
 // reads or returns media bytes.
+// Semantic hits keep their rank and their cosine score; lexical-only hits are
+// appended behind them (a keyword hit is a weaker signal than a meaning hit, but
+// it must never be dropped). Deduped by id — an asset found both ways keeps its
+// semantic score.
+export function mergeMatches(
+  semantic: MediaTextMatch[],
+  lexical: MediaTextMatch[],
+  limit: number,
+): MediaTextMatch[] {
+  const seen = new Set(semantic.map((match) => match.id));
+  const extras = lexical.filter((match) => !seen.has(match.id));
+  return [...semantic, ...extras].slice(0, limit);
+}
+
 export async function runMediaMetadataSearch(
   deps: MediaMetadataSearchDeps,
   input: MediaMetadataSearchInput,
@@ -260,13 +319,20 @@ export async function runMediaMetadataSearch(
   const empty: MediaMetadataSearchResult = { query: input.query, count: 0, items: [] };
 
   const embedding = await deps.embedQuery(input.query);
-  let matches = embedding
+  const semantic = embedding
     ? await deps.matchAssetsByText(embedding, { threshold: input.threshold, limit: input.limit })
     : [];
 
-  if (matches.length === 0 && deps.lexicalSearch) {
-    matches = await deps.lexicalSearch(input.query, { limit: input.limit });
-  }
+  // HYBRID, not a fallback ladder. Running lexical only when the vector search
+  // comes back empty makes any asset without an embedding invisible the moment
+  // ONE other asset matches semantically — so a just-uploaded file (analysis is
+  // async, and free-tier brands are never analyzed) could not be found by its own
+  // name. Union the two, semantic first, and a literal-name search always works.
+  const lexical = deps.lexicalSearch
+    ? await deps.lexicalSearch(input.query, { limit: input.limit })
+    : [];
+
+  const matches = mergeMatches(semantic, lexical, input.limit);
 
   const ids = matches.map((match) => match.id);
   if (ids.length === 0) return empty;

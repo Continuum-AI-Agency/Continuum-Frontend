@@ -14,6 +14,19 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/sign/**' },
+      // The local Supabase stack signs from http://127.0.0.1:54321; without this
+      // every library image throws "Invalid src prop" and takes the page down.
+      // Development only — the hosted app never sees this host.
+      ...(process.env.NODE_ENV === 'development'
+        ? ([
+            {
+              protocol: 'http',
+              hostname: '127.0.0.1',
+              port: '54321',
+              pathname: '/storage/v1/object/sign/**',
+            },
+          ] as const)
+        : []),
     ],
   },
   // Disable fetch cache in development to prevent infinite cache growth

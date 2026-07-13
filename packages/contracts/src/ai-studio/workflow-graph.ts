@@ -665,3 +665,78 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
       return { data: {}, style: { width: 192, height: 192 } };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Timeline vocabulary (timelineEditor)
+// ---------------------------------------------------------------------------
+//
+// The timelineEditor takes a POOL of clip sources on one `media-in` handle, and a
+// separate ordered list of timeline items that reference those sources by node id.
+// Wiring a clip in does not place it; placing it does. Both halves live here so an
+// agent seeding a cut and the browser rendering it agree on one vocabulary.
+
+export const CLIP_TRANSITION_TYPES = [
+  'cut',
+  'fade',
+  'dipWhite',
+  'crossDissolve',
+  'slideLeft',
+  'slideRight',
+  'slideUp',
+  'slideDown',
+  'wipeLeft',
+  'wipeRight',
+  'zoomIn',
+  'spin',
+] as const;
+
+export type ClipTransitionType = (typeof CLIP_TRANSITION_TYPES)[number];
+
+export const clipTransitionSchema = z
+  .object({
+    type: z.enum(CLIP_TRANSITION_TYPES),
+    durationSec: z.number().min(0).max(5),
+  })
+  .strict();
+
+/**
+ * One placement on the timeline. `sourceNodeId` MUST name a node wired into the
+ * editor's `media-in` pool — an item pointing at a node that is not connected
+ * renders nothing, silently, which is the single most likely way an agent-authored
+ * timeline goes wrong. applyOps enforces it.
+ */
+export const timelineItemSpecSchema = z
+  .object({
+    sourceNodeId: z.string().min(1),
+    order: z.number().int().nonnegative(),
+    kind: z.enum(['video', 'image']).optional(),
+    trimStartSec: z.number().min(0).optional(),
+    trimEndSec: z.number().min(0).optional(),
+    /** How long a still holds on screen. Images only. */
+    durationSec: z.number().min(0).max(60).optional(),
+    muteAudio: z.boolean().optional(),
+    /** The transition INTO this clip, from the one before it. */
+    transition: clipTransitionSchema.optional(),
+  })
+  .strict();
+
+export type TimelineItemSpec = z.infer<typeof timelineItemSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// Image generator models (nanoGen)
+// ---------------------------------------------------------------------------
+//
+// The values a nanoGen node's `data.model` accepts — the canvas maps them to
+// backend model ids at payload time (buildNodePayload). An agent that invents a
+// model id here produces a node that 400s the moment the user presses Run.
+
+export const IMAGE_GENERATOR_MODELS = [
+  'nano-banana',
+  'nano-banana-pro',
+  'nano-banana-2',
+  'gpt-image-2',
+  'flux-2-pro',
+  'flux-2-max',
+] as const;
+
+export type ImageGeneratorModel = (typeof IMAGE_GENERATOR_MODELS)[number];

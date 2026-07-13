@@ -1,11 +1,23 @@
-import { Calendar, Clock3, Globe2, LineChart } from "lucide-react";
+import { Calendar, Clock3, Globe2, LineChart } from 'lucide-react';
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { BrandInsightsTrend, BrandInsightsEvent, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
-import { BrandTrendsTabs } from "./BrandTrendsTabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import type {
+  BrandInsightsEvent,
+  BrandInsightsQuestionsByNiche,
+  BrandInsightsTrend,
+  BrandInsightsWeekSummary,
+} from '@/lib/schemas/brandInsights';
+import { cn } from '@/lib/utils';
+import { BrandTrendsTabs } from './BrandTrendsTabs';
 
 type BrandTrendsPanelProps = {
   trends: BrandInsightsTrend[];
@@ -15,6 +27,11 @@ type BrandTrendsPanelProps = {
   weekStartDate?: string;
   generatedAt?: string;
   status?: string;
+  weeks?: BrandInsightsWeekSummary[];
+  generationKind?: 'initial' | 'regeneration';
+  generationCount?: number;
+  onWeekChange?: (weekStartDate: string) => void;
+  isWeekLoading?: boolean;
   /** Small stable actions rendered in the header badge row (e.g. icon buttons). */
   actionSlot?: React.ReactNode;
   /** Expanded content rendered at the top of CardContent — use for generate controls that may expand with alerts/progress. */
@@ -28,11 +45,16 @@ function formatDate(value?: string) {
   if (!value) return undefined;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
+}
+
+function formatWeekOption(week: BrandInsightsWeekSummary) {
+  const label = formatDate(week.weekStartDate) ?? week.weekStartDate;
+  return week.regenerationCount > 0 ? `${label} · ${week.generationCount} attempts` : label;
 }
 
 function BrandTrendsPanelSkeleton() {
@@ -58,7 +80,10 @@ function BrandTrendsPanelSkeleton() {
         </div>
         <div className="rounded-lg border overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={`trends-row-${i}`} className="flex items-start gap-3 px-4 py-3 border-b last:border-0">
+            <div
+              key={`trends-row-${i}`}
+              className="flex items-start gap-3 px-4 py-3 border-b last:border-0"
+            >
               <div className="flex-1 space-y-1.5">
                 <Skeleton className="h-3.5 w-3/5" />
                 <Skeleton className="h-3 w-4/5" />
@@ -83,6 +108,11 @@ export function BrandTrendsPanel({
   weekStartDate,
   generatedAt,
   status,
+  weeks = [],
+  generationKind,
+  generationCount,
+  onWeekChange,
+  isWeekLoading = false,
   actionSlot,
   statusSlot,
   brandId,
@@ -97,7 +127,10 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <Card data-tour-id="brand-trends" className={cn("flex flex-col gap-0 border py-0 shadow-none", className)}>
+    <Card
+      data-tour-id="brand-trends"
+      className={cn('flex flex-col gap-0 border py-0 shadow-none', className)}
+    >
       <CardHeader className="gap-0 border-b px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-2">
@@ -117,9 +150,31 @@ export function BrandTrendsPanel({
               </Badge>
             ) : null}
             {weekLabel ? (
-              <Badge variant="outline" className="h-6 text-xs">
-                <Calendar className="mr-1 h-3 w-3" />
-                {weekLabel}
+              weeks.length > 1 && onWeekChange ? (
+                <Select value={weekStartDate} onValueChange={onWeekChange} disabled={isWeekLoading}>
+                  <SelectTrigger className="h-6 w-[168px] text-xs">
+                    <Calendar className="mr-1 size-3" />
+                    <SelectValue aria-label="Browse Trends week" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weeks.map((week) => (
+                      <SelectItem key={week.weekStartDate} value={week.weekStartDate}>
+                        {formatWeekOption(week)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge variant="outline" className="h-6 text-xs">
+                  <Calendar className="mr-1 h-3 w-3" />
+                  {weekLabel}
+                </Badge>
+              )
+            ) : null}
+            {generationKind === 'regeneration' ? (
+              <Badge variant="secondary" className="h-6 text-xs">
+                Regeneration
+                {generationCount && generationCount > 1 ? ` · ${generationCount} attempts` : ''}
               </Badge>
             ) : null}
             {generatedLabel ? (
@@ -128,7 +183,11 @@ export function BrandTrendsPanel({
                 {generatedLabel}
               </Badge>
             ) : null}
-            {status ? <Badge variant="secondary" className="h-6 text-xs">{status}</Badge> : null}
+            {status ? (
+              <Badge variant="secondary" className="h-6 text-xs">
+                {status}
+              </Badge>
+            ) : null}
             {statusSlot}
           </div>
         </div>

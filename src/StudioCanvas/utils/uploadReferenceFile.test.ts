@@ -1,5 +1,5 @@
-import { describe, it, expect, mock } from 'bun:test';
-import { uploadReferenceFile, REFERENCE_UPLOAD_BUCKET } from './uploadReferenceFile';
+import { describe, expect, it, mock } from 'bun:test';
+import { REFERENCE_UPLOAD_BUCKET, uploadReferenceFile } from './uploadReferenceFile';
 
 const makeFile = () => new File([new Uint8Array([1, 2, 3])], 'ref.png', { type: 'image/png' });
 
@@ -37,10 +37,33 @@ describe('uploadReferenceFile', () => {
     });
   });
 
+  it('keeps the library asset id the upload registered, so the reference stays traceable', async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const updateNodeData = mock((_id: string, data: Record<string, unknown>) => {
+      updates.push(data);
+    });
+    const uploadAsset = mock(async () => ({
+      assetId: 'asset-1',
+      storagePath: 'brand/asset-1/ref.png',
+      signedUrl: 'https://x.supabase.co/sign/ref.png?token=t',
+    }));
+
+    await uploadReferenceFile(
+      { nodeId: 'n1', file: makeFile(), brandId: 'brand-1', field: 'image' },
+      { updateNodeData, uploadAsset },
+    );
+
+    expect(updates[1].assetId).toBe('asset-1');
+  });
+
   it('sets the video field when field is video', async () => {
     const updates: Array<Record<string, unknown>> = [];
     const updateNodeData = mock((_id: string, data: Record<string, unknown>) => updates.push(data));
-    const uploadAsset = mock(async () => ({ assetId: 'a', storagePath: 'p/v.mp4', signedUrl: 'https://x/v.mp4?t=1' }));
+    const uploadAsset = mock(async () => ({
+      assetId: 'a',
+      storagePath: 'p/v.mp4',
+      signedUrl: 'https://x/v.mp4?t=1',
+    }));
 
     await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'b', field: 'video' },
@@ -64,6 +87,9 @@ describe('uploadReferenceFile', () => {
 
     expect(result).toBeNull();
     expect(updates[0]).toEqual({ referenceStatus: 'processing', referenceError: undefined });
-    expect(updates[1]).toEqual({ referenceStatus: 'error', referenceError: 'File exceeds 50 MB limit' });
+    expect(updates[1]).toEqual({
+      referenceStatus: 'error',
+      referenceError: 'File exceeds 50 MB limit',
+    });
   });
 });

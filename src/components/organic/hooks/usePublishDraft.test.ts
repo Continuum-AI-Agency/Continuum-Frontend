@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
+
 const showMock = vi.fn();
 const updateDraftMock = vi.fn();
 
@@ -12,19 +14,20 @@ vi.mock('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: showMock }),
 }));
 
-vi.mock('@/lib/organic/store', () => ({
-  useCalendarStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      updateDraft: updateDraftMock,
-      accountContext: {
-        accountIds: {
-          instagram: '17841400008460056',
-          linkedin: 'urn:li:organization:2414183',
-        },
-        brandId: '32841a24-9e31-480c-8a3a-7ebc3cde0569',
+// mock.module/vi.mock is process-wide: the shared stub answers keys this file does not
+// name with a no-op, so sibling specs' hooks never receive `undefined` for a selector.
+vi.mock('@/lib/organic/store', () =>
+  createCalendarStoreStub({
+    updateDraft: updateDraftMock,
+    accountContext: {
+      accountIds: {
+        instagram: '17841400008460056',
+        linkedin: 'urn:li:organization:2414183',
       },
-    }),
-}));
+      brandId: '32841a24-9e31-480c-8a3a-7ebc3cde0569',
+    },
+  }),
+);
 
 import { usePublishDraft } from './usePublishDraft';
 

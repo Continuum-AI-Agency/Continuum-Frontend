@@ -972,6 +972,44 @@ body {
   }
 }
 
+/* Scroll utilities required by ui/message-scroller.tsx. Upstream shadcn ships these in its own
+   globals.css; we define them here rather than let the CLI rewrite this file. */
+
+@utility scroll-fade-b {
+  mask-image: linear-gradient(to bottom, black calc(100% - 2rem), transparent 100%);
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: var(--border);
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Legacy mirror-highlight classes kept inert so any residual mark markup
    does not wash tokens. Mentions render as inline chips instead. */
 .mention-token,

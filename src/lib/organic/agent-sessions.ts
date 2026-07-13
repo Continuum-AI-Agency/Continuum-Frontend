@@ -1,19 +1,19 @@
 import {
-  organicChatMessageDtoSchema,
-  organicChatSessionDtoSchema,
-  persistedOrganicFrameSchema,
   type OrganicChatMessageDto,
   type OrganicChatSessionDto,
+  organicChatMessageDtoSchema,
+  organicChatSessionDtoSchema,
   type PersistedOrganicFrame,
-} from "@continuum/contracts";
-import { request } from "@/lib/api/http";
-import { agentMentionMetadataSchema, type AgentMentionMetadata } from "@/lib/agent-references";
+  persistedOrganicFrameSchema,
+} from '@continuum/contracts';
+import { type AgentMentionMetadata, agentMentionMetadataSchema } from '@/lib/agent-references';
+import { request } from '@/lib/api/http';
 
 export type OrganicSession = {
   sessionId: string;
   brandId: string | null;
   title: string | null;
-  lastMessageRole: "user" | "assistant" | null;
+  lastMessageRole: 'user' | 'assistant' | null;
   lastMessagePreview: string | null;
   lastMessageAt: string | null;
   createdAt: string;
@@ -23,7 +23,7 @@ export type OrganicSession = {
 export type OrganicSessionMessage = {
   id: string;
   sessionId: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   metadata?: AgentMentionMetadata;
   /** Persisted card frames stored with the message; replayed on load. */
@@ -33,7 +33,10 @@ export type OrganicSessionMessage = {
 
 const MESSAGE_CACHE_TTL_MS = 60_000;
 
-const messageCache = new Map<string, { messages: OrganicSessionMessage[]; fetchedAt: number }>();
+const messageCache = new Map<
+  string,
+  { messages: OrganicSessionMessage[]; nextCursor: string | null; fetchedAt: number }
+>();
 
 let pendingMessageFetch: AbortController | null = null;
 
@@ -49,20 +52,20 @@ export function invalidateMessageCache(sessionId: string): void {
 
 function extractSessions(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
-  if (raw !== null && typeof raw === "object") {
+  if (raw !== null && typeof raw === 'object') {
     const obj = raw as Record<string, unknown>;
-    if (Array.isArray(obj["sessions"])) return obj["sessions"];
-    if (Array.isArray(obj["data"])) return obj["data"];
+    if (Array.isArray(obj['sessions'])) return obj['sessions'];
+    if (Array.isArray(obj['data'])) return obj['data'];
   }
   return [];
 }
 
 function extractMessages(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
-  if (raw !== null && typeof raw === "object") {
+  if (raw !== null && typeof raw === 'object') {
     const obj = raw as Record<string, unknown>;
-    if (Array.isArray(obj["messages"])) return obj["messages"];
-    if (Array.isArray(obj["data"])) return obj["data"];
+    if (Array.isArray(obj['messages'])) return obj['messages'];
+    if (Array.isArray(obj['data'])) return obj['data'];
   }
   return [];
 }
@@ -101,7 +104,7 @@ function toPersistedFrames(uiCards: unknown[] | undefined): PersistedOrganicFram
 function mapMessage(
   row: OrganicChatMessageDto,
   index: number,
-  sessionId: string
+  sessionId: string,
 ): OrganicSessionMessage {
   return {
     id: row.id != null ? String(row.id) : `${sessionId}:msg:${index}`,
@@ -110,13 +113,11 @@ function mapMessage(
     content: row.content,
     metadata: narrowMetadata(row.metadata),
     uiCardFrames: toPersistedFrames(row.uiCards),
-    createdAt: row.createdAt ?? "",
+    createdAt: row.createdAt ?? '',
   };
 }
 
-export async function fetchOrganicSessions(
-  brandId: string
-): Promise<OrganicSession[]> {
+export async function fetchOrganicSessions(brandId: string): Promise<OrganicSession[]> {
   try {
     const raw = await request({
       path: `/api/organic/agent/sessions?brand_id=${encodeURIComponent(brandId)}`,
@@ -126,40 +127,79 @@ export async function fetchOrganicSessions(
       .filter((result) => result.success)
       .map((result) => mapSession(result.data));
   } catch (error) {
-    console.error("[fetchOrganicSessions] failed:", error);
+    console.error('[fetchOrganicSessions] failed:', error);
     return [];
   }
 }
 
-export async function fetchOrganicSessionMessages(
+export type OrganicMessagePage = {
+  messages: OrganicSessionMessage[];
+  /** Cursor for the next OLDER page, or null when the transcript is fully loaded. */
+  nextCursor: string | null;
+};
+
+function extractNextCursor(raw: unknown): string | null {
+  if (raw === null || typeof raw !== 'object') return null;
+  const cursor = (raw as Record<string, unknown>)['nextCursor'];
+  return typeof cursor === 'string' ? cursor : null;
+}
+
+/**
+ * Fetches one page of a session's transcript, newest page first. Pass `before` (the cursor from a
+ * previous page) to walk backwards through older messages. Only the first page is cached and only
+ * the first page aborts an in-flight fetch — a "load earlier" request must not cancel it.
+ */
+export async function fetchOrganicSessionMessagePage(
   sessionId: string,
-  brandId: string
-): Promise<OrganicSessionMessage[]> {
-  const cached = messageCache.get(sessionId);
-  if (cached && Date.now() - cached.fetchedAt < MESSAGE_CACHE_TTL_MS) {
-    return cached.messages;
+  brandId: string,
+  before?: string,
+): Promise<OrganicMessagePage> {
+  const isFirstPage = !before;
+
+  if (isFirstPage) {
+    const cached = messageCache.get(sessionId);
+    if (cached && Date.now() - cached.fetchedAt < MESSAGE_CACHE_TTL_MS) {
+      return { messages: cached.messages, nextCursor: cached.nextCursor };
+    }
+    pendingMessageFetch?.abort();
   }
 
-  pendingMessageFetch?.abort();
   const controller = new AbortController();
-  pendingMessageFetch = controller;
+  if (isFirstPage) pendingMessageFetch = controller;
+
+  const query = new URLSearchParams({ brand_id: brandId });
+  if (before) query.set('before', before);
 
   try {
     const raw = await request({
-      path: `/api/organic/agent/sessions/${encodeURIComponent(sessionId)}/messages?brand_id=${encodeURIComponent(brandId)}`,
+      path: `/api/organic/agent/sessions/${encodeURIComponent(sessionId)}/messages?${query.toString()}`,
       signal: controller.signal,
     });
     const messages = extractMessages(raw)
       .map((row) => organicChatMessageDtoSchema.safeParse(row))
       .filter((result) => result.success)
       .map((result, index) => mapMessage(result.data, index, sessionId));
-    messageCache.set(sessionId, { messages, fetchedAt: Date.now() });
-    return messages;
+    const nextCursor = extractNextCursor(raw);
+
+    if (isFirstPage) {
+      messageCache.set(sessionId, { messages, nextCursor, fetchedAt: Date.now() });
+    }
+    return { messages, nextCursor };
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") return [];
-    console.error("[fetchOrganicSessionMessages] failed:", error);
-    return [];
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { messages: [], nextCursor: null };
+    }
+    console.error('[fetchOrganicSessionMessagePage] failed:', error);
+    return { messages: [], nextCursor: null };
   }
+}
+
+export async function fetchOrganicSessionMessages(
+  sessionId: string,
+  brandId: string,
+): Promise<OrganicSessionMessage[]> {
+  const { messages } = await fetchOrganicSessionMessagePage(sessionId, brandId);
+  return messages;
 }
 
 /**
@@ -170,7 +210,7 @@ export async function fetchOrganicSessionMessages(
 export async function deleteOrganicSession(sessionId: string, brandId: string): Promise<void> {
   await request({
     path: `/api/organic/agent/sessions/${encodeURIComponent(sessionId)}?brand_id=${encodeURIComponent(brandId)}`,
-    method: "DELETE",
+    method: 'DELETE',
   });
   invalidateMessageCache(sessionId);
 }

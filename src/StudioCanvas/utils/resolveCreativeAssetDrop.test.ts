@@ -1,7 +1,11 @@
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import { resolveCreativeAssetDrop } from './resolveCreativeAssetDrop';
 
-const resolver = mock(async () => ({ base64: 'resolved_base64', sourceName: 'asset.png', byteLength: 16 }));
+const resolver = mock(async () => ({
+  base64: 'resolved_base64',
+  sourceName: 'asset.png',
+  byteLength: 16,
+}));
 
 describe('resolveCreativeAssetDrop', () => {
   it('returns image success for data-url payloads', async () => {
@@ -27,7 +31,11 @@ describe('resolveCreativeAssetDrop', () => {
   });
 
   it('resolves remote creative asset payloads', async () => {
-    const payload = JSON.stringify({ name: 'asset.png', path: 'brand/asset.png', contentType: 'image/png' });
+    const payload = JSON.stringify({
+      name: 'asset.png',
+      path: 'brand/asset.png',
+      contentType: 'image/png',
+    });
     const result = await resolveCreativeAssetDrop(payload, resolver);
 
     expect(result.status).toBe('success');
@@ -64,6 +72,9 @@ describe('resolveCreativeAssetDrop', () => {
       expect(result.sourcePath).toBe('brand/asset.png');
       expect(result.bucket).toBe('media-library');
       expect(result.sourceUrl).toBe('https://fresh.example/asset.png');
+      // Carries the Library asset id, so anything generated from this reference can
+      // be traced back to the asset that fed it.
+      expect(result.assetId).toBe('asset-1');
     }
   });
 

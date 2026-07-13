@@ -1,732 +1,127 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
-import { renderHook, act } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { act, renderHook } from '@testing-library/react';
+import * as React from 'react';
 
-import { useDraftGeneration, mapWeeklyGridToCalendarPlacements } from "./useDraftGeneration";
-import { useCalendarStore } from "@/lib/organic/store";
-import { streamCalendarGeneration } from "../primitives/organic-calendar-api";
-import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation";
+import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+import { useDraftGeneration } from './useDraftGeneration';
 
-mock.module("@/lib/organic/store", () => ({
-  useCalendarStore: mock(),
-}));
+// Deliberately no mock.module: it is process-wide in bun, so mocking the store or the
+// ladder client here would clobber sibling specs (and be clobbered by them, depending on
+// load order). Stubbing fetch is per-file and exercises the real ladder client end to end.
+//
+// Consequently these tests assert the OBSERVABLE contract — which request goes out, and
+// when none does — rather than the store writes, which the store's own spec covers.
+const originalFetch = globalThis.fetch;
 
-mock.module("../primitives/organic-calendar-api", () => ({
-  streamCalendarGeneration: mock(),
-}));
+type FetchCall = { url: string; body: Record<string, unknown> };
+let calls: FetchCall[] = [];
+let respond: () => Response;
 
-mock.module("@/lib/supabase/client", () => ({
-  createSupabaseBrowserClient: () => ({
-    auth: {
-      getSession: mock().mockResolvedValue({ data: { session: { access_token: "test-token" } } }),
-    },
-  }),
-}));
+const okResponse = () =>
+  new Response(
+    JSON.stringify({
+      status: 'queued',
+      stage: 'generate_copy',
+      draftId: '11111111-1111-4111-8111-111111111111',
+      jobId: 'job-1',
+      mediaStage: 'text_only',
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
 
-describe("useDraftGeneration", () => {
-  type HookProps = Parameters<typeof useDraftGeneration>[0];
+const BRAND_ID = 'brand-1';
 
-  const mockStore = {
-    gridStatus: "idle",
-    setGridStatus: mock(),
-    setGridProgress: mock(),
-    setGridError: mock(),
-    addDraft: mock(),
-    bulkDeleteDrafts: mock(),
-    updateDraft: mock(),
-    setGhosts: mock(),
-    addEvent: mock(),
-    setDays: mock(),
-    setUnscheduledDrafts: mock(),
-  };
+const draft = (over: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft =>
+  ({
+    id: 'fe-1',
+    backendDraftId: 'be-1',
+    status: 'draft',
+    mediaCount: 0,
+    platforms: ['instagram'],
+    ...over,
+  }) as unknown as OrganicCalendarDraft;
 
-  const defaultProps: HookProps = {
-    brandProfileId: "brand-123",
-    calendarDays: [
-      {
-        id: "2026-01-26",
-        label: "Mon",
-        dateLabel: "Jan 26",
-        suggestedTimes: ["9:00 AM", "1:00 PM"],
-        slots: [
-          {
-            id: "seed-1",
-            title: "Seeded topic",
-            summary: "Ready",
-            timeLabel: "9:00 AM",
-            dateLabel: "Mon, Jan 26",
-            status: "placeholder",
-            platforms: ["instagram"],
-            format: "Post",
-            objective: "Generation Seed",
-            captionPreview: "Generate me",
-            tags: [],
-            mediaCount: 1,
-            seedTrendId: "trend-1",
-          },
-        ],
-      },
-    ],
-    drafts: [
-      {
-        id: "seed-1",
-        title: "Seeded topic",
-        summary: "Ready",
-        timeLabel: "9:00 AM",
-        dateLabel: "Mon, Jan 26",
-        status: "placeholder",
-        platforms: ["instagram"],
-        format: "Post",
-        objective: "Generation Seed",
-        captionPreview: "Generate me",
-        tags: [],
-        mediaCount: 1,
-        seedTrendId: "trend-1",
-      },
-    ],
-    selectedTrendIds: ["trend-1"],
-    platformAccountIds: { instagram: "acc-123" },
-    activePlatforms: ["instagram"],
-    weekStartId: "2026-01-26",
-  };
+const wrapper = ({ children }: { children: React.ReactNode }) =>
+  React.createElement(ToastProvider, null, children);
 
-  beforeEach(() => {
-    mock.restore();
-    Object.values(mockStore).forEach((value) => {
-      if (typeof value === "function" && "mockClear" in value) {
-        (value as ReturnType<typeof mock>).mockClear();
-      }
-    });
-    mockStore.gridStatus = "idle";
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockClear();
-    (useCalendarStore as unknown as ReturnType<typeof mock>).mockImplementation(
-      (selector?: (state: typeof mockStore) => unknown) =>
-        selector ? selector(mockStore) : mockStore
-    );
-  });
+// Takes the full props object: a `= BRAND_ID` default would still apply when a test
+// passes `undefined` explicitly, quietly defeating the no-brand case.
+const hookFor = (
+  drafts: OrganicCalendarDraft[],
+  props: { brandProfileId?: string } = { brandProfileId: BRAND_ID },
+) =>
+  renderHook(() => useDraftGeneration({ brandProfileId: props.brandProfileId, drafts }), {
+    wrapper,
+  }).result.current;
 
-  afterEach(() => {
-    mock.restore();
-  });
-
-  it("handles generation success flow", async () => {
-    const { result } = renderHook(() => useDraftGeneration(defaultProps));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({ type: "progress", completed: 1, total: 2, message: "Drafting..." });
-        onEvent({ type: "slot_started", placementId: "p1", message: "Building post..." });
-        onEvent({
-          type: "slot_completed",
-          placement: {
-            placementId: "p1",
-            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00Z" },
-            platform: { name: "instagram" },
-            content: { titleTopic: "Test Title", format: "Post" },
-            creative: { creativeIdea: "Test Idea" },
-            copy: { caption: "Test Caption", hashtags: { high: ["#test"] } },
-          },
-        });
-        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.setGridStatus).toHaveBeenCalledWith("running");
-    expect(mockStore.setGridProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ percent: 10 })
-    );
-    expect(mockStore.addDraft).toHaveBeenCalledWith(
-      "2026-01-26",
-      expect.objectContaining({
-        id: "seed-1",
-        title: "Test Title",
-        captionPreview: "Test Caption\n\n#test",
-      })
-    );
-    expect(mockStore.setGridStatus).toHaveBeenCalledWith("complete");
-  });
-
-  it("replaces seeded draft in place when backend emits a new placement id", async () => {
-    const { result } = renderHook(() => useDraftGeneration(defaultProps));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({
-          type: "slot_completed",
-          placement: {
-            placementId: "draft-remote-1",
-            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00.000Z" },
-            platform: { name: "instagram" },
-            seed: { source: "trend", trendId: "trend-1" },
-            content: { titleTopic: "Generated Title", format: "Post" },
-            creative: {
-              creativeIdea: "Generated idea",
-              mediaSuggestion: {
-                kind: "carousel",
-                assetUrl: "https://signed/img.png",
-                generationContext: {
-                  sourceAgent: "asset_producer",
-                  strategist: {
-                    objective: "Engagement",
-                    funnelStage: "middle",
-                    targetAudience: "Families",
-                  },
-                  creativeDirection: {
-                    conceptTitle: "Family-first dinner",
-                    storyHook: "Dinner together",
-                    visualMode: "carousel",
-                    productionNotes: ["Use warm tones"],
-                  },
-                },
-              },
-            },
-            copy: { caption: "Generated caption" },
-          },
-        });
-        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.bulkDeleteDrafts).toHaveBeenCalledWith(["seed-1", "draft-remote-1"]);
-    expect(mockStore.addDraft).toHaveBeenCalledWith(
-      "2026-01-26",
-      expect.objectContaining({
-        id: "seed-1",
-        title: "Generated Title",
-        mediaSuggestion: expect.objectContaining({
-          assetUrl: "https://signed/img.png",
-          generationContext: expect.objectContaining({
-            strategist: expect.objectContaining({
-              funnelStage: "middle",
-              targetAudience: "Families",
-            }),
-            creativeDirection: expect.objectContaining({
-              conceptTitle: "Family-first dinner",
-              storyHook: "Dinner together",
-            }),
-          }),
-        }),
-      })
-    );
-  });
-
-  it("carries durable publishingAssets (storage-first, no base64) through to the draft", async () => {
-    const { result } = renderHook(() => useDraftGeneration(defaultProps));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({
-          type: "slot_completed",
-          placement: {
-            placementId: "draft-remote-2",
-            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00.000Z" },
-            platform: { name: "instagram" },
-            seed: { source: "trend", trendId: "trend-1" },
-            content: { titleTopic: "Carousel Title", format: "Carousel" },
-            creative: {
-              creativeIdea: "Carousel idea",
-              mediaSuggestion: { kind: "carousel", assetUrl: "https://signed/slide1.png" },
-            },
-            publishingAssets: [
-              { role: "slide_1", kind: "image", slideIndex: 1, assetId: "asset-1", bucket: "brand-profile-assets", storagePath: "b/p/1.png", storageUrl: "https://signed/slide1.png" },
-              { role: "slide_2", kind: "image", slideIndex: 2, assetId: "asset-2", bucket: "brand-profile-assets", storagePath: "b/p/2.png", storageUrl: "https://signed/slide2.png" },
-            ],
-            copy: { caption: "Generated caption" },
-          },
-        });
-        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.addDraft).toHaveBeenCalledWith(
-      "2026-01-26",
-      expect.objectContaining({
-        id: "seed-1",
-        publishingAssets: expect.arrayContaining([
-          expect.objectContaining({ role: "slide_1", assetId: "asset-1", storageUrl: "https://signed/slide1.png" }),
-          expect.objectContaining({ role: "slide_2", assetId: "asset-2", storageUrl: "https://signed/slide2.png" }),
-        ]),
-      })
-    );
-  });
-
-  it("sends all placeholder slots in the request payload", async () => {
-    const props: HookProps = {
-      ...defaultProps,
-      calendarDays: [
-        {
-          id: "2026-01-26",
-          label: "Mon",
-          dateLabel: "Jan 26",
-          suggestedTimes: ["9:00 AM", "1:00 PM"],
-          slots: [
-            {
-              id: "seed-1",
-              title: "Seed 1",
-              summary: "Ready",
-              timeLabel: "9:00 AM",
-              dateLabel: "Mon, Jan 26",
-              status: "placeholder",
-              platforms: ["instagram"],
-              format: "Post",
-              objective: "Generation Seed",
-              captionPreview: "Generate me",
-              tags: [],
-              mediaCount: 1,
-              seedTrendId: "trend-1",
-            },
-            {
-              id: "already-generated",
-              title: "Existing",
-              summary: "Done",
-              timeLabel: "1:00 PM",
-              dateLabel: "Mon, Jan 26",
-              status: "draft",
-              platforms: ["instagram"],
-              format: "Post",
-              objective: "Awareness",
-              captionPreview: "Already generated",
-              tags: [],
-              mediaCount: 1,
-            },
-          ],
-        },
-        {
-          id: "2026-01-27",
-          label: "Tue",
-          dateLabel: "Jan 27",
-          suggestedTimes: ["9:00 AM", "1:00 PM"],
-          slots: [
-            {
-              id: "seed-2",
-              title: "Seed 2",
-              summary: "Ready",
-              timeLabel: "1:00 PM",
-              dateLabel: "Tue, Jan 27",
-              status: "placeholder",
-              platforms: ["instagram"],
-              format: "Carousel",
-              objective: "Generation Seed",
-              captionPreview: "Generate me too",
-              tags: [],
-              mediaCount: 1,
-              seedTrendId: "trend-2",
-            },
-          ],
-        },
-      ],
-      drafts: [
-        ...defaultProps.drafts,
-        {
-          id: "seed-2",
-          title: "Seed 2",
-          summary: "Ready",
-          timeLabel: "1:00 PM",
-          dateLabel: "Tue, Jan 27",
-          status: "placeholder",
-          platforms: ["instagram"],
-          format: "Carousel",
-          objective: "Generation Seed",
-          captionPreview: "Generate me too",
-          tags: [],
-          mediaCount: 1,
-          seedTrendId: "trend-2",
-        },
-      ],
-      selectedTrendIds: ["trend-1", "trend-2"],
-    };
-
-    const { result } = renderHook(() => useDraftGeneration(props));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({ type: "complete", summary: { total: 2, succeeded: 2, failed: 0 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mock.calls;
-    expect(streamCalls).toHaveLength(1);
-    const firstPayload = streamCalls[0][0] as { placements: Array<{ placementId: string }> };
-    expect(firstPayload.placements).toHaveLength(2);
-    expect(firstPayload.placements.map((placement) => placement.placementId).sort()).toEqual([
-      "seed-1",
-      "seed-2",
-    ]);
-  });
-
-  it("sends creative direction and thumbnail metadata with each placeholder", async () => {
-    const props: HookProps = {
-      ...defaultProps,
-      calendarDays: [
-        {
-          id: "2026-01-26",
-          label: "Mon",
-          dateLabel: "Jan 26",
-          suggestedTimes: ["9:00 AM", "1:00 PM"],
-          slots: [
-            {
-              id: "seed-meta",
-              title: "Seeded topic",
-              summary: "Ready",
-              timeLabel: "9:00 AM",
-              dateLabel: "Mon, Jan 26",
-              status: "placeholder",
-              platforms: ["instagram"],
-              format: "Post",
-              objective: "Generation Seed",
-              captionPreview: "Generate me",
-              tags: [],
-              mediaCount: 1,
-              seedTrendId: "trend-1",
-              creativeDirectionPrompt: "Use a bright, playful opener",
-              thumbnailPrompt: "Minimal white product shot",
-            },
-          ],
-        },
-      ],
-      drafts: [
-        {
-          id: "seed-meta",
-          title: "Seeded topic",
-          summary: "Ready",
-          timeLabel: "9:00 AM",
-          dateLabel: "Mon, Jan 26",
-          status: "placeholder",
-          platforms: ["instagram"],
-          format: "Post",
-          objective: "Generation Seed",
-          captionPreview: "Generate me",
-          tags: [],
-          mediaCount: 1,
-          seedTrendId: "trend-1",
-          creativeDirectionPrompt: "Use a bright, playful opener",
-          thumbnailPrompt: "Minimal white product shot",
-        },
-      ],
-      selectedTrendIds: ["trend-1"],
-    };
-
-    const { result } = renderHook(() => useDraftGeneration(props));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mock.calls;
-    expect(streamCalls).toHaveLength(1);
-    const firstPayload = streamCalls[0][0] as {
-      placements: Array<{ placementId: string; metadata?: Record<string, string> }>;
-    };
-    expect(firstPayload.placements[0]?.metadata).toMatchObject({
-      creativeDirectionPrompt: "Use a bright, playful opener",
-      thumbnailPrompt: "Minimal white product shot",
-    });
-  });
-
-  it("does not auto-sort when no trends are selected", () => {
-    const props: HookProps = {
-      ...defaultProps,
-      selectedTrendIds: [],
-    };
-    const { result } = renderHook(() => useDraftGeneration(props));
-
-    result.current.handleAutoSort();
-
-    expect(mockStore.addDraft).not.toHaveBeenCalled();
-  });
-
-  it("handles generation error flow", async () => {
-    const { result } = renderHook(() => useDraftGeneration(defaultProps));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockRejectedValue(
-      new Error("API Error")
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.setGridStatus).toHaveBeenCalledWith("error");
-    expect(mockStore.setGridError).toHaveBeenCalledWith("API Error");
-  });
-
-  it("validates missing brand profile", async () => {
-    const props: HookProps = { ...defaultProps, brandProfileId: undefined };
-    const { result } = renderHook(() => useDraftGeneration(props));
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.setGridStatus).toHaveBeenCalledWith("error");
-    expect(mockStore.setGridError).toHaveBeenCalledWith(
-      expect.stringContaining("Missing brand context")
-    );
-    expect(streamCalendarGeneration).not.toHaveBeenCalled();
-  });
-
-  it("marks failed placements and keeps run as complete_with_errors", async () => {
-    const props: HookProps = {
-      ...defaultProps,
-      calendarDays: [
-        {
-          id: "2026-01-26",
-          label: "Mon",
-          dateLabel: "Jan 26",
-          suggestedTimes: ["9:00 AM", "1:00 PM"],
-          slots: [
-            {
-              id: "seed-1",
-              title: "Seeded topic",
-              summary: "Ready",
-              timeLabel: "9:00 AM",
-              dateLabel: "Mon, Jan 26",
-              status: "placeholder",
-              platforms: ["instagram"],
-              format: "Post",
-              objective: "Generation Seed",
-              captionPreview: "Generate me",
-              tags: [],
-              mediaCount: 1,
-              seedTrendId: "trend-1",
-            },
-          ],
-        },
-      ],
-      drafts: [
-        {
-          id: "seed-1",
-          title: "Seeded topic",
-          summary: "Ready",
-          timeLabel: "9:00 AM",
-          dateLabel: "Mon, Jan 26",
-          status: "placeholder",
-          platforms: ["instagram"],
-          format: "Post",
-          objective: "Generation Seed",
-          captionPreview: "Generate me",
-          tags: [],
-          mediaCount: 1,
-          seedTrendId: "trend-1",
-        },
-      ],
-      selectedTrendIds: ["trend-1"],
-    };
-    const { result } = renderHook(() => useDraftGeneration(props));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({
-          type: "slot_failed",
-          placementId: "seed-1",
-          message: "Trend not found",
-          retryable: true,
-          attempts: 1,
-        });
-        onEvent({ type: "complete", summary: { total: 1, succeeded: 0, failed: 1 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.updateDraft).toHaveBeenCalled();
-    expect(mockStore.setGridStatus).toHaveBeenCalledWith("complete_with_errors");
-  });
-
-  it("captures persistedDraftId from slot_completed and sets backendDraftId", async () => {
-    const { result } = renderHook(() => useDraftGeneration(defaultProps));
-
-    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
-      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
-        onEvent({
-          type: "slot_completed",
-          placement: {
-            placementId: "seed-1",
-            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00Z" },
-            platform: { name: "instagram" },
-            content: { titleTopic: "Backend ID Test", format: "Post" },
-            creative: {},
-            copy: { caption: "Caption" },
-          },
-          persistedDraftId: "supabase-uuid-abc-123",
-        });
-        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
-      }
-    );
-
-    await act(async () => {
-      await result.current.handleGenerateDrafts();
-    });
-
-    expect(mockStore.addDraft).toHaveBeenCalledWith(
-      "2026-01-26",
-      expect.objectContaining({
-        backendDraftId: "supabase-uuid-abc-123",
-      })
-    );
-  });
+beforeEach(() => {
+  calls = [];
+  respond = () => okResponse();
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) });
+    return respond();
+  }) as typeof fetch;
 });
 
-describe("mapWeeklyGridToCalendarPlacements", () => {
-  it("maps weekly grid rows to day slots with platform rotation", () => {
-    const placements = mapWeeklyGridToCalendarPlacements({
-      weeklyGrid: {
-        grid: [
-          {
-            day: "Monday",
-            type: "Post",
-            format: "Reel",
-            tone: "Educational",
-            title_topic: "Trend A",
-            objective: "Awareness",
-            target: "Founders",
-            cta: "Comment below",
-            num_slides: 1,
-          },
-          {
-            day: "Monday",
-            type: "Post",
-            format: "Carousel",
-            tone: "Confident",
-            title_topic: "Trend B",
-            objective: "Engagement",
-            target: "Marketers",
-            cta: "Share this",
-            num_slides: 3,
-          },
-        ],
-      },
-      calendarDays: [
-        {
-          id: "2026-01-26",
-          label: "Mon",
-          dateLabel: "Jan 26",
-          suggestedTimes: ["9:00 AM", "1:00 PM"],
-          slots: [],
-        },
-      ],
-      selectedTrendIds: ["trend-1", "trend-2"],
-      activePlatforms: ["instagram", "linkedin"],
-      platformAccountIds: {
-        instagram: "ig-1",
-        linkedin: "li-1",
-      },
-    });
-
-    expect(placements).toHaveLength(2);
-    expect(placements[0]).toEqual(
-      expect.objectContaining({
-        dayId: "2026-01-26",
-        draft: expect.objectContaining({
-          timeLabel: "9:00 AM",
-          platforms: ["instagram"],
-          seedTrendId: "trend-1",
-        }),
-      })
-    );
-    expect(placements[1]).toEqual(
-      expect.objectContaining({
-        dayId: "2026-01-26",
-        draft: expect.objectContaining({
-          timeLabel: "1:00 PM",
-          platforms: ["linkedin"],
-          seedTrendId: "trend-2",
-        }),
-      })
-    );
-  });
+afterEach(() => {
+  globalThis.fetch = originalFetch;
 });
 
-describe("mapWeeklyGridToCalendarPlacements", () => {
-  it("maps weekly grid rows to day slots with platform rotation", () => {
-    const placements = mapWeeklyGridToCalendarPlacements({
-      weeklyGrid: {
-        grid: [
-          {
-            day: "Monday",
-            type: "Post",
-            format: "Reel",
-            tone: "Educational",
-            title_topic: "Trend A",
-            objective: "Awareness",
-            target: "Founders",
-            cta: "Comment below",
-            num_slides: 1,
-          },
-          {
-            day: "Monday",
-            type: "Post",
-            format: "Carousel",
-            tone: "Confident",
-            title_topic: "Trend B",
-            objective: "Engagement",
-            target: "Marketers",
-            cta: "Share this",
-            num_slides: 3,
-          },
-        ],
-      },
-      calendarDays: [
-        {
-          id: "2026-01-26",
-          label: "Mon",
-          dateLabel: "Jan 26",
-          suggestedTimes: ["9:00 AM", "1:00 PM"],
-          slots: [],
-        },
-      ],
-      selectedTrendIds: ["trend-1", "trend-2"],
-      activePlatforms: ["instagram", "facebook", "linkedin"],
-      platformAccountIds: {
-        instagram: "ig-1",
-        facebook: "fb-1",
-        linkedin: "li-1",
-      },
-    });
+describe('handleRegenerate', () => {
+  it('rewrites copy through the ladder with the destructive regenerate flag', async () => {
+    const hook = hookFor([draft()]);
 
-    expect(placements).toHaveLength(2);
-    expect(placements[0]).toEqual(
-      expect.objectContaining({
-        dayId: "2026-01-26",
-        draft: expect.objectContaining({
-          timeLabel: "9:00 AM",
-          platforms: ["instagram"],
-          seedTrendId: "trend-1",
-        }),
-      })
-    );
-    expect(placements[1]).toEqual(
-      expect.objectContaining({
-        dayId: "2026-01-26",
-        draft: expect.objectContaining({
-          timeLabel: "1:00 PM",
-          platforms: ["linkedin"],
-          seedTrendId: "trend-2",
-        }),
-      })
-    );
+    await act(async () => hook.handleRegenerate('fe-1'));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain('/api/organic/agent/drafts/be-1/generate-copy');
+    expect(calls[0].body).toEqual({ brandId: BRAND_ID, regenerate: true });
+  });
+
+  // The old batch path early-returned unless the draft carried a seedTrendId, so a
+  // manual draft could never be regenerated. It can now.
+  it('regenerates a manual draft that has no seed trend', async () => {
+    const hook = hookFor([draft({ seedTrendId: undefined, origin: 'manual' })]);
+
+    await act(async () => hook.handleRegenerate('fe-1'));
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it('refuses to regenerate a draft that has not been persisted yet', async () => {
+    const hook = hookFor([draft({ backendDraftId: undefined })]);
+
+    await act(async () => hook.handleRegenerate('fe-1'));
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('refuses to regenerate without a brand', async () => {
+    const hook = hookFor([draft()], {});
+
+    await act(async () => hook.handleRegenerate('fe-1'));
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('ignores an unknown draft id', async () => {
+    const hook = hookFor([draft()]);
+
+    await act(async () => hook.handleRegenerate('missing'));
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('swallows a Backend rejection instead of throwing at the call site', async () => {
+    respond = () =>
+      new Response(JSON.stringify({ code: 'already_realized', message: 'media is realized' }), {
+        status: 409,
+      });
+    const hook = hookFor([draft()]);
+
+    await act(async () => hook.handleRegenerate('fe-1'));
+
+    expect(calls).toHaveLength(1);
   });
 });

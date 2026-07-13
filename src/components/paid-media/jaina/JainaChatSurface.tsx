@@ -26,9 +26,6 @@ const AnimatedShaderBackground = dynamic(
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCampaignAI } from '@/CampaignCanvas/hooks/useCampaignAI';
-import type { Attachment } from '@/components/ai-elements/attachments';
-import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
-import { PromptInput } from '@/components/ai-elements/prompt-input';
 import {
   Queue,
   QueueItem,
@@ -43,6 +40,12 @@ import {
   QueueSectionTrigger,
 } from '@/components/ai-elements/queue';
 import { AutomationSheets } from '@/components/automations/AutomationSheets';
+import type { Attachment } from '@/components/chat/attachments';
+import { ChatMarker } from '@/components/chat/ChatMarker';
+import { ChatTranscript } from '@/components/chat/ChatTranscript';
+import { PromptInput } from '@/components/chat/prompt-input';
+import { useChatAttachments } from '@/components/chat/useChatAttachments';
+import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useJainaChatStream } from '@/hooks/useJainaChatStream';
@@ -85,6 +88,7 @@ import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
 import { JainaMessageItem } from './components/JainaMessageItem';
 import type { PlanFeedbackPayload } from './components/PlanSection';
+import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
 import {
   extractRenderableFallbackFromStructuredContent,
   getFinalThought,
@@ -1105,9 +1109,11 @@ export function JainaChatSurface({
     string | null
   >(null);
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
+  const attachments = useChatAttachments({ brandId: brandProfileId, sessionId });
   const pendingClarificationId = state.pendingClarification?.id;
 
   const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
+  const anchors = React.useMemo(() => deriveJainaAnchors(messages), [messages]);
   const [conversationSessions, setConversationSessions] = React.useState<
     JainaConversationSession[]
   >([]);
@@ -1431,7 +1437,7 @@ export function JainaChatSurface({
   }, [reportArtifactJob, show]);
 
   const fetchConversationHistory = React.useCallback(
-    async (targetSessionId?: string) => {
+    async (targetSessionId?: string, before?: string) => {
       if (!adAccountId) return null;
 
       const searchParams = new URLSearchParams({
@@ -1443,6 +1449,9 @@ export function JainaChatSurface({
 
       if (targetSessionId) {
         searchParams.set('sessionId', targetSessionId);
+      }
+      if (before) {
+        searchParams.set('before', before);
       }
 
       const response = await fetch(
@@ -1578,6 +1587,26 @@ export function JainaChatSurface({
     [adAccountId, brandProfileId, setConversationSessionsWithCache],
   );
 
+  const { hasEarlier, isLoadingEarlier, loadEarlier, setEarlierCursor } =
+    useEarlierHistory<JainaChatMessage>({
+      fetchPage: React.useCallback(
+        async (cursor: string) => {
+          const payload = await fetchConversationHistory(sessionId, cursor);
+          if (!payload) return null;
+          return {
+            items: (payload.messages ?? []).map((message) =>
+              mapConversationMessageToChatMessage(message, undefined),
+            ),
+            nextCursor: payload.nextCursor ?? null,
+          };
+        },
+        [fetchConversationHistory, sessionId],
+      ),
+      applyPage: React.useCallback((older: JainaChatMessage[]) => {
+        setMessages((current) => prependUnseen(current, older));
+      }, []),
+    });
+
   const loadConversationSession = React.useCallback(
     async (targetSessionId: string, options?: { silent?: boolean }) => {
       if (!adAccountId) return;
@@ -1616,6 +1645,7 @@ export function JainaChatSurface({
           mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
         );
         setMessages(mappedMessages);
+        setEarlierCursor(payload.nextCursor ?? null);
         setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
         void hydrateConversationMessagesFromRuns({
           targetSessionId,
@@ -2089,6 +2119,7 @@ export function JainaChatSurface({
           mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
         );
         setMessages(mappedMessages);
+        setEarlierCursor(conversationPayload.nextCursor ?? null);
         setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
         void hydrateConversationMessagesFromRuns({
           targetSessionId: mostRecentSessionId,
@@ -2185,7 +2216,7 @@ export function JainaChatSurface({
       query: string;
       canvas: boolean;
       clarificationId?: string;
-      images?: Array<{ url: string; name?: string }>;
+      images?: Array<{ url: string; name?: string; mediaType?: string }>;
       references?: AgentMentionReference[];
       planAction?: JainaPlanAction;
       forceReportArtifact?: boolean;
@@ -2225,13 +2256,20 @@ export function JainaChatSurface({
         return false;
       }
 
+      const hasReferences = Boolean(input.references?.length);
+      const hasAttachments = Boolean(input.images?.length);
       const userMessage: JainaChatMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
         content: query,
         createdAt: now,
-        ...(input.references && input.references.length > 0
-          ? { metadata: { references: input.references } }
+        ...(hasReferences || hasAttachments
+          ? {
+              metadata: {
+                references: input.references ?? [],
+                ...(hasAttachments ? { attachments: input.images } : {}),
+              },
+            }
           : {}),
       };
 
@@ -2350,8 +2388,8 @@ export function JainaChatSurface({
       if (!normalizedQuery) return;
 
       const images = attachments
-        ?.filter((a) => Boolean(a.url))
-        .map((a) => ({ url: a.url as string, name: a.name }));
+        ?.filter((a) => a.status === 'ready' && Boolean(a.url))
+        .map((a) => ({ url: a.url as string, name: a.name, mediaType: a.type }));
 
       const pendingPlanId = findPendingPlanId(messages);
 
@@ -2803,46 +2841,57 @@ export function JainaChatSurface({
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-hidden">
-            <Conversation>
-              <ConversationContent>
-                {isConversationSwitching ? <ConversationSkeleton /> : null}
+            <ChatTranscript
+              anchors={anchors}
+              isStreaming={Boolean(activeResponseId)}
+              hasEarlier={hasEarlier}
+              isLoadingEarlier={isLoadingEarlier}
+              onLoadEarlier={loadEarlier}
+            >
+              {isConversationSwitching ? <ConversationSkeleton /> : null}
 
-                {!isConversationSwitching && messages.length === 0 && (
-                  <JainaEmptyState
-                    adAccountId={adAccountId}
-                    onExampleClick={(q) => handleSubmit(q)}
-                  />
-                )}
+              {!isConversationSwitching && messages.length === 0 && (
+                <JainaEmptyState
+                  adAccountId={adAccountId}
+                  onExampleClick={(q) => handleSubmit(q)}
+                />
+              )}
 
-                <AnimatePresence mode="popLayout">
-                  {messages.map((message, index) => {
-                    const precedingUserMessage =
-                      message.role === 'assistant'
-                        ? [...messages]
-                            .slice(0, index)
-                            .reverse()
-                            .find((m) => m.role === 'user')
-                        : undefined;
-                    return (
-                      <JainaMessageItem
-                        key={message.id}
-                        message={message}
-                        activeResponseId={activeResponseId}
-                        state={state}
-                        onSuggestionClick={handleSubmit}
-                        onPlanFeedback={handlePlanFeedback}
-                        onFocusInput={handleFocusInput}
-                        onRegenerate={
-                          precedingUserMessage
-                            ? () => handleSubmit(precedingUserMessage.content)
-                            : undefined
-                        }
+              {messages.map((message, index) => {
+                const precedingUserMessage =
+                  message.role === 'assistant'
+                    ? [...messages]
+                        .slice(0, index)
+                        .reverse()
+                        .find((m) => m.role === 'user')
+                    : undefined;
+                return (
+                  <React.Fragment key={message.id}>
+                    <JainaMessageItem
+                      message={message}
+                      activeResponseId={activeResponseId}
+                      state={state}
+                      onSuggestionClick={handleSubmit}
+                      onPlanFeedback={handlePlanFeedback}
+                      onFocusInput={handleFocusInput}
+                      onRegenerate={
+                        precedingUserMessage
+                          ? () => handleSubmit(precedingUserMessage.content)
+                          : undefined
+                      }
+                    />
+                    {milestonesForJainaMessage(message).map((milestone) => (
+                      <ChatMarker
+                        key={milestone.id}
+                        id={milestone.id}
+                        kind="milestone"
+                        label={milestone.label}
                       />
-                    );
-                  })}
-                </AnimatePresence>
-              </ConversationContent>
-            </Conversation>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </ChatTranscript>
           </div>
 
           <div ref={promptInputWrapperRef} className="shrink-0">
@@ -2956,9 +3005,10 @@ export function JainaChatSurface({
 
               <div data-tour-id="paid-jaina-chat" className="w-full">
                 <PromptInput
-                  onSubmit={(value, attachments, references) =>
-                    handleSubmit(value, attachments, references)
+                  onSubmit={(value, submitted, references) =>
+                    handleSubmit(value, submitted, references)
                   }
+                  attachments={attachments}
                   disabled={isInputDisabled}
                   ariaLabel="Message Jaina"
                   mentionProvider={jainaMentionProvider}

@@ -1,23 +1,26 @@
-"use client";
+'use client';
 
 import {
-  mapBackendGenerationResponse,
-  mapBackendStatusMessage,
-  mapBackendStatusResponse,
-} from "@/lib/brand-insights/backend";
-import {
+  parseFrame,
+  type TrendsReadFrame,
+  trendsReadFrameSchema,
   trendsSseMessageDataSchema,
   trendsSseSnapshotDataSchema,
-} from "@continuum/contracts";
-
-import { getApiBaseUrl } from "@/lib/api/config";
-import { assertOk } from "@/lib/api/errors";
-import type { RequestOptions } from "@/lib/api/http.types";
+} from '@continuum/contracts';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { assertOk } from '@/lib/api/errors';
+import type { RequestOptions } from '@/lib/api/http.types';
 import {
-  brandInsightsGenerateInputSchema,
+  mapBackendGenerationResponse,
+  mapBackendInsightsResponse,
+  mapBackendStatusMessage,
+  mapBackendStatusResponse,
+} from '@/lib/brand-insights/backend';
+import {
   type BrandInsightsStatusMessage,
   type BrandInsightsStatusResponse,
-} from "@/lib/schemas/brandInsights";
+  brandInsightsGenerateInputSchema,
+} from '@/lib/schemas/brandInsights';
 
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -59,15 +62,14 @@ function resolveRequiredWindow(input: {
   windowStart?: string;
   windowEnd?: string;
 }) {
-  const resolvedWindowStartDate =
-    input.windowStart
-      ? parseIsoTimestamp(input.windowStart, "windowStart")
-      : input.weekStartDate
-        ? parseWeekStartDate(input.weekStartDate)
-        : getCurrentWeekStartUtc();
+  const resolvedWindowStartDate = input.windowStart
+    ? parseIsoTimestamp(input.windowStart, 'windowStart')
+    : input.weekStartDate
+      ? parseWeekStartDate(input.weekStartDate)
+      : getCurrentWeekStartUtc();
 
   const resolvedWindowEndDate = input.windowEnd
-    ? parseIsoTimestamp(input.windowEnd, "windowEnd")
+    ? parseIsoTimestamp(input.windowEnd, 'windowEnd')
     : new Date(resolvedWindowStartDate.getTime() + WEEK_IN_MS);
 
   return {
@@ -78,9 +80,9 @@ function resolveRequiredWindow(input: {
 }
 
 async function getBrowserAccessToken(): Promise<string | undefined> {
-  if (typeof window === "undefined") return undefined;
+  if (typeof window === 'undefined') return undefined;
   try {
-    const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
     const supabase = createSupabaseBrowserClient();
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? undefined;
@@ -89,16 +91,18 @@ async function getBrowserAccessToken(): Promise<string | undefined> {
   }
 }
 
-async function request<TResponse = unknown>(options: RequestOptions<TResponse>): Promise<TResponse> {
-  const { path, method = "GET", body, headers = {}, schema, cache, next } = options;
+async function request<TResponse = unknown>(
+  options: RequestOptions<TResponse>,
+): Promise<TResponse> {
+  const { path, method = 'GET', body, headers = {}, schema, cache, next } = options;
   const baseUrl = getApiBaseUrl();
   const url = /^https?:\/\//i.test(path)
     ? path
-    : `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+    : `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const token = await getBrowserAccessToken();
   const finalHeaders: Record<string, string> = {
-    ...(body ? { "Content-Type": "application/json" } : {}),
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...headers,
   };
@@ -130,8 +134,8 @@ export async function generateBrandInsights(input: unknown) {
     windowEnd: parsed.windowEnd,
   });
   const response = await request({
-    path: "/api/trends/jobs/start",
-    method: "POST",
+    path: '/api/trends/jobs/start',
+    method: 'POST',
     body: {
       brand_id: parsed.brandId,
       week_start_date: window.weekStartDate,
@@ -141,27 +145,44 @@ export async function generateBrandInsights(input: unknown) {
       items_per_platform: parsed.maxItemsPerPlatform ?? undefined,
       force_regenerate: parsed.forceRegenerate ?? undefined,
     },
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   return mapBackendGenerationResponse(response);
+}
+
+/** Read the additive collection for one persisted calendar week. */
+export async function fetchBrandInsightsWeek(input: { brandId: string; weekStartDate: string }) {
+  const response = await request({
+    path: '/api/trends/read',
+    method: 'POST',
+    body: {
+      brand_id: input.brandId,
+      week_start_date: input.weekStartDate,
+    },
+    cache: 'no-store',
+  });
+  return mapBackendInsightsResponse(response);
 }
 
 type FetchBrandInsightsStatusOptions = {
   path?: string;
 };
 
-export async function fetchBrandInsightsStatus(generationId: string, options?: FetchBrandInsightsStatusOptions) {
+export async function fetchBrandInsightsStatus(
+  generationId: string,
+  options?: FetchBrandInsightsStatusOptions,
+) {
   const response = await request({
     path: options?.path ?? `/api/trends/jobs/${encodeURIComponent(generationId)}`,
-    method: "GET",
-    cache: "no-store",
+    method: 'GET',
+    cache: 'no-store',
   });
 
   return mapBackendStatusResponse(response);
 }
 
-const TERMINAL_STATUSES = new Set(["completed", "failed", "error", "not_found"]);
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'error', 'not_found']);
 const DEFAULT_JOB_POLL_INTERVAL_MS = 2000;
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
 
@@ -177,7 +198,7 @@ function parseJsonEventData<T = unknown>(event: MessageEvent<string>): T | null 
 // swallow. In development we surface it so the mismatch is caught early; in
 // production we skip the frame and keep the stream alive.
 function warnContractDrift(kind: string, issues: unknown): void {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== 'production') {
     console.warn(`[brand-insights] dropped malformed ${kind} frame (contract drift)`, issues);
   }
 }
@@ -188,9 +209,9 @@ export function isTerminalBrandInsightsStatus(status?: string | null): boolean {
 
 export function resolveBrandInsightsEventsUrl(channel: string, afterMessageId?: number): string {
   const baseUrl = getApiBaseUrl();
-  const resolved = new URL(channel, `${baseUrl.replace(/\/$/, "")}/`);
-  if (typeof afterMessageId === "number" && Number.isFinite(afterMessageId)) {
-    resolved.searchParams.set("after", String(afterMessageId));
+  const resolved = new URL(channel, `${baseUrl.replace(/\/$/, '')}/`);
+  if (typeof afterMessageId === 'number' && Number.isFinite(afterMessageId)) {
+    resolved.searchParams.set('after', String(afterMessageId));
   }
   return resolved.toString();
 }
@@ -207,7 +228,7 @@ type BrandInsightsJobTrackerOptions = {
 };
 
 function shouldUseEventSource(streamChannel?: string) {
-  if (!streamChannel || typeof window === "undefined") return false;
+  if (!streamChannel || typeof window === 'undefined') return false;
   try {
     const streamUrl = resolveBrandInsightsEventsUrl(streamChannel);
     return new URL(streamUrl).origin === window.location.origin;
@@ -253,7 +274,7 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
     const status = await fetchBrandInsightsStatus(options.generationId, {
       path: options.fallbackPollUrl,
     });
-    if (status.stream && typeof status.stream.latestMessageId === "number") {
+    if (status.stream && typeof status.stream.latestMessageId === 'number') {
       lastMessageId = status.stream.latestMessageId;
     }
     options.onStatus(status);
@@ -267,14 +288,18 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
 
     pollOnce().catch((error) => {
       if (!stopped) {
-        options.onError?.(error instanceof Error ? error : new Error("Unable to poll brand insights status."));
+        options.onError?.(
+          error instanceof Error ? error : new Error('Unable to poll brand insights status.'),
+        );
       }
     });
 
     pollTimer = setInterval(() => {
       pollOnce().catch((error) => {
         if (!stopped) {
-          options.onError?.(error instanceof Error ? error : new Error("Unable to poll brand insights status."));
+          options.onError?.(
+            error instanceof Error ? error : new Error('Unable to poll brand insights status.'),
+          );
         }
       });
     }, options.pollIntervalMs ?? DEFAULT_JOB_POLL_INTERVAL_MS);
@@ -292,20 +317,20 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
     const source = new EventSource(streamUrl, { withCredentials: true });
     eventSource = source;
 
-    source.addEventListener("snapshot", (event) => {
+    source.addEventListener('snapshot', (event) => {
       if (stopped) return;
       const payload = parseJsonEventData(event as MessageEvent<string>);
       if (!payload) return;
 
       const validated = trendsSseSnapshotDataSchema.safeParse(payload);
       if (!validated.success) {
-        warnContractDrift("snapshot", validated.error.issues);
+        warnContractDrift('snapshot', validated.error.issues);
         return;
       }
 
       try {
-        const status = mapBackendStatusResponse({ status: "success", data: validated.data });
-        if (status.stream && typeof status.stream.latestMessageId === "number") {
+        const status = mapBackendStatusResponse({ status: 'success', data: validated.data });
+        if (status.stream && typeof status.stream.latestMessageId === 'number') {
           lastMessageId = status.stream.latestMessageId;
         }
         options.onStatus(status);
@@ -317,20 +342,20 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
       }
     });
 
-    source.addEventListener("message", (event) => {
+    source.addEventListener('message', (event) => {
       if (stopped) return;
       const payload = parseJsonEventData(event as MessageEvent<string>);
       if (!payload) return;
 
       const validated = trendsSseMessageDataSchema.safeParse(payload);
       if (!validated.success) {
-        warnContractDrift("message", validated.error.issues);
+        warnContractDrift('message', validated.error.issues);
         return;
       }
 
       try {
         const message = mapBackendStatusMessage(validated.data);
-        if (typeof message.messageId === "number") {
+        if (typeof message.messageId === 'number') {
           lastMessageId = message.messageId;
         }
         options.onMessage?.(message);
@@ -339,9 +364,9 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
       }
     });
 
-    source.addEventListener("ping", () => undefined);
+    source.addEventListener('ping', () => undefined);
 
-    source.addEventListener("done", () => {
+    source.addEventListener('done', () => {
       closeEventSource();
       pollOnce()
         .catch(() => undefined)
@@ -378,4 +403,52 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
   }
 
   return stop;
+}
+
+/**
+ * Read a persisted, completed Trends generation progressively. This uses
+ * `fetch` rather than EventSource so the browser can attach the Supabase bearer
+ * token. Callers receive sections as their independent server queries settle;
+ * no in-flight generation content crosses this boundary.
+ */
+export async function streamCompletedBrandInsightsRead(input: {
+  brandId: string;
+  generationId?: string;
+  onFrame: (frame: TrendsReadFrame) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const token = await getBrowserAccessToken();
+  if (!token) throw new Error('Missing access token for Trends read stream.');
+
+  const url = new URL('/api/trends/read/stream', getApiBaseUrl());
+  url.searchParams.set('brand_id', input.brandId);
+  if (input.generationId) url.searchParams.set('generation_id', input.generationId);
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+    signal: input.signal,
+  });
+  await assertOk(response);
+  if (!response.body) throw new Error('Trends read stream returned no body.');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = '';
+  while (true) {
+    const result = await reader.read();
+    if (result.done) break;
+    buffered += decoder.decode(result.value, { stream: true });
+    const lines = buffered.split('\n');
+    buffered = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const frame = parseFrame(line, trendsReadFrameSchema);
+      if (!frame) {
+        warnContractDrift('trends read', line);
+        continue;
+      }
+      input.onFrame(frame);
+    }
+  }
 }

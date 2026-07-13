@@ -1,19 +1,21 @@
-import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // happy-dom does not expose SyntaxError on its window object, which causes
 // @testing-library/dom's querySelectorAll internals to crash. Polyfill it.
-;(globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError = SyntaxError;
+(globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
+  SyntaxError;
 
 // next/image uses querySelectorAll internally in this happy-dom version.
 // Replace with a plain <img> so the test environment doesn't crash.
-mock.module("next/image", () => ({
+mock.module('next/image', () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
 }));
 
-import { CalendarDraftCard } from "./CalendarDraftCard";
-import type { OrganicCalendarDraft } from "./types";
+import { CalendarDraftCard } from './CalendarDraftCard';
+import type { OrganicCalendarDraft } from './types';
 
 const store = {
   updateDraft: mock(),
@@ -21,11 +23,9 @@ const store = {
   duplicateDraft: mock(),
 };
 
-mock.module("@/lib/organic/store", () => ({
-  useCalendarStore: (selector: (state: typeof store) => unknown) => selector(store),
-}));
+mock.module('@/lib/organic/store', () => createCalendarStoreStub(store));
 
-mock.module("@/components/ui/context-menu", () => ({
+mock.module('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -42,67 +42,75 @@ mock.module("@/components/ui/context-menu", () => ({
     className?: string;
     disabled?: boolean;
   }) => (
-    <button className={className} disabled={disabled} onClick={() => onSelect?.()}>
+    <button type="button" className={className} disabled={disabled} onClick={() => onSelect?.()}>
       {children}
     </button>
   ),
 }));
 
-mock.module("@/components/ui/hover-card", () => ({
+mock.module('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   HoverCardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-mock.module("@/components/ui/tooltip", () => ({
+mock.module('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-mock.module("@/components/ui/progress", () => ({
+mock.module('@/components/ui/progress', () => ({
   Progress: () => <div data-testid="progress" />,
 }));
 
-mock.module("@/components/ui/ToastProvider", () => ({
+mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: mock() }),
   useToastContext: () => ({ show: mock() }),
 }));
 
-mock.module("@/components/organic/hooks/usePublishDraft", () => ({
-  usePublishDraft: () => ({ publish: mock(), retryPublish: mock(), isPublishing: false, stage: null, pollingAttempt: 0, tokenExpired: false, error: null }),
+mock.module('@/components/organic/hooks/usePublishDraft', () => ({
+  usePublishDraft: () => ({
+    publish: mock(),
+    retryPublish: mock(),
+    isPublishing: false,
+    stage: null,
+    pollingAttempt: 0,
+    tokenExpired: false,
+    error: null,
+  }),
 }));
 
-mock.module("@/components/organic/hooks/useProgressAnimation", () => ({
+mock.module('@/components/organic/hooks/useProgressAnimation', () => ({
   useProgressAnimation: () => null,
 }));
 
-mock.module("./DraftHoverCardContent", () => ({
+mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 
-mock.module("./DraftCardBadges", () => ({
+mock.module('./DraftCardBadges', () => ({
   PlatformBadge: ({ platform }: { platform: string }) => <span>{platform}</span>,
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
 
 const draft: OrganicCalendarDraft = {
-  id: "draft-1",
-  title: "Draft title",
-  summary: "Draft summary",
-  timeLabel: "9:00 AM",
-  dateLabel: "Mon, Jan 1",
-  status: "draft",
-  platforms: ["instagram"],
-  format: "Post",
-  objective: "Engagement",
-  captionPreview: "Caption text",
+  id: 'draft-1',
+  title: 'Draft title',
+  summary: 'Draft summary',
+  timeLabel: '9:00 AM',
+  dateLabel: 'Mon, Jan 1',
+  status: 'draft',
+  platforms: ['instagram'],
+  format: 'Post',
+  objective: 'Engagement',
+  captionPreview: 'Caption text',
   tags: [],
   mediaCount: 1,
 };
 
-describe("CalendarDraftCard", () => {
+describe('CalendarDraftCard', () => {
   beforeEach(() => {
     // Reset only the store spies' call history between tests. A global
     // mock.restore() here would unregister the mock.module() stubs above,
@@ -115,7 +123,7 @@ describe("CalendarDraftCard", () => {
     cleanup();
   });
 
-  it("clicking the card focuses the side editor via onSelect", () => {
+  it('clicking the card focuses the side editor via onSelect', () => {
     const onSelect = mock();
     const { container } = render(
       <CalendarDraftCard
@@ -124,18 +132,18 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={onSelect}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    const cardButton = container.querySelector("button[aria-pressed]");
+    const cardButton = container.querySelector('button[aria-pressed]');
     expect(cardButton).toBeTruthy();
     if (!cardButton) return;
 
     fireEvent.click(cardButton);
-    expect(onSelect).toHaveBeenCalledWith("draft-1");
+    expect(onSelect).toHaveBeenCalledWith('draft-1');
   });
 
-  it("quick platform edit updates draft and keeps editor focused", () => {
+  it('quick platform edit updates draft and keeps editor focused', () => {
     const onSelect = mock();
     render(
       <CalendarDraftCard
@@ -144,21 +152,21 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={onSelect}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    fireEvent.click(screen.getAllByText("Platform: LinkedIn")[0]);
+    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
 
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
-    expect(store.updateDraft.mock.calls[0]?.[0]).toBe("draft-1");
+    expect(store.updateDraft.mock.calls[0]?.[0]).toBe('draft-1');
     const updater = store.updateDraft.mock.calls[0]?.[1] as (
-      currentDraft: OrganicCalendarDraft
+      currentDraft: OrganicCalendarDraft,
     ) => OrganicCalendarDraft;
-    expect(updater(draft).platforms).toEqual(["linkedin"]);
-    expect(onSelect).toHaveBeenCalledWith("draft-1");
+    expect(updater(draft).platforms).toEqual(['linkedin']);
+    expect(onSelect).toHaveBeenCalledWith('draft-1');
   });
 
-  it("retry generation action calls onRegenerate", () => {
+  it('retry generation action calls onRegenerate', () => {
     const onSelect = mock();
     const onRegenerate = mock();
     render(
@@ -169,16 +177,16 @@ describe("CalendarDraftCard", () => {
         onSelect={onSelect}
         onToggleSelection={mock()}
         onRegenerate={onRegenerate}
-      />
+      />,
     );
 
-    fireEvent.click(screen.getAllByText("Regenerate")[0]);
+    fireEvent.click(screen.getAllByText('Regenerate')[0]);
 
-    expect(onRegenerate).toHaveBeenCalledWith("draft-1");
+    expect(onRegenerate).toHaveBeenCalledWith('draft-1');
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("applies a quick time preset directly from the context menu", () => {
+  it('applies a quick time preset directly from the context menu', () => {
     const onSelect = mock();
     render(
       <CalendarDraftCard
@@ -187,20 +195,20 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={onSelect}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    fireEvent.click(screen.getAllByText("Time: 1:00 PM")[0]);
+    fireEvent.click(screen.getAllByText('Time: 1:00 PM')[0]);
 
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
     const updater = store.updateDraft.mock.calls[0]?.[1] as (
-      currentDraft: OrganicCalendarDraft
+      currentDraft: OrganicCalendarDraft,
     ) => OrganicCalendarDraft;
-    expect(updater(draft).timeLabel).toBe("1:00 PM");
-    expect(onSelect).toHaveBeenCalledWith("draft-1");
+    expect(updater(draft).timeLabel).toBe('1:00 PM');
+    expect(onSelect).toHaveBeenCalledWith('draft-1');
   });
 
-  it("exposes a custom time picker entry that defers mutation to the popover", () => {
+  it('exposes a custom time picker entry that defers mutation to the popover', () => {
     // The custom-time flow is deferred to the popover's Set button (not a direct
     // store mutation). Assert the entry is present; the popover itself is a Radix
     // portal exercised elsewhere.
@@ -211,18 +219,18 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    expect(screen.getAllByText("Time: Custom...")[0]).toBeTruthy();
+    expect(screen.getAllByText('Time: Custom...')[0]).toBeTruthy();
     expect(store.updateDraft).not.toHaveBeenCalled();
   });
 
-  it("only allows marking as scheduled when the time is valid", () => {
+  it('only allows marking as scheduled when the time is valid', () => {
     const invalidTimeDraft: OrganicCalendarDraft = {
       ...draft,
-      id: "draft-2",
-      timeLabel: "9 AM",
+      id: 'draft-2',
+      timeLabel: '9 AM',
     };
 
     const { rerender } = render(
@@ -232,10 +240,10 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    fireEvent.click(screen.getAllByText("Approve & Schedule")[0]);
+    fireEvent.click(screen.getAllByText('Approve & Schedule')[0]);
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -245,19 +253,19 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    fireEvent.click(screen.getAllByText("Approve & Schedule")[0]);
+    fireEvent.click(screen.getAllByText('Approve & Schedule')[0]);
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
   });
 
-  it("clear failure button invokes onClearFailure for failed drafts", () => {
+  it('clear failure button invokes onClearFailure for failed drafts', () => {
     const failedDraft: OrganicCalendarDraft = {
       ...draft,
-      id: "draft-failed",
-      status: "failed",
-      generationError: "Failed to generate post",
+      id: 'draft-failed',
+      status: 'failed',
+      generationError: 'Failed to generate post',
     };
     const onClearFailure = mock();
 
@@ -269,14 +277,14 @@ describe("CalendarDraftCard", () => {
         onSelect={mock()}
         onToggleSelection={mock()}
         onClearFailure={onClearFailure}
-      />
+      />,
     );
 
-    fireEvent.click(screen.getByText("Clear"));
-    expect(onClearFailure).toHaveBeenCalledWith("draft-failed");
+    fireEvent.click(screen.getByText('Clear'));
+    expect(onClearFailure).toHaveBeenCalledWith('draft-failed');
   });
 
-  it("invokes the onMouseEnter hover callback for the preview surface", () => {
+  it('invokes the onMouseEnter hover callback for the preview surface', () => {
     const onMouseEnter = mock();
     const { container } = render(
       <CalendarDraftCard
@@ -286,9 +294,9 @@ describe("CalendarDraftCard", () => {
         onSelect={mock()}
         onToggleSelection={mock()}
         onMouseEnter={onMouseEnter}
-      />
+      />,
     );
-    const cardButton = container.querySelector("button[aria-pressed]");
+    const cardButton = container.querySelector('button[aria-pressed]');
     expect(cardButton).toBeTruthy();
     if (!cardButton) return;
 
@@ -299,10 +307,10 @@ describe("CalendarDraftCard", () => {
   it("shows an explicit 'Text only' state for a pending draft with no media or storyboard", () => {
     const textOnly: OrganicCalendarDraft = {
       ...draft,
-      id: "draft-text-only",
+      id: 'draft-text-only',
       // mediaCount intentionally 1 to prove the chip no longer keys off it.
       mediaCount: 1,
-      mediaSuggestion: { mediaStatus: "pending" },
+      mediaSuggestion: { mediaStatus: 'pending' },
     };
 
     render(
@@ -312,26 +320,26 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    expect(screen.getByText("Text only — no media yet")).toBeTruthy();
-    expect(screen.queryByText("Blueprint ready")).toBeNull();
+    expect(screen.getByText('Text only — no media yet')).toBeTruthy();
+    expect(screen.queryByText('Blueprint ready')).toBeNull();
   });
 
   it("shows the storyboard + 'Blueprint ready' pill for a pending draft with a persisted storyboard", () => {
     const withStoryboard: OrganicCalendarDraft = {
       ...draft,
-      id: "draft-storyboard",
+      id: 'draft-storyboard',
       mediaCount: 1,
       mediaSuggestion: {
-        mediaStatus: "pending",
+        mediaStatus: 'pending',
         storyboard: [
           {
-            role: "primary",
-            bucket: "brand-profile-assets",
-            storagePath: "organic/d/preview/1.png",
-            storageUrl: "https://signed.example.com/1.png",
+            role: 'primary',
+            bucket: 'brand-profile-assets',
+            storagePath: 'organic/d/preview/1.png',
+            storageUrl: 'https://signed.example.com/1.png',
           },
         ],
       },
@@ -344,20 +352,20 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    expect(screen.getByText("Blueprint ready")).toBeTruthy();
-    expect(screen.getByAltText("Storyboard frame 1")).toBeTruthy();
-    expect(screen.queryByText("Text only — no media yet")).toBeNull();
+    expect(screen.getByText('Blueprint ready')).toBeTruthy();
+    expect(screen.getByAltText('Storyboard frame 1')).toBeTruthy();
+    expect(screen.queryByText('Text only — no media yet')).toBeNull();
   });
 
-  it("shows a generating indicator while media is generating", () => {
+  it('shows a generating indicator while media is generating', () => {
     const generating: OrganicCalendarDraft = {
       ...draft,
-      id: "draft-generating",
-      generationStage: "Generating media…",
-      mediaSuggestion: { mediaStatus: "generating" },
+      id: 'draft-generating',
+      generationStage: 'Generating media…',
+      mediaSuggestion: { mediaStatus: 'generating' },
     };
 
     render(
@@ -367,25 +375,25 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    expect(screen.getByText("Generating media…")).toBeTruthy();
-    expect(screen.queryByText("Text only — no media yet")).toBeNull();
+    expect(screen.getByText('Generating media…')).toBeTruthy();
+    expect(screen.queryByText('Text only — no media yet')).toBeNull();
   });
 
-  it("does not render a text-only state when the draft has realized publishing assets", () => {
+  it('does not render a text-only state when the draft has realized publishing assets', () => {
     const realized: OrganicCalendarDraft = {
       ...draft,
-      id: "draft-realized",
+      id: 'draft-realized',
       mediaCount: 0,
-      mediaSuggestion: { mediaStatus: "ready" },
+      mediaSuggestion: { mediaStatus: 'ready' },
       publishingAssets: [
         {
-          role: "primary",
-          kind: "image",
-          storagePath: "p/1.png",
-          storageUrl: "https://signed.example.com/r.png",
+          role: 'primary',
+          kind: 'image',
+          storagePath: 'p/1.png',
+          storageUrl: 'https://signed.example.com/r.png',
         },
       ],
     };
@@ -397,10 +405,10 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={mock()}
         onToggleSelection={mock()}
-      />
+      />,
     );
 
-    expect(screen.queryByText("Text only — no media yet")).toBeNull();
-    expect(screen.queryByText("Blueprint ready")).toBeNull();
+    expect(screen.queryByText('Text only — no media yet')).toBeNull();
+    expect(screen.queryByText('Blueprint ready')).toBeNull();
   });
 });

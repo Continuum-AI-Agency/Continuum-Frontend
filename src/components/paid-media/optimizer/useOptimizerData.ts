@@ -34,6 +34,8 @@ import {
   OptimizerInsightResponseSchema,
   type OptimizerLogRow,
   OptimizerLogsResponseSchema,
+  type PaidAdAngle,
+  PaidAdAngleSchema,
   type PortfolioAdset,
   PortfolioAdsetSchema,
   type PortfolioLevel,
@@ -120,6 +122,7 @@ export const optimizerQueryKeys = {
     ['optimizer', 'archived', brandId, adAccountId ?? 'all'] as const,
   adsetAds: (adsetId: string) => ['optimizer', 'adset-ads', adsetId] as const,
   adDailyTrends: (adsetId: string) => ['optimizer', 'ad-daily-trends', adsetId] as const,
+  adAngles: (adsetId: string) => ['optimizer', 'ad-angles', adsetId] as const,
   insight: (insightKey: string) => ['optimizer', 'insight', insightKey] as const,
 };
 
@@ -523,6 +526,7 @@ const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ADS: AdsetAd[] = [];
 const EMPTY_AD_TRENDS: AdDailyTrend[] = [];
+const EMPTY_AD_ANGLES: PaidAdAngle[] = [];
 
 const FIVE_MINUTES = 5 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
@@ -747,6 +751,36 @@ export function useOptimizerAdDailyTrends(
     queryKey: optimizerQueryKeys.adDailyTrends(adsetId ?? 'none'),
     queryFn: () => fetchAdDailyTrends(brandId, accountId as string, adsetId as string),
     empty: EMPTY_AD_TRENDS,
+    enabled: Boolean(brandId && accountId && adsetId),
+    staleTime: TEN_MINUTES,
+  });
+}
+
+/** The creative angle labels for one ad set's ads (paid-creative-intel), read
+ *  under RLS via the brand-asserting RPC. Empty until the labeling worker has
+ *  processed the brand — the HoverCard then simply omits the angle line. */
+async function fetchAdAngles(brandId: string, adsetId: string): Promise<PaidAdAngle[]> {
+  const { data, error } = await getClient().rpc('paid_media_get_ad_angles', {
+    p_brand_id: brandId,
+    p_adset_ids: [adsetId],
+  });
+  if (error) throw new Error('paid_media_get_ad_angles unreachable');
+  return z
+    .array(PaidAdAngleSchema)
+    .catch([])
+    .parse(data ?? []);
+}
+
+/** Angle labels for the focused ad set — lazy like the other per-adset reads. */
+export function useOptimizerAdAngles(
+  brandId: string,
+  accountId: string | null,
+  adsetId: string | null,
+) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.adAngles(adsetId ?? 'none'),
+    queryFn: () => fetchAdAngles(brandId, adsetId as string),
+    empty: EMPTY_AD_ANGLES,
     enabled: Boolean(brandId && accountId && adsetId),
     staleTime: TEN_MINUTES,
   });

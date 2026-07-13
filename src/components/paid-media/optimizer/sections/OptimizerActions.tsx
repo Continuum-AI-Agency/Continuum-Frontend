@@ -9,6 +9,7 @@ import type { PortfolioListItem, RenewalTask } from '@continuum/contracts';
 import { CheckCircle2Icon } from 'lucide-react';
 
 import { EmptyState } from '@/components/shared/state/EmptyState';
+import { AdLevelPreviewNotice } from './AdLevelPreviewNotice';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
@@ -32,17 +33,23 @@ export function OptimizerActions({
   const hasWork = portfoliosWithPending.length > 0 || renewals.length > 0;
 
   if (!hasWork) {
+    // The notice STAYS on the empty state. "All caught up" is exactly where a reader is most
+    // likely to conclude the account is handled — and ad-level actions are the ones that are not.
     return (
-      <EmptyState
-        headline="You’re all caught up"
-        media={<CheckCircle2Icon aria-hidden="true" />}
-        description="No pending recommendations or open renewal tasks. New actions appear here after the next optimization cycle."
-      />
+      <div className="space-y-4">
+        <AdLevelPreviewNotice />
+        <EmptyState
+          headline="You’re all caught up"
+          media={<CheckCircle2Icon aria-hidden="true" />}
+          description="No pending recommendations or open renewal tasks. New actions appear here after the next optimization cycle."
+        />
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <AdLevelPreviewNotice />
       {portfoliosWithPending.map((portfolio) => (
         <OptimizerActionsPortfolioGroup
           key={portfolio.id}

@@ -6,7 +6,6 @@ import {
   ExclamationTriangleIcon,
   LightningBoltIcon,
   PlusIcon,
-  RocketIcon,
   TrashIcon,
 } from '@radix-ui/react-icons';
 import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
@@ -31,12 +30,9 @@ import type { CalendarDateRange } from '@/lib/organic/store';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { DisabledControl } from '../DisabledControl';
-import {
-  describeAddPlaceholderBlock,
-  describeClearBlock,
-  describeGenerateBlock,
-} from '../disabledReasons';
+import { describeAddPlaceholderBlock, describeClearBlock } from '../disabledReasons';
 import { AddPostMenu } from './AddPostMenu';
+import { PlannerAccountSwitcher } from './PlannerAccountSwitcher';
 import type { CreatePostOptions } from './planner-platforms';
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const; // Monday-started, matches the planner
@@ -155,11 +151,9 @@ type CalendarToolbarProps = {
   onDateRangeChange: (range: CalendarDateRange | null) => void;
   selectedTrendCount: number;
   maxTrendSelections?: number;
-  seededDraftCount: number;
   isGenerating: boolean;
   onOpenTrends: () => void;
   onCreatePost: (options: CreatePostOptions) => void;
-  onGenerate: () => void;
   onClear: () => void;
   draftsCount: number;
   slotProgress: { completed: number; total: number; failed: number } | null;
@@ -179,11 +173,9 @@ export function CalendarToolbar({
   onDateRangeChange,
   selectedTrendCount,
   maxTrendSelections,
-  seededDraftCount,
   isGenerating,
   onOpenTrends,
   onCreatePost,
-  onGenerate,
   onClear,
   draftsCount,
   slotProgress,
@@ -200,9 +192,10 @@ export function CalendarToolbar({
   const setShowPlanned = useCalendarStore((state) => state.setShowPlanned);
 
   const addHint = describeAddPlaceholderBlock({ isGenerating });
-  const generateHint = describeGenerateBlock({ isGenerating, seededDraftCount });
   const clearHint = describeClearBlock({ isGenerating, draftsCount });
-  const showPlanningNote = !isGenerating && draftsCount === 0 && seededDraftCount === 0;
+  // draftsCount already counts placeholder slots, so an empty calendar is the whole
+  // condition for the planning note.
+  const showPlanningNote = !isGenerating && draftsCount === 0;
 
   return (
     <ContextMenu>
@@ -254,9 +247,6 @@ export function CalendarToolbar({
                 {selectedTrendCount}
                 {typeof maxTrendSelections === 'number' ? `/${maxTrendSelections}` : ''} trends
               </Badge>
-              <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                {seededDraftCount} placeholders
-              </Badge>
               {postedContentCount > 0 ? (
                 <Badge variant="outline" className="text-2xs uppercase tracking-wide">
                   {postedContentCount} posted
@@ -282,6 +272,9 @@ export function CalendarToolbar({
                   Posts
                 </Button>
               ) : null}
+              {/* Which of the brand's accounts this planner generates for and publishes to.
+                  Renders only where there is more than one to choose from. */}
+              <PlannerAccountSwitcher />
               <Button
                 type="button"
                 size="sm"
@@ -311,22 +304,6 @@ export function CalendarToolbar({
                   </Button>
                 </AddPostMenu>
               )}
-              <DisabledControl hint={generateHint}>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="default"
-                  disabled={isGenerating || seededDraftCount === 0}
-                  onClick={onGenerate}
-                >
-                  {isGenerating ? (
-                    <LightningBoltIcon className="mr-1 h-3.5 w-3.5 animate-pulse" />
-                  ) : (
-                    <RocketIcon className="mr-1 h-3.5 w-3.5" />
-                  )}
-                  Generate
-                </Button>
-              </DisabledControl>
               <DisabledControl hint={clearHint}>
                 <Button
                   type="button"
@@ -419,9 +396,6 @@ export function CalendarToolbar({
           onSelect={() => onCreatePost({ status: 'draft', mode: 'manual', format: 'Post' })}
         >
           New post
-        </ContextMenuItem>
-        <ContextMenuItem disabled={seededDraftCount === 0} onSelect={onGenerate}>
-          Generate placeholders
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClear}>

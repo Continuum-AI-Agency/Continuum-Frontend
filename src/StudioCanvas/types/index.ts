@@ -106,6 +106,10 @@ export type ImageReferenceType = 'default' | 'product' | 'color' | 'person';
 export interface ImageNodeData extends BaseNodeData {
   image?: string;
   fileName?: string;
+  // media.assets id of the Library asset this node holds, when it has one (dropped
+  // from the Library, uploaded on drop, or attached by an agent). Persisted so a
+  // generation downstream of this node can be credited back to the asset that fed it.
+  assetId?: string;
   sourcePath?: string;
   // Storage bucket for sourcePath, so a reference URL can be re-signed on load.
   bucket?: string;
@@ -123,6 +127,8 @@ export interface ImageNodeData extends BaseNodeData {
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
   fileName?: string;
+  // media.assets id of the Library asset this node holds — see ImageNodeData.assetId.
+  assetId?: string;
   sourcePath?: string;
   bucket?: string;
   sourceUrl?: string;
@@ -259,13 +265,17 @@ export interface TimelineTrack {
   items: TimelineItem[];
 }
 
-// A placeable member of the Video Editor input pool, derived from a connected
-// upstream image/video source node. Drives the editor's media bin.
+// A placeable member of the Video Editor input pool. Drives the editor's media
+// bin. On the canvas each entry is a connected upstream image/video source node
+// (hence `nodeId`); other hosts key it by their own source id.
 export interface TimelineInputSource {
   nodeId: string;
   kind: 'video' | 'image';
   label: string;
   previewUrl?: string;
+  // Known source duration (seconds), when the host already has it. Absent on the
+  // canvas, where the editor probes the preview URL for it instead.
+  durationSec?: number;
 }
 
 export interface TimelineEditorNodeData extends BaseNodeData {

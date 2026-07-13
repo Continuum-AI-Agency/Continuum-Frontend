@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { ChatBubbleIcon, PlayIcon } from '@radix-ui/react-icons';
+import { ChatBubbleIcon, ChevronDownIcon, PlayIcon } from '@radix-ui/react-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,16 +19,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
-import { useStudioStore } from '../../stores/useStudioStore';
-import type { StudioNode, TimelineEditorNodeData, TimelineInputSource } from '../../types';
+import type { TimelineInputSource } from '../../types';
 import { clipEffectsToCss, resolveTextOverlays, speedFor } from '../../utils/render/effectSpec';
 import { DEFAULT_EXPORT_PRESET_ID, EXPORT_PRESETS } from '../../utils/render/exportPresets';
 import { headFadeFor, tailFadeFor, transitionOverlayAt } from '../../utils/render/transitions';
 import { findActiveCue, groupWordsIntoCues } from '../../utils/splice/captionCues';
-import { resolveTimelineInputPool } from '../../utils/splice/resolveClipSources';
+import type { TimelineEditorAdapter, TimelineRenderSinkKind } from './adapter';
 import { ClipInspector } from './ClipInspector';
+import { buildClipPlacements } from './commentMapping';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
 import { probeVideoDuration } from './mediaProbe';
 import { resolveOverlayTracks } from './multiTrack';
@@ -36,6 +42,7 @@ import { OVERLAY_DROP_ID, trackIdFromOverlayDrop } from './OverlayTrack';
 import { OverlayTracks } from './OverlayTracks';
 import { laneItemEdges } from './snapping';
 import { CLIP_DRAG_PREFIX } from './TimelineClipBlock';
+import { TimelineCommentLayer } from './TimelineCommentLayer';
 import { TimelinePreview } from './TimelinePreview';
 import { TIMELINE_DROP_ID, TimelineTrack } from './TimelineTrack';
 import { useOverlayModel } from './useOverlayModel';
@@ -48,38 +55,43 @@ import { useTimelineRender } from './useTimelineRender';
 const PX_PER_SEC = 80;
 
 export function TimelineEditorDialog({
-  nodeId,
+  adapter,
   open,
   onOpenChange,
 }: {
-  nodeId: string;
+  adapter: TimelineEditorAdapter;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
-  const edges = useStudioStore((state) => state.edges);
-  const setKeyboardScope = useStudioStore((state) => state.setKeyboardScope);
-  const updateNode = useStudioStore((state) => state.updateNode);
-  const triggerSave = useStudioStore((state) => state.triggerSave);
+  const { document, patchDocument, pool, renderSinks, onEditorOpenChange } = adapter;
+  const items = document.items;
+  const overlayTracks = useMemo(() => resolveOverlayTracks(document), [document]);
 
-  const node = nodes.find((candidate) => candidate.id === nodeId);
-  const data = node?.data as TimelineEditorNodeData | undefined;
-  const items = useMemo(() => data?.items ?? [], [data?.items]);
-  const overlayTracks = useMemo(() => resolveOverlayTracks(data), [data]);
-
-  const pool = useMemo(
-    () => resolveTimelineInputPool(nodeId, edges, nodes),
-    [nodeId, edges, nodes],
-  );
   const poolById = useMemo(() => new Map(pool.map((source) => [source.nodeId, source])), [pool]);
 
+  // Clip geometry needs each source's duration. Hosts that already know it hand it
+  // over with the pool; the rest are probed from their preview media once.
   const [sourceDurations, setSourceDurations] = useState<Map<string, number>>(new Map());
   const probedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
+    setSourceDurations((prev) => {
+      const next = new Map(prev);
+      let changed = false;
+      for (const source of pool) {
+        const known = source.durationSec;
+        if (typeof known !== 'number' || known <= 0) continue;
+        if (next.get(source.nodeId) === known) continue;
+        next.set(source.nodeId, known);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+
     let cancelled = false;
     for (const source of pool) {
+      if (typeof source.durationSec === 'number' && source.durationSec > 0) continue;
       if (source.kind !== 'video' || !source.previewUrl || probedRef.current.has(source.nodeId))
         continue;
       probedRef.current.add(source.nodeId);
@@ -99,18 +111,18 @@ export function TimelineEditorDialog({
     };
   }, [open, pool]);
 
-  // Claim the keyboard while open so the canvas-level Delete/copy/undo handlers
-  // stand down (see useStudioStore.keyboardScope + StudioCanvas key handler).
+  // Let the host know the editor is up: the canvas claims the keyboard scope so its
+  // Delete/copy/undo handlers stand down while the dialog owns the keys.
   useEffect(() => {
     if (!open) return;
-    setKeyboardScope('modal');
-    return () => setKeyboardScope('canvas');
-  }, [open, setKeyboardScope]);
+    onEditorOpenChange(true);
+    return () => onEditorOpenChange(false);
+  }, [open, onEditorOpenChange]);
 
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC);
-  const model = useTimelineEditorModel({ nodeId, items, sourceDurations, pxPerSec });
-  const { render, isRendering, support } = useTimelineRender(nodeId);
-  const captions = useTimelineCaptions(nodeId);
+  const model = useTimelineEditorModel({ adapter, items, sourceDurations, pxPerSec });
+  const { render, isRendering, progress, support } = useTimelineRender(adapter);
+  const captions = useTimelineCaptions(adapter);
 
   const mediaFor = useCallback(
     (itemId: string): ClipMedia | undefined => {
@@ -140,7 +152,7 @@ export function TimelineEditorDialog({
   );
 
   const overlayModel = useOverlayModel({
-    nodeId,
+    adapter,
     tracks: overlayTracks,
     sourceDurations,
     labelFor,
@@ -186,20 +198,30 @@ export function TimelineEditorDialog({
     if (selectedItemId) model.duplicate(selectedItemId);
   }, [model.duplicate, selectedItemId]);
 
-  const markers = useMemo(() => data?.markers ?? [], [data?.markers]);
+  // Library review feedback, projected onto this cut. Canvas-scoped timelines
+  // are deliberately excluded: there a clip's source id names an upstream canvas
+  // node, not a media.assets row, so there is nothing for a comment to hang off.
+  const commentPlacements = useMemo(() => {
+    if (adapter.scope !== 'library') return null;
+    return buildClipPlacements({
+      layoutClips: model.layout.clips,
+      overlayTracks,
+      sourceDurations,
+    });
+  }, [adapter.scope, model.layout.clips, overlayTracks, sourceDurations]);
+
+  const markers = useMemo(() => document.markers ?? [], [document.markers]);
+  // A ruler marker cannot change the rendered output, so it must not invalidate a
+  // render that already happened.
   const handleToggleMarker = useCallback(() => {
-    updateNode(nodeId, (current) => ({
-      ...current,
-      data: {
-        ...(current.data as TimelineEditorNodeData),
-        markers: toggleMarkerTime(
-          (current.data as TimelineEditorNodeData).markers ?? [],
-          playback.playheadSec,
-        ),
-      },
-    }));
-    triggerSave();
-  }, [nodeId, playback.playheadSec, triggerSave, updateNode]);
+    patchDocument(
+      (current) => ({
+        ...current,
+        markers: toggleMarkerTime(current.markers ?? [], playback.playheadSec),
+      }),
+      { invalidatesRender: false },
+    );
+  }, [patchDocument, playback.playheadSec]);
 
   useTimelineKeymap({
     enabled: open,
@@ -288,22 +310,21 @@ export function TimelineEditorDialog({
     [model],
   );
 
-  const exportPresetId = data?.exportPresetId ?? DEFAULT_EXPORT_PRESET_ID;
+  const exportPresetId = document.exportPresetId ?? DEFAULT_EXPORT_PRESET_ID;
   const setExportPreset = useCallback(
     (id: string) => {
-      updateNode(nodeId, (current) => ({
-        ...current,
-        data: { ...(current.data as TimelineEditorNodeData), exportPresetId: id, committed: false },
-      }));
-      triggerSave();
+      patchDocument((current) => ({ ...current, exportPresetId: id }));
     },
-    [nodeId, updateNode, triggerSave],
+    [patchDocument],
   );
 
-  const handleRender = useCallback(async () => {
-    const ok = await render();
-    if (ok) onOpenChange(false);
-  }, [onOpenChange, render]);
+  const handleRender = useCallback(
+    async (sink: TimelineRenderSinkKind) => {
+      const ok = await render(sink);
+      if (ok) onOpenChange(false);
+    },
+    [onOpenChange, render],
+  );
 
   const activeClip = clipAtTime(model.layout, playback.playheadSec);
   const activeKind = activeClip
@@ -363,19 +384,21 @@ export function TimelineEditorDialog({
 
   // Active caption line at the playhead (auto-captions), shown in the preview when
   // captions are enabled. Exact karaoke burn-in is in the export.
+  const captionWords = document.captionWords;
+  const captionsEnabled = document.captionsEnabled;
   const captionCues = useMemo(() => {
-    const words = data?.captionWords;
-    if (!data?.captionsEnabled || !words || words.length === 0) return undefined;
-    return groupWordsIntoCues([...words].sort((a, b) => a.startSec - b.startSec));
-  }, [data?.captionsEnabled, data?.captionWords]);
+    if (!captionsEnabled || !captionWords || captionWords.length === 0) return undefined;
+    return groupWordsIntoCues([...captionWords].sort((a, b) => a.startSec - b.startSec));
+  }, [captionsEnabled, captionWords]);
   const activeCaption = captionCues
     ? (findActiveCue(captionCues, playback.playheadSec)
         ?.words.map((word) => word.text)
         .join(' ') ?? undefined)
     : undefined;
 
-  const progress = typeof data?.progress === 'number' ? Math.max(0, Math.min(1, data.progress)) : 0;
+  const renderProgress = Math.max(0, Math.min(1, progress));
   const renderDisabled = isRendering || items.length === 0 || (support ? !support.ok : false);
+  const primarySink = renderSinks[0];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -386,11 +409,8 @@ export function TimelineEditorDialog({
       >
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
           <div className="flex flex-col gap-0.5">
-            <DialogTitle className="text-base">Video Editor</DialogTitle>
-            <DialogDescription className="text-xs">
-              Place clips & stills, trim, split, then render. The clip is saved to your library and
-              the workflow continues.
-            </DialogDescription>
+            <DialogTitle className="text-base">{adapter.header.title}</DialogTitle>
+            <DialogDescription className="text-xs">{adapter.header.description}</DialogDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -404,15 +424,15 @@ export function TimelineEditorDialog({
               <ChatBubbleIcon className="h-3.5 w-3.5" />
               {captions.isGenerating
                 ? 'Captioning…'
-                : (data?.captionWords?.length ?? 0) > 0
+                : (captionWords?.length ?? 0) > 0
                   ? 'Re-caption'
                   : 'Auto-captions'}
             </Button>
-            {(data?.captionWords?.length ?? 0) > 0 ? (
+            {(captionWords?.length ?? 0) > 0 ? (
               // biome-ignore lint/a11y/noLabelWithoutControl: label wraps its Switch control
               <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                 <Switch
-                  checked={data?.captionsEnabled ?? false}
+                  checked={captionsEnabled ?? false}
                   onCheckedChange={(checked) => captions.setCaptionsEnabled(checked)}
                 />
                 Captions
@@ -442,10 +462,49 @@ export function TimelineEditorDialog({
             >
               Done
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={handleRender} disabled={renderDisabled}>
-              <PlayIcon className="h-3.5 w-3.5" />
-              {isRendering ? 'Rendering…' : 'Render & Continue'}
-            </Button>
+            {primarySink ? (
+              <div className="flex items-center">
+                <Button
+                  size="sm"
+                  className={renderSinks.length > 1 ? 'gap-1.5 rounded-r-none' : 'gap-1.5'}
+                  onClick={() => handleRender(primarySink.kind)}
+                  disabled={renderDisabled}
+                >
+                  <PlayIcon className="h-3.5 w-3.5" />
+                  {isRendering ? 'Rendering…' : primarySink.label}
+                </Button>
+                {renderSinks.length > 1 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="rounded-l-none border-l border-primary-foreground/25 px-2"
+                        disabled={renderDisabled}
+                        aria-label="Choose where the render goes"
+                      >
+                        <ChevronDownIcon className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      {renderSinks.map((sink) => (
+                        <DropdownMenuItem
+                          key={sink.kind}
+                          onClick={() => handleRender(sink.kind)}
+                          className="flex flex-col items-start gap-0.5"
+                        >
+                          <span className="text-xs font-medium">{sink.label}</span>
+                          {sink.description ? (
+                            <span className="text-2xs text-muted-foreground">
+                              {sink.description}
+                            </span>
+                          ) : null}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </DialogHeader>
 
@@ -454,13 +513,20 @@ export function TimelineEditorDialog({
             {support.reason}
           </div>
         ) : null}
-        {isRendering ? <Progress value={progress * 100} className="h-1 rounded-none" /> : null}
+        {isRendering ? (
+          <Progress value={renderProgress * 100} className="h-1 rounded-none" />
+        ) : null}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr_320px] grid-rows-1 gap-3 p-3">
               <div className="min-h-0 overflow-hidden rounded-lg border border-border/60 p-2">
-                <MediaBin pool={pool} onPlace={handlePlace} />
+                <MediaBin
+                  pool={pool}
+                  onPlace={handlePlace}
+                  onRemove={adapter.removePoolSource}
+                  action={adapter.binAction}
+                />
               </div>
               <div className="min-h-0">
                 <TimelinePreview
@@ -565,6 +631,17 @@ export function TimelineEditorDialog({
                     if (selectedItemId === itemId) setSelectedItemId(undefined);
                   }}
                   onSplit={model.split}
+                  commentLane={
+                    commentPlacements && adapter.brandId ? (
+                      <TimelineCommentLayer
+                        brandId={adapter.brandId}
+                        placements={commentPlacements}
+                        pxPerSec={pxPerSec}
+                        playheadSec={playback.playheadSec}
+                        onSeek={playback.seek}
+                      />
+                    ) : null
+                  }
                 />
               </div>
             </div>

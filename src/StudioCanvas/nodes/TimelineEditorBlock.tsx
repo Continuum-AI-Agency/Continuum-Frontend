@@ -17,7 +17,8 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { TimelineEditorNodeData } from '../types';
 import { downloadAsset } from '../utils/downloadAsset';
 import { TimelineEditorDialog } from './timeline/TimelineEditorDialog';
+import { useCanvasTimelineAdapter } from './timeline/useCanvasTimelineAdapter';
 import { useTimelineRender } from './timeline/useTimelineRender';
 
 // Compact launcher for the Video Editor (timelineEditor) break-point node. The
@@ -79,7 +81,10 @@ export function TimelineEditorBlock({
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
-  const { render, isRendering, support } = useTimelineRender(id);
+  // The editor runs against a host adapter, not the canvas store. The canvas one
+  // is built here and shared by the node's Render button and the editor dialog.
+  const adapter = useCanvasTimelineAdapter(id);
+  const { render, isRendering, support } = useTimelineRender(adapter);
 
   const [isHovered, setIsHovered] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -348,7 +353,7 @@ export function TimelineEditorBlock({
       </ContextMenu>
 
       {editorOpen ? (
-        <TimelineEditorDialog nodeId={id} open={editorOpen} onOpenChange={setEditorOpen} />
+        <TimelineEditorDialog adapter={adapter} open={editorOpen} onOpenChange={setEditorOpen} />
       ) : null}
     </TooltipProvider>
   );

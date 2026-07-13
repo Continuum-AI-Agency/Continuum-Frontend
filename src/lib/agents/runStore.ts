@@ -87,17 +87,10 @@ export const useAgentRunStore = create<AgentRunStoreState>()((set) => ({
     set((state) => {
       const existing = state.runs[run.runId];
 
-      // A terminal run stops occupying its session, so the next turn is not mistaken for
-      // a re-attach to the finished one.
-      const activeRunIdBySession = { ...state.activeRunIdBySession };
-      if (isTerminalAgentRunStatus(run.status)) {
-        if (activeRunIdBySession[run.sessionId] === run.runId) {
-          delete activeRunIdBySession[run.sessionId];
-        }
-      } else {
-        activeRunIdBySession[run.sessionId] = run.runId;
-      }
-
+      // A session points at its LATEST run, terminal or not. A finished run is not unbound:
+      // a panel projecting it still needs to find it to fold the terminal frame, and the
+      // next turn simply rebinds the session to its own new runId. Consumers that care ask
+      // the status (isSessionStreaming, selectLiveRuns).
       return {
         runs: {
           ...state.runs,

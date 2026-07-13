@@ -20,6 +20,7 @@ import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ApplyModePill } from '../ApplyModePill';
 import { AdSetTimeline } from '../charts/AdSetTimeline';
 import { AdsetActionMenu } from '../charts/AdsetActionMenu';
 import { AngleMatrix } from '../charts/AngleMatrix';
@@ -31,11 +32,11 @@ import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { ScoreRadar } from '../charts/ScoreRadar';
 import { adSetRoasSeries, buildCycleActionMap, sumFunnelWindow } from '../charts/vizData';
-import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { applyModeExplainer, confidenceBand, parseReport } from '../reportModel';
 import {
   useOptimizerAccountSnapshots,
+  useOptimizerAdAngles,
   useOptimizerAdDailyTrends,
   useOptimizerAdsetAds,
   useOptimizerAngleMatrix,
@@ -122,6 +123,7 @@ export function PortfolioDetailWorkspace({
 
   const dailyTrendsQuery = useOptimizerAdDailyTrends(brandId, adAccountId, selectedAdsetId);
   const adsetAdsQuery = useOptimizerAdsetAds(brandId, adAccountId, selectedAdsetId);
+  const adAnglesQuery = useOptimizerAdAngles(brandId, adAccountId, selectedAdsetId);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -348,6 +350,7 @@ export function PortfolioDetailWorkspace({
             >
               <AdSetTimeline
                 ads={adsetAdsQuery.data}
+                angles={adAnglesQuery.data}
                 currency={currency}
                 metric={chartMetric}
                 onMetricChange={onMetricChange}

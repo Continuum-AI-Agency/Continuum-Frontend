@@ -1,34 +1,34 @@
 // Shared types for chat-based image/video generation in AI Studio.
 // SupportedModel is kept in sync with MODEL_CATALOG in @continuum/contracts.
 
-import type { BrandBookPieceKind } from "@continuum/contracts";
+import type { BrandBookPieceKind } from '@continuum/contracts';
 
 export type SupportedModel =
-  | "nano-banana"
-  | "gemini-3-pro-image-preview"
-  | "veo-3-1"
-  | "veo-3-1-fast"
-  | "veo-3-1-lite"
-  | "kling-omni"
-  | "sora-2";
+  | 'nano-banana'
+  | 'gemini-3-pro-image-preview'
+  | 'veo-3-1'
+  | 'veo-3-1-fast'
+  | 'veo-3-1-lite'
+  | 'kling-omni'
+  | 'sora-2';
 
 // Models accepted by the backend generation services (may include provider-specific aliases).
 export type SupportedBackendModel =
   | SupportedModel
-  | "veo-3.1-generate-preview"
-  | "veo-3.1-fast-generate-preview"
-  | "veo-3.1-lite-generate-preview"
-  | "kling-omni"
-  | "gemini-2.5-flash-image";
+  | 'veo-3.1-generate-preview'
+  | 'veo-3.1-fast-generate-preview'
+  | 'veo-3.1-lite-generate-preview'
+  | 'kling-omni'
+  | 'gemini-2.5-flash-image';
 
-export const modelMediumMap: Record<SupportedModel, "image" | "video"> = {
-  "nano-banana": "image",
-  "gemini-3-pro-image-preview": "image",
-  "veo-3-1": "video",
-  "veo-3-1-fast": "video",
-  "veo-3-1-lite": "video",
-  "kling-omni": "video",
-  "sora-2": "video",
+export const modelMediumMap: Record<SupportedModel, 'image' | 'video'> = {
+  'nano-banana': 'image',
+  'gemini-3-pro-image-preview': 'image',
+  'veo-3-1': 'video',
+  'veo-3-1-fast': 'video',
+  'veo-3-1-lite': 'video',
+  'kling-omni': 'video',
+  'sora-2': 'video',
 };
 
 export type RefImage = {
@@ -41,7 +41,7 @@ export type RefImage = {
   originalMime?: string;
   markupLayer?: string;
   weight?: number;
-  referenceType?: "asset" | "style"; // Veo reference_images
+  referenceType?: 'asset' | 'style'; // Veo reference_images
 };
 
 export type RefVideo = {
@@ -55,12 +55,12 @@ export type RefVideo = {
 export type ChatImageRequestPayload = {
   brandProfileId: string;
   model: SupportedModel;
-  medium: "image" | "video";
+  medium: 'image' | 'video';
   prompt: string;
   negativePrompt?: string;
   aspectRatio: string;
   resolution?: string;
-  imageSize?: "512px" | "1K" | "2K" | "4K"; // Pro/Nano Banana 2
+  imageSize?: '512px' | '1K' | '2K' | '4K'; // Pro/Nano Banana 2
   referenceVideo?: RefVideo;
   durationSeconds?: 4 | 6 | 8;
   seed?: number;
@@ -74,7 +74,7 @@ export type ChatImageRequestPayload = {
 export type ChatImageHistoryItem = {
   id: string;
   model: SupportedModel;
-  medium: "image" | "video";
+  medium: 'image' | 'video';
   prompt: string;
   aspectRatio: string;
   createdAt: string;
@@ -86,15 +86,21 @@ export type ChatImageHistoryItem = {
 };
 
 export type StreamEvent =
-  | { type: "status"; status: "queued" | "processing" | "completed" | "failed" }
-  | { type: "progress"; pct: number; etaMs?: number }
-  | { type: "chunk"; base64: string }
-  | { type: "thumbnail"; base64: string }
-  | { type: "done"; base64?: string; videoUrl?: string; posterBase64?: string; meta?: Record<string, unknown> }
-  | { type: "error"; message: string };
+  | { type: 'status'; status: 'queued' | 'processing' | 'completed' | 'failed' }
+  | { type: 'progress'; pct: number; etaMs?: number }
+  | { type: 'chunk'; base64: string }
+  | { type: 'thumbnail'; base64: string }
+  | {
+      type: 'done';
+      base64?: string;
+      videoUrl?: string;
+      posterBase64?: string;
+      meta?: Record<string, unknown>;
+    }
+  | { type: 'error'; message: string };
 
 export type StreamState = {
-  status: "idle" | "starting" | "streaming" | "done" | "error";
+  status: 'idle' | 'starting' | 'streaming' | 'done' | 'error';
   progressPct?: number;
   etaMs?: number;
   currentBase64?: string;
@@ -106,12 +112,12 @@ export type StreamState = {
 };
 
 export type ChatConversationTurn = {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
 };
 
 export type BackendGeminiContent = {
-  role: "user" | "model";
+  role: 'user' | 'model';
   parts: Array<{ text: string }>;
 };
 
@@ -119,13 +125,22 @@ export type BackendGeminiContent = {
 export type BackendChatImageRequestPayload = {
   brand_id: string;
   model: SupportedBackendModel;
-  medium: "image" | "video";
+  medium: 'image' | 'video';
   prompt: string;
   aspect_ratio: string;
   resolution?: string;
-  duration_seconds?: "4" | "6" | "8";
-  image_size?: "512px" | "1K" | "2K" | "4K";
-  reference_images?: { data?: string; image_url?: string; storage_bucket?: string; storage_path?: string; mime_type: string; filename?: string; weight?: number; referenceType?: "asset" | "style" }[];
+  duration_seconds?: '4' | '6' | '8';
+  image_size?: '512px' | '1K' | '2K' | '4K';
+  reference_images?: {
+    data?: string;
+    image_url?: string;
+    storage_bucket?: string;
+    storage_path?: string;
+    mime_type: string;
+    filename?: string;
+    weight?: number;
+    referenceType?: 'asset' | 'style';
+  }[];
   first_frame?: { data?: string; image_url?: string; mime_type: string; filename?: string };
   last_frame?: { data?: string; image_url?: string; mime_type: string; filename?: string };
   reference_video?: { data: string; mime_type: string; filename?: string };
@@ -136,11 +151,14 @@ export type BackendChatImageRequestPayload = {
   // Brand-book pieces tagged on the node; the Backend renders them into an
   // authoritative forced block.
   brand_book_pieces?: BrandBookPieceKind[];
+  // Library ids of the reference creatives; the Backend folds what they earned into
+  // the prompt as <asset_performance>.
+  reference_asset_ids?: string[];
   seed?: number;
   cfg_scale?: number;
   steps?: number;
   continue_from?: { data: string; mime_type: string }[];
-  history?: { role: "user" | "assistant"; content: string }[];
+  history?: { role: 'user' | 'assistant'; content: string }[];
   reset?: boolean;
 };
 

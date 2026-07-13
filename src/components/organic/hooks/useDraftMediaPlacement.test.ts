@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeAll, beforeEach, mock } from "bun:test"
+import { describe, it, expect, afterAll, beforeAll, beforeEach, mock } from "bun:test"
 import { renderHook, act } from "@testing-library/react"
 import type { MediaAsset } from "@continuum/contracts"
+import { createCalendarStoreStub } from "@/lib/organic/testing/calendarStoreStub"
 
 // Intercept store so tests don't need a full Zustand provider.
-mock.module("@/lib/organic/store", () => ({
-  useCalendarStore: mock(),
-}))
+// The shared stub answers unnamed keys with a no-op. mock.module is process-wide, so a
+// bare `mock()` here hands `undefined` to every sibling spec's store selector.
+mock.module("@/lib/organic/store", () => createCalendarStoreStub())
 
 // shapeUserSuppliedMedia is pure — use the real implementation.
 // creativeRefFromAsset is also pure.
@@ -23,17 +24,22 @@ mock.module("@/lib/organic/store", () => ({
 let useDraftMediaPlacement: (draftId: string) => ReturnType<
   typeof import("./useDraftMediaPlacement").useDraftMediaPlacement
 >
-let useCalendarStore: ReturnType<typeof mock>
+let useCalendarStore: ReturnType<typeof mock> & { defaultImplementation: (s: (x: unknown) => unknown) => unknown }
 
 beforeAll(async () => {
   mock.restore()
-  mock.module("@/lib/organic/store", () => ({
-    useCalendarStore: mock(),
-  }))
+  mock.module("@/lib/organic/store", () => createCalendarStoreStub())
   const hookMod = await import("./useDraftMediaPlacement")
   const storeMod = await import("@/lib/organic/store")
   useDraftMediaPlacement = hookMod.useDraftMediaPlacement
-  useCalendarStore = storeMod.useCalendarStore as ReturnType<typeof mock>
+  useCalendarStore = storeMod.useCalendarStore as typeof useCalendarStore
+})
+
+// This file drives the shared stub with mockImplementation. mock.module is process-wide,
+// so leaving that implementation in place hands every later spec a store whose selectors
+// return this file's fixture instead of their own.
+afterAll(() => {
+  useCalendarStore.mockImplementation(useCalendarStore.defaultImplementation)
 })
 
 function makeImageAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {

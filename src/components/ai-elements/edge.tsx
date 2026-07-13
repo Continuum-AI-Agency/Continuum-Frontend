@@ -1,3 +1,5 @@
+// House-modified: diverged from the upstream ai-elements component of the same name.
+// Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import type { CSSProperties } from "react";
 import type { EdgeProps, InternalNode, Node } from "@xyflow/react";
 

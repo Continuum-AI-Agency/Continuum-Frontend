@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render as rtlRender, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';
 
 // happy-dom does not expose SyntaxError on its window object, which causes
@@ -26,11 +27,9 @@ mock.module('@/components/organic/hooks/usePublishDraft', () => ({
   })),
 }));
 
-mock.module('@/lib/organic/store', () => ({
-  useCalendarStore: mock((selector: (s: unknown) => unknown) =>
-    selector({ updateDraft: mock(), bulkDeleteDrafts: mock() }),
-  ),
-}));
+mock.module('@/lib/organic/store', () =>
+  createCalendarStoreStub({ updateDraft: mock(), bulkDeleteDrafts: mock() }),
+);
 
 mock.module('./AiStudioHandoffContext', () => ({
   useOpenDraftInAiStudio: () => undefined,
@@ -152,7 +151,15 @@ mock.module('./PreviewMediaDropZone', () => ({
 
 afterAll(() => mock.restore());
 
+import { ToastProvider } from '@/components/ui/ToastProvider';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
+
+// The preview's enrichment ladder surfaces enqueue failures as toasts, so it needs the
+// same context the (post-auth) layout wraps the whole app in.
+const render = (ui: ReactNode) => rtlRender(<ToastProvider>{ui}</ToastProvider>);
+
+const renderPreview = () =>
+  render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
 
 function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
@@ -176,7 +183,7 @@ describe('OrganicDraftPreview — contextual shell', () => {
   beforeEach(() => cleanup());
 
   it('renders the glanceable metadata chips and the ⋯ command menu', () => {
-    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+    renderPreview();
     expect(screen.getByTestId('meta-chips')).toBeTruthy();
     expect(screen.getByText('instagram')).toBeTruthy();
     expect(screen.getByText('Post')).toBeTruthy();
@@ -185,7 +192,7 @@ describe('OrganicDraftPreview — contextual shell', () => {
   });
 
   it('renders the caption as click-to-edit text (no always-on textarea)', () => {
-    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+    renderPreview();
     // EditableCaption read mode = a button labelled for editing carrying the text.
     const caption = screen.getByLabelText('Edit instagram caption');
     expect(caption.tagName).toBe('BUTTON');
@@ -297,7 +304,7 @@ describe('OrganicDraftPreview — schedule readiness', () => {
   });
 
   it('renders the media-enrichment inventory label in the header', () => {
-    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+    renderPreview();
     expect(screen.getByText('No media yet')).toBeTruthy();
   });
 });

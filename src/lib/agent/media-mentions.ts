@@ -12,16 +12,16 @@ import type {
   MediaAsset,
   MediaCollection,
   MediaSearchResultItem,
-} from "@continuum/contracts";
-import type { AgentMentionSuggestion } from "@/lib/agent-references";
+} from '@continuum/contracts';
+import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import {
   buildLibraryQuery,
   MEDIA_SOURCES,
-  toContractSource,
   type SourceFilterValue,
-} from "@/lib/media/filters";
+  toContractSource,
+} from '@/lib/media/filters';
 
-const MEDIA_GROUP = "Media library";
+const MEDIA_GROUP = 'Media library';
 const MIN_SEMANTIC_QUERY = 2;
 
 export type MediaSourceFolder = { value: SourceFilterValue; label: string };
@@ -31,21 +31,21 @@ export type MediaSourceFolder = { value: SourceFilterValue; label: string };
 // gets a folder automatically. "backfill" is folded into All media — it has no
 // first-class folder (same as the Library sidebar Browse group).
 export const MEDIA_SOURCE_FOLDERS: MediaSourceFolder[] = [
-  { value: "all", label: "All media" },
-  ...MEDIA_SOURCES.filter((s) => s.value !== "backfill"),
+  { value: 'all', label: 'All media' },
+  ...MEDIA_SOURCES.filter((s) => s.value !== 'backfill'),
 ];
 
-export const MEDIA_SOURCE_FOLDER_PREFIX = "media-source:";
-export const MEDIA_COLLECTION_FOLDER_PREFIX = "media-collection:";
+export const MEDIA_SOURCE_FOLDER_PREFIX = 'media-source:';
+export const MEDIA_COLLECTION_FOLDER_PREFIX = 'media-collection:';
 
 export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSuggestion {
-  const label = asset.title ?? asset.storagePath.split("/").pop() ?? asset.id;
+  const label = asset.title ?? asset.storagePath.split('/').pop() ?? asset.id;
   const previewUrl = asset.signedUrl ?? asset.thumbnailUrl ?? null;
   const reference: AgentMentionReference = {
     id: asset.id,
-    type: "media_asset",
+    type: 'media_asset',
     label,
-    source: "organic",
+    source: 'organic',
     metadata: {
       assetId: asset.id,
       kind: asset.kind,
@@ -66,15 +66,16 @@ export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSu
   return {
     key: `media:${asset.id}`,
     label,
-    type: "media_asset",
-    source: "organic",
+    type: 'media_asset',
+    source: 'organic',
     group: MEDIA_GROUP,
-    description: [asset.kind, asset.description].filter(Boolean).join(" · "),
+    description: [asset.kind, asset.description].filter(Boolean).join(' · '),
     badge: asset.kind,
     reference,
     preview: {
       url: previewUrl,
-      kind: asset.kind,
+      // 'file' assets (.aep etc.) have no renderable inline preview.
+      kind: asset.kind === 'file' ? undefined : asset.kind,
       label,
     },
   };
@@ -84,10 +85,10 @@ export function sourceFolderToSuggestion(folder: MediaSourceFolder): AgentMentio
   return {
     key: `${MEDIA_SOURCE_FOLDER_PREFIX}${folder.value}`,
     label: folder.label,
-    type: "media_asset",
-    source: "organic",
+    type: 'media_asset',
+    source: 'organic',
     group: MEDIA_GROUP,
-    childrenLabel: "Browse creatives",
+    childrenLabel: 'Browse creatives',
     isFolder: true,
   };
 }
@@ -96,10 +97,10 @@ export function collectionToSuggestion(collection: MediaCollection): AgentMentio
   return {
     key: `${MEDIA_COLLECTION_FOLDER_PREFIX}${collection.id}`,
     label: collection.name,
-    type: "media_asset",
-    source: "organic",
+    type: 'media_asset',
+    source: 'organic',
     group: MEDIA_GROUP,
-    childrenLabel: collection.kind === "smart" ? "Smart collection" : "Collection",
+    childrenLabel: collection.kind === 'smart' ? 'Smart collection' : 'Collection',
     isFolder: true,
   };
 }
@@ -145,16 +146,16 @@ export async function fetchMediaMentionAssets(
   input: FetchMediaMentionAssetsInput,
 ): Promise<AgentMentionSuggestion[]> {
   const { brandId, source, collectionId, query, limit = 24 } = input;
-  const trimmed = (query ?? "").trim();
+  const trimmed = (query ?? '').trim();
 
   if (trimmed.length >= MIN_SEMANTIC_QUERY && !collectionId) {
     const contractSource = toContractSource(source);
-    const response = await fetch("/api/library/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const response = await fetch('/api/library/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brandId,
-        mode: "text",
+        mode: 'text',
         query: trimmed,
         limit,
         ...(contractSource ? { filters: { source: contractSource } } : {}),
@@ -165,7 +166,7 @@ export async function fetchMediaMentionAssets(
     return (payload.items ?? []).map((item) => mediaAssetToMentionSuggestion(item.asset));
   }
 
-  const params = buildLibraryQuery({ brandId, source: source ?? "all", collectionId, limit });
+  const params = buildLibraryQuery({ brandId, source: source ?? 'all', collectionId, limit });
   const response = await fetch(`/api/library/assets?${params.toString()}`);
   if (!response.ok) return [];
   const payload = (await response.json()) as { items?: MediaAsset[] };

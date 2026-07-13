@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { TimelineEditorNodeData, TimelineItem, TimelineTrack } from '../../types';
+import type { TimelineItem, TimelineTrack } from '../../types';
 
 // Multi-track helpers for the Video Editor. The base track is `data.items`
 // (unchanged); overlay tracks float on top, each item placed at an absolute
@@ -13,8 +13,14 @@ const DEFAULT_OVERLAY_TRACK_ID = 'overlay-1';
 // cover the base; the user adjusts scale/position via the inspector transform.
 const DEFAULT_OVERLAY_TRANSFORM = { scale: 0.4, offsetX: 0.28, offsetY: -0.28 };
 
-/** The overlay tracks on a timeline node (empty for legacy single-track data). */
-export function resolveOverlayTracks(data: TimelineEditorNodeData | undefined): TimelineTrack[] {
+/**
+ * The overlay tracks on a timeline document (empty for legacy single-track data).
+ * Structural, not node-shaped: the editor's document is a node's data on the
+ * canvas and a draft row in the Library, and both carry the same overlay field.
+ */
+export function resolveOverlayTracks(
+  data: { items?: TimelineItem[]; overlayTracks?: TimelineTrack[] } | undefined,
+): TimelineTrack[] {
   return Array.isArray(data?.overlayTracks) ? data.overlayTracks : [];
 }
 

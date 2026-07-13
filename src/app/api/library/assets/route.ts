@@ -1,15 +1,23 @@
-import { mediaKindSchema, mediaSourceSchema } from '@continuum/contracts';
+import {
+  type CustomFieldFilter,
+  mediaKindSchema,
+  mediaReviewStatusSchema,
+  mediaSourceSchema,
+} from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { parseFieldFiltersParam } from '@/lib/library/customFields';
+import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import {
   buildCarousel,
   carouselSignablePaths,
   EXCLUDE_CAROUSEL_SLIDES_FILTER,
 } from '@/lib/media/carousel';
-import { rowToMediaAsset } from '@/lib/media/mapper';
+import { kindMatchOrFilter, paginateByMembership, parseTagsParam } from '@/lib/media/filters';
+import { rowToSignedMediaAsset } from '@/lib/media/mapper';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from '@/lib/media/schema';
-import { mintSignedUrls } from '@/lib/media/signed-urls';
+import { assetSignablePaths, mintSignedUrls } from '@/lib/media/signed-urls';
 import { resolveSmartQueryFilter } from '@/lib/media/smart-collections';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -23,6 +31,8 @@ const querySchema = z.object({
   collectionId: z.string().uuid().optional(),
   source: mediaSourceSchema.optional(),
   kind: mediaKindSchema.optional(),
+  tags: z.string().optional(),
+  reviewStatus: mediaReviewStatusSchema.optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(96).default(PAGE_SIZE),
 });
@@ -45,13 +55,24 @@ export async function GET(request: Request) {
     collectionId: url.searchParams.get('collectionId') ?? undefined,
     source: url.searchParams.get('source') ?? undefined,
     kind: url.searchParams.get('kind') ?? undefined,
+    tags: url.searchParams.get('tags') ?? undefined,
+    reviewStatus: url.searchParams.get('reviewStatus') ?? undefined,
     offset: url.searchParams.get('offset') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, collectionId, source, kind, offset, limit } = parsed.data;
+  const { brandId, collectionId, source, kind, reviewStatus, offset, limit } = parsed.data;
+  const tags = parseTagsParam(parsed.data.tags);
+
+  // A malformed filter must fail loudly: dropping it would widen the result set,
+  // and a filter UI that quietly shows MORE than you asked for is worse than one
+  // that errors.
+  const fieldFilterParse = parseFieldFiltersParam(url.searchParams.get('fieldFilters'));
+  if (!fieldFilterParse.ok) {
+    return NextResponse.json({ error: fieldFilterParse.reason }, { status: 422 });
+  }
 
   if (!(await callerHasBrandAccess(supabase, brandId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -66,6 +87,7 @@ export async function GET(request: Request) {
   // for derived folders). Manual collections instead constrain by membership.
   let effectiveSource = source;
   let effectiveKind = kind;
+  let effectiveFieldFilters: CustomFieldFilter[] = fieldFilterParse.filters;
   let assetIds: string[] | null = null;
 
   if (collectionId) {
@@ -85,13 +107,18 @@ export async function GET(request: Request) {
       const smart = resolveSmartQueryFilter(col.smart_query);
       effectiveSource = smart.source ?? source;
       effectiveKind = smart.kind ?? kind;
+      // The collection's saved field filters NARROW further with the chips the
+      // user has on — they compose (AND), they do not replace each other.
+      effectiveFieldFilters = [...(smart.fieldFilters ?? []), ...fieldFilterParse.filters];
     } else {
+      // Full membership id list (position-ordered): pagination happens AFTER
+      // the asset-level filters below, so excluded rows (deleted, carousel
+      // slides) can never under-fill a page or desync the offset math.
       const { data: items, error: itemsError } = await mediaSchema(supabase)
         .from('collection_items')
         .select('asset_id')
         .eq('collection_id', collectionId)
-        .order('position', { ascending: true })
-        .range(offset, offset + limit - 1);
+        .order('position', { ascending: true });
       if (itemsError) {
         console.error('[library/assets] collection_items query failed', itemsError);
         return NextResponse.json({ error: 'Query failed' }, { status: 500 });
@@ -103,44 +130,93 @@ export async function GET(request: Request) {
     }
   }
 
+  // Custom-field filters resolve to an asset-id constraint, because the values
+  // live in their own table. `restrictIds` is a candidate set to intersect;
+  // `excludeIds` only appears for is_empty-only filters, where there is nothing
+  // positive to enumerate and the constraint is a complement.
+  let restrictIds: string[] | null = null;
+  let excludeIds: string[] = [];
+
+  if (effectiveFieldFilters.length > 0) {
+    let resolution: Awaited<ReturnType<typeof resolveFieldFilterAssetIds>>;
+    try {
+      resolution = await resolveFieldFilterAssetIds(supabase, brandId, effectiveFieldFilters);
+    } catch {
+      return NextResponse.json({ error: 'Query failed' }, { status: 500 });
+    }
+    if (resolution.kind === 'ids') restrictIds = resolution.ids;
+    if (resolution.kind === 'exclude') excludeIds = resolution.ids;
+  }
+
+  // A manual collection already gives a finite candidate list, so both field
+  // constraints fold into it in memory — no second id list on the wire.
+  if (assetIds && restrictIds) {
+    const allowed = new Set(restrictIds);
+    assetIds = assetIds.filter((id) => allowed.has(id));
+    restrictIds = null;
+  }
+  if (assetIds && excludeIds.length > 0) {
+    const denied = new Set(excludeIds);
+    assetIds = assetIds.filter((id) => !denied.has(id));
+    excludeIds = [];
+  }
+  if ((assetIds && assetIds.length === 0) || restrictIds?.length === 0) {
+    return NextResponse.json({ items: [], nextOffset: null });
+  }
+
+  // Hide non-cover carousel slides everywhere (flat grid AND collections) — a
+  // saved carousel shows as one cover tile carrying its slides.
   let query = mediaSchema(supabase)
     .from('assets')
     .select(MEDIA_ASSET_SELECT)
     .eq('brand_id', brandId)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER);
 
+  if (restrictIds) query = query.in('id', restrictIds);
+  if (excludeIds.length > 0) query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   if (effectiveSource) query = query.eq('source', effectiveSource);
-  if (effectiveKind) query = query.eq('kind', effectiveKind);
+  // Kind matches the row itself OR a slide inside a cover row's origin_ref, so
+  // mixed carousels (video slide behind an image cover) surface under "Videos".
+  if (effectiveKind) query = query.or(kindMatchOrFilter(effectiveKind));
+  if (tags.length > 0) query = query.contains('tags', tags);
+  if (reviewStatus) query = query.eq('review_status', reviewStatus);
+
+  let rows: MediaAssetRow[];
+  let nextOffset: number | null;
 
   if (assetIds) {
-    query = query.in('id', assetIds);
+    const { data, error } = await query.in('id', assetIds);
+    if (error) {
+      console.error('[library/assets] assets query failed', error);
+      return NextResponse.json({ error: 'Query failed' }, { status: 500 });
+    }
+    const members = (data ?? []) as unknown as MediaAssetRow[];
+    const paged = paginateByMembership(members, assetIds, offset, limit);
+    rows = paged.page;
+    nextOffset = paged.nextOffset;
   } else {
-    // Hide non-cover carousel slides from the flat grid — a saved carousel shows
-    // as one cover tile (its slides ride along on the cover's `carousel` field).
-    query = query
-      .not('tags', 'cs', EXCLUDE_CAROUSEL_SLIDES_FILTER)
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+    if (error) {
+      console.error('[library/assets] assets query failed', error);
+      return NextResponse.json({ error: 'Query failed' }, { status: 500 });
+    }
+    rows = (data ?? []) as unknown as MediaAssetRow[];
+    nextOffset = rows.length === limit ? offset + limit : null;
   }
 
-  const { data, error } = await query;
-  if (error) {
-    console.error('[library/assets] assets query failed', error);
-    return NextResponse.json({ error: 'Query failed' }, { status: 500 });
-  }
-
-  const rows = (data ?? []) as unknown as MediaAssetRow[];
   const signedUrlMap = await mintSignedUrls([
-    ...rows.map((r) => ({ path: r.storage_path, bucket: r.bucket })),
+    ...assetSignablePaths(rows),
     ...carouselSignablePaths(rows),
   ]);
 
   const items = rows.map((row) => {
-    const asset = rowToMediaAsset(row, signedUrlMap.get(row.storage_path) ?? null);
+    const asset = rowToSignedMediaAsset(row, signedUrlMap);
     const carousel = buildCarousel(row, signedUrlMap);
     return carousel ? { ...asset, carousel } : asset;
   });
 
-  const nextOffset = rows.length === limit ? offset + limit : null;
   return NextResponse.json({ items, nextOffset });
 }

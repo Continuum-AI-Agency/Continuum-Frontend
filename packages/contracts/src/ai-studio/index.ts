@@ -1,4 +1,6 @@
+export * from './agent-vocabulary';
 export * from './brand-enforcement';
+export * from './canvas-compose';
 export * from './model-catalog';
 export * from './omni-gen';
 export * from './prompt-enrichment';

@@ -103,15 +103,16 @@ const SCALE: AppNavigationItem = {
   items: SCALE_ITEMS,
 };
 
-// Locked developer surface. Greyed-out and non-interactive until released, with
-// a user-facing reason so it never reads as an unexplained dead entry (BUG-009).
+// Locked developer surface. Greyed-out and non-interactive for users not in the
+// Continuum Developers program; disabledReason is the hover tooltip + a11y name
+// so the entry never reads as an unexplained dead affordance (BUG-009).
 const DEVELOPERS: AppNavigationItem = {
   label: "Developers",
   href: "/developers",
   icon: Code,
   disabled: true,
   locked: true,
-  disabledReason: "Coming soon",
+  disabledReason: "You are not enrolled in our developers program",
 };
 
 // The canonical sidebar IA: an unlabeled lead group, then one labeled section

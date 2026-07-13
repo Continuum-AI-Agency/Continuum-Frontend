@@ -29,7 +29,8 @@ function platformLabel(platform: PublishPlatform | undefined): string {
 // User-facing copy for the precise publish failure codes the backend maps from the
 // provider's error code + the staging gate. Falls back to the raw message.
 const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
-  token_expired: 'Your account connection expired. Reconnect it, then try again.',
+  token_expired:
+    'PLEASE RECONNECT: The connection for the selected Instagram account expired or was revoked. Reconnect that account in Integrations, then try again. We always post to the account you selected — never a different one on the brand.',
   rate_limited:
     'The platform is temporarily rate-limiting requests. Wait a few minutes and try again.',
   media_processing_error: "The platform couldn't process this media. Check the file and try again.",

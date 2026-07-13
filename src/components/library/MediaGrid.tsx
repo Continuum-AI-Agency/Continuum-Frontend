@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
-import { ImagePlus, Loader2 } from "lucide-react";
-import type { MediaAsset } from "@continuum/contracts";
-import type { CaptionStyle } from "@/lib/clips/clipCaptionStyle";
-import { stagger } from "@/components/ui/Motion";
-import { MediaCard } from "./MediaCard";
-import { cn } from "@/lib/utils";
+import type { MediaAsset } from '@continuum/contracts';
+import { ImagePlus, Loader2 } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
+import { useEffect, useRef } from 'react';
+import { stagger } from '@/components/ui/Motion';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { cn } from '@/lib/utils';
+import { MediaCard } from './MediaCard';
 
 type Props = {
   assets: MediaAsset[];
@@ -18,6 +18,7 @@ type Props = {
   hasMore?: boolean;
   loadingMore?: boolean;
   className?: string;
+  onOpenDetail?: (asset: MediaAsset) => void;
 };
 
 const cardVariants: Variants = {
@@ -27,7 +28,7 @@ const cardVariants: Variants = {
 };
 
 const GRID_CLASS =
-  "grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  'grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 export function MediaGrid({
   assets,
@@ -38,6 +39,7 @@ export function MediaGrid({
   hasMore = false,
   loadingMore = false,
   className,
+  onOpenDetail,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -53,7 +55,7 @@ export function MediaGrid({
       (entries) => {
         if (entries[0]?.isIntersecting && !loadingMore) onLoadMore();
       },
-      { rootMargin: "300px" },
+      { rootMargin: '300px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -64,9 +66,11 @@ export function MediaGrid({
       <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 text-muted-foreground">
         <ImagePlus className="size-8 text-muted-foreground/30" />
         <div className="flex flex-col items-center gap-1 text-center">
-          <p className="text-sm">{emptyHint ?? "No media yet."}</p>
+          <p className="text-sm">{emptyHint ?? 'No media yet.'}</p>
           {!emptyHint && (
-            <p className="text-xs text-muted-foreground/60">Upload images or videos, or drop files anywhere on the page.</p>
+            <p className="text-xs text-muted-foreground/60">
+              Upload images or videos, or drop files anywhere on the page.
+            </p>
           )}
         </div>
       </div>
@@ -78,7 +82,14 @@ export function MediaGrid({
       {reduceMotion ? (
         <div className={cn(GRID_CLASS, className)}>
           {assets.map((asset, i) => (
-            <MediaCard key={asset.id} asset={asset} index={i} showBoundingBoxes={showBoundingBoxes} captionStyle={captionStyle} />
+            <MediaCard
+              key={asset.id}
+              asset={asset}
+              index={i}
+              showBoundingBoxes={showBoundingBoxes}
+              captionStyle={captionStyle}
+              onOpen={onOpenDetail}
+            />
           ))}
         </div>
       ) : (
@@ -91,7 +102,13 @@ export function MediaGrid({
           <AnimatePresence mode="popLayout" initial={false}>
             {assets.map((asset, i) => (
               <motion.div key={asset.id} layout variants={cardVariants} exit="exit">
-                <MediaCard asset={asset} index={i} showBoundingBoxes={showBoundingBoxes} captionStyle={captionStyle} />
+                <MediaCard
+                  asset={asset}
+                  index={i}
+                  showBoundingBoxes={showBoundingBoxes}
+                  captionStyle={captionStyle}
+                  onOpen={onOpenDetail}
+                />
               </motion.div>
             ))}
           </AnimatePresence>

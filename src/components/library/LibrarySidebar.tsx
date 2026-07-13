@@ -1,28 +1,29 @@
-"use client";
+'use client';
 
-import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import type { MediaCollection, MediaSource } from '@continuum/contracts';
 import {
-  FolderPlus,
+  Clapperboard,
+  Film,
   Folder,
   FolderOpen,
+  FolderPlus,
   HardDrive,
-  Loader2,
   LayoutGrid,
-  Upload,
-  Sparkles,
-  PenTool,
-  Telescope,
-  Film,
-  Clapperboard,
+  Loader2,
+  Megaphone,
   MessageSquare,
+  PenTool,
   Scissors,
-} from "lucide-react";
-import type { MediaCollection, MediaSource } from "@continuum/contracts";
-import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { MEDIA_SOURCES, type SourceFilterValue } from "@/lib/media/filters";
+  Sparkles,
+  Telescope,
+  Upload,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useState } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { MEDIA_SOURCES, type SourceFilterValue } from '@/lib/media/filters';
+import { cn } from '@/lib/utils';
 
 type Props = {
   brandId: string;
@@ -41,6 +42,7 @@ const SOURCE_ICONS: Record<MediaSource, typeof Folder> = {
   ai_generated: Sparkles,
   canvas: PenTool,
   inspiration: Telescope,
+  meta_ad: Megaphone,
   hyperframe: Film,
   chat_upload: MessageSquare,
   clip: Scissors,
@@ -53,8 +55,8 @@ const SOURCE_ICONS: Record<MediaSource, typeof Folder> = {
 // MEDIA_SOURCES so every composited bucket shows up. Imported/backfill stays
 // reachable via the filter chips but is intentionally not a sidebar folder.
 const BROWSE_FOLDERS: { value: SourceFilterValue; label: string; icon: typeof Folder }[] = [
-  { value: "all", label: "All Media", icon: LayoutGrid },
-  ...MEDIA_SOURCES.filter((s) => s.value !== "backfill").map((s) => ({
+  { value: 'all', label: 'All Media', icon: LayoutGrid },
+  ...MEDIA_SOURCES.filter((s) => s.value !== 'backfill').map((s) => ({
     value: s.value,
     label: s.label,
     icon: SOURCE_ICONS[s.value],
@@ -62,10 +64,10 @@ const BROWSE_FOLDERS: { value: SourceFilterValue; label: string; icon: typeof Fo
 ];
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
 }
 
 function CollectionRow({
@@ -82,8 +84,8 @@ function CollectionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent",
-        selected && "bg-accent font-medium",
+        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+        selected && 'bg-accent font-medium',
       )}
     >
       {selected ? (
@@ -112,11 +114,13 @@ function BrowseRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent",
-        selected && "bg-accent font-medium",
+        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-accent',
+        selected && 'bg-accent font-medium',
       )}
     >
-      <Icon className={cn("size-4 shrink-0", selected ? "text-primary" : "text-muted-foreground")} />
+      <Icon
+        className={cn('size-4 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}
+      />
       <span className="truncate">{label}</span>
     </button>
   );
@@ -133,7 +137,7 @@ export function LibrarySidebar({
 }: Props) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   async function submitCreate() {
@@ -144,18 +148,18 @@ export function LibrarySidebar({
     }
     setSubmitting(true);
     try {
-      const resp = await fetch("/api/library/collections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const resp = await fetch('/api/library/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandId, name: trimmed }),
       });
       if (resp.ok) {
-        setName("");
+        setName('');
         setCreating(false);
         router.refresh();
       }
     } catch (err) {
-      console.error("[LibrarySidebar] create collection failed", err);
+      console.error('[LibrarySidebar] create collection failed', err);
     } finally {
       setSubmitting(false);
     }
@@ -205,9 +209,9 @@ export function LibrarySidebar({
               disabled={submitting}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void submitCreate();
-                if (e.key === "Escape") {
-                  setName("");
+                if (e.key === 'Enter') void submitCreate();
+                if (e.key === 'Escape') {
+                  setName('');
                   setCreating(false);
                 }
               }}

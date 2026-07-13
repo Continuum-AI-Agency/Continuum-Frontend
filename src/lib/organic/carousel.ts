@@ -2,10 +2,12 @@
 // Drafts carry a `format` string ("carousel"/"Carousel"); real published posts
 // carry a raw `mediaType` (Instagram "CAROUSEL_ALBUM"). Both are matched loosely
 // so casing and provider spelling never leak into call sites.
+//
+// The draft-format predicate is re-exported from @continuum/contracts so what the
+// planner renders as a carousel and what the publisher publishes as one can never
+// disagree — they are now the same function.
 
-export function isCarouselFormat(format?: string | null): boolean {
-  return (format ?? '').trim().toLowerCase() === 'carousel';
-}
+export { isCarouselFormat } from '@continuum/contracts';
 
 export function isCarouselMediaType(mediaType?: string | null): boolean {
   return (mediaType ?? '').toUpperCase().includes('CAROUSEL');

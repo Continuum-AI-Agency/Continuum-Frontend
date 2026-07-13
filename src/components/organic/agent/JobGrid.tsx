@@ -6,6 +6,8 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import { useDraftStoryboard } from '../hooks/useDraftStoryboard';
 import type { AgentJobState } from './types';
 
@@ -202,12 +204,12 @@ function JobCard({
             </div>
           </div>
           {thumbnailUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={thumbnailUrl}
-              alt="Draft preview"
-              className="aspect-[4/5] w-full rounded-md object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-            />
+            <div className="aspect-[4/5] w-full overflow-hidden rounded-md outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10">
+              <ChatMediaThumb
+                media={mediaFromPreviewUrls(`job:${job.jobId}`, [thumbnailUrl], format)[0]}
+                className="rounded-none"
+              />
+            </div>
           )}
           {caption && <p className="line-clamp-2 text-xs text-foreground">{caption}</p>}
           {hashtags.length > 0 && (

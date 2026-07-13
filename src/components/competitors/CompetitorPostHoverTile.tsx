@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink, Heart, Images, MessageCircle, Play } from "lucide-react";
 
-import type { InstagramMediaItem } from "@continuum/contracts";
+import type { InstagramMediaItem, InstagramPost } from "@continuum/contracts";
 import {
   Carousel,
   CarouselContent,
@@ -29,6 +29,13 @@ function formatDate(value: string | null | undefined): string | null {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
+/** First playable video URL on a reel (or null when the post has no video item). */
+function reelVideoUrl(post: InstagramPost): string | null {
+  if (post.kind !== "reel") return null;
+  const video = post.items.find((item) => item.kind === "video");
+  return video?.url ?? null;
+}
+
 function KindGlyph({ kind }: { kind: CompetitorPostView["post"]["kind"] }) {
   if (kind === "reel") return <Play className="h-2.5 w-2.5 fill-current" aria-hidden />;
   if (kind === "carousel") return <Images className="h-2.5 w-2.5" aria-hidden />;
@@ -52,6 +59,68 @@ function PostThumb({ coverUrl, alt, className }: { coverUrl: string | null; alt:
       loading="lazy"
       onError={() => setErrored(true)}
       className={cn("w-full object-cover", className)}
+    />
+  );
+}
+
+// Muted looping reel player. Parent sets `playing` (tile hover) or `autoPlay`
+// (hover-card open) to start/stop. Falls back to the cover still on load error.
+function ReelVideo({
+  src,
+  poster,
+  alt,
+  className,
+  playing = false,
+  autoPlay = false,
+  controls = false,
+}: {
+  src: string;
+  poster: string | null;
+  alt: string;
+  className?: string;
+  playing?: boolean;
+  autoPlay?: boolean;
+  controls?: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [errored, setErrored] = useState(false);
+  const shouldPlay = playing || autoPlay;
+
+  useEffect(() => {
+    if (errored) return;
+    const video = videoRef.current;
+    if (!video) return;
+    if (shouldPlay) {
+      void video.play().catch(() => {
+        // Autoplay can be blocked by policy; poster still shows.
+      });
+      return;
+    }
+    video.pause();
+    try {
+      video.currentTime = 0;
+    } catch {
+      // Seeking before metadata is ready can throw; leave at pause position.
+    }
+  }, [shouldPlay, errored, src]);
+
+  if (errored) {
+    return <PostThumb coverUrl={poster} alt={alt} className={className} />;
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      poster={poster ?? undefined}
+      muted
+      loop
+      playsInline
+      controls={controls}
+      preload={shouldPlay ? "auto" : "metadata"}
+      aria-label={alt}
+      onError={() => setErrored(true)}
+      className={cn("w-full bg-black object-cover", className)}
     />
   );
 }
@@ -129,6 +198,9 @@ export function CompetitorPostHoverTile({
   const postDate = formatDate(post.timestamp);
   const altText = `${view.competitorName} ${post.kind}`;
   const slides = carouselSlides(post);
+  const videoUrl = reelVideoUrl(post);
+  const [tileHovering, setTileHovering] = useState(false);
+  const mediaClassName = "aspect-square h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-105";
 
   return (
     <HoverCard openDelay={180} closeDelay={100}>
@@ -139,12 +211,20 @@ export function CompetitorPostHoverTile({
           rel="noreferrer"
           aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
           className="group/tile relative block overflow-hidden rounded-md border border-border/70 bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onPointerEnter={() => setTileHovering(true)}
+          onPointerLeave={() => setTileHovering(false)}
         >
-          <PostThumb
-            coverUrl={post.coverUrl}
-            alt={altText}
-            className="aspect-square h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-105"
-          />
+          {videoUrl ? (
+            <ReelVideo
+              src={videoUrl}
+              poster={post.coverUrl}
+              alt={altText}
+              playing={tileHovering}
+              className={mediaClassName}
+            />
+          ) : (
+            <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
+          )}
           {(post.kind !== "post" || post.mediaCount > 1) && (
             <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
               <KindGlyph kind={post.kind} />
@@ -157,6 +237,15 @@ export function CompetitorPostHoverTile({
       <HoverCardContent align="start" className="w-80 overflow-hidden p-0">
         {slides.length > 0 ? (
           <PostCarousel slides={slides} poster={post.coverUrl} alt={altText} />
+        ) : videoUrl ? (
+          <ReelVideo
+            src={videoUrl}
+            poster={post.coverUrl}
+            alt={altText}
+            autoPlay
+            controls
+            className="max-h-72 aspect-square"
+          />
         ) : (
           <PostThumb coverUrl={post.coverUrl} alt={altText} className="max-h-72" />
         )}

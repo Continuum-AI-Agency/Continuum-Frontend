@@ -1,22 +1,16 @@
-// Clip transition model + timing math, shared by the canvas export and the CSS
-// preview. `cut`, `fade` (through black), and `dipWhite` are single-clip color
-// ramps at the seam — no overlap, so they fit the sequential render loop.
-// `crossDissolve` overlaps two clips and is handled by the frame compositor.
-// The transition is attached to the *incoming* clip (the boundary before it).
+// Clip transition timing math, shared by the canvas export and the CSS preview.
+// `cut`, `fade` (through black), and `dipWhite` are single-clip color ramps at the
+// seam — no overlap, so they fit the sequential render loop. `crossDissolve`
+// overlaps two clips and is handled by the frame compositor. The transition is
+// attached to the *incoming* clip (the boundary before it).
+//
+// The transition VOCABULARY lives in @continuum/contracts (workflow-graph.ts) so
+// the Canvas Composer agent emits the same names this engine renders — adding a
+// transition type starts there, then gets its math here.
 
-export type ClipTransitionType =
-  | 'cut'
-  | 'fade'
-  | 'dipWhite'
-  | 'crossDissolve'
-  | 'slideLeft'
-  | 'slideRight'
-  | 'slideUp'
-  | 'slideDown'
-  | 'wipeLeft'
-  | 'wipeRight'
-  | 'zoomIn'
-  | 'spin';
+import type { ClipTransitionType } from '@continuum/contracts';
+
+export type { ClipTransitionType } from '@continuum/contracts';
 
 export interface ClipTransition {
   type: ClipTransitionType;
@@ -86,21 +80,48 @@ export function overlapTransitionAt(
   const k = Math.max(0, Math.min(1, t));
   switch (type) {
     case 'slideLeft':
-      return { outgoing: { ...idleLayer(), translateX: -k * width }, incoming: { ...idleLayer(), translateX: (1 - k) * width } };
+      return {
+        outgoing: { ...idleLayer(), translateX: -k * width },
+        incoming: { ...idleLayer(), translateX: (1 - k) * width },
+      };
     case 'slideRight':
-      return { outgoing: { ...idleLayer(), translateX: k * width }, incoming: { ...idleLayer(), translateX: -(1 - k) * width } };
+      return {
+        outgoing: { ...idleLayer(), translateX: k * width },
+        incoming: { ...idleLayer(), translateX: -(1 - k) * width },
+      };
     case 'slideUp':
-      return { outgoing: { ...idleLayer(), translateY: -k * height }, incoming: { ...idleLayer(), translateY: (1 - k) * height } };
+      return {
+        outgoing: { ...idleLayer(), translateY: -k * height },
+        incoming: { ...idleLayer(), translateY: (1 - k) * height },
+      };
     case 'slideDown':
-      return { outgoing: { ...idleLayer(), translateY: k * height }, incoming: { ...idleLayer(), translateY: -(1 - k) * height } };
+      return {
+        outgoing: { ...idleLayer(), translateY: k * height },
+        incoming: { ...idleLayer(), translateY: -(1 - k) * height },
+      };
     case 'wipeRight':
-      return { outgoing: idleLayer(), incoming: { ...idleLayer(), clip: { x: 0, y: 0, w: k * width, h: height } } };
+      return {
+        outgoing: idleLayer(),
+        incoming: { ...idleLayer(), clip: { x: 0, y: 0, w: k * width, h: height } },
+      };
     case 'wipeLeft':
-      return { outgoing: idleLayer(), incoming: { ...idleLayer(), clip: { x: (1 - k) * width, y: 0, w: k * width, h: height } } };
+      return {
+        outgoing: idleLayer(),
+        incoming: { ...idleLayer(), clip: { x: (1 - k) * width, y: 0, w: k * width, h: height } },
+      };
     case 'zoomIn':
       return { outgoing: idleLayer(), incoming: { ...idleLayer(k), scale: Math.max(0.001, k) } };
     case 'spin':
-      return { outgoing: idleLayer(), incoming: { translateX: 0, translateY: 0, scale: Math.max(0.001, k), rotate: (1 - k) * Math.PI, alpha: k } };
+      return {
+        outgoing: idleLayer(),
+        incoming: {
+          translateX: 0,
+          translateY: 0,
+          scale: Math.max(0.001, k),
+          rotate: (1 - k) * Math.PI,
+          alpha: k,
+        },
+      };
     default: // crossDissolve
       return { outgoing: idleLayer(), incoming: idleLayer(k) };
   }
@@ -158,7 +179,8 @@ export function computeOutputPlacements(
     const next = placements[i + 1];
     if (next && next.inOverlapSec > 0) {
       placements[i].outOverlapSec = next.inOverlapSec;
-      placements[i].soloEndSec = placements[i].outputStartSec + placements[i].outputDurationSec - next.inOverlapSec;
+      placements[i].soloEndSec =
+        placements[i].outputStartSec + placements[i].outputDurationSec - next.inOverlapSec;
     }
   }
   const last = placements[placements.length - 1];
@@ -168,7 +190,9 @@ export function computeOutputPlacements(
 
 /** The head overlap an overlap-transition contributes (0 for cut/fade/dip). */
 export function overlapInSecFor(transition: ClipTransition | undefined): number {
-  return transition && isOverlapTransition(transition.type) ? Math.max(0, transition.durationSec) : 0;
+  return transition && isOverlapTransition(transition.type)
+    ? Math.max(0, transition.durationSec)
+    : 0;
 }
 
 /**

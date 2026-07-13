@@ -79,6 +79,9 @@ export const publishErrorCodeSchema = z.enum([
   // Compliance gate reasons (see assertPublishable):
   'quality_failed',
   'media_missing',
+  // The draft resolved to no caption at all. A platform accepts a container with no caption
+  // param and posts it blank, so this fails closed rather than publishing an empty post.
+  'caption_missing',
   'hyperframe_mp4_not_ready',
   // The draft's format is not offered by its platform.
   'unsupported_format',

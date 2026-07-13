@@ -19,22 +19,6 @@ export function describeAddPlaceholderBlock(input: { isGenerating: boolean }): D
   return null;
 }
 
-export function describeGenerateBlock(input: {
-  isGenerating: boolean;
-  seededDraftCount: number;
-}): DisabledHint | null {
-  if (input.isGenerating) {
-    return { reason: 'Generation is already running.' };
-  }
-  if (input.seededDraftCount === 0) {
-    return {
-      reason: 'Add at least one placeholder to the calendar first.',
-      unlocks: 'AI drafts written from your Brand Book',
-    };
-  }
-  return null;
-}
-
 export function describeClearBlock(input: {
   isGenerating: boolean;
   draftsCount: number;

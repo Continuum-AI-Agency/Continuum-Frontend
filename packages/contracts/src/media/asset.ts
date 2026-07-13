@@ -5,8 +5,22 @@
 
 import { z } from 'zod';
 
-export const mediaKindSchema = z.enum(['image', 'video']);
+// 'file' covers non-renderable source files (After Effects projects, RAW
+// bundles) stored for the future rendering backend; the grid shows a generic
+// file card and no analysis pipeline runs for them.
+export const mediaKindSchema = z.enum(['image', 'video', 'file']);
 export type MediaKind = z.infer<typeof mediaKindSchema>;
+
+// Human review workflow over an asset — independent of the processing
+// `status`. 'none' means the asset has never entered review.
+export const mediaReviewStatusSchema = z.enum([
+  'none',
+  'draft',
+  'in_review',
+  'needs_changes',
+  'approved',
+]);
+export type MediaReviewStatus = z.infer<typeof mediaReviewStatusSchema>;
 
 // Where a library asset originated. Each value is a delineated "source" folder in
 // the unified library/grabber; physically the bytes may live in different storage
@@ -20,6 +34,9 @@ export type MediaKind = z.infer<typeof mediaKindSchema>;
 //   chat_upload:  files users dropped into a chat surface (chat-uploads bucket).
 //   clip:         a section cut from a long-form video (OpusClip-style pipeline).
 //   reel:         a client-stitched reel MP4 (Veo scenes → single publishable video).
+//   meta_ad:      an ad creative pulled back OUT of Meta into the Library, so a
+//                 creative that only ever existed as an ad can still be annotated,
+//                 versioned and reviewed like any other asset (Creative DNA).
 export const mediaSourceSchema = z.enum([
   'upload',
   'ai_generated',
@@ -30,6 +47,7 @@ export const mediaSourceSchema = z.enum([
   'chat_upload',
   'clip',
   'reel',
+  'meta_ad',
 ]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
@@ -74,7 +92,21 @@ export const adCreativeAnalysisSchema = z
   .strict();
 export type AdCreativeAnalysis = z.infer<typeof adCreativeAnalysisSchema>;
 
+// One timecoded line of a video's spoken track. Milliseconds (not seconds) so a
+// player can seek without a lossy unit conversion.
+export const transcriptSegmentSchema = z
+  .object({
+    startMs: z.number().int().nonnegative(),
+    endMs: z.number().int().nonnegative(),
+    text: z.string().min(1),
+  })
+  .strict();
+export type TranscriptSegment = z.infer<typeof transcriptSegmentSchema>;
+
 // Structured output the Gemini vision call must return for analyze_media.
+// transcript/transcriptSegments are populated on the video path only; a silent
+// clip yields an empty transcript (`''` / `[]`), which is a valid analysis —
+// not a failure. Images leave both undefined.
 export const mediaAnalysisResultSchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -82,6 +114,8 @@ export const mediaAnalysisResultSchema = z
     tags: z.array(z.string().min(1)).default([]),
     detectedObjects: z.array(detectedObjectSchema).default([]),
     adCreativeAnalysis: adCreativeAnalysisSchema.nullable().optional(),
+    transcript: z.string().nullable().optional(),
+    transcriptSegments: z.array(transcriptSegmentSchema).nullable().optional(),
   })
   .strict();
 export type MediaAnalysisResult = z.infer<typeof mediaAnalysisResultSchema>;
@@ -106,16 +140,27 @@ export const mediaAssetSchema = z
     source: mediaSourceSchema,
     originRef: z.record(z.string(), z.unknown()).nullable().optional(),
     status: mediaStatusSchema,
+    reviewStatus: mediaReviewStatusSchema.default('none'),
+    checksum: z.string().nullable().optional(),
     title: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     tags: z.array(z.string()).default([]),
     detectedObjects: z.array(detectedObjectSchema).default([]),
     adCreativeAnalysis: adCreativeAnalysisSchema.nullable().optional(),
+    // Video only, and nullable/optional so pre-v1.5 rows (and every image) parse.
+    // `transcript: ''` means "analyzed, no speech"; `null` means "never transcribed".
+    transcript: z.string().nullable().optional(),
+    transcriptSegments: z.array(transcriptSegmentSchema).nullable().optional(),
+    transcriptSource: z.string().nullable().optional(),
     embeddingModel: z.string().nullable().optional(),
     hasImageEmbedding: z.boolean().default(false),
     createdAt: z.string(),
     updatedAt: z.string(),
     signedUrl: z.string().nullable().optional(),
+    // Persisted poster path inside the asset's OWN bucket (never a URL). Null
+    // means no poster exists and the reader falls back to the full asset.
+    thumbnailPath: z.string().nullable().optional(),
+    // Transient signed URL for `thumbnailPath`, minted per-request like signedUrl.
     thumbnailUrl: z.string().nullable().optional(),
     // Present only on the cover row of a saved multi-slide group (e.g. a competitor
     // carousel): the ordered, signed slides so the Library renders one grouped tile

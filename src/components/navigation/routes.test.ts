@@ -101,7 +101,9 @@ describe("navigation structure", () => {
     expect(developers!.disabled).toBe(true);
     expect(developers!.locked).toBe(true);
     // BUG-009: a disabled entry must carry a user-facing reason.
-    expect(developers!.disabledReason).toBe("Coming soon");
+    expect(developers!.disabledReason).toBe(
+      "You are not enrolled in our developers program",
+    );
   });
 
   it("footer is Settings + admin-gated Admin", () => {

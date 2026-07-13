@@ -1,4 +1,4 @@
-import { StudioNode, Edge, BrandBookPieceKind } from './index';
+import type { BrandBookPieceKind, Edge, StudioNode } from './index';
 
 export type ExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -14,8 +14,21 @@ export type NodeOutput =
   | { type: 'text'; value: string }
   // base64 is optional: under URL-first generation an image output carries only a
   // signed URL (+ storage path/bucket). base64 is the emergency fallback.
-  | { type: 'image'; base64?: string; mimeType: string; url?: string; storagePath?: string; storageBucket?: string }
-  | { type: 'video'; url: string; posterBase64?: string; storagePath?: string; storageBucket?: string };
+  | {
+      type: 'image';
+      base64?: string;
+      mimeType: string;
+      url?: string;
+      storagePath?: string;
+      storageBucket?: string;
+    }
+  | {
+      type: 'video';
+      url: string;
+      posterBase64?: string;
+      storagePath?: string;
+      storageBucket?: string;
+    };
 
 export interface WorkflowExecutionContext {
   brandProfileId: string;
@@ -34,7 +47,7 @@ export type DependencyGraph = {
   dependencies: Map<string, string[]>;
   entryPoints: string[];
   executionOrder: string[];
-}
+};
 
 export interface EnrichPromptPayload {
   prompt: string;
@@ -89,6 +102,9 @@ export interface GenerationPayload {
   skillIds?: string[];
   // Brand-book pieces the Backend renders into an authoritative forced block.
   brandBookPieces?: BrandBookPieceKind[];
+  // Library ids of the reference creatives. The Backend folds what they actually
+  // EARNED into the prompt (<asset_performance>) so a variant is not made blind.
+  referenceAssetIds?: string[];
   aspectRatio?: string;
   resolution?: string;
   imageSize?: '512px' | '1K' | '2K' | '4K';

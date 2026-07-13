@@ -1,0 +1,101 @@
+// The seam that lets the Video Editor run anywhere.
+//
+// The editor was born inside the canvas: its document was a React Flow node's
+// data, its media bin was the node's incoming edges, every edit autosaved the
+// whole canvas session, and rendering resumed the downstream workflow graph.
+// None of that is intrinsic to editing video — it is how the canvas happens to
+// store things. This interface is the only thing the editor components know
+// about their host, so the same timeline can be opened from the Library on a
+// media.assets row with no canvas anywhere in sight.
+//
+// Implementations: useCanvasTimelineAdapter (node data + canvas_sessions +
+// workflow resume) and useLibraryTimelineAdapter (media.timeline_drafts + a
+// Library media bin + save-as-version/new-asset).
+
+import type { ReactNode } from 'react';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
+import type { CaptionWord } from '../../utils/splice/captionCues';
+import type {
+  TimelineOverlayRenderItem,
+  TimelineRenderItem,
+} from '../../utils/splice/composeTimeline';
+
+// The editable, user-authored document. Deliberately narrower than
+// TimelineEditorNodeData: render progress, the generated-video coordinates and
+// the canvas break-point gate (`committed`) are the host's business, not the
+// editor's.
+export interface TimelineDocument {
+  items: TimelineItem[];
+  overlayTracks?: TimelineTrack[];
+  exportPresetId?: string;
+  markers?: number[];
+  captionsEnabled?: boolean;
+  captionWords?: CaptionWord[];
+  captionStyle?: CaptionStyle;
+}
+
+export interface TimelinePatchOptions {
+  // Does this edit invalidate a render that already happened? Moving a clip
+  // does; dropping a ruler marker or toggling caption visibility does not. On
+  // the canvas this maps to the `committed` break-point flag, which must not be
+  // reset by edits that cannot change the output.
+  invalidatesRender?: boolean;
+}
+
+// Where a finished render goes. The canvas has exactly one destination (the
+// workflow it is parked in); the Library has two.
+export type TimelineRenderSinkKind = 'canvas-workflow' | 'library-version' | 'library-new-asset';
+
+export interface TimelineRenderSink {
+  kind: TimelineRenderSinkKind;
+  label: string;
+  description?: string;
+}
+
+export interface TimelineEditorAdapter {
+  scope: 'canvas' | 'library';
+  brandId: string | null;
+  header: { title: string; description: string };
+
+  // `document` is the reactive snapshot the editor renders from. `getDocument`
+  // is a fresh read for the render path, which must never composite a stale
+  // props closure (the canvas implementation reads straight from the store).
+  document: TimelineDocument;
+  getDocument(): TimelineDocument;
+  patchDocument(
+    updater: (document: TimelineDocument) => TimelineDocument,
+    options?: TimelinePatchOptions,
+  ): void;
+
+  // The media bin. On the canvas it is derived from the node's incoming edges
+  // and is therefore read-only — you add media by wiring a node. In the Library
+  // it is part of the draft, so `addPoolSources` is present and the bin grows a
+  // "Add from Library" affordance.
+  pool: TimelineInputSource[];
+  addPoolSources?(sources: TimelineInputSource[]): void;
+  removePoolSource?(sourceId: string): void;
+  // Rendered inside the media bin header (the Library's picker button).
+  binAction?: ReactNode;
+
+  // Render-time byte resolution. Both hosts end at the same mediabunny worker;
+  // they differ only in how a source id becomes a Blob.
+  resolveSources(items: TimelineItem[]): Promise<TimelineRenderItem[]>;
+  resolveOverlays(tracks: TimelineTrack[]): Promise<TimelineOverlayRenderItem[]>;
+
+  // The sink owns persistence AND the host's post-render side effects: the
+  // canvas commits the break-point and resumes the workflow; the Library saves
+  // a new version or a new asset and stamps the draft.
+  renderSinks: TimelineRenderSink[];
+  completeRender(blob: Blob, sink: TimelineRenderSinkKind): Promise<void>;
+
+  // Progress fan-out beyond the dialog. The canvas mirrors it onto the node so
+  // the collapsed node card keeps showing its progress bar; the Library has no
+  // second surface and no-ops.
+  reportRenderProgress(progress: number): void;
+  reportRenderState(state: { isExecuting: boolean; error?: string }): void;
+
+  // Open/close lifecycle: the canvas claims the keyboard scope, the Library
+  // flushes any pending draft save.
+  onEditorOpenChange(open: boolean): void;
+}

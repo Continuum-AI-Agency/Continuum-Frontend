@@ -31,8 +31,8 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
-import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { inferPublishPlatform } from '@/lib/organic/publish-utils';
+import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
@@ -80,6 +80,34 @@ const PUBLISH_PLATFORM_LABELS: Record<string, string> = {
   linkedin: 'LinkedIn',
 };
 
+// Ghost per-stage CTA rendered INSIDE the card's own <button> — a real <button>
+// here would be invalid HTML nesting, so it follows the card's role="button"
+// span pattern. Kept visually calm: outline chip, muted until hover.
+function CardStageAction({ label, onActivate }: { label: string; onActivate: () => void }) {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
+    <span
+      role="button"
+      tabIndex={0}
+      className="inline-flex shrink-0 items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+      onClick={(event) => {
+        event.stopPropagation();
+        onActivate();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          onActivate();
+        }
+      }}
+    >
+      <LightningBoltIcon className="h-2.5 w-2.5" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
 export function CalendarDraftCard({
   draft,
   isSelected,
@@ -89,6 +117,8 @@ export function CalendarDraftCard({
   onDragStart,
   onRegenerate,
   onClearFailure,
+  onEnrich,
+  onRealize,
   onMouseEnter,
   onMouseLeave,
 }: {
@@ -100,6 +130,10 @@ export function CalendarDraftCard({
   onDragStart?: (event: React.DragEvent<HTMLButtonElement>, draftId: string) => void;
   onRegenerate?: (draftId: string) => void;
   onClearFailure?: (draftId: string) => void;
+  /** Stage-2 "Enrich" (blueprint sketch) for a text-only draft. */
+  onEnrich?: (draftId: string) => void;
+  /** Stage-3 "Generate final media" for a storyboard-ready draft. */
+  onRealize?: (draftId: string) => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
@@ -206,6 +240,9 @@ export function CalendarDraftCard({
             <button
               type="button"
               onClick={(e) => {
+                // Selecting a card must not also focus its day — the enclosing cell
+                // treats a click as "focus this day" for context-free create actions.
+                e.stopPropagation();
                 if (e.shiftKey) {
                   onToggleSelection(draft.id);
                 } else {
@@ -440,7 +477,15 @@ export function CalendarDraftCard({
                   </p>
                 ) : isStoryboardReady ? (
                   <div className="mt-2 space-y-1">
-                    <MediaStagePill mediaStage="storyboard_ready" />
+                    <span className="flex items-center gap-1.5">
+                      <MediaStagePill mediaStage="storyboard_ready" />
+                      {onRealize && draft.backendDraftId && !isStreaming ? (
+                        <CardStageAction
+                          label="Generate final media"
+                          onActivate={() => onRealize(draft.id)}
+                        />
+                      ) : null}
+                    </span>
                     {storyboardFrames.length > 0 && (
                       <div className="flex items-center gap-1">
                         {storyboardFrames.slice(0, 3).map((frame, index) => (
@@ -471,8 +516,13 @@ export function CalendarDraftCard({
                     <MediaStagePill mediaStage="failed" />
                   </p>
                 ) : isTextOnlyDraft ? (
-                  <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
-                    Text only — no media yet
+                  <p className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-2xs italic text-muted-foreground/60">
+                      Text only — no media yet
+                    </span>
+                    {onEnrich && draft.backendDraftId ? (
+                      <CardStageAction label="Enrich" onActivate={() => onEnrich(draft.id)} />
+                    ) : null}
                   </p>
                 ) : null}
 

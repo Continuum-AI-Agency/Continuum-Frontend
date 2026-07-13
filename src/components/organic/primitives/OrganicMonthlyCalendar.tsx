@@ -14,7 +14,9 @@ import {
 } from '@/components/ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
+import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
+import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
 import { formatDayId } from './calendar-utils';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
@@ -256,6 +258,8 @@ export function OrganicMonthlyCalendar({
   postedContent,
 }: OrganicMonthlyCalendarProps) {
   const todayId = React.useMemo(() => formatDayId(new Date()), []);
+  const focusedDayId = useCalendarStore((state) => state.focusedDayId);
+  const setFocusedDayId = useCalendarStore((state) => state.setFocusedDayId);
 
   const draftsByDayId = React.useMemo(() => {
     const map = new Map<string, OrganicCalendarDraft[]>();
@@ -337,61 +341,71 @@ export function OrganicMonthlyCalendar({
               drafts.length + posts.length - visibleDrafts.length - visiblePosts.length;
 
             return (
-              <div
-                key={dayId}
-                className={cn(
-                  'group relative border-b border-r border-border/30 p-1.5 last:border-r-0',
-                  !isCurrentMonth && 'opacity-40',
-                  isToday && 'bg-primary/[0.04]',
-                )}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  {isToday ? (
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-2xs font-semibold text-primary-foreground">
-                      {date.getDate()}
-                    </span>
-                  ) : (
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {date.getDate()}
-                    </span>
+              // Right-click on the cell offers the same create actions as its "+"
+              // menu, preset to this day. No platformKey by design: the workspace
+              // picks the brand's default platform (see the "+" note below).
+              <AddPostContextMenu key={dayId} dayId={dayId} onCreatePost={onCreatePost}>
+                {/* Clicking the cell (not a chip) focuses the day, so the toolbar "+" and
+                  the right-click "New post" target it. DraftChip stops propagation.
+                  No keyboard handler by design: this is a pointer shortcut to a target
+                  keyboard users reach directly — every cell's own "+" already carries its
+                  dayId — so adding a key handler here would only add a dead tab stop. */}
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: day-focus surface; the cell is a drop target, not a control */}
+                {/* biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only shortcut; the cell's "+" button is the keyboard path */}
+                <div
+                  onClick={() => setFocusedDayId(dayId)}
+                  className={cn(
+                    'group relative border-b border-r border-border/30 p-1.5 last:border-r-0',
+                    !isCurrentMonth && 'opacity-40',
+                    isToday && 'bg-primary/[0.04]',
+                    dayId === focusedDayId && 'ring-2 ring-inset ring-primary/40',
                   )}
-                  <AddPostMenu
-                    dayId={dayId}
-                    platformKey="instagram"
-                    onCreatePost={onCreatePost}
-                    align="start"
-                  >
-                    <button
-                      type="button"
-                      aria-label="Add post"
-                      className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-                    >
-                      <Plus className="size-3 text-muted-foreground" />
-                    </button>
-                  </AddPostMenu>
-                </div>
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    {isToday ? (
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-2xs font-semibold text-primary-foreground">
+                        {date.getDate()}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {date.getDate()}
+                      </span>
+                    )}
+                    {/* No platformKey: the workspace picks the brand's default platform,
+                      which a hardcoded "instagram" here would override. */}
+                    <AddPostMenu dayId={dayId} onCreatePost={onCreatePost} align="start">
+                      <button
+                        type="button"
+                        aria-label="Add post"
+                        className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                      >
+                        <Plus className="size-3 text-muted-foreground" />
+                      </button>
+                    </AddPostMenu>
+                  </div>
 
-                <div className="flex flex-col gap-0.5">
-                  {visibleDrafts.map((draft) => (
-                    <DraftChip
-                      key={draft.id}
-                      draft={draft}
-                      isSelected={draft.id === selectedDraftId}
-                      onClick={() => onSelectDraft(draft.id)}
-                      onRegenerate={onRegenerate}
-                      onDelete={onDeleteDraft}
-                    />
-                  ))}
-                  {visiblePosts.map((post) => (
-                    <PostedContentChip key={post.id} post={post} />
-                  ))}
-                  {overflowCount > 0 && (
-                    <span className="pl-1 text-3xs text-muted-foreground/70">
-                      +{overflowCount} more
-                    </span>
-                  )}
+                  <div className="flex flex-col gap-0.5">
+                    {visibleDrafts.map((draft) => (
+                      <DraftChip
+                        key={draft.id}
+                        draft={draft}
+                        isSelected={draft.id === selectedDraftId}
+                        onClick={() => onSelectDraft(draft.id)}
+                        onRegenerate={onRegenerate}
+                        onDelete={onDeleteDraft}
+                      />
+                    ))}
+                    {visiblePosts.map((post) => (
+                      <PostedContentChip key={post.id} post={post} />
+                    ))}
+                    {overflowCount > 0 && (
+                      <span className="pl-1 text-3xs text-muted-foreground/70">
+                        +{overflowCount} more
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </AddPostContextMenu>
             );
           })}
         </div>

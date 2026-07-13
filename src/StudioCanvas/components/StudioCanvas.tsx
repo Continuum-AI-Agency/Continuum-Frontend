@@ -34,6 +34,7 @@ import { CanvasMediaLoader } from '@/components/ai-studio/CanvasMediaLoader';
 import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
+import { CanvasComposer } from '@/components/ai-studio/composer/CanvasComposer';
 import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { useCanvasRunRequests } from '@/components/ai-studio/hooks/useCanvasRunRequests';
@@ -78,6 +79,7 @@ import {
   type WorkflowConceptSpec,
 } from '@/lib/organic/ai-studio-bridge';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
@@ -96,6 +98,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
+import { executeWorkflow } from '../utils/executeWorkflow';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
@@ -809,6 +812,17 @@ function Flow({
     setIsCreateSkillOpen(true);
   }, [nodes]);
 
+  // The Composer builds; the user runs. Same execution path as the toolbar's Run
+  // Flow — the composed workflow is an ordinary canvas, with nothing special about it.
+  const composerExecutionControls = useWorkflowExecution();
+  const selectedNodeIds = useMemo(
+    () => nodes.filter((node) => node.selected).map((node) => node.id),
+    [nodes],
+  );
+  const handleComposerRun = useCallback(() => {
+    void executeWorkflow(composerExecutionControls, { brandId: brandProfileId });
+  }, [composerExecutionControls, brandProfileId]);
+
   // Applies full brand-book enforcement to every selected generation node at once,
   // so the user can brand-enforce a whole flow in one action. Reference/text nodes
   // are ignored (they carry no generation prompt).
@@ -1228,10 +1242,13 @@ function Flow({
       let assetData = {};
       let style = { width: 192, height: 192 };
 
+      // assetId is only set when the drop came from the Library. It is what lets a
+      // generation fed by this node be credited back to the asset that fed it.
       if (assetNodeType === 'image') {
         assetData = {
           image: resolved.dataUrl,
           fileName: resolved.fileName,
+          assetId: resolved.assetId,
           sourcePath: resolved.sourcePath,
           bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
@@ -1240,6 +1257,7 @@ function Flow({
         assetData = {
           video: resolved.dataUrl,
           fileName: resolved.fileName,
+          assetId: resolved.assetId,
           sourcePath: resolved.sourcePath,
           bucket: resolved.bucket,
           sourceUrl: resolved.sourceUrl,
@@ -1287,7 +1305,11 @@ function Flow({
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: canvas wrapper tracks cursor position for real-time collaboration; no semantic role applies
-    <div className="h-full min-h-0 w-full" ref={reactFlowWrapper} onMouseMove={handleMouseMove}>
+    <div
+      className="relative h-full min-h-0 w-full"
+      ref={reactFlowWrapper}
+      onMouseMove={handleMouseMove}
+    >
       <ContextMenu onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
@@ -1553,6 +1575,16 @@ function Flow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+      {/* Overlaid on the canvas rather than mounted as a React Flow Panel: the hero
+          state centres itself on an empty canvas, which the Panel grid cannot express,
+          and bottom-center is already taken by the keyboard-hint strip. */}
+      <CanvasComposer
+        brandProfileId={brandProfileId}
+        roomId={activeRoomId}
+        isCanvasEmpty={nodes.length === 0}
+        selectedNodeIds={selectedNodeIds}
+        onRun={handleComposerRun}
+      />
       <LoadWorkflowDialog
         brandProfileId={brandProfileId}
         open={isLoadWorkflowOpen}

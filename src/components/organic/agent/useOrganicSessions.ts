@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import {
   deleteOrganicSession,
   fetchOrganicSessions,
-  fetchOrganicSessionMessages,
+  fetchOrganicSessionMessagePage,
+  type OrganicMessagePage,
   type OrganicSession,
-  type OrganicSessionMessage,
 } from "@/lib/organic/agent-sessions";
 import { useOrganicSessionStore } from "@/lib/organic/organic-session-store";
 
@@ -19,7 +19,7 @@ export function useOrganicSessions(
   isLoadingMessages: boolean;
   activeSessionId: string | null;
   startNewSession: () => string;
-  selectSession: (id: string) => Promise<OrganicSessionMessage[]>;
+  selectSession: (id: string) => Promise<OrganicMessagePage>;
   refreshSessions: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
 } {
@@ -61,11 +61,11 @@ export function useOrganicSessions(
   }, []);
 
   const selectSession = useCallback(
-    async (sessionId: string): Promise<OrganicSessionMessage[]> => {
+    async (sessionId: string): Promise<OrganicMessagePage> => {
       setActiveSessionId(sessionId);
       setIsLoadingMessages(true);
       try {
-        return await fetchOrganicSessionMessages(sessionId, brandId);
+        return await fetchOrganicSessionMessagePage(sessionId, brandId);
       } finally {
         setIsLoadingMessages(false);
       }

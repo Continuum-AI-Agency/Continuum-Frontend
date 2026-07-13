@@ -1,9 +1,18 @@
 'use client';
 
-import { AlertCircle, Check, Clock, ImageOff, Loader2, Sparkles } from 'lucide-react';
-import { motion } from 'motion/react';
-import { useEffect, useRef } from 'react';
 import { resolveOrganicAgentLabel, resolveOrganicGenerationDisplay } from '@continuum/contracts';
+import {
+  AlertCircle,
+  Check,
+  Clock,
+  ImageOff,
+  Loader2,
+  PencilRuler,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Carousel,
   CarouselContent,
@@ -12,6 +21,8 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { Progress } from '@/components/ui/progress';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useDraftStoryboard } from '../hooks/useDraftStoryboard';
@@ -53,21 +64,21 @@ function resolvePreviewImages(preview: PipelinePreview | undefined): string[] {
   return [];
 }
 
-function PreviewImages({ images }: { images: string[] }) {
-  if (images.length === 0) return null;
+// A generated reel is an MP4; rendering it into an <img> is why generated video previews came out
+// blank. The shared primitive reads the draft's format and gives video a real poster frame.
+function PreviewImages({ images, format }: { images: string[]; format?: string | null }) {
+  const media = mediaFromPreviewUrls('preview', images, format);
+  if (media.length === 0) return null;
 
-  if (images.length > 1) {
+  if (media.length > 1) {
     return (
       <Carousel className="w-full">
         <CarouselContent>
-          {images.map((url, i) => (
-            <CarouselItem key={i}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt={`Slide ${i + 1}`}
-                className={cn('aspect-[4/5] w-full rounded-lg object-cover', IMAGE_OUTLINE)}
-              />
+          {media.map((item) => (
+            <CarouselItem key={item.id}>
+              <div className={cn('aspect-[4/5] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
+                <ChatMediaThumb media={item} className="rounded-none" />
+              </div>
             </CarouselItem>
           ))}
         </CarouselContent>
@@ -78,12 +89,9 @@ function PreviewImages({ images }: { images: string[] }) {
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={images[0]}
-      alt="Preview"
-      className={cn('aspect-[4/5] w-full rounded-lg object-cover', IMAGE_OUTLINE)}
-    />
+    <div className={cn('aspect-[4/5] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
+      <ChatMediaThumb media={media[0]} className="rounded-none" />
+    </div>
   );
 }
 
@@ -235,7 +243,15 @@ function CheckpointStepper({ checkpoint }: { checkpoint: CheckpointState }) {
   );
 }
 
-export function PipelineCard({ card }: { card: PipelineCardState }) {
+type PipelineCardProps = {
+  card: PipelineCardState;
+  /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
+  onEnrichDraft?: (draftId: string) => void;
+  /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
+  onGenerateMedia?: (draftId: string, format: string) => void;
+};
+
+export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineCardProps) {
   const status = STATUS[card.status];
   const quality = qualityPercent(card.quality?.overallScore);
   const isRunning = card.status === 'running';
@@ -259,6 +275,26 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
   const draftStoryboard = useDraftStoryboard(card.draftId);
   const cardImages = resolvePreviewImages(card.preview);
   const previewImages = cardImages.length > 0 ? cardImages : draftStoryboard;
+
+  // Approve-through media actions, wired exactly like ConceptCard's: Enrich while
+  // only text exists, Generate media once the blueprint landed. Neither shows once
+  // media is final/user-supplied or already rendering.
+  const draftId = card.draftId ?? null;
+  const mediaStatus = card.checkpoint?.mediaStatus;
+  const mediaSettled =
+    mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
+  const showEnrich = Boolean(
+    onEnrichDraft &&
+      draftId &&
+      card.checkpoint?.textReady &&
+      !card.checkpoint?.blueprintReady &&
+      !mediaSettled,
+  );
+  const showGenerateMedia = Boolean(
+    onGenerateMedia && draftId && card.checkpoint?.blueprintReady && !mediaSettled,
+  );
+  const [mediaActionSent, setMediaActionSent] = useState(false);
+
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
@@ -298,7 +334,7 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
         />
       )}
 
-      <PreviewImages images={previewImages} />
+      <PreviewImages images={previewImages} format={card.preview?.format} />
 
       {card.preview?.caption && (
         <p className="line-clamp-2 text-sm leading-relaxed text-foreground text-pretty">
@@ -308,6 +344,41 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
 
       {card.status === 'failed' && card.error?.message && (
         <p className="line-clamp-2 text-sm text-destructive/80">{card.error.message}</p>
+      )}
+
+      {(showEnrich || showGenerateMedia) && draftId && (
+        <div className="-mx-3.5 -mb-3.5 flex items-stretch border-t border-border/40">
+          {showEnrich && (
+            <button
+              type="button"
+              title="Sketch a low-cost blueprint before final media"
+              disabled={mediaActionSent}
+              onClick={() => {
+                setMediaActionSent(true);
+                onEnrichDraft?.(draftId);
+              }}
+              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+            >
+              <PencilRuler className="h-3 w-3" />
+              {mediaActionSent ? 'Enriching…' : 'Enrich'}
+            </button>
+          )}
+          {showGenerateMedia && (
+            <button
+              type="button"
+              title="Render the final media from the approved blueprint"
+              disabled={mediaActionSent}
+              onClick={() => {
+                setMediaActionSent(true);
+                onGenerateMedia?.(draftId, card.preview?.format ?? '');
+              }}
+              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Wand2 className="h-3 w-3" />
+              {mediaActionSent ? 'Generating…' : 'Generate media'}
+            </button>
+          )}
+        </div>
       )}
     </AgentArtifactCard>
   );

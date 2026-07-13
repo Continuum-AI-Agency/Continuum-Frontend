@@ -55,6 +55,9 @@ export function useOrganicAgentStream(
     abortRef.current = null;
     readerRef.current = null;
     setIsStreaming(false);
+    // Release ownership: the run lives on, and the store projection takes over rendering it.
+    runIdRef.current = null;
+    setLiveRunId(null);
   }, []);
 
   /**
@@ -126,6 +129,7 @@ export function useOrganicAgentStream(
           if (runIdFromEvent) {
             chatRunId = runIdFromEvent;
             runIdRef.current = runIdFromEvent;
+            setLiveRunId(runIdFromEvent);
             useAgentRunStore.getState().upsertRun({
               runId: runIdFromEvent,
               agent: 'organic',
@@ -168,7 +172,7 @@ export function useOrganicAgentStream(
               return;
             }
 
-            const seq = typeof event.seq === "number" ? event.seq : null;
+            const seq = typeof event.seq === 'number' ? event.seq : null;
             // Dedupe across the initial POST stream and any reconnect
             // GETs — both sources may overlap on the boundary frame.
             if (seq !== null) {
@@ -187,11 +191,11 @@ export function useOrganicAgentStream(
         // Supabase access token server-side from the request cookie and
         // emits the PostHog `organic_agent_chat_message_sent` event before
         // forwarding to the Backend.
-        const response = await fetch("/api/organic/agent/chat", {
-          method: "POST",
+        const response = await fetch('/api/organic/agent/chat', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            Accept: "application/x-ndjson",
+            'Content-Type': 'application/json',
+            Accept: 'application/x-ndjson',
           },
           // References travel once, top-level. The backend reads body.references
           // first (see organic/agent/src/runtime/server.ts), so the previous
@@ -245,7 +249,7 @@ export function useOrganicAgentStream(
           const resumeUrl = `/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
           const resumeResponse = await fetch(resumeUrl, {
             headers: {
-              Accept: "application/x-ndjson",
+              Accept: 'application/x-ndjson',
             },
             signal: controller.signal,
           });
@@ -255,23 +259,23 @@ export function useOrganicAgentStream(
             // chat-run persistence), surface the dropped-connection
             // error instead of silently spinning.
             throw new Error(
-              `Stream reconnect failed (status ${resumeResponse.status}). The connection was lost and could not be resumed.`
+              `Stream reconnect failed (status ${resumeResponse.status}). The connection was lost and could not be resumed.`,
             );
           }
 
           const resumeReader = resumeResponse.body.getReader();
-          if (mode === "chat") readerRef.current = resumeReader;
+          if (mode === 'chat') readerRef.current = resumeReader;
           await consumeReader(resumeReader);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Stream failed";
-        if (mode === "chat" && !controller.signal.aborted) {
-          dispatch({ type: "STREAM_ERROR", error: message });
+        const message = error instanceof Error ? error.message : 'Stream failed';
+        if (mode === 'chat' && !controller.signal.aborted) {
+          dispatch({ type: 'STREAM_ERROR', error: message });
         }
         return { error: message };
       } finally {
-        if (mode === "chat") {
-          dispatch({ type: "STREAM_COMPLETE" });
+        if (mode === 'chat') {
+          dispatch({ type: 'STREAM_COMPLETE' });
           setIsStreaming(false);
         } else {
           controlAbortRefs.current.delete(controller);

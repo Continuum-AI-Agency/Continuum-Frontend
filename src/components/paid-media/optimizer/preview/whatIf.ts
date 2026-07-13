@@ -10,17 +10,8 @@ import type {
   OptimizationModeDto,
   OptimizationObjective,
 } from '@continuum/contracts';
+import { getOptimizationMetricDefinition, kpiFieldForOptimizationGoal } from '@continuum/contracts';
 import { runCycle } from '@continuum/optimization-engine';
-
-/** The conversion KPI field per objective (mirrors the engine OBJECTIVE_PROFILES). */
-const KPI_FIELD: Record<OptimizationObjective, string> = {
-  purchase: 'purchases',
-  app_install: 'appInstalls',
-  signup: 'signups',
-  lead: 'leads',
-  traffic: 'landingPageViews',
-  awareness: 'impressions',
-};
 
 export type CampaignRow = {
   adsetId: string;
@@ -36,7 +27,10 @@ export function campaignRows(
   snapshots: AdSetSnapshot[],
   objective: OptimizationObjective,
 ): CampaignRow[] {
-  const kpi = KPI_FIELD[objective];
+  // Derived, not restated. A local copy of the objective -> KPI-field map is a fourth
+  // place for it to drift from the engine, the SQL and the verdicts — and a preview that
+  // counts a different event than the cycle it is previewing is worse than no preview.
+  const kpi = getOptimizationMetricDefinition(objective).kpiField;
   return snapshots
     .map((snapshot) => {
       const d14 = snapshot.windows?.d14 as Record<string, number> | undefined;
@@ -80,7 +74,18 @@ export function runWhatIf(
 ): WhatIfResult | null {
   if (snapshots.length === 0) return null;
 
-  const result = runCycle(snapshots, {
+  // Stamp each ad set's DECLARED currency before previewing, exactly as the optimizer's
+  // ingest does. Snapshots read back from the DB carry `optimization_goal` but not the
+  // resolved `kpiField` (the cycle recomputes it each run), and without it the preview
+  // would confidently rank an ad set the real cycle is about to FREEZE for buying a
+  // different event than this portfolio prices. A preview that disagrees with the cycle
+  // it previews is worse than no preview.
+  const priced = snapshots.map((snapshot) => {
+    const kpiField = kpiFieldForOptimizationGoal(snapshot.optimization_goal);
+    return kpiField ? { ...snapshot, kpiField } : snapshot;
+  });
+
+  const result = runCycle(priced, {
     objective: options.objective,
     mode: options.mode,
     total: options.total,

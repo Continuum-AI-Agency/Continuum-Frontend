@@ -1,1 +1,2 @@
-export * from "./signals";
+export * from './signals';
+export * from './weekly';

@@ -1,12 +1,12 @@
 'use client';
 
-import { CheckCircle2Icon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import * as React from 'react';
-import { Checkpoint, CheckpointIcon } from '@/components/ai-elements/checkpoint';
-import { MentionifiedText } from '@/components/ai-elements/mentionified-text';
-import { Message } from '@/components/ai-elements/message';
 import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
+import { ChatMessage } from '@/components/chat/ChatMessage';
+import { MentionifiedText } from '@/components/chat/mentionified-text';
+import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
+import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
@@ -191,7 +191,7 @@ export function JainaMessageItem({
   }, [toolResults]);
 
   return (
-    <Message role={message.role}>
+    <ChatMessage id={message.id} role={message.role} anchor={message.role === 'user'}>
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -199,14 +199,20 @@ export function JainaMessageItem({
         className="group w-full space-y-4"
       >
         {message.role === 'user' ? (
-          <span className="text-sm font-medium whitespace-pre-wrap">
-            <MentionifiedText text={message.content} references={message.metadata?.references} />
-            <AutomatePromptAction
-              agent="jaina"
-              prompt={message.content}
-              className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
+          <>
+            <span className="text-sm font-medium whitespace-pre-wrap">
+              <MentionifiedText text={message.content} references={message.metadata?.references} />
+              <AutomatePromptAction
+                agent="jaina"
+                prompt={message.content}
+                className="ml-1 size-6 align-middle opacity-0 transition-opacity group-hover:opacity-100"
+              />
+            </span>
+            <ChatMediaGrid
+              items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
+              lightboxTitle="Attachment"
             />
-          </span>
+          </>
         ) : (
           <>
             {hasRenderableContent ? (
@@ -342,37 +348,12 @@ export function JainaMessageItem({
               <WorkerInsightsPanel results={spawnWorkerResults} />
             ) : null}
 
-            {!isStreaming && message.status === 'done' && (reportV2 || shouldRenderInlineReport) ? (
-              <Checkpoint className="pt-1">
-                <CheckpointIcon>
-                  <motion.div
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <CheckCircle2Icon
-                      className="size-4 text-emerald-500 shrink-0"
-                      aria-hidden="true"
-                    />
-                  </motion.div>
-                </CheckpointIcon>
-                <motion.span
-                  className="shrink-0 px-2 text-xs"
-                  initial={{ opacity: 0, x: -4 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
-                >
-                  Analysis complete
-                </motion.span>
-              </Checkpoint>
-            ) : null}
-
             {!isStreaming && message.status === 'done' ? (
               <MessageActionBar content={message.content} onRegenerate={onRegenerate} />
             ) : null}
           </>
         )}
       </motion.div>
-    </Message>
+    </ChatMessage>
   );
 }

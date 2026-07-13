@@ -1,40 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
-import { useStudioStore } from '../../stores/useStudioStore';
-import type { StudioNode, TimelineEditorNodeData, TimelineItem } from '../../types';
-import type { NodeOutput } from '../../types/execution';
-import { collectDownstreamLeafIds, executeWorkflow } from '../../utils/executeWorkflow';
-import { persistTimelineRender } from '../../utils/persistTimelineRender';
 import { resolveExportPreset } from '../../utils/render/exportPresets';
-import {
-  resolveTimelineOverlays,
-  resolveTimelineSources,
-} from '../../utils/splice/resolveClipSources';
 import { checkSpliceSupport, type WebCodecsSupport } from '../../utils/splice/webcodecsSupport';
 import { runTimelineInWorker } from '../../workers/spliceWorkerClient';
+import type { TimelineEditorAdapter, TimelineRenderSinkKind } from './adapter';
 import { resolveOverlayTracks } from './multiTrack';
 
-// The Video Editor (timelineEditor) render orchestration, shared by the node
-// launcher and the full editor dialog: resolve the placed timeline to source
-// blobs, compose the MP4 in a worker, persist it to the media library, commit
-// the break-point gate, then resume only the parked downstream chain. Reads the
-// timeline fresh from the store at call time so it always renders the latest edit.
+// The Video Editor render orchestration, shared by the node launcher and the full
+// editor dialog: resolve the placed timeline to source blobs, compose the MP4 in a
+// worker, then hand the result to the host's sink (which persists it and runs the
+// host's post-render side effects). Reads the document fresh from the adapter at
+// call time so it always renders the latest edit, never a stale props closure.
 
 export interface UseTimelineRenderResult {
-  render: () => Promise<boolean>;
+  render: (sink?: TimelineRenderSinkKind) => Promise<boolean>;
   isRendering: boolean;
+  progress: number;
   support: WebCodecsSupport | null;
 }
 
-export function useTimelineRender(nodeId: string): UseTimelineRenderResult {
-  const updateNode = useStudioStore((state) => state.updateNode);
-  const triggerSave = useStudioStore((state) => state.triggerSave);
-  const executionControls = useWorkflowExecution();
+export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRenderResult {
   const { show } = useToast();
+  const {
+    getDocument,
+    resolveSources,
+    resolveOverlays,
+    completeRender,
+    reportRenderProgress,
+    reportRenderState,
+    renderSinks,
+  } = adapter;
 
   const [support, setSupport] = useState<WebCodecsSupport | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -46,143 +45,89 @@ export function useTimelineRender(nodeId: string): UseTimelineRenderResult {
     };
   }, []);
 
-  const render = useCallback(async (): Promise<boolean> => {
-    if (support && !support.ok) {
-      show({ title: 'Editor unavailable', description: support.reason, variant: 'warning' });
-      return false;
-    }
+  const defaultSink = renderSinks[0]?.kind;
 
-    const state = useStudioStore.getState();
-    const nodes = state.nodes as StudioNode[];
-    const edges = state.edges;
-    const brandId = state.brandId;
-    const node = nodes.find((candidate) => candidate.id === nodeId);
-    const nodeData = node?.data as TimelineEditorNodeData | undefined;
-    const items = (nodeData?.items ?? []) as TimelineItem[];
-    const overlayTracks = resolveOverlayTracks(nodeData);
-    const exportPreset = resolveExportPreset(nodeData?.exportPresetId);
-
-    if (items.length === 0) {
-      show({
-        title: 'Nothing to render',
-        description: 'Place at least one clip or image on the timeline.',
-        variant: 'warning',
-      });
-      return false;
-    }
-
-    const controller = new AbortController();
-    setIsRendering(true);
-    updateNode(nodeId, (current) => ({
-      ...current,
-      data: {
-        ...(current.data as TimelineEditorNodeData),
-        isExecuting: true,
-        error: undefined,
-        progress: 0,
-      },
-    }));
-
-    try {
-      const resolvedOutputs = new Map<string, NodeOutput>();
-      const resolved = await resolveTimelineSources(items, edges, nodes, resolvedOutputs, nodeId);
-      const resolvedOverlays = await resolveTimelineOverlays(
-        overlayTracks,
-        edges,
-        nodes,
-        resolvedOutputs,
-        nodeId,
-      );
-      const captionsOn =
-        Boolean(nodeData?.captionsEnabled) && (nodeData?.captionWords?.length ?? 0) > 0;
-      const result = await runTimelineInWorker({
-        items: resolved,
-        overlays: resolvedOverlays,
-        videoBitrate: exportPreset.videoBitrate,
-        targetWidth: exportPreset.width ?? undefined,
-        targetHeight: exportPreset.height ?? undefined,
-        captionWords: captionsOn ? nodeData?.captionWords : undefined,
-        captionStyle: captionsOn ? nodeData?.captionStyle : undefined,
-        signal: controller.signal,
-        onProgress: ({ progress }) => {
-          useStudioStore.getState().updateNodeData(nodeId, { progress });
-        },
-      });
-
-      updateNode(nodeId, (current) => ({
-        ...current,
-        data: {
-          ...(current.data as TimelineEditorNodeData),
-          generatedVideo: result.objectUrl,
-          progress: 1,
-        },
-      }));
-
-      // Persist the finalized clip to the media library. Prefer the durable signed
-      // URL + storage coords so the output survives canvas reloads; fall back to
-      // the in-memory object URL when the brand is anonymous (local preview).
-      let committedUrl = result.objectUrl;
-      let storagePath: string | undefined;
-      let bucket: string | undefined;
-      if (brandId && brandId !== 'default-brand') {
-        try {
-          const persisted = await persistTimelineRender({ blob: result.blob, brandId, nodeId });
-          committedUrl = persisted.signedUrl;
-          storagePath = persisted.storagePath;
-          bucket = persisted.bucket;
-        } catch (persistError) {
-          const message =
-            persistError instanceof Error ? persistError.message : 'Library save failed';
-          show({ title: 'Saved locally only', description: message, variant: 'warning' });
-        }
+  const render = useCallback(
+    async (sink?: TimelineRenderSinkKind): Promise<boolean> => {
+      if (support && !support.ok) {
+        show({ title: 'Editor unavailable', description: support.reason, variant: 'warning' });
+        return false;
       }
 
-      updateNode(nodeId, (current) => ({
-        ...current,
-        data: {
-          ...(current.data as TimelineEditorNodeData),
-          committed: true,
-          generatedVideo: committedUrl,
-          generatedVideoUrl: committedUrl,
-          generatedVideoStoragePath: storagePath,
-          generatedVideoBucket: bucket,
-          isExecuting: false,
-          isComplete: true,
-          awaitingInput: false,
-          progress: 1,
-        },
-      }));
-      triggerSave();
+      const document = getDocument();
+      const items = document.items;
+      const overlayTracks = resolveOverlayTracks(document);
+      const exportPreset = resolveExportPreset(document.exportPresetId);
 
-      // Resume the workflow: re-run only the parked downstream chain, targeting
-      // each leaf so its upstream closure reuses this committed clip instead of
-      // regenerating the whole graph.
-      const currentNodes = useStudioStore.getState().nodes as StudioNode[];
-      const leafIds = collectDownstreamLeafIds(
-        nodeId,
-        edges,
-        new Map(currentNodes.map((candidate) => [candidate.id, candidate])),
-      );
-      for (const leafId of leafIds) {
-        await executeWorkflow(executionControls, {
-          targetNodeId: leafId,
-          clearDownstream: false,
-          brandId,
+      if (items.length === 0) {
+        show({
+          title: 'Nothing to render',
+          description: 'Place at least one clip or image on the timeline.',
+          variant: 'warning',
         });
+        return false;
       }
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Render failed';
-      updateNode(nodeId, (current) => ({
-        ...current,
-        data: { ...(current.data as TimelineEditorNodeData), isExecuting: false, error: message },
-      }));
-      show({ title: 'Render failed', description: message, variant: 'warning' });
-      return false;
-    } finally {
-      setIsRendering(false);
-    }
-  }, [executionControls, nodeId, show, support, triggerSave, updateNode]);
 
-  return { render, isRendering, support };
+      const target = sink ?? defaultSink;
+      if (!target) {
+        show({
+          title: 'Nowhere to render',
+          description: 'This editor has no render destination.',
+          variant: 'warning',
+        });
+        return false;
+      }
+
+      const controller = new AbortController();
+      setIsRendering(true);
+      setProgress(0);
+      reportRenderState({ isExecuting: true, error: undefined });
+      reportRenderProgress(0);
+
+      try {
+        const resolved = await resolveSources(items);
+        const resolvedOverlays = await resolveOverlays(overlayTracks);
+        const captionsOn =
+          Boolean(document.captionsEnabled) && (document.captionWords?.length ?? 0) > 0;
+        const result = await runTimelineInWorker({
+          items: resolved,
+          overlays: resolvedOverlays,
+          videoBitrate: exportPreset.videoBitrate,
+          targetWidth: exportPreset.width ?? undefined,
+          targetHeight: exportPreset.height ?? undefined,
+          captionWords: captionsOn ? document.captionWords : undefined,
+          captionStyle: captionsOn ? document.captionStyle : undefined,
+          signal: controller.signal,
+          onProgress: ({ progress: value }) => {
+            setProgress(value);
+            reportRenderProgress(value);
+          },
+        });
+
+        setProgress(1);
+        await completeRender(result.blob, target);
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Render failed';
+        reportRenderState({ isExecuting: false, error: message });
+        show({ title: 'Render failed', description: message, variant: 'warning' });
+        return false;
+      } finally {
+        setIsRendering(false);
+      }
+    },
+    [
+      completeRender,
+      defaultSink,
+      getDocument,
+      reportRenderProgress,
+      reportRenderState,
+      resolveOverlays,
+      resolveSources,
+      show,
+      support,
+    ],
+  );
+
+  return { render, isRendering, progress, support };
 }

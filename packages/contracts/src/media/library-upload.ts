@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Contracts for the `library-upload` edge function. A locally selected/dropped
@@ -43,6 +43,10 @@ export const registerMediaRequestSchema = z
     fileName: z.string().min(1),
     mimeType: z.string().min(1),
     sizeBytes: z.number().int().nonnegative(),
+    // sha256 hex of the uploaded bytes, computed in-browser. Seeds the future
+    // creative-DNA join against paid_media content hashes. Optional: digest
+    // failures must never block an upload.
+    checksum: z.string().min(1).optional(),
   })
   .strict();
 
@@ -51,7 +55,7 @@ export const registerMediaRequestSchema = z
 export const registerMediaResponseSchema = z
   .object({
     ok: z.literal(true),
-    status: z.enum(["ready", "exists"]),
+    status: z.enum(['ready', 'exists']),
     assetId: z.string(),
     storagePath: z.string(),
     signedUrl: z.string().min(1),
@@ -61,7 +65,7 @@ export const registerMediaResponseSchema = z
 export const registerMediaErrorSchema = z
   .object({
     ok: z.literal(false),
-    status: z.literal("error"),
+    status: z.literal('error'),
     message: z.string(),
   })
   .strict();

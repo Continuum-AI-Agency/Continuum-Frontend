@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_REEL_VIDEO_BATCH_MAX } from '@continuum/contracts';
+import { DEFAULT_REEL_VIDEO_BATCH_MAX, type PublishPlatform } from '@continuum/contracts';
 import { Cross2Icon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
@@ -11,14 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
+import { readSavedAccountSelection } from '@/lib/organic/account-selection';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
-import { useCalendarStore } from '@/lib/organic/store';
+import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
 import { getLocalStorageJSON } from '@/lib/storage';
 import { useAiStudioHandoff } from '../hooks/useAiStudioHandoff';
+import { useApproveScheduleDraft } from '../hooks/useApproveScheduleDraft';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
@@ -32,10 +34,12 @@ import { CalendarDndContext } from './CalendarDndContext';
 import { CalendarDraftCard } from './CalendarDraftCard';
 import { CalendarToolbar } from './CalendarToolbar';
 import {
+  buildDayRange,
   buildWeekDays,
   formatDayId,
   formatWeekHeading,
   formatWeekRange,
+  makeCalendarDay,
   sliceWeekDays,
   startOfWeek,
   UNSCHEDULED_DAY_ID,
@@ -74,6 +78,7 @@ type OrganicCalendarWorkspaceClientProps = {
   trends?: Trend[];
   activePlatforms?: OrganicPlatformKey[];
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
+  platformAccountOptions?: Partial<Record<OrganicPlatformKey, PlannerAccountOption[]>>;
   maxTrendSelections?: number;
   brandProfileId?: string;
   brandName?: string;
@@ -99,6 +104,7 @@ export function OrganicCalendarWorkspaceClient({
   trends = [],
   activePlatforms = [],
   platformAccountIds = {},
+  platformAccountOptions = {},
   maxTrendSelections,
   brandProfileId,
   brandName,
@@ -133,6 +139,8 @@ export function OrganicCalendarWorkspaceClient({
     gridError,
     dateRange,
     setDateRange,
+    focusedDayId,
+    setFocusedDayId,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -159,21 +167,45 @@ export function OrganicCalendarWorkspaceClient({
       gridError: state.gridError,
       dateRange: state.dateRange,
       setDateRange: state.setDateRange,
+      focusedDayId: state.focusedDayId,
+      setFocusedDayId: state.setFocusedDayId,
     })),
   );
 
   React.useEffect(() => {
-    // One account id per publishable platform; the publish hook picks by the draft's platform.
+    // One account id per publishable platform — the account this workspace publishes to. It
+    // seeds from the brand's default, then from whatever the user last chose in the switcher
+    // (per brand), and both generation and publish read it. A choice that only lives in a
+    // dropdown is how posts kept landing on the brand's first-resolved account.
     const instagram = instagramAccountId ?? platformAccountIds.instagram;
+    const defaults: Partial<Record<PublishPlatform, string>> = {
+      ...(instagram ? { instagram } : {}),
+      ...(platformAccountIds.facebook ? { facebook: platformAccountIds.facebook } : {}),
+      ...(platformAccountIds.linkedin ? { linkedin: platformAccountIds.linkedin } : {}),
+    };
+
+    const saved = readSavedAccountSelection(brandProfileId ?? null);
+    const accountIds = { ...defaults };
+    for (const [platform, accountId] of Object.entries(saved) as Array<[PublishPlatform, string]>) {
+      // Only honor a saved choice that is still one of the brand's accounts.
+      const options = platformAccountOptions[platform as OrganicPlatformKey] ?? [];
+      if (options.some((option) => option.id === accountId)) accountIds[platform] = accountId;
+    }
+
     setAccountContext({
-      accountIds: {
-        ...(instagram ? { instagram } : {}),
-        ...(platformAccountIds.facebook ? { facebook: platformAccountIds.facebook } : {}),
-        ...(platformAccountIds.linkedin ? { linkedin: platformAccountIds.linkedin } : {}),
-      },
+      accountIds,
+      accountOptions: platformAccountOptions as Partial<
+        Record<PublishPlatform, PlannerAccountOption[]>
+      >,
       brandId: brandProfileId ?? null,
     });
-  }, [instagramAccountId, platformAccountIds, brandProfileId, setAccountContext]);
+  }, [
+    instagramAccountId,
+    platformAccountIds,
+    platformAccountOptions,
+    brandProfileId,
+    setAccountContext,
+  ]);
 
   const { selectedId, selectedIds, handleSelect, clearAll, handleKeyDown } =
     useCalendarSelection(calendarDays);
@@ -234,13 +266,20 @@ export function OrganicCalendarWorkspaceClient({
   }, [initialWeekStart]);
   const weekStartId = formatDayId(weekStart);
 
+  // The account the switcher settled on — not the brand's default. A draft the planner writes
+  // must be stamped with the account it will actually publish to.
+  const selectedAccountIds = useCalendarStore(
+    useShallow((state) => state.accountContext.accountIds),
+  );
+
   const { refetch: refetchCalendarDrafts, isHydrated: isCalendarHydrated } =
     useCalendarDraftPersistence({
       brandProfileId,
       calendarDays,
       setCalendarDays,
       updateDraftById,
-      platformAccountIds,
+      platformAccountIds:
+        Object.keys(selectedAccountIds).length > 0 ? selectedAccountIds : platformAccountIds,
     });
 
   // Server-authoritative freshness: subscribe to Realtime draft writes for this
@@ -300,14 +339,25 @@ export function OrganicCalendarWorkspaceClient({
 
   // Week navigation is now a pure cursor move over already-loaded data — no per-week
   // fetch or cache swap. The week grid re-slices the loaded set for the new week.
+  // Navigating away from a focused day drops the focus: a ring left on an off-screen
+  // day would silently redirect the next toolbar "+" somewhere the user can't see.
   const handleWeekChange = React.useCallback(
     (date: Date) => {
       const nextWeekStart = startOfWeek(date);
       if (formatDayId(nextWeekStart) === weekStartId) return;
       clearAll();
+      setFocusedDayId(null);
       setWeekStart(nextWeekStart);
     },
-    [clearAll, weekStartId],
+    [clearAll, setFocusedDayId, weekStartId],
+  );
+
+  const handleViewModeChange = React.useCallback(
+    (mode: 'week' | 'month' | 'list') => {
+      setFocusedDayId(null);
+      setViewMode(mode);
+    },
+    [setFocusedDayId, setViewMode],
   );
 
   const handlePreviousWeek = React.useCallback(() => {
@@ -326,15 +376,17 @@ export function OrganicCalendarWorkspaceClient({
     const prev = new Date(monthAnchorDate);
     prev.setDate(1);
     prev.setMonth(prev.getMonth() - 1);
+    setFocusedDayId(null);
     setMonthAnchorDate(prev);
-  }, [monthAnchorDate]);
+  }, [monthAnchorDate, setFocusedDayId]);
 
   const handleNextMonth = React.useCallback(() => {
     const next = new Date(monthAnchorDate);
     next.setDate(1);
     next.setMonth(next.getMonth() + 1);
+    setFocusedDayId(null);
     setMonthAnchorDate(next);
-  }, [monthAnchorDate]);
+  }, [monthAnchorDate, setFocusedDayId]);
 
   const drafts = React.useMemo(() => calendarDays.flatMap((day) => day.slots), [calendarDays]);
 
@@ -370,6 +422,29 @@ export function OrganicCalendarWorkspaceClient({
       : scheduled;
     return [...filtered, ...unscheduled];
   }, [gridDays, dateRange]);
+
+  // Every day id the user can currently see, per view. Used to decide whether
+  // "today" is a sensible landing spot for a context-free create.
+  const visibleDayIds = React.useMemo(() => {
+    if (viewMode === 'week') return visibleWeekDays.map((day) => day.id);
+    if (viewMode === 'list') {
+      return listDays.filter((day) => day.id !== UNSCHEDULED_DAY_ID).map((day) => day.id);
+    }
+    const monthStart = new Date(monthAnchorDate.getFullYear(), monthAnchorDate.getMonth(), 1);
+    const monthEnd = new Date(monthAnchorDate.getFullYear(), monthAnchorDate.getMonth() + 1, 0);
+    return buildDayRange(monthStart, monthEnd).map((day) => day.id);
+  }, [viewMode, visibleWeekDays, listDays, monthAnchorDate]);
+
+  // Where a "+" with no day of its own lands (the toolbar button, the right-click
+  // "New post"): the day the user last clicked, else today when it is on screen,
+  // else the first visible day. Never `calendarDays[0]`, which is the top of the
+  // loaded week regardless of what the user is looking at.
+  const defaultCreateDayId = React.useMemo(() => {
+    if (focusedDayId) return focusedDayId;
+    const todayId = formatDayId(new Date());
+    if (visibleDayIds.includes(todayId)) return todayId;
+    return visibleDayIds[0] ?? todayId;
+  }, [focusedDayId, visibleDayIds]);
 
   const selectedDraft = React.useMemo(() => {
     if (!selectedId) return null;
@@ -437,22 +512,9 @@ export function OrganicCalendarWorkspaceClient({
     platformAccountIds,
   );
 
-  const {
-    seededDraftCount,
-    gridStatus,
-    handleGenerateDrafts,
-    handleAutoSort,
-    handleGenerateGridJob,
-    handleRegenerate,
-    handleClearFailure,
-  } = useDraftGeneration({
+  const { gridStatus, handleRegenerate, handleClearFailure } = useDraftGeneration({
     brandProfileId,
-    calendarDays,
     drafts,
-    selectedTrendIds,
-    platformAccountIds,
-    activePlatforms,
-    weekStartId,
   });
 
   const { refresh: refreshTrends, isFetching: isFetchingTrends } = useBrandInsightsRefresh(
@@ -491,10 +553,13 @@ export function OrganicCalendarWorkspaceClient({
           | undefined) ||
         'instagram';
 
-      const targetDay = context?.dayId
-        ? (calendarDays.find((day) => day.id === context.dayId) ?? null)
-        : (calendarDays[0] ?? null);
-      if (!targetDay) return null;
+      // The month grid renders every day of the visible month, but `calendarDays`
+      // only holds the loaded week scaffold plus days that already carry drafts. A
+      // "+" on any other cell must still create there, so derive the day from its id
+      // rather than bailing — `addDraft` materializes it in the store the same way.
+      const targetDayId = context?.dayId ?? defaultCreateDayId;
+      const targetDay =
+        calendarDays.find((day) => day.id === targetDayId) ?? makeCalendarDay(targetDayId);
       const isManual = context?.mode === 'manual';
       const status = context?.status ?? 'draft';
       const trendTag = context?.trendId;
@@ -513,7 +578,7 @@ export function OrganicCalendarWorkspaceClient({
             ? 'Content idea'
             : `New ${selectedPlatform[0].toUpperCase()}${selectedPlatform.slice(1)} post`,
         summary: '',
-        timeLabel: targetDay?.suggestedTimes[0] ?? '9:00 AM',
+        timeLabel: targetDay.suggestedTimes[0] ?? '9:00 AM',
         dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
         status,
         platforms: [selectedPlatform],
@@ -535,7 +600,7 @@ export function OrganicCalendarWorkspaceClient({
       handleSelect(draftId, false);
       return draftId;
     },
-    [activePlatforms, addDraft, calendarDays, handleSelect, platformAccountIds],
+    [activePlatforms, addDraft, calendarDays, defaultCreateDayId, handleSelect, platformAccountIds],
   );
 
   // "Create with AI" composer (direction + tagged creatives + trends → durable job).
@@ -559,33 +624,24 @@ export function OrganicCalendarWorkspaceClient({
       if (mode === 'ai') {
         const platform =
           (isSchedulablePlannerPlatform(context?.platform) && context?.platform) || 'instagram';
-        const targetDay = context?.dayId
-          ? (calendarDays.find((day) => day.id === context.dayId) ?? calendarDays[0] ?? null)
-          : (calendarDays[0] ?? null);
-        const dayId = (targetDay?.id ?? context?.dayId ?? '').slice(0, 10);
+        const dayId = (context?.dayId ?? defaultCreateDayId).slice(0, 10);
         const scheduledAt = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
           ? `${dayId}T12:00:00.000Z`
           : new Date().toISOString();
         setAiComposer({ platform: platform as OrganicPlatformKey, scheduledAt });
         return;
       }
-      const status = context?.status ?? 'draft';
-      const createdDraftId = createQuickDraft({
+      createQuickDraft({
         dayId: context?.dayId,
         platform: context?.platform,
-        status,
+        status: context?.status ?? 'draft',
         trendId: context?.trendId,
         mode,
         format: context?.format,
       });
-      if (!createdDraftId) return;
     },
-    [calendarDays, createQuickDraft],
+    [createQuickDraft, defaultCreateDayId],
   );
-
-  const handleGenerateSelectedDrafts = React.useCallback(() => {
-    void handleGenerateDrafts();
-  }, [handleGenerateDrafts]);
 
   const { handleOpenInAiStudio, handleOpenDraftInAiStudio } = useAiStudioHandoff({
     brandProfileId,
@@ -609,16 +665,25 @@ export function OrganicCalendarWorkspaceClient({
     [calendarDays, handleOpenDraftInAiStudio],
   );
 
+  const { approveAndSchedule } = useApproveScheduleDraft();
+
   const handleBulkApprove = React.useCallback(() => {
     // Only schedule drafts that meet the bare minimum (caption + media); leave the
-    // rest as drafts so the readiness gate can't be bypassed in bulk.
-    selectedIds.forEach((id) =>
-      updateDraftById(id, (d) =>
-        evaluateDraftReadiness(d).ready ? { ...d, status: 'scheduled' as const } : d,
-      ),
-    );
+    // rest as drafts so the readiness gate can't be bypassed in bulk. Persistence
+    // must go through the backend approve→schedule chain — a local status flip
+    // never reaches the DB row, so the scheduled-publish poller would never see it.
+    const ready = selectedIds
+      .map((id) => drafts.find((draft) => draft.id === id))
+      .filter(
+        (draft): draft is OrganicCalendarDraft => !!draft && evaluateDraftReadiness(draft).ready,
+      );
+    void (async () => {
+      for (const draft of ready) {
+        await approveAndSchedule(draft);
+      }
+    })();
     clearAll();
-  }, [selectedIds, updateDraftById, clearAll]);
+  }, [selectedIds, drafts, approveAndSchedule, clearAll]);
 
   const handleBulkDelete = React.useCallback(() => {
     bulkDeleteDrafts(selectedIds);
@@ -633,7 +698,34 @@ export function OrganicCalendarWorkspaceClient({
   // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel
   // drafts. Reel and image batches both flow through this single hook so the
   // GenerationsPopover ticker registers a backendJobId and server-side cancel works.
-  const { generateDraftMedia, isGenerating: isGeneratingMedia } = useGenerateDraftMedia();
+  const {
+    generateDraftMedia,
+    isGenerating: isGeneratingMedia,
+    expandDrafts,
+  } = useGenerateDraftMedia();
+
+  // Per-card stage CTAs: "Enrich" (Stage-2 blueprint sketch) on a text-only
+  // card, "Generate final media" (Stage-3 realize, format-routed) on a
+  // storyboard-ready card. Both need the persisted backend row.
+  const handleEnrichDraft = React.useCallback(
+    (draftId: string) => {
+      const draft = drafts.find((d) => d.id === draftId);
+      if (!brandProfileId || !draft?.backendDraftId) return;
+      void expandDrafts(brandProfileId, [{ feId: draft.id, backendDraftId: draft.backendDraftId }]);
+    },
+    [brandProfileId, drafts, expandDrafts],
+  );
+
+  const handleRealizeDraft = React.useCallback(
+    (draftId: string) => {
+      const draft = drafts.find((d) => d.id === draftId);
+      if (!brandProfileId || !draft?.backendDraftId) return;
+      void generateDraftMedia(brandProfileId, [
+        { feId: draft.id, backendDraftId: draft.backendDraftId, format: draft.format ?? '' },
+      ]);
+    },
+    [brandProfileId, drafts, generateDraftMedia],
+  );
 
   // Selected reel drafts that carry a persisted storyboard and have not yet been
   // rendered to video — the eligible set for the gated "Generate videos" batch.
@@ -806,12 +898,11 @@ export function OrganicCalendarWorkspaceClient({
               <motion.div layout transition={layoutTransition}>
                 <CalendarToolbar
                   viewMode={viewMode}
-                  onViewModeChange={setViewMode}
+                  onViewModeChange={handleViewModeChange}
                   dateRange={dateRange}
                   onDateRangeChange={setDateRange}
                   selectedTrendCount={selectedTrendIds.length}
                   maxTrendSelections={maxTrendSelections}
-                  seededDraftCount={seededDraftCount}
                   isGenerating={isGenerating}
                   onOpenTrends={() => setTrendsDrawerOpen(true)}
                   onCreatePost={(options) =>
@@ -823,7 +914,6 @@ export function OrganicCalendarWorkspaceClient({
                       format: options.format,
                     })
                   }
-                  onGenerate={handleGenerateSelectedDrafts}
                   onClear={clearCalendar}
                   draftsCount={drafts.length}
                   slotProgress={slotProgress}
@@ -879,6 +969,8 @@ export function OrganicCalendarWorkspaceClient({
                           onToggleSelection={(id) => handleSelect(id, true)}
                           onRegenerate={handleRegenerate}
                           onClearFailure={handleClearFailure}
+                          onEnrich={handleEnrichDraft}
+                          onRealize={handleRealizeDraft}
                           onNativeDrop={handleNativeDrop}
                         />
                       </div>
@@ -1041,9 +1133,10 @@ export function OrganicCalendarWorkspaceClient({
                       draft={selectedDraft}
                       brandName={brandName}
                       brandProfileId={brandProfileId}
-                      onApprove={(draftId) =>
-                        updateDraftById(draftId, (d) => ({ ...d, status: 'scheduled' as const }))
-                      }
+                      onApprove={(draftId) => {
+                        const target = drafts.find((draft) => draft.id === draftId);
+                        if (target) void approveAndSchedule(target);
+                      }}
                     />
                   </div>
                 </motion.aside>
