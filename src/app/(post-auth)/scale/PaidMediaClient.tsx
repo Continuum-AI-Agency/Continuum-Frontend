@@ -120,6 +120,11 @@ type PaidMediaClientPageProps = {
   initialAdAccountId?: string | null;
 };
 
+type PaidMediaAccountContext = {
+  brandProfileId: string;
+  selectedAdAccount: string | null;
+};
+
 export default function PaidMediaClientPage({
   brandProfileId,
   brandName,
@@ -133,18 +138,34 @@ export default function PaidMediaClientPage({
   const { user } = useSession();
   const [, startTabTransition] = React.useTransition();
 
-  const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(
-    initialAdAccountId ?? null,
+  const [accountContext, setAccountContext] = React.useState<PaidMediaAccountContext>(() => ({
+    brandProfileId,
+    selectedAdAccount: initialAdAccountId ?? null,
+  }));
+  const isBrandContextTransition = accountContext.brandProfileId !== brandProfileId;
+  const selectedAdAccount = isBrandContextTransition ? null : accountContext.selectedAdAccount;
+  const setSelectedAdAccount = React.useCallback(
+    (adAccountId: string | null) => {
+      setAccountContext((current) => {
+        if (current.brandProfileId !== brandProfileId) return current;
+        if (current.selectedAdAccount === adAccountId) return current;
+        return { ...current, selectedAdAccount: adAccountId };
+      });
+    },
+    [brandProfileId],
   );
   const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const prefetchOptimizerOverview = usePrefetchOptimizerOverview(brandProfileId, selectedAdAccount);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
-  const handlePlatformChange = React.useCallback((next: PaidMediaPlatform) => {
-    setPlatform(next);
-    setSelectedAdAccount(null);
-  }, []);
+  const handlePlatformChange = React.useCallback(
+    (next: PaidMediaPlatform) => {
+      setPlatform(next);
+      setSelectedAdAccount(null);
+    },
+    [setSelectedAdAccount],
+  );
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(normalizedTabParam ?? 'dashboard');
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const [isJainaFullscreen, setIsJainaFullscreen] = React.useState(false);
@@ -160,7 +181,19 @@ export default function PaidMediaClientPage({
   // Reset brand-dependent state when server re-renders with a new brand
   // biome-ignore lint/correctness/useExhaustiveDependencies: brandProfileId is the intended trigger — this reset must re-run when the active brand changes, not only when initialAdAccountId does.
   React.useEffect(() => {
-    setSelectedAdAccount(initialAdAccountId ?? null);
+    setAccountContext((current) => {
+      const nextAdAccount = initialAdAccountId ?? null;
+      if (
+        current.brandProfileId === brandProfileId &&
+        current.selectedAdAccount === nextAdAccount
+      ) {
+        return current;
+      }
+      return {
+        brandProfileId,
+        selectedAdAccount: nextAdAccount,
+      };
+    });
     setSelectedCampaign(null);
     setPlatform('meta');
   }, [brandProfileId, initialAdAccountId]);
@@ -325,6 +358,21 @@ export default function PaidMediaClientPage({
         <div className="min-h-0 rounded-xl border bg-card p-3">
           <Skeleton className="h-full min-h-0 w-full rounded-lg" />
         </div>
+      </div>
+    );
+  }
+
+  if (isBrandContextTransition) {
+    return (
+      <div
+        role="status"
+        aria-label="Switching Scale brand context"
+        className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2"
+      >
+        <span className="sr-only">Switching Scale to {brandName}</span>
+        <Skeleton className="h-9 w-[min(20rem,50vw)] rounded-md" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+        <Skeleton className="h-full min-h-0 w-full rounded-xl" />
       </div>
     );
   }

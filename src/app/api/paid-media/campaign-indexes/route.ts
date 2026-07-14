@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-
+import { type NextRequest, NextResponse } from 'next/server';
+import { log } from '@/lib/observability/logger';
 import {
-  campaignIndexCreateSchema,
   type CampaignIndexRecord,
-} from "@/lib/paid-media/campaign-indexes";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getPostHogClient } from "@/lib/posthog-server";
+  campaignIndexCreateSchema,
+} from '@/lib/paid-media/campaign-indexes';
+import { getPostHogClient } from '@/lib/posthog-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const CAMPAIGN_INDEX_TABLE = "paid_media_campaign_indexes" as never;
+const CAMPAIGN_INDEX_TABLE = 'paid_media_campaign_indexes' as never;
 
 type CampaignIndexRow = {
   id: string;
@@ -21,21 +21,21 @@ type CampaignIndexRow = {
 
 type CampaignIndexInsertPayload = Pick<
   CampaignIndexRow,
-  "brand_id" | "meta_account_id" | "name" | "campaign_ids"
+  'brand_id' | 'meta_account_id' | 'name' | 'campaign_ids'
 >;
 
 function normalizeCampaignIndexRow(input: unknown): CampaignIndexRecord | null {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
 
   if (
-    typeof row.id !== "string" ||
-    typeof row.brand_id !== "string" ||
-    typeof row.meta_account_id !== "string" ||
-    typeof row.name !== "string" ||
+    typeof row.id !== 'string' ||
+    typeof row.brand_id !== 'string' ||
+    typeof row.meta_account_id !== 'string' ||
+    typeof row.name !== 'string' ||
     !Array.isArray(row.campaign_ids) ||
-    typeof row.created_at !== "string" ||
-    typeof row.updated_at !== "string"
+    typeof row.created_at !== 'string' ||
+    typeof row.updated_at !== 'string'
   ) {
     return null;
   }
@@ -45,20 +45,20 @@ function normalizeCampaignIndexRow(input: unknown): CampaignIndexRecord | null {
     brandId: row.brand_id,
     metaAccountId: row.meta_account_id,
     name: row.name,
-    campaignIds: row.campaign_ids.filter((value): value is string => typeof value === "string"),
+    campaignIds: row.campaign_ids.filter((value): value is string => typeof value === 'string'),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  const brandId = request.nextUrl.searchParams.get("brandId");
-  const metaAccountId = request.nextUrl.searchParams.get("metaAccountId");
+  const brandId = request.nextUrl.searchParams.get('brandId');
+  const metaAccountId = request.nextUrl.searchParams.get('metaAccountId');
 
   if (!brandId || !metaAccountId) {
-    return NextResponse.json({ error: "brandId and metaAccountId are required" }, { status: 400 });
+    return NextResponse.json({ error: 'brandId and metaAccountId are required' }, { status: 400 });
   }
 
   try {
@@ -69,16 +69,16 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data, error } = await supabase
-      .schema("brand_profiles")
+      .schema('brand_profiles')
       .from(CAMPAIGN_INDEX_TABLE)
-      .select("id, brand_id, meta_account_id, name, campaign_ids, created_at, updated_at")
-      .eq("brand_id", brandId)
-      .eq("meta_account_id", metaAccountId)
-      .order("name", { ascending: true });
+      .select('id, brand_id, meta_account_id, name, campaign_ids, created_at, updated_at')
+      .eq('brand_id', brandId)
+      .eq('meta_account_id', metaAccountId)
+      .order('name', { ascending: true });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -90,8 +90,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ indexes }, { status: 200 });
   } catch (error) {
-    console.error("Failed to list campaign indexes", error);
-    return NextResponse.json({ error: "Failed to list campaign indexes" }, { status: 500 });
+    log.error('Failed to list campaign indexes', error, {
+      'http.route': '/api/paid-media/campaign-indexes',
+      'http.method': 'GET',
+    });
+    return NextResponse.json({ error: 'Failed to list campaign indexes' }, { status: 500 });
   }
 }
 
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = campaignIndexCreateSchema.safeParse(body);
@@ -116,7 +119,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const payload: CampaignIndexInsertPayload = {
@@ -127,10 +130,10 @@ export async function POST(request: NextRequest) {
     };
 
     const { data, error } = await supabase
-      .schema("brand_profiles")
+      .schema('brand_profiles')
       .from(CAMPAIGN_INDEX_TABLE)
       .insert(payload as never)
-      .select("id, brand_id, meta_account_id, name, campaign_ids, created_at, updated_at")
+      .select('id, brand_id, meta_account_id, name, campaign_ids, created_at, updated_at')
       .single();
 
     if (error) {
@@ -139,14 +142,14 @@ export async function POST(request: NextRequest) {
 
     const index = normalizeCampaignIndexRow(data as CampaignIndexRow);
     if (!index) {
-      return NextResponse.json({ error: "Invalid campaign index response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid campaign index response' }, { status: 502 });
     }
 
-    const distinctId = session.user?.id ?? session.user?.email ?? "anonymous";
+    const distinctId = session.user?.id ?? session.user?.email ?? 'anonymous';
     const posthog = getPostHogClient();
     posthog.capture({
       distinctId,
-      event: "campaign_index_created",
+      event: 'campaign_index_created',
       properties: {
         brand_id: parsed.data.brandId,
         meta_account_id: parsed.data.metaAccountId,
@@ -157,7 +160,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ index }, { status: 201 });
   } catch (error) {
-    console.error("Failed to create campaign index", error);
-    return NextResponse.json({ error: "Failed to create campaign index" }, { status: 500 });
+    log.error('Failed to create campaign index', error, {
+      'http.route': '/api/paid-media/campaign-indexes',
+      'http.method': 'POST',
+    });
+    return NextResponse.json({ error: 'Failed to create campaign index' }, { status: 500 });
   }
 }

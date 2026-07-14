@@ -1,5 +1,7 @@
 'use client';
 
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { z } from 'zod';
 import type {
   CampaignPerformanceMetrics,
   CampaignPerformanceRow,
@@ -14,6 +16,64 @@ export type CampaignPerformanceParams = {
   platform: PaidMediaPlatform;
   range: PaidMetricsRange;
 };
+
+const CampaignFunctionErrorSchema = z.object({
+  error: z.string().min(1),
+  errorCode: z.enum([
+    'UNAUTHORIZED',
+    'TOKEN_EXPIRED',
+    'PERMISSIONS_MISSING',
+    'INTEGRATION_NOT_LINKED',
+    'RATE_LIMITED',
+    'ACCOUNT_NOT_VERIFIED',
+    'UPSTREAM_UNAVAILABLE',
+    'INTERNAL_ERROR',
+  ]),
+  platform: z.literal('meta'),
+  retryable: z.boolean(),
+  retryAfter: z.number().nonnegative().optional(),
+});
+
+type CampaignFunctionError = z.infer<typeof CampaignFunctionErrorSchema>;
+
+export class CampaignPerformanceLoadError extends Error {
+  readonly errorCode: CampaignFunctionError['errorCode'];
+  readonly retryable: boolean;
+  readonly retryAfter?: number;
+  readonly status?: number;
+
+  constructor(error: CampaignFunctionError, status?: number) {
+    super(error.error);
+    this.name = 'CampaignPerformanceLoadError';
+    this.errorCode = error.errorCode;
+    this.retryable = error.retryable;
+    this.retryAfter = error.retryAfter;
+    this.status = status;
+  }
+}
+
+async function parseFunctionError(error: unknown): Promise<Error> {
+  if (!(error instanceof FunctionsHttpError)) {
+    return error instanceof Error ? error : new Error('Failed to load campaign performance');
+  }
+
+  const context = error.context as unknown;
+  if (!context || typeof context !== 'object') return error;
+  const json = Reflect.get(context, 'json');
+  if (typeof json !== 'function') return error;
+
+  try {
+    const parsed = CampaignFunctionErrorSchema.safeParse(await json.call(context));
+    if (!parsed.success) return error;
+    const status = Reflect.get(context, 'status');
+    return new CampaignPerformanceLoadError(
+      parsed.data,
+      typeof status === 'number' ? status : undefined,
+    );
+  } catch {
+    return error;
+  }
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -132,7 +192,7 @@ async function fetchCampaignUniverse(
   );
 
   if (error) {
-    throw new Error(error.message);
+    throw await parseFunctionError(error);
   }
 
   return Array.isArray(data?.campaigns) ? (data.campaigns as CampaignPerformanceRow[]) : [];

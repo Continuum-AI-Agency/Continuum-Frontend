@@ -1,24 +1,28 @@
-"use client";
+'use client';
 
-import { create } from "zustand";
+import { create } from 'zustand';
 
-import { registerBrandScopedStore } from "@/lib/brands/brand-switch";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 import {
-  fetchCampaignPerformanceRows,
+  CampaignPerformanceLoadError,
   type CampaignPerformanceParams,
-} from "@/lib/paid-media/campaign-performance-loader";
-import { consumePrefetchedCampaigns } from "@/lib/prefetch/paid-media-cache";
-import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
-import type { PaidMetricsRange } from "@/lib/schemas/paidMetrics";
-import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
+  fetchCampaignPerformanceRows,
+} from '@/lib/paid-media/campaign-performance-loader';
+import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
+import { consumePrefetchedCampaigns } from '@/lib/prefetch/paid-media-cache';
+import type { BudgetPacingResponse } from '@/lib/schemas/budgetPacing';
+import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-type CacheStatus = "idle" | "loading" | "success" | "error";
+type CacheStatus = 'idle' | 'loading' | 'success' | 'error';
 
 type CampaignPerformanceEntry = {
   status: CacheStatus;
   data: CampaignPerformanceRow[];
   error?: string;
+  errorCode?: CampaignPerformanceLoadError['errorCode'];
+  retryable?: boolean;
+  retryAfter?: number;
   updatedAt?: number;
 };
 
@@ -43,11 +47,11 @@ type PaidMediaPerformanceState = {
   budgetPacing: Record<string, BudgetPacingEntry>;
   loadCampaignPerformance: (
     params: CampaignPerformanceParams,
-    options?: LoadOptions
+    options?: LoadOptions,
   ) => Promise<CampaignPerformanceRow[]>;
   loadBudgetPacing: (
     params: BudgetPacingParams,
-    options?: LoadOptions
+    options?: LoadOptions,
   ) => Promise<BudgetPacingResponse>;
   invalidateCampaignPerformance: (key: string) => void;
   invalidateBudgetPacing: (key: string) => void;
@@ -58,25 +62,20 @@ type PaidMediaPerformanceState = {
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function isFresh(updatedAt: number | undefined): boolean {
-  return typeof updatedAt === "number" && Date.now() - updatedAt < CACHE_TTL_MS;
+  return typeof updatedAt === 'number' && Date.now() - updatedAt < CACHE_TTL_MS;
 }
 
 function rangeKey(range: PaidMetricsRange): string {
-  if (range.preset !== "custom") return range.preset;
+  if (range.preset !== 'custom') return range.preset;
   return `custom:${range.since}:${range.until}`;
 }
 
 export function makeCampaignPerformanceKey(params: CampaignPerformanceParams): string {
-  return [
-    params.brandId,
-    params.adAccountId,
-    params.platform,
-    rangeKey(params.range),
-  ].join(":");
+  return [params.brandId, params.adAccountId, params.platform, rangeKey(params.range)].join(':');
 }
 
 export function makeBudgetPacingKey(params: BudgetPacingParams): string {
-  return [params.brandId, params.adAccountId, "budget-pacing"].join(":");
+  return [params.brandId, params.adAccountId, 'budget-pacing'].join(':');
 }
 
 export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((set, get) => ({
@@ -87,11 +86,11 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
     const key = makeCampaignPerformanceKey(params);
     const existing = get().campaigns[key];
 
-    if (!options?.force && existing?.status === "success" && isFresh(existing.updatedAt)) {
+    if (!options?.force && existing?.status === 'success' && isFresh(existing.updatedAt)) {
       return existing.data;
     }
 
-    if (!options?.force && existing?.status === "loading") {
+    if (!options?.force && existing?.status === 'loading') {
       return existing.data;
     }
 
@@ -99,7 +98,7 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
       campaigns: {
         ...state.campaigns,
         [key]: {
-          status: "loading",
+          status: 'loading',
           data: existing?.data ?? [],
         },
       },
@@ -114,7 +113,7 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
         campaigns: {
           ...state.campaigns,
           [key]: {
-            status: "success",
+            status: 'success',
             data: resolvedCampaigns,
             updatedAt: Date.now(),
           },
@@ -123,14 +122,19 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
 
       return resolvedCampaigns;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load campaign performance";
+      const message =
+        error instanceof Error ? error.message : 'Failed to load campaign performance';
+      const typedError = error instanceof CampaignPerformanceLoadError ? error : null;
       set((state) => ({
         campaigns: {
           ...state.campaigns,
           [key]: {
-            status: "error",
+            status: 'error',
             data: existing?.data ?? [],
             error: message,
+            errorCode: typedError?.errorCode,
+            retryable: typedError?.retryable,
+            retryAfter: typedError?.retryAfter,
             updatedAt: existing?.updatedAt,
           },
         },
@@ -143,7 +147,12 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
     const key = makeBudgetPacingKey(params);
     const existing = get().budgetPacing[key];
 
-    if (!options?.force && existing?.status === "success" && existing.data && isFresh(existing.updatedAt)) {
+    if (
+      !options?.force &&
+      existing?.status === 'success' &&
+      existing.data &&
+      isFresh(existing.updatedAt)
+    ) {
       return existing.data;
     }
 
@@ -151,7 +160,7 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
       budgetPacing: {
         ...state.budgetPacing,
         [key]: {
-          status: "loading",
+          status: 'loading',
           data: existing?.data,
         },
       },
@@ -163,10 +172,10 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
         data: { session },
       } = await supabase.auth.getSession();
 
-      const response = await fetch("/api/paid-media/budget-pacing", {
-        method: "POST",
+      const response = await fetch('/api/paid-media/budget-pacing', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({ brandId: params.brandId, adAccountId: params.adAccountId }),
@@ -181,7 +190,7 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
         budgetPacing: {
           ...state.budgetPacing,
           [key]: {
-            status: "success",
+            status: 'success',
             data,
             updatedAt: Date.now(),
           },
@@ -189,12 +198,12 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
       }));
       return data;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load budget pacing";
+      const message = error instanceof Error ? error.message : 'Failed to load budget pacing';
       set((state) => ({
         budgetPacing: {
           ...state.budgetPacing,
           [key]: {
-            status: "error",
+            status: 'error',
             data: existing?.data,
             error: message,
             updatedAt: existing?.updatedAt,
@@ -225,6 +234,6 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
 }));
 
 registerBrandScopedStore({
-  name: "paid-media-performance",
+  name: 'paid-media-performance',
   reset: () => usePaidMediaPerformanceStore.getState().resetForBrandSwitch(),
 });

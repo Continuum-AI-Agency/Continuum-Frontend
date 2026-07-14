@@ -124,46 +124,49 @@ export function PaidMediaDashboard({
     return `${format(from, 'LLL dd, yyyy')} - ${format(to, 'LLL dd, yyyy')}`;
   }, [customRangeSelection.from, customRangeSelection.to]);
 
-  const loadCampaigns = React.useCallback(async () => {
-    const requestId = loadCampaignsRequestIdRef.current + 1;
-    loadCampaignsRequestIdRef.current = requestId;
+  const loadCampaigns = React.useCallback(
+    async (force = false) => {
+      const requestId = loadCampaignsRequestIdRef.current + 1;
+      loadCampaignsRequestIdRef.current = requestId;
 
-    if (!adAccountId) {
-      setCampaigns([]);
-      setSelectedCampaignId(undefined);
-      setLoadState({ status: 'idle' });
-      return;
-    }
-
-    setLoadState({ status: 'loading-campaigns' });
-
-    try {
-      const campaignsWithMetrics = await loadCampaignPerformance(
-        {
-          brandId,
-          adAccountId,
-          platform,
-          range: metricsRange,
-        },
-        { force: false },
-      );
-
-      if (requestId !== loadCampaignsRequestIdRef.current) {
+      if (!adAccountId) {
+        setCampaigns([]);
+        setSelectedCampaignId(undefined);
+        setLoadState({ status: 'idle' });
         return;
       }
-      setCampaigns(campaignsWithMetrics);
-      setLoadState({ status: 'success' });
-    } catch (error) {
-      if (requestId !== loadCampaignsRequestIdRef.current) {
-        return;
+
+      setLoadState({ status: 'loading-campaigns' });
+
+      try {
+        const campaignsWithMetrics = await loadCampaignPerformance(
+          {
+            brandId,
+            adAccountId,
+            platform,
+            range: metricsRange,
+          },
+          { force },
+        );
+
+        if (requestId !== loadCampaignsRequestIdRef.current) {
+          return;
+        }
+        setCampaigns(campaignsWithMetrics);
+        setLoadState({ status: 'success' });
+      } catch (error) {
+        if (requestId !== loadCampaignsRequestIdRef.current) {
+          return;
+        }
+        console.error('Failed to load campaigns:', error);
+        setLoadState({
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Failed to load campaigns',
+        });
       }
-      console.error('Failed to load campaigns:', error);
-      setLoadState({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Failed to load campaigns',
-      });
-    }
-  }, [adAccountId, brandId, loadCampaignPerformance, metricsRange, platform]);
+    },
+    [adAccountId, brandId, loadCampaignPerformance, metricsRange, platform],
+  );
 
   const loadCampaignIndexes = React.useCallback(async () => {
     if (!adAccountId) {
@@ -204,7 +207,7 @@ export function PaidMediaDashboard({
   }, [adAccountId, brandId]);
 
   React.useEffect(() => {
-    void loadCampaigns();
+    void loadCampaigns(false);
   }, [loadCampaigns]);
 
   React.useEffect(() => {
@@ -212,7 +215,7 @@ export function PaidMediaDashboard({
   }, [loadCampaignIndexes]);
 
   const handleRefresh = () => {
-    void loadCampaigns();
+    void loadCampaigns(true);
   };
 
   const handlePlatformChange = (value: Platform) => {
@@ -499,8 +502,23 @@ export function PaidMediaDashboard({
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
       {loadState.status === 'error' ? (
-        <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {loadState.message}
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          <span>{loadState.message}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 border-destructive/40 bg-background/80 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            aria-label="Retry campaigns"
+            onClick={() => void loadCampaigns(true)}
+          >
+            <ReloadIcon className="h-3.5 w-3.5" />
+            Retry
+          </Button>
         </div>
       ) : null}
 

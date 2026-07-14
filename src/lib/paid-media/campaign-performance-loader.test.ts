@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 let universe: Array<{ id: string; name: string; status: string }> = [
   { id: 'c1', name: 'Camp 1', status: 'ENABLED' },
@@ -14,6 +15,7 @@ mock.module('@/lib/supabase/client', () => ({
 }));
 
 import {
+  CampaignPerformanceLoadError,
   fetchCampaignPerformanceRows,
   shouldBatchCampaignMetrics,
   widenedSpanDays,
@@ -123,6 +125,40 @@ describe('fetchCampaignPerformanceRows', () => {
 
     const fnName = invokeMock.mock.calls[0][0] as string;
     expect(fnName.startsWith('paid-media-reporting/campaigns')).toBe(true);
+  });
+
+  it('surfaces the typed Edge error instead of the generic FunctionsHttpError message', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: new FunctionsHttpError(
+        new Response(
+          JSON.stringify({
+            error: 'Meta account lookup is temporarily unavailable.',
+            errorCode: 'UPSTREAM_UNAVAILABLE',
+            platform: 'meta',
+            retryable: true,
+            retryAfter: 30,
+          }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    });
+
+    const error = await fetchCampaignPerformanceRows({
+      brandId: 'b1',
+      adAccountId: 'act_1',
+      platform: 'meta',
+      range: { preset: 'last_7d' },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(CampaignPerformanceLoadError);
+    expect(error).toMatchObject({
+      message: 'Meta account lookup is temporarily unavailable.',
+      errorCode: 'UPSTREAM_UNAVAILABLE',
+      retryable: true,
+      retryAfter: 30,
+      status: 503,
+    });
   });
 
   it('invokes the Google Ads campaign function for the google-ads platform', async () => {
