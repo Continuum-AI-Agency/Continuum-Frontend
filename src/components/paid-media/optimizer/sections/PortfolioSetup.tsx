@@ -27,6 +27,7 @@ import {
   suggestionToPortfolioConfig,
 } from '@continuum/contracts';
 import {
+  ArrowLeftIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   PlusIcon,
@@ -154,6 +155,10 @@ export function PortfolioSetup({
   onCreated,
   showAccountHeader = true,
 }: PortfolioSetupProps) {
+  // 'start' offers the fast path (a suggestion, one click). 'build' hands the whole container to
+  // the two-pane builder. They are alternatives, so only one is on screen at a time.
+  const [view, setView] = React.useState<'start' | 'build'>('start');
+
   const { data: accounts } = useOptimizerAdAccounts(brandId);
   const account = accounts.find((row) => row.account_id === adAccountId) ?? null;
   const resolvedCurrency = currency ?? account?.currency ?? null;
@@ -231,6 +236,32 @@ export function PortfolioSetup({
     );
   };
 
+  // Two views, not three steps. Starting from a suggestion and building one by hand are
+  // ALTERNATIVES — the old page rendered both at once, stacked, under a decorative "1 → 2 → 3"
+  // list. Splitting them is what frees the builder to use the whole container instead of being
+  // the third thing down a scroll.
+  if (view === 'build') {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => setView('start')}
+          className="flex w-fit shrink-0 items-center gap-1 rounded text-muted-foreground text-xs outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeftIcon className="size-3.5" aria-hidden="true" />
+          Back to suggestions
+        </button>
+        <PortfolioCreateForm
+          brandId={brandId}
+          adAccountId={adAccountId}
+          currency={resolvedCurrency}
+          level={level}
+          onCreated={onCreated}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {showAccountHeader ? (
@@ -253,32 +284,33 @@ export function PortfolioSetup({
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <SparklesIcon className="size-4 text-primary" />
-          <h3 className="text-sm font-semibold tracking-tight">Suggested portfolios</h3>
+          <h3 className="font-semibold text-sm tracking-tight">Start from a suggestion</h3>
           {suggestions.length > 0 ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground text-xs">
               grouped from this account&rsquo;s active ad sets
             </span>
           ) : null}
         </div>
 
         {suggestRead.isLoading ? (
-          <div className="space-y-2">
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
             <Skeleton className="h-16 rounded-lg" />
             <Skeleton className="h-16 rounded-lg" />
           </div>
         ) : suggestRead.isError ? (
-          <p className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-xs text-warning">
-            Suggestions are unavailable — the optimizer service is offline. You can still create a
-            portfolio manually below.
+          <p className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-warning text-xs">
+            Suggestions are unavailable — the optimizer service is offline. You can still build a
+            portfolio by hand.
           </p>
         ) : suggestions.length === 0 ? (
-          <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/10 px-4 py-3">
-            <p className="text-xs text-muted-foreground">
+          <div className="space-y-2 rounded-lg border border-border/70 border-dashed bg-muted/10 px-4 py-3">
+            <p className="text-muted-foreground text-xs">
               {suggestEmptyMessage(suggestReason, level)}
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          // A grid, not a stack. Three suggestions used to leave ~60% of a full-width row empty.
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {suggestions.map((suggestion) => {
               const groupIds = new Set(suggestion.adset_ids);
               const groupSnapshots = snapshots.filter((snapshot) => groupIds.has(snapshot.id));
@@ -306,13 +338,23 @@ export function PortfolioSetup({
         sections={cboSections}
       />
 
-      <PortfolioCreateForm
-        brandId={brandId}
-        adAccountId={adAccountId}
-        currency={resolvedCurrency}
-        level={level}
-        onCreated={onCreated}
-      />
+      <section className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/10 px-4 py-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm tracking-tight">Or build one by hand</h3>
+          <p className="text-muted-foreground text-xs">
+            Pick the ad sets yourself and set the budget and target.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => setView('build')}
+        >
+          <PlusIcon className="size-4" aria-hidden="true" />
+          Build a portfolio
+        </Button>
+      </section>
     </div>
   );
 }
@@ -610,7 +652,7 @@ export function PortfolioCreateForm({
   const entityLabel = level === 'campaign' ? 'campaigns' : 'ad sets';
 
   return (
-    <Card className="flex min-h-0 flex-col gap-0 rounded-lg py-0 shadow-none">
+    <Card className="flex min-h-0 flex-1 flex-col gap-0 rounded-lg py-0 shadow-none">
       <CardHeader className="shrink-0 border-b border-border/70 p-4">
         <CardTitle className="text-sm">Create a portfolio</CardTitle>
         <p className="text-xs text-muted-foreground">
@@ -637,7 +679,9 @@ export function PortfolioCreateForm({
             isError={snapshotsRead.isError}
             mode={level}
             objective={objective}
-            heightClassName="h-[26rem] lg:h-[min(60vh,34rem)]"
+            // The picker takes whatever height the pane has. It used to be capped at 60vh inside
+            // a 672px column — the cap was doing the cramping, not the content.
+            heightClassName="h-[22rem] lg:h-full lg:min-h-[24rem]"
           />
         </div>
 

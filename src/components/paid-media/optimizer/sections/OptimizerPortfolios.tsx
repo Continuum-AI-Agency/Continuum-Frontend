@@ -16,9 +16,9 @@ import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { useOptimizerArchivedPortfolios, useOptimizerMutations } from '../useOptimizerData';
+import { NewPortfolioSheet } from './NewPortfolioSheet';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
 import { PortfolioPerformancePanel } from './PortfolioPerformancePanel';
-import { PortfolioSetup } from './PortfolioSetup';
 
 type OptimizerPortfoliosProps = {
   brandId: string;
@@ -244,20 +244,17 @@ export function OptimizerPortfolios({
         </Button>
       </div>
 
-      {creating ? (
-        <div className="rounded-lg border border-border/70 bg-card p-4">
-          <PortfolioSetup
-            brandId={brandId}
-            adAccountId={adAccountId}
-            currency={currency ?? null}
-            showAccountHeader={false}
-            onCreated={(portfolioId) => {
-              setCreating(false);
-              onCreated?.(portfolioId);
-            }}
-          />
-        </div>
-      ) : null}
+      {/* A Sheet, not an inline expander. The expander rendered the whole setup body into this
+          narrow, scrolling column — re-squeezing the builder and shoving the portfolio list you
+          launched from off the screen. */}
+      <NewPortfolioSheet
+        open={creating}
+        onOpenChange={setCreating}
+        brandId={brandId}
+        adAccountId={adAccountId}
+        currency={currency ?? null}
+        onCreated={onCreated}
+      />
 
       <div className="space-y-2">
         {portfolios.map((portfolio) => (

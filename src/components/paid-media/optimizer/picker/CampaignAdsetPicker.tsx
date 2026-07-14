@@ -491,6 +491,11 @@ export function CampaignAdsetPicker({
           Nothing matches this search or filter.
         </p>
       ) : (
+        /* NOT shadcn's <ScrollArea>. Radix wraps a Viewport's children in a `display: table`
+           div, which is why `position: sticky` does not work inside one — and this table's
+           column header has to stay pinned while you scroll 300 ad sets. A styled scrollbar is
+           not worth losing the header. (The virtualizer also needs a ref to the element that
+           actually scrolls, which ScrollArea does not expose.) One scroll container, owned here. */
         <div
           ref={scrollRef}
           className={cn(
