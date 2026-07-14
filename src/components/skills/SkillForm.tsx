@@ -1,10 +1,11 @@
 'use client';
 
 import type { Skill, SkillKind } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { createBrandSkill, updateBrandSkill } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
-import { AgentButton } from '../agentCardKit';
 
 type Props = {
   brandId: string;
@@ -28,7 +29,7 @@ const parseTags = (raw: string): string[] =>
 
 // Create/edit form for a brand skill. Saves straight to the database via the
 // brand-skill endpoints; library templates are never edited here.
-export function SkillWizardForm({ brandId, initial, onCancelAction, onSavedAction }: Props) {
+export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [kind, setKind] = useState<SkillKind>(initial?.kind ?? 'creative_direction');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -129,12 +130,19 @@ export function SkillWizardForm({ brandId, initial, onCancelAction, onSavedActio
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <div className="mt-0.5 flex items-center justify-end gap-2">
-        <AgentButton variant="ghost" onClick={onCancelAction}>
+        <Button variant="ghost" size="sm" onClick={onCancelAction}>
           Cancel
-        </AgentButton>
-        <AgentButton variant="primary" loading={saving} disabled={!canSave} onClick={save}>
+        </Button>
+        <Button
+          variant="brand"
+          size="sm"
+          disabled={!canSave}
+          aria-busy={saving || undefined}
+          onClick={save}
+        >
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {initial ? 'Save changes' : 'Create skill'}
-        </AgentButton>
+        </Button>
       </div>
     </div>
   );

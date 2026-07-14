@@ -1,16 +1,15 @@
 'use client';
 
-// The full-page skills browser for Settings → Skills. A permanent home for the
-// creative-direction + analytic skills the AI Studio canvas and the organic agent
-// apply. Reuses the exact SkillWizardList + SkillWizardForm the composer wizard
-// uses, so the browse/create/edit/archive behavior never forks — this surface just
-// renders them inline (full width) instead of inside a popover.
+// The skills browser for Settings → Skills — the one place skills are authored.
+// Home for the creative-direction + analytic skills the AI Studio canvas and the
+// organic agent apply. The agent chat only *applies* skills (composer picker /
+// @-mention) and deep-links here to manage them.
 
 import type { Skill } from '@continuum/contracts';
 import { ChevronLeft, Lock } from 'lucide-react';
 import { useState } from 'react';
-import { SkillWizardForm } from '@/components/organic/agent/SkillWizard/SkillWizardForm';
-import { SkillWizardList } from '@/components/organic/agent/SkillWizard/SkillWizardList';
+import { SkillForm } from '@/components/skills/SkillForm';
+import { SkillList } from '@/components/skills/SkillList';
 import { archiveBrandSkill, useBrandSkills } from '@/lib/organic/skills';
 
 type Screen =
@@ -42,7 +41,7 @@ export function SkillsSettingsSection({ brandId }: { brandId: string }) {
         (isLoading ? (
           <p className="text-sm text-muted-foreground">Loading skills…</p>
         ) : (
-          <SkillWizardList
+          <SkillList
             skills={skills}
             templates={templates}
             onNewAction={() => setScreen({ kind: 'form', skill: null })}
@@ -55,7 +54,7 @@ export function SkillsSettingsSection({ brandId }: { brandId: string }) {
         ))}
 
       {screen.kind === 'form' && (
-        <SkillWizardForm
+        <SkillForm
           brandId={brandId}
           initial={screen.skill}
           onCancelAction={() => setScreen({ kind: 'list' })}

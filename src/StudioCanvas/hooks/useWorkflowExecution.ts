@@ -4,6 +4,7 @@ import { type OmniGenRequest, omniGenStreamFrameSchema } from '@continuum/contra
 import { useCallback, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiUrl } from '@/lib/api/config';
+import { authedSseHeaders } from '@/lib/api/sseHeaders';
 import { readServerSentEvents } from '@/lib/sse/readServerSentEvents';
 import type {
   BackendChatImageRequestPayload,
@@ -107,10 +108,7 @@ export function useWorkflowExecution() {
       try {
         const res = await fetch(initUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-          },
+          headers: await authedSseHeaders(),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
@@ -445,10 +443,7 @@ export function useWorkflowExecution() {
       try {
         const response = await fetch(resolveInitUrl('/ai-studio/generate-video-omni'), {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-          },
+          headers: await authedSseHeaders(),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });

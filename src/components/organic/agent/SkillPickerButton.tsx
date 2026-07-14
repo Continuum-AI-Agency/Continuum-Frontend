@@ -1,7 +1,8 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Wand2 } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import {
   Command,
@@ -12,6 +13,10 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
+// Authoring lives in Settings, not here — this popover applies skills. The same
+// deep-link backs the canvas grounding popover, so the two never drift.
+const SKILLS_SETTINGS_HREF = '/settings?section=skills';
 
 type Props = {
   skills: Skill[];
@@ -51,7 +56,7 @@ export function SkillPickerButton({
             <CommandEmpty>
               {isError
                 ? "Couldn't load brand skills. Check your connection and try again."
-                : 'No skills yet — ask the agent to save one (e.g. “save this as a skill”).'}
+                : 'No skills yet — ask the agent to save one (e.g. “save this as a skill”), or create one in Settings.'}
             </CommandEmpty>
             <CommandGroup heading="Brand skills">
               {skills.map((skill) => (
@@ -86,9 +91,7 @@ export function SkillPickerButton({
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{skill.name}</span>
                       {skill.description && (
-                        <span className="text-xs text-muted-foreground">
-                          {skill.description}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{skill.description}</span>
                       )}
                     </div>
                   </CommandItem>
@@ -97,6 +100,16 @@ export function SkillPickerButton({
             )}
           </CommandList>
         </Command>
+        <div className="border-t border-border/60 px-2 py-1.5">
+          <Link
+            href={SKILLS_SETTINGS_HREF}
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Wand2 className="h-3 w-3" />
+            Manage skills
+          </Link>
+        </div>
       </PopoverContent>
     </Popover>
   );

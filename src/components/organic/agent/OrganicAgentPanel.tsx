@@ -22,8 +22,6 @@ import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDra
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
-import { useAgentRunStore } from '@/lib/agents/runStore';
-import { useProjectedRun } from './useProjectedRun';
 import { useSession } from '@/hooks/useSession';
 import {
   fetchCreativeInsightSuggestions,
@@ -55,6 +53,7 @@ import type {
   AgentMentionReference,
   AgentMentionSuggestion,
 } from '@/lib/agent-references';
+import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import {
@@ -89,7 +88,6 @@ import { PostContentCardGrid } from './PostContentCardGrid';
 import { restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
 import { SkillProposalCard } from './SkillProposalCard';
-import { SkillWizardLauncher } from './SkillWizard/SkillWizardLauncher';
 import { ToolApprovalCard } from './ToolApprovalCard';
 import { TrendChartCard } from './TrendChartCard';
 import type {
@@ -102,6 +100,7 @@ import type {
 } from './types';
 import { initialPanelState, panelReducer } from './useOrganicAgentReducer';
 import { useOrganicSessions } from './useOrganicSessions';
+import { useProjectedRun } from './useProjectedRun';
 
 /** Top-level @-menu folders (order is display order). Nested children drill via keys. */
 const ROOT_MENTION_FOLDERS: Array<{
@@ -1732,16 +1731,6 @@ export function OrganicAgentPanel({
         </ChatTranscript>
 
         <div className="relative shrink-0">
-          {brandId && (
-            <div className="absolute bottom-full right-2 z-50 mb-2">
-              <SkillWizardLauncher
-                brandId={brandId}
-                skills={brandSkills}
-                templates={brandSkillTemplates}
-                onChangedAction={() => void refreshBrandSkills()}
-              />
-            </div>
-          )}
           {state.mediaResolution && state.mediaResolution.failed.length > 0 ? (
             <div
               role="status"

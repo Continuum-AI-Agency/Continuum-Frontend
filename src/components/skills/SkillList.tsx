@@ -3,7 +3,7 @@
 import type { Skill } from '@continuum/contracts';
 import { Archive, Lock, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
-import { AgentButton } from '../agentCardKit';
+import { Button } from '@/components/ui/button';
 
 type Props = {
   skills: Skill[];
@@ -21,9 +21,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Browse list for the wizard: the brand's own skills (editable / archivable) and
-// the read-only first-party library.
-export function SkillWizardList({
+// Browse list for the skills browser: the brand's own skills (editable /
+// archivable) and the read-only first-party library.
+export function SkillList({
   skills,
   templates,
   onNewAction,
@@ -43,10 +43,10 @@ export function SkillWizardList({
 
   return (
     <div className="flex flex-col gap-3">
-      <AgentButton variant="primary" className="w-full justify-center" onClick={onNewAction}>
+      <Button variant="brand" size="sm" className="w-full justify-center" onClick={onNewAction}>
         <Plus className="h-3.5 w-3.5" />
         New skill
-      </AgentButton>
+      </Button>
 
       <div className="flex flex-col gap-1.5">
         <SectionLabel>Your skills</SectionLabel>
