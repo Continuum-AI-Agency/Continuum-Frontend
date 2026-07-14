@@ -28,6 +28,7 @@ import {
   type CreatePortfolioRequest,
   type CycleRunReport,
   CycleRunReportSchema,
+  type CycleSkipReason,
   type EnrollRequest,
   type OptimizerInsightRequest,
   type OptimizerInsightResponse,
@@ -346,11 +347,48 @@ async function enrollAdsets(request: EnrollRequest): Promise<{ enrolled: number 
   return { enrolled: parsed.success ? parsed.data.enrolled : 0 };
 }
 
+/** Why a "Run now" click could not reach a working service. */
+export type RunUnavailableKind =
+  | 'not_configured' // 501 — OPTIMIZER_SERVICE_URL is unset on the edge
+  | 'timeout' // 504 — the edge gave up waiting on the service
+  | 'forbidden' // 403 — the ad account is not connected to this brand
+  | 'malformed' // 200, but the body did not match the contract → drift
+  | 'unknown';
+
+/** The three honest outcomes of a "Run now" click.
+ *
+ *  `skipped` is the one that matters: the cycle RAN and correctly did nothing, which is
+ *  actionable ("nothing is enrolled") and NOT an outage. runCycle used to return
+ *  `RunCycleResponse | null`, and that `null` was the poison — at the call site it was
+ *  indistinguishable from an unreachable service, so all three outcomes collapsed into one
+ *  message: "Optimizer service not live yet". It was true in none of them. */
+export type RunCycleOutcome =
+  | { status: 'ran'; run: RunCycleResponse }
+  | { status: 'skipped'; reason: CycleSkipReason; run: RunCycleResponse }
+  | { status: 'unavailable'; kind: RunUnavailableKind };
+
+/** Map an edge-invoke failure to a reason we can actually explain to the user. */
+function unavailableFromError(error: unknown): RunCycleOutcome {
+  const status = (error as { context?: { status?: number } } | null)?.context?.status;
+  const kind: RunUnavailableKind =
+    status === 501
+      ? 'not_configured'
+      : status === 504
+        ? 'timeout'
+        : status === 403
+          ? 'forbidden'
+          : 'unknown';
+  return { status: 'unavailable', kind };
+}
+
+/** Trigger a cycle now. NEVER throws: every failure is a described outcome, because the
+ *  caller has to render the difference between "we did nothing, and here is why" and "we
+ *  could not reach the service". */
 async function runCycle(
   portfolioId: string,
   brandId?: string,
   accountId?: string | null,
-): Promise<RunCycleResponse | null> {
+): Promise<RunCycleOutcome> {
   // brandId + accountId scope the run to a brand/account the caller can access —
   // the optimizer-run edge verifies them (mirrors optimizer-suggest). Omitted keys
   // keep the request backward-compatible with the portfolio_id-only shape.
@@ -361,9 +399,27 @@ async function runCycle(
       ...(accountId ? { accountId } : {}),
     },
   });
-  if (error) throw new Error('Failed to run cycle');
+  if (error) return unavailableFromError(error);
+
   const parsed = RunCycleResponseSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) {
+    // A malformed body is contract drift between this app and the optimizer service. Say so
+    // LOUDLY: swallowing it into a silent null is what hid this exact bug for weeks.
+    console.error('optimizer-run returned a body that does not match RunCycleResponseSchema', {
+      issues: parsed.error.issues,
+    });
+    return { status: 'unavailable', kind: 'malformed' };
+  }
+
+  const run = parsed.data;
+  if (run.skipped) return { status: 'skipped', reason: run.skipped, run };
+  if (run.runId === null) {
+    // The service's invariant is runId === null ⟺ skipped. A null runId with no reason is a
+    // shape we do not understand, and guessing "it worked" would be a lie.
+    console.error('optimizer-run returned runId:null with no skip reason', { run });
+    return { status: 'unavailable', kind: 'malformed' };
+  }
+  return { status: 'ran', run };
 }
 
 /** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
@@ -914,7 +970,11 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
 
   const run = useMutation({
     mutationFn: (portfolioId: string) => runCycle(portfolioId, brandId, adAccountId),
-    onSuccess: invalidateOptimizer,
+    // Only a cycle that actually persisted a run changed anything worth re-reading. A skip
+    // wrote nothing, and an unreachable service wrote nothing either.
+    onSuccess: (outcome) => {
+      if (outcome.status === 'ran') invalidateOptimizer();
+    },
   });
 
   const setStatus = useMutation({

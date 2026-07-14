@@ -29,6 +29,7 @@ import {
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { OptimizerPanel } from './OptimizerPanel';
 import { RecommendationInsight } from './RecommendationInsight';
+import { RunOutcomeNotice } from './RunOutcomeNotice';
 
 type PortfolioPerformancePanelProps = {
   portfolioId: string;
@@ -66,7 +67,9 @@ export function PortfolioPerformancePanel({
   const latestRun = report?.latest_run ?? null;
   // Await the first cycle of a freshly-enrolled portfolio (scheduler + the create
   // path's kicked run land it) — poll until it appears instead of sitting empty.
-  useOptimizerFirstRunPoll(!latestRun, performanceQuery.refetch);
+  // But STOP once a run comes back skipped: a portfolio with nothing enrolled will never
+  // produce a cycle, so polling for one is waiting for something that cannot happen.
+  useOptimizerFirstRunPoll(!latestRun && run.data?.status !== 'skipped', performanceQuery.refetch);
   const confidence = confidenceBand(latestRun?.confidence?.band);
   const confidenceScore = latestRun?.confidence?.score;
   const metric = getOptimizationMetricDefinition(objective);
@@ -76,7 +79,6 @@ export function PortfolioPerformancePanel({
       (max, item) => Math.max(max, (ciCpa(item) ?? 0) * metric.denominatorMultiplier),
       0,
     ) || 1;
-  const runUnreachable = run.isError || (run.isSuccess && run.data == null && !run.isPending);
 
   if (performanceQuery.isLoading) {
     return (
@@ -126,7 +128,7 @@ export function PortfolioPerformancePanel({
           </Button>
         }
       >
-        <div className="space-y-1 text-xs text-muted-foreground">
+        <div className="space-y-1.5 text-xs text-muted-foreground">
           {latestRun ? (
             <span>
               mode {latestRun.mode} · conservation {latestRun.conserved ? '✓ exact' : '—'} ·
@@ -135,11 +137,7 @@ export function PortfolioPerformancePanel({
           ) : (
             <span>No cycle has run yet — use Run now to score this portfolio.</span>
           )}
-          {runUnreachable ? (
-            <p className="text-warning">
-              Optimizer service not live yet — scheduled cycles will populate this shortly.
-            </p>
-          ) : null}
+          <RunOutcomeNotice outcome={run.data} isPending={run.isPending} />
         </div>
       </OptimizerPanel>
 

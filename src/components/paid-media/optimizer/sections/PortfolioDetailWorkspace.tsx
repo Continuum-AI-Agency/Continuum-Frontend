@@ -51,6 +51,7 @@ import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { HeldChangesPanel } from './HeldChangesPanel';
 import { OptimizerPanel } from './OptimizerPanel';
+import { RunOutcomeNotice } from './RunOutcomeNotice';
 
 type PortfolioDetailWorkspaceProps = {
   portfolio: PortfolioListItem;
@@ -96,7 +97,11 @@ export function PortfolioDetailWorkspace({
   // A freshly-enrolled portfolio has no cycle yet. The create path kicked off a run
   // and the scheduler backstops it (next_realloc_at=now), so poll the performance
   // read until the first result lands rather than leaving the user on empty panels.
-  const awaitingFirstCycle = !latestRun;
+  //
+  // A SKIPPED run ends the wait. "Scoring your first cycle…" used to spin forever on a
+  // portfolio with nothing enrolled, because no cycle would ever arrive to stop it — the
+  // spinner promised a result that could not exist.
+  const awaitingFirstCycle = !latestRun && run.data?.status !== 'skipped';
   useOptimizerFirstRunPoll(awaitingFirstCycle, performanceQuery.refetch);
   const confidence = confidenceBand(latestRun?.confidence?.band);
   // Offer the manual apply only when there are actual moves and the portfolio is in
@@ -178,6 +183,10 @@ export function PortfolioDetailWorkspace({
       </header>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        {/* Both "Run now" triggers in this workspace used to fire into a void — no success,
+            no skip reason, no error. */}
+        <RunOutcomeNotice outcome={run.data} isPending={run.isPending} />
+
         {awaitingFirstCycle ? (
           <div
             role="status"

@@ -5,11 +5,10 @@
 // renders an approve/reject row per recommendation.
 
 import type { PortfolioListItem } from '@continuum/contracts';
-
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
 import {
   CREATIVE_RECOMMENDATION_KINDS,
   isExecutable,
@@ -186,8 +185,8 @@ function RecommendationBrief({ seed }: { seed?: Record<string, unknown> | null }
         // The distinction the whole feature turns on: this creative converts best AND Meta
         // rates its craft below its auction peers. Cloning it would industrialize the penalty.
         <p className="mt-1.5 text-2xs font-medium text-foreground">
-          Keep the angle — rebuild the execution. Meta rates this creative below its auction
-          peers, so copying it as-is would reproduce what the auction is already penalizing.
+          Keep the angle — rebuild the execution. Meta rates this creative below its auction peers,
+          so copying it as-is would reproduce what the auction is already penalizing.
         </p>
       ) : null}
     </div>

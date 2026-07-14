@@ -16,6 +16,7 @@ export * from './preview';
 export * from './realize';
 export * from './reel-finalize';
 export * from './reel-video';
+export * from './reformat';
 export * from './registerCanvas';
 export * from './review';
 export * from './search';

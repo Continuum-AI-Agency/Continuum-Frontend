@@ -4,6 +4,7 @@
 // the bytes to its own bucket, we only record the media.assets row.
 
 import { z } from 'zod';
+import { imageReformatModeSchema } from './reformat';
 
 // Structured provenance stored on media.assets.origin_ref for canvas creations.
 // kind:"canvas" is the discriminant agents/backfills key on. The Library assets
@@ -33,6 +34,7 @@ export const resizeOriginRefSchema = z
     /** Placement preset id, e.g. "ig-story-reel". */
     preset: z.string().min(1),
     aspectRatio: z.string().min(1),
+    mode: imageReformatModeSchema.optional(),
     model: z.string().min(1).nullable().optional(),
   })
   .strict();

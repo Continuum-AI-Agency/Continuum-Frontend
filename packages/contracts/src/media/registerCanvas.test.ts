@@ -39,6 +39,7 @@ describe('registerCanvasAssetRequestSchema', () => {
         sourceAssetId: ASSET_ID,
         preset: 'ig-story-reel',
         aspectRatio: '9:16',
+        mode: 'smart_expand',
         model: 'gemini-3.1-flash-image-preview',
       },
     });

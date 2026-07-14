@@ -289,21 +289,51 @@ export const RunCycleRequestSchema = z.union([
 ]);
 export type RunCycleRequest = z.infer<typeof RunCycleRequestSchema>;
 
-/** POST /cycle response — mirrors the optimizer service's CycleOutcome. One run's
- *  outcome: the persisted run id, how many ad-set snapshots it scored, the engine
- *  recommendations it raised, and (in autopilot) the platform apply results.
- *  `recommendations` / `applied` / `failed` stay loose arrays: recommendations are
- *  the engine `Recommendation` shape and apply rows carry platform response jsonb;
- *  the FE narrows what it renders (see the "wire DTOs stay loose" rule). */
-export const RunCycleResponseSchema = z.object({
-  portfolioId: z.string().uuid().nullable(),
-  runId: z.string().uuid(),
-  snapshotCount: z.number().int().nonnegative(),
-  recommendations: z.array(z.record(z.string(), z.unknown())),
-  applied: z.array(z.record(z.string(), z.unknown())),
-  failed: z.array(z.record(z.string(), z.unknown())),
-  skipped: z.array(z.record(z.string(), z.unknown())).optional(),
-});
+/** Why a cycle produced no run. Both are HTTP 200 with `runId: null` — a skip is a
+ *  SUCCESSFUL, ACTIONABLE outcome, not an outage:
+ *    - `no_adsets`    — nothing is enrolled in the portfolio yet.
+ *    - `no_snapshots` — ingest returned nothing for the enrolled entities (an expired
+ *                       Meta token, or no active/spending ad sets).
+ *  Mirrors CycleOutcome['skipped'] (Continuum-Optimizer/src/types.ts). */
+export const CycleSkipReasonSchema = z.enum(['no_adsets', 'no_snapshots']);
+export type CycleSkipReason = z.infer<typeof CycleSkipReasonSchema>;
+
+/** POST /cycle response — mirrors the optimizer service's CycleOutcome EXACTLY
+ *  (Continuum-Optimizer/src/types.ts; produced by runPortfolioCycle, scheduler.ts,
+ *  on both its ran path and its skip path).
+ *
+ *  Every outcome field is a COUNT, not a row array. The rows themselves are read back
+ *  through optimizer_get_portfolio_performance (CycleRunReportSchema below) — this
+ *  envelope only tallies what the cycle did.
+ *
+ *  DELIBERATELY NARROW, and that is not a violation of the "wire DTOs stay loose" rule:
+ *  that rule is for read models the DB hands us as opaque jsonb. This is a struct we
+ *  author on BOTH sides, and a loose schema here is precisely what let the Frontend
+ *  mis-read a real, persisted run as an outage — `recommendations`/`applied`/`failed`
+ *  were declared as arrays while the service has always sent counts, so safeParse could
+ *  never succeed and every "Run now" click reported "Optimizer service not live yet".
+ *  `.loose()` is applied ONLY so a NEW service-side field cannot break a deployed FE;
+ *  do NOT give the counters defaults, which would resurrect that same class of bug. */
+export const RunCycleResponseSchema = z
+  .object({
+    portfolioId: z.string().uuid(),
+    /** null IFF the cycle was SKIPPED — no optimizer.cycle_runs row was persisted. */
+    runId: z.string().uuid().nullable(),
+    snapshotCount: z.number().int().nonnegative(),
+    /** How many recommendations the engine raised this cycle. */
+    recommendations: z.number().int().nonnegative(),
+    applied: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    /** Writes skipped because the ledger showed the same target already applied/in-flight. */
+    deduped: z.number().int().nonnegative(),
+    /** Changed budgets NOT written because the applier is a dry-run/soak stub. */
+    stubbed: z.number().int().nonnegative(),
+    /** Autopilot changes parked over the %-cap for per-item human approval. */
+    held: z.number().int().nonnegative(),
+    /** Present ONLY on a skipped cycle. */
+    skipped: CycleSkipReasonSchema.optional(),
+  })
+  .loose();
 export type RunCycleResponse = z.infer<typeof RunCycleResponseSchema>;
 
 /** FE performance-tab read model — the shape optimizer_get_portfolio_performance

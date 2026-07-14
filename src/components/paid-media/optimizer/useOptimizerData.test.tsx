@@ -13,7 +13,9 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { optimizerQueryKeys, useOptimizerPortfolios } = await import('./useOptimizerData');
+const { optimizerQueryKeys, useOptimizerMutations, useOptimizerPortfolios } = await import(
+  './useOptimizerData'
+);
 
 function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -76,5 +78,81 @@ describe('optimizer React Query reads', () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data).toEqual([]);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+// The bug these exist to fence:
+//
+// RunCycleResponseSchema declared recommendations/applied/failed as ARRAYS and runId as a
+// required uuid. The optimizer service has always sent COUNTS and a nullable runId. safeParse
+// could therefore NEVER succeed — runCycle returned null on every healthy cycle, and the panel
+// read that null as "Optimizer service not live yet". The cycle had run, scored the ad sets,
+// and persisted the whole time.
+//
+// `ran` below is the VERBATIM body the service sends. Against the old schema it fails to parse.
+describe('runCycle outcomes', () => {
+  const RAN = {
+    portfolioId: '11111111-1111-4111-8111-111111111111',
+    runId: '22222222-2222-4222-8222-222222222222',
+    snapshotCount: 3,
+    recommendations: 1,
+    applied: 0,
+    failed: 0,
+    deduped: 0,
+    stubbed: 0,
+    held: 0,
+  };
+  const skip = (reason: 'no_adsets' | 'no_snapshots') => ({
+    ...RAN,
+    runId: null,
+    snapshotCount: 0,
+    recommendations: 0,
+    skipped: reason,
+  });
+
+  async function runOnce() {
+    const { result } = renderHook(() => useOptimizerMutations('brand', 'act_1'), {
+      wrapper: createWrapper(),
+    });
+    result.current.run.mutate('11111111-1111-4111-8111-111111111111');
+    await waitFor(() => expect(result.current.run.isSuccess).toBe(true));
+    return result.current.run.data;
+  }
+
+  it('reports a persisted cycle as ran — the exact body the old schema rejected', async () => {
+    rpc.mockResolvedValueOnce({ data: RAN, error: null } as never);
+    expect(await runOnce()).toEqual({ status: 'ran', run: expect.objectContaining(RAN) });
+  });
+
+  it('reports an empty portfolio as SKIPPED, not as an offline service', async () => {
+    rpc.mockResolvedValueOnce({ data: skip('no_adsets'), error: null } as never);
+    const outcome = await runOnce();
+    expect(outcome).toMatchObject({ status: 'skipped', reason: 'no_adsets' });
+  });
+
+  it('reports a cycle with no live Meta data as SKIPPED', async () => {
+    rpc.mockResolvedValueOnce({ data: skip('no_snapshots'), error: null } as never);
+    expect(await runOnce()).toMatchObject({ status: 'skipped', reason: 'no_snapshots' });
+  });
+
+  it('maps a 501 to not_configured (OPTIMIZER_SERVICE_URL unset on the edge)', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { context: { status: 501 } } } as never);
+    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'not_configured' });
+  });
+
+  it('maps a 403 to forbidden — a refusal, never an outage', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { context: { status: 403 } } } as never);
+    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'forbidden' });
+  });
+
+  it('flags contract drift as malformed rather than silently returning null', async () => {
+    // recommendations as an ARRAY: precisely the shape the old schema demanded.
+    rpc.mockResolvedValueOnce({ data: { ...RAN, recommendations: [{}] }, error: null } as never);
+    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
+  });
+
+  it('treats runId:null with no skip reason as malformed, not as success', async () => {
+    rpc.mockResolvedValueOnce({ data: { ...RAN, runId: null }, error: null } as never);
+    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
   });
 });
