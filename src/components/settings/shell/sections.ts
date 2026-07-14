@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  BookText,
   Building2,
   CreditCard,
   IdCard,
@@ -25,6 +26,7 @@ export const BRAND_SECTIONS = [
   { key: 'general', label: 'General', icon: IdCard, scope: 'brand' },
   { key: 'brand-book', label: 'Brand Book', icon: Library, scope: 'brand' },
   { key: 'skills', label: 'Skills', icon: Sparkles, scope: 'brand' },
+  { key: 'prompts', label: 'Prompts', icon: BookText, scope: 'brand' },
   { key: 'integrations', label: 'Integrations', icon: Plug, scope: 'brand' },
   { key: 'knowledge', label: 'Knowledge', icon: BookOpen, scope: 'brand' },
   { key: 'billing', label: 'Billing', icon: CreditCard, scope: 'brand' },
@@ -42,6 +44,7 @@ export const ALL_SECTION_KEYS = [
   'general',
   'brand-book',
   'skills',
+  'prompts',
   'integrations',
   'knowledge',
   'billing',

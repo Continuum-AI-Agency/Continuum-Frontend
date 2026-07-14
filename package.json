@@ -30,6 +30,7 @@
     "chat:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/chat-shell.spec.ts --workers=1",
     "projection:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/mid-run-projection.spec.ts --workers=1",
     "skills:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/skills-composer.spec.ts --workers=1",
+    "prompts:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/prompt-library.spec.ts --workers=1",
     "agent:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/agent-runs.bench.ts",
     "jaina:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/jaina-runs.bench.ts"
   },

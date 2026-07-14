@@ -19,6 +19,7 @@ import { BrandIdentitySection } from '@/components/settings/brand/BrandIdentityS
 import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandIntegrationsSwitcher';
 import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
 import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
+import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
 import { SkillsSettingsSection } from '@/components/settings/brand/SkillsSettingsSection';
 import { RoleCapabilityLegend } from '@/components/settings/RoleCapabilityLegend';
 import { AccountNavPill } from '@/components/settings/shell/AccountNavPill';
@@ -160,6 +161,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           description="Reusable creative-direction skills folded into AI Studio generations and agent content. Create your own, browse the first-party library, and edit or archive existing ones."
         >
           <SkillsSettingsSection brandId={activeBrandId} />
+        </SettingsSection>
+      </>
+    );
+  } else if (initialSection === 'prompts') {
+    activeSectionSlot = (
+      <>
+        {createBrandHeader(defaultBrandName)}
+        <SettingsSection
+          title="Prompt library"
+          description="Prompts you keep retyping, saved once and shared with the brand. Pick one in the agent composer and it types itself into the box, ready to edit before you send."
+        >
+          <PromptsSettingsSection brandId={activeBrandId} />
         </SettingsSection>
       </>
     );

@@ -58,6 +58,13 @@ type PromptInputProps = {
   queuedMentionSuggestions?: AgentMentionSuggestion[];
   onQueuedMentionSuggestionsConsumed?: () => void;
   /**
+   * Plain text to drop into the editor at the caret — the prompt library's channel.
+   * A saved prompt is text the user would otherwise have typed, so it lands as ordinary
+   * editable text rather than as a chip: there is no reference for the Backend to resolve.
+   */
+  queuedText?: string | null;
+  onQueuedTextConsumed?: () => void;
+  /**
    * When the user selects a multi-ref pack (e.g. KPIs › Packs › Grow followers),
    * expand it into concrete metric chips instead of inserting a single pack atom.
    * Return null/empty to fall through to normal single-chip insert.
@@ -372,6 +379,33 @@ function insertChipAtSelection(
   selection?.addRange(after);
 }
 
+// Inserts plain text at the caret, falling back to the end of the editor when the caret
+// is elsewhere on the page (the picker's popover steals focus, so that is the common case).
+function insertTextAtSelection(root: HTMLElement, text: string): void {
+  root.focus();
+  const selection = window.getSelection();
+  const caretIsInEditor =
+    selection && selection.rangeCount > 0 && root.contains(selection.anchorNode);
+  const range = caretIsInEditor
+    ? selection.getRangeAt(0)
+    : (() => {
+        const r = document.createRange();
+        r.selectNodeContents(root);
+        r.collapse(false);
+        return r;
+      })();
+
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+
+  const after = document.createRange();
+  after.setStartAfter(node);
+  after.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(after);
+}
+
 export function PromptInput({
   onSubmit,
   attachments,
@@ -384,6 +418,8 @@ export function PromptInput({
   mentionSource = 'organic',
   queuedMentionSuggestions,
   onQueuedMentionSuggestionsConsumed,
+  queuedText,
+  onQueuedTextConsumed,
   expandPackSuggestion,
   mentionAnalytics,
   mentionPlatforms,
@@ -549,6 +585,13 @@ export function PromptInput({
     queuedMentionSuggestions.forEach(appendMentionSuggestion);
     onQueuedMentionSuggestionsConsumed?.();
   }, [appendMentionSuggestion, onQueuedMentionSuggestionsConsumed, queuedMentionSuggestions]);
+
+  useEffect(() => {
+    if (!queuedText || !editorRef.current) return;
+    insertTextAtSelection(editorRef.current, queuedText);
+    syncFromEditor();
+    onQueuedTextConsumed?.();
+  }, [queuedText, onQueuedTextConsumed, syncFromEditor]);
 
   const selectMentionSuggestion = useCallback(
     (suggestion: AgentMentionSuggestion) => {

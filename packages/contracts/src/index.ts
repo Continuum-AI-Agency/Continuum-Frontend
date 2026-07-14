@@ -15,6 +15,7 @@ export * from './onboarding/index';
 export * from './optimization/index';
 export * from './organic/index';
 export * from './paid/index';
+export * from './prompts/index';
 export * from './skills/index';
 export * from './streaming/index';
 export * from './trends/index';

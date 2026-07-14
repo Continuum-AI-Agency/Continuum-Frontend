@@ -61,6 +61,7 @@ import {
   type OrganicSessionMessage,
 } from '@/lib/organic/agent-sessions';
 import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
+import { useBrandPrompts } from '@/lib/organic/prompts-api';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { useCalendarStore } from '@/lib/organic/store';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
@@ -85,6 +86,7 @@ import { OrganicSessionSidebar } from './OrganicSessionSidebar';
 import { OrganicThinkingPanel } from './OrganicThinkingPanel';
 import { ToolCallPipelineCards } from './PipelinePlacementGrid';
 import { PostContentCardGrid } from './PostContentCardGrid';
+import { PromptPickerButton } from './PromptPickerButton';
 import { restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
 import { SkillProposalCard } from './SkillProposalCard';
@@ -375,9 +377,13 @@ export function OrganicAgentPanel({
     refresh: refreshBrandSkills,
     isError: brandSkillsError,
   } = useBrandSkills(brandId);
+  const { prompts: brandPrompts, isError: brandPromptsError } = useBrandPrompts(brandId);
   const [queuedMentionSuggestions, setQueuedMentionSuggestions] = useState<
     AgentMentionSuggestion[]
   >([]);
+  // A picked prompt is TEXT, not a reference — it goes into the editor for the user to
+  // edit, where a picked skill goes onto the wire as a resolvable chip.
+  const [queuedPromptText, setQueuedPromptText] = useState<string | null>(null);
   // Dashboard pin queue (What's Working / KPI strip / packs) drains into the same
   // channel SkillPicker and Media "Use" already use.
   const mentionQueueLength = useAgentMentionQueueStore((s) => s.queue.length);
@@ -1779,6 +1785,8 @@ export function OrganicAgentPanel({
             mentionProvider={mentionProviderObj}
             queuedMentionSuggestions={queuedMentionSuggestions}
             onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
+            queuedText={queuedPromptText}
+            onQueuedTextConsumed={() => setQueuedPromptText(null)}
             expandPackSuggestion={expandPackSuggestion}
             mentionAnalytics={{
               brandId,
@@ -1796,17 +1804,24 @@ export function OrganicAgentPanel({
             mentionPlatform={activeMentionPlatform}
             onMentionPlatformChange={setMentionPlatform}
             actions={
-              <SkillPickerButton
-                skills={brandSkills}
-                templates={brandSkillTemplates}
-                isError={brandSkillsError}
-                onPickAction={(skill) =>
-                  setQueuedMentionSuggestions((current) => [
-                    ...current,
-                    skillToMentionSuggestion(skill),
-                  ])
-                }
-              />
+              <>
+                <SkillPickerButton
+                  skills={brandSkills}
+                  templates={brandSkillTemplates}
+                  isError={brandSkillsError}
+                  onPickAction={(skill) =>
+                    setQueuedMentionSuggestions((current) => [
+                      ...current,
+                      skillToMentionSuggestion(skill),
+                    ])
+                  }
+                />
+                <PromptPickerButton
+                  prompts={brandPrompts}
+                  isError={brandPromptsError}
+                  onPickAction={(prompt) => setQueuedPromptText(prompt.body)}
+                />
+              </>
             }
             placeholder="Plan me 3 posts this week on the beauty trend…"
           />
