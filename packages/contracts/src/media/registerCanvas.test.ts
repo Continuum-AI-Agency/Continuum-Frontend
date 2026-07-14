@@ -23,6 +23,15 @@ describe('registerCanvasAssetRequestSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('accepts a known non-negative byte size from the writer', () => {
+    const parsed = registerCanvasAssetRequestSchema.parse({
+      ...base,
+      sizeBytes: 12_345,
+      originRef: { kind: 'canvas', nodeId: 'node-7' },
+    });
+    expect(parsed.sizeBytes).toBe(12_345);
+  });
+
   it('rejects a canvas origin ref that tries to assert its own lineage', () => {
     const parsed = registerCanvasAssetRequestSchema.safeParse({
       ...base,

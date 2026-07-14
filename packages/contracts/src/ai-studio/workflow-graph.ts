@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  coerceImageSize,
+  DEFAULT_IMAGE_GENERATOR_MODEL,
+  isImageGeneratorModel,
+} from './image-size';
+import { generatorNodeStyle } from './node-sizing';
 
 // Canonical AI Studio canvas graph rules — node-type vocabulary, handle
 // compatibility, connection limits, and media↔handle compatibility. Ported from
@@ -26,6 +32,9 @@ export const STUDIO_NODE_TYPES = [
 
 export type StudioNodeType = (typeof STUDIO_NODE_TYPES)[number];
 export const studioNodeTypeEnum = z.enum(STUDIO_NODE_TYPES);
+
+export const isStudioNodeType = (type?: string): type is StudioNodeType =>
+  typeof type === 'string' && (STUDIO_NODE_TYPES as readonly string[]).includes(type);
 
 // Structural shapes the validators operate on — deliberately loose so the
 // Frontend xyflow Node/Edge/Connection types satisfy them without an adapter.
@@ -331,7 +340,7 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
 export const getAllowedTargetHandles = (node: GraphNodeLike): string[] => {
   switch (node.type) {
     case 'nanoGen':
-      return ['prompt', ...VIDEO_IMAGE_REFERENCE_HANDLES, 'trigger'];
+      return ['prompt', 'negative', ...VIDEO_IMAGE_REFERENCE_HANDLES, 'trigger'];
     case 'extendVideo':
       return ['prompt', 'video'];
     case 'videoEditor': {
@@ -444,7 +453,7 @@ export function isValidConnection(
   if (targetNode.type === 'nanoGen') {
     if (isImageReferenceHandle(targetHandle)) {
       if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
-    } else if (targetHandle === 'prompt') {
+    } else if (targetHandle === 'prompt' || targetHandle === 'negative') {
       if (!isTextProducingSource(sourceNode)) return false;
     } else {
       return false;
@@ -580,7 +589,15 @@ export function createNodeData(
   overrides: Record<string, unknown> = {},
 ): NodeCreationResult {
   const base = baseNodeData(type);
-  return { ...base, data: { ...base.data, ...overrides } };
+  const merged = { ...base.data, ...overrides };
+  const { data } = coerceNodeConfig(type, merged);
+
+  for (const key of Object.keys(data)) {
+    if (data[key] === undefined) delete data[key];
+  }
+
+  const style = nodeStyleFor(type, data) ?? base.style;
+  return style ? { data, style } : { data };
 }
 
 function baseNodeData(type: StudioNodeType): NodeCreationResult {
@@ -588,12 +605,14 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
     case 'nanoGen':
       return {
         data: {
-          model: 'nano-banana-2',
+          model: DEFAULT_IMAGE_GENERATOR_MODEL,
           imageSize: '512px',
           positivePrompt: '',
+          negativePrompt: '',
           aspectRatio: '16:9',
         },
-        style: { width: 400, height: 225 },
+        // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
+        // 16:9 lands on the historical 400x225.
       };
     case 'videoGen':
     case 'veoDirector':
@@ -723,20 +742,79 @@ export const timelineItemSpecSchema = z
 export type TimelineItemSpec = z.infer<typeof timelineItemSpecSchema>;
 
 // ---------------------------------------------------------------------------
-// Image generator models (nanoGen)
+// Agent-written node config
 // ---------------------------------------------------------------------------
 //
-// The values a nanoGen node's `data.model` accepts — the canvas maps them to
-// backend model ids at payload time (buildNodePayload). An agent that invents a
-// model id here produces a node that 400s the moment the user presses Run.
+// Node `data` is a loose record by design — the canvas puts runtime flags, media
+// coordinates and layout hints in it, and no single schema describes all of that.
+// The consequence, until now, was that the enum-shaped CONFIG fields an agent is
+// allowed to write were validated NOWHERE: an invented `imageSize: '1024px'` sat
+// on the node until the user pressed Run and the generation endpoint 400d, with a
+// prompt hint as the only guard. This is the write-time guard.
+//
+// It is patch-safe: only the keys PRESENT in `patch` are touched, with `current`
+// supplying the node's existing values for context (an `update_node` that sets only
+// a prompt must not have a model injected into it).
 
-export const IMAGE_GENERATOR_MODELS = [
-  'nano-banana',
-  'nano-banana-pro',
-  'nano-banana-2',
-  'gpt-image-2',
-  'flux-2-pro',
-  'flux-2-max',
-] as const;
+export interface NodeConfigCoercion {
+  data: Record<string, unknown>;
+  /** Human-readable corrections, for warning the agent that wrote them. */
+  changes: string[];
+}
 
-export type ImageGeneratorModel = (typeof IMAGE_GENERATOR_MODELS)[number];
+export function coerceNodeConfig(
+  type: StudioNodeType,
+  patch: Record<string, unknown>,
+  current: Record<string, unknown> = {},
+): NodeConfigCoercion {
+  if (type !== 'nanoGen') return { data: patch, changes: [] };
+
+  const changes: string[] = [];
+  const next: Record<string, unknown> = { ...patch };
+
+  if ('model' in next && !isImageGeneratorModel(next.model)) {
+    changes.push(
+      `"${String(next.model)}" is not an image generator model — using ${DEFAULT_IMAGE_GENERATOR_MODEL}`,
+    );
+    next.model = DEFAULT_IMAGE_GENERATOR_MODEL;
+  }
+
+  const model = isImageGeneratorModel(next.model)
+    ? next.model
+    : isImageGeneratorModel(current.model)
+      ? current.model
+      : DEFAULT_IMAGE_GENERATOR_MODEL;
+
+  // A model change can invalidate a size that was legal for the previous model, so
+  // the size is re-checked whenever either field is written.
+  if ('imageSize' in next || 'model' in next) {
+    const requested = 'imageSize' in next ? next.imageSize : current.imageSize;
+    const size = coerceImageSize(model, requested);
+    if (size === undefined) {
+      if (requested !== undefined) {
+        changes.push(`${model} takes no image size — dropped "${String(requested)}"`);
+      }
+      next.imageSize = undefined;
+    } else {
+      if (requested !== undefined && requested !== size) {
+        changes.push(
+          `imageSize "${String(requested)}" is not valid for ${model} — using "${size}"`,
+        );
+      }
+      next.imageSize = size;
+    }
+  }
+
+  return { data: next, changes };
+}
+
+/** The style a nanoGen node carries for the aspect ratio in `data`. */
+export function nodeStyleFor(
+  type: StudioNodeType,
+  data: Record<string, unknown>,
+): Record<string, number> | undefined {
+  if (type !== 'nanoGen') return undefined;
+  const aspectRatio = typeof data.aspectRatio === 'string' ? data.aspectRatio : '16:9';
+  const { width, height } = generatorNodeStyle(aspectRatio);
+  return { width, height };
+}

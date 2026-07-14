@@ -25,7 +25,7 @@ export const MAX_PROJECTED_WIRING = 120;
 export const AGENT_FIELD_WHITELIST: Record<StudioNodeType, string[]> = {
   string: ['value'],
   videoDecode: ['value'],
-  nanoGen: ['model', 'positivePrompt', 'aspectRatio', 'imageSize'],
+  nanoGen: ['model', 'positivePrompt', 'negativePrompt', 'aspectRatio', 'imageSize'],
   videoGen: ['model', 'prompt', 'negativePrompt', 'aspectRatio', 'durationSeconds', 'resolution'],
   veoDirector: [
     'model',

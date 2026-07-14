@@ -1,11 +1,16 @@
 import {
+  IMAGE_GENERATOR_MODELS,
+  IMAGE_SIZES,
+  imageSizesForModel,
+  supportsImageSize,
+} from './image-size';
+import {
   CLIP_TRANSITION_TYPES,
   createNodeData,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
   getVideoGeneratorTargetHandles,
-  IMAGE_GENERATOR_MODELS,
   STUDIO_NODE_TYPES,
   type StudioNodeType,
   type TimelineItemSpec,
@@ -47,12 +52,12 @@ const formatHandle = (type: StudioNodeType, handle: string): string => {
   return limit === undefined ? handle : `${handle} (max ${limit})`;
 };
 
-// Legal values for the enum-shaped config fields the whitelist advertises. Node
-// `data` is a loose record by design, so nothing validates these at build time —
-// they surface only when the user presses Run and the generation endpoint 400s.
-// Telling the model the values up front is the cheapest place to stop that.
+// Legal values for the enum-shaped config fields the whitelist advertises. These are
+// now COERCED at write time (coerceNodeConfig), so an invented value no longer reaches
+// the generation endpoint — but the model still writes better nodes when it is told the
+// vocabulary up front, and a coerced node is not the node the user asked for.
 const CONFIG_FIELD_HINTS: Record<string, string> = {
-  imageSize: '512px|1K|2K|4K',
+  imageSize: `${IMAGE_SIZES.join('|')} — MODEL-DEPENDENT, see below`,
   aspectRatio: '16:9, 9:16, 1:1, …',
   durationSeconds: '4|6|8',
   resolution: '720p|1080p',
@@ -93,8 +98,14 @@ function describeVideoModels(): string {
     `IMAGE GENERATOR MODELS — the ONLY values a nanoGen \`data.model\` accepts: ${IMAGE_GENERATOR_MODELS.join(', ')}.`,
     'DO NOT set `model` on a nanoGen at all unless the user names one — the default',
     '(nano-banana-2) is the first-party model. gpt-image-2 / flux-2-* are external',
-    'paid providers reserved for an explicit user request. An invented value 400s',
-    'the moment the user presses Run.',
+    'paid providers reserved for an explicit user request.',
+    '',
+    'IMAGE SIZES — a nanoGen `data.imageSize` is only legal for the models that take one:',
+    ...IMAGE_GENERATOR_MODELS.map((model) =>
+      supportsImageSize(model)
+        ? `- ${model} — ${imageSizesForModel(model).join(' | ')}`
+        : `- ${model} — takes NO imageSize; do not set one`,
+    ),
   ].join('\n');
 }
 

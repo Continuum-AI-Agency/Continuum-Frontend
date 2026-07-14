@@ -58,6 +58,7 @@ export const registerCanvasAssetRequestSchema = z
     width: z.number().int().positive().nullable().optional(),
     height: z.number().int().positive().nullable().optional(),
     durationMs: z.number().int().nonnegative().nullable().optional(),
+    sizeBytes: z.number().int().nonnegative().nullable().optional(),
     originRef: registeredAssetOriginRefSchema,
   })
   .strict();

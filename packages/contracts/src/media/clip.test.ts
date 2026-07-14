@@ -163,6 +163,7 @@ describe("registerClipRequestSchema", () => {
       storagePath: "b1/clips/asset-1/0.mp4",
       fileName: "0.mp4",
       mimeType: "video/mp4",
+      sizeBytes: 45_678,
       durationSec: 18,
       section: {
         index: 0,
@@ -177,6 +178,7 @@ describe("registerClipRequestSchema", () => {
       score: { status: "pending", hookPotential: null, comparedAgainst: null, computedAt: "2026-06-15T00:00:00Z" },
     });
     expect(ok.success).toBe(true);
+    expect(ok.success && ok.data.sizeBytes).toBe(45_678);
   });
 });
 

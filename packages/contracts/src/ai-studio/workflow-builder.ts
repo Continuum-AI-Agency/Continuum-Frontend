@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import {
+  coerceNodeConfig,
   createNodeData,
   type GraphEdgeLike,
   type GraphNodeLike,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
+  isStudioNodeType,
   isTimelineMediaHandle,
   isValidConnection,
+  nodeStyleFor,
   STUDIO_NODE_TYPES,
   type StudioNodeType,
   TIMELINE_MEDIA_INPUT_HANDLE,
@@ -48,9 +51,6 @@ export interface WorkflowGraph {
 
 const COLUMN_SPACING = 360;
 const ROW_SPACING = 220;
-
-const isStudioNodeType = (type: string): type is StudioNodeType =>
-  (STUDIO_NODE_TYPES as readonly string[]).includes(type);
 
 function inferDataType(sourceHandle?: string | null): string {
   switch (sourceHandle) {
@@ -434,7 +434,21 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
           errors.push(`set "${op.id}" timeline items with the set_timeline op, not update_node`);
           break;
         }
-        if (!replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, ...op.data } }))) {
+        // The other door into a node's config. add_node goes through createNodeData,
+        // which coerces; without the same guard here an illegal enum (imageSize:
+        // "1024px") lands on the node and 400s the generation endpoint at Run time.
+        const patch = isStudioNodeType(target?.type ?? '')
+          ? coerceNodeConfig(target?.type as StudioNodeType, op.data, target?.data ?? {}).data
+          : op.data;
+        if (
+          !replaceNode(op.id, (n) => {
+            const data = dropUndefined({ ...n.data, ...patch });
+            const style = isStudioNodeType(n.type) ? nodeStyleFor(n.type, data) : undefined;
+            return style
+              ? { ...n, data, style, width: style.width, height: style.height }
+              : { ...n, data };
+          })
+        ) {
           errors.push(`node "${op.id}" not found`);
         }
         break;
@@ -594,6 +608,17 @@ function connectNodes(
 function dropKeys(data: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   const next = { ...data };
   for (const key of keys) delete next[key];
+  return next;
+}
+
+// A coerced patch clears a field it invalidated by setting it to undefined (an
+// imageSize on a model that takes none). Merging that in would leave the key present
+// and undefined on a persisted node; drop it instead.
+function dropUndefined(data: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) next[key] = value;
+  }
   return next;
 }
 

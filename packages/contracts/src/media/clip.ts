@@ -123,6 +123,7 @@ export const registerClipRequestSchema = z
     storagePath: z.string().min(1),
     fileName: z.string().min(1),
     mimeType: z.literal("video/mp4"),
+    sizeBytes: z.number().int().nonnegative(),
     durationSec: z.number().positive(),
     section: clipPlanSectionSchema,
     transcriptExcerpt: z.string().optional(),
