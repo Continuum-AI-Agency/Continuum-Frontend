@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ChartColumn,
   Code,
+  Eye,
   Gauge,
   Images,
   Plug,
@@ -84,6 +85,13 @@ const LIBRARY: AppNavigationItem = {
   accentColor: "text-rose-500",
   description: "Media library + competitor inspiration for your brand.",
 };
+const BRAND_SPY: AppNavigationItem = {
+  label: "Brand Spy",
+  href: "/competitor-spy",
+  icon: Eye,
+  accentColor: "text-cyan-500",
+  description: "Track competitor activity and creative signals.",
+};
 
 // Parent area entries — used by the flat list (breadcrumb + command palette).
 // In the sidebar these render as section headers; the flat entries keep their
@@ -127,7 +135,14 @@ export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
 
 // Flat list of navigable areas for non-grouped consumers (breadcrumb, command
 // palette). Parent areas only — sub-routes are reached from the sidebar.
-export const APP_NAVIGATION: AppNavigationItem[] = [HOME, CANVAS, ORGANIC, SCALE, LIBRARY];
+export const APP_NAVIGATION: AppNavigationItem[] = [
+  HOME,
+  CANVAS,
+  ORGANIC,
+  SCALE,
+  LIBRARY,
+  BRAND_SPY,
+];
 
 export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [
   {

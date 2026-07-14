@@ -85,9 +85,6 @@ export function BrandIdentitySection({
             disabled={!canEdit}
           />
           <div className="flex flex-1 flex-col gap-3">
-            <span className="text-xs font-medium text-muted-foreground">
-              BRAND ID: {activeBrandId}
-            </span>
             <div className="flex flex-wrap items-center gap-3">
               <Input
                 value={brandName}

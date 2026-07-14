@@ -9,6 +9,7 @@ import { ModuleShortcutLink } from '@/components/shared/ModuleShortcutLink';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
 import { resolveOrganicAccount } from '@/lib/organic/resolve-organic-account';
 import { cn } from '@/lib/utils';
+import { isZeroDataInsightSet } from './organicInsightPresentation';
 
 const RANGE_PRESET = 'last_7d' as const;
 
@@ -36,17 +37,26 @@ export function OrganicInsightsList({
     enabled: Boolean(integrationAccountId),
   });
 
-  const items = useMemo<InsightListItem[]>(
-    () =>
-      insights.slice(0, 8).map((insight, index) => ({
-        id: insight.post_id ?? `${insight.category}-${index}`,
-        text: insight.text,
-        severity: insight.severity,
-        label: insight.category,
-        detail: insight.recommendation,
-      })),
-    [insights],
-  );
+  const items = useMemo<InsightListItem[]>(() => {
+    if (isZeroDataInsightSet(insights)) {
+      return [
+        {
+          id: 'organic-zero-data',
+          text: 'Publish your first posts to unlock performance insights.',
+          severity: 'neutral',
+          label: 'Getting started',
+          detail: 'Continuum will surface reach, engagement, and content patterns as data arrives.',
+        },
+      ];
+    }
+    return insights.slice(0, 8).map((insight, index) => ({
+      id: insight.post_id ?? `${insight.category}-${index}`,
+      text: insight.text,
+      severity: insight.severity,
+      label: insight.category,
+      detail: insight.recommendation,
+    }));
+  }, [insights]);
 
   return (
     <InsightsList

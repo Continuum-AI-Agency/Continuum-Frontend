@@ -15,8 +15,11 @@ test("Dashboard welcome toast options use info styling + configured duration", (
   const toast = createDashboardWelcomeToastOptions(" Duane Scott ");
 
   expect(toast.variant).toBe("info");
+  expect(DASHBOARD_WELCOME_TOAST_DURATION_MS).toBe(5_000);
   expect(toast.durationMs).toBe(DASHBOARD_WELCOME_TOAST_DURATION_MS);
   expect(toast.title).toBe("Welcome back, Duane Scott.");
+  expect(toast.description).toContain("top bar");
+  expect(toast.description).not.toContain("right");
 });
 
 test("Dashboard welcome toast options fall back to User", () => {
@@ -29,4 +32,3 @@ test("Dashboard welcome toast only shows on /dashboard", () => {
   expect(shouldShowDashboardWelcomeToast("/dashboard/brands")).toBe(false);
   expect(shouldShowDashboardWelcomeToast(null)).toBe(false);
 });
-

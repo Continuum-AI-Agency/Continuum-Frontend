@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { BrandBookResponse } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -46,6 +46,13 @@ const completeSetup = deriveDashboardSetup({
 afterEach(() => cleanup());
 
 describe('HomeBaseDashboard', () => {
+  it('labels the paid and organic control as a dashboard view selector', () => {
+    render(<HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />);
+
+    expect(screen.getByText('Dashboard view')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Dashboard view options' })).toBeTruthy();
+  });
+
   it('renders the organic view with its title and active slot', () => {
     const { container } = render(
       <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />,
@@ -90,7 +97,7 @@ describe('HomeBaseDashboard', () => {
     expect(container.textContent).toContain('Get started');
     // No live data + no mode toggle when there is nothing to show.
     expect(container.querySelector('[data-dashboard-panel="organic"]')).toBeNull();
-    expect(container.querySelector('nav[aria-label="Dashboard workspace"]')).toBeNull();
+    expect(container.querySelector('nav[aria-label="Dashboard view options"]')).toBeNull();
   });
 
   it('leads the live data with first-run guidance when setup is partial', () => {
@@ -107,7 +114,7 @@ describe('HomeBaseDashboard', () => {
     const panel = container.querySelector('[data-dashboard-panel="organic"]');
     expect(panel?.textContent).toContain('Organic slot');
     // The mode toggle is present because there is data to switch between.
-    expect(container.querySelector('nav[aria-label="Dashboard workspace"]')).not.toBeNull();
+    expect(container.querySelector('nav[aria-label="Dashboard view options"]')).not.toBeNull();
   });
 
   it('drops the first-run surface once setup is complete', () => {

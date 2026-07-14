@@ -1,10 +1,12 @@
 import { Fragment } from 'react';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
+import { cn } from '@/lib/utils';
 
 export type MetricStripItem = {
   label: string;
   value: string;
   deltaPct?: number;
+  tone?: 'default' | 'muted' | 'danger';
   // Overrides the value's text color (e.g. a hook-rate health gradient) while
   // keeping the shared label/value/delta layout.
   valueColor?: string;
@@ -33,7 +35,12 @@ export function MetricStrip({ items, live = false }: { items: MetricStripItem[];
               {item.label}
             </span>
             <span
-              className="font-mono text-sm font-semibold tabular-nums text-foreground"
+              className={cn(
+                'font-mono text-sm font-semibold tabular-nums',
+                item.tone === 'muted' && 'text-muted-foreground',
+                item.tone === 'danger' && 'text-destructive',
+                (!item.tone || item.tone === 'default') && 'text-foreground',
+              )}
               style={item.valueColor ? { color: item.valueColor } : undefined}
             >
               {item.value}

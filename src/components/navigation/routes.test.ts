@@ -20,6 +20,7 @@ describe("navigation structure", () => {
       "Organic",
       "Scale",
       "Library",
+      "Brand Spy",
     ]);
     expect(APP_NAVIGATION.map((i) => i.href)).toEqual([
       "/dashboard",
@@ -27,6 +28,7 @@ describe("navigation structure", () => {
       "/organic",
       "/scale",
       "/library",
+      "/competitor-spy",
     ]);
   });
 
@@ -91,6 +93,14 @@ describe("navigation structure", () => {
   it("puts Library under a Storage section", () => {
     const storage = APP_NAVIGATION_GROUPS.find((g) => g.label === "Storage");
     expect(storage?.items.map((i) => i.href)).toEqual(["/library"]);
+  });
+
+  it("keeps Brand Spy out of every sidebar group", () => {
+    const sidebarHrefs = APP_NAVIGATION_GROUPS.flatMap((group) => group.items).map(
+      (item) => item.href,
+    );
+
+    expect(sidebarHrefs).not.toContain("/competitor-spy");
   });
 
   it("exposes a single locked, greyed-out Developers entry with a stated reason", () => {

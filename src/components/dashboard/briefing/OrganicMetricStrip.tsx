@@ -1,49 +1,50 @@
-"use client";
+'use client';
 
 // Home organic KPI strip: multi-platform summary over the same ingestion path
 // as Metrics Compare (loadBrandOrganicSnapshot). Within a platform with multiple
 // accounts, values are platform-blended (summable metrics only).
 
-import { useEffect, useMemo, useState } from "react";
-import type { OrganicMetricPlatform } from "@continuum/contracts";
-import { Skeleton } from "@/components/ui/skeleton";
-import { MetricStrip, type MetricStripItem } from "@/components/shared/MetricStrip";
-import { blendMetric } from "@/lib/organic/blendAccounts";
+import type { OrganicMetricPlatform } from '@continuum/contracts';
+import { useEffect, useMemo, useState } from 'react';
+import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
+import { Skeleton } from '@/components/ui/skeleton';
+import { blendMetric } from '@/lib/organic/blendAccounts';
 import {
+  type BrandOrganicSnapshot,
   flattenAccountsByPlatform,
   loadBrandOrganicSnapshot,
-  type BrandOrganicSnapshot,
   type SnapshotAccountRef,
-} from "@/lib/organic/brandOrganicSnapshot";
+} from '@/lib/organic/brandOrganicSnapshot';
+import { resolveMetricPresentation } from '@/lib/ui/metricPresentation';
 
-const RANGE_PRESET = "last_7d" as const;
+const RANGE_PRESET = 'last_7d' as const;
 
 const PLATFORM_ORDER: OrganicMetricPlatform[] = [
-  "instagram",
-  "facebook",
-  "tiktok",
-  "youtube",
-  "linkedin",
+  'instagram',
+  'facebook',
+  'tiktok',
+  'youtube',
+  'linkedin',
 ];
 
 const PLATFORM_SHORT: Record<OrganicMetricPlatform, string> = {
-  instagram: "IG",
-  facebook: "FB",
-  tiktok: "TT",
-  youtube: "YT",
-  linkedin: "LI",
+  instagram: 'IG',
+  facebook: 'FB',
+  tiktok: 'TT',
+  youtube: 'YT',
+  linkedin: 'LI',
 };
 
 // Preferred headline metric per platform (lowest-level product language).
 const HEADLINE_METRIC: Record<
   OrganicMetricPlatform,
-  { id: "reach" | "views" | "impressions"; label: string }
+  { id: 'reach' | 'views' | 'impressions'; label: string }
 > = {
-  instagram: { id: "reach", label: "reach" },
-  facebook: { id: "reach", label: "reach" },
-  tiktok: { id: "views", label: "views" },
-  youtube: { id: "views", label: "views" },
-  linkedin: { id: "impressions", label: "impr." },
+  instagram: { id: 'reach', label: 'reach' },
+  facebook: { id: 'reach', label: 'reach' },
+  tiktok: { id: 'views', label: 'views' },
+  youtube: { id: 'views', label: 'views' },
+  linkedin: { id: 'impressions', label: 'impr.' },
 };
 
 export type OrganicMetricStripAccount = {
@@ -60,16 +61,7 @@ type OrganicMetricStripProps = {
   accountsByPlatform?: Partial<Record<OrganicMetricPlatform, OrganicMetricStripAccount[]>>;
 };
 
-function formatCompact(value: number): string {
-  return new Intl.NumberFormat(undefined, {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-}
-
-function resolveAccounts(
-  props: OrganicMetricStripProps,
-): SnapshotAccountRef[] {
+function resolveAccounts(props: OrganicMetricStripProps): SnapshotAccountRef[] {
   if (props.accountsByPlatform) {
     const byPlatform = {
       instagram: props.accountsByPlatform.instagram ?? [],
@@ -83,14 +75,14 @@ function resolveAccounts(
   const refs: SnapshotAccountRef[] = [];
   for (const account of props.accounts ?? []) {
     refs.push({
-      platform: "instagram",
+      platform: 'instagram',
       integrationAccountId: account.integrationAccountId,
       name: account.name,
     });
   }
   for (const account of props.youtubeAccounts ?? []) {
     refs.push({
-      platform: "youtube",
+      platform: 'youtube',
       integrationAccountId: account.integrationAccountId,
       name: account.name,
     });
@@ -99,9 +91,9 @@ function resolveAccounts(
 }
 
 type State =
-  | { status: "idle" | "loading" }
-  | { status: "error" }
-  | { status: "success"; snapshot: BrandOrganicSnapshot };
+  | { status: 'idle' | 'loading' }
+  | { status: 'error' }
+  | { status: 'success'; snapshot: BrandOrganicSnapshot };
 
 export function OrganicMetricStrip(props: OrganicMetricStripProps) {
   const { brandId } = props;
@@ -111,7 +103,7 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
     ...PLATFORM_ORDER.flatMap((p) =>
       (props.accountsByPlatform?.[p] ?? []).map((a) => `${p}:${a.integrationAccountId}`),
     ),
-  ].join("|");
+  ].join('|');
 
   const accountRefs = useMemo(
     () => resolveAccounts(props),
@@ -120,15 +112,15 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
     [brandId, accountKey],
   );
 
-  const [state, setState] = useState<State>({ status: "idle" });
+  const [state, setState] = useState<State>({ status: 'idle' });
 
   useEffect(() => {
     if (accountRefs.length === 0) {
-      setState({ status: "idle" });
+      setState({ status: 'idle' });
       return;
     }
     let cancelled = false;
-    setState({ status: "loading" });
+    setState({ status: 'loading' });
     loadBrandOrganicSnapshot({
       brandId,
       accounts: accountRefs,
@@ -136,10 +128,10 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
       forceRefresh: false,
     })
       .then((snapshot) => {
-        if (!cancelled) setState({ status: "success", snapshot });
+        if (!cancelled) setState({ status: 'success', snapshot });
       })
       .catch(() => {
-        if (!cancelled) setState({ status: "error" });
+        if (!cancelled) setState({ status: 'error' });
       });
     return () => {
       cancelled = true;
@@ -147,34 +139,60 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
   }, [accountRefs, brandId]);
 
   const items = useMemo<MetricStripItem[]>(() => {
-    if (state.status !== "success") return [];
-    const { accounts } = state.snapshot;
-    if (accounts.length === 0) return [];
-
     const itemsOut: MetricStripItem[] = [];
     for (const platform of PLATFORM_ORDER) {
-      const onPlatform = accounts.filter((a) => a.platform === platform);
-      if (onPlatform.length === 0) continue;
       const headline = HEADLINE_METRIC[platform];
-      const blended = blendMetric(onPlatform, headline.id);
-      if (blended.kind !== "sum") continue;
-      const suffix = onPlatform.length > 1 ? " Σ" : "";
+      const configuredAccounts = accountRefs.filter((account) => account.platform === platform);
+      const connected = configuredAccounts.length > 0;
+      const snapshotAccounts =
+        state.status === 'success'
+          ? state.snapshot.accounts.filter((account) => account.platform === platform)
+          : [];
+      const blended =
+        snapshotAccounts.length > 0 ? blendMetric(snapshotAccounts, headline.id) : null;
+      const presentation = resolveMetricPresentation({
+        connected,
+        loading: connected && (state.status === 'idle' || state.status === 'loading'),
+        failed: connected && state.status === 'error',
+        total: blended?.kind === 'sum' ? blended.total : undefined,
+        deltaPct: blended?.kind === 'sum' ? blended.comparison?.percentageChange : undefined,
+      });
+      const suffix = configuredAccounts.length > 1 ? ' Σ' : '';
       itemsOut.push({
         label: `${PLATFORM_SHORT[platform]}${suffix} ${headline.label}`,
-        value: formatCompact(blended.total),
-        deltaPct: blended.comparison?.percentageChange,
+        value: presentation.value,
+        deltaPct: presentation.deltaPct,
+        tone:
+          presentation.state === 'error'
+            ? 'danger'
+            : presentation.state === 'ready'
+              ? 'default'
+              : 'muted',
       });
     }
     return itemsOut;
-  }, [state]);
+  }, [accountRefs, state]);
 
-  if (state.status === "idle" || state.status === "error") return null;
-  if (state.status === "loading") return <Skeleton className="h-4 w-72" />;
   if (items.length === 0) return null;
 
   return (
     <div data-tour-id="organic-home-metric-strip">
-      <MetricStrip items={items} live />
+      {state.status === 'loading' ? (
+        <div
+          className="flex flex-wrap items-center gap-3"
+          role="status"
+          aria-label="Loading organic metrics"
+        >
+          {PLATFORM_ORDER.map((platform) => (
+            <Skeleton key={platform} className="h-4 w-24" />
+          ))}
+        </div>
+      ) : (
+        <MetricStrip
+          items={items}
+          live={state.status === 'success' && items.some((item) => item.tone === 'default')}
+        />
+      )}
     </div>
   );
 }

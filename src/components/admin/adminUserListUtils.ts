@@ -1,5 +1,9 @@
 import type { PermissionRow } from "@/components/admin/adminUserTypes";
 
+export function membershipLabel(count: number) {
+  return `${count} ${count === 1 ? "membership" : "memberships"}`;
+}
+
 export function groupPermissionsByUserId(permissions: PermissionRow[]) {
   const byUserId = new Map<string, PermissionRow[]>();
 

@@ -7,7 +7,7 @@ Object.assign(global.window, {
   TypeError: globalThis.TypeError,
 });
 
-import { type InsightListItem, InsightsList } from './InsightsList';
+import { type InsightListItem, InsightsList, normalizeInsightItems } from './InsightsList';
 
 const items: InsightListItem[] = [
   {
@@ -21,10 +21,22 @@ const items: InsightListItem[] = [
 ];
 
 describe('InsightsList', () => {
+  it('deduplicates repeated insight copy while preserving the first item', () => {
+    const normalized = normalizeInsightItems([
+      items[0],
+      { ...items[0], id: 'duplicate', text: '  REACH is up! ' },
+      items[1],
+    ]);
+
+    expect(normalized.map((item) => item.id)).toEqual(['a', 'b']);
+  });
+
   afterEach(() => cleanup());
 
-  it('renders the dot, label, text, and detail for each item', () => {
+  it('renders text severity, label, insight, and detail for each item', () => {
     render(<InsightsList title="Insights" items={items} />);
+    expect(screen.getByText('Positive')).toBeDefined();
+    expect(screen.getByText('Needs attention')).toBeDefined();
     expect(screen.getByText('Reach is up')).toBeDefined();
     expect(screen.getByText('Growth')).toBeDefined();
     expect(screen.getByText('Keep posting reels')).toBeDefined();
@@ -48,5 +60,11 @@ describe('InsightsList', () => {
   it('shows the empty state when there are no items', () => {
     render(<InsightsList title="Insights" items={[]} emptyState="No insights yet." />);
     expect(screen.getByText('No insights yet.')).toBeDefined();
+  });
+
+  it('labels the shaped loading state', () => {
+    render(<InsightsList title="Insights" items={[]} isLoading />);
+    expect(screen.getByRole('status', { name: 'Loading recent insights' })).toBeDefined();
+    expect(screen.getByText('Loading recent insights…')).toBeDefined();
   });
 });

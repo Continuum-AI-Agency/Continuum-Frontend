@@ -1,7 +1,5 @@
-"use client";
+'use client';
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import {
   Building2,
   CheckCircle2,
@@ -18,10 +16,17 @@ import {
   ShieldAlert,
   Trash2,
   UserCog,
-} from "lucide-react";
-
-import { useToast } from "@/components/ui/ToastProvider";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+} from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Fragment, useEffect, useMemo, useState, useTransition } from 'react';
+import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
+import {
+  buildAdminPaginationRange,
+  buildAdminUserListPaginationParams,
+  buildAdminUserListSearchParams,
+  groupPermissionsByUserId,
+  membershipLabel,
+} from '@/components/admin/adminUserListUtils';
 import type {
   AdminAuditLogEntry,
   AdminBrandOption,
@@ -29,13 +34,21 @@ import type {
   AdminUser,
   AdminWorkflowLibraryRow,
   PermissionRow,
-} from "@/components/admin/adminUserTypes";
+} from '@/components/admin/adminUserTypes';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
-  buildAdminPaginationRange,
-  buildAdminUserListPaginationParams,
-  buildAdminUserListSearchParams,
-  groupPermissionsByUserId,
-} from "@/components/admin/adminUserListUtils";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Pagination,
   PaginationContent,
@@ -44,35 +57,25 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+} from '@/components/ui/pagination';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/components/ui/ToastProvider';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Props = {
   users: AdminUser[];
@@ -113,19 +116,19 @@ function getUserInitials(user: AdminUser) {
 }
 
 function formatDate(value: string | null | undefined) {
-  if (!value) return "Unknown";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+  if (!value) return 'Unknown';
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   }).format(new Date(value));
 }
 
 function roleVariant(role: string | null) {
-  if (role === "owner") return "default";
-  if (role === "admin") return "secondary";
-  return "outline";
+  if (role === 'owner') return 'default';
+  if (role === 'admin') return 'secondary';
+  return 'outline';
 }
 
 export function AdminUserList({ users, permissions, pagination, searchQuery }: Props) {
@@ -140,21 +143,25 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? null);
   const [pendingActions, setPendingActions] = useState<PendingActions>({});
   const [tierOverrides, setTierOverrides] = useState<Record<string, string>>({});
-  const [impersonationDialog, setImpersonationDialog] = useState<ImpersonationDialogState | null>(null);
+  const [impersonationDialog, setImpersonationDialog] = useState<ImpersonationDialogState | null>(
+    null,
+  );
 
   const [brands, setBrands] = useState<AdminBrandOption[]>([]);
-  const [brandQuery, setBrandQuery] = useState("");
-  const [sourceBrandId, setSourceBrandId] = useState("global");
-  const [targetBrandId, setTargetBrandId] = useState("");
-  const [workflowQuery, setWorkflowQuery] = useState("");
+  const [brandQuery, setBrandQuery] = useState('');
+  const [sourceBrandId, setSourceBrandId] = useState('global');
+  const [targetBrandId, setTargetBrandId] = useState('');
+  const [workflowQuery, setWorkflowQuery] = useState('');
   const [workflows, setWorkflows] = useState<AdminWorkflowLibraryRow[]>([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [isWorkflowLoading, setIsWorkflowLoading] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AdminAuditLogEntry[]>([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
-  const [reportBrandId, setReportBrandId] = useState("");
-  const [reportRecipientEmail, setReportRecipientEmail] = useState("");
-  const [reportSmokeResult, setReportSmokeResult] = useState<FirstValueReportSmokeResponse | null>(null);
+  const [reportBrandId, setReportBrandId] = useState('');
+  const [reportRecipientEmail, setReportRecipientEmail] = useState('');
+  const [reportSmokeResult, setReportSmokeResult] = useState<FirstValueReportSmokeResponse | null>(
+    null,
+  );
   const [isReportSmokeLoading, setIsReportSmokeLoading] = useState(false);
 
   useEffect(() => {
@@ -171,25 +178,29 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
 
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
-  const selectedMemberships = selectedUser ? permissionsByUserId.get(selectedUser.id) ?? [] : [];
+  const selectedMemberships = selectedUser ? (permissionsByUserId.get(selectedUser.id) ?? []) : [];
   const selectedWorkflow = workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? null;
 
-  const safePage = pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
+  const safePage =
+    pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
   const totalPages = Math.max(pagination.totalPages, 1);
   const totalCountLabel = pagination.totalCount.toLocaleString();
   const trimmedQuery = query.trim();
   const serverQueryActive = searchQuery.trim().length > 0;
-  const totalLabelSuffix = serverQueryActive ? "matches" : "total";
+  const totalLabelSuffix = serverQueryActive ? 'matches' : 'total';
   const paginationItems = useMemo(
     () => buildAdminPaginationRange({ currentPage: safePage, totalPages, siblingCount: 1 }),
-    [safePage, totalPages]
+    [safePage, totalPages],
   );
 
   const adminCount = useMemo(() => users.filter((user) => user.isAdmin).length, [users]);
-  const ownerMemberships = useMemo(() => permissions.filter((permission) => permission.role === "owner").length, [permissions]);
+  const ownerMemberships = useMemo(
+    () => permissions.filter((permission) => permission.role === 'owner').length,
+    [permissions],
+  );
   const uniqueBrandCount = useMemo(
     () => new Set(permissions.map((permission) => permission.brand_profile_id)).size,
-    [permissions]
+    [permissions],
   );
 
   function setActionPending(actionId: string, pending: boolean) {
@@ -205,26 +216,39 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   function handlePageNavigation(event: React.MouseEvent<HTMLAnchorElement>, nextPage: number) {
     if (nextPage === pagination.page) return;
     if (event.defaultPrevented) return;
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
     event.preventDefault();
     startNavTransition(() => {
-      const params = buildAdminUserListPaginationParams(searchParamsString, nextPage, pagination.pageSize);
+      const params = buildAdminUserListPaginationParams(
+        searchParamsString,
+        nextPage,
+        pagination.pageSize,
+      );
       router.push(`?${params}`);
     });
   }
 
   function getPageHref(nextPage: number) {
-    const params = buildAdminUserListPaginationParams(searchParamsString, nextPage, pagination.pageSize);
+    const params = buildAdminUserListPaginationParams(
+      searchParamsString,
+      nextPage,
+      pagination.pageSize,
+    );
     return `?${params}`;
   }
 
   useEffect(() => {
-    const currentQuery = new URLSearchParams(searchParamsString).get("query") ?? "";
+    const currentQuery = new URLSearchParams(searchParamsString).get('query') ?? '';
     if (trimmedQuery === currentQuery.trim()) return;
 
     const timeout = setTimeout(() => {
       startNavTransition(() => {
-        const params = buildAdminUserListSearchParams(searchParamsString, trimmedQuery, pagination.pageSize);
+        const params = buildAdminUserListSearchParams(
+          searchParamsString,
+          trimmedQuery,
+          pagination.pageSize,
+        );
         router.push(`?${params}`);
       });
     }, 300);
@@ -245,22 +269,24 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     const actionId = `impersonate:${user.id}`;
     setActionPending(actionId, true);
     try {
-      const { data, error } = await supabase.functions.invoke("impersonate-user", {
+      const { data, error } = await supabase.functions.invoke('impersonate-user', {
         body: { target_id: user.id },
       });
-      if (error || !data?.signInLink) throw new Error(error?.message ?? "Failed to generate link");
+      if (error || !data?.signInLink) throw new Error(error?.message ?? 'Failed to generate link');
       const copied = await copyImpersonationLinkToClipboard(data.signInLink);
       if (!copied) setImpersonationDialog({ email: user.email, link: data.signInLink });
       show({
-        title: "Impersonation link ready",
-        description: copied ? "Link copied to clipboard." : "Copy blocked by the browser. Use the manual copy dialog.",
-        variant: copied ? "success" : "warning",
+        title: 'Impersonation link ready',
+        description: copied
+          ? 'Link copied to clipboard.'
+          : 'Copy blocked by the browser. Use the manual copy dialog.',
+        variant: copied ? 'success' : 'warning',
       });
     } catch (error) {
       show({
-        title: "Failed to impersonate",
-        description: error instanceof Error ? error.message : "Unable to generate link.",
-        variant: "error",
+        title: 'Failed to impersonate',
+        description: error instanceof Error ? error.message : 'Unable to generate link.',
+        variant: 'error',
       });
     } finally {
       setActionPending(actionId, false);
@@ -271,44 +297,48 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     const actionId = `admin:${user.id}`;
     setActionPending(actionId, true);
     try {
-      const { error } = await supabase.functions.invoke("admin-set-admin", {
-        method: "POST",
+      const { error } = await supabase.functions.invoke('admin-set-admin', {
+        method: 'POST',
         body: { userId: user.id, isAdmin: !user.isAdmin },
       });
       if (error) throw new Error(error.message);
-      show({ title: user.isAdmin ? "Admin revoked" : "Admin granted", variant: "success" });
+      show({ title: user.isAdmin ? 'Admin revoked' : 'Admin granted', variant: 'success' });
       router.refresh();
     } catch (error) {
       show({
-        title: "Update failed",
-        description: error instanceof Error ? error.message : "Unable to update admin flag.",
-        variant: "error",
+        title: 'Update failed',
+        description: error instanceof Error ? error.message : 'Unable to update admin flag.',
+        variant: 'error',
       });
     } finally {
       setActionPending(actionId, false);
     }
   }
 
-  async function handleTierChange(input: { membership: PermissionRow; nextTier: string; previousTier: string }) {
+  async function handleTierChange(input: {
+    membership: PermissionRow;
+    nextTier: string;
+    previousTier: string;
+  }) {
     const actionId = `tier:${input.membership.user_id}:${input.membership.brand_profile_id}`;
     setTierOverrides((prev) => ({ ...prev, [actionId]: input.nextTier }));
     setActionPending(actionId, true);
     try {
       const nextTierValue = Number(input.nextTier);
       if (!Number.isFinite(nextTierValue)) return;
-      const { error } = await supabase.functions.invoke("admin-update-tier", {
-        method: "POST",
+      const { error } = await supabase.functions.invoke('admin-update-tier', {
+        method: 'POST',
         body: { brandProfileId: input.membership.brand_profile_id, tier: nextTierValue },
       });
       if (error) throw new Error(error.message);
-      show({ title: "Brand tier updated", variant: "success" });
+      show({ title: 'Brand tier updated', variant: 'success' });
       router.refresh();
     } catch (error) {
       setTierOverrides((prev) => ({ ...prev, [actionId]: input.previousTier }));
       show({
-        title: "Failed to update brand tier",
-        description: error instanceof Error ? error.message : "Unable to save brand tier.",
-        variant: "error",
+        title: 'Failed to update brand tier',
+        description: error instanceof Error ? error.message : 'Unable to save brand tier.',
+        variant: 'error',
       });
     } finally {
       setActionPending(actionId, false);
@@ -316,26 +346,26 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }
 
   async function handleRemoveMember(membership: PermissionRow) {
-    if (membership.role === "owner") return;
+    if (membership.role === 'owner') return;
     const actionId = `remove:${membership.user_id}:${membership.brand_profile_id}`;
     setActionPending(actionId, true);
     try {
-      const { error } = await supabase.functions.invoke("admin-access-actions", {
-        method: "POST",
+      const { error } = await supabase.functions.invoke('admin-access-actions', {
+        method: 'POST',
         body: {
-          action: "remove_member",
+          action: 'remove_member',
           brandProfileId: membership.brand_profile_id,
           userId: membership.user_id,
         },
       });
       if (error) throw new Error(error.message);
-      show({ title: "Member removed", variant: "success" });
+      show({ title: 'Member removed', variant: 'success' });
       router.refresh();
     } catch (error) {
       show({
-        title: "Removal failed",
-        description: error instanceof Error ? error.message : "Unable to remove member.",
-        variant: "error",
+        title: 'Removal failed',
+        description: error instanceof Error ? error.message : 'Unable to remove member.',
+        variant: 'error',
       });
     } finally {
       setActionPending(actionId, false);
@@ -343,12 +373,15 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   }
 
   async function loadBrands() {
-    const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>("admin-workflow-library", {
-      method: "POST",
-      body: { action: "list_brands", query: brandQuery, limit: 100 },
-    });
+    const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>(
+      'admin-workflow-library',
+      {
+        method: 'POST',
+        body: { action: 'list_brands', query: brandQuery, limit: 100 },
+      },
+    );
     if (error) {
-      show({ title: "Unable to load brands", description: error.message, variant: "error" });
+      show({ title: 'Unable to load brands', description: error.message, variant: 'error' });
       return;
     }
     setBrands(data?.brands ?? []);
@@ -357,14 +390,17 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   async function loadWorkflows() {
     setIsWorkflowLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>("admin-workflow-library", {
-        method: "POST",
-        body: {
-          action: "list",
-          query: workflowQuery,
-          ...(sourceBrandId !== "global" ? { brandProfileId: sourceBrandId } : {}),
+      const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>(
+        'admin-workflow-library',
+        {
+          method: 'POST',
+          body: {
+            action: 'list',
+            query: workflowQuery,
+            ...(sourceBrandId !== 'global' ? { brandProfileId: sourceBrandId } : {}),
+          },
         },
-      });
+      );
       if (error) throw new Error(error.message);
       setWorkflows(data?.workflows ?? []);
       setSelectedWorkflowId((current) => {
@@ -373,9 +409,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
       });
     } catch (error) {
       show({
-        title: "Unable to load workflows",
-        description: error instanceof Error ? error.message : "Workflow library request failed.",
-        variant: "error",
+        title: 'Unable to load workflows',
+        description: error instanceof Error ? error.message : 'Workflow library request failed.',
+        variant: 'error',
       });
     } finally {
       setIsWorkflowLoading(false);
@@ -385,17 +421,20 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   async function loadAuditEntries() {
     setIsAuditLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke<AdminAuditResponse>("admin-audit-log", {
-        method: "POST",
-        body: { page: 1, pageSize: 50 },
-      });
+      const { data, error } = await supabase.functions.invoke<AdminAuditResponse>(
+        'admin-audit-log',
+        {
+          method: 'POST',
+          body: { page: 1, pageSize: 50 },
+        },
+      );
       if (error) throw new Error(error.message);
       setAuditEntries(data?.entries ?? []);
     } catch (error) {
       show({
-        title: "Unable to load audit log",
-        description: error instanceof Error ? error.message : "Audit request failed.",
-        variant: "error",
+        title: 'Unable to load audit log',
+        description: error instanceof Error ? error.message : 'Audit request failed.',
+        variant: 'error',
       });
     } finally {
       setIsAuditLoading(false);
@@ -417,33 +456,35 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleWorkflowAction(action: "migrate_global_to_brand" | "duplicate_to_brand" | "promote_to_global") {
+  async function handleWorkflowAction(
+    action: 'migrate_global_to_brand' | 'duplicate_to_brand' | 'promote_to_global',
+  ) {
     if (!selectedWorkflow) return;
-    if (action !== "promote_to_global" && !targetBrandId) {
-      show({ title: "Choose a destination brand", variant: "warning" });
+    if (action !== 'promote_to_global' && !targetBrandId) {
+      show({ title: 'Choose a destination brand', variant: 'warning' });
       return;
     }
 
     const actionId = `workflow:${action}:${selectedWorkflow.id}`;
     setActionPending(actionId, true);
     try {
-      const { error } = await supabase.functions.invoke("admin-workflow-library", {
-        method: "POST",
+      const { error } = await supabase.functions.invoke('admin-workflow-library', {
+        method: 'POST',
         body: {
           action,
           workflowId: selectedWorkflow.id,
-          ...(action !== "promote_to_global" ? { targetBrandProfileId: targetBrandId } : {}),
+          ...(action !== 'promote_to_global' ? { targetBrandProfileId: targetBrandId } : {}),
         },
       });
       if (error) throw new Error(error.message);
-      show({ title: "Workflow action complete", variant: "success" });
+      show({ title: 'Workflow action complete', variant: 'success' });
       await loadWorkflows();
       await loadAuditEntries();
     } catch (error) {
       show({
-        title: "Workflow action failed",
-        description: error instanceof Error ? error.message : "Unable to update workflow library.",
-        variant: "error",
+        title: 'Workflow action failed',
+        description: error instanceof Error ? error.message : 'Unable to update workflow library.',
+        variant: 'error',
       });
     } finally {
       setActionPending(actionId, false);
@@ -453,7 +494,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   async function handleFirstValueReportSmoke(send: boolean) {
     const brandId = reportBrandId.trim();
     if (!brandId) {
-      show({ title: "Brand ID required", description: "Select or paste a brand ID first.", variant: "warning" });
+      show({
+        title: 'Brand ID required',
+        description: 'Select or paste a brand ID first.',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -461,36 +506,37 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     setReportSmokeResult(null);
     try {
       const { data, error } = await supabase.functions.invoke<FirstValueReportSmokeResponse>(
-        "send-first-value-report",
+        'send-first-value-report',
         {
-          method: "POST",
+          method: 'POST',
           body: {
-            action: "smoke_test",
+            action: 'smoke_test',
             brandId,
             send,
             ...(reportRecipientEmail.trim() ? { recipientEmail: reportRecipientEmail.trim() } : {}),
           },
-        }
+        },
       );
       if (error) throw new Error(error.message);
-      const result = data ?? { status: "unknown" };
+      const result = data ?? { status: 'unknown' };
       setReportSmokeResult(result);
       show({
-        title: send ? "Smoke email sent" : "Report is ready",
+        title: send ? 'Smoke email sent' : 'Report is ready',
         description: send
           ? result.resendMessageId
             ? `Resend message ${result.resendMessageId}`
-            : "Resend accepted the message."
-          : "One or more report sections are available.",
-        variant: "success",
+            : 'Resend accepted the message.'
+          : 'One or more report sections are available.',
+        variant: 'success',
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to run first value report smoke test.";
-      setReportSmokeResult({ status: "failed", ok: false, error: message });
+      const message =
+        error instanceof Error ? error.message : 'Unable to run first value report smoke test.';
+      setReportSmokeResult({ status: 'failed', ok: false, error: message });
       show({
-        title: send ? "Smoke send failed" : "Smoke validation failed",
+        title: send ? 'Smoke send failed' : 'Smoke validation failed',
         description: message,
-        variant: "error",
+        variant: 'error',
       });
     } finally {
       setIsReportSmokeLoading(false);
@@ -546,7 +592,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 <h2 className="text-base font-semibold text-primary">User Directory</h2>
                 <p className="text-xs text-muted-foreground">
                   Showing {users.length} on this page · {totalCountLabel} {totalLabelSuffix}
-                  {isNavPending ? " · Updating..." : null}
+                  {isNavPending ? ' · Updating...' : null}
                 </p>
               </div>
               <div className="w-full lg:w-[320px]">
@@ -570,7 +616,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               <ShieldAlert className="size-4" />
               <AlertTitle>Immediate audited changes</AlertTitle>
               <AlertDescription>
-                Service-role actions apply immediately. Owner memberships are locked and cannot be removed in this panel.
+                Service-role actions apply immediately. Owner memberships are locked and cannot be
+                removed in this panel.
               </AlertDescription>
             </Alert>
 
@@ -589,27 +636,35 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     <TableBody>
                       {users.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="px-5 py-6 text-sm text-muted-foreground">
-                            {serverQueryActive ? "No users match this search." : "No users found."}
+                          <TableCell
+                            colSpan={4}
+                            className="px-5 py-6 text-sm text-muted-foreground"
+                          >
+                            {serverQueryActive ? 'No users match this search.' : 'No users found.'}
                           </TableCell>
                         </TableRow>
                       ) : (
                         users.map((user) => {
                           const memberships = permissionsByUserId.get(user.id) ?? [];
                           const isSelected = selectedUser?.id === user.id;
-                          const ownerCount = memberships.filter((membership) => membership.role === "owner").length;
+                          const ownerCount = memberships.filter(
+                            (membership) => membership.role === 'owner',
+                          ).length;
                           const brandSummary =
                             memberships.length === 0
-                              ? "No brand memberships"
+                              ? 'No brand memberships'
                               : memberships
                                   .slice(0, 2)
-                                  .map((membership) => membership.brand_name ?? membership.brand_profile_id)
-                                  .join(", ");
+                                  .map(
+                                    (membership) =>
+                                      membership.brand_name ?? membership.brand_profile_id,
+                                  )
+                                  .join(', ');
 
                           return (
                             <TableRow
                               key={user.id}
-                              data-state={isSelected ? "selected" : undefined}
+                              data-state={isSelected ? 'selected' : undefined}
                               className="cursor-pointer"
                               onClick={() => setSelectedUserId(user.id)}
                             >
@@ -619,14 +674,22 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                     {getUserInitials(user)}
                                   </div>
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-primary">{user.name ?? user.email}</div>
-                                    <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                                    <div className="truncate text-sm font-semibold text-primary">
+                                      {user.name ?? user.email}
+                                    </div>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                      {user.email}
+                                    </p>
                                   </div>
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="text-sm text-primary">{memberships.length} memberships</div>
-                                <p className="max-w-[360px] truncate text-xs text-muted-foreground">{brandSummary}</p>
+                                <div className="text-sm text-primary">
+                                  {membershipLabel(memberships.length)}
+                                </div>
+                                <p className="max-w-[360px] truncate text-xs text-muted-foreground">
+                                  {brandSummary}
+                                </p>
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap items-center gap-1.5">
@@ -637,7 +700,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                       {ownerCount} owner
                                     </Badge>
                                   ) : null}
-                                  {memberships.length === 0 && <Badge variant="outline">No brands</Badge>}
+                                  {memberships.length === 0 && (
+                                    <Badge variant="outline">No brands</Badge>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell className="text-right">
@@ -650,7 +715,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                     void handleImpersonate(user);
                                   }}
                                 >
-                                  {pendingActions[`impersonate:${user.id}`] ? <Loader2 className="size-4 animate-spin" /> : null}
+                                  {pendingActions[`impersonate:${user.id}`] ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : null}
                                   Impersonate
                                 </Button>
                               </TableCell>
@@ -683,12 +750,14 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   <PaginationItem>
                     <PaginationPrevious
                       href={getPageHref(Math.max(1, pagination.page - 1))}
-                      onClick={(event) => handlePageNavigation(event, Math.max(1, pagination.page - 1))}
+                      onClick={(event) =>
+                        handlePageNavigation(event, Math.max(1, pagination.page - 1))
+                      }
                       disabled={!pagination.hasPrevPage || isNavPending}
                     />
                   </PaginationItem>
                   {paginationItems.map((item, index) =>
-                    item === "ellipsis" ? (
+                    item === 'ellipsis' ? (
                       <PaginationItem key={`ellipsis-${index}`}>
                         <PaginationEllipsis />
                       </PaginationItem>
@@ -703,12 +772,14 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                           {item}
                         </PaginationLink>
                       </PaginationItem>
-                    )
+                    ),
                   )}
                   <PaginationItem>
                     <PaginationNext
                       href={getPageHref(Math.min(totalPages, pagination.page + 1))}
-                      onClick={(event) => handlePageNavigation(event, Math.min(totalPages, pagination.page + 1))}
+                      onClick={(event) =>
+                        handlePageNavigation(event, Math.min(totalPages, pagination.page + 1))
+                      }
                       disabled={!pagination.hasNextPage || isNavPending}
                     />
                   </PaginationItem>
@@ -733,11 +804,19 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 <div className="border-b border-subtle p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-semibold text-primary">{selectedUser.name ?? selectedUser.email}</h3>
+                      <h3 className="truncate text-base font-semibold text-primary">
+                        {selectedUser.name ?? selectedUser.email}
+                      </h3>
                       <p className="truncate text-xs text-muted-foreground">{selectedUser.email}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Created {formatDate(selectedUser.createdAt)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Created {formatDate(selectedUser.createdAt)}
+                      </p>
                     </div>
-                    {selectedUser.isAdmin ? <Badge variant="secondary">Admin</Badge> : <Badge variant="outline">User</Badge>}
+                    {selectedUser.isAdmin ? (
+                      <Badge variant="secondary">Admin</Badge>
+                    ) : (
+                      <Badge variant="outline">User</Badge>
+                    )}
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button
@@ -746,38 +825,38 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                       disabled={Boolean(pendingActions[`impersonate:${selectedUser.id}`])}
                       onClick={() => void handleImpersonate(selectedUser)}
                     >
-                      {pendingActions[`impersonate:${selectedUser.id}`] ? <Loader2 className="size-4 animate-spin" /> : null}
+                      {pendingActions[`impersonate:${selectedUser.id}`] ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : null}
                       Impersonate
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
+                    <AdminActionConfirmation
+                      trigger={
                         <Button
                           size="sm"
-                          variant={selectedUser.isAdmin ? "destructive" : "outline"}
+                          variant={selectedUser.isAdmin ? 'destructive' : 'outline'}
                           disabled={Boolean(pendingActions[`admin:${selectedUser.id}`])}
                         >
-                          {pendingActions[`admin:${selectedUser.id}`] ? <Loader2 className="size-4 animate-spin" /> : null}
-                          {selectedUser.isAdmin ? "Revoke admin" : "Make admin"}
+                          {pendingActions[`admin:${selectedUser.id}`] ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : null}
+                          {selectedUser.isAdmin ? 'Revoke admin' : 'Make admin'}
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{selectedUser.isAdmin ? "Revoke admin access?" : "Grant admin access?"}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action is immediate and will be written to the admin audit log.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => void handleAdminToggle(selectedUser)}>Confirm</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                      }
+                      title={selectedUser.isAdmin ? 'Revoke admin access?' : 'Grant admin access?'}
+                      description="This action is immediate and will be written to the admin audit log."
+                      confirmLabel={selectedUser.isAdmin ? 'Revoke admin' : 'Make admin'}
+                      targetEmail={selectedUser.email}
+                      requireTypedEmail={!selectedUser.isAdmin}
+                      onConfirm={() => void handleAdminToggle(selectedUser)}
+                    />
                   </div>
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Brand access</h4>
+                  <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Brand access
+                  </h4>
                   {selectedMemberships.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No memberships for this user.</p>
                   ) : (
@@ -786,17 +865,22 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                       const tierActionId = `tier:${membership.user_id}:${membership.brand_profile_id}`;
                       const currentTier = tierOverrides[tierActionId] ?? tierValue;
                       const removeActionId = `remove:${membership.user_id}:${membership.brand_profile_id}`;
-                      const isOwner = membership.role === "owner";
+                      const isOwner = membership.role === 'owner';
 
                       return (
-                        <div key={`${membership.user_id}-${membership.brand_profile_id}`} className="rounded-md border border-subtle bg-default/40 p-3">
+                        <div
+                          key={`${membership.user_id}-${membership.brand_profile_id}`}
+                          className="rounded-md border border-subtle bg-default/40 p-3"
+                        >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-primary">
                                 {membership.brand_name ?? membership.brand_profile_id}
                               </p>
                               <div className="mt-1 flex flex-wrap gap-1.5">
-                                <Badge variant={roleVariant(membership.role)}>{membership.role ?? "unknown"}</Badge>
+                                <Badge variant={roleVariant(membership.role)}>
+                                  {membership.role ?? 'unknown'}
+                                </Badge>
                                 <Badge variant="outline">Tier {currentTier}</Badge>
                                 {isOwner ? (
                                   <Badge variant="outline" className="gap-1">
@@ -810,7 +894,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                               value={currentTier}
                               onValueChange={(value) => {
                                 if (value === currentTier) return;
-                                void handleTierChange({ membership, nextTier: value, previousTier: currentTier });
+                                void handleTierChange({
+                                  membership,
+                                  nextTier: value,
+                                  previousTier: currentTier,
+                                });
                               }}
                               disabled={Boolean(pendingActions[tierActionId])}
                             >
@@ -832,26 +920,28 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 Owner locked
                               </Button>
                             ) : (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="destructive" disabled={Boolean(pendingActions[removeActionId])}>
-                                    {pendingActions[removeActionId] ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                              <AdminActionConfirmation
+                                trigger={
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={Boolean(pendingActions[removeActionId])}
+                                  >
+                                    {pendingActions[removeActionId] ? (
+                                      <Loader2 className="size-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="size-4" />
+                                    )}
                                     Remove access
                                   </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Remove this brand membership?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This removes the user from {membership.brand_name ?? "this brand"} and writes an audit log entry.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => void handleRemoveMember(membership)}>Remove</AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                                }
+                                title="Remove this brand membership?"
+                                description={`This removes ${selectedUser.email} from ${membership.brand_name ?? 'this brand'} and writes an audit log entry.`}
+                                confirmLabel="Remove access"
+                                targetEmail={selectedUser.email}
+                                requireTypedEmail
+                                onConfirm={() => void handleRemoveMember(membership)}
+                              />
                             )}
                           </div>
                         </div>
@@ -861,7 +951,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 </div>
               </div>
             ) : (
-              <div className="p-4 text-sm text-muted-foreground">Select a user to inspect access.</div>
+              <div className="p-4 text-sm text-muted-foreground">
+                Select a user to inspect access.
+              </div>
             )}
           </aside>
         </div>
@@ -873,7 +965,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <CardContent className="space-y-4 p-4">
               <div>
                 <h2 className="text-base font-semibold text-primary">Source</h2>
-                <p className="text-xs text-muted-foreground">Global workflow library or brand canvas workflows.</p>
+                <p className="text-xs text-muted-foreground">
+                  Global workflow library or brand canvas workflows.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="workflow-brand-search">Brand search</Label>
@@ -915,7 +1009,12 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" size="sm" onClick={() => void loadWorkflows()} className="w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadWorkflows()}
+                className="w-full"
+              >
                 <RefreshCw className="size-4" />
                 Refresh workflows
               </Button>
@@ -926,7 +1025,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <div className="flex items-center justify-between gap-3 border-b border-subtle p-3">
               <div>
                 <h2 className="text-base font-semibold text-primary">Workflow Assignments</h2>
-                <p className="text-xs text-muted-foreground">Assign global workflows to brands, duplicate canvas workflows, and promote brand workflows globally.</p>
+                <p className="text-xs text-muted-foreground">
+                  Assign global workflows to brands, duplicate canvas workflows, and promote brand
+                  workflows globally.
+                </p>
               </div>
               <div className="relative w-[280px]">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -950,13 +1052,19 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 <TableBody>
                   {isWorkflowLoading ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={3}
+                        className="py-8 text-center text-sm text-muted-foreground"
+                      >
                         Loading workflows...
                       </TableCell>
                     </TableRow>
                   ) : workflows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={3}
+                        className="py-8 text-center text-sm text-muted-foreground"
+                      >
                         No workflows found.
                       </TableCell>
                     </TableRow>
@@ -964,18 +1072,22 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     workflows.map((workflow) => (
                       <TableRow
                         key={workflow.id}
-                        data-state={workflow.id === selectedWorkflowId ? "selected" : undefined}
+                        data-state={workflow.id === selectedWorkflowId ? 'selected' : undefined}
                         className="cursor-pointer"
                         onClick={() => setSelectedWorkflowId(workflow.id)}
                       >
                         <TableCell>
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-primary">{workflow.name}</div>
-                            <p className="line-clamp-1 text-xs text-muted-foreground">{workflow.description ?? "No description"}</p>
+                            <div className="truncate text-sm font-semibold text-primary">
+                              {workflow.name}
+                            </div>
+                            <p className="line-clamp-1 text-xs text-muted-foreground">
+                              {workflow.description ?? 'No description'}
+                            </p>
                           </div>
                         </TableCell>
                         <TableCell>
-                          {workflow.visibility === "global" ? (
+                          {workflow.visibility === 'global' ? (
                             <Badge variant="secondary" className="gap-1">
                               <Globe2 className="size-3" />
                               Global
@@ -987,7 +1099,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{formatDate(workflow.updated_at)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(workflow.updated_at)}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -1001,10 +1115,18 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    {selectedWorkflow.visibility === "global" ? <Globe2 className="size-4 text-brand-primary" /> : <Library className="size-4 text-brand-primary" />}
-                    <h3 className="min-w-0 truncate text-base font-semibold text-primary">{selectedWorkflow.name}</h3>
+                    {selectedWorkflow.visibility === 'global' ? (
+                      <Globe2 className="size-4 text-brand-primary" />
+                    ) : (
+                      <Library className="size-4 text-brand-primary" />
+                    )}
+                    <h3 className="min-w-0 truncate text-base font-semibold text-primary">
+                      {selectedWorkflow.name}
+                    </h3>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{selectedWorkflow.description ?? "No description"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedWorkflow.description ?? 'No description'}
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-md border border-subtle bg-default/40 p-2">
@@ -1014,7 +1136,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   <div className="rounded-md border border-subtle bg-default/40 p-2">
                     <span className="block text-muted-foreground">Nodes</span>
                     <strong className="text-primary">
-                      {Array.isArray((selectedWorkflow.content as { nodes?: unknown[] } | undefined)?.nodes)
+                      {Array.isArray(
+                        (selectedWorkflow.content as { nodes?: unknown[] } | undefined)?.nodes,
+                      )
                         ? (selectedWorkflow.content as { nodes?: unknown[] }).nodes?.length
                         : 0}
                     </strong>
@@ -1023,35 +1147,61 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 <Alert className="border-subtle">
                   <Copy className="size-4" />
                   <AlertTitle>Duplicate policy</AlertTitle>
-                  <AlertDescription>Conflicting names are saved as renamed copies.</AlertDescription>
+                  <AlertDescription>
+                    Conflicting names are saved as renamed copies.
+                  </AlertDescription>
                 </Alert>
                 <div className="space-y-2">
-                  {selectedWorkflow.visibility === "global" ? (
+                  {selectedWorkflow.visibility === 'global' ? (
                     <Button
                       className="w-full"
-                      disabled={!targetBrandId || Boolean(pendingActions[`workflow:migrate_global_to_brand:${selectedWorkflow.id}`])}
-                      onClick={() => void handleWorkflowAction("migrate_global_to_brand")}
+                      disabled={
+                        !targetBrandId ||
+                        Boolean(
+                          pendingActions[`workflow:migrate_global_to_brand:${selectedWorkflow.id}`],
+                        )
+                      }
+                      onClick={() => void handleWorkflowAction('migrate_global_to_brand')}
                     >
-                      {pendingActions[`workflow:migrate_global_to_brand:${selectedWorkflow.id}`] ? <Loader2 className="size-4 animate-spin" /> : <Building2 className="size-4" />}
+                      {pendingActions[`workflow:migrate_global_to_brand:${selectedWorkflow.id}`] ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Building2 className="size-4" />
+                      )}
                       Assign to brand canvas
                     </Button>
                   ) : (
                     <Fragment>
                       <Button
                         className="w-full"
-                        disabled={!targetBrandId || Boolean(pendingActions[`workflow:duplicate_to_brand:${selectedWorkflow.id}`])}
-                        onClick={() => void handleWorkflowAction("duplicate_to_brand")}
+                        disabled={
+                          !targetBrandId ||
+                          Boolean(
+                            pendingActions[`workflow:duplicate_to_brand:${selectedWorkflow.id}`],
+                          )
+                        }
+                        onClick={() => void handleWorkflowAction('duplicate_to_brand')}
                       >
-                        {pendingActions[`workflow:duplicate_to_brand:${selectedWorkflow.id}`] ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
+                        {pendingActions[`workflow:duplicate_to_brand:${selectedWorkflow.id}`] ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Copy className="size-4" />
+                        )}
                         Duplicate canvas workflow
                       </Button>
                       <Button
                         variant="outline"
                         className="w-full"
-                        disabled={Boolean(pendingActions[`workflow:promote_to_global:${selectedWorkflow.id}`])}
-                        onClick={() => void handleWorkflowAction("promote_to_global")}
+                        disabled={Boolean(
+                          pendingActions[`workflow:promote_to_global:${selectedWorkflow.id}`],
+                        )}
+                        onClick={() => void handleWorkflowAction('promote_to_global')}
                       >
-                        {pendingActions[`workflow:promote_to_global:${selectedWorkflow.id}`] ? <Loader2 className="size-4 animate-spin" /> : <Globe2 className="size-4" />}
+                        {pendingActions[`workflow:promote_to_global:${selectedWorkflow.id}`] ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Globe2 className="size-4" />
+                        )}
                         Promote to global library
                       </Button>
                     </Fragment>
@@ -1071,8 +1221,17 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
             <h2 className="text-base font-semibold text-primary">Admin Audit Log</h2>
             <p className="text-xs text-muted-foreground">Latest service-role admin actions.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void loadAuditEntries()} disabled={isAuditLoading}>
-            {isAuditLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadAuditEntries()}
+            disabled={isAuditLoading}
+          >
+            {isAuditLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
             Refresh
           </Button>
         </div>
@@ -1104,19 +1263,32 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   <TableRow key={entry.id}>
                     <TableCell>
                       <div className="text-sm font-medium text-primary">{entry.action}</div>
-                      <p className="text-xs text-muted-foreground">Actor {entry.actor_user_id ?? "unknown"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Actor {entry.actor_user_id ?? 'unknown'}
+                      </p>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-primary">{entry.target_type}</div>
-                      <p className="max-w-[320px] truncate text-xs text-muted-foreground">{entry.target_id ?? "none"}</p>
+                      <p className="max-w-[320px] truncate text-xs text-muted-foreground">
+                        {entry.target_id ?? 'none'}
+                      </p>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={entry.status === "success" ? "secondary" : "destructive"} className="gap-1">
-                        {entry.status === "success" ? <CheckCircle2 className="size-3" /> : <ShieldAlert className="size-3" />}
+                      <Badge
+                        variant={entry.status === 'success' ? 'secondary' : 'destructive'}
+                        className="gap-1"
+                      >
+                        {entry.status === 'success' ? (
+                          <CheckCircle2 className="size-3" />
+                        ) : (
+                          <ShieldAlert className="size-3" />
+                        )}
                         {entry.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatDate(entry.created_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {formatDate(entry.created_at)}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -1130,18 +1302,18 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           <Card className="border-subtle bg-surface shadow-sm">
             <CardContent className="space-y-4 p-4">
               <div>
-                <h2 className="text-base font-semibold text-primary">First Value Report Smoke Test</h2>
+                <h2 className="text-base font-semibold text-primary">
+                  First Value Report Smoke Test
+                </h2>
                 <p className="text-xs text-muted-foreground">
-                  Validate or send the onboarding follow-up email for a specific brand without waiting for cron.
+                  Validate or send the onboarding follow-up email for a specific brand without
+                  waiting for cron.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="first-value-brand-select">Brand</Label>
-                <Select
-                  value={reportBrandId || undefined}
-                  onValueChange={setReportBrandId}
-                >
+                <Select value={reportBrandId || undefined} onValueChange={setReportBrandId}>
                   <SelectTrigger id="first-value-brand-select">
                     <SelectValue placeholder="Choose a loaded brand" />
                   </SelectTrigger>
@@ -1186,7 +1358,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   disabled={isReportSmokeLoading}
                   onClick={() => void handleFirstValueReportSmoke(false)}
                 >
-                  {isReportSmokeLoading ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
+                  {isReportSmokeLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <PlayCircle className="size-4" />
+                  )}
                   Validate
                 </Button>
                 <Button
@@ -1194,7 +1370,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                   disabled={isReportSmokeLoading}
                   onClick={() => void handleFirstValueReportSmoke(true)}
                 >
-                  {isReportSmokeLoading ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                  {isReportSmokeLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Mail className="size-4" />
+                  )}
                   Send smoke email
                 </Button>
               </div>
@@ -1206,7 +1386,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               <div>
                 <h2 className="text-base font-semibold text-primary">Smoke Result</h2>
                 <p className="text-xs text-muted-foreground">
-                  The report can send with any section that has renderable email content. The snapshot shows ready sections, rendered insight counts, and chart points.
+                  The report can send with any section that has renderable email content. The
+                  snapshot shows ready sections, rendered insight counts, and chart points.
                 </p>
               </div>
 
@@ -1217,21 +1398,23 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               ) : reportSmokeResult.ok === false ? (
                 <Alert variant="destructive">
                   <ShieldAlert className="size-4" />
-                  <AlertTitle>{reportSmokeResult.status ?? "Report smoke test failed"}</AlertTitle>
+                  <AlertTitle>{reportSmokeResult.status ?? 'Report smoke test failed'}</AlertTitle>
                   <AlertDescription>
                     {reportSmokeResult.error ??
                       reportSmokeResult.missing?.reason ??
-                      "Required report data is missing."}
+                      'Required report data is missing.'}
                   </AlertDescription>
                 </Alert>
               ) : (
                 <Alert className="border-emerald-200 bg-emerald-50/60 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
                   <CheckCircle2 className="size-4" />
-                  <AlertTitle>{reportSmokeResult.sent ? "Smoke email sent" : "Report ready"}</AlertTitle>
+                  <AlertTitle>
+                    {reportSmokeResult.sent ? 'Smoke email sent' : 'Report ready'}
+                  </AlertTitle>
                   <AlertDescription>
                     {reportSmokeResult.resendMessageId
                       ? `Resend message ID: ${reportSmokeResult.resendMessageId}`
-                      : "One or more report sections are available."}
+                      : 'One or more report sections are available.'}
                   </AlertDescription>
                 </Alert>
               )}
@@ -1250,19 +1433,23 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </div>
       </TabsContent>
 
-      <Dialog open={Boolean(impersonationDialog)} onOpenChange={(open) => !open && setImpersonationDialog(null)}>
+      <Dialog
+        open={Boolean(impersonationDialog)}
+        onOpenChange={(open) => !open && setImpersonationDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Copy impersonation link</DialogTitle>
             <DialogDescription>
-              Paste this link into a browser to impersonate {impersonationDialog?.email ?? "this user"}.
+              Paste this link into a browser to impersonate{' '}
+              {impersonationDialog?.email ?? 'this user'}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="impersonation-link">Impersonation link</Label>
             <Input
               id="impersonation-link"
-              value={impersonationDialog?.link ?? ""}
+              value={impersonationDialog?.link ?? ''}
               readOnly
               onFocus={(event) => event.currentTarget.select()}
             />
@@ -1274,11 +1461,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 if (!impersonationDialog?.link) return;
                 const copied = await copyImpersonationLinkToClipboard(impersonationDialog.link);
                 show({
-                  title: copied ? "Link copied" : "Copy blocked",
+                  title: copied ? 'Link copied' : 'Copy blocked',
                   description: copied
-                    ? "The impersonation link is on your clipboard."
-                    : "Copy blocked by the browser. Use a different browser or allow clipboard permissions.",
-                  variant: copied ? "success" : "warning",
+                    ? 'The impersonation link is on your clipboard.'
+                    : 'Copy blocked by the browser. Use a different browser or allow clipboard permissions.',
+                  variant: copied ? 'success' : 'warning',
                 });
               }}
             >

@@ -1,6 +1,7 @@
-import Image from "next/image";
-import Link from "next/link";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { CopyBrandIdButton } from './CopyBrandIdButton';
 
 type BrandIdentityHeaderProps = {
   brandId: string;
@@ -8,12 +9,8 @@ type BrandIdentityHeaderProps = {
   logoUrl: string | null;
 };
 
-export function BrandIdentityHeader({
-  brandId,
-  name,
-  logoUrl,
-}: BrandIdentityHeaderProps) {
-  const initial = name.trim().charAt(0).toUpperCase() || "?";
+export function BrandIdentityHeader({ brandId, name, logoUrl }: BrandIdentityHeaderProps) {
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
 
   return (
     <div className="mb-5 flex items-center gap-3 rounded-lg border border-border/50 bg-card/30 px-4 py-3">
@@ -33,9 +30,12 @@ export function BrandIdentityHeader({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-        <p className="truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground">
-          {brandId}
-        </p>
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground">
+            {brandId}
+          </p>
+          <CopyBrandIdButton brandId={brandId} />
+        </div>
       </div>
       <Link
         href="/settings?section=brands"

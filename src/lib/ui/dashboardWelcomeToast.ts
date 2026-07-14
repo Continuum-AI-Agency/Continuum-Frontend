@@ -1,6 +1,6 @@
 import type { ToastOptions } from "@/components/ui/ToastProvider";
 
-export const DASHBOARD_WELCOME_TOAST_DURATION_MS = 10_000;
+export const DASHBOARD_WELCOME_TOAST_DURATION_MS = 5_000;
 
 export function shouldShowDashboardWelcomeToast(pathname: string | null): boolean {
   return pathname === "/dashboard";
@@ -11,9 +11,8 @@ export function createDashboardWelcomeToastOptions(displayName: string): ToastOp
   return {
     title: `Welcome back, ${safeDisplayName}.`,
     description:
-      "Your dashboard shows live brand insights and quick actions. Switch brands or add a new one from the menu on the right.",
+      "Your dashboard shows live brand insights and quick actions. Switch brands or add one from the top bar.",
     variant: "info",
     durationMs: DASHBOARD_WELCOME_TOAST_DURATION_MS,
   };
 }
-

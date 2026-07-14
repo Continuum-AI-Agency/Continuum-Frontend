@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import React from "react";
-import { motion, useReducedMotion } from "motion/react";
-import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { FirstRunSetup } from "@/components/dashboard/first-run/FirstRunSetup";
-import type { DashboardSetupState } from "@/components/dashboard/first-run/setupState";
+import { motion, useReducedMotion } from 'motion/react';
+import { useRouter } from 'next/navigation';
+import React from 'react';
+import { FirstRunSetup } from '@/components/dashboard/first-run/FirstRunSetup';
+import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
+import { cn } from '@/lib/utils';
 
 type Props = {
   activeView: DashboardView;
@@ -16,7 +16,7 @@ type Props = {
   brandBookRefreshedAt?: string | null;
 };
 
-type DashboardView = "paid" | "organic";
+type DashboardView = 'paid' | 'organic';
 
 const DASHBOARD_VIEWS: Record<
   DashboardView,
@@ -27,14 +27,14 @@ const DASHBOARD_VIEWS: Record<
   }
 > = {
   organic: {
-    label: "Organic",
-    title: "Social metrics & Trend signals",
-    microcopy: "Social performance, audience insights, and trend signals.",
+    label: 'Organic',
+    title: 'Social metrics & Trend signals',
+    microcopy: 'Social performance, audience insights, and trend signals.',
   },
   paid: {
-    label: "Paid",
-    title: "Performance & DCO actions",
-    microcopy: "Ad performance, budget pacing, and DCO actions.",
+    label: 'Paid',
+    title: 'Performance & DCO actions',
+    microcopy: 'Ad performance, budget pacing, and DCO actions.',
   },
 };
 
@@ -59,21 +59,21 @@ export function HomeBaseDashboard({
     (nextView: DashboardView) => {
       if (nextView === activeView) return;
       const params = new URLSearchParams(window.location.search);
-      if (nextView === "organic") {
-        params.delete("view");
+      if (nextView === 'organic') {
+        params.delete('view');
       } else {
-        params.set("view", nextView);
+        params.set('view', nextView);
       }
       const query = params.toString();
       startTransition(() => {
-        router.replace(query ? `/dashboard?${query}` : "/dashboard", { scroll: false });
+        router.replace(query ? `/dashboard?${query}` : '/dashboard', { scroll: false });
       });
     },
-    [activeView, router]
+    [activeView, router],
   );
 
   React.useEffect(() => {
-    router.prefetch(activeView === "paid" ? "/dashboard" : "/dashboard?view=paid");
+    router.prefetch(activeView === 'paid' ? '/dashboard' : '/dashboard?view=paid');
   }, [activeView, router]);
 
   return (
@@ -94,33 +94,40 @@ export function HomeBaseDashboard({
                 </p>
               </div>
 
-              <nav
-                className="inline-flex shrink-0 rounded-md border border-border/70 bg-background p-0.5"
-                aria-label="Dashboard workspace"
-              >
-                {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
-                  const config = DASHBOARD_VIEWS[view];
-                  const isActive = activeView === view;
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Dashboard view
+                </span>
+                <nav
+                  className="inline-flex rounded-md border border-border/70 bg-background p-0.5"
+                  aria-label="Dashboard view options"
+                >
+                  {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
+                    const config = DASHBOARD_VIEWS[view];
+                    const isActive = activeView === view;
 
-                  return (
-                    <button
-                      key={view}
-                      type="button"
-                      data-tour-id={view === "paid" ? "dashboard-paid-toggle" : undefined}
-                      title={config.microcopy}
-                      onClick={() => handleViewChange(view)}
-                      className={cn(
-                        "h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]",
-                        isActive ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground"
-                      )}
-                      style={{ transitionProperty: "background-color, color, scale" }}
-                      aria-pressed={isActive}
-                    >
-                      {config.label}
-                    </button>
-                  );
-                })}
-              </nav>
+                    return (
+                      <button
+                        key={view}
+                        type="button"
+                        data-tour-id={view === 'paid' ? 'dashboard-paid-toggle' : undefined}
+                        title={config.microcopy}
+                        onClick={() => handleViewChange(view)}
+                        className={cn(
+                          'h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
+                          isActive
+                            ? 'bg-muted/60 text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
+                        )}
+                        style={{ transitionProperty: 'background-color, color, scale' }}
+                        aria-pressed={isActive}
+                      >
+                        {config.label}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
             </>
           ) : (
             <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
