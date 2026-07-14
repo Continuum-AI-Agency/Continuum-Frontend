@@ -8,11 +8,22 @@
 // @tanstack/react-virtual (already a dependency, used by nothing), with exactly ONE scroll
 // container that this component owns.
 //
-// The table stays a real <table>: virtualization needs absolutely-positioned rows, which fight
-// table layout — so the table, its head, body and rows are laid out with `display: grid` /
-// `flex` instead. Semantics (and the implicit ARIA roles that come with them) are preserved;
-// only the layout algorithm changes. Hand-rolling role="grid" on divs would have thrown away
-// the semantics to buy nothing.
+// Built from the shadcn primitives — Table/TableHeader/TableRow/TableCell inside a ScrollArea.
+// Two things had to be reconciled to get there:
+//
+//   1. Virtualization needs absolutely-positioned rows, which fight table layout. So the table,
+//      its body and its rows are laid out with `display: grid` on one shared column template.
+//      The elements stay real <table>/<tr>/<td>, so the semantics (and their implicit ARIA
+//      roles) survive; only the layout algorithm changes. Hand-rolling role="grid" on divs
+//      would have thrown the semantics away to buy nothing.
+//
+//   2. Radix wraps a ScrollArea Viewport's children in a `display: table` div, so
+//      `position: sticky` does not survive inside one. Rather than give up the pinned column
+//      header, the header is lifted OUT of the scroller into its own header-only Table: it
+//      cannot scroll away, so it never needs to be sticky. The overlay scrollbar takes no
+//      layout width, so the two tables stay aligned on the shared GRID_COLS template.
+//      ScrollArea exposes its viewport via the `viewportRef` prop on our copy of the component
+//      (shadcn components live in this repo to be owned and extended).
 //
 // Ad sets the optimizer cannot move budget for (CBO/lifetime, ingest-frozen) are still disabled
 // with a legible, VISIBLE reason — never dropped. New: with an `objective` in hand, ad sets that
@@ -40,7 +51,16 @@ import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useS
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatCpa, formatCurrency } from '../format';
@@ -126,15 +146,12 @@ const AdsetRow = memo(function AdsetRow({
   const controlId = `optimizer-adset-${safeId(row.id)}`;
 
   return (
-    <tr
+    <TableRow
       data-state={checked ? 'selected' : undefined}
       style={style}
-      className={cn(
-        GRID_COLS,
-        'absolute top-0 left-0 w-full border-border/40 border-b data-[state=selected]:bg-muted/40',
-      )}
+      className={cn(GRID_COLS, 'absolute top-0 left-0 w-full border-border/40')}
     >
-      <td className="flex justify-center">
+      <TableCell className="p-0 flex justify-center">
         <Checkbox
           id={controlId}
           checked={checked}
@@ -142,9 +159,9 @@ const AdsetRow = memo(function AdsetRow({
           aria-label={row.name}
           onCheckedChange={(value) => onToggle(row.id, value === true)}
         />
-      </td>
+      </TableCell>
 
-      <td className="min-w-0">
+      <TableCell className="p-0 min-w-0">
         <label
           htmlFor={controlId}
           className={cn('block min-w-0', row.eligible ? 'cursor-pointer' : 'cursor-not-allowed')}
@@ -193,18 +210,22 @@ const AdsetRow = memo(function AdsetRow({
             </span>
           ) : null}
         </label>
-      </td>
+      </TableCell>
 
-      <td className="text-right text-xs tabular-nums">
+      <TableCell className="p-0 text-right text-xs tabular-nums">
         {row.eligible ? formatCurrency(row.currentBudget, currency) : DASH}
-      </td>
-      <td className="text-right text-xs tabular-nums">{money(row.spend14, currency)}</td>
-      <td className="text-right text-xs tabular-nums">
+      </TableCell>
+      <TableCell className="p-0 text-right text-xs tabular-nums">
+        {money(row.spend14, currency)}
+      </TableCell>
+      <TableCell className="p-0 text-right text-xs tabular-nums">
         {row.cpa != null ? formatCpa(row.cpa, currency) : DASH}
-      </td>
-      <td className="text-right text-xs tabular-nums">{row.adCount > 0 ? row.adCount : DASH}</td>
+      </TableCell>
+      <TableCell className="p-0 text-right text-xs tabular-nums">
+        {row.adCount > 0 ? row.adCount : DASH}
+      </TableCell>
 
-      <td className="flex justify-center">
+      <TableCell className="p-0 flex justify-center">
         {/* A Popover, not a nested expanding row: a variable-height row is poison for a
             virtualizer, and the old one shoved everything below it off-screen. */}
         {showAds && row.adCount > 0 ? (
@@ -223,8 +244,8 @@ const AdsetRow = memo(function AdsetRow({
             </PopoverContent>
           </Popover>
         ) : null}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 });
 
@@ -255,23 +276,23 @@ function CampaignHeaderRow({
   const someSelected = selectedCount > 0 && !allSelected;
 
   return (
-    <tr
+    <TableRow
       style={style}
       className={cn(
         GRID_COLS,
-        'absolute top-0 left-0 w-full border-border/60 border-b bg-muted/30',
+        'absolute top-0 left-0 w-full border-border/60 bg-muted/30 hover:bg-muted/40',
       )}
     >
-      <td className="flex justify-center">
+      <TableCell className="p-0 flex justify-center">
         <Checkbox
           checked={allSelected ? true : someSelected ? 'indeterminate' : false}
           disabled={disabled || eligibleIds.length === 0}
           aria-label={`Select all eligible ad sets in ${section.campaignName}`}
           onCheckedChange={(value) => onToggleAll(eligibleIds, value === true)}
         />
-      </td>
+      </TableCell>
 
-      <td className="flex min-w-0 items-center gap-1">
+      <TableCell className="p-0 flex min-w-0 items-center gap-1">
         <button
           type="button"
           onClick={() => onToggleCollapse(section.campaignId)}
@@ -293,18 +314,22 @@ function CampaignHeaderRow({
             {section.mismatchCount} wrong KPI
           </Badge>
         ) : null}
-      </td>
+      </TableCell>
 
-      <td className="text-right text-xs tabular-nums">{money(section.totalBudget, currency)}</td>
-      <td className="text-right text-xs tabular-nums">{money(section.totalSpend14, currency)}</td>
-      <td className="text-right text-xs tabular-nums">
+      <TableCell className="p-0 text-right text-xs tabular-nums">
+        {money(section.totalBudget, currency)}
+      </TableCell>
+      <TableCell className="p-0 text-right text-xs tabular-nums">
+        {money(section.totalSpend14, currency)}
+      </TableCell>
+      <TableCell className="p-0 text-right text-xs tabular-nums">
         {section.cpa != null ? formatCpa(section.cpa, currency) : DASH}
-      </td>
-      <td className="text-right text-xs tabular-nums">
+      </TableCell>
+      <TableCell className="p-0 text-right text-xs tabular-nums">
         {section.totalAds > 0 ? section.totalAds : DASH}
-      </td>
-      <td />
-    </tr>
+      </TableCell>
+      <TableCell />
+    </TableRow>
   );
 }
 
@@ -491,78 +516,92 @@ export function CampaignAdsetPicker({
           Nothing matches this search or filter.
         </p>
       ) : (
-        /* NOT shadcn's <ScrollArea>. Radix wraps a Viewport's children in a `display: table`
-           div, which is why `position: sticky` does not work inside one — and this table's
-           column header has to stay pinned while you scroll 300 ad sets. A styled scrollbar is
-           not worth losing the header. (The virtualizer also needs a ref to the element that
-           actually scrolls, which ScrollArea does not expose.) One scroll container, owned here. */
-        <div
-          ref={scrollRef}
-          className={cn(
-            heightClassName,
-            'overflow-y-auto overscroll-contain rounded-lg border border-border/60',
-          )}
-        >
-          {/* display:grid on the table (and flex on its rows) is what lets rows be absolutely
-              positioned without table layout fighting back. aria-rowcount is the REAL total,
-              not the windowed count — a virtualized table that reports only what it rendered
-              lies to assistive tech. */}
-          <table className="grid w-full" aria-rowcount={rows.length}>
-            <thead className="sticky top-0 z-10 grid bg-card">
-              <tr
+        // The column header lives OUTSIDE the scroller, so it never needs `position: sticky` —
+        // which is what makes shadcn's ScrollArea usable here. (Radix wraps a Viewport's children
+        // in a `display: table` div, and sticky does not survive that. Lifting the header out is
+        // the fix; the overlay scrollbar takes no layout width, so the two tables stay aligned on
+        // the shared GRID_COLS template.)
+        <div className="min-h-0 overflow-hidden rounded-lg border border-border/60">
+          <Table containerClassName="overflow-visible" className="grid bg-card">
+            <TableHeader className="grid">
+              <TableRow
                 className={cn(
                   GRID_COLS,
-                  'border-border/60 border-b py-1.5 text-left font-medium text-2xs text-muted-foreground uppercase tracking-wide',
+                  'py-1.5 text-left font-medium text-2xs text-muted-foreground uppercase tracking-wide hover:bg-transparent',
                 )}
               >
-                <th aria-label="Select" />
-                <th className="font-medium">{isCampaignMode ? 'Campaign' : 'Ad set'}</th>
-                <th className="text-right font-medium">Budget/day</th>
-                <th className="text-right font-medium">Spend 14d</th>
-                <th className="text-right font-medium">{metric?.costLabel ?? 'CPA'}</th>
-                <th className="text-right font-medium">Ads</th>
-                <th aria-label="Creatives" />
-              </tr>
-            </thead>
+                <TableHead aria-label="Select" className="p-0" />
+                <TableHead className="p-0 font-medium">
+                  {isCampaignMode ? 'Campaign' : 'Ad set'}
+                </TableHead>
+                <TableHead className="p-0 text-right font-medium">Budget/day</TableHead>
+                <TableHead className="p-0 text-right font-medium">Spend 14d</TableHead>
+                <TableHead className="p-0 text-right font-medium">
+                  {metric?.costLabel ?? 'CPA'}
+                </TableHead>
+                <TableHead className="p-0 text-right font-medium">Ads</TableHead>
+                <TableHead aria-label="Creatives" className="p-0" />
+              </TableRow>
+            </TableHeader>
+          </Table>
 
-            <tbody className="relative grid" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-              {virtualRows.map((virtualRow) => {
-                const row = rows[virtualRow.index];
-                if (!row) return null;
-                const style: CSSProperties = {
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                };
-                return row.kind === 'campaign' ? (
-                  <CampaignHeaderRow
-                    key={virtualRow.key}
-                    style={style}
-                    section={row.section}
-                    visibleCount={row.visibleCount}
-                    collapsed={collapsed.has(row.section.campaignId)}
-                    selectedIds={selectedIds}
-                    disabled={disabled}
-                    currency={currency}
-                    onToggleCollapse={toggleCollapse}
-                    onToggleAll={toggleMany}
-                  />
-                ) : (
-                  <AdsetRow
-                    key={virtualRow.key}
-                    style={style}
-                    row={row.item}
-                    checked={selectedIds.has(row.item.id)}
-                    disabled={disabled}
-                    currency={currency}
-                    showAds={!isCampaignMode}
-                    brandId={brandId}
-                    accountId={accountId}
-                    onToggle={toggleOne}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
+          <ScrollArea
+            viewportRef={scrollRef}
+            viewportClassName="overscroll-contain"
+            className={heightClassName}
+          >
+            {/* display:grid on the table (and on its rows) is what lets rows be absolutely
+                positioned without table layout fighting back. aria-rowcount is the REAL total,
+                not the windowed count — a virtualized table that reports only what it rendered
+                lies to assistive tech. */}
+            <Table
+              containerClassName="overflow-visible"
+              className="grid"
+              aria-rowcount={rows.length}
+              aria-label={isCampaignMode ? 'Campaigns' : 'Ad sets by campaign'}
+            >
+              <TableBody
+                className="relative grid"
+                style={{ height: `${virtualizer.getTotalSize()}px` }}
+              >
+                {virtualRows.map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  if (!row) return null;
+                  const style: CSSProperties = {
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  };
+                  return row.kind === 'campaign' ? (
+                    <CampaignHeaderRow
+                      key={virtualRow.key}
+                      style={style}
+                      section={row.section}
+                      visibleCount={row.visibleCount}
+                      collapsed={collapsed.has(row.section.campaignId)}
+                      selectedIds={selectedIds}
+                      disabled={disabled}
+                      currency={currency}
+                      onToggleCollapse={toggleCollapse}
+                      onToggleAll={toggleMany}
+                    />
+                  ) : (
+                    <AdsetRow
+                      key={virtualRow.key}
+                      style={style}
+                      row={row.item}
+                      checked={selectedIds.has(row.item.id)}
+                      disabled={disabled}
+                      currency={currency}
+                      showAds={!isCampaignMode}
+                      brandId={brandId}
+                      accountId={accountId}
+                      onToggle={toggleOne}
+                    />
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </div>
       )}
     </div>
