@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
@@ -99,6 +100,15 @@ export function PlannerMatrix({
   const gridProgress = useCalendarStore((state) => state.gridProgress);
 
   const selectedDraftIdSet = React.useMemo(() => new Set(selectedDraftIds), [selectedDraftIds]);
+  const [showInactivePlatforms, setShowInactivePlatforms] = React.useState(false);
+  const inactivePlatforms = React.useMemo(
+    () => platforms.filter((platform) => platform.comingSoon),
+    [platforms],
+  );
+  const visiblePlatforms = React.useMemo(
+    () => (showInactivePlatforms ? platforms : platforms.filter((platform) => !platform.comingSoon)),
+    [platforms, showInactivePlatforms],
+  );
 
   const draftsByCell = React.useMemo(() => {
     const map = new Map<string, OrganicCalendarDraft[]>();
@@ -185,7 +195,7 @@ export function PlannerMatrix({
             />
           ))}
 
-          {platforms.map((platform, platformIndex) => (
+          {visiblePlatforms.map((platform, platformIndex) => (
             <React.Fragment key={platform.key}>
               <div
                 className={cn(
@@ -235,7 +245,7 @@ export function PlannerMatrix({
                       compact
                       isToday={day.id === todayId}
                       isLastColumn={dayIndex === days.length - 1}
-                      isLastRow={platformIndex === platforms.length - 1}
+                      isLastRow={platformIndex === visiblePlatforms.length - 1}
                       onSelectDraft={onSelectDraft}
                       onToggleSelection={onToggleSelection}
                       onRegenerate={onRegenerate}
@@ -263,7 +273,7 @@ export function PlannerMatrix({
                     showGhosts={platformIndex === 0}
                     isToday={day.id === todayId}
                     isLastColumn={dayIndex === days.length - 1}
-                    isLastRow={platformIndex === platforms.length - 1}
+                    isLastRow={platformIndex === visiblePlatforms.length - 1}
                     onSelectDraft={onSelectDraft}
                     onToggleSelection={onToggleSelection}
                     onRegenerate={onRegenerate}
@@ -277,6 +287,20 @@ export function PlannerMatrix({
               })}
             </React.Fragment>
           ))}
+          {inactivePlatforms.length > 0 ? (
+            <div className="sticky left-0 col-span-8 flex items-center justify-center border-t border-border/50 bg-muted/20 px-2 py-1.5">
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() => setShowInactivePlatforms((current) => !current)}
+              >
+                {showInactivePlatforms
+                  ? 'Hide inactive platforms'
+                  : `Show ${inactivePlatforms.length} inactive platform${inactivePlatforms.length === 1 ? '' : 's'}`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

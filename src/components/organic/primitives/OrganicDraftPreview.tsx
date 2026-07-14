@@ -58,6 +58,7 @@ import { PostMetaChips } from './PostMetaChips';
 import { PreviewMediaDropZone } from './PreviewMediaDropZone';
 import { resolvePreviewAspectRatio, resolvePreviewMaxWidth } from './social-preview-utils';
 import type { OrganicCalendarDraft } from './types';
+import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft;
@@ -750,6 +751,7 @@ export function OrganicDraftPreview({
 }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const openInStudio = useOpenDraftInAiStudio();
   const draftForPreview = useDraftWithFreshMedia(draft, brandProfileId);
   const isHyperframeFormat = draft.format.toLowerCase() === 'hyperframe';
@@ -878,8 +880,8 @@ export function OrganicDraftPreview({
   }, [brandProfileId, draft.id, draft.backendDraftId, expandDrafts]);
 
   const handleDelete = React.useCallback(() => {
-    bulkDeleteDrafts([draft.id]);
-  }, [bulkDeleteDrafts, draft.id]);
+    requestDraftDeletion([draft.id], bulkDeleteDrafts);
+  }, [bulkDeleteDrafts, draft.id, requestDraftDeletion]);
 
   const mediaStatusVariant = resolveMediaStatusVariant(draft);
   const mediaIsPending = mediaStatusVariant === 'pending';

@@ -1,5 +1,12 @@
 'use client';
 
+// Audience by location. Country mode paints the world choropleth; city mode
+// pins the mapped cities on MapLibre, each carrying its name as a persistent
+// label (the tooltip alone left the map a field of anonymous dots).
+//
+// The city layer only plots cities present in CITY_COORDS — the footer states
+// how many of the reported cities that leaves unmapped.
+
 import React from 'react';
 import { AudienceChoroplethMap } from '@/components/organic/AudienceChoroplethMap';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -7,9 +14,10 @@ import {
   Map,
   MapControls,
   MapMarker,
-  type MapRef,
   MarkerContent,
+  MarkerLabel,
   MarkerTooltip,
+  useMap,
 } from '@/components/ui/map';
 import { cn } from '@/lib/utils';
 
@@ -34,66 +42,6 @@ type Props = {
   countryEntries: DemographicEntry[];
   cityEntries: DemographicEntry[];
   timeframe?: string;
-};
-
-const COUNTRY_COORDS: Record<string, [number, number]> = {
-  AE: [54.37, 24.45],
-  AR: [-64.19, -34.61],
-  AT: [14.55, 47.52],
-  AU: [133.78, -25.27],
-  BE: [4.47, 50.5],
-  BR: [-51.93, -14.24],
-  CA: [-106.35, 56.13],
-  CH: [8.23, 46.82],
-  CL: [-71.54, -35.68],
-  CN: [104.2, 35.86],
-  CO: [-74.3, 4.57],
-  CZ: [15.47, 49.82],
-  DE: [10.45, 51.17],
-  DK: [9.5, 56.26],
-  DZ: [1.66, 28.03],
-  EG: [30.8, 26.82],
-  ES: [-3.75, 40.46],
-  ET: [40.49, 9.15],
-  FI: [25.75, 61.92],
-  FR: [2.21, 46.23],
-  GB: [-3.44, 55.38],
-  GR: [21.82, 39.07],
-  HK: [114.17, 22.32],
-  HU: [19.5, 47.16],
-  ID: [113.92, -0.79],
-  IE: [-8.24, 53.41],
-  IL: [34.85, 31.05],
-  IN: [78.96, 20.59],
-  IT: [12.57, 41.87],
-  JP: [138.25, 36.2],
-  KE: [37.91, -0.02],
-  KR: [127.77, 35.91],
-  LK: [80.77, 7.87],
-  MA: [-7.09, 31.79],
-  MX: [-102.55, 23.63],
-  MY: [101.98, 4.21],
-  NG: [8.68, 9.08],
-  NL: [5.29, 52.13],
-  NO: [8.47, 60.47],
-  NZ: [174.89, -40.9],
-  PE: [-75.02, -9.19],
-  PH: [121.77, 12.88],
-  PK: [69.35, 30.38],
-  PL: [19.15, 51.92],
-  PT: [-8.22, 39.4],
-  RO: [24.97, 45.94],
-  RU: [105.32, 61.52],
-  SA: [45.08, 23.89],
-  SE: [18.64, 60.13],
-  SG: [103.82, 1.35],
-  TH: [100.99, 15.87],
-  TR: [35.24, 38.96],
-  TW: [120.96, 23.7],
-  UA: [31.17, 48.38],
-  US: [-95.71, 37.09],
-  VN: [108.28, 14.06],
-  ZA: [22.94, -30.56],
 };
 
 const CITY_COORDS: Record<string, [number, number]> = {
@@ -226,6 +174,117 @@ function resolveCityCoordinates(value: string): [number, number] | null {
   return null;
 }
 
+// Instagram reports "City, Region". The region is noise on a map that already shows
+// the region — the marker wears the city, the tooltip and the list keep the full name.
+export function shortCityName(label: string): string {
+  const [city] = label.split(',');
+  return (city ?? label).trim() || label;
+}
+
+export function markerRadius(value: number, maxValue: number): number {
+  return Math.max(10, Math.min(32, 10 + (value / Math.max(1, maxValue)) * 22));
+}
+
+// Label geometry, in screen pixels. The chip is a single nowrap line of text-2xs
+// semibold inside px-1.5 + a 1px border, so its width tracks the character count.
+const LABEL_CHAR_WIDTH = 6.2;
+const LABEL_CHROME_WIDTH = 16;
+const LABEL_HEIGHT = 17;
+const LABEL_GAP = 4;
+
+export type CityLabelCandidate = {
+  key: string;
+  text: string;
+  value: number;
+  /** Screen position of the marker's centre, from map.project(). */
+  x: number;
+  y: number;
+  radius: number;
+};
+
+type LabelBox = { left: number; right: number; top: number; bottom: number };
+
+function labelBox(candidate: CityLabelCandidate): LabelBox {
+  const width = candidate.text.length * LABEL_CHAR_WIDTH + LABEL_CHROME_WIDTH;
+  const top = candidate.y + candidate.radius / 2 + LABEL_GAP;
+  return {
+    left: candidate.x - width / 2,
+    right: candidate.x + width / 2,
+    top,
+    bottom: top + LABEL_HEIGHT,
+  };
+}
+
+function overlaps(a: LabelBox, b: LabelBox): boolean {
+  return (
+    a.left < b.right + LABEL_GAP &&
+    a.right + LABEL_GAP > b.left &&
+    a.top < b.bottom + LABEL_GAP &&
+    a.bottom + LABEL_GAP > b.top
+  );
+}
+
+// Which cities get to wear their name at the current viewport. Greedy placement in
+// follower order: the biggest city is placed first and can never be the one dropped,
+// and any label whose box would collide with one already placed stays a bare dot (its
+// name is still one hover away). Recomputed on every pan/zoom, so a dense metro like
+// Buenos Aires declutters itself as the user zooms in.
+export function selectVisibleLabels(candidates: CityLabelCandidate[]): Set<string> {
+  const placed: LabelBox[] = [];
+  const visible = new Set<string>();
+  for (const candidate of [...candidates].sort((a, b) => b.value - a.value)) {
+    const box = labelBox(candidate);
+    if (placed.some((other) => overlaps(box, other))) continue;
+    placed.push(box);
+    visible.add(candidate.key);
+  }
+  return visible;
+}
+
+// Lives inside <Map> so it can read the live map instance and reproject on every move.
+function CityLabelPlacement({
+  points,
+  maxValue,
+  onPlace,
+}: {
+  points: LocationPoint[];
+  maxValue: number;
+  onPlace: (keys: Set<string>) => void;
+}) {
+  const { map, isLoaded } = useMap();
+
+  React.useEffect(() => {
+    if (!map || !isLoaded) return;
+
+    const recompute = () => {
+      const projected = points.map((point) => {
+        const { x, y } = map.project(point.coordinates);
+        return {
+          key: point.key,
+          text: shortCityName(point.label),
+          value: point.value,
+          x,
+          y,
+          radius: markerRadius(point.value, maxValue),
+        };
+      });
+      onPlace(selectVisibleLabels(projected));
+    };
+
+    recompute();
+    map.on('move', recompute);
+    map.on('zoom', recompute);
+    map.on('resize', recompute);
+    return () => {
+      map.off('move', recompute);
+      map.off('zoom', recompute);
+      map.off('resize', recompute);
+    };
+  }, [map, isLoaded, points, maxValue, onPlace]);
+
+  return null;
+}
+
 function averageCenter(points: LocationPoint[]): [number, number] {
   if (points.length === 0) return [8, 24];
   const [sumLng, sumLat] = points.reduce(
@@ -237,33 +296,6 @@ function averageCenter(points: LocationPoint[]): [number, number] {
 
 export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, timeframe }: Props) {
   const [mode, setMode] = React.useState<'country' | 'city'>('country');
-  const [mapZoom, setMapZoom] = React.useState(1.2);
-  const [selectedCountryCode, setSelectedCountryCode] = React.useState<string | null>(null);
-  const mapRef = React.useRef<MapRef | null>(null);
-
-  const countryPoints = React.useMemo<LocationPoint[]>(
-    () =>
-      countryEntries
-        .flatMap((entry) => {
-          const code = entry.key.trim().toUpperCase();
-          const coordinates =
-            typeof entry.lng === 'number' && typeof entry.lat === 'number'
-              ? ([entry.lng, entry.lat] as [number, number])
-              : COUNTRY_COORDS[code];
-          if (!coordinates) return [];
-          return [
-            {
-              key: code,
-              label: resolveCountryLabel(entry.label || code),
-              value: entry.value,
-              coordinates,
-              countryCode: code,
-            },
-          ];
-        })
-        .slice(0, 45),
-    [countryEntries],
-  );
 
   const countryChoroplethData = React.useMemo(
     () =>
@@ -298,62 +330,33 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
     [cityEntries],
   );
 
-  const cityZoomThreshold = 2.35;
-  const autoCityMode = mode === 'country' && mapZoom >= cityZoomThreshold && cityPoints.length > 0;
-  const cityLayerVisible = mode === 'city' || autoCityMode;
-  const countryLayerVisible = !cityLayerVisible;
-  const viewMode = cityLayerVisible ? 'city' : 'country';
-  const scopedCityPoints =
-    autoCityMode && selectedCountryCode
-      ? cityPoints.filter((point) => point.countryCode === selectedCountryCode)
-      : cityPoints;
-  const initialZoom = mode === 'country' ? (countryPoints.length > 8 ? 1.15 : 1.8) : 2.6;
-  const mapCenter = React.useMemo(
-    () => averageCenter(countryLayerVisible ? countryPoints : scopedCityPoints),
-    [countryLayerVisible, countryPoints, scopedCityPoints],
-  );
-  const renderPoints = countryLayerVisible ? countryPoints : scopedCityPoints;
-  const maxValue = renderPoints.reduce((max, point) => Math.max(max, point.value), 0);
-  const activeEntries = countryLayerVisible
-    ? countryEntries
-    : autoCityMode && selectedCountryCode
-      ? cityEntries.filter((entry) => entry.countryCode === selectedCountryCode)
-      : cityEntries;
+  const countryLayerVisible = mode === 'country';
+  const mapCenter = React.useMemo(() => averageCenter(cityPoints), [cityPoints]);
+  const maxValue = cityPoints.reduce((max, point) => Math.max(max, point.value), 0);
+  const [labelledCities, setLabelledCities] = React.useState<Set<string>>(new Set());
+
+  // Placement runs on every map move; only re-render when the visible set actually changes.
+  const handleLabelPlacement = React.useCallback((keys: Set<string>) => {
+    setLabelledCities((current) => {
+      if (current.size === keys.size && [...keys].every((key) => current.has(key))) {
+        return current;
+      }
+      return keys;
+    });
+  }, []);
+  const activeEntries = countryLayerVisible ? countryEntries : cityEntries;
   const topEntries = [...activeEntries].sort((a, b) => b.value - a.value).slice(0, 8);
 
-  React.useEffect(() => {
-    setMapZoom(initialZoom);
-  }, [initialZoom]);
-
-  React.useEffect(() => {
-    if (mode !== 'country') return;
-    if (mapZoom >= cityZoomThreshold) return;
-    if (!selectedCountryCode) return;
-    setSelectedCountryCode(null);
-  }, [cityZoomThreshold, mapZoom, mode, selectedCountryCode]);
-
-  const handleCountryPointClick = React.useCallback(
-    (point: LocationPoint) => {
-      if (mode !== 'country' || cityPoints.length === 0) return;
-      setSelectedCountryCode(point.countryCode ?? point.key);
-      const targetZoom = Math.max(cityZoomThreshold + 0.5, 3.1);
-      mapRef.current?.flyTo({
-        center: point.coordinates,
-        zoom: targetZoom,
-        duration: 750,
-        essential: true,
-      });
-    },
-    [cityPoints.length, cityZoomThreshold, mode],
-  );
-
   return (
-    <div className="rounded-lg border border-subtle bg-surface">
+    <div
+      data-tour-id="organic-audience-location"
+      className="rounded-lg border border-subtle bg-surface"
+    >
       <SectionHeader
         title="Audience Location"
         meta={
           <span className="text-xs text-muted-foreground">
-            Followers by {viewMode} ({timeframeLabel(timeframe)})
+            Followers by {mode} ({timeframeLabel(timeframe)})
           </span>
         }
         action={
@@ -364,10 +367,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 'h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
                 mode === 'country' ? 'bg-accent/20 text-foreground' : 'text-muted-foreground',
               )}
-              onClick={() => {
-                setMode('country');
-                setSelectedCountryCode(null);
-              }}
+              onClick={() => setMode('country')}
               aria-label="Show country location data"
               aria-pressed={mode === 'country'}
             >
@@ -379,10 +379,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 'h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
                 mode === 'city' ? 'bg-accent/20 text-foreground' : 'text-muted-foreground',
               )}
-              onClick={() => {
-                setMode('city');
-                setSelectedCountryCode(null);
-              }}
+              onClick={() => setMode('city')}
               aria-label="Show city location data"
               aria-pressed={mode === 'city'}
             >
@@ -404,51 +401,55 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               ) : (
                 <AudienceChoroplethMap data={countryChoroplethData} className="bg-card" />
               )
-            ) : renderPoints.length === 0 ? (
+            ) : cityPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
                 <span className="text-sm text-muted-foreground">City breakdown unavailable.</span>
               </div>
             ) : (
               <Map
-                ref={mapRef}
-                key={`audience-map-${mode}`}
+                key="audience-city-map"
                 className="h-full w-full"
                 theme="light"
                 center={mapCenter}
-                zoom={initialZoom}
+                zoom={2.6}
                 minZoom={0.7}
                 maxZoom={8}
                 attributionControl={false}
-                onViewportChange={(viewport: { zoom: number }) => {
-                  setMapZoom(viewport.zoom);
-                }}
+                // The map sits inside the metrics tab's one scroll container. Plain
+                // wheel must keep scrolling that container; zoom is ctrl/⌘ + wheel,
+                // the zoom controls, or a pinch.
+                cooperativeGestures
               >
-                {renderPoints.map((point, index) => {
+                <CityLabelPlacement
+                  points={cityPoints}
+                  maxValue={maxValue}
+                  onPlace={handleLabelPlacement}
+                />
+                {cityPoints.map((point, index) => {
                   const band = pointBand(point.value, maxValue);
-                  const radius = Math.max(
-                    10,
-                    Math.min(32, 10 + (point.value / Math.max(1, maxValue)) * 22),
-                  );
+                  const radius = markerRadius(point.value, maxValue);
                   return (
                     <MapMarker
-                      key={`${viewMode}-${point.key}-${point.coordinates[0]}-${point.coordinates[1]}-${index}`}
+                      key={`city-${point.key}-${point.coordinates[0]}-${point.coordinates[1]}-${index}`}
                       longitude={point.coordinates[0]}
                       latitude={point.coordinates[1]}
-                      onClick={() => {
-                        if (countryLayerVisible) {
-                          handleCountryPointClick(point);
-                        }
-                      }}
                     >
                       <MarkerContent>
                         <div
                           className={cn(
                             'rounded-full border transition-transform duration-200 hover:scale-110',
-                            countryLayerVisible && 'cursor-zoom-in',
                             markerClassName(band),
                           )}
                           style={{ width: radius, height: radius }}
                         />
+                        {labelledCities.has(point.key) ? (
+                          <MarkerLabel
+                            position="bottom"
+                            className="pointer-events-none rounded-full border border-white/70 bg-white/90 px-1.5 py-0.5 font-semibold text-zinc-900 shadow-sm"
+                          >
+                            {shortCityName(point.label)}
+                          </MarkerLabel>
+                        ) : null}
                       </MarkerContent>
                       <MarkerTooltip
                         popupClassName="audience-location-tooltip"
@@ -501,35 +502,23 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 </div>
               )}
             </div>
-
-            {mode === 'country' && cityPoints.length > 0 ? (
-              <div className="pointer-events-none absolute right-3 top-3 hidden rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur sm:block">
-                <span className="text-xs text-muted-foreground">
-                  {autoCityMode
-                    ? selectedCountryCode
-                      ? `City layer: ${selectedCountryCode} (zoom ${mapZoom.toFixed(1)}x)`
-                      : `City view active (zoom ${mapZoom.toFixed(1)}x)`
-                    : `Country layer active. Click a country dot or zoom to ${cityZoomThreshold.toFixed(1)}x.`}
-                </span>
-              </div>
-            ) : null}
           </div>
 
           <div className="rounded-lg border border-subtle bg-white/70 p-3">
             <h3 className="mb-2 text-sm font-semibold">
-              Top {viewMode === 'country' ? 'countries' : 'cities'}
+              Top {countryLayerVisible ? 'countries' : 'cities'}
             </h3>
-            <div className="space-y-2 overflow-y-auto pr-1 xl:max-h-[clamp(180px,40svh,360px)]">
+            <div className="space-y-2 pr-1">
               {topEntries.length === 0 ? (
                 <span className="text-sm text-muted-foreground">No entries available.</span>
               ) : (
                 topEntries.map((entry, index) => (
                   <div
-                    key={`${viewMode}-${entry.key}-${index}`}
+                    key={`${mode}-${entry.key}-${index}`}
                     className="flex justify-between items-center"
                   >
                     <span className="truncate pr-2 text-sm text-muted-foreground">
-                      {viewMode === 'country'
+                      {countryLayerVisible
                         ? resolveCountryLabel(entry.label || entry.key)
                         : entry.label}
                     </span>
@@ -538,9 +527,9 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 ))
               )}
             </div>
-            {viewMode === 'city' && activeEntries.length > renderPoints.length ? (
+            {!countryLayerVisible && cityEntries.length > cityPoints.length ? (
               <span className="mt-3 block text-xs text-muted-foreground">
-                Mapped {renderPoints.length}/{activeEntries.length} cities with known coordinates.
+                Mapped {cityPoints.length}/{cityEntries.length} cities with known coordinates.
               </span>
             ) : null}
           </div>

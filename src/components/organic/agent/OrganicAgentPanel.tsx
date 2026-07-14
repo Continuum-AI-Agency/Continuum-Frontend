@@ -21,6 +21,7 @@ import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunS
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/ToastProvider';
 import { useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
 import { useSession } from '@/hooks/useSession';
 import {
@@ -56,6 +57,7 @@ import type {
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { cancelOrganicJobOptimistically } from '@/lib/organic/agent-cancellation';
 import {
   fetchOrganicSessionMessagePage,
   type OrganicSessionMessage,
@@ -87,6 +89,7 @@ import { OrganicThinkingPanel } from './OrganicThinkingPanel';
 import { ToolCallPipelineCards } from './PipelinePlacementGrid';
 import { PostContentCardGrid } from './PostContentCardGrid';
 import { PromptPickerButton } from './PromptPickerButton';
+import { presentAgentMessage } from './presentAgentMessage';
 import { restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
 import { SkillProposalCard } from './SkillProposalCard';
@@ -303,6 +306,7 @@ export function OrganicAgentPanel({
   mentionContext,
 }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
+  const { show } = useToast();
   const { attachRun } = useCalendarRunStream();
   const requestCalendarRefetch = useCalendarStore((s) => s.requestCalendarRefetch);
   const handleCalendarDraftSignal = useCallback(() => {
@@ -805,16 +809,33 @@ export function OrganicAgentPanel({
 
   const handleCancel = useCallback(
     async (jobId: string) => {
-      const token = await getBrowserAccessToken();
-      if (!token) return;
-      fetch(`${getApiBaseUrl()}/api/organic/agent/jobs/${jobId}/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ brandId }),
-      }).catch(() => {});
+      const job = state.jobs[jobId];
+      if (!job) return;
+      await cancelOrganicJobOptimistically({
+        job,
+        remove: (id) => dispatch({ type: 'JOB_CANCEL_START', jobId: id }),
+        restore: (removedJob) => dispatch({ type: 'JOB_CANCEL_FAILURE', jobId: removedJob.jobId }),
+        confirm: (id) => dispatch({ type: 'JOB_CANCEL_SUCCESS', jobId: id }),
+        notifyFailure: (message) =>
+          show({
+            title: 'Could not cancel generation',
+            description: message,
+            variant: 'error',
+          }),
+      });
     },
-    [brandId],
+    [show, state.jobs],
   );
+
+  const handleStop = useCallback(async () => {
+    const result = await cancel();
+    if (result.ok) return;
+    show({
+      title: 'Could not stop the run',
+      description: result.error,
+      variant: 'error',
+    });
+  }, [cancel, show]);
 
   const jobs = Object.values(state.jobs);
   const hasSession = Boolean(state.sessionId || activeSessionId);
@@ -1441,7 +1462,6 @@ export function OrganicAgentPanel({
           isLoadingEarlier={isLoadingEarlier}
           onLoadEarlier={loadEarlier}
           className="min-h-0 flex-1"
-          contentClassName="gap-3 p-1"
         >
           {isLoadingMessages ? (
             <div className="space-y-3 p-3">
@@ -1482,7 +1502,7 @@ export function OrganicAgentPanel({
                       {msg.role === 'assistant' ? (
                         msg.content ? (
                           <SafeMarkdown
-                            content={msg.content}
+                            content={presentAgentMessage(msg.content)}
                             className="text-base leading-7 text-foreground text-pretty"
                             mode={msg.id === state.streamingMessageId ? 'streaming' : 'static'}
                             isAnimating={msg.id === state.streamingMessageId}
@@ -1779,7 +1799,7 @@ export function OrganicAgentPanel({
             attachments={attachments}
             disabled={inputDisabled}
             isStreaming={isStreaming}
-            onStop={cancel}
+            onStop={handleStop}
             ariaLabel="Message the organic agent"
             className="px-0"
             mentionProvider={mentionProviderObj}

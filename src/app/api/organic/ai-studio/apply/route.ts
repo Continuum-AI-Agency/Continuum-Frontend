@@ -10,42 +10,22 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildUserSuppliedContentJson } from "./userSuppliedContentJson";
+import {
+  type AppliedMediaAssetInput,
+  buildAppliedMediaAssetRow,
+} from "./mediaAssetRow";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
 export const runtime = "nodejs";
 
 // Register a generated creative as a durable media.assets row so it is
 // searchable by the Organic agent in future sessions.
-async function registerAiCreativeAsMediaAsset(params: {
-  brandProfileId: string;
-  userId: string;
-  draftId: string;
-  bucket: string;
-  storagePath: string;
-  fileName: string;
-  mimeType: string;
-  kind: "image" | "video";
-  width?: number | null;
-  height?: number | null;
-}): Promise<void> {
+async function registerAiCreativeAsMediaAsset(params: AppliedMediaAssetInput): Promise<void> {
   const admin = createSupabaseAdminClient();
 
   // "media" schema is not in generated types yet; cast to untyped base client.
   const mediaAdmin = (admin as unknown as SupabaseClient).schema("media");
-  const { error } = await mediaAdmin.from("assets").insert({
-      brand_id: params.brandProfileId,
-      created_by: params.userId,
-      kind: params.kind,
-      bucket: params.bucket,
-      storage_path: params.storagePath,
-      file_name: params.fileName,
-      mime_type: params.mimeType,
-      width: params.width ?? null,
-      height: params.height ?? null,
-      source: "ai_generated",
-      origin_ref: { draftId: params.draftId },
-      status: "stored",
-    });
+  const { error } = await mediaAdmin.from("assets").insert(buildAppliedMediaAssetRow(params));
 
   if (error) {
     // Non-fatal: log and continue. The asset is still usable; it just won't be
@@ -258,6 +238,7 @@ export async function POST(request: Request) {
         fileName,
         mimeType: source.mimeType,
         kind: asset.kind,
+        sizeBytes: source.bytes.byteLength,
         width: asset.width,
         height: asset.height,
       }).catch((err) => {

@@ -6,7 +6,7 @@ import type { OrganicCalendarDraft } from '@/components/organic/primitives/types
 import { useToast } from '@/components/ui/ToastProvider';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
-import { classifyOrganicError, isRetryableError } from '@/lib/organic/error-handling';
+import { classifyOrganicError } from '@/lib/organic/error-handling';
 import { buildPublishBody, inferPublishPlatform } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 
@@ -87,8 +87,6 @@ async function* parseSSE(body: ReadableStream<Uint8Array>) {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-const MAX_RETRIES = 2;
-
 export function usePublishDraft(): UsePublishDraftResult {
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const accountContext = useCalendarStore((state) => state.accountContext);
@@ -100,18 +98,9 @@ export function usePublishDraft(): UsePublishDraftResult {
   const [tokenExpired, setTokenExpired] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const retryCountRef = React.useRef(0);
-  const retryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Retained so the user can re-fire the last publish deliberately (retryPublish). There is no
+  // timer and no retry counter: publishing is never retried automatically.
   const lastDraftRef = React.useRef<OrganicCalendarDraft | null>(null);
-  const mountedRef = React.useRef(true);
-
-  React.useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    };
-  }, []);
 
   const publish = React.useCallback(
     async (draft: OrganicCalendarDraft) => {
@@ -121,8 +110,6 @@ export function usePublishDraft(): UsePublishDraftResult {
       setPollingAttempt(0);
       setTokenExpired(false);
       setError(null);
-
-      let retrying = false;
 
       try {
         const token = await getBrowserAccessToken();
@@ -243,43 +230,32 @@ export function usePublishDraft(): UsePublishDraftResult {
           }
         }
       } catch (err) {
-        if (isRetryableError(err) && retryCountRef.current < MAX_RETRIES) {
-          retryCountRef.current += 1;
-          const delay = 2 ** retryCountRef.current * 1000;
-          retrying = true;
-          show({
-            title: 'Publishing failed',
-            description: `Retrying in ${delay / 1000}s...`,
-            variant: 'error',
-          });
-          retryTimerRef.current = setTimeout(() => {
-            if (mountedRef.current && lastDraftRef.current) {
-              publish(lastDraftRef.current);
-            }
-          }, delay);
-          return;
-        }
+        // NEVER auto-retry a publish. It is not idempotent, and a network-level failure tells us
+        // nothing about whether the post went out — the request may have succeeded and only the
+        // RESPONSE been lost. This hook used to retry twice on a backoff, and on 2026-07-14 that
+        // turned one click into three live Instagram posts: the backend had stripped CORS from
+        // the publish stream, so `fetch` rejected with "Failed to fetch" while the server
+        // published anyway, and each retry published again.
+        //
+        // The user retries deliberately via `retryPublish()`. The backend's publish claim is the
+        // backstop that makes even a duplicate request safe.
         const msg =
-          retryCountRef.current > 0
-            ? `Publishing failed after ${retryCountRef.current + 1} attempts.`
-            : 'Network error. Please try again.';
+          err instanceof Error && err.message
+            ? err.message
+            : 'Publishing failed. Check the post, then try again.';
         setError(msg);
         show({ title: 'Publishing failed', description: msg, variant: 'error' });
       } finally {
-        if (!retrying) {
-          setIsPublishing(false);
-          setStage(null);
-        }
+        setIsPublishing(false);
+        setStage(null);
       }
     },
     [updateDraft, accountContext, show],
   );
 
+  // The ONLY retry: the user asked for it. A publish is never replayed by a timer.
   const retryPublish = React.useCallback(() => {
-    if (lastDraftRef.current) {
-      retryCountRef.current = 0;
-      publish(lastDraftRef.current);
-    }
+    if (lastDraftRef.current) publish(lastDraftRef.current);
   }, [publish]);
 
   return { publish, retryPublish, isPublishing, stage, pollingAttempt, tokenExpired, error };

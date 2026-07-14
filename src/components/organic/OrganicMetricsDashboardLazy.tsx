@@ -1,15 +1,13 @@
-"use client";
+'use client';
 
-import dynamic from "next/dynamic";
-import type {
-  OrganicAccountOption,
-  OrganicMetricsBrandInsights,
-} from "@/components/organic/OrganicMetricsDashboard";
-import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
+import dynamic from 'next/dynamic';
+import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
+import type { OrganicAccountOption } from '@/components/organic/OrganicMetricsDashboard';
+import type { OrganicMetricsBrandInsights } from '@/lib/schemas/brandInsights';
 
 const OrganicMetricsDashboardDynamic = dynamic(
   () =>
-    import("@/components/organic/OrganicMetricsDashboard").then((m) => ({
+    import('@/components/organic/OrganicMetricsDashboard').then((m) => ({
       default: m.OrganicMetricsDashboard,
     })),
   { ssr: false, loading: () => <OrganicMetricsWidgetSkeleton /> },
@@ -24,7 +22,7 @@ type Props = {
     youtube: OrganicAccountOption[];
     linkedin: OrganicAccountOption[];
   };
-  initialPlatform?: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin";
+  initialPlatform?: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
   brandInsights?: OrganicMetricsBrandInsights | null;
 };
 

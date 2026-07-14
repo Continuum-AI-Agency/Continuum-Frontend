@@ -7,8 +7,10 @@ import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { readSavedAccountSelection } from '@/lib/organic/account-selection';
@@ -18,7 +20,7 @@ import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
-import { getLocalStorageJSON } from '@/lib/storage';
+import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
 import { useAiStudioHandoff } from '../hooks/useAiStudioHandoff';
 import { useApproveScheduleDraft } from '../hooks/useApproveScheduleDraft';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
@@ -44,14 +46,22 @@ import {
   startOfWeek,
   UNSCHEDULED_DAY_ID,
 } from './calendar-utils';
+import { StatusBadge } from './DraftCardBadges';
+import {
+  DraftDeletionConfirmationProvider,
+  useDraftDeletionConfirmation,
+} from './DraftDeletionConfirmation';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
+import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
+import { usePlannerDateAnchors } from './planner-date-anchor';
 import {
   buildPlannerPlatforms,
   type CreatePostFormat,
   type CreatePostMode,
   type PlannerPlatformKey,
 } from './planner-platforms';
+import { derivePlannerInsight } from './plannerIntelligence';
 import { TimeGridCanvas } from './TimeGridCanvas';
 import type {
   OrganicCalendarDay,
@@ -69,6 +79,8 @@ const OrganicListView = dynamic(() => import('./OrganicListView').then((m) => m.
 const OrganicTrendsDrawer = dynamic(() =>
   import('./OrganicTrendsDrawer').then((m) => m.OrganicTrendsDrawer),
 );
+
+const PREVIEW_LAYOUT_KEY = 'continuum:organic-planner:preview-percent';
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[];
@@ -98,7 +110,15 @@ function isSchedulablePlannerPlatform(
   return platform === 'instagram' || platform === 'linkedin';
 }
 
-export function OrganicCalendarWorkspaceClient({
+export function OrganicCalendarWorkspaceClient(props: OrganicCalendarWorkspaceClientProps) {
+  return (
+    <DraftDeletionConfirmationProvider>
+      <OrganicCalendarWorkspaceInner {...props} />
+    </DraftDeletionConfirmationProvider>
+  );
+}
+
+function OrganicCalendarWorkspaceInner({
   days: initialDays,
   trendTypes,
   trends = [],
@@ -114,6 +134,7 @@ export function OrganicCalendarWorkspaceClient({
   initialView,
   postedContentAccountsByPlatform,
 }: OrganicCalendarWorkspaceClientProps) {
+  const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const {
     days: calendarDays,
     setDays: setCalendarDays,
@@ -226,23 +247,10 @@ export function OrganicCalendarWorkspaceClient({
     return Array.from(deduped.values());
   }, [trendTypes, trends]);
 
-  const resolvedInitialWeekStart = React.useMemo(() => {
-    if (initialWeekStart) {
-      const parsed = new Date(initialWeekStart);
-      if (!Number.isNaN(parsed.getTime())) {
-        return startOfWeek(parsed);
-      }
-    }
-    if (persistedWeekStartId) {
-      const parsed = new Date(persistedWeekStartId);
-      if (!Number.isNaN(parsed.getTime())) {
-        return startOfWeek(parsed);
-      }
-    }
-    return startOfWeek(new Date());
-  }, [initialWeekStart, persistedWeekStartId]);
-  const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart);
-  const [monthAnchorDate, setMonthAnchorDate] = React.useState<Date>(resolvedInitialWeekStart);
+  const { weekStart, setWeekStart, monthAnchorDate, setMonthAnchorDate } = usePlannerDateAnchors({
+    initialWeekStart: initialWeekStart ?? undefined,
+    persistedWeekStartId,
+  });
   const [localGridViewMode, setLocalGridViewMode] = React.useState<'day' | 'week'>('week');
   const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false);
 
@@ -252,18 +260,6 @@ export function OrganicCalendarWorkspaceClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-seed the visible week when the URL-derived week prop changes (e.g. returning
-  // from AI Studio with ?weekStartId=...). `weekStart` is local state seeded once,
-  // so without this a back-nav would paint the wrong/default week. Keyed on the prop
-  // only, so manual week navigation (which changes state, not the prop) is untouched.
-  React.useEffect(() => {
-    if (!initialWeekStart) return;
-    const parsed = new Date(initialWeekStart);
-    if (Number.isNaN(parsed.getTime())) return;
-    setWeekStart(startOfWeek(parsed));
-    setMonthAnchorDate(startOfWeek(parsed));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialWeekStart]);
   const weekStartId = formatDayId(weekStart);
 
   // The account the switcher settled on — not the brand's default. A draft the planner writes
@@ -521,8 +517,11 @@ export function OrganicCalendarWorkspaceClient({
     brandProfileId ?? '',
   );
 
+  // Only channels the brand can actually post to (or already has posts on) become rows.
+  // The not-yet-supported channels stay in the list but PlannerMatrix keeps them behind
+  // its own collapsed "inactive platforms" strip rather than four permanent empty rows.
   const plannerPlatforms = React.useMemo(
-    () => buildPlannerPlatforms(activePlatforms, calendarDays),
+    () => buildPlannerPlatforms(activePlatforms, calendarDays, { includeComingSoon: true }),
     [activePlatforms, calendarDays],
   );
 
@@ -686,9 +685,11 @@ export function OrganicCalendarWorkspaceClient({
   }, [selectedIds, drafts, approveAndSchedule, clearAll]);
 
   const handleBulkDelete = React.useCallback(() => {
-    bulkDeleteDrafts(selectedIds);
-    clearAll();
-  }, [bulkDeleteDrafts, selectedIds, clearAll]);
+    requestDraftDeletion(selectedIds, (ids) => {
+      bulkDeleteDrafts(ids);
+      clearAll();
+    });
+  }, [bulkDeleteDrafts, selectedIds, clearAll, requestDraftDeletion]);
 
   const handleBulkMove = React.useCallback(() => {
     bulkMoveDrafts(selectedIds, calendarDays[0]?.id);
@@ -843,6 +844,34 @@ export function OrganicCalendarWorkspaceClient({
       failed,
     };
   }, [gridProgress.completed, gridProgress.failed, gridProgress.total]);
+  const [isWidePlanner, setIsWidePlanner] = React.useState(false);
+  const [previewPercent] = React.useState(() =>
+    Math.min(42, Math.max(24, getLocalStorageJSON(PREVIEW_LAYOUT_KEY, 32))),
+  );
+
+  React.useEffect(() => {
+    const query = window.matchMedia('(min-width: 64rem)');
+    const update = () => setIsWidePlanner(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  const scheduledCount = React.useMemo(
+    () =>
+      drafts.filter((draft) => draft.status === 'scheduled' || draft.status === 'published').length,
+    [drafts],
+  );
+  const plannerStage = resolvePlannerStage({
+    draftsCount: drafts.length,
+    scheduledCount,
+    isGenerating,
+    hasSelection: Boolean(selectedDraft),
+  });
+  const plannerInsight = React.useMemo(
+    () => derivePlannerInsight(visibleWeekDays),
+    [visibleWeekDays],
+  );
 
   const layoutTransition = React.useMemo(
     () => ({
@@ -885,264 +914,312 @@ export function OrganicCalendarWorkspaceClient({
             ) : null
           }
         >
-          <motion.div
-            layout
-            transition={layoutTransition}
-            className="flex h-full min-h-0 w-full flex-col gap-[var(--shell-gutter-tight)] @[64rem]/organic:flex-row"
-          >
-            <motion.section
-              layout
-              transition={layoutTransition}
-              className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
-            >
-              <motion.div layout transition={layoutTransition}>
-                <CalendarToolbar
-                  viewMode={viewMode}
-                  onViewModeChange={handleViewModeChange}
-                  dateRange={dateRange}
-                  onDateRangeChange={setDateRange}
-                  selectedTrendCount={selectedTrendIds.length}
-                  maxTrendSelections={maxTrendSelections}
-                  isGenerating={isGenerating}
-                  onOpenTrends={() => setTrendsDrawerOpen(true)}
-                  onCreatePost={(options) =>
-                    handleGoDraft({
-                      dayId: options.dayId,
-                      platform: options.platformKey,
-                      status: options.status,
-                      mode: options.mode,
-                      format: options.format,
-                    })
+          <ResizablePanelGroup
+            key={`${isWidePlanner ? 'wide' : 'narrow'}:${selectedDraft ? 'preview' : 'workspace'}`}
+            id="organic-planner-layout"
+            orientation={isWidePlanner ? 'horizontal' : 'vertical'}
+            defaultLayout={
+              selectedDraft
+                ? {
+                    'planner-workspace': 100 - (isWidePlanner ? previewPercent : 48),
+                    'planner-preview': isWidePlanner ? previewPercent : 48,
                   }
-                  onClear={clearCalendar}
-                  draftsCount={drafts.length}
-                  slotProgress={slotProgress}
-                  gridProgress={gridProgress}
-                  gridStatus={gridStatus}
-                  gridError={gridError}
-                  postedContentCount={postedContent.length}
-                  isFetchingPostedContent={isFetchingPostedContent}
-                  onFetchPostedContent={fetchExternalPosts}
-                />
-              </motion.div>
-
-              <motion.div
+                : { 'planner-workspace': 100 }
+            }
+            onLayoutChanged={(layout, meta) => {
+              const nextPreviewPercent = layout['planner-preview'];
+              if (isWidePlanner && meta.isUserInteraction && nextPreviewPercent > 0) {
+                setLocalStorageJSON(PREVIEW_LAYOUT_KEY, nextPreviewPercent);
+              }
+            }}
+            className="h-full min-h-0 w-full"
+          >
+            <ResizablePanel id="planner-workspace" minSize={selectedDraft ? 55 : 100}>
+              <motion.section
                 layout
                 transition={layoutTransition}
-                data-tour-id="organic-list-content"
-                className="min-h-0 flex-1 overflow-hidden"
+                className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
               >
-                <AnimatePresence mode="wait">
-                  {viewMode === 'week' && (
-                    <motion.div
-                      key="view-week"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="h-full"
-                    >
-                      {/* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
+                <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
+                <motion.div layout transition={layoutTransition}>
+                  <CalendarToolbar
+                    viewMode={viewMode}
+                    onViewModeChange={handleViewModeChange}
+                    dateRange={dateRange}
+                    onDateRangeChange={setDateRange}
+                    selectedTrendCount={selectedTrendIds.length}
+                    maxTrendSelections={maxTrendSelections}
+                    isGenerating={isGenerating}
+                    onOpenTrends={() => setTrendsDrawerOpen(true)}
+                    onCreatePost={(options) =>
+                      handleGoDraft({
+                        dayId: options.dayId,
+                        platform: options.platformKey,
+                        status: options.status,
+                        mode: options.mode,
+                        format: options.format,
+                      })
+                    }
+                    onClear={clearCalendar}
+                    draftsCount={drafts.length}
+                    slotProgress={slotProgress}
+                    gridProgress={gridProgress}
+                    gridStatus={gridStatus}
+                    gridError={gridError}
+                    postedContentCount={postedContent.length}
+                    isFetchingPostedContent={isFetchingPostedContent}
+                    onFetchPostedContent={fetchExternalPosts}
+                  />
+                </motion.div>
+
+                <motion.div
+                  layout
+                  transition={layoutTransition}
+                  data-tour-id="organic-list-content"
+                  className="min-h-0 flex-1 overflow-hidden"
+                >
+                  <AnimatePresence mode="wait">
+                    {viewMode === 'week' && (
+                      <motion.div
+                        key="view-week"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="h-full"
+                      >
+                        {/* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
                         week grid takes the full vertical space instead of a 74/26 split. */}
-                      <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
-                        <TimeGridCanvas
-                          days={visibleWeekDays}
+                        <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
+                          <TimeGridCanvas
+                            days={visibleWeekDays}
+                            platforms={plannerPlatforms}
+                            selectedDraftId={selectedId}
+                            selectedDraftIds={selectedIds}
+                            rangeTitle={weekTitle}
+                            rangeSubtitle={weekSubtitle}
+                            viewMode={localGridViewMode}
+                            onViewModeChange={setLocalGridViewMode}
+                            onPreviousWeek={handlePreviousWeek}
+                            onNextWeek={handleNextWeek}
+                            onCreatePost={(context) =>
+                              handleGoDraft({
+                                dayId: context?.dayId,
+                                platform: context?.platform,
+                                status: context?.status,
+                                mode: context?.mode,
+                                format: context?.format,
+                              })
+                            }
+                            onSelectDraft={(id) => handleSelect(id, false)}
+                            onToggleSelection={(id) => handleSelect(id, true)}
+                            onRegenerate={handleRegenerate}
+                            onClearFailure={handleClearFailure}
+                            onEnrich={handleEnrichDraft}
+                            onRealize={handleRealizeDraft}
+                            onNativeDrop={handleNativeDrop}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {viewMode === 'month' && (
+                      <motion.div
+                        key="view-month"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="h-full"
+                      >
+                        <OrganicMonthlyCalendar
+                          days={gridDays}
+                          monthAnchorDate={monthAnchorDate}
+                          platforms={plannerPlatforms}
+                          postedContent={postedContent}
+                          selectedDraftId={selectedId}
+                          onSelectDraft={(id) => handleSelect(id, false)}
+                          onCreatePost={({ dayId, platformKey, status, mode, format }) =>
+                            handleGoDraft({
+                              dayId,
+                              platform: platformKey as PlannerPlatformKey | undefined,
+                              status,
+                              mode,
+                              format,
+                            })
+                          }
+                          onPreviousMonth={handlePreviousMonth}
+                          onNextMonth={handleNextMonth}
+                          onRegenerate={handleRegenerate}
+                          onDeleteDraft={(id) => requestDraftDeletion([id], bulkDeleteDrafts)}
+                        />
+                      </motion.div>
+                    )}
+
+                    {viewMode === 'list' && (
+                      <motion.div
+                        key="view-list"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="h-full"
+                      >
+                        <OrganicListView
+                          days={listDays}
                           platforms={plannerPlatforms}
                           selectedDraftId={selectedId}
                           selectedDraftIds={selectedIds}
-                          rangeTitle={weekTitle}
-                          rangeSubtitle={weekSubtitle}
-                          viewMode={localGridViewMode}
-                          onViewModeChange={setLocalGridViewMode}
-                          onPreviousWeek={handlePreviousWeek}
-                          onNextWeek={handleNextWeek}
-                          onCreatePost={(context) =>
-                            handleGoDraft({
-                              dayId: context?.dayId,
-                              platform: context?.platform,
-                              status: context?.status,
-                              mode: context?.mode,
-                              format: context?.format,
-                            })
-                          }
                           onSelectDraft={(id) => handleSelect(id, false)}
                           onToggleSelection={(id) => handleSelect(id, true)}
                           onRegenerate={handleRegenerate}
-                          onClearFailure={handleClearFailure}
-                          onEnrich={handleEnrichDraft}
-                          onRealize={handleRealizeDraft}
-                          onNativeDrop={handleNativeDrop}
+                          onCreatePost={({ dayId, platformKey, status, mode }) =>
+                            handleGoDraft({
+                              dayId,
+                              platform: platformKey as PlannerPlatformKey | undefined,
+                              status,
+                              mode,
+                            })
+                          }
+                          brandProfileId={brandProfileId}
+                          backlogDrafts={backlogDrafts}
+                          onAddBacklogDraft={addBacklogDraft}
+                          onDeleteBacklogDraft={deleteBacklogDraft}
+                          onPromoteBacklogDraft={promoteBacklogDraft}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+
+                <OrganicTrendsDrawer
+                  open={trendsDrawerOpen}
+                  onOpenChange={setTrendsDrawerOpen}
+                  trends={resolvedTrends}
+                  selectedTrendIds={selectedTrendIds}
+                  activePlatforms={activePlatforms}
+                  maxSelections={maxTrendSelections}
+                  onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                  onFetch={brandProfileId ? refreshTrends : undefined}
+                  isFetching={isFetchingTrends}
+                />
+
+                {brandProfileId && aiComposer && (
+                  <AiPostComposer
+                    open
+                    onOpenChange={(next) => {
+                      if (!next) setAiComposer(null);
+                    }}
+                    brandProfileId={brandProfileId}
+                    platform={aiComposer.platform}
+                    scheduledAt={aiComposer.scheduledAt}
+                    trends={resolvedTrends}
+                    platformAccountIds={platformAccountIds}
+                  />
+                )}
+              </motion.section>
+            </ResizablePanel>
+            {selectedDraft ? (
+              <>
+                <ResizableHandle
+                  withHandle
+                  collapseDirection={isWidePlanner ? 'right' : undefined}
+                  collapseLabel="Close draft preview"
+                  onCollapse={clearAll}
+                  className={isWidePlanner ? 'mx-1 bg-transparent' : 'my-1 bg-transparent'}
+                />
+                <ResizablePanel
+                  id="planner-preview"
+                  defaultSize={isWidePlanner ? previewPercent : 48}
+                  minSize={isWidePlanner ? '22rem' : '18rem'}
+                  maxSize={isWidePlanner ? '36rem' : '70%'}
+                  collapsible
+                  collapsedSize={0}
+                >
+                  <AnimatePresence initial={false}>
+                    <motion.aside
+                      key="preview-panel"
+                      layout
+                      role="complementary"
+                      aria-label="Draft preview"
+                      tabIndex={-1}
+                      onKeyDown={(e: React.KeyboardEvent) => {
+                        if (e.key === 'Escape') clearAll();
+                      }}
+                      initial={{ opacity: 0, x: 28, scale: 0.98 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 24, scale: 0.98 }}
+                      transition={previewTransition}
+                      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45"
+                    >
+                      <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Post Preview
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={!brandProfileId}
+                                    onClick={handleOpenInAiStudio}
+                                    style={!brandProfileId ? { pointerEvents: 'none' } : undefined}
+                                  >
+                                    Open in AI Studio
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {!brandProfileId ? (
+                                <TooltipContent>Select a brand to use AI Studio</TooltipContent>
+                              ) : null}
+                            </Tooltip>
+                          </TooltipProvider>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label="Close preview"
+                            onClick={clearAll}
+                          >
+                            <Cross2Icon className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* The preview's status reads from the same presentation map as the card's
+                          pill — one status, one hue, one word, wherever it is shown. */}
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline">
+                          {selectedDraft.platforms[0] ?? 'Unassigned'}
+                        </Badge>
+                        <StatusBadge status={selectedDraft.status} format={selectedDraft.format} />
+                        <Badge variant="outline">
+                          {selectedDraft.dateLabel || 'Unscheduled'} ·{' '}
+                          {selectedDraft.timeLabel || 'No time'}
+                        </Badge>
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                        <OrganicDraftPreview
+                          draft={selectedDraft}
+                          brandName={brandName}
+                          brandProfileId={brandProfileId}
+                          onApprove={(draftId) => {
+                            const target = drafts.find((draft) => draft.id === draftId);
+                            if (target) void approveAndSchedule(target);
+                          }}
                         />
                       </div>
-                    </motion.div>
-                  )}
-
-                  {viewMode === 'month' && (
-                    <motion.div
-                      key="view-month"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="h-full"
-                    >
-                      <OrganicMonthlyCalendar
-                        days={gridDays}
-                        monthAnchorDate={monthAnchorDate}
-                        platforms={plannerPlatforms}
-                        postedContent={postedContent}
-                        selectedDraftId={selectedId}
-                        onSelectDraft={(id) => handleSelect(id, false)}
-                        onCreatePost={({ dayId, platformKey, status, mode, format }) =>
-                          handleGoDraft({
-                            dayId,
-                            platform: platformKey as PlannerPlatformKey | undefined,
-                            status,
-                            mode,
-                            format,
-                          })
-                        }
-                        onPreviousMonth={handlePreviousMonth}
-                        onNextMonth={handleNextMonth}
-                        onRegenerate={handleRegenerate}
-                        onDeleteDraft={(id) => bulkDeleteDrafts([id])}
-                      />
-                    </motion.div>
-                  )}
-
-                  {viewMode === 'list' && (
-                    <motion.div
-                      key="view-list"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="h-full"
-                    >
-                      <OrganicListView
-                        days={listDays}
-                        platforms={plannerPlatforms}
-                        selectedDraftId={selectedId}
-                        selectedDraftIds={selectedIds}
-                        onSelectDraft={(id) => handleSelect(id, false)}
-                        onToggleSelection={(id) => handleSelect(id, true)}
-                        onRegenerate={handleRegenerate}
-                        onCreatePost={({ dayId, platformKey, status, mode }) =>
-                          handleGoDraft({
-                            dayId,
-                            platform: platformKey as PlannerPlatformKey | undefined,
-                            status,
-                            mode,
-                          })
-                        }
-                        brandProfileId={brandProfileId}
-                        backlogDrafts={backlogDrafts}
-                        onAddBacklogDraft={addBacklogDraft}
-                        onDeleteBacklogDraft={deleteBacklogDraft}
-                        onPromoteBacklogDraft={promoteBacklogDraft}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-
-              <OrganicTrendsDrawer
-                open={trendsDrawerOpen}
-                onOpenChange={setTrendsDrawerOpen}
-                trends={resolvedTrends}
-                selectedTrendIds={selectedTrendIds}
-                activePlatforms={activePlatforms}
-                maxSelections={maxTrendSelections}
-                onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-                onFetch={brandProfileId ? refreshTrends : undefined}
-                isFetching={isFetchingTrends}
-              />
-
-              {brandProfileId && aiComposer && (
-                <AiPostComposer
-                  open
-                  onOpenChange={(next) => {
-                    if (!next) setAiComposer(null);
-                  }}
-                  brandProfileId={brandProfileId}
-                  platform={aiComposer.platform}
-                  scheduledAt={aiComposer.scheduledAt}
-                  trends={resolvedTrends}
-                  platformAccountIds={platformAccountIds}
-                />
-              )}
-            </motion.section>
-
-            <AnimatePresence initial={false}>
-              {selectedDraft ? (
-                <motion.aside
-                  key="preview-panel"
-                  layout
-                  role="complementary"
-                  aria-label="Draft preview"
-                  tabIndex={-1}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === 'Escape') clearAll();
-                  }}
-                  initial={{ opacity: 0, x: 28, scale: 0.98 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: 24, scale: 0.98 }}
-                  transition={previewTransition}
-                  className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 @[64rem]/organic:h-full @[64rem]/organic:w-[clamp(26rem,28cqi,38rem)] @[64rem]/organic:shrink-0"
-                >
-                  <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Post Preview
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                disabled={!brandProfileId}
-                                onClick={handleOpenInAiStudio}
-                                style={!brandProfileId ? { pointerEvents: 'none' } : undefined}
-                              >
-                                Open in AI Studio
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          {!brandProfileId ? (
-                            <TooltipContent>Select a brand to use AI Studio</TooltipContent>
-                          ) : null}
-                        </Tooltip>
-                      </TooltipProvider>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label="Close preview"
-                        onClick={clearAll}
-                      >
-                        <Cross2Icon className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                    <OrganicDraftPreview
-                      draft={selectedDraft}
-                      brandName={brandName}
-                      brandProfileId={brandProfileId}
-                      onApprove={(draftId) => {
-                        const target = drafts.find((draft) => draft.id === draftId);
-                        if (target) void approveAndSchedule(target);
-                      }}
-                    />
-                  </div>
-                </motion.aside>
-              ) : null}
-            </AnimatePresence>
-          </motion.div>
+                    </motion.aside>
+                  </AnimatePresence>
+                </ResizablePanel>
+              </>
+            ) : null}
+          </ResizablePanelGroup>
         </CalendarDndContext>
 
         <BulkActionToolbar

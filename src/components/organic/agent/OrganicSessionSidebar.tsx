@@ -1,7 +1,7 @@
 'use client';
 
 import { PlusIcon, Trash2Icon } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AutomationsSidebarPanel } from '@/components/automations/AutomationsSidebarPanel';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,6 +11,7 @@ import { AUTOMATIONS_AVAILABLE } from '@/lib/automations/availability';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 import type { OrganicSession } from '@/lib/organic/agent-sessions';
 import { cn } from '@/lib/utils';
+import { presentSessionTitles } from './sessionTitles';
 
 type SidebarMode = 'chats' | 'automations';
 
@@ -37,12 +38,6 @@ function formatSessionTime(value: string | null): string {
   }).format(date);
 }
 
-function getSessionTitle(session: OrganicSession): string {
-  if (session.title?.trim()) return session.title;
-  if (session.lastMessagePreview) return session.lastMessagePreview;
-  return 'New conversation';
-}
-
 export function OrganicSessionSidebar({
   sessions,
   activeSessionId,
@@ -54,6 +49,7 @@ export function OrganicSessionSidebar({
   onDeleteSession,
 }: OrganicSessionSidebarProps) {
   const [mode, setMode] = useState<SidebarMode>('chats');
+  const sessionTitles = useMemo(() => presentSessionTitles(sessions), [sessions]);
   const openAutomationBuilder = useAutomationSheetStore((state) => state.openBuilder);
 
   return (
@@ -163,7 +159,7 @@ export function OrganicSessionSidebar({
                     )}
                   >
                     <span className="line-clamp-2 w-full text-xs font-medium text-primary">
-                      {getSessionTitle(session)}
+                      {sessionTitles.get(session.sessionId) ?? 'New conversation'}
                     </span>
                     <div className="flex w-full items-center justify-between gap-2">
                       <span className="text-2xs uppercase tracking-wide text-muted-foreground">

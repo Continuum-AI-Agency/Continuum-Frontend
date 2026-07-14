@@ -36,11 +36,12 @@ import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
-import { PlatformBadge, StatusDot } from './DraftCardBadges';
+import { PlatformBadge, StatusBadge } from './DraftCardBadges';
+import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { MediaStagePill, resolveDraftMediaStage } from './DraftLifecycle';
 import { DuplicateDayPicker } from './DuplicateDayPicker';
-import { cardVariants } from './draft-card-styles';
+import { cardVariants, draftStatusPresentation } from './draft-card-styles';
 import type { OrganicCalendarDraft } from './types';
 
 const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ['instagram', 'facebook', 'linkedin'];
@@ -53,7 +54,10 @@ const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
   youtube: 'YouTube',
 };
 
-// Left-border accent colors per platform / status
+// The left rail says WHERE the post goes; the status pill and the top strip say WHAT
+// STATE it is in. Keeping the two axes apart is why the rail no longer turns emerald
+// on publish — a card that changed both its channel color and its status color at once
+// left the reader guessing which fact had changed.
 const PLATFORM_ACCENT: Record<string, string> = {
   instagram: '#E1306C',
   linkedin: '#0A66C2',
@@ -63,10 +67,7 @@ const PLATFORM_ACCENT: Record<string, string> = {
   twitter: '#1DA1F2',
 };
 
-function resolveAccentColor(draft: OrganicCalendarDraft, platform: string): string {
-  if (draft.status === 'published') return '#10B981'; // emerald-500
-  if (draft.status === 'failed') return '#EF4444'; // red-500
-  if (draft.status === 'streaming') return '#5A48F9'; // brand-primary
+function resolvePlatformAccentColor(platform: string): string {
   return PLATFORM_ACCENT[platform] ?? '#5A48F9';
 }
 
@@ -156,6 +157,7 @@ export function CalendarDraftCard({
   const [timeError, setTimeError] = React.useState<string | null>(null);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
   const { publish, isPublishing } = usePublishDraft();
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
@@ -164,7 +166,13 @@ export function CalendarDraftCard({
   const canPublish =
     publishPlatform !== null && draft.status !== 'published' && draft.status !== 'streaming';
 
-  const accentColor = resolveAccentColor(draft, platform);
+  const accentColor = resolvePlatformAccentColor(platform);
+  const statusPresentation = draftStatusPresentation(draft.status);
+  // A week is only scannable if a card can show its whole idea. Cards stay clamped at
+  // rest — the grid keeps its rhythm — and reveal the full title/copy on hover, or
+  // whenever the card is the selected one being edited.
+  const revealTitleClass = isSelected ? '' : 'line-clamp-2 group-hover:line-clamp-none';
+  const revealCaptionClass = isSelected ? 'line-clamp-6' : 'line-clamp-2 group-hover:line-clamp-6';
   // Enrichment state is the authoritative backend media_stage (with a derived
   // fallback for ephemeral stream drafts) — the single source the card and the
   // editor share, never re-classified ad-hoc per surface.
@@ -267,7 +275,7 @@ export function CalendarDraftCard({
                   'border-dashed border-muted-foreground/30 bg-muted/20',
               )}
             >
-              {/* Top-edge status strip */}
+              {/* Top-edge status strip — same hue as the status pill (one source of truth). */}
               {(isStreaming ||
                 isFailed ||
                 draft.status === 'scheduled' ||
@@ -275,11 +283,9 @@ export function CalendarDraftCard({
                 <div
                   className={cn(
                     'absolute top-0 left-0 right-0 h-0.5',
-                    isStreaming &&
-                      'bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer',
-                    isFailed && 'bg-red-500',
-                    draft.status === 'scheduled' && 'bg-primary/60',
-                    draft.status === 'published' && 'bg-emerald-500',
+                    isStreaming
+                      ? 'bg-gradient-to-r from-transparent via-warning to-transparent animate-shimmer'
+                      : statusPresentation.strip,
                   )}
                   style={isStreaming ? { backgroundSize: '200% 100%' } : undefined}
                   aria-hidden
@@ -305,8 +311,9 @@ export function CalendarDraftCard({
               />
 
               <div className="relative z-10 pl-1">
-                {/* Header row: time | multi-select | regen | status dot */}
-                <div className="flex items-center justify-between mb-1.5">
+                {/* Header row: time | multi-select | regen | status pill. The row wraps so the
+                    readable pill survives the narrowest planner column instead of being clipped. */}
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-y-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-2xs uppercase tracking-wider text-muted-foreground/70 font-bold">
                       {draft.timeLabel}
@@ -362,14 +369,22 @@ export function CalendarDraftCard({
                         <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
                       </span>
                     )}
-                    <StatusDot status={draft.status} format={draft.format} />
+                    <StatusBadge
+                      status={draft.status}
+                      format={draft.format}
+                      className={cn(
+                        'px-1.5 py-0 text-3xs font-bold uppercase tracking-wider',
+                        isStreaming && 'animate-pulse',
+                      )}
+                    />
                   </div>
                 </div>
 
-                {/* Title */}
+                {/* Title — clamped at rest, revealed in full on hover (see revealTitleClass). */}
                 <p
                   className={cn(
-                    'text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif',
+                    'text-sm font-semibold leading-tight tracking-tight text-foreground',
+                    revealTitleClass,
                     isStreaming && 'animate-pulse opacity-70',
                   )}
                 >
@@ -386,7 +401,12 @@ export function CalendarDraftCard({
                 )}
 
                 {/* Caption */}
-                <p className="mt-1 text-xs text-muted-foreground leading-snug font-medium line-clamp-2">
+                <p
+                  className={cn(
+                    'mt-1 text-xs font-medium leading-snug text-muted-foreground',
+                    revealCaptionClass,
+                  )}
+                >
                   {draft.captionPreview}
                 </p>
 
@@ -668,7 +688,7 @@ export function CalendarDraftCard({
           ) : null}
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
-            onSelect={() => bulkDeleteDrafts([draft.id])}
+            onSelect={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
           >
             <TrashIcon className="mr-2 h-3.5 w-3.5" />
             Delete draft

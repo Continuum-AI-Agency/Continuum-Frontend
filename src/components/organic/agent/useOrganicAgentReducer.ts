@@ -39,6 +39,10 @@ export type PanelState = {
   isHydrated: boolean;
   jobs: Record<string, AgentJobState>;
   pipeline: Record<string, PipelineCardState>;
+  pendingJobCancellations: Record<
+    string,
+    { job: AgentJobState; pipeline?: PipelineCardState }
+  >;
   planItemStatus: Record<string, PlanItemStatus>;
   pendingToolApprovals: ToolApproval[];
   bulkRuns: Record<string, BulkRunRef>;
@@ -81,6 +85,9 @@ export type PanelAction =
   | { type: 'STREAM_UI_CARD'; card: UiCard }
   | { type: 'STREAM_MEDIA_SEARCH_RESULTS'; frame: MediaSearchResultsFrame }
   | { type: 'JOB_UPDATE'; job: Partial<AgentJobState> & { jobId: string } }
+  | { type: 'JOB_CANCEL_START'; jobId: string }
+  | { type: 'JOB_CANCEL_SUCCESS'; jobId: string }
+  | { type: 'JOB_CANCEL_FAILURE'; jobId: string }
   | { type: 'DRAFT_BLUEPRINT'; draftId: string; previews: string[] }
   | { type: 'PIPELINE_STAGE'; event: ParsedPipelineStage }
   | { type: 'PIPELINE_CARD'; card: Partial<PipelineCardState> & { jobId: string } }
@@ -277,6 +284,7 @@ export function initialPanelState(): PanelState {
     isHydrated: false,
     jobs: {},
     pipeline: {},
+    pendingJobCancellations: {},
     planItemStatus: {},
     pendingToolApprovals: [],
     bulkRuns: {},
@@ -297,6 +305,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       const jobs = Array.isArray(action.jobs) ? action.jobs : [];
       for (const job of jobs) {
         if (!job || typeof job.jobId !== 'string') continue;
+        if (state.pendingJobCancellations[job.jobId]) continue;
         merged[job.jobId] = job;
         // Seed/refresh the inline pipeline card from the durable row. Persisted
         // message ui_cards only hold intra-turn frames — the worker's cards land
@@ -465,7 +474,16 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       };
     }
 
-    case 'JOB_UPDATE':
+    case 'JOB_UPDATE': {
+      const pendingJobCancellations = { ...state.pendingJobCancellations };
+      delete pendingJobCancellations[action.job.jobId];
+      if (action.job.status === 'cancelled') {
+        const jobs = { ...state.jobs };
+        const pipeline = { ...state.pipeline };
+        delete jobs[action.job.jobId];
+        delete pipeline[action.job.jobId];
+        return { ...state, jobs, pipeline, pendingJobCancellations };
+      }
       return {
         ...state,
         jobs: {
@@ -475,9 +493,54 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
             ...action.job,
           } as AgentJobState,
         },
+        pendingJobCancellations,
       };
 
-    case 'PIPELINE_STAGE':
+    }
+
+    case 'JOB_CANCEL_START': {
+      const job = state.jobs[action.jobId];
+      if (!job) return state;
+      const jobs = { ...state.jobs };
+      const pipeline = { ...state.pipeline };
+      delete jobs[action.jobId];
+      delete pipeline[action.jobId];
+      return {
+        ...state,
+        jobs,
+        pipeline,
+        pendingJobCancellations: {
+          ...state.pendingJobCancellations,
+          [action.jobId]: { job, pipeline: state.pipeline[action.jobId] },
+        },
+      };
+    }
+
+    case 'JOB_CANCEL_SUCCESS': {
+      if (!state.pendingJobCancellations[action.jobId]) return state;
+      const pendingJobCancellations = { ...state.pendingJobCancellations };
+      delete pendingJobCancellations[action.jobId];
+      return { ...state, pendingJobCancellations };
+    }
+
+    case 'JOB_CANCEL_FAILURE': {
+      const pending = state.pendingJobCancellations[action.jobId];
+      if (!pending) return state;
+      const pendingJobCancellations = { ...state.pendingJobCancellations };
+      delete pendingJobCancellations[action.jobId];
+      return {
+        ...state,
+        jobs: { ...state.jobs, [action.jobId]: pending.job },
+        pipeline: pending.pipeline
+          ? { ...state.pipeline, [action.jobId]: pending.pipeline }
+          : state.pipeline,
+        pendingJobCancellations,
+      };
+    }
+
+    case 'PIPELINE_STAGE': {
+      const pendingJobCancellations = { ...state.pendingJobCancellations };
+      delete pendingJobCancellations[action.event.jobId];
       return {
         ...state,
         pipeline: {
@@ -493,9 +556,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           agentName: action.event.agentName,
           ...(typeof action.event.pct === 'number' ? { pct: action.event.pct } : {}),
         }),
+        pendingJobCancellations,
       };
+    }
 
-    case 'PIPELINE_CARD':
+    case 'PIPELINE_CARD': {
+      const pendingJobCancellations = { ...state.pendingJobCancellations };
+      delete pendingJobCancellations[action.card.jobId];
       return {
         ...state,
         pipeline: {
@@ -510,7 +577,9 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                 ...(typeof action.card.pct === 'number' ? { pct: action.card.pct } : {}),
               })
             : state.jobs,
+        pendingJobCancellations,
       };
+    }
 
     case 'DRAFT_BLUEPRINT': {
       const { draftId, previews } = action;
@@ -595,6 +664,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         messages: [],
         jobs: {},
         pipeline: {},
+        pendingJobCancellations: {},
         planItemStatus: {},
         pendingToolApprovals: [],
         bulkRuns: {},

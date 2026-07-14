@@ -90,11 +90,6 @@ mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 
-mock.module('./DraftCardBadges', () => ({
-  PlatformBadge: ({ platform }: { platform: string }) => <span>{platform}</span>,
-  StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
-}));
-
 const draft: OrganicCalendarDraft = {
   id: 'draft-1',
   title: 'Draft title',

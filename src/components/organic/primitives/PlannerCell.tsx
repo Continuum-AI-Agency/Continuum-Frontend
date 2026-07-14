@@ -74,6 +74,10 @@ export const PlannerCell = React.memo(function PlannerCell({
   const isFocusedDay = focusedDayId === dayId;
 
   const visibleDrafts = drafts;
+  // Grid rows size to their tallest cell, so an empty cell only has to be tall enough to
+  // be a drop target. A whole row of them (a connected channel with nothing planned this
+  // week) then collapses instead of claiming a post's worth of height seven times over.
+  const isEmptyCell = visibleDrafts.length === 0 && ghosts === 0;
 
   const handleNativeDrop = (event: React.DragEvent<HTMLDivElement>) => {
     const rawData = event.dataTransfer.getData('application/json');
@@ -101,8 +105,11 @@ export const PlannerCell = React.memo(function PlannerCell({
       className={cn(
         'group relative align-top',
         compact
-          ? 'min-h-[clamp(40px,5dvh,80px)] px-[var(--app-shell-pad-inline-tight)] py-[var(--app-shell-pad-block)]'
-          : 'min-h-[clamp(96px,15dvh,220px)] px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]',
+          ? 'min-h-[clamp(2.5rem,5dvh,5rem)] px-[var(--app-shell-pad-inline-tight)] py-[var(--app-shell-pad-block)]'
+          : cn(
+              'px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]',
+              isEmptyCell ? 'min-h-[clamp(3.5rem,7dvh,6rem)]' : 'min-h-[clamp(7rem,16dvh,14rem)]',
+            ),
         'border-r border-b border-border/50',
         !isLastColumn && 'border-r',
         isLastColumn && 'border-r-0',

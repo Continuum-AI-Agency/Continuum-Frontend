@@ -2,8 +2,9 @@ import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-post
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import type { PlannerAccountOption } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
-import { buildWeekDays, startOfWeek } from './calendar-utils';
+import { buildWeekDays } from './calendar-utils';
 import { OrganicCalendarWorkspaceClient } from './OrganicCalendarWorkspaceClient';
+import { resolvePlannerInitialDates } from './planner-date-anchor';
 import type {
   OrganicCalendarDay,
   OrganicCreationStep,
@@ -78,16 +79,15 @@ export function OrganicCalendarWorkspace({
   initialView,
   postedContentAccountsByPlatform,
 }: OrganicCalendarWorkspaceProps) {
-  const resolvedWeekStart =
-    initialWeekStart && !Number.isNaN(new Date(initialWeekStart).getTime())
-      ? startOfWeek(new Date(initialWeekStart))
-      : startOfWeek(new Date());
+  const { weekStart: resolvedWeekStart } = resolvePlannerInitialDates({
+    initialWeekStart: initialWeekStart ?? undefined,
+  });
   const days = buildWeekDays(resolvedWeekStart);
 
   return (
     <OrganicCalendarWorkspaceClient
       days={days}
-      initialWeekStart={resolvedWeekStart.toISOString()}
+      initialWeekStart={initialWeekStart ?? undefined}
       initialSelectedDraftId={initialSelectedDraftId}
       steps={defaultCreationSteps}
       editorSlides={defaultEditorSlides}

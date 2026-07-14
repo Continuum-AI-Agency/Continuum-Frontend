@@ -21,6 +21,8 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { DisabledControl } from '@/components/organic/DisabledControl';
 import { describeExportBlock, describeRefreshBlock } from '@/components/organic/disabledReasons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
+import { mergePostWithFreshMedia } from '@/components/organic/organicPostMediaRecovery';
+import { PostMediaPreviewImage } from '@/components/organic/PostMediaPreviewImage';
 import { PostCommentsPanel } from '@/components/organic/primitives/PostCommentsPanel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -44,8 +46,7 @@ const OrganicAudienceLocationMapCard = dynamic(
 import type { IntegrationErrorCode, OrganicMetricId } from '@continuum/contracts';
 import { kpiConfigForPlatform } from '@continuum/contracts';
 import { Flag } from 'lucide-react';
-import { BrandInsightsGenerateButton } from '@/components/brand-insights/BrandInsightsGenerateButton';
-import { BrandTrendsPanel } from '@/components/brand-insights/BrandTrendsPanel';
+import { BrandTrendsHeaderModule } from '@/components/brand-insights/BrandTrendsHeaderModule';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
@@ -110,22 +111,18 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
 import { isAllZeroPost, useOrganicPostDetail } from '@/hooks/useOrganicPostDetail';
 import { kpiMetricToMentionSuggestion } from '@/lib/agent/kpi-mentions';
-import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
 import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
 import type { OrganicComputedInsight } from '@/lib/organic/organic-insights.types';
 import { consumePrefetched } from '@/lib/prefetch/organic-metrics-cache';
-import type {
-  BrandInsightsQuestionsByNiche,
-  BrandInsightsTrendsAndEvents,
-  BrandInsightsWeekSummary,
-} from '@/lib/schemas/brandInsights';
+import type { OrganicMetricsBrandInsights } from '@/lib/schemas/brandInsights';
 import type {
   AudienceBreakdown,
   AudienceDemographicEntry,
@@ -142,17 +139,6 @@ export type OrganicAccountOption = {
   integrationAccountId: string;
   name: string;
   externalAccountId: string | null;
-};
-
-export type OrganicMetricsBrandInsights = {
-  trendsAndEvents: BrandInsightsTrendsAndEvents;
-  questionsByNiche?: BrandInsightsQuestionsByNiche;
-  generatedAt?: string;
-  status?: string;
-  weekStartDate?: string;
-  weeks?: BrandInsightsWeekSummary[];
-  generationKind?: 'initial' | 'regeneration';
-  generationCount?: number;
 };
 
 type AccountsByPlatform = {
@@ -447,12 +433,14 @@ function PostGalleryCard({
   selected,
   loading,
   onSelect,
+  onRecoverMedia,
   platform = 'instagram',
 }: {
   post: OrganicPost;
   selected: boolean;
   loading: boolean;
   onSelect: () => void;
+  onRecoverMedia?: (postId: string) => void;
   platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
@@ -523,11 +511,12 @@ function PostGalleryCard({
             </Reel>
           ) : (
             <div className="relative h-full w-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <PostMediaPreviewImage
+                postId={post.id}
                 src={preview}
                 alt={post.title ?? post.caption ?? 'Post media'}
                 className="h-full w-full object-contain outline outline-1 outline-black/10 dark:outline-white/10"
+                onRecover={onRecoverMedia}
               />
               {isThumbnailOnlyVideo && post.permalink ? (
                 <a
@@ -695,6 +684,7 @@ function PostSnapshotPanel({
   series,
   accountSeries,
   loading,
+  onRecoverMedia,
   platform = 'instagram',
 }: {
   post: OrganicPost;
@@ -703,6 +693,7 @@ function PostSnapshotPanel({
   series: Array<{ date: string; value: number }>;
   accountSeries?: Array<{ date: string; value: number }>;
   loading: boolean;
+  onRecoverMedia?: (postId: string) => void;
   platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
@@ -775,11 +766,13 @@ function PostSnapshotPanel({
                   </ReelContent>
                 </Reel>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <PostMediaPreviewImage
+                  postId={post.id}
                   src={preview}
                   alt={post.title ?? post.caption ?? 'Selected post'}
                   className="max-h-[320px] min-h-[180px] w-full object-contain"
+                  onRecover={onRecoverMedia}
+                  fallbackLabel="Preview unavailable for this post"
                 />
               )
             ) : (
@@ -1341,7 +1334,7 @@ function AudienceCard({
             ) : ageDemographics.length === 0 ? (
               <span className="text-xs text-muted-foreground">Age breakdown unavailable.</span>
             ) : (
-              <div className="flex flex-col gap-3 max-h-64 overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3 pr-1">
                 {ageDemographics.map((entry) => (
                   <div key={entry.key}>
                     <div className="flex items-center justify-between mb-1">
@@ -1376,6 +1369,7 @@ function Dashboard({
   postDetailsById,
   loadingPostId,
   onRequestPostDetail,
+  onRecoverPostMedia,
   hasMorePosts,
   loadingMorePosts,
   onLoadMorePosts,
@@ -1386,12 +1380,14 @@ function Dashboard({
   platform,
   rangePreset,
   youtubePostType,
+  scrollRootRef,
 }: {
   data: OrganicMetricsResponse;
   viewMode: MetricsViewMode;
   postDetailsById?: Record<string, OrganicPost>;
   loadingPostId?: string | null;
   onRequestPostDetail?: (postId: string) => void;
+  onRecoverPostMedia?: (postId: string) => void;
   hasMorePosts?: boolean;
   loadingMorePosts?: boolean;
   onLoadMorePosts?: () => void;
@@ -1402,6 +1398,9 @@ function Dashboard({
   platform: MetricsPlatform;
   rangePreset: OrganicDateRangePreset;
   youtubePostType: YoutubePostTypeFilter;
+  // The tab's one scroll container. Cards below never open a scroller of their
+  // own, so infinite-scroll observation has to key off this shared root.
+  scrollRootRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [selectedPostId, setSelectedPostId] = React.useState<string | null>(null);
   const [selectedAccountMetric, setSelectedAccountMetric] =
@@ -1460,20 +1459,11 @@ function Dashboard({
   const selectedPostBase = (data.posts ?? []).find((post) => post.id === selectedPostId) ?? null;
   const selectedPostDetail =
     (selectedPostId ? postDetailsById?.[selectedPostId] : undefined) ?? null;
-  // Detail supplies the richer metrics, but the media URLs come from the base
-  // gallery post (already loaded) so opening the panel never re-downloads or
-  // flashes the media.
   const selectedPost: OrganicPost | null =
     selectedPostDetail && selectedPostBase
-      ? {
-          ...selectedPostDetail,
-          mediaUrl: selectedPostBase.mediaUrl ?? selectedPostDetail.mediaUrl,
-          thumbnailUrl: selectedPostBase.thumbnailUrl ?? selectedPostDetail.thumbnailUrl,
-          carouselMedia: selectedPostBase.carouselMedia ?? selectedPostDetail.carouselMedia,
-        }
+      ? mergePostWithFreshMedia(selectedPostBase, selectedPostDetail)
       : (selectedPostDetail ?? selectedPostBase);
   const postCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const postsScrollerRef = React.useRef<HTMLDivElement | null>(null);
   const postsLoadSentinelRef = React.useRef<HTMLDivElement | null>(null);
   // A KPI is drillable only once its per-day series carries enough real points.
   // Series the backend can't (yet) supply — retention before reels accrue, TikTok
@@ -1557,7 +1547,7 @@ function Dashboard({
 
   React.useEffect(() => {
     if (!isPostsView || !hasMorePosts || loadingMorePosts || !onLoadMorePosts) return;
-    const root = postsScrollerRef.current;
+    const root = scrollRootRef.current;
     const target = postsLoadSentinelRef.current;
     if (!root || !target) return;
 
@@ -1811,10 +1801,7 @@ function Dashboard({
                           </SelectContent>
                         </Select>
                       </div>
-                      <div
-                        ref={postsScrollerRef}
-                        className="mx-auto max-h-[calc(100dvh-11rem)] w-full overflow-y-auto px-1"
-                      >
+                      <div className="mx-auto w-full px-1">
                         <div
                           className={cn(
                             'mx-auto grid gap-3 sm:gap-4',
@@ -1824,11 +1811,11 @@ function Dashboard({
                           {sortPosts(visiblePosts, postSortKey).map((post) => {
                             // Quick-look uses the store-hydrated detail (richer
                             // metrics + breakdowns) so it fills in after a fetch.
-                            // The gallery card itself uses the base post so its
-                            // already-loaded media URL stays put — the detail
-                            // fetch returns freshly-signed URLs that would
-                            // otherwise force a re-download/flash.
+                            // Detail media fields are also preferred because they
+                            // carry newly signed URLs after stale-media recovery.
                             const detailed = postDetailsById?.[post.id] ?? post;
+                            const displayPost =
+                              detailed === post ? post : mergePostWithFreshMedia(post, detailed);
                             return (
                               <motion.div
                                 layout
@@ -1850,12 +1837,13 @@ function Dashboard({
                                   <HoverCardTrigger asChild>
                                     <div className="w-full">
                                       <PostGalleryCard
-                                        post={post}
+                                        post={displayPost}
                                         selected={selectedPostId === post.id}
                                         loading={loadingPostId === post.id}
                                         onSelect={() => {
                                           setSelectedPostId(post.id);
                                         }}
+                                        onRecoverMedia={onRecoverPostMedia}
                                         platform={platform}
                                       />
                                     </div>
@@ -1904,6 +1892,7 @@ function Dashboard({
                           series={postSeries}
                           accountSeries={accountSeries}
                           loading={loadingPostId === selectedPost.id}
+                          onRecoverMedia={onRecoverPostMedia}
                           platform={platform}
                         />
                       ) : null}
@@ -1925,9 +1914,6 @@ export function OrganicMetricsDashboard({
   initialPlatform = 'instagram',
   brandInsights = null,
 }: Props) {
-  const [visibleBrandInsights, setVisibleBrandInsights] =
-    React.useState<OrganicMetricsBrandInsights | null>(brandInsights);
-  const [isLoadingTrendsWeek, setIsLoadingTrendsWeek] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
   const [platform, setPlatform] = React.useState<MetricsPlatform>(initialPlatform);
   const [viewMode, setViewMode] = React.useState<MetricsViewMode>('account');
@@ -1940,36 +1926,11 @@ export function OrganicMetricsDashboard({
   );
   const [reportEmailOpen, setReportEmailOpen] = React.useState(false);
   const [reportError, setReportError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    setVisibleBrandInsights(brandInsights);
-  }, [brandInsights]);
-
-  const selectTrendsWeek = React.useCallback(
-    async (weekStartDate: string) => {
-      if (!weekStartDate || weekStartDate === visibleBrandInsights?.weekStartDate) return;
-      setIsLoadingTrendsWeek(true);
-      try {
-        const result = await fetchBrandInsightsWeek({ brandId, weekStartDate });
-        setVisibleBrandInsights({
-          trendsAndEvents: result.data.trendsAndEvents,
-          questionsByNiche: result.data.questionsByNiche,
-          generatedAt: result.data.trendsAndEvents.generatedAt ?? result.generatedAt,
-          status: result.data.trendsAndEvents.status ?? result.status,
-          weekStartDate: result.data.weekStartDate,
-          weeks: result.data.weeks,
-          generationKind: result.data.generationKind,
-          generationCount: result.data.generationCount,
-        });
-      } catch (error) {
-        setReportError(error instanceof Error ? error.message : 'Unable to load that Trends week.');
-      } finally {
-        setIsLoadingTrendsWeek(false);
-      }
-    },
-    [brandId, visibleBrandInsights?.weekStartDate],
-  );
   const manualRefreshRef = React.useRef(false);
+  // The metrics tab scrolls on exactly one axis, in exactly one element: this
+  // body. Cards inside it grow to their content instead of nesting scrollers, so
+  // a wheel anywhere over the tab moves the same surface.
+  const metricsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const setSelection = useAccountSelectionStore((s) => s.setSelection);
   const [postGalleryPosts, setPostGalleryPosts] = React.useState<OrganicPost[]>([]);
   // Posts fetched in parallel for the account view so the drilldown chart can
@@ -2053,6 +2014,7 @@ export function OrganicMetricsDashboard({
   // Top Creatives table) that requests the same account+post pair.
   const {
     requestPostDetail: requestPostDetailBase,
+    recoverPostMedia,
     loadingPostId,
     postDetailsById,
     resetPostDetails,
@@ -2532,46 +2494,58 @@ export function OrganicMetricsDashboard({
             </SelectContent>
           </Select>
 
-          <Tabs
-            value={viewMode}
-            onValueChange={(value) => {
-              const next = value as MetricsViewMode;
-              setViewMode(next);
-              // Leaving Compare: ensure Account/Posts has a selected account so
-              // the familiar single-account load path runs immediately.
-              if (next !== 'compare' && !selectedAccountId) {
-                const first = platformAccounts[0]?.integrationAccountId ?? null;
-                if (first) {
-                  setSelectedAccountByPlatform((current) => ({
-                    ...current,
-                    [platform]: first,
-                  }));
-                  setSelection(brandId, platform, first);
+          <div className="flex items-center gap-2">
+            <span className="hidden text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
+              Metrics view
+            </span>
+            <Tabs
+              value={viewMode}
+              onValueChange={(value) => {
+                const next = value as MetricsViewMode;
+                setViewMode(next);
+                // Leaving Compare: ensure Account/Posts has a selected account so
+                // the familiar single-account load path runs immediately.
+                if (next !== 'compare' && !selectedAccountId) {
+                  const first = platformAccounts[0]?.integrationAccountId ?? null;
+                  if (first) {
+                    setSelectedAccountByPlatform((current) => ({
+                      ...current,
+                      [platform]: first,
+                    }));
+                    setSelection(brandId, platform, first);
+                  }
                 }
-              }
-            }}
-            className="w-auto gap-0"
-          >
-            <TabsList className="inline-flex h-8 w-auto rounded-lg border border-subtle bg-muted/20 p-0.5">
-              <TabsTrigger
-                value="account"
-                className="px-3 text-xs"
-                data-tour-id="metrics-view-account"
+              }}
+              className="w-auto gap-0"
+            >
+              <TabsList
+                className="inline-flex h-8 w-auto rounded-lg border border-subtle bg-muted/20 p-0.5"
+                aria-label="Organic metrics view"
               >
-                Account
-              </TabsTrigger>
-              <TabsTrigger value="posts" className="px-3 text-xs" data-tour-id="metrics-view-posts">
-                Posts
-              </TabsTrigger>
-              <TabsTrigger
-                value="compare"
-                className="px-3 text-xs"
-                data-tour-id="metrics-view-compare"
-              >
-                Compare
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+                <TabsTrigger
+                  value="account"
+                  className="px-3 text-xs"
+                  data-tour-id="metrics-view-account"
+                >
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger
+                  value="posts"
+                  className="px-3 text-xs"
+                  data-tour-id="metrics-view-posts"
+                >
+                  Post performance
+                </TabsTrigger>
+                <TabsTrigger
+                  value="compare"
+                  className="px-3 text-xs"
+                  data-tour-id="metrics-view-compare"
+                >
+                  Compare accounts
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
 
           {platform === 'youtube' && viewMode === 'posts' ? (
             <Tabs
@@ -2595,6 +2569,10 @@ export function OrganicMetricsDashboard({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <BrandTrendsHeaderModule brandId={brandId} brandInsights={brandInsights} />
+
+          <Separator orientation="vertical" className="h-5" />
+
           <DisabledControl
             side="bottom"
             hint={
@@ -2687,6 +2665,8 @@ export function OrganicMetricsDashboard({
       </div>
 
       <div
+        ref={metricsScrollRef}
+        data-tour-id="organic-metrics-scroll-body"
         className={cn(
           'min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-2 sm:p-3',
           isPending && 'opacity-60 pointer-events-none transition-opacity duration-150',
@@ -2696,37 +2676,6 @@ export function OrganicMetricsDashboard({
           <Alert variant="destructive" className="mb-3">
             <AlertDescription>{reportError}</AlertDescription>
           </Alert>
-        ) : null}
-        {visibleBrandInsights ? (
-          <section className="mb-3" data-tour-id="organic-metrics-brand-trends">
-            <BrandTrendsPanel
-              trends={visibleBrandInsights.trendsAndEvents.trends}
-              events={visibleBrandInsights.trendsAndEvents.events}
-              questionsByNiche={visibleBrandInsights.questionsByNiche}
-              brandId={brandId}
-              country={visibleBrandInsights.trendsAndEvents.country}
-              weekStartDate={visibleBrandInsights.weekStartDate}
-              generatedAt={
-                visibleBrandInsights.trendsAndEvents.generatedAt ?? visibleBrandInsights.generatedAt
-              }
-              status={visibleBrandInsights.trendsAndEvents.status ?? visibleBrandInsights.status}
-              weeks={visibleBrandInsights.weeks}
-              generationKind={visibleBrandInsights.generationKind}
-              generationCount={visibleBrandInsights.generationCount}
-              onWeekChange={selectTrendsWeek}
-              isWeekLoading={isLoadingTrendsWeek}
-              statusSlot={
-                <BrandInsightsGenerateButton
-                  brandId={brandId}
-                  lastGeneratedAt={
-                    visibleBrandInsights.trendsAndEvents.generatedAt ??
-                    visibleBrandInsights.generatedAt
-                  }
-                  force
-                />
-              }
-            />
-          </section>
         ) : null}
         {viewMode !== 'compare' ? (
           <div className="mb-3">
@@ -2814,6 +2763,7 @@ export function OrganicMetricsDashboard({
                   postDetailsById={postDetailsById}
                   loadingPostId={loadingPostId}
                   onRequestPostDetail={requestPostDetail}
+                  onRecoverPostMedia={recoverPostMedia}
                   hasMorePosts={hasMorePostWindows}
                   loadingMorePosts={loadingMorePostWindows}
                   onLoadMorePosts={loadMorePostWindow}
@@ -2824,6 +2774,7 @@ export function OrganicMetricsDashboard({
                   platform={platform}
                   rangePreset={rangePreset}
                   youtubePostType={youtubePostType}
+                  scrollRootRef={metricsScrollRef}
                 />
               </motion.div>
             ) : (

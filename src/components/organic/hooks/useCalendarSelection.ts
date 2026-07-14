@@ -1,9 +1,11 @@
 import * as React from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useCalendarStore } from "@/lib/organic/store";
+import { useDraftDeletionConfirmation } from '../primitives/DraftDeletionConfirmation';
 import type { OrganicCalendarDay } from "../primitives/types";
 
 export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
+  const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const {
     selectedDraftId,
     setSelectedDraftId,
@@ -55,10 +57,12 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
   const handleDelete = React.useCallback(() => {
     const idsToDelete = selectedDraftId ? [selectedDraftId] : selectedDraftIds;
     if (idsToDelete.length > 0) {
-      bulkDeleteDrafts(idsToDelete);
-      clearAll();
+      requestDraftDeletion(idsToDelete, (ids) => {
+        bulkDeleteDrafts(ids);
+        clearAll();
+      });
     }
-  }, [selectedDraftId, selectedDraftIds, bulkDeleteDrafts, clearAll]);
+  }, [selectedDraftId, selectedDraftIds, bulkDeleteDrafts, clearAll, requestDraftDeletion]);
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {

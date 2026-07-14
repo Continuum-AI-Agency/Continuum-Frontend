@@ -104,6 +104,7 @@ function JobCard({
               <Pill variant="muted">Queued</Pill>
               {onCancelAction && (
                 <Button
+                  aria-label="Cancel queued generation"
                   size="sm"
                   variant="ghost"
                   className="h-5 w-5 p-0 text-muted-foreground"
@@ -134,6 +135,7 @@ function JobCard({
               <Pill variant="warning">{stageLabel}</Pill>
               {onCancelAction && (
                 <Button
+                  aria-label="Cancel running generation"
                   size="sm"
                   variant="ghost"
                   className="h-5 w-5 p-0 text-muted-foreground"

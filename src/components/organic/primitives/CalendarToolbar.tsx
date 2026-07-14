@@ -26,6 +26,8 @@ import {
 } from '@/components/ui/context-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CalendarDateRange } from '@/lib/organic/store';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
@@ -36,6 +38,31 @@ import { PlannerAccountSwitcher } from './PlannerAccountSwitcher';
 import type { CreatePostOptions } from './planner-platforms';
 
 const WEEK_OPTS = { weekStartsOn: 1 } as const; // Monday-started, matches the planner
+
+function StatusLegend() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs">
+          Status legend
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56">
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-foreground">Post status</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="muted">Draft</Badge>
+            <Badge variant="violet">Generating</Badge>
+            <Badge variant="outline">Scheduled</Badge>
+            <Badge variant="success">Published</Badge>
+            <Badge variant="destructive">Failed</Badge>
+          </div>
+          <p className="text-2xs text-muted-foreground">Every status is labeled; color is secondary.</p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function toDayId(date: Date): string {
   return format(date, 'yyyy-MM-dd');
@@ -243,14 +270,26 @@ export function CalendarToolbar({
               ) : (
                 <TimeframeSelector dateRange={dateRange} onDateRangeChange={onDateRangeChange} />
               )}
-              <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                {selectedTrendCount}
-                {typeof maxTrendSelections === 'number' ? `/${maxTrendSelections}` : ''} trends
-              </Badge>
+              <StatusLegend />
+              <Separator orientation="vertical" className="h-5" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-2xs uppercase tracking-wide">
+                    This week · {selectedTrendCount}
+                    {typeof maxTrendSelections === 'number' ? `/${maxTrendSelections}` : ''} trends
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>Trend references selected for the current planning week</TooltipContent>
+              </Tooltip>
               {postedContentCount > 0 ? (
-                <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                  {postedContentCount} posted
-                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="text-2xs uppercase tracking-wide">
+                      This week · {postedContentCount} posted
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>Published posts loaded into this planning week</TooltipContent>
+                </Tooltip>
               ) : null}
             </div>
             <div className="flex items-center gap-2">
@@ -285,22 +324,23 @@ export function CalendarToolbar({
                 <LightningBoltIcon className="mr-1 h-3.5 w-3.5" />
                 Trends
               </Button>
+              <Separator orientation="vertical" className="h-5" />
               {isGenerating ? (
                 <DisabledControl hint={addHint}>
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Add post"
+                    size="sm"
                     disabled
                   >
-                    <PlusIcon className="h-3.5 w-3.5 animate-pulse" />
+                    <PlusIcon className="animate-pulse" data-icon="inline-start" />
+                    Create content
                   </Button>
                 </DisabledControl>
               ) : (
                 <AddPostMenu onCreatePost={onCreatePost} align="end">
-                  <Button type="button" size="icon-sm" variant="outline" aria-label="Add post">
-                    <PlusIcon className="h-3.5 w-3.5" />
+                  <Button type="button" size="sm">
+                    <PlusIcon data-icon="inline-start" />
+                    Create content
                   </Button>
                 </AddPostMenu>
               )}
@@ -328,7 +368,7 @@ export function CalendarToolbar({
           ) : null}
 
           {slotProgress ? (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 space-y-1" aria-live="polite" aria-atomic="true">
               <div className="space-y-0.5">
                 <p className="text-xs font-medium text-muted-foreground">
                   {slotProgress.completed}/{slotProgress.total} completed
@@ -395,7 +435,7 @@ export function CalendarToolbar({
         <ContextMenuItem
           onSelect={() => onCreatePost({ status: 'draft', mode: 'manual', format: 'Post' })}
         >
-          New post
+          Create content
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onClear}>

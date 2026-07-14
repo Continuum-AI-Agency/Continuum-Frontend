@@ -24,6 +24,7 @@ import { UNSCHEDULED_DAY_ID } from "./calendar-utils"
 import { DraftHoverCardContent } from "./DraftHoverCardContent"
 import { resolveDraftMediaAssetUrl } from "./DraftCardMedia"
 import { statusFrameClasses } from "./draft-card-styles"
+import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 
 const PLATFORM_BADGE_COLORS: Record<string, string> = {
   instagram: "bg-pink-500/15 text-pink-700 dark:text-pink-400",
@@ -316,6 +317,7 @@ export function OrganicListView({
   const [collapsed, setCollapsed] = React.useState<GroupState>({})
   const [creating, setCreating] = React.useState<string | null>(null)
   const bulkDeleteDrafts = useCalendarStore((s) => s.bulkDeleteDrafts)
+  const { requestDraftDeletion } = useDraftDeletionConfirmation()
   const updateDraft = useCalendarStore((s) => s.updateDraft)
 
   // Undated drafts (the "unscheduled" sentinel day) get their own group; the
@@ -402,7 +404,9 @@ export function OrganicListView({
               draft={draft}
               isSelected={draft.id === selectedDraftId}
               onSelect={() => onSelectDraft(draft.id)}
-              onDelete={() => onDeleteBacklogDraft(draft.id)}
+              onDelete={() =>
+                requestDraftDeletion([draft.id], (ids) => ids.forEach(onDeleteBacklogDraft))
+              }
             />
           ))}
           {backlogDrafts.length === 0 && creating !== "backlog" && (
@@ -433,7 +437,7 @@ export function OrganicListView({
                     isMultiSelected={selectedIdSet.has(draft.id)}
                     onSelect={() => onSelectDraft(draft.id)}
                     onToggle={() => onToggleSelection(draft.id)}
-                    onDelete={() => bulkDeleteDrafts([draft.id])}
+                    onDelete={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
                     onRegenerate={() => onRegenerate(draft.id)}
                   />
                 ))}
@@ -467,7 +471,7 @@ export function OrganicListView({
               isMultiSelected={selectedIdSet.has(draft.id)}
               onSelect={() => onSelectDraft(draft.id)}
               onToggle={() => onToggleSelection(draft.id)}
-              onDelete={() => bulkDeleteDrafts([draft.id])}
+              onDelete={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
               onRegenerate={() => onRegenerate(draft.id)}
             />
           ))}

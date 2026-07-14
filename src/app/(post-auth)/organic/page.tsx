@@ -358,7 +358,11 @@ async function OrganicContent({
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}
             trends={selectorTrends}
-            activePlatforms={fallbackPlatforms}
+            // The planner adds Instagram as its usable empty-state row. Passing
+            // every MVP platform here would falsely present disconnected
+            // LinkedIn as active; trend suggestions can still use the broader
+            // fallback platform set above.
+            activePlatforms={activePlatformKeys}
             platformAccountIds={platformAccountIds}
             platformAccountOptions={platformAccountOptions}
             maxTrendSelections={5}

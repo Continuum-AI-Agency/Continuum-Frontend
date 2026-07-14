@@ -148,6 +148,52 @@ describe('usePublishDraft', () => {
     expect(showMock.mock.calls[0][0].description).toContain('LinkedIn');
   });
 
+  // THE regression lock. On 2026-07-14 one click on Publish put three identical posts on
+  // Instagram. The backend stripped CORS from the hijacked publish stream, so the browser
+  // rejected a response the server had already acted on; `fetch` threw "Failed to fetch";
+  // this hook classified that as retryable and replayed the POST twice on a 2s/4s backoff.
+  // Every replay published for real.
+  //
+  // A publish is not idempotent, and a network error tells us NOTHING about whether the post
+  // went out — the request may have succeeded and only the response been lost. So: never retry
+  // it automatically. Ever.
+  it('does NOT retry a failed publish — a network error may mean the post already went out', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(draft);
+    });
+
+    // Wait past the old backoff schedule (2s + 4s). If a timer were still armed, the second and
+    // third publishes would land in this window — as they did on the real account.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 7000));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.current.isPublishing).toBe(false);
+    expect(result.current.error).toBeTruthy();
+  }, 15000);
+
+  it('retries only when the user explicitly asks', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(draft);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      result.current.retryPublish();
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
   it('registers an unpersisted draft against the backend origin first', async () => {
     const fetchMock = vi
       .fn()

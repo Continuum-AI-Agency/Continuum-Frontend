@@ -10,39 +10,57 @@
 // placeholder while assembling).
 
 import type { CreativeLeaderboardEntry } from '@continuum/contracts';
+import { TrendingUp } from 'lucide-react';
 import * as React from 'react';
 
+import { Pill, type PillProps, PillStatus } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCreativeStrategyReport } from '@/hooks/useCreativeStrategyReport';
 import { audienceLine } from '@/lib/organic/creative-strategy-rows';
 import { cn } from '@/lib/utils';
 import { CreativeStrategyTable } from './creative-strategy/CreativeStrategyTable';
 
+// An angle's label is a full sentence in the report. The chip shows as much as fits;
+// the tooltip carries the whole thing plus the measured number behind it.
 function leaderboardMetricLine(entry: CreativeLeaderboardEntry): string {
   const base = `${entry.count} ${entry.count === 1 ? 'creative' : 'creatives'}`;
   if (entry.metricName && entry.avgMetric !== null) {
     const formatted =
       Math.abs(entry.avgMetric) < 1 ? entry.avgMetric.toFixed(3) : entry.avgMetric.toFixed(2);
-    return `${base} · avg ${entry.metricName.replace(/_/g, ' ')} ${formatted}`;
+    return `${entry.label} — ${base} · avg ${entry.metricName.replace(/_/g, ' ')} ${formatted}`;
   }
-  return base;
+  return `${entry.label} — ${base}`;
+}
+
+// The leaderboards are already ordered by the report. Rank is what the eye should
+// read first, so it carries both the numeral and the tone — brand violet for the
+// winner, teal for the runner-up, muted for the rest.
+function rankVariant(rank: number): PillProps['variant'] {
+  if (rank === 0) return 'violet';
+  if (rank === 1) return 'teal';
+  return 'muted';
 }
 
 function Leaderboard({ title, entries }: { title: string; entries: CreativeLeaderboardEntry[] }) {
   if (entries.length === 0) return null;
   return (
     <div>
-      <span className="mb-1 block text-xs text-muted-foreground uppercase tracking-wide">
+      <span className="mb-1.5 block text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
         {title}
       </span>
-      <div className="flex gap-2 flex-wrap">
-        {entries.map((entry) => (
+      <div className="flex gap-1.5 flex-wrap">
+        {entries.map((entry, rank) => (
           <Tooltip key={`${title}-${entry.label}`}>
             <TooltipTrigger asChild>
-              <span className="cursor-default rounded-full border border-subtle bg-muted/40 px-2 py-0.5 text-xs">
-                {entry.label}
-                <span className="ml-1 text-muted-foreground tabular-nums">{entry.count}</span>
-              </span>
+              <Pill
+                variant={rankVariant(rank)}
+                className="cursor-default px-2 py-1 text-xs"
+                data-testid="creative-leaderboard-chip"
+              >
+                <PillStatus className="text-2xs tabular-nums">#{rank + 1}</PillStatus>
+                <span className="max-w-64 truncate font-medium">{entry.label}</span>
+                <span className="tabular-nums opacity-70">{entry.count}</span>
+              </Pill>
             </TooltipTrigger>
             <TooltipContent>{leaderboardMetricLine(entry)}</TooltipContent>
           </Tooltip>
@@ -79,12 +97,20 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
   const sources = report.sourceCounts;
 
   return (
-    <div className="rounded-lg border border-subtle bg-surface/95">
+    // The highest-value panel on the tab: it is the only one that carries the
+    // brand accent, so it reads as the focal card among otherwise-flat surfaces.
+    <div
+      data-tour-id="organic-whats-working"
+      className="rounded-lg border border-primary/30 bg-primary/[0.04]"
+    >
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <span className="block text-sm font-semibold">What&apos;s Working</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              <TrendingUp className="size-4 shrink-0 text-primary" aria-hidden="true" />
+              What&apos;s Working
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
               from your top {sources.topOrganicPosts} posts + {sources.topAds} ads
               {audience ? ` · audience ${audience}` : ''}
             </span>
@@ -93,8 +119,8 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
             type="button"
             onClick={() => setOpen((value) => !value)}
             className={cn(
-              'rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors',
-              'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+              'shrink-0 rounded-md border border-primary/30 px-2 py-1 text-xs text-muted-foreground transition-colors',
+              'hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             )}
             aria-expanded={open}
           >

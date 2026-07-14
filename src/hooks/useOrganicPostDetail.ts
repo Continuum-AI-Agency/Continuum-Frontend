@@ -45,6 +45,9 @@ type UseOrganicPostDetailReturn = {
   // same postId — in-flight and already-loaded ids are deduped internally.
   // Resolves the post (cached or freshly fetched), or null when unavailable.
   requestPostDetail: (postId: string) => Promise<OrganicPost | null>;
+  // Bypasses the local/server cache once per post after a rendered media URL
+  // fails. Repeated image errors are deduped until the account scope resets.
+  recoverPostMedia: (postId: string) => Promise<OrganicPost | null>;
   loadingPostId: string | null;
   // Scoped to integrationAccountId, keyed by post id. Backed by
   // usePostAnalyticsStore, so any consumer sharing an account+post pair reads
@@ -75,11 +78,15 @@ export function useOrganicPostDetail(
   const [loadingPostId, setLoadingPostId] = React.useState<string | null>(null);
   const loadedPostDetailIdsRef = React.useRef<Set<string>>(new Set());
   const loadingPostDetailIdsRef = React.useRef<Set<string>>(new Set());
+  const recoveredMediaPostIdsRef = React.useRef<Set<string>>(new Set());
+  const mediaRecoveryGenerationRef = React.useRef<Map<string, number>>(new Map());
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: platform/integrationAccountId are intentional trigger deps (reset gating refs on account switch), not data deps the effect body reads
   React.useEffect(() => {
     loadedPostDetailIdsRef.current.clear();
     loadingPostDetailIdsRef.current.clear();
+    recoveredMediaPostIdsRef.current.clear();
+    mediaRecoveryGenerationRef.current.clear();
     setLoadingPostId(null);
   }, [platform, integrationAccountId]);
 
@@ -87,6 +94,7 @@ export function useOrganicPostDetail(
     async (postId: string): Promise<OrganicPost | null> => {
       if (!integrationAccountId || postId.length === 0) return null;
       if (loadingPostDetailIdsRef.current.has(postId)) return null;
+      const mediaRecoveryGeneration = mediaRecoveryGenerationRef.current.get(postId) ?? 0;
 
       const cached = usePostAnalyticsStore
         .getState()
@@ -120,7 +128,11 @@ export function useOrganicPostDetail(
         }
         if (detailedPost) {
           loadedPostDetailIdsRef.current.add(postId);
-          setPostDetailInStore({ integrationAccountId, post: detailedPost });
+          // If a media-error recovery started while this ordinary cached request
+          // was in flight, do not let its stale response overwrite the forced one.
+          if ((mediaRecoveryGenerationRef.current.get(postId) ?? 0) === mediaRecoveryGeneration) {
+            setPostDetailInStore({ integrationAccountId, post: detailedPost });
+          }
         }
         return detailedPost;
       } catch (error) {
@@ -134,12 +146,61 @@ export function useOrganicPostDetail(
     [brandId, platform, integrationAccountId, setPostDetailInStore],
   );
 
+  const recoverPostMedia = React.useCallback(
+    async (postId: string): Promise<OrganicPost | null> => {
+      if (!integrationAccountId || postId.length === 0) return null;
+
+      const current = () =>
+        usePostAnalyticsStore.getState().getPostDetail({ integrationAccountId, postId }) ?? null;
+      if (recoveredMediaPostIdsRef.current.has(postId)) return current();
+
+      // Claim the single recovery attempt before yielding so duplicate React
+      // error events and concurrent gallery/detail renderers collapse to one fetch.
+      recoveredMediaPostIdsRef.current.add(postId);
+      const recoveryGeneration = (mediaRecoveryGenerationRef.current.get(postId) ?? 0) + 1;
+      mediaRecoveryGenerationRef.current.set(postId, recoveryGeneration);
+      setLoadingPostId(postId);
+      try {
+        const data = await fetchOrganicAnalytics({
+          brandId,
+          integrationAccountId,
+          platform,
+          range: { preset: 'last_30d' },
+          scope: 'posts',
+          selectedPostId: postId,
+          forceRefresh: true,
+        });
+        const refreshedPost = (data.posts ?? []).find((post) => post.id === postId) ?? null;
+        if (refreshedPost) {
+          loadedPostDetailIdsRef.current.add(postId);
+          setPostDetailInStore({ integrationAccountId, post: refreshedPost });
+        }
+        return refreshedPost;
+      } catch (error) {
+        console.error('[useOrganicPostDetail] Failed to recover post media', error);
+        return null;
+      } finally {
+        mediaRecoveryGenerationRef.current.set(postId, recoveryGeneration + 1);
+        setLoadingPostId((currentPostId) => (currentPostId === postId ? null : currentPostId));
+      }
+    },
+    [brandId, platform, integrationAccountId, setPostDetailInStore],
+  );
+
   const resetPostDetails = React.useCallback(() => {
     loadedPostDetailIdsRef.current.clear();
     loadingPostDetailIdsRef.current.clear();
+    recoveredMediaPostIdsRef.current.clear();
+    mediaRecoveryGenerationRef.current.clear();
     usePostAnalyticsStore.getState().clearPostDetails();
     setLoadingPostId(null);
   }, []);
 
-  return { requestPostDetail, loadingPostId, postDetailsById, resetPostDetails };
+  return {
+    requestPostDetail,
+    recoverPostMedia,
+    loadingPostId,
+    postDetailsById,
+    resetPostDetails,
+  };
 }

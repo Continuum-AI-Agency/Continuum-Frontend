@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { AgentJobState } from './types';
+import { applyOrganicFrame } from './applyOrganicFrame';
 import { initialPanelState, panelReducer } from './useOrganicAgentReducer';
 
 describe('useOrganicAgentReducer', () => {
@@ -79,6 +80,162 @@ describe('useOrganicAgentReducer', () => {
 
     expect(next.jobs).toEqual({});
     expect(next.pipeline.ghost).toBeDefined();
+  });
+
+  it('removes a cancelled job and its active pipeline placeholder', () => {
+    let state = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [
+        {
+          jobId: 'job-1',
+          brandId: 'brand-1',
+          status: 'running',
+          toolCallId: 'call-1',
+        } as AgentJobState,
+      ],
+    });
+
+    applyOrganicFrame(
+      {
+        type: 'job.cancelled',
+        data: { jobId: 'job-1', brandId: 'brand-1', status: 'cancelled' },
+      },
+      (action) => {
+        state = panelReducer(state, action);
+      },
+      'chat',
+    );
+
+    expect(state.jobs['job-1']).toBeUndefined();
+    expect(state.pipeline['job-1']).toBeUndefined();
+  });
+
+  it('restores an optimistically removed queued job after cancellation fails', () => {
+    const queuedJob: AgentJobState = {
+      jobId: 'job-1',
+      brandId: 'brand-1',
+      status: 'queued',
+    };
+    const hydrated = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [queuedJob],
+    });
+    const removed = panelReducer(hydrated, {
+      type: 'JOB_CANCEL_START',
+      jobId: queuedJob.jobId,
+    });
+    const restored = panelReducer(removed, { type: 'JOB_CANCEL_FAILURE', jobId: queuedJob.jobId });
+
+    expect(removed.jobs['job-1']).toBeUndefined();
+    expect(restored.jobs['job-1']).toEqual(queuedJob);
+  });
+
+  it('does not resurrect a stale queued job when progress arrives before X fails', () => {
+    const queuedJob: AgentJobState = {
+      jobId: 'job-1',
+      brandId: 'brand-1',
+      status: 'queued',
+    };
+    const hydrated = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [queuedJob],
+    });
+    const removed = panelReducer(hydrated, { type: 'JOB_CANCEL_START', jobId: 'job-1' });
+    const progressed = panelReducer(removed, {
+      type: 'JOB_UPDATE',
+      job: { jobId: 'job-1', brandId: 'brand-1', status: 'running', stage: 'drafting' },
+    });
+    const rollback = panelReducer(progressed, {
+      type: 'JOB_CANCEL_FAILURE',
+      jobId: queuedJob.jobId,
+    });
+
+    expect(rollback.jobs['job-1']).toMatchObject({ status: 'running', stage: 'drafting' });
+  });
+
+  it('does not overwrite newer pipeline progress when X fails', () => {
+    const queuedJob: AgentJobState = {
+      jobId: 'job-1',
+      brandId: 'brand-1',
+      status: 'queued',
+      toolCallId: 'tool-1',
+    };
+    let state = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [queuedJob],
+    });
+    state = panelReducer(state, { type: 'JOB_CANCEL_START', jobId: queuedJob.jobId });
+    state = panelReducer(state, {
+      type: 'PIPELINE_STAGE',
+      event: {
+        jobId: queuedJob.jobId,
+        brandId: queuedJob.brandId,
+        planId: null,
+        planItemId: null,
+        stage: 'assets',
+        status: 'active',
+        pct: 70,
+      },
+    });
+    state = panelReducer(state, { type: 'JOB_CANCEL_FAILURE', jobId: queuedJob.jobId });
+
+    expect(state.jobs['job-1']).toBeUndefined();
+    expect(state.pipeline['job-1']).toMatchObject({
+      status: 'running',
+      currentStage: 'assets',
+      pct: 70,
+    });
+  });
+
+  it('does not overwrite a newer pipeline card when X fails', () => {
+    const queuedJob: AgentJobState = {
+      jobId: 'job-1',
+      brandId: 'brand-1',
+      status: 'queued',
+      toolCallId: 'tool-1',
+    };
+    let state = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [queuedJob],
+    });
+    state = panelReducer(state, { type: 'JOB_CANCEL_START', jobId: queuedJob.jobId });
+    state = panelReducer(state, {
+      type: 'PIPELINE_CARD',
+      card: {
+        jobId: queuedJob.jobId,
+        status: 'running',
+        currentStage: 'quality',
+        pct: 85,
+      },
+    });
+    state = panelReducer(state, { type: 'JOB_CANCEL_FAILURE', jobId: queuedJob.jobId });
+
+    expect(state.jobs['job-1']).toBeUndefined();
+    expect(state.pipeline['job-1']).toMatchObject({
+      status: 'running',
+      currentStage: 'quality',
+      pct: 85,
+    });
+  });
+
+  it('does not resurrect a stale queued job when job.cancelled arrives before X fails', () => {
+    const queuedJob: AgentJobState = {
+      jobId: 'job-1',
+      brandId: 'brand-1',
+      status: 'queued',
+    };
+    let state = panelReducer(initialPanelState(), { type: 'HYDRATE_JOBS', jobs: [queuedJob] });
+    state = panelReducer(state, { type: 'JOB_CANCEL_START', jobId: 'job-1' });
+    applyOrganicFrame(
+      { type: 'job.cancelled', data: { jobId: 'job-1', brandId: 'brand-1' } },
+      (action) => {
+        state = panelReducer(state, action);
+      },
+      'chat',
+    );
+    state = panelReducer(state, { type: 'JOB_CANCEL_FAILURE', jobId: queuedJob.jobId });
+
+    expect(state.jobs['job-1']).toBeUndefined();
   });
 
   it('does not throw when hydrate payload is not iterable', () => {

@@ -29,6 +29,7 @@ mock.module('@radix-ui/react-icons', () => ({
 }));
 
 mock.module('@/components/ui/button', () => ({
+  buttonVariants: () => '',
   Button: ({
     children,
     disabled,
@@ -80,6 +81,17 @@ mock.module('@/components/ui/ToastProvider', () => ({
 
 mock.module('@/components/ui/progress', () => ({
   Progress: ({ value }: { value?: number }) => <div data-testid="progress" data-value={value} />,
+}));
+
+mock.module('@/components/ui/separator', () => ({
+  Separator: () => <span aria-hidden="true" />,
+}));
+
+mock.module('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 mock.module('@/components/ui/context-menu', () => ({
@@ -309,14 +321,14 @@ describe('CalendarToolbar', () => {
     expect(container.textContent).not.toContain('Planning mode');
   });
 
-  it('creates a manual post (not an AI flow) from the New post action', () => {
+  it('offers one clearly named content creation action', () => {
     const onCreatePost = mock();
     const { container } = render(<CalendarToolbar {...defaultProps({ onCreatePost })} />);
-    const newPost = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'New post',
+    const createActions = Array.from(container.querySelectorAll('button')).filter(
+      (button) => button.textContent?.trim() === 'Create content',
     );
-    expect(newPost).toBeTruthy();
-    fireEvent.click(newPost!);
+    expect(createActions.length).toBeGreaterThan(0);
+    fireEvent.click(createActions.at(-1)!);
     expect(onCreatePost).toHaveBeenCalledWith({
       status: 'draft',
       mode: 'manual',

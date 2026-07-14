@@ -82,36 +82,55 @@ const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = ['instagram', 'linkedin
 
 const COMING_SOON_ORDER: PlannerPlatformKey[] = ['facebook', 'youtube', 'tiktok', 'x'];
 
+// A planner row is expensive: every one of its seven cells claims a whole cell's worth
+// of vertical space. So a row has to earn its keep — a platform gets a row only if the
+// brand can actually post to it (a connected account) or already has posts on it.
+// Everything else, including the not-yet-supported channels, collapses out of the grid.
+export type BuildPlannerPlatformsOptions = {
+  /** Render the not-yet-supported channels as their own (compact) rows. Off by default;
+      the workspace offers them behind a single collapsed strip instead. */
+  includeComingSoon?: boolean;
+};
+
+export function comingSoonPlannerPlatforms(): PlannerPlatform[] {
+  return COMING_SOON_ORDER.map((platform) => ({
+    ...PLATFORM_META[platform],
+    Icon: PLATFORM_META[platform].Icon ?? CircleDashed,
+    comingSoon: true,
+  }));
+}
+
 export function buildPlannerPlatforms(
   activePlatforms: OrganicPlatformKey[],
   days: OrganicCalendarDay[],
+  options: BuildPlannerPlatformsOptions = {},
 ): PlannerPlatform[] {
-  const discoveredSchedulable = new Set<OrganicPlatformTag>(['instagram', 'linkedin']);
+  const scheduled = new Set<OrganicPlatformTag>();
 
   activePlatforms.forEach((platform) => {
     if (SCHEDULABLE_PLATFORM_ORDER.includes(platform)) {
-      discoveredSchedulable.add(platform);
+      scheduled.add(platform);
     }
   });
   days.forEach((day) => {
     day.slots.forEach((draft) => {
       draft.platforms.forEach((platform) => {
         if (SCHEDULABLE_PLATFORM_ORDER.includes(platform)) {
-          discoveredSchedulable.add(platform);
+          scheduled.add(platform);
         }
       });
     });
   });
 
+  // A planner with no rows would have nowhere to drop a post and no "+" to press, so
+  // the default channel always survives the filter.
+  if (scheduled.size === 0) scheduled.add('instagram');
+
   const schedulablePlatforms = SCHEDULABLE_PLATFORM_ORDER.filter((platform) =>
-    discoveredSchedulable.has(platform),
+    scheduled.has(platform),
   ).map((platform) => PLATFORM_META[platform]);
 
-  const comingSoonPlatforms = COMING_SOON_ORDER.map((platform) => ({
-    ...PLATFORM_META[platform],
-    Icon: PLATFORM_META[platform].Icon ?? CircleDashed,
-    comingSoon: true,
-  }));
+  if (!options.includeComingSoon) return schedulablePlatforms;
 
-  return [...schedulablePlatforms, ...comingSoonPlatforms];
+  return [...schedulablePlatforms, ...comingSoonPlannerPlatforms()];
 }

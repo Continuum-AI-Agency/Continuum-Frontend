@@ -9,8 +9,7 @@ import {
 import type { AgentChatInput } from '@/components/organic/agent/types';
 import type { PanelAction } from '@/components/organic/agent/useOrganicAgentReducer';
 import { useAgentRunStore } from '@/lib/agents/runStore';
-import { getApiBaseUrl } from '@/lib/api/config';
-import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { confirmOrganicRunCancellation } from '@/lib/organic/agent-cancellation';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
 
 const RECONNECT_BACKOFF_MS = 750;
@@ -67,20 +66,23 @@ export function useOrganicAgentStream(
    */
   const cancel = useCallback(async () => {
     const runId = runIdRef.current;
-    detach();
-    if (!runId) return;
+    if (!runId) return { ok: false as const, error: 'No active run to stop.' };
 
-    try {
-      const token = await getBrowserAccessToken();
-      if (!token) return;
-      await fetch(`${getApiBaseUrl()}/api/organic/agent/runs/${runId}/cancel`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {
-      // The run row is the source of truth; a failed cancel surfaces as the run continuing.
-    }
-  }, [detach]);
+    return confirmOrganicRunCancellation({
+      runId,
+      acknowledge: (cancelledRunId) => {
+        const record = useAgentRunStore.getState().runs[cancelledRunId];
+        if (record) {
+          useAgentRunStore.getState().upsertRun({ ...record.run, status: 'cancelled' });
+        }
+      },
+      isCurrent: (cancelledRunId) => runIdRef.current === cancelledRunId,
+      reconcileCurrent: () => {
+        dispatch({ type: 'STREAM_COMPLETE' });
+        detach();
+      },
+    });
+  }, [detach, dispatch]);
 
   // Unmount detaches the view. It does NOT cancel: this cleanup used to abort the run's
   // only reader, which — together with the Backend aborting on socket close — is why

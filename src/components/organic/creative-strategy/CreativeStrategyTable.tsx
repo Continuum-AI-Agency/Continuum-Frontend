@@ -178,7 +178,6 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
           />
         );
       }}
-      maxHeight="34rem"
     />
   );
 }
