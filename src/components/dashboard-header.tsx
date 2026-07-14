@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import React, { Suspense } from 'react';
+import { BrandSwitcherMenu } from '@/components/navigation/BrandSwitcherMenu';
 import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -53,6 +54,7 @@ function DashboardHeaderInner() {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        <BrandSwitcherMenu triggerId="global-brand-switcher" />
         <NotificationsBell />
       </div>
     </header>
@@ -84,8 +86,15 @@ function useDashboardWelcomeToast() {
     if (!toast) return;
     if (!shouldShowDashboardWelcomeToast(pathname)) return;
 
-    const key = `${pathname}:${displayName ?? 'User'}`;
+    const key = `continuum:dashboard-welcome:${user.id}`;
     if (lastShownKeyRef.current === key) return;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, 'shown');
+    } catch {
+      // Storage can be unavailable in hardened/private browser contexts; the
+      // in-memory guard still prevents repeats during this mounted session.
+    }
     lastShownKeyRef.current = key;
 
     toast.show(createDashboardWelcomeToastOptions(displayName ?? 'User'));

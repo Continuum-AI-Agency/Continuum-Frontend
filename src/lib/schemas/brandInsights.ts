@@ -314,3 +314,15 @@ export type BrandInsightsBrandVoice = z.infer<typeof brandInsightsBrandVoiceSche
 export type BrandInsightsProfile = z.infer<typeof brandInsightsProfileSchema>;
 export type BrandInsightsGenerationWindow = z.infer<typeof brandInsightsGenerationWindowSchema>;
 export type BrandInsightsGenerateInput = z.infer<typeof brandInsightsGenerateInputSchema>;
+
+/** One week of brand-insight signals, as the Organic surfaces hand them around. */
+export type OrganicMetricsBrandInsights = {
+  trendsAndEvents: BrandInsightsTrendsAndEvents;
+  questionsByNiche?: BrandInsightsQuestionsByNiche;
+  generatedAt?: string;
+  status?: string;
+  weekStartDate?: string;
+  weeks?: BrandInsightsWeekSummary[];
+  generationKind?: 'initial' | 'regeneration';
+  generationCount?: number;
+};

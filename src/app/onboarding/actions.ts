@@ -1,7 +1,25 @@
-"use server";
+'use server';
 
-import { randomUUID } from "node:crypto";
-import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
+import { randomUUID } from 'node:crypto';
+import { documentCategorySchema } from '@continuum/contracts';
+import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
+import { getClaimsIdentity } from '@/lib/auth/claims';
+import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
+import { log } from '@/lib/observability/logger';
+import {
+  approveOnboardingBrandProfile,
+  type IntegrationProvider,
+} from '@/lib/onboarding/agentClient';
+import { mapOnboardingStateToAgentPayload } from '@/lib/onboarding/mapping';
+import type {
+  OnboardingConnectionAccount,
+  OnboardingDocument,
+  OnboardingPatch,
+  OnboardingState,
+} from '@/lib/onboarding/state';
+import { createBrandId } from '@/lib/onboarding/state';
 import {
   appendDocument,
   applyOnboardingPatch,
@@ -9,55 +27,40 @@ import {
   removeDocument,
   resetOnboardingState,
   updateDocumentCategory,
-} from "@/lib/onboarding/storage";
-import { documentCategorySchema } from "@continuum/contracts";
-import type {
-  OnboardingDocument,
-  OnboardingPatch,
-  OnboardingState,
-  OnboardingConnectionAccount,
-} from "@/lib/onboarding/state";
-import { createBrandId } from "@/lib/onboarding/state";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { mapOnboardingStateToAgentPayload } from "@/lib/onboarding/mapping";
-import { approveOnboardingBrandProfile, type IntegrationProvider } from "@/lib/onboarding/agentClient";
-import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-import { revalidatePath } from "next/cache";
-import { after } from "next/server";
-import { getPostHogClient } from "@/lib/posthog-server";
-import { getClaimsIdentity } from "@/lib/auth/claims";
-
+} from '@/lib/onboarding/storage';
+import { getPostHogClient } from '@/lib/posthog-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const getIntegrationServer = async () => {
-  return import("@/lib/api/integrations/server");
+  return import('@/lib/api/integrations/server');
 };
 
 const PLATFORM_KEY_TO_PROVIDER: Record<string, IntegrationProvider> = {
-  youtube: "youtube",
-  googleAds: "google-ads",
-  dv360: "google-ads",
-  googleAnalytics: "google-ads",
-  instagram: "meta",
-  facebook: "meta",
-  threads: "meta",
-  tiktok: "tiktok",
-  linkedin: "linkedin",
+  youtube: 'youtube',
+  googleAds: 'google-ads',
+  dv360: 'google-ads',
+  googleAnalytics: 'google-ads',
+  instagram: 'meta',
+  facebook: 'meta',
+  threads: 'meta',
+  tiktok: 'tiktok',
+  linkedin: 'linkedin',
 };
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 async function fetchAssignedIntegrationContext(
   supabase: SupabaseServerClient,
-  brandId: string
+  brandId: string,
 ): Promise<{ accountIds: string[]; providers: IntegrationProvider[] }> {
   const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("brand_profile_integration_accounts")
-    .select("integration_account_id, integration_accounts_assets:integration_account_id(type)")
-    .eq("brand_profile_id", brandId);
+    .schema('brand_profiles')
+    .from('brand_profile_integration_accounts')
+    .select('integration_account_id, integration_accounts_assets:integration_account_id(type)')
+    .eq('brand_profile_id', brandId);
 
   if (error) {
-    console.warn("[approveAndLaunchOnboardingAction] BPIA fetch failed", error);
+    log.warn('[approveAndLaunchOnboardingAction] BPIA fetch failed', { error: String(error) });
     return { accountIds: [], providers: [] };
   }
 
@@ -89,7 +92,7 @@ export async function fetchOnboardingStateAction(brandId: string): Promise<Onboa
 
 export async function mutateOnboardingStateAction(
   brandId: string,
-  patch: OnboardingPatch
+  patch: OnboardingPatch,
 ): Promise<OnboardingState> {
   return applyOnboardingPatch(brandId, patch);
 }
@@ -110,17 +113,14 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
   // defensively on its first attempt.
   after(async () => {
     try {
-      const { warmBrandNowServer } = await import("@/lib/api/warmBrand.server");
+      const { warmBrandNowServer } = await import('@/lib/api/warmBrand.server');
       await warmBrandNowServer(brandId);
     } catch (error) {
-      console.warn("[completeOnboardingAction] brand warm failed", {
-        brandId,
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+      log.error('[completeOnboardingAction] brand warm failed', error, { brandId });
     }
   });
 
-  revalidatePath("/", "layout");
+  revalidatePath('/', 'layout');
   return state;
 }
 
@@ -130,14 +130,14 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
 // approveAndLaunchOnboardingAction = this + completeOnboardingAction (classic flow).
 export async function approveOnboardingAndStartAnalysisAction(
   brandId: string,
-  options?: { idempotencyKey?: string }
+  options?: { idempotencyKey?: string },
 ): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const user = await getClaimsIdentity();
   const userId = user?.id;
 
   if (!userId) {
-    throw new Error("User session not found");
+    throw new Error('User session not found');
   }
 
   const state = await fetchOnboardingState(brandId);
@@ -147,7 +147,7 @@ export async function approveOnboardingAndStartAnalysisAction(
   if (assignedFromBpia.accountIds.length > 0) {
     payload.runContext.integration_account_ids = assignedFromBpia.accountIds;
     payload.runContext.integrated_platforms = Array.from(
-      new Set([...payload.runContext.integrated_platforms, ...assignedFromBpia.providers])
+      new Set([...payload.runContext.integrated_platforms, ...assignedFromBpia.providers]),
     );
   }
 
@@ -155,7 +155,7 @@ export async function approveOnboardingAndStartAnalysisAction(
     payload,
     idempotencyKey: options?.idempotencyKey,
   });
-  console.info("[approveOnboardingAndStartAnalysisAction] Brand profile approved", {
+  console.info('[approveOnboardingAndStartAnalysisAction] Brand profile approved', {
     brandId,
     agentBrandProfileId: approved.brand_profile.id,
   });
@@ -164,35 +164,39 @@ export async function approveOnboardingAndStartAnalysisAction(
   const readinessFindings = state.brand.readiness?.findings ?? null;
   after(async () => {
     try {
-      const { runStrategicAnalysisServer } = await import("@/lib/api/strategicAnalyses.server");
+      const { runStrategicAnalysisServer } = await import('@/lib/api/strategicAnalyses.server');
       const analysisAck = await runStrategicAnalysisServer({
         brandId,
         readinessScore,
         readinessFindings,
       });
-      console.info("[approveOnboardingAndStartAnalysisAction] Strategic analysis triggered", {
+      console.info('[approveOnboardingAndStartAnalysisAction] Strategic analysis triggered', {
         brandId,
         runId: analysisAck.runId,
         taskId: analysisAck.taskId,
         status: analysisAck.status,
       });
     } catch (error) {
-      console.warn("[approveOnboardingAndStartAnalysisAction] Strategic analysis kickoff failed", {
-        brandId,
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+      log.error(
+        '[approveOnboardingAndStartAnalysisAction] Strategic analysis kickoff failed',
+        error,
+        {
+          brandId,
+        },
+      );
     }
   });
 
-  if (process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== "false") {
+  if (process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== 'false') {
     after(async () => {
       try {
-        const { warmOnboardingCompetitorsServer } = await import("@/lib/api/onboardingInspirations.server");
+        const { warmOnboardingCompetitorsServer } = await import(
+          '@/lib/api/onboardingInspirations.server'
+        );
         await warmOnboardingCompetitorsServer(brandId);
       } catch (error) {
-        console.warn("[approveOnboardingAndStartAnalysisAction] competitor warm failed", {
+        log.error('[approveOnboardingAndStartAnalysisAction] competitor warm failed', error, {
           brandId,
-          message: error instanceof Error ? error.message : "Unknown error",
         });
       }
     });
@@ -202,7 +206,7 @@ export async function approveOnboardingAndStartAnalysisAction(
   // brand-kit.json) so generation and other features can map to it by brandId.
   after(async () => {
     try {
-      const { persistBrandKitServer } = await import("@/lib/api/onboardingInspirations.server");
+      const { persistBrandKitServer } = await import('@/lib/api/onboardingInspirations.server');
       await persistBrandKitServer({
         brandId,
         colors: state.brand.colors ?? [],
@@ -210,9 +214,8 @@ export async function approveOnboardingAndStartAnalysisAction(
         logoPath: state.brand.logoPath ?? null,
       });
     } catch (error) {
-      console.warn("[approveOnboardingAndStartAnalysisAction] brand kit persist failed", {
+      log.error('[approveOnboardingAndStartAnalysisAction] brand kit persist failed', error, {
         brandId,
-        message: error instanceof Error ? error.message : "Unknown error",
       });
     }
   });
@@ -220,7 +223,7 @@ export async function approveOnboardingAndStartAnalysisAction(
   const posthog = getPostHogClient();
   posthog.capture({
     distinctId: userId,
-    event: "onboarding_completed",
+    event: 'onboarding_completed',
     properties: {
       brand_id: brandId,
       integration_count: payload.runContext.integration_account_ids.length,
@@ -231,7 +234,7 @@ export async function approveOnboardingAndStartAnalysisAction(
 
 export async function approveAndLaunchOnboardingAction(
   brandId: string,
-  options?: { idempotencyKey?: string }
+  options?: { idempotencyKey?: string },
 ): Promise<OnboardingState> {
   await approveOnboardingAndStartAnalysisAction(brandId, options);
   return completeOnboardingAction(brandId);
@@ -239,16 +242,17 @@ export async function approveAndLaunchOnboardingAction(
 
 export async function registerDocumentMetadataAction(
   brandId: string,
-  document: Omit<OnboardingDocument, "id" | "createdAt" | "status"> & {
-  id?: string;
-  status?: OnboardingDocument["status"];
-}): Promise<OnboardingState> {
+  document: Omit<OnboardingDocument, 'id' | 'createdAt' | 'status'> & {
+    id?: string;
+    status?: OnboardingDocument['status'];
+  },
+): Promise<OnboardingState> {
   const payload: OnboardingDocument = {
     id: document.id ?? randomUUID(),
     name: document.name,
     source: document.source,
     createdAt: new Date().toISOString(),
-    status: document.status ?? "ready",
+    status: document.status ?? 'ready',
     size: document.size,
     externalUrl: document.externalUrl,
   };
@@ -258,7 +262,7 @@ export async function registerDocumentMetadataAction(
 
 export async function removeDocumentAction(
   brandId: string,
-  documentId: string
+  documentId: string,
 ): Promise<OnboardingState> {
   return removeDocument(brandId, documentId);
 }
@@ -266,7 +270,7 @@ export async function removeDocumentAction(
 export async function updateDocumentCategoryAction(
   brandId: string,
   documentId: string,
-  category: string
+  category: string,
 ): Promise<OnboardingState> {
   const parsed = documentCategorySchema.safeParse(category);
   if (!parsed.success) {
@@ -279,47 +283,50 @@ export async function enqueueDocumentEmbedAction(
   brandId: string,
   input: {
     name: string;
-    source: OnboardingDocument["source"];
+    source: OnboardingDocument['source'];
     externalUrl?: string;
     storagePath?: string;
     mimeType?: string;
     fileName?: string;
     size?: number;
-  }
+  },
 ): Promise<OnboardingState> {
   const supabase = await createSupabaseServerClient();
   const documentId = createBrandId();
 
   type EmbedInvokeResult = { jobId?: string };
 
-  const { data: invokeData } = await supabase.functions.invoke<EmbedInvokeResult>("embed_document", {
-    body: {
-      brandId,
-      documentId,
-      source: input.source,
-      storagePath: input.storagePath,
-      externalUrl: input.externalUrl,
-      mimeType: input.mimeType,
-      fileName: input.fileName ?? input.name,
+  const { data: invokeData } = await supabase.functions.invoke<EmbedInvokeResult>(
+    'embed_document',
+    {
+      body: {
+        brandId,
+        documentId,
+        source: input.source,
+        storagePath: input.storagePath,
+        externalUrl: input.externalUrl,
+        mimeType: input.mimeType,
+        fileName: input.fileName ?? input.name,
+      },
     },
-  });
+  );
 
   const document: OnboardingDocument = {
     id: documentId,
     name: input.name,
     source: input.source,
     createdAt: new Date().toISOString(),
-    status: "processing",
+    status: 'processing',
     size: input.size,
     externalUrl: input.externalUrl,
     storagePath: input.storagePath,
-    jobId: typeof invokeData?.jobId === "string" ? invokeData.jobId : undefined,
+    jobId: typeof invokeData?.jobId === 'string' ? invokeData.jobId : undefined,
   };
 
   return appendDocument(brandId, document);
 }
 
-type IntegrationGroup = "google" | "meta";
+type IntegrationGroup = 'google' | 'meta';
 
 type EdgeAccount = {
   id: string;
@@ -332,14 +339,14 @@ type EdgeAccount = {
 type AccountsByPlatformResponse = {
   syncedAt: string;
   accountsByPlatform: Record<
-    "youtube" | "googleAds" | "dv360" | "googleAnalytics" | "instagram" | "facebook" | "threads",
+    'youtube' | 'googleAds' | 'dv360' | 'googleAnalytics' | 'instagram' | 'facebook' | 'threads',
     EdgeAccount[]
   >;
 };
 
 export async function syncIntegrationAccountsAction(
   brandId: string,
-  groups: IntegrationGroup[]
+  groups: IntegrationGroup[],
 ): Promise<OnboardingState> {
   const supabase = await createSupabaseServerClient();
   let authHeader: Record<string, string> | undefined;
@@ -350,16 +357,14 @@ export async function syncIntegrationAccountsAction(
     if (session?.access_token) {
       authHeader = { Authorization: `Bearer ${session.access_token}` };
     }
-  } catch {
-    
-  }
-  const { data, error } = await supabase.functions.invoke("integration_accounts", {
+  } catch {}
+  const { data, error } = await supabase.functions.invoke('integration_accounts', {
     body: { groups },
     headers: authHeader,
   });
   if (error) {
     const contextBody =
-      typeof (error as { context?: { body?: unknown } })?.context?.body === "string"
+      typeof (error as { context?: { body?: unknown } })?.context?.body === 'string'
         ? (error as { context: { body: string } }).context.body
         : undefined;
     let parsedBody: unknown;
@@ -370,9 +375,8 @@ export async function syncIntegrationAccountsAction(
         parsedBody = contextBody;
       }
     }
-    console.error("[syncIntegrationAccountsAction] integration_accounts invoke failed", {
+    log.error('[syncIntegrationAccountsAction] integration_accounts invoke failed', error, {
       status: (error as { status?: number })?.status,
-      message: error.message,
       body: parsedBody,
       groups,
       authHeaderProvided: Boolean(authHeader?.Authorization),
@@ -384,60 +388,63 @@ export async function syncIntegrationAccountsAction(
 
   const allAccountIds = Object.values(payload?.accountsByPlatform ?? {})
     .flat()
-    .map(account => account.id)
+    .map((account) => account.id)
     .filter(Boolean);
 
   let selectionById = new Map<string, boolean>();
   if (allAccountIds.length > 0) {
     const { data: selectionRows } = await supabase
-      .schema("brand_profiles")
-      .from("integration_accounts_assets")
-      .select("id, raw_payload")
-      .in("id", allAccountIds);
+      .schema('brand_profiles')
+      .from('integration_accounts_assets')
+      .select('id, raw_payload')
+      .in('id', allAccountIds);
 
     selectionById = new Map(
       (selectionRows ?? [])
-        .map(row => {
+        .map((row) => {
           const hasSelectedKey =
             row?.raw_payload &&
-            typeof row.raw_payload === "object" &&
-            Object.prototype.hasOwnProperty.call(row.raw_payload, "selected");
+            typeof row.raw_payload === 'object' &&
+            Object.hasOwn(row.raw_payload, 'selected');
           if (!hasSelectedKey) return null;
-          const selected =
-            (row.raw_payload as Record<string, unknown>).selected === true;
+          const selected = (row.raw_payload as Record<string, unknown>).selected === true;
           return [row.id, selected] as const;
         })
-        .filter((entry): entry is readonly [string, boolean] => Boolean(entry))
+        .filter((entry): entry is readonly [string, boolean] => Boolean(entry)),
     );
   }
 
   const platformKeys = [
-    "youtube",
-    "googleAds",
-    "dv360",
-    "googleAnalytics",
-    "instagram",
-    "facebook",
-    "threads",
+    'youtube',
+    'googleAds',
+    'dv360',
+    'googleAnalytics',
+    'instagram',
+    'facebook',
+    'threads',
   ] as const;
 
-  const connectionsPatch: Partial<OnboardingPatch["connections"]> = {};
+  const connectionsPatch: Partial<OnboardingPatch['connections']> = {};
 
   for (const key of platformKeys) {
     const accounts = payload?.accountsByPlatform?.[key] ?? [];
     if (!accounts.length) continue;
     const mapped: OnboardingConnectionAccount[] = accounts.map((a) => ({
       id: a.id,
-      name: a.name ?? a.externalAccountId ?? "Account",
-      status: (a.status === "pending" || a.status === "error") ? (a.status as "pending" | "error") : "active",
+      name: a.name ?? a.externalAccountId ?? 'Account',
+      status:
+        a.status === 'pending' || a.status === 'error'
+          ? (a.status as 'pending' | 'error')
+          : 'active',
       selected: selectionById.has(a.id) ? selectionById.get(a.id) === true : undefined,
     }));
 
     const hasExplicitSelection =
-      mapped.some(account => account.selected === true) || mapped.some(account => account.selected === false);
+      mapped.some((account) => account.selected === true) ||
+      mapped.some((account) => account.selected === false);
     const defaultAccountId = hasExplicitSelection
-      ? mapped.find(account => account.selected)?.id ?? null
-      : mapped[0]?.id ?? null;
+      ? (mapped.find((account) => account.selected)?.id ?? null)
+      : (mapped[0]?.id ?? null);
 
     connectionsPatch[key as PlatformKey] = {
       connected: true,
@@ -459,11 +466,12 @@ export async function syncIntegrationAccountsAction(
 export async function associateIntegrationAccountsAction(
   brandId: string,
   integrationAccountIds: string[],
-  allIntegrationAccountIds?: string[]
+  allIntegrationAccountIds?: string[],
 ): Promise<OnboardingState> {
-  const idsToUpdate = (allIntegrationAccountIds && allIntegrationAccountIds.length > 0)
-    ? allIntegrationAccountIds
-    : integrationAccountIds;
+  const idsToUpdate =
+    allIntegrationAccountIds && allIntegrationAccountIds.length > 0
+      ? allIntegrationAccountIds
+      : integrationAccountIds;
 
   if (!idsToUpdate?.length) {
     return fetchOnboardingState(brandId);
@@ -476,9 +484,9 @@ export async function associateIntegrationAccountsAction(
   });
 
   const state = await fetchOnboardingState(brandId);
-  const connectionsPatch: Partial<OnboardingPatch["connections"]> = {};
+  const connectionsPatch: Partial<OnboardingPatch['connections']> = {};
 
-  PLATFORM_KEYS.forEach(key => {
+  PLATFORM_KEYS.forEach((key) => {
     const connection = state.connections[key];
     if (!connection) return;
     const accounts = (connection.accounts ?? []).map((account: OnboardingConnectionAccount) => {
