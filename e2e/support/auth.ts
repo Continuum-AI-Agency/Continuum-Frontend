@@ -175,6 +175,42 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
 }
 
 /**
+ * Signs in a deterministic local fixture through GoTrue's real password flow.
+ * Prefer this for local-stack benches: it avoids one-time magic-link state while
+ * producing the same @supabase/ssr cookie payload the application consumes.
+ */
+export async function mintSessionWithPassword(
+  email: string,
+  password: string,
+): Promise<PlaywrightStorageState> {
+  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const anonKey = resolveAnonKey();
+  const sessionStorage = new MemorySessionStorage();
+  const anon = createClient(url, anonKey, {
+    auth: {
+      storageKey: SUPABASE_AUTH_COOKIE_NAME,
+      storage: sessionStorage,
+      persistSession: true,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  const { data, error } = await anon.auth.signInWithPassword({ email, password });
+  if (error) {
+    throw new Error(`[e2e/auth] password sign-in failed for ${email}: ${error.message}`);
+  }
+
+  const persisted = sessionStorage.read(SUPABASE_AUTH_COOKIE_NAME);
+  const rawSessionJson = persisted ?? (data.session ? JSON.stringify(data.session) : null);
+  if (!rawSessionJson) {
+    throw new Error(`[e2e/auth] No session was persisted after password sign-in for ${email}.`);
+  }
+
+  return buildStorageState(rawSessionJson);
+}
+
+/**
  * The same real GoTrue flow, but returning the raw access token instead of browser cookies —
  * for benches that call the Backend over HTTP directly rather than driving a page.
  */

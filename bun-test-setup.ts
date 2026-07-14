@@ -1,15 +1,15 @@
+import { mock } from 'bun:test';
 import { Window } from 'happy-dom';
-import { mock } from "bun:test";
 
 // Mock server-only to allow testing components that import server files
-mock.module("server-only", () => {
+mock.module('server-only', () => {
   return {};
 });
 
 const window = new Window({
-    url: 'http://localhost:3000',
-    width: 1024,
-    height: 768,
+  url: 'http://localhost:3000',
+  width: 1024,
+  height: 768,
 });
 
 global.window = window as any;
@@ -26,6 +26,9 @@ global.HTMLTextAreaElement = window.HTMLTextAreaElement as any;
 // Add DocumentFragment which was missing
 global.DocumentFragment = window.DocumentFragment as any;
 global.Node = window.Node as any;
+// Radix focus-scopes (Popover, Dialog, DropdownMenu) walk the DOM with a
+// TreeWalker on open, so NodeFilter must be global or opening one throws.
+global.NodeFilter = window.NodeFilter as any;
 global.Event = window.Event as any;
 global.CustomEvent = window.CustomEvent as any;
 global.MouseEvent = window.MouseEvent as any;
@@ -35,7 +38,7 @@ global.DOMRect = (window as any).DOMRect;
 global.sessionStorage = window.sessionStorage as any;
 global.localStorage = window.localStorage as any;
 
-if (typeof globalThis.requestAnimationFrame !== "function") {
+if (typeof globalThis.requestAnimationFrame !== 'function') {
   globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number =>
     setTimeout(() => cb(performance.now()), 16) as unknown as number;
   globalThis.cancelAnimationFrame = (handle: number): void => {
@@ -43,13 +46,13 @@ if (typeof globalThis.requestAnimationFrame !== "function") {
   };
 }
 
-if (typeof globalThis.getComputedStyle !== "function") {
+if (typeof globalThis.getComputedStyle !== 'function') {
   globalThis.getComputedStyle = ((): CSSStyleDeclaration => {
-    return { getPropertyValue: () => "" } as unknown as CSSStyleDeclaration;
+    return { getPropertyValue: () => '' } as unknown as CSSStyleDeclaration;
   }) as typeof globalThis.getComputedStyle;
 }
 
-mock.module("next/navigation", () => {
+mock.module('next/navigation', () => {
   return {
     useRouter: () => ({
       push: () => {},
@@ -60,23 +63,23 @@ mock.module("next/navigation", () => {
       refresh: () => {},
     }),
     useSearchParams: () => new URLSearchParams(),
-    usePathname: () => "",
+    usePathname: () => '',
     useSelectedLayoutSegment: () => null,
     useSelectedLayoutSegments: () => [],
     redirect: (url: string) => {
       console.log(`Redirecting to ${url}`);
     },
     notFound: () => {
-      console.log("Not found");
+      console.log('Not found');
     },
   };
 });
 
-mock.module("@/components/theme-provider", () => {
+mock.module('@/components/theme-provider', () => {
   return {
     useTheme: () => ({
-      mode: "light",
-      appearance: "light",
+      mode: 'light',
+      appearance: 'light',
       setMode: () => {},
       toggle: () => {},
     }),

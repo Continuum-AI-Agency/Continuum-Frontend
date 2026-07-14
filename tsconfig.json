@@ -23,7 +23,9 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next/wpd/types/**/*.ts",
+    ".next/wpd/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

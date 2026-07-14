@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from '@playwright/test';
 
 // Playwright E2E harness for the Continuum Frontend (Next.js on :3000).
 // The dev server is auto-started via `bun run dev`; set PLAYWRIGHT_BASE_URL to
@@ -6,30 +6,36 @@ import { defineConfig, devices } from "@playwright/test";
 // (SUPABASE_SERVICE_ROLE_KEY + NEXT_PUBLIC_SUPABASE_URL) are documented in
 // e2e/README.md and are only required by specs that call e2e/support/auth.ts.
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+const webServerPort = new URL(baseURL).port;
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? "line" : "list",
+  reporter: process.env.CI ? 'line' : 'list',
   use: {
     baseURL,
-    trace: "on-first-retry",
+    trace: 'on-first-retry',
   },
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
   webServer: {
-    command: "bun run dev",
+    command: 'bun run dev',
+    env: {
+      NEXT_DIST_DIR: process.env.NEXT_DIST_DIR || '.next',
+      NEXT_TSCONFIG_PATH: process.env.NEXT_TSCONFIG_PATH || 'tsconfig.json',
+      PORT: webServerPort,
+    },
     url: baseURL,
     reuseExistingServer: true,
     timeout: 120_000,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 });

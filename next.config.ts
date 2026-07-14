@@ -4,6 +4,8 @@ import type { NextConfig } from 'next';
 // Gated rollout: enable Cache Components by setting NEXT_CACHE_COMPONENTS=1.
 // Off by default until Phase 2 audits dynamic boundaries for every page.
 const cacheComponentsEnabled = process.env.NEXT_CACHE_COMPONENTS === '1';
+const distDir = process.env.NEXT_DIST_DIR?.trim();
+const tsconfigPath = process.env.NEXT_TSCONFIG_PATH?.trim();
 
 // Monorepo root (one level up from Continuum-Frontend/). Vercel runs the build
 // command from Continuum-Frontend, so derive this from cwd rather than
@@ -11,6 +13,12 @@ const cacheComponentsEnabled = process.env.NEXT_CACHE_COMPONENTS === '1';
 const workspaceRoot = path.resolve(process.cwd(), '..');
 
 const nextConfig: NextConfig = {
+  // Parallel local benches can opt into an isolated build directory instead
+  // of contending with a developer's existing `.next/dev/lock`.
+  ...(distDir ? { distDir } : {}),
+  // Keep generated route types from isolated benches out of the primary
+  // tsconfig so a benchmark never mutates the developer's compiler inputs.
+  ...(tsconfigPath ? { typescript: { tsconfigPath } } : {}),
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/sign/**' },
@@ -34,6 +42,15 @@ const nextConfig: NextConfig = {
     cacheHandler: require.resolve('./cache-handler.js'),
   }),
   ...(cacheComponentsEnabled && { cacheComponents: true }),
+  // The OpenTelemetry log SDK (instrumentation.ts -> PostHog) must stay out of the Turbopack
+  // server bundle; bundling it breaks its global registry, which is how instrumentation and the
+  // route handlers share one provider.
+  serverExternalPackages: [
+    '@opentelemetry/api-logs',
+    '@opentelemetry/sdk-logs',
+    '@opentelemetry/exporter-logs-otlp-http',
+    '@opentelemetry/resources',
+  ],
   experimental: {
     serverActions: {
       bodySizeLimit: '25mb',
