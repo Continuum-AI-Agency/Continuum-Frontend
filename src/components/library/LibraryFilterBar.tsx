@@ -30,6 +30,9 @@ type Props = {
   onFieldFiltersChange?: (filters: CustomFieldFilter[]) => void;
   // Visual density: "page" for the library route, "compact" for the studio sheet.
   variant?: 'page' | 'compact';
+  // The full Library page already exposes source in its collection sidebar.
+  // Embedded pickers can keep this row visible because they have no sidebar.
+  showSource?: boolean;
   className?: string;
 };
 
@@ -45,6 +48,7 @@ export function LibraryFilterBar({
   fieldFilters,
   onFieldFiltersChange,
   variant = 'page',
+  showSource = true,
   className,
 }: Props) {
   const reduceMotion = useReducedMotion();
@@ -52,15 +56,19 @@ export function LibraryFilterBar({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-2', className)}>
+      {showSource ? (
+        <ChipRow
+          label="Source"
+          options={SOURCE_FILTERS}
+          active={source}
+          onSelect={onSourceChange}
+          layoutId={`${layoutId}-source`}
+          reduceMotion={!!reduceMotion}
+          variant={variant}
+        />
+      ) : null}
       <ChipRow
-        options={SOURCE_FILTERS}
-        active={source}
-        onSelect={onSourceChange}
-        layoutId={`${layoutId}-source`}
-        reduceMotion={!!reduceMotion}
-        variant={variant}
-      />
-      <ChipRow
+        label="Format"
         options={KIND_FILTERS}
         active={kind}
         onSelect={onKindChange}
@@ -108,44 +116,59 @@ function TagChipRow({
     <fieldset
       aria-label="Filter by tag"
       className={cn(
-        'flex flex-wrap items-center gap-1 rounded-2xl p-0.5',
-        compact ? 'bg-white/5' : 'bg-muted/60',
+        'flex flex-wrap items-center gap-2 border-0 p-0',
+        compact ? 'text-white/55' : 'text-muted-foreground',
       )}
     >
-      {options.map(({ tag, count }) => {
-        const isActive = selected.includes(tag);
-        return (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => toggle(tag)}
-            aria-pressed={isActive}
-            className={cn(
-              'flex min-h-8 items-center gap-1 rounded-full px-3 text-xs font-medium',
-              'transition-colors active:scale-[0.96]',
-              compact
-                ? isActive
-                  ? 'bg-white/15 text-white shadow-sm'
-                  : 'text-white/55 hover:text-white/80'
-                : isActive
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <span>{tag}</span>
-            <span
-              className={cn('tabular-nums', compact ? 'text-white/40' : 'text-muted-foreground/60')}
+      <legend className="sr-only">Tags</legend>
+      <span aria-hidden className="text-2xs font-semibold uppercase tracking-wide">
+        Tags
+      </span>
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-1 rounded-2xl p-0.5',
+          compact ? 'bg-white/5' : 'bg-muted/60',
+        )}
+      >
+        {options.map(({ tag, count }) => {
+          const isActive = selected.includes(tag);
+          return (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggle(tag)}
+              aria-pressed={isActive}
+              className={cn(
+                'flex min-h-8 items-center gap-1 rounded-full px-3 text-xs font-medium',
+                'transition-colors active:scale-[0.96]',
+                compact
+                  ? isActive
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-white/55 hover:text-white/80'
+                  : isActive
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+              )}
             >
-              {count}
-            </span>
-          </button>
-        );
-      })}
+              <span>{tag}</span>
+              <span
+                className={cn(
+                  'tabular-nums',
+                  compact ? 'text-white/40' : 'text-muted-foreground/60',
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </fieldset>
   );
 }
 
 function ChipRow<T extends string>({
+  label,
   options,
   active,
   onSelect,
@@ -153,6 +176,7 @@ function ChipRow<T extends string>({
   reduceMotion,
   variant,
 }: {
+  label: string;
   options: readonly { value: T; label: string }[];
   active: T;
   onSelect: (value: T) => void;
@@ -163,47 +187,59 @@ function ChipRow<T extends string>({
   const compact = variant === 'compact';
   return (
     <fieldset
+      aria-label={`Filter by ${label.toLowerCase()}`}
       className={cn(
-        'inline-flex items-center rounded-full p-0.5',
-        compact ? 'bg-white/5' : 'bg-muted/60',
+        'flex items-center gap-2 border-0 p-0',
+        compact ? 'text-white/55' : 'text-muted-foreground',
       )}
     >
-      {options.map((opt) => {
-        const isActive = opt.value === active;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onSelect(opt.value)}
-            aria-pressed={isActive}
-            className={cn(
-              'relative min-h-8 rounded-full px-3 text-xs font-medium tabular-nums',
-              'transition-[color] [transition-property:color] active:scale-[0.96]',
-              compact
-                ? isActive
-                  ? 'text-white'
-                  : 'text-white/55 hover:text-white/80'
-                : isActive
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {isActive && (
-              <motion.span
-                layoutId={layoutId}
-                className={cn(
-                  'absolute inset-0 rounded-full shadow-sm',
-                  compact ? 'bg-white/15' : 'bg-background',
-                )}
-                transition={
-                  reduceMotion ? { duration: 0 } : { type: 'spring', bounce: 0, duration: 0.3 }
-                }
-              />
-            )}
-            <span className="relative z-10">{opt.label}</span>
-          </button>
-        );
-      })}
+      <legend className="sr-only">{label}</legend>
+      <span aria-hidden className="text-2xs font-semibold uppercase tracking-wide">
+        {label}
+      </span>
+      <div
+        className={cn(
+          'inline-flex items-center rounded-full p-0.5',
+          compact ? 'bg-white/5' : 'bg-muted/60',
+        )}
+      >
+        {options.map((opt) => {
+          const isActive = opt.value === active;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onSelect(opt.value)}
+              aria-pressed={isActive}
+              className={cn(
+                'relative min-h-8 rounded-full px-3 text-xs font-medium tabular-nums',
+                'transition-[color] [transition-property:color] active:scale-[0.96]',
+                compact
+                  ? isActive
+                    ? 'text-white'
+                    : 'text-white/55 hover:text-white/80'
+                  : isActive
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId={layoutId}
+                  className={cn(
+                    'absolute inset-0 rounded-full shadow-sm',
+                    compact ? 'bg-white/15' : 'bg-background',
+                  )}
+                  transition={
+                    reduceMotion ? { duration: 0 } : { type: 'spring', bounce: 0, duration: 0.3 }
+                  }
+                />
+              )}
+              <span className="relative z-10">{opt.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </fieldset>
   );
 }

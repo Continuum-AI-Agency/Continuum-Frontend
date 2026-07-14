@@ -204,6 +204,7 @@ const studioStoredEventSchema = z.object({
   bucket: z.string().optional(),
   path: z.string().optional(),
   signed_url: z.string().optional(),
+  size_bytes: z.number().int().nonnegative().optional(),
 });
 
 const studioErrorEventSchema = z.object({ message: z.string() });
@@ -214,6 +215,7 @@ export type StudioImageResult = {
   base64?: string;
   bucket?: string;
   path?: string;
+  sizeBytes?: number;
 };
 
 export type GenerateStudioImageOptions = {
@@ -296,6 +298,7 @@ export async function generateStudioImage(
     ...((finalImage?.path ?? finalStored?.path)
       ? { path: finalImage?.path ?? finalStored?.path }
       : {}),
+    ...(typeof finalStored?.size_bytes === 'number' ? { sizeBytes: finalStored.size_bytes } : {}),
   };
 }
 
@@ -465,6 +468,7 @@ export async function registerResizedAsset(
       result.mimeType,
     ),
     mimeType: result.mimeType,
+    sizeBytes: result.sizeBytes,
     originRef: {
       kind: 'resize',
       sourceAssetId: asset.id,

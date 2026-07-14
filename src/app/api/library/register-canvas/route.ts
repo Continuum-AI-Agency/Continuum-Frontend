@@ -20,21 +20,11 @@ export const runtime = 'nodejs';
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
-// Kill switch (defaults ON). Set CANVAS_AUTO_REGISTER_ENABLED=false to stop
-// auto-registering canvas creations into the media library.
-function autoRegisterEnabled(): boolean {
-  return process.env.CANVAS_AUTO_REGISTER_ENABLED !== 'false';
-}
-
 // Register-in-place: the generator already uploaded the bytes to its own bucket
 // (brand-profile-assets); we only record a media.assets row pointing at that
 // object. No byte copy. Cross-bucket signing already works everywhere the library
 // is read.
 export async function POST(request: Request) {
-  if (!autoRegisterEnabled()) {
-    return NextResponse.json({ assetId: null });
-  }
-
   const json = await request.json().catch(() => null);
   const parsed = registerCanvasAssetRequestSchema.safeParse(json);
   if (!parsed.success) {

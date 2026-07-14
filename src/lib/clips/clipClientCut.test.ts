@@ -100,6 +100,7 @@ describe('cutAndPersistSection', () => {
       action: 'register',
       storagePath: 'clips/b1/asset-1/1.mp4',
       durationSec: 26,
+      sizeBytes: 3,
     });
     expect((invoke.mock.calls[1][1].body as { score: unknown }).score).toEqual(SCORE);
     expect(revokeSpy).toHaveBeenCalledWith('blob:fake-clip');

@@ -16,6 +16,7 @@ import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from 
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';
 import { mediaSchema } from './supabase-media';
+import { sumActiveMediaAssetBytes } from './storage-usage';
 
 const PAGE_SIZE = 48;
 
@@ -177,17 +178,10 @@ export async function fetchMediaCollections(brandId: string): Promise<MediaColle
 
 export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
   const client = await createSupabaseServerClient();
-  const { data, error } = await mediaSchema(client)
-    .from('assets')
-    .select('size_bytes')
-    .eq('brand_id', brandId)
-    .is('deleted_at', null)
-    .returns<{ size_bytes: number | null }[]>();
-
-  if (error) {
+  try {
+    return await sumActiveMediaAssetBytes(client, brandId);
+  } catch (error) {
     console.error('[media/fetchers] storage usage query failed', error);
     return 0;
   }
-
-  return (data ?? []).reduce((sum, r) => sum + (r.size_bytes ?? 0), 0);
 }

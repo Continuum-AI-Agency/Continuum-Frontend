@@ -156,6 +156,40 @@ describe('POST /api/library/thumbnail', () => {
     expect(update).toEqual({ thumbnail_path: `${BRAND_ID}/${ASSET_ID}/thumb.webp` });
   });
 
+  it('leaves an existing poster untouched when registration is replayed', async () => {
+    const existingPath = `${BRAND_ID}/${ASSET_ID}/thumb.webp`;
+    const { client, queries, uploads } = createAdminStub([
+      {
+        data: {
+          id: ASSET_ID,
+          bucket: 'media-library',
+          kind: 'video',
+          thumbnail_path: existingPath,
+        },
+        error: null,
+      },
+    ]);
+    hooks.__testCreateSupabaseAdminClient = () => client;
+
+    const response = await POST(
+      posterRequest(
+        { brandId: BRAND_ID, assetId: ASSET_ID },
+        { bytes: WEBP_BYTES, type: 'image/webp' },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      assetId: ASSET_ID,
+      bucket: 'media-library',
+      thumbnailPath: existingPath,
+    });
+    expect(uploads).toHaveLength(0);
+    expect(queries.flatMap((query) => query.calls).some((call) => call.method === 'update')).toBe(
+      false,
+    );
+  });
+
   it('rejects a caller without brand access before touching storage', async () => {
     const { client, uploads } = createAdminStub([VIDEO_ROW]);
     hooks.__testCreateSupabaseAdminClient = () => client;

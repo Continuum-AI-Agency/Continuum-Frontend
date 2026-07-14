@@ -36,6 +36,7 @@ describe('buildCanvasAssetRow', () => {
       width: 1024,
       height: 1024,
       duration_ms: null,
+      size_bytes: null,
       source: 'canvas',
       origin_ref: baseRequest.originRef,
       status: 'stored',
@@ -60,6 +61,13 @@ describe('buildCanvasAssetRow', () => {
     );
     expect(row.kind).toBe('video');
     expect(row.duration_ms).toBe(8000);
+  });
+
+  it('persists a known byte size and defaults an unknown size to null', () => {
+    expect(buildCanvasAssetRow({ ...baseRequest, sizeBytes: 4_096 }, 'user-1').size_bytes).toBe(
+      4_096,
+    );
+    expect(buildCanvasAssetRow(baseRequest, 'user-1').size_bytes).toBeNull();
   });
 });
 

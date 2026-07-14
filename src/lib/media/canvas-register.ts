@@ -16,6 +16,7 @@ export type CanvasAssetRow = {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
+  size_bytes: number | null;
   source: 'canvas' | 'ai_generated';
   origin_ref: Record<string, unknown>;
   status: 'stored';
@@ -58,6 +59,7 @@ export function buildCanvasAssetRow(
     width: input.width ?? null,
     height: input.height ?? null,
     duration_ms: input.durationMs ?? null,
+    size_bytes: input.sizeBytes ?? null,
     source: SOURCE_BY_ORIGIN_KIND[input.originRef.kind],
     origin_ref: {
       ...input.originRef,

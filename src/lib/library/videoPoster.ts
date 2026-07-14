@@ -41,6 +41,22 @@ export function posterTimestampSec(durationSec: number | null | undefined): numb
   return PREFERRED_POSTER_TIME_SEC;
 }
 
+// Explicit fallback for legacy/AI videos that predate persisted posters. A
+// metadata-only <video> often paints its blank first frame; seeking asks the
+// browser for one representative frame without pretending a poster exists.
+export function seekVideoPreviewFrame(video: {
+  duration: number;
+  currentTime: number;
+}): boolean {
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
+  try {
+    video.currentTime = posterTimestampSec(video.duration);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isVideoMimeType(mimeType: string | null | undefined): boolean {
   return typeof mimeType === 'string' && mimeType.startsWith('video/');
 }

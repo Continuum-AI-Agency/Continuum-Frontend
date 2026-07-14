@@ -11,6 +11,7 @@ import {
   Layers,
   Loader2,
   Play,
+  Scaling,
   Scissors,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -18,6 +19,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 import { ClipCaptionToggle } from './ClipCaptionToggle';
@@ -28,13 +30,16 @@ import { useClipCaptionPreference } from './hooks/useClipCaptionPreference';
 import { useClipQualityPreference } from './hooks/useClipQualityPreference';
 import { useGenerateClips } from './hooks/useGenerateClips';
 import { MediaBoundingBoxes } from './MediaBoundingBoxes';
+import { ImageReformatDialog } from './reformat/ImageReformatDialog';
 
 type Props = {
+  brandId: string;
   asset: MediaAsset;
   index?: number;
   showBoundingBoxes?: boolean;
   captionStyle?: CaptionStyle;
   onOpen?: (asset: MediaAsset) => void;
+  onAssetChanged?: () => void;
 };
 
 const BADGE_BASE =
@@ -95,6 +100,9 @@ function VideoThumbnail({
         playsInline
         preload={posterUrl ? 'none' : 'metadata'}
         onError={onMediaError}
+        onLoadedMetadata={() => {
+          if (!posterUrl && videoRef.current) seekVideoPreviewFrame(videoRef.current);
+        }}
         onLoadedData={() => {
           if (hoveredRef.current) void videoRef.current?.play();
         }}
@@ -242,6 +250,7 @@ function CarouselThumbnail({
             playsInline
             preload="metadata"
             onError={() => setMediaError(true)}
+            onLoadedMetadata={(event) => seekVideoPreviewFrame(event.currentTarget)}
           />
         ) : (
           <Image
@@ -256,8 +265,11 @@ function CarouselThumbnail({
           />
         )
       ) : (
-        <div className="flex size-full items-center justify-center bg-muted">
+        <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3 text-center">
           <ImageOff className="size-8 text-muted-foreground/40" />
+          <span className="text-2xs text-muted-foreground/70">
+            {slide?.signedUrl ? 'Preview unavailable' : 'Media file unavailable'}
+          </span>
         </div>
       )}
 
@@ -344,6 +356,9 @@ function MediaCardHoverDetail({
               muted
               playsInline
               preload={asset.thumbnailUrl ? 'none' : 'metadata'}
+              onLoadedMetadata={(event) => {
+                if (!asset.thumbnailUrl) seekVideoPreviewFrame(event.currentTarget);
+              }}
               className="h-full w-full object-contain"
             />
           ) : (
@@ -442,11 +457,13 @@ function GenerateClipsButton({
 }
 
 export function MediaCard({
+  brandId,
   asset,
   index,
   showBoundingBoxes = false,
   captionStyle,
   onOpen,
+  onAssetChanged,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const { generate, isGenerating, progress } = useGenerateClips();
@@ -460,90 +477,119 @@ export function MediaCard({
   });
   const canGenerateClips = asset.kind === 'video' && asset.status === 'ready';
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
+  const [reformatOpen, setReformatOpen] = useState(false);
 
   return (
-    <HoverCard openDelay={150} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        {/* The whole card opens the detail takeover; inner controls (clip tools,
+    <>
+      <HoverCard openDelay={150} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          {/* The whole card opens the detail takeover; inner controls (clip tools,
             copy, carousel paging) stopPropagation so they keep their own click.
             A native <button> cannot wrap those nested controls, hence the role. */}
-        {/* biome-ignore lint/a11y/useSemanticElements: nested interactive controls preclude a native button wrapper */}
-        <motion.div
-          role="button"
-          tabIndex={0}
-          aria-label={`Open ${asset.title ?? asset.fileName}`}
-          onClick={() => onOpen?.(asset)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onOpen?.(asset);
-            }
-          }}
-          className={cn(
-            'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
-            'transition-[border-color] hover:border-foreground/20',
-            onOpen &&
-              'cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
-          )}
-          whileHover={reduceMotion ? undefined : { y: -2 }}
-          transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
-        >
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-            {asset.carousel && asset.carousel.slideCount > 1 ? (
-              <CarouselThumbnail
-                slides={asset.carousel.slides}
-                priority={priority}
-                alt={asset.title ?? asset.fileName}
-              />
-            ) : (
-              <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} priority={priority} />
+          {/* biome-ignore lint/a11y/useSemanticElements: nested interactive controls preclude a native button wrapper */}
+          <motion.div
+            role="button"
+            tabIndex={0}
+            aria-label={`Open ${asset.title ?? asset.fileName}`}
+            onClick={() => onOpen?.(asset)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen?.(asset);
+              }
+            }}
+            className={cn(
+              'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
+              'transition-[border-color] hover:border-foreground/20',
+              onOpen &&
+                'cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
             )}
-            <StatusBadge status={asset.status} />
-          </div>
-
-          <div className="flex flex-col gap-1.5 p-3">
-            <p className="truncate text-sm font-medium leading-snug text-balance">
-              {asset.title ?? asset.fileName}
-            </p>
-
-            {asset.description && (
-              <div className="flex items-start gap-1">
-                <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground text-pretty">
-                  {asset.description}
-                </p>
-                <CopyDescriptionButton text={asset.description} />
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
-              {canGenerateClips && !activeProgress && (
-                <div className="flex items-center gap-1.5">
-                  <ClipCaptionToggle
-                    value={captionsEnabled}
-                    onChange={setCaptionsEnabled}
-                    disabled={isGenerating}
-                  />
-                  <ClipQualityToggle
-                    value={quality}
-                    onChange={setQuality}
-                    disabled={isGenerating}
-                  />
-                  <GenerateClipsButton
-                    onGenerate={() =>
-                      void generate(asset, { quality, captionsEnabled, captionStyle })
-                    }
-                    disabled={isGenerating}
-                  />
-                </div>
+            whileHover={reduceMotion ? undefined : { y: -2 }}
+            transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
+          >
+            <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+              {asset.carousel && asset.carousel.slideCount > 1 ? (
+                <CarouselThumbnail
+                  slides={asset.carousel.slides}
+                  priority={priority}
+                  alt={asset.title ?? asset.fileName}
+                />
+              ) : (
+                <Thumbnail
+                  asset={asset}
+                  showBoundingBoxes={showBoundingBoxes}
+                  priority={priority}
+                />
               )}
+              <StatusBadge status={asset.status} />
+              {asset.kind === 'image' && asset.signedUrl ? (
+                <button
+                  type="button"
+                  title="Reformat image"
+                  aria-label={`Reformat ${asset.title ?? asset.fileName}`}
+                  className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setReformatOpen(true);
+                  }}
+                >
+                  <Scaling className="size-3.5" />
+                </button>
+              ) : null}
             </div>
 
-            {activeProgress && <ClipProgressStrip progress={activeProgress} />}
-          </div>
-        </motion.div>
-      </HoverCardTrigger>
-      <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
-    </HoverCard>
+            <div className="flex flex-col gap-1.5 p-3">
+              <p className="truncate text-sm font-medium leading-snug text-balance">
+                {asset.title ?? asset.fileName}
+              </p>
+
+              {asset.description && (
+                <div className="flex items-start gap-1">
+                  <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+                    {asset.description}
+                  </p>
+                  <CopyDescriptionButton text={asset.description} />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
+                {canGenerateClips && !activeProgress && (
+                  <div className="flex items-center gap-1.5">
+                    <ClipCaptionToggle
+                      value={captionsEnabled}
+                      onChange={setCaptionsEnabled}
+                      disabled={isGenerating}
+                    />
+                    <ClipQualityToggle
+                      value={quality}
+                      onChange={setQuality}
+                      disabled={isGenerating}
+                    />
+                    <GenerateClipsButton
+                      onGenerate={() =>
+                        void generate(asset, { quality, captionsEnabled, captionStyle })
+                      }
+                      disabled={isGenerating}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {activeProgress && <ClipProgressStrip progress={activeProgress} />}
+            </div>
+          </motion.div>
+        </HoverCardTrigger>
+        <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
+      </HoverCard>
+      <ImageReformatDialog
+        open={reformatOpen}
+        onOpenChange={setReformatOpen}
+        brandId={brandId}
+        asset={asset}
+        onCompleted={() => onAssetChanged?.()}
+      />
+    </>
   );
 }

@@ -1,15 +1,16 @@
 /* eslint-disable @next/next/no-img-element */
-"use client";
+'use client';
 
-import React from "react";
-import { Loader2, Play, Search, ImageOff, AlertTriangle } from "lucide-react";
-import type { MediaAsset } from "@continuum/contracts";
-import { LibraryFilterBar } from "@/components/library/LibraryFilterBar";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { useStudioLibraryBrowser } from "@/lib/creative-assets/useStudioLibraryBrowser";
-import { setStudioAssetDragData } from "@/lib/creative-assets/studioAssetDrop";
-import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl";
-import { SOURCE_LABEL } from "@/lib/media/filters";
+import type { MediaAsset } from '@continuum/contracts';
+import { AlertTriangle, ImageOff, Loader2, Play, Scaling, Search } from 'lucide-react';
+import React from 'react';
+import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
+import { ImageReformatDialog } from '@/components/library/reformat/ImageReformatDialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
+import { setStudioAssetDragData } from '@/lib/creative-assets/studioAssetDrop';
+import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import { SOURCE_LABEL } from '@/lib/media/filters';
 
 type Props = {
   brandProfileId: string;
@@ -31,7 +32,7 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) loadMore();
       },
-      { rootMargin: "300px" },
+      { rootMargin: '300px' },
     );
     observer.observe(node);
     return () => observer.disconnect();
@@ -70,12 +71,12 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           </div>
         ) : assets.length === 0 ? (
           <div className="p-6 text-center text-sm text-gray-400">
-            {query.trim() ? "No matching assets." : "No assets in the library yet."}
+            {query.trim() ? 'No matching assets.' : 'No assets in the library yet.'}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {assets.map((asset) => (
-              <StudioAssetTile key={asset.id} asset={asset} />
+              <StudioAssetTile key={asset.id} asset={asset} brandId={brandProfileId} />
             ))}
           </div>
         )}
@@ -91,44 +92,76 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
   );
 }
 
-function StudioAssetTile({ asset }: { asset: MediaAsset }) {
+function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: string }) {
   const url = sanitizeCreativeAssetUrl(asset.signedUrl);
-  const isVideo = asset.kind === "video";
+  const isVideo = asset.kind === 'video';
   const label = asset.title ?? asset.fileName;
+  const [reformatOpen, setReformatOpen] = React.useState(false);
 
   // Detail surfaces on hover (in context), not on click. Drag-to-canvas stays
   // on the trigger via dragstart; click is intentionally left free.
   return (
-    <HoverCard openDelay={150} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <div
-          draggable
-          onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
-          className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
-        >
-          {url && !isVideo ? (
-            <img src={url} alt={label} className="h-full w-full object-cover" />
-          ) : url && isVideo ? (
-            <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-gray-600">
-              <ImageOff className="h-6 w-6" />
-            </div>
-          )}
+    <>
+      <HoverCard openDelay={150} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: draggable Library tile; nested quick action requires a non-button wrapper */}
+          <div
+            draggable
+            onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
+            className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
+          >
+            {url && !isVideo ? (
+              <img src={url} alt={label} className="h-full w-full object-cover" />
+            ) : url && isVideo ? (
+              <video
+                src={`${url}#t=0.01`}
+                preload="metadata"
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-gray-600">
+                <ImageOff className="h-6 w-6" />
+              </div>
+            )}
 
-          {isVideo && (
-            <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
-              <Play className="h-3 w-3 text-white" />
-            </div>
-          )}
+            {isVideo && (
+              <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
+                <Play className="h-3 w-3 text-white" />
+              </div>
+            )}
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-            <p className="truncate text-xs font-medium text-white">{label}</p>
+            {!isVideo && url ? (
+              <button
+                type="button"
+                aria-label={`Reformat ${label}`}
+                title="Reformat image"
+                className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setReformatOpen(true);
+                }}
+              >
+                <Scaling className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <p className="truncate text-xs font-medium text-white">{label}</p>
+            </div>
           </div>
-        </div>
-      </HoverCardTrigger>
-      <StudioAssetHoverDetail asset={asset} url={url} isVideo={isVideo} label={label} />
-    </HoverCard>
+        </HoverCardTrigger>
+        <StudioAssetHoverDetail asset={asset} url={url} isVideo={isVideo} label={label} />
+      </HoverCard>
+      <ImageReformatDialog
+        open={reformatOpen}
+        onOpenChange={setReformatOpen}
+        brandId={brandId}
+        asset={asset}
+      />
+    </>
   );
 }
 
@@ -153,7 +186,13 @@ function StudioAssetHoverDetail({
           {url && !isVideo ? (
             <img src={url} alt={label} className="h-full w-full object-contain" />
           ) : url && isVideo ? (
-            <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-contain" />
+            <video
+              src={`${url}#t=0.01`}
+              preload="metadata"
+              muted
+              playsInline
+              className="h-full w-full object-contain"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <ImageOff className="h-6 w-6" />
@@ -182,7 +221,10 @@ function StudioAssetHoverDetail({
         {tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
-              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground">
+              <span
+                key={tag}
+                className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground"
+              >
                 {tag}
               </span>
             ))}

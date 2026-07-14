@@ -30,6 +30,7 @@ import {
   parseTagsParam,
   type SourceFilterValue,
 } from '@/lib/media/filters';
+import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
 import { AssetDetailModal } from './detail/AssetDetailModal';
 import { useCustomFields } from './fields/useCustomFields';
@@ -246,7 +247,13 @@ export function LibraryViewer({
 
           {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
           <div
-            className="relative flex min-w-0 flex-1 flex-col gap-[var(--app-shell-gap)] overflow-y-auto p-[var(--card-pad)]"
+            className={cn(
+              'relative flex min-w-0 flex-1 flex-col gap-[var(--app-shell-gap)] overflow-y-auto p-[var(--card-pad)]',
+              // Give the docked detail panel its own room once the viewport is
+              // wide enough to spare it; below that the panel floats over the
+              // grid (still scrollable — there is no scrim and no scroll lock).
+              detailAsset && 'min-[1500px]:pr-[58rem]',
+            )}
             onDragEnter={handleDragEnter}
             onDragOver={(e) => e.preventDefault()}
             onDragLeave={handleDragLeave}
@@ -299,6 +306,7 @@ export function LibraryViewer({
                 kind={optimisticKind}
                 onSourceChange={(value) => pushFilters({ source: value })}
                 onKindChange={(value) => pushFilters({ kind: value })}
+                showSource={false}
                 tagOptions={tagOptions}
                 selectedTags={optimisticTags}
                 onTagsChange={(tags) => pushFilters({ tags })}
@@ -385,6 +393,7 @@ export function LibraryViewer({
                 />
               ) : (
                 <MediaGrid
+                  brandId={brandId}
                   assets={displayedAssets}
                   showBoundingBoxes={showBoundingBoxes}
                   captionStyle={captionStyle}
@@ -393,6 +402,10 @@ export function LibraryViewer({
                   hasMore={isSearching ? false : hasMore}
                   loadingMore={loadingMore}
                   onOpenDetail={setDetailAsset}
+                  onAssetChanged={() => {
+                    setAssetRevision((revision) => revision + 1);
+                    router.refresh();
+                  }}
                 />
               )}
             </div>

@@ -122,7 +122,8 @@ export async function GET(request: Request) {
     const rows = await loadVersionRows(admin, brandId, assetId);
     const versions = await toVersionContracts(admin, brandId, head, rows);
     return NextResponse.json(listVersionsResponseSchema.parse({ versions }));
-  } catch {
+  } catch (error) {
+    console.error('[library/versions] GET failed', error);
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
   }
 }
@@ -202,7 +203,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       registerVersionResponseSchema.parse({ assetId: input.assetId, versionNumber, versions }),
     );
-  } catch {
+  } catch (error) {
+    console.error('[library/versions] POST failed', error);
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
   }
 }
@@ -280,7 +282,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json(
       registerVersionResponseSchema.parse({ assetId, versionNumber, versions }),
     );
-  } catch {
+  } catch (error) {
+    console.error('[library/versions] PATCH failed', error);
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
   }
 }

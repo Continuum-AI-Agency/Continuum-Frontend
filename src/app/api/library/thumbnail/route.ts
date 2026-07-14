@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
   const { data: asset, error: assetError } = await mediaSchema(admin)
     .from('assets')
-    .select('id, bucket, kind')
+    .select('id, bucket, kind, thumbnail_path')
     .eq('id', assetId)
     .eq('brand_id', brandId)
     .is('deleted_at', null)
@@ -84,9 +84,17 @@ export async function POST(request: Request) {
   if (!asset) {
     return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
   }
-  const head = asset as { id: string; bucket: string; kind: string };
+  const head = asset as {
+    id: string;
+    bucket: string;
+    kind: string;
+    thumbnail_path: string | null;
+  };
   if (head.kind !== 'video') {
     return NextResponse.json({ error: 'Only video assets carry a poster' }, { status: 409 });
+  }
+  if (head.thumbnail_path) {
+    return NextResponse.json({ assetId, bucket: head.bucket, thumbnailPath: head.thumbnail_path });
   }
 
   const thumbnailPath = buildThumbnailStoragePath({ brandId, assetId, mimeType: poster.type });

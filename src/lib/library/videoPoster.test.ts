@@ -4,6 +4,7 @@ import {
   isVideoMimeType,
   persistVideoPoster,
   posterTimestampSec,
+  seekVideoPreviewFrame,
   type VideoPoster,
 } from './videoPoster';
 
@@ -40,6 +41,25 @@ describe('posterTimestampSec', () => {
     expect(posterTimestampSec(Number.POSITIVE_INFINITY)).toBe(1);
     expect(posterTimestampSec(0)).toBe(1);
     expect(posterTimestampSec(-4)).toBe(1);
+  });
+});
+
+describe('seekVideoPreviewFrame', () => {
+  it('seeks an un-postered video past a blank opening frame', () => {
+    const video = { duration: 12, currentTime: 0 };
+
+    expect(seekVideoPreviewFrame(video)).toBe(true);
+    expect(video.currentTime).toBe(1);
+  });
+
+  it('uses the midpoint for a sub-second video and ignores an unknown duration', () => {
+    const shortVideo = { duration: 0.6, currentTime: 0 };
+    const stream = { duration: Number.POSITIVE_INFINITY, currentTime: 0 };
+
+    expect(seekVideoPreviewFrame(shortVideo)).toBe(true);
+    expect(shortVideo.currentTime).toBeCloseTo(0.3, 5);
+    expect(seekVideoPreviewFrame(stream)).toBe(false);
+    expect(stream.currentTime).toBe(0);
   });
 });
 

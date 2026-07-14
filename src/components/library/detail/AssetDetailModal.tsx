@@ -294,8 +294,15 @@ function AssetDetailDialog({
   }, []);
 
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[1440px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1440px]">
+    // Non-modal on purpose: the grid stays legible, scrollable and clickable
+    // beside the panel, and clicking another creative swaps what is docked here
+    // rather than closing it. Escape and the close button are the ways out.
+    <Dialog open modal={false} onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent
+        showOverlay={false}
+        onInteractOutside={(event) => event.preventDefault()}
+        className="fixed inset-y-4 right-4 left-auto flex h-auto w-[min(56rem,calc(100vw-2rem))] max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-none"
+      >
         <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 pr-14">
           <div className="min-w-0">
             <DialogTitle className="truncate text-sm font-medium">
@@ -305,26 +312,10 @@ function AssetDetailDialog({
               {assetMetaLine(asset)}
             </DialogDescription>
           </div>
+          {/* The header carries only the DELIBERATE workflow verdicts — what this
+              creative's status is, who should look at it, who may see it. Actions
+              that reshape the creative itself are docked onto the creative, below. */}
           <div className="ml-auto flex items-center gap-2">
-            {/* Quick Look, resize, canvas and timeline all act on the HEAD file.
-                Offering them over an older version would be a lie about what they
-                would edit, so they are withdrawn and the banner says why. */}
-            {viewingHead ? (
-              <>
-                <QuickLookButton brandId={brandId} asset={asset} onAssetChanged={onAssetChanged} />
-                <SmartResizeMenu brandId={brandId} asset={asset} onAssetChanged={onAssetChanged} />
-                <OpenInCanvasButton
-                  brandId={brandId}
-                  asset={asset}
-                  onAssetChanged={onAssetChanged}
-                />
-                <EditTimelineButton
-                  brandId={brandId}
-                  asset={asset}
-                  onAssetChanged={onAssetChanged}
-                />
-              </>
-            ) : null}
             <ReviewStatusControl brandId={brandId} asset={asset} onChanged={onAssetChanged} />
             <RequestReviewButton brandId={brandId} asset={asset} />
             <ShareLinkMenu brandId={brandId} asset={asset} />
@@ -385,6 +376,38 @@ function AssetDetailDialog({
               ) : (
                 <FilePreviewStage brandId={brandId} asset={asset} />
               )}
+
+              {/* Docked to the creative, not to the dialog chrome: these reshape
+                  the image in front of you, so they read as "things I can do to
+                  THIS". They all act on the HEAD file — offering them over an
+                  older version would be a lie about what they would edit, so they
+                  are withdrawn and the banner says why. */}
+              {viewingHead ? (
+                <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
+                  <div className="flex items-center gap-1 rounded-full border border-border bg-background/85 p-1 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/70">
+                    <QuickLookButton
+                      brandId={brandId}
+                      asset={asset}
+                      onAssetChanged={onAssetChanged}
+                    />
+                    <SmartResizeMenu
+                      brandId={brandId}
+                      asset={asset}
+                      onAssetChanged={onAssetChanged}
+                    />
+                    <OpenInCanvasButton
+                      brandId={brandId}
+                      asset={asset}
+                      onAssetChanged={onAssetChanged}
+                    />
+                    <EditTimelineButton
+                      brandId={brandId}
+                      asset={asset}
+                      onAssetChanged={onAssetChanged}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="shrink-0 border-t border-border px-4 py-2">
               <VersionRail

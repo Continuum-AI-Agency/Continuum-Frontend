@@ -148,6 +148,7 @@ export async function cutAndPersistSection(
       storagePath: ticket.path,
       fileName: `${section.index}.mp4`,
       mimeType: 'video/mp4',
+      sizeBytes: spliced.blob.size,
       durationSec: spliced.durationSec,
       section,
       transcriptExcerpt: section.transcriptExcerpt,

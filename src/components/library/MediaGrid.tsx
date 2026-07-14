@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { MediaCard } from './MediaCard';
 
 type Props = {
+  brandId: string;
   assets: MediaAsset[];
   showBoundingBoxes?: boolean;
   captionStyle?: CaptionStyle;
@@ -19,6 +20,7 @@ type Props = {
   loadingMore?: boolean;
   className?: string;
   onOpenDetail?: (asset: MediaAsset) => void;
+  onAssetChanged?: () => void;
 };
 
 const cardVariants: Variants = {
@@ -31,6 +33,7 @@ const GRID_CLASS =
   'grid grid-cols-2 gap-[var(--app-shell-gap)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 export function MediaGrid({
+  brandId,
   assets,
   showBoundingBoxes = false,
   captionStyle,
@@ -40,6 +43,7 @@ export function MediaGrid({
   loadingMore = false,
   className,
   onOpenDetail,
+  onAssetChanged,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -84,11 +88,13 @@ export function MediaGrid({
           {assets.map((asset, i) => (
             <MediaCard
               key={asset.id}
+              brandId={brandId}
               asset={asset}
               index={i}
               showBoundingBoxes={showBoundingBoxes}
               captionStyle={captionStyle}
               onOpen={onOpenDetail}
+              onAssetChanged={onAssetChanged}
             />
           ))}
         </div>
@@ -103,11 +109,13 @@ export function MediaGrid({
             {assets.map((asset, i) => (
               <motion.div key={asset.id} layout variants={cardVariants} exit="exit">
                 <MediaCard
+                  brandId={brandId}
                   asset={asset}
                   index={i}
                   showBoundingBoxes={showBoundingBoxes}
                   captionStyle={captionStyle}
                   onOpen={onOpenDetail}
+                  onAssetChanged={onAssetChanged}
                 />
               </motion.div>
             ))}
