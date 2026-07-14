@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { AdSetSnapshot, WindowMetrics } from '@continuum/contracts';
+import type { CampaignSection } from './campaignGroups';
 import {
   buildCampaignSections,
   buildCboCampaignSections,
+  defaultCollapsed,
+  filterItems,
   filterSection,
+  flattenRows,
+  pickerCounts,
   sectionEligibleIds,
+  topEligibleBySpend,
 } from './campaignGroups';
 
 function win(spend: number, purchases = 0): WindowMetrics {
@@ -294,5 +300,174 @@ describe('metrics — per row + campaign aggregates', () => {
       }),
     ]);
     expect(section.adsets.map((r) => r.id)).toEqual(['big', 'small', 'cbo']);
+  });
+});
+
+// ── browsing at scale ────────────────────────────────────────────────────────────────────
+// An account with 300+ ad sets is not browsable by scrolling. These are the pieces the
+// virtualized picker is built from.
+
+const fleet = () => [
+  snap({ id: 'a1', name: 'Prospecting Broad', campaignId: 'c1', campaignName: 'Summer Sale' }),
+  snap({
+    id: 'a2',
+    name: 'Retargeting 30d',
+    campaignId: 'c1',
+    campaignName: 'Summer Sale',
+    currentBudget: 200,
+    windows: { d3: win(0), d7: win(0), d14: win(900, 9) },
+  }),
+  snap({
+    id: 'b1',
+    name: 'Lookalike 1%',
+    campaignId: 'c2',
+    campaignName: 'Always On',
+    windows: { d3: win(0), d7: win(0), d14: win(0) },
+  }),
+  snap({
+    id: 'b2',
+    name: 'Held CBO',
+    campaignId: 'c2',
+    campaignName: 'Always On',
+    currentBudget: 0,
+    freeze: true,
+    freezeReason: 'unsupported_budget',
+  }),
+];
+
+const sectionById = (id: string) =>
+  buildCampaignSections(fleet()).find((s) => s.campaignId === id) as CampaignSection;
+
+describe('filterItems — tokenized AND search', () => {
+  it('matches tokens in any order and across name + campaign (the old substring test could not)', () => {
+    const summer = sectionById('c1');
+    expect(filterItems(summer, { query: 'broad prospecting' }).map((i) => i.id)).toEqual(['a1']);
+    expect(filterItems(summer, { query: 'summer retarget' }).map((i) => i.id)).toEqual(['a2']);
+  });
+
+  it('matches on ad-set id', () => {
+    expect(filterItems(sectionById('c1'), { query: 'a2' }).map((i) => i.id)).toEqual(['a2']);
+  });
+
+  it('chips are additive: eligible + spending keeps only ad sets that are both', () => {
+    const sections = buildCampaignSections(fleet());
+    const all = sections.flatMap((s) => filterItems(s, { chips: ['eligible', 'spending'] }));
+    expect(all.map((i) => i.id).sort()).toEqual(['a1', 'a2']); // b1 never spent, b2 is held
+  });
+
+  it('the held chip surfaces exactly the ineligible rows', () => {
+    const sections = buildCampaignSections(fleet());
+    const held = sections.flatMap((s) => filterItems(s, { chips: ['held'] }));
+    expect(held.map((i) => i.id)).toEqual(['b2']);
+  });
+});
+
+describe('flattenRows — the virtualizer index', () => {
+  it('a collapsed campaign contributes its header and none of its ad sets', () => {
+    const sections = buildCampaignSections(fleet());
+    const rows = flattenRows(sections, { collapsed: new Set(['c2']) });
+    expect(rows.filter((r) => r.kind === 'campaign')).toHaveLength(2);
+    expect(rows.filter((r) => r.kind === 'adset').map((r) => r.item.id)).toEqual(['a2', 'a1']);
+  });
+
+  // The regression. The old picker computed `isCollapsed = !searching && collapsed.has(id)`,
+  // so typing anything into the search box made every collapse control inert — you could click
+  // it and nothing happened.
+  it('honors an explicit collapse EVEN WHILE SEARCHING', () => {
+    const sections = buildCampaignSections(fleet());
+    const rows = flattenRows(sections, { collapsed: new Set(['c1']), query: 'a' });
+    expect(rows.some((r) => r.kind === 'adset' && r.section.campaignId === 'c1')).toBe(false);
+  });
+
+  it('drops a campaign whose ad sets are all filtered out', () => {
+    const sections = buildCampaignSections(fleet());
+    const rows = flattenRows(sections, { collapsed: new Set(), query: 'lookalike' });
+    expect(rows.filter((r) => r.kind === 'campaign').map((r) => r.section.campaignId)).toEqual([
+      'c2',
+    ]);
+  });
+
+  it('reports how many ad sets survive inside a collapsed campaign, so nothing hides silently', () => {
+    const sections = buildCampaignSections(fleet());
+    const rows = flattenRows(sections, { collapsed: new Set(['c1']) });
+    const header = rows.find((r) => r.kind === 'campaign' && r.section.campaignId === 'c1');
+    expect(header?.kind === 'campaign' && header.visibleCount).toBe(2);
+  });
+});
+
+describe('selection helpers', () => {
+  it('topEligibleBySpend picks the biggest spenders and never an ineligible one', () => {
+    const sections = buildCampaignSections(fleet());
+    expect(topEligibleBySpend(sections, 2)).toEqual(['a2', 'a1']);
+    expect(topEligibleBySpend(sections, 10)).not.toContain('b2');
+  });
+
+  it('defaultCollapsed leaves the top spenders open and collapses the rest', () => {
+    // 20+ big spenders in c1 push c3's single small ad set out of the top 20, so a 300-ad-set
+    // account does not open fully expanded.
+    const big = Array.from({ length: 22 }, (_, i) =>
+      snap({
+        id: `big${i}`,
+        campaignId: 'c1',
+        campaignName: 'Summer Sale',
+        windows: { d3: win(0), d7: win(0), d14: win(1000 + i, 5) },
+      }),
+    );
+    const small = snap({
+      id: 'small',
+      campaignId: 'c3',
+      campaignName: 'Zeta',
+      windows: { d3: win(0), d7: win(0), d14: win(1, 0) },
+    });
+    const collapsed = defaultCollapsed(buildCampaignSections([...big, small]));
+    expect(collapsed.has('c1')).toBe(false); // holds the top spenders
+    expect(collapsed.has('c3')).toBe(true); // nothing in the top 20
+  });
+
+  it('pickerCounts always reports the real fleet totals (nothing hidden without a signpost)', () => {
+    expect(pickerCounts(buildCampaignSections(fleet()))).toEqual({
+      total: 4,
+      eligible: 3,
+      held: 1,
+      mismatch: 0,
+    });
+  });
+});
+
+// The bug the picker could never see: an ad set is ELIGIBLE (its budget is movable) and yet
+// completely INERT, because it buys a different event than the portfolio's objective and
+// runCycle freezes it on kpi_mismatch. On a live account 60 of 63 eligible ad sets were
+// mismatched under a `purchase` objective — 95% of the budget enrolled and frozen solid.
+describe('objective awareness', () => {
+  const mixed = () => [
+    snap({ id: 'buys-purchases', campaignId: 'c1', campaignName: 'C', kpiField: 'purchases' }),
+    snap({ id: 'buys-convos', campaignId: 'c1', campaignName: 'C', kpiField: 'conversations' }),
+    snap({ id: 'inherits', campaignId: 'c1', campaignName: 'C' }),
+  ];
+
+  it('flags exactly the ad sets that buy something else', () => {
+    const [section] = buildCampaignSections(mixed(), 'adset', 'purchase');
+    expect(section.adsets.filter((i) => i.mismatch).map((i) => i.id)).toEqual(['buys-convos']);
+    expect(section.mismatchCount).toBe(1);
+  });
+
+  it('an ad set that declares no KPI inherits the objective and can never mismatch', () => {
+    const [section] = buildCampaignSections(mixed(), 'adset', 'purchase');
+    expect(section.adsets.find((i) => i.id === 'inherits')?.mismatch).toBe(false);
+  });
+
+  it('without an objective nothing is flagged — eligibility stays objective-agnostic', () => {
+    const [section] = buildCampaignSections(mixed());
+    expect(section.adsets.every((i) => !i.mismatch)).toBe(true);
+    expect(section.mismatchCount).toBe(0);
+  });
+
+  it('counts the objective’s OWN event, not a max-of-everything proxy', () => {
+    // 140 spend / 14 purchases = $10 CPA under `purchase`; under `lead` there are no leads at
+    // all, so the cost is unknowable rather than borrowed from the purchase column.
+    const [asPurchase] = buildCampaignSections(mixed(), 'adset', 'purchase');
+    const [asLead] = buildCampaignSections(mixed(), 'adset', 'lead');
+    expect(asPurchase.adsets.find((i) => i.id === 'buys-purchases')?.cpa).toBe(10);
+    expect(asLead.adsets.find((i) => i.id === 'buys-purchases')?.cpa).toBeNull();
   });
 });

@@ -1,40 +1,47 @@
 'use client';
 
-// The enrollment selector as a searchable DATA TABLE, grouped by campaign. Each
-// campaign is a collapsible group header carrying a tri-state "select all eligible"
-// checkbox + campaign-level aggregates (budget / spend / CPA / ads); its ad-set
-// rows show the same metrics per ad set. Ad sets the optimizer can't move budget
-// for (CBO/lifetime, ingest-frozen) are disabled with a legible, VISIBLE reason —
-// never dropped. Selection is controlled by the parent as a flat id array.
+// The enrollment selector: a VIRTUALIZED, campaign-grouped table of ad sets.
 //
-// In campaign mode each snapshot is self-referential (one campaign per section),
-// so the group header is dropped and every campaign renders as a single selectable
-// row — the row IS the entity. Eligible campaigns carry a Daily/Lifetime chip;
-// ABO campaigns (no campaign budget) are held with the same visible-reason pattern.
+// It used to render every ad set in the account into the DOM, inside a max-h-[60vh] box, inside
+// a 672px column, with a scroll container fighting the one its parent already had. A 300-ad-set
+// account produced 300+ rows and two competing scrollbars. It is now windowed by
+// @tanstack/react-virtual (already a dependency, used by nothing), with exactly ONE scroll
+// container that this component owns.
+//
+// The table stays a real <table>: virtualization needs absolutely-positioned rows, which fight
+// table layout — so the table, its head, body and rows are laid out with `display: grid` /
+// `flex` instead. Semantics (and the implicit ARIA roles that come with them) are preserved;
+// only the layout algorithm changes. Hand-rolling role="grid" on divs would have thrown away
+// the semantics to buy nothing.
+//
+// Ad sets the optimizer cannot move budget for (CBO/lifetime, ingest-frozen) are still disabled
+// with a legible, VISIBLE reason — never dropped. New: with an `objective` in hand, ad sets that
+// buy a DIFFERENT event are marked too. Those are eligible and yet completely inert, because
+// runCycle freezes them on kpi_mismatch. On a live account 60 of 63 eligible ad sets were
+// mismatched under a `purchase` objective — 95% of the budget enrolled and frozen solid. The
+// picker could not see it, because eligibility is deliberately objective-agnostic. Now it can.
+//
+// In campaign mode each snapshot is self-referential (one campaign per section), so the group
+// header is dropped and every campaign renders as a single selectable row — the row IS the
+// entity.
 
-import type { AdSetSnapshot, PortfolioLevel } from '@continuum/contracts';
+import type { AdSetSnapshot, OptimizationObjective, PortfolioLevel } from '@continuum/contracts';
+import { getOptimizationMetricDefinition } from '@continuum/contracts';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ChevronDown,
   ChevronRight,
   Image as ImageIcon,
-  Search,
   SearchX,
   ServerCrash,
   TriangleAlert,
 } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatCpa, formatCurrency } from '../format';
 import { AdsetAdList } from './AdsetAdList';
@@ -42,12 +49,26 @@ import {
   type AdsetPickItem,
   buildCampaignSections,
   type CampaignSection,
-  filterSection,
+  defaultCollapsed,
+  flattenRows,
+  type PickerChip,
+  type PickerRow,
+  pickerCounts,
   sectionEligibleIds,
+  sectionsMatching,
+  topEligibleBySpend,
 } from './campaignGroups';
+import { PickerToolbar } from './PickerToolbar';
 
-const COLS = 7;
 const DASH = '—';
+
+// Fixed heights make estimateSize EXACT — no measureElement, no scroll jitter, and
+// scrollToIndex lands where it says it will.
+const ROW_H = { campaign: 44, adset: 40, held: 56 } as const;
+
+// One template for the head and every row, so the columns line up without table layout.
+const GRID_COLS =
+  'grid grid-cols-[2rem_minmax(0,1fr)_6.5rem_6.5rem_5.5rem_3.5rem_2rem] items-center gap-2 px-3';
 
 type CampaignAdsetPickerProps = {
   snapshots: AdSetSnapshot[];
@@ -59,9 +80,13 @@ type CampaignAdsetPickerProps = {
   disabled?: boolean;
   isLoading?: boolean;
   isError?: boolean;
-  // 'adset' (default) groups ad sets under campaigns; 'campaign' selects whole
-  // campaigns (one self-referential row per section, no ad-set children).
   mode?: PortfolioLevel;
+  /** The portfolio's objective. Unlocks the KPI-mismatch marking and an objective-correct cost
+   *  column. Optional so PortfolioManagePanel keeps working unchanged. */
+  objective?: OptimizationObjective;
+  /** How tall the scroll region is. The default suits an inline form; the two-pane builder
+   *  passes h-full and gives the picker the whole pane. */
+  heightClassName?: string;
 };
 
 function safeId(value: string): string {
@@ -77,48 +102,54 @@ const BUDGET_TYPE_LABEL: Record<'daily' | 'lifetime', string> = {
   lifetime: 'Lifetime',
 };
 
-function AdsetTableRow({
+const AdsetRow = memo(function AdsetRow({
   row,
   checked,
   disabled,
   currency,
-  adsOpen,
   showAds,
+  brandId,
+  accountId,
   onToggle,
-  onToggleAds,
+  style,
 }: {
   row: AdsetPickItem;
   checked: boolean;
   disabled: boolean;
   currency?: string | null;
-  adsOpen: boolean;
-  // Campaign mode hides the ads disclosure (a campaign id is not an ad-set id).
   showAds: boolean;
+  brandId: string;
+  accountId: string;
   onToggle: (id: string, checked: boolean) => void;
-  onToggleAds: (id: string) => void;
+  style: CSSProperties;
 }) {
   const controlId = `optimizer-adset-${safeId(row.id)}`;
+
   return (
-    <TableRow
+    <tr
       data-state={checked ? 'selected' : undefined}
-      className={cn(!row.eligible && 'opacity-95')}
+      style={style}
+      className={cn(
+        GRID_COLS,
+        'absolute top-0 left-0 w-full border-border/40 border-b data-[state=selected]:bg-muted/40',
+      )}
     >
-      <TableCell className="w-9 py-1.5 pl-3 align-top">
+      <td className="flex justify-center">
         <Checkbox
           id={controlId}
-          className="mt-1"
           checked={checked}
           disabled={disabled || !row.eligible}
           aria-label={row.name}
           onCheckedChange={(value) => onToggle(row.id, value === true)}
         />
-      </TableCell>
-      <TableCell className="py-1.5 align-top">
+      </td>
+
+      <td className="min-w-0">
         <label
           htmlFor={controlId}
           className={cn('block min-w-0', row.eligible ? 'cursor-pointer' : 'cursor-not-allowed')}
         >
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5">
             <span
               className={cn(
                 'truncate text-sm',
@@ -137,112 +168,143 @@ function AdsetTableRow({
                 Held
               </Badge>
             ) : null}
+            {row.eligible && row.mismatch ? (
+              <Badge variant="warning" className="shrink-0 text-3xs">
+                Wrong KPI
+              </Badge>
+            ) : null}
           </span>
+
+          {/* The reason is always VISIBLE, never tooltip-only — line-clamped so the row height
+              stays exact, with the full text on hover. */}
           {!row.eligible && row.reason ? (
-            <span className="mt-0.5 block text-2xs text-warning">{row.reason}</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
+                  {row.reason}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">{row.reason}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {row.eligible && row.mismatch ? (
+            <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
+              Buys {row.kpiField} — the optimizer freezes it and never moves its budget.
+            </span>
           ) : null}
         </label>
-      </TableCell>
-      <TableCell className="py-1.5 text-right text-xs tabular-nums align-top">
-        {row.eligible ? formatCurrency(row.currentBudget, currency) : DASH}
-      </TableCell>
-      <TableCell className="py-1.5 text-right text-xs tabular-nums align-top">
-        {money(row.spend14, currency)}
-      </TableCell>
-      <TableCell className="py-1.5 text-right text-xs tabular-nums align-top">
-        {row.cpa != null ? formatCpa(row.cpa, currency) : DASH}
-      </TableCell>
-      <TableCell className="py-1.5 text-right text-xs tabular-nums align-top">
-        {row.adCount > 0 ? row.adCount : DASH}
-      </TableCell>
-      <TableCell className="w-9 py-1.5 pr-2 align-top">
-        {showAds ? (
-          <button
-            type="button"
-            onClick={() => onToggleAds(row.id)}
-            aria-label={`Show ads in ${row.name}`}
-            aria-expanded={adsOpen}
-            className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ImageIcon className="size-3.5" aria-hidden />
-          </button>
-        ) : null}
-      </TableCell>
-    </TableRow>
-  );
-}
+      </td>
 
-function CampaignGroupRow({
+      <td className="text-right text-xs tabular-nums">
+        {row.eligible ? formatCurrency(row.currentBudget, currency) : DASH}
+      </td>
+      <td className="text-right text-xs tabular-nums">{money(row.spend14, currency)}</td>
+      <td className="text-right text-xs tabular-nums">
+        {row.cpa != null ? formatCpa(row.cpa, currency) : DASH}
+      </td>
+      <td className="text-right text-xs tabular-nums">{row.adCount > 0 ? row.adCount : DASH}</td>
+
+      <td className="flex justify-center">
+        {/* A Popover, not a nested expanding row: a variable-height row is poison for a
+            virtualizer, and the old one shoved everything below it off-screen. */}
+        {showAds && row.adCount > 0 ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Show ads in ${row.name}`}
+                className="rounded p-0.5 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ImageIcon className="size-3.5" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="max-h-80 w-96 overflow-y-auto p-2">
+              <AdsetAdList adsetId={row.id} brandId={brandId} accountId={accountId} />
+            </PopoverContent>
+          </Popover>
+        ) : null}
+      </td>
+    </tr>
+  );
+});
+
+function CampaignHeaderRow({
   section,
-  visible,
-  selected,
+  visibleCount,
+  collapsed,
+  selectedIds,
   disabled,
   currency,
-  collapsed,
   onToggleCollapse,
-  onToggleMany,
+  onToggleAll,
+  style,
 }: {
   section: CampaignSection;
-  visible: AdsetPickItem[];
-  selected: Set<string>;
+  visibleCount: number;
+  collapsed: boolean;
+  selectedIds: Set<string>;
   disabled: boolean;
   currency?: string | null;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
-  onToggleMany: (ids: string[], checked: boolean) => void;
+  onToggleCollapse: (campaignId: string) => void;
+  onToggleAll: (ids: string[], checked: boolean) => void;
+  style: CSSProperties;
 }) {
-  const eligibleIds = sectionEligibleIds(visible);
-  const total = eligibleIds.length;
-  const selectedCount = eligibleIds.reduce((n, id) => (selected.has(id) ? n + 1 : n), 0);
-  const allSelected = total > 0 && selectedCount === total;
-  const partiallySelected = selectedCount > 0 && selectedCount < total;
-  const selectAllId = `optimizer-campaign-${safeId(section.campaignId)}`;
+  const eligibleIds = sectionEligibleIds(section.adsets);
+  const selectedCount = eligibleIds.filter((id) => selectedIds.has(id)).length;
+  const allSelected = eligibleIds.length > 0 && selectedCount === eligibleIds.length;
+  const someSelected = selectedCount > 0 && !allSelected;
 
   return (
-    <TableRow className="border-border/60 bg-muted/40 hover:bg-muted/50">
-      <TableCell className="w-9 py-2 pl-3">
+    <tr
+      style={style}
+      className={cn(
+        GRID_COLS,
+        'absolute top-0 left-0 w-full border-border/60 border-b bg-muted/30',
+      )}
+    >
+      <td className="flex justify-center">
         <Checkbox
-          id={selectAllId}
-          checked={partiallySelected ? 'indeterminate' : allSelected}
-          disabled={disabled || total === 0}
+          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+          disabled={disabled || eligibleIds.length === 0}
           aria-label={`Select all eligible ad sets in ${section.campaignName}`}
-          onCheckedChange={(value) => onToggleMany(eligibleIds, value === true)}
+          onCheckedChange={(value) => onToggleAll(eligibleIds, value === true)}
         />
-      </TableCell>
-      <TableCell className="py-2">
+      </td>
+
+      <td className="flex min-w-0 items-center gap-1">
         <button
           type="button"
-          onClick={onToggleCollapse}
+          onClick={() => onToggleCollapse(section.campaignId)}
           aria-expanded={!collapsed}
-          className="flex min-w-0 items-center gap-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 items-center gap-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {collapsed ? (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           ) : (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           )}
-          <span className="truncate font-semibold text-sm text-foreground">
-            {section.campaignName}
-          </span>
-          <span className="shrink-0 text-2xs text-muted-foreground">
-            {selectedCount}/{total} of {section.totalCount}
-          </span>
+          <span className="truncate font-medium text-xs">{section.campaignName}</span>
         </button>
-      </TableCell>
-      <TableCell className="py-2 text-right text-xs font-medium tabular-nums">
-        {money(section.totalBudget, currency)}
-      </TableCell>
-      <TableCell className="py-2 text-right text-xs font-medium tabular-nums">
-        {money(section.totalSpend14, currency)}
-      </TableCell>
-      <TableCell className="py-2 text-right text-xs font-medium tabular-nums">
+        <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
+          {selectedCount}/{eligibleIds.length} of {visibleCount}
+        </span>
+        {section.mismatchCount > 0 ? (
+          <Badge variant="warning" className="shrink-0 text-3xs">
+            {section.mismatchCount} wrong KPI
+          </Badge>
+        ) : null}
+      </td>
+
+      <td className="text-right text-xs tabular-nums">{money(section.totalBudget, currency)}</td>
+      <td className="text-right text-xs tabular-nums">{money(section.totalSpend14, currency)}</td>
+      <td className="text-right text-xs tabular-nums">
         {section.cpa != null ? formatCpa(section.cpa, currency) : DASH}
-      </TableCell>
-      <TableCell className="py-2 text-right text-xs font-medium tabular-nums">
+      </td>
+      <td className="text-right text-xs tabular-nums">
         {section.totalAds > 0 ? section.totalAds : DASH}
-      </TableCell>
-      <TableCell className="w-9 py-2" />
-    </TableRow>
+      </td>
+      <td />
+    </tr>
   );
 }
 
@@ -257,206 +319,247 @@ export function CampaignAdsetPicker({
   isLoading = false,
   isError = false,
   mode = 'adset',
+  objective,
+  heightClassName = 'h-[24rem]',
 }: CampaignAdsetPickerProps) {
   const [query, setQuery] = useState('');
+  const [chips, setChips] = useState<PickerChip[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [adsOpen, setAdsOpen] = useState<Set<string>>(new Set());
+  const [seeded, setSeeded] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const campaignMode = mode === 'campaign';
-  const entityLabel = campaignMode ? 'campaigns' : 'ad sets';
-  const sections = useMemo(() => buildCampaignSections(snapshots, mode), [snapshots, mode]);
-  const selected = useMemo(() => new Set(selectedAdsetIds), [selectedAdsetIds]);
-  const totalEligible = useMemo(
-    () => sections.reduce((sum, section) => sum + section.eligibleCount, 0),
-    [sections],
+  const sections = useMemo(
+    () => buildCampaignSections(snapshots, mode, objective),
+    [snapshots, mode, objective],
+  );
+  const counts = useMemo(() => pickerCounts(sections), [sections]);
+  const selectedIds = useMemo(() => new Set(selectedAdsetIds), [selectedAdsetIds]);
+  const isCampaignMode = mode === 'campaign';
+
+  // Open with the biggest spenders visible and the long tail collapsed. A 300-ad-set account
+  // that opens fully expanded is not a browsing experience.
+  useEffect(() => {
+    if (seeded || sections.length === 0 || isCampaignMode) return;
+    setCollapsed(defaultCollapsed(sections));
+    setSeeded(true);
+  }, [sections, seeded, isCampaignMode]);
+
+  // A new query opens the campaigns that have hits — otherwise the results hide behind a
+  // collapse arrow. Collapsing WHILE searching still works (flattenRows honors the set), which
+  // it did not before: the old picker made every collapse control inert the moment you typed.
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      setQuery(value);
+      const hits = sectionsMatching(sections, value, chips);
+      if (hits.length === 0) return;
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        for (const id of hits) next.delete(id);
+        return next;
+      });
+    },
+    [sections, chips],
   );
 
-  function toggleOne(id: string, checked: boolean) {
-    const next = new Set(selected);
-    if (checked) next.add(id);
-    else next.delete(id);
-    onChange([...next]);
-  }
+  const rows: PickerRow[] = useMemo(
+    () =>
+      isCampaignMode
+        ? sections.flatMap((section) =>
+            section.adsets.map((item) => ({ kind: 'adset' as const, item, section })),
+          )
+        : flattenRows(sections, { collapsed, query, chips }),
+    [sections, collapsed, query, chips, isCampaignMode],
+  );
 
-  function toggleMany(ids: string[], checked: boolean) {
-    const next = new Set(selected);
-    for (const id of ids) {
-      if (checked) next.add(id);
-      else next.delete(id);
-    }
-    onChange([...next]);
-  }
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => {
+      const row = rows[index];
+      if (!row) return ROW_H.adset;
+      if (row.kind === 'campaign') return ROW_H.campaign;
+      return !row.item.eligible || row.item.mismatch ? ROW_H.held : ROW_H.adset;
+    },
+    overscan: 12,
+  });
 
-  function toggleCollapse(campaignId: string) {
-    setCollapsed((current) => {
-      const next = new Set(current);
+  const toggleOne = useCallback(
+    (id: string, checked: boolean) => {
+      onChange(
+        checked ? [...selectedAdsetIds, id] : selectedAdsetIds.filter((value) => value !== id),
+      );
+    },
+    [onChange, selectedAdsetIds],
+  );
+
+  const toggleMany = useCallback(
+    (ids: string[], checked: boolean) => {
+      const set = new Set(selectedAdsetIds);
+      for (const id of ids) {
+        if (checked) set.add(id);
+        else set.delete(id);
+      }
+      onChange([...set]);
+    },
+    [onChange, selectedAdsetIds],
+  );
+
+  const toggleCollapse = useCallback((campaignId: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
       if (next.has(campaignId)) next.delete(campaignId);
       else next.add(campaignId);
       return next;
     });
-  }
+  }, []);
 
-  function toggleAds(adsetId: string) {
-    setAdsOpen((current) => {
-      const next = new Set(current);
-      if (next.has(adsetId)) next.delete(adsetId);
-      else next.add(adsetId);
-      return next;
-    });
-  }
+  // Select it, then take the user to it. The point of the Command palette is that an operator
+  // who knows the ad set's name never has to scroll for it.
+  const jumpTo = useCallback(
+    (adsetId: string) => {
+      if (!selectedIds.has(adsetId)) toggleOne(adsetId, true);
+      const index = rows.findIndex((row) => row.kind === 'adset' && row.item.id === adsetId);
+      if (index >= 0) virtualizer.scrollToIndex(index, { align: 'center' });
+    },
+    [rows, selectedIds, toggleOne, virtualizer],
+  );
+
+  const selectTop = useCallback(
+    (count: number) => toggleMany(topEligibleBySpend(sections, count), true),
+    [sections, toggleMany],
+  );
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="h-9 rounded-md bg-muted/70" />
-        <Skeleton className="h-9 rounded-md bg-muted/70" />
-        <Skeleton className="h-9 w-3/4 rounded-md bg-muted/70" />
+      <div className="space-y-2" role="status" aria-busy="true">
+        <span className="sr-only">Loading ad sets</span>
+        <Skeleton className="h-8 rounded-lg bg-muted/70" />
+        <Skeleton className={cn(heightClassName, 'rounded-lg bg-muted/70')} />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5 text-warning text-xs">
-        <ServerCrash className="size-4 shrink-0" aria-hidden />
-        Couldn&rsquo;t load {entityLabel} for this account. The optimizer service may be offline.
-      </div>
+      <p className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+        <ServerCrash className="size-4 shrink-0" aria-hidden="true" />
+        Couldn't load this account's ad sets. Retry in a moment.
+      </p>
     );
   }
 
-  if (snapshots.length === 0) {
+  if (counts.total === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-border/60 border-dashed py-8 text-center">
-        <SearchX className="size-5 text-muted-foreground" aria-hidden />
-        <p className="text-muted-foreground text-sm">
-          No active {entityLabel} found for this account.
-        </p>
-      </div>
+      <p className="flex items-center gap-2 rounded-lg border border-border/60 border-dashed px-3 py-6 text-xs text-muted-foreground">
+        <SearchX className="size-4 shrink-0" aria-hidden="true" />
+        No ad sets found on this account.
+      </p>
     );
   }
 
-  const searching = query.trim().length > 0;
-  const rendered = sections
-    .map((section) => ({ section, visible: filterSection(section, query) }))
-    .filter(({ visible }) => !searching || visible.length > 0);
+  const metric = objective ? getOptimizationMetricDefinition(objective) : null;
+  const virtualRows = virtualizer.getVirtualItems();
 
   return (
-    <div className="flex flex-col gap-2">
-      {snapshots.length > 6 ? (
-        <div className="relative">
-          <Search
-            className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={campaignMode ? 'Search campaigns' : 'Search campaigns or ad sets'}
-            className="h-8 pl-8 text-sm"
-            aria-label={campaignMode ? 'Search campaigns' : 'Search campaigns or ad sets'}
-          />
-        </div>
+    <div className="flex min-h-0 flex-col gap-2">
+      {!isCampaignMode ? (
+        <PickerToolbar
+          sections={sections}
+          counts={counts}
+          query={query}
+          chips={chips}
+          selectedCount={selectedAdsetIds.length}
+          disabled={disabled}
+          onQueryChange={handleQueryChange}
+          onChipsChange={setChips}
+          onJumpTo={jumpTo}
+          onSelectTop={selectTop}
+        />
       ) : null}
 
-      {totalEligible === 0 ? (
-        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5 text-2xs text-warning">
-          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          <span>
-            {campaignMode
-              ? 'Every campaign here splits its budget at the ad-set level (ABO), so there’s nothing to reallocate at the campaign level. Optimize these as an ad-set portfolio instead.'
-              : 'Every ad set here has its budget managed at the campaign level (CBO or lifetime), so there’s nothing for the optimizer to reallocate. Connect an account with ad-set daily budgets to enroll.'}
-          </span>
-        </div>
+      {counts.eligible === 0 ? (
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+          <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          None of these {isCampaignMode ? 'campaigns' : 'ad sets'} own a budget the optimizer can
+          move — they are managed at the campaign level (CBO or lifetime).
+        </p>
       ) : null}
 
-      <Table containerClassName="max-h-[60vh] overflow-y-auto overscroll-contain rounded-lg border border-border/60">
-        <TableHeader className="sticky top-0 z-10 bg-card">
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="w-9 pl-3" />
-            <TableHead className="text-xs">{campaignMode ? 'Campaign' : 'Ad set'}</TableHead>
-            <TableHead className="text-right text-xs">
-              {campaignMode ? 'Budget' : 'Budget/day'}
-            </TableHead>
-            <TableHead className="text-right text-xs">Spend 14d</TableHead>
-            <TableHead className="text-right text-xs">CPA</TableHead>
-            <TableHead className="text-right text-xs">Ads</TableHead>
-            <TableHead className="w-9" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rendered.length === 0 ? (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={COLS} className="py-6 text-center text-muted-foreground text-sm">
-                No {campaignMode ? 'campaigns' : 'campaigns or ad sets'} match &ldquo;{query.trim()}
-                &rdquo;.
-              </TableCell>
-            </TableRow>
-          ) : (
-            rendered.map(({ section, visible }) => {
-              // Campaign mode: the section IS a single self-referential row — render
-              // it directly (no group header, no ad-set children, no ads disclosure).
-              if (campaignMode) {
-                const row = visible[0] ?? section.adsets[0];
-                return (
-                  <AdsetTableRow
-                    key={section.campaignId}
-                    row={row}
-                    checked={selected.has(row.id)}
+      {rows.length === 0 ? (
+        <p className="flex items-center gap-2 rounded-lg border border-border/60 border-dashed px-3 py-6 text-xs text-muted-foreground">
+          <SearchX className="size-4 shrink-0" aria-hidden="true" />
+          Nothing matches this search or filter.
+        </p>
+      ) : (
+        <div
+          ref={scrollRef}
+          className={cn(
+            heightClassName,
+            'overflow-y-auto overscroll-contain rounded-lg border border-border/60',
+          )}
+        >
+          {/* display:grid on the table (and flex on its rows) is what lets rows be absolutely
+              positioned without table layout fighting back. aria-rowcount is the REAL total,
+              not the windowed count — a virtualized table that reports only what it rendered
+              lies to assistive tech. */}
+          <table className="grid w-full" aria-rowcount={rows.length}>
+            <thead className="sticky top-0 z-10 grid bg-card">
+              <tr
+                className={cn(
+                  GRID_COLS,
+                  'border-border/60 border-b py-1.5 text-left font-medium text-2xs text-muted-foreground uppercase tracking-wide',
+                )}
+              >
+                <th aria-label="Select" />
+                <th className="font-medium">{isCampaignMode ? 'Campaign' : 'Ad set'}</th>
+                <th className="text-right font-medium">Budget/day</th>
+                <th className="text-right font-medium">Spend 14d</th>
+                <th className="text-right font-medium">{metric?.costLabel ?? 'CPA'}</th>
+                <th className="text-right font-medium">Ads</th>
+                <th aria-label="Creatives" />
+              </tr>
+            </thead>
+
+            <tbody className="relative grid" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+              {virtualRows.map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                if (!row) return null;
+                const style: CSSProperties = {
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                };
+                return row.kind === 'campaign' ? (
+                  <CampaignHeaderRow
+                    key={virtualRow.key}
+                    style={style}
+                    section={row.section}
+                    visibleCount={row.visibleCount}
+                    collapsed={collapsed.has(row.section.campaignId)}
+                    selectedIds={selectedIds}
                     disabled={disabled}
                     currency={currency}
-                    adsOpen={false}
-                    showAds={false}
+                    onToggleCollapse={toggleCollapse}
+                    onToggleAll={toggleMany}
+                  />
+                ) : (
+                  <AdsetRow
+                    key={virtualRow.key}
+                    style={style}
+                    row={row.item}
+                    checked={selectedIds.has(row.item.id)}
+                    disabled={disabled}
+                    currency={currency}
+                    showAds={!isCampaignMode}
+                    brandId={brandId}
+                    accountId={accountId}
                     onToggle={toggleOne}
-                    onToggleAds={toggleAds}
                   />
                 );
-              }
-              const isCollapsed = !searching && collapsed.has(section.campaignId);
-              return (
-                <Fragment key={section.campaignId}>
-                  <CampaignGroupRow
-                    section={section}
-                    visible={visible}
-                    selected={selected}
-                    disabled={disabled}
-                    currency={currency}
-                    collapsed={isCollapsed}
-                    onToggleCollapse={() => toggleCollapse(section.campaignId)}
-                    onToggleMany={toggleMany}
-                  />
-                  {isCollapsed
-                    ? null
-                    : visible.map((row) => (
-                        <Fragment key={row.id}>
-                          <AdsetTableRow
-                            row={row}
-                            checked={selected.has(row.id)}
-                            disabled={disabled}
-                            currency={currency}
-                            adsOpen={adsOpen.has(row.id)}
-                            showAds
-                            onToggle={toggleOne}
-                            onToggleAds={toggleAds}
-                          />
-                          {adsOpen.has(row.id) ? (
-                            <TableRow className="hover:bg-transparent">
-                              <TableCell colSpan={COLS} className="bg-muted/20 p-0">
-                                <AdsetAdList
-                                  brandId={brandId}
-                                  accountId={accountId}
-                                  adsetId={row.id}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </Fragment>
-                      ))}
-                </Fragment>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

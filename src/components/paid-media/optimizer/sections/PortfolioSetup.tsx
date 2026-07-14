@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BudgetHint, SetupAdvisor, TargetHint, useSetupAdvice } from '../advisor/SetupAdvisor';
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildCboCampaignSections } from '../picker/campaignGroups';
@@ -538,6 +539,19 @@ export function PortfolioCreateForm({
       .reduce((sum, snapshot) => sum + (snapshot.currentBudget ?? 0), 0);
   }, [snapshotsRead.data, selectedAdsetIds]);
 
+  // What the engine will actually do with this selection, under this objective, at this budget
+  // and target. Deterministic and recomputed on every change — it is the only place in the
+  // product that holds BOTH the selection and the objective, which is what makes the
+  // kpi_mismatch collision (an ad set that enrolls ELIGIBLE and yet frozen) knowable at all.
+  const advice = useSetupAdvice({
+    snapshots: snapshotsRead.data,
+    selectedIds: selectedAdsetIds,
+    objective,
+    mode,
+    dailyTotal,
+    target: cpaTarget,
+  });
+
   const typedDaily = Number.parseFloat(dailyTotal);
   const effectiveDaily =
     Number.isFinite(typedDaily) && typedDaily > 0 ? typedDaily : selectedBudgetSum;
@@ -596,62 +610,87 @@ export function PortfolioCreateForm({
   const entityLabel = level === 'campaign' ? 'campaigns' : 'ad sets';
 
   return (
-    <Card className="gap-0 rounded-lg py-0 shadow-none">
-      <CardHeader className="border-b border-border/70 p-4">
+    <Card className="flex min-h-0 flex-col gap-0 rounded-lg py-0 shadow-none">
+      <CardHeader className="shrink-0 border-b border-border/70 p-4">
         <CardTitle className="text-sm">Create a portfolio</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Name it, pick the {entityLabel} to optimize together, and set a daily budget in{' '}
+          Pick the {entityLabel} to optimize together, and set a daily budget in{' '}
           {currency ?? 'the account currency'}.
         </p>
       </CardHeader>
-      <CardContent className="space-y-3 p-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="optimizer-portfolio-name">Name</Label>
-          <Input
-            id="optimizer-portfolio-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. Prospecting · Purchases"
+
+      {/* Two panes: the selection on the left, and everything that DEPENDS on the selection on
+          the right. They have to be on screen together — an advisor you scroll away from to
+          reach the budget field is an advisor nobody reads. Below lg they stack, picker first. */}
+      <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col gap-1.5">
+          <Label>{level === 'campaign' ? 'Campaigns to enroll' : 'Ad sets to enroll'}</Label>
+          <CampaignAdsetPicker
+            snapshots={snapshotsRead.data}
+            selectedAdsetIds={selectedAdsetIds}
+            onChange={setSelectedAdsetIds}
+            brandId={brandId}
+            accountId={adAccountId}
+            currency={currency}
+            disabled={busy}
+            isLoading={snapshotsRead.isLoading}
+            isError={snapshotsRead.isError}
+            mode={level}
+            objective={objective}
+            heightClassName="h-[26rem] lg:h-[min(60vh,34rem)]"
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <div className="space-y-1.5">
-            <Label>Objective</Label>
-            <Select
-              value={objective}
-              onValueChange={(value) => setObjective(value as OptimizationObjective)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OBJECTIVES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {humanize(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="optimizer-portfolio-name">Name</Label>
+            <Input
+              id="optimizer-portfolio-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Prospecting · Purchases"
+            />
           </div>
-          <div className="space-y-1.5">
-            <Label>Mode</Label>
-            <Select value={mode} onValueChange={(value) => setMode(value as OptimizationModeDto)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {humanize(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Objective</Label>
+              <Select
+                value={objective}
+                onValueChange={(value) => setObjective(value as OptimizationObjective)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OBJECTIVES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {humanize(value)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Mode</Label>
+              <Select value={mode} onValueChange={(value) => setMode(value as OptimizationModeDto)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {humanize(value)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Autonomy gets its own row now. It used to share a 3-up grid with Budget and Target
+              purely because the column was 672px wide — three unrelated controls jammed
+              together, and its explainer had nowhere to go. */}
           <div className="space-y-1.5">
             <Label>Autonomy tier</Label>
             {/* Create offers observe (soak) and recommend (HITL). Autopilot needs guardrails
@@ -670,83 +709,87 @@ export function PortfolioCreateForm({
             </Select>
             <p className="text-2xs text-muted-foreground">{applyModeExplainer(applyMode)}</p>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="optimizer-daily-total">Daily budget ({symbol})</Label>
-            <Input
-              id="optimizer-daily-total"
-              inputMode="decimal"
-              value={dailyTotal}
-              onChange={(event) => setDailyTotal(event.target.value)}
-              placeholder={selectedBudgetSum > 0 ? String(Math.round(selectedBudgetSum)) : '4200'}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="optimizer-cpa-target">
-              {metric.targetLabel} ({symbol}, optional)
-            </Label>
-            <Input
-              id="optimizer-cpa-target"
-              inputMode="decimal"
-              value={cpaTarget}
-              onChange={(event) => setCpaTarget(event.target.value)}
-              placeholder={metric.costLabel === 'CPM' ? '12' : '40'}
-            />
-          </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <Label>{level === 'campaign' ? 'Campaigns to enroll' : 'Ad sets to enroll'}</Label>
-          <CampaignAdsetPicker
-            snapshots={snapshotsRead.data}
-            selectedAdsetIds={selectedAdsetIds}
-            onChange={setSelectedAdsetIds}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="optimizer-daily-total">Daily budget ({symbol})</Label>
+              <Input
+                id="optimizer-daily-total"
+                inputMode="decimal"
+                value={dailyTotal}
+                onChange={(event) => setDailyTotal(event.target.value)}
+                placeholder={selectedBudgetSum > 0 ? String(Math.round(selectedBudgetSum)) : '4200'}
+              />
+              <BudgetHint
+                advice={advice}
+                currency={currency}
+                disabled={busy}
+                onUse={setDailyTotal}
+              />
+            </div>
+            <div className="space-y-1.5">
+              {/* NOT "(optional)". Blank does not mean "no target" — it means the engine's $50
+                  default, which is the spend at which a zero-result ad set gets proposed for
+                  pause. The advisor says so, loudly, right below. */}
+              <Label htmlFor="optimizer-cpa-target">
+                {metric.targetLabel} ({symbol})
+              </Label>
+              <Input
+                id="optimizer-cpa-target"
+                inputMode="decimal"
+                value={cpaTarget}
+                onChange={(event) => setCpaTarget(event.target.value)}
+                placeholder={metric.costLabel === 'CPM' ? '12' : '40'}
+              />
+              <TargetHint
+                advice={advice}
+                currency={currency}
+                disabled={busy}
+                onUse={setCpaTarget}
+              />
+            </div>
+          </div>
+
+          <SetupAdvisor
+            advice={advice}
             brandId={brandId}
-            accountId={adAccountId}
-            currency={currency}
+            selectedIds={selectedAdsetIds}
             disabled={busy}
-            isLoading={snapshotsRead.isLoading}
-            isError={snapshotsRead.isError}
-            mode={level}
+            onChangeSelection={setSelectedAdsetIds}
+            onUseBudget={setDailyTotal}
+            onUseTarget={setCpaTarget}
           />
-          <p className="text-2xs text-muted-foreground">
-            {selectedAdsetIds.length > 0
-              ? `${selectedAdsetIds.length} ${
-                  level === 'campaign'
-                    ? selectedAdsetIds.length === 1
-                      ? 'campaign'
-                      : 'campaigns'
-                    : selectedAdsetIds.length === 1
-                      ? 'ad set'
-                      : 'ad sets'
-                } selected · ${formatCurrency(selectedBudgetSum, currency)}/day current budget`
-              : `Select at least one of the ${entityLabel} above — a portfolio with none never scores.`}
-          </p>
-        </div>
 
-        {create.isError || enroll.isError ? (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {create.error instanceof Error
-              ? create.error.message
-              : enroll.error instanceof Error
-                ? `Portfolio created, but enrolling the ${entityLabel} failed — press Create again to retry, or add them from Manage.`
-                : 'Could not create the portfolio.'}
-          </p>
-        ) : null}
+          {create.isError || enroll.isError ? (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {create.error instanceof Error
+                ? create.error.message
+                : enroll.error instanceof Error
+                  ? `Portfolio created, but enrolling the ${entityLabel} failed — press Create again to retry, or add them from Manage.`
+                  : 'Could not create the portfolio.'}
+            </p>
+          ) : null}
 
-        <div className="flex justify-end pt-1">
-          <Button
-            type="button"
-            className="gap-1.5"
-            disabled={!canSubmit || busy}
-            onClick={handleCreate}
-          >
-            <PlusIcon className="size-4" />
-            {busy
-              ? 'Creating…'
-              : selectedAdsetIds.length > 0
-                ? `Create & enroll ${selectedAdsetIds.length}`
-                : 'Create portfolio'}
-          </Button>
+          <div className="sticky bottom-0 mt-auto flex items-center justify-between gap-2 border-border/60 border-t bg-card pt-3">
+            <p className="min-w-0 truncate text-2xs text-muted-foreground">
+              {selectedAdsetIds.length > 0
+                ? `${formatCurrency(selectedBudgetSum, currency)}/day current budget`
+                : `Select at least one of the ${entityLabel}.`}
+            </p>
+            <Button
+              type="button"
+              className="shrink-0 gap-1.5"
+              disabled={!canSubmit || busy}
+              onClick={handleCreate}
+            >
+              <PlusIcon className="size-4" />
+              {busy
+                ? 'Creating…'
+                : selectedAdsetIds.length > 0
+                  ? `Create & enroll ${selectedAdsetIds.length}`
+                  : 'Create portfolio'}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

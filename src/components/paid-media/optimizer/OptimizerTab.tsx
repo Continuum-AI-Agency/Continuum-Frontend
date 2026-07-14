@@ -106,10 +106,13 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
     );
   }
 
-  // No portfolios yet → onboarding path.
+  // No portfolios yet → onboarding path. It gets the same full-height, single-scroll shell the
+  // detail workspace below uses. It used to be `overflow-y-auto` here AND `max-h-[60vh]
+  // overflow-y-auto` inside the ad-set picker: two scrollbars competing over the same gesture.
+  // Onboarding owns its own scroll region now, and this container owns none.
   if (portfolios.length === 0) {
     return (
-      <div className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none">
+      <section className="grid h-full min-h-0 animate-in overflow-hidden rounded-lg border border-border/70 bg-background fade-in-0 duration-200 motion-reduce:animate-none">
         <OptimizerOnboarding
           brandId={brandId}
           adAccountId={adAccountId}
@@ -117,7 +120,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
           currency={currency}
           onCreated={handlePortfolioCreated}
         />
-      </div>
+      </section>
     );
   }
 
