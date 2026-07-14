@@ -1,28 +1,10 @@
-import type { Edge } from '@xyflow/react';
+// Canonical single-text-input guards live in @continuum/contracts
+// (ai-studio/workflow-graph) so the Backend MCP tool and this canvas enforce
+// the exact same rules — no drift. This module re-exports it so existing
+// `./connectionValidation` imports keep resolving.
 
-const TEXT_INPUT_HANDLES = new Set(['prompt', 'prompt-in', 'trigger', 'negative', 'input', 'audio', 'video']);
-
-export function isTextInputHandle(handleId?: string | null): boolean {
-  if (!handleId) return false;
-  return TEXT_INPUT_HANDLES.has(handleId);
-}
-
-export function hasExistingTargetConnection(
-  edges: Edge[],
-  targetId: string,
-  targetHandle?: string | null,
-): boolean {
-  if (!targetHandle) return false;
-  return edges.some((edge) => edge.target === targetId && edge.targetHandle === targetHandle);
-}
-
-export function canAcceptSingleTextInput(
-  edges: Edge[],
-  targetId: string,
-  targetHandle?: string | null,
-): boolean {
-  if (!isTextInputHandle(targetHandle)) return true;
-  return !hasExistingTargetConnection(edges, targetId, targetHandle);
-}
-
-export const textInputHandles = TEXT_INPUT_HANDLES;
+export {
+  canAcceptSingleTextInput,
+  hasExistingTargetConnection,
+  isTextInputHandle,
+} from '@continuum/contracts';

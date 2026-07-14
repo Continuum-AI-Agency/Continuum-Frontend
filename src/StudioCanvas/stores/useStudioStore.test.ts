@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import type { Connection } from '@xyflow/react';
+import type { StudioNode } from '../types';
 import { useStudioStore } from './useStudioStore';
-import { StudioNode } from '../types';
-import { Connection } from '@xyflow/react';
 
 describe('useStudioStore', () => {
   beforeEach(() => {
@@ -84,7 +84,7 @@ describe('useStudioStore', () => {
       target: 'nano',
       targetHandle: 'prompt',
     });
-    
+
     // Image to Ref Images
     useStudioStore.getState().onConnect({
       source: 'img1',
@@ -160,7 +160,7 @@ describe('useStudioStore', () => {
       target: 'nano',
       targetHandle: 'prompt',
     });
-    
+
     expect(useStudioStore.getState().edges).toHaveLength(0);
 
     // Image to Ref Images (Valid)
@@ -177,7 +177,12 @@ describe('useStudioStore', () => {
   it('should gate video reference mode inputs', () => {
     const nodes: StudioNode[] = [
       { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
-      { id: 'veo', position: { x: 0, y: 0 }, data: { referenceMode: 'images' }, type: 'veoDirector' },
+      {
+        id: 'veo',
+        position: { x: 0, y: 0 },
+        data: { referenceMode: 'images' },
+        type: 'veoDirector',
+      },
     ];
     useStudioStore.getState().setNodes(nodes);
 
@@ -203,7 +208,7 @@ describe('useStudioStore', () => {
     const nodes: StudioNode[] = [
       { id: targetId, position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
     ];
-    
+
     // Create 15 image nodes
     for (let i = 0; i < 15; i++) {
       nodes.push({ id: `img${i}`, position: { x: 0, y: 0 }, data: {}, type: 'image' });
@@ -233,7 +238,12 @@ describe('useStudioStore', () => {
 
   it('should cap Kling Omni image references to 4 when ref video is connected', () => {
     const nodes: StudioNode[] = [
-      { id: 'kling', position: { x: 0, y: 0 }, data: { model: 'kling-omni', prompt: '' }, type: 'videoGen' } as any,
+      {
+        id: 'kling',
+        position: { x: 0, y: 0 },
+        data: { model: 'kling-omni', prompt: '' },
+        type: 'videoGen',
+      } as any,
       { id: 'videoRef', position: { x: 0, y: 0 }, data: { video: '' }, type: 'video' },
       { id: 'img1', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
       { id: 'img2', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
@@ -259,8 +269,12 @@ describe('useStudioStore', () => {
       });
     });
 
-    const refVideoEdges = useStudioStore.getState().edges.filter((edge) => edge.targetHandle === 'ref-video');
-    const refImageEdges = useStudioStore.getState().edges.filter((edge) => edge.targetHandle === 'ref-images');
+    const refVideoEdges = useStudioStore
+      .getState()
+      .edges.filter((edge) => edge.targetHandle === 'ref-video');
+    const refImageEdges = useStudioStore
+      .getState()
+      .edges.filter((edge) => edge.targetHandle === 'ref-images');
 
     expect(refVideoEdges).toHaveLength(1);
     expect(refImageEdges).toHaveLength(4);
@@ -432,9 +446,7 @@ describe('normalizeEdges legacy handle remapping', () => {
   });
 
   it('detachNodeConnections is a no-op when the node has no connections', () => {
-    const nodes: StudioNode[] = [
-      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
-    ];
+    const nodes: StudioNode[] = [{ id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' }];
     useStudioStore.getState().setNodes(nodes);
     const snapshotBefore = useStudioStore.getState().history.past.length;
 
@@ -466,5 +478,41 @@ describe('normalizeEdges legacy handle remapping', () => {
     ]);
 
     expect(useStudioStore.getState().edges).toHaveLength(0);
+  });
+
+  it('stamps the correct dataType for an audio source connection (was mis-colored as text)', () => {
+    const nodes: StudioNode[] = [
+      { id: 'audio1', position: { x: 0, y: 0 }, data: {}, type: 'audio' },
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().onConnect({
+      source: 'audio1',
+      sourceHandle: 'audio',
+      target: 'str1',
+      targetHandle: 'audio',
+    });
+
+    const [edge] = useStudioStore.getState().edges;
+    expect((edge.data as { dataType?: string } | undefined)?.dataType).toBe('audio');
+  });
+
+  it('stamps the correct dataType for a document source connection (was mis-colored as text)', () => {
+    const nodes: StudioNode[] = [
+      { id: 'doc1', position: { x: 0, y: 0 }, data: {}, type: 'document' },
+      { id: 'str1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().onConnect({
+      source: 'doc1',
+      sourceHandle: 'document',
+      target: 'str1',
+      targetHandle: 'document',
+    });
+
+    const [edge] = useStudioStore.getState().edges;
+    expect((edge.data as { dataType?: string } | undefined)?.dataType).toBe('document');
   });
 });

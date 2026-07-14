@@ -7,6 +7,12 @@ import { clipAtTime, type TimelineLayout } from './useTimelineEditorModel';
 // on a wall-clock tick, and the global playhead is the source of truth shared
 // with the timeline scrubber. This mirrors what composeTimeline renders, with
 // DOM playback standing in for the final mediabunny encode.
+//
+// One <video> element serves every clip, so crossing a clip boundary means
+// re-pointing that element at another source and another source-time. That
+// hand-off is the whole difficulty: the element's clock is only meaningful once
+// it has actually landed on the cue point, so the driver tracks the cue it issued
+// and runs the playhead on wall-clock until the element catches up.
 
 export interface ClipMedia {
   kind: 'video' | 'image';
@@ -17,6 +23,34 @@ export interface ClipMedia {
 }
 
 const clipSpeed = (media: ClipMedia): number => (media.speed && media.speed > 0 ? media.speed : 1);
+
+/** The subset of HTMLVideoElement the playhead driver touches, so it can be faked in tests. */
+export interface PlaybackVideoElement {
+  src: string;
+  currentTime: number;
+  playbackRate: number;
+  readonly paused: boolean;
+  readonly seeking: boolean;
+  readonly ended: boolean;
+  readonly readyState: number;
+  play(): Promise<void>;
+  pause(): void;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+}
+
+/** The clip the shared <video> element is currently pointed at, and where. */
+export interface PlaybackCue {
+  clipId: string;
+  /** Source-time the element was seeked to; its clock is untrustworthy until it lands here. */
+  sourceSec: number;
+  pending: boolean;
+}
+
+export interface PlayheadFrame {
+  playheadSec: number;
+  cue: PlaybackCue | null;
+}
 
 export interface PlayheadPlayback {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -29,6 +63,127 @@ export interface PlayheadPlayback {
 }
 
 const SNAP_EPSILON = 0.02;
+const HAVE_METADATA = 1;
+const HAVE_CURRENT_DATA = 2;
+
+// The element's clock runs in source time, so a wall-clock tolerance has to be
+// scaled by the clip's speed: at 3.5x one animation frame consumes ~58ms of
+// source, and an unscaled 20ms window is narrower than a single sample.
+const endToleranceFor = (speed: number): number => SNAP_EPSILON * speed;
+
+const ensureVideoSrc = (video: PlaybackVideoElement, url: string): boolean => {
+  if (video.getAttribute('data-clip-src') === url) return false;
+  video.src = url;
+  video.setAttribute('data-clip-src', url);
+  return true;
+};
+
+const seekVideo = (video: PlaybackVideoElement, sourceSec: number): void => {
+  try {
+    video.currentTime = sourceSec;
+  } catch {
+    // Before metadata, currentTime may throw; the cue stays pending and is re-applied.
+  }
+};
+
+// Point the shared element at a clip's source and source-time. Cueing is keyed on
+// clip identity, not on the URL: a split or a duplicate places two clips on one
+// source, and the second still needs its own seek.
+export function cueVideoToClip(
+  video: PlaybackVideoElement,
+  media: ClipMedia,
+  clipId: string,
+  localSec: number,
+): PlaybackCue | null {
+  if (media.kind !== 'video' || !media.url) return null;
+
+  const speed = clipSpeed(media);
+  const sourceSec = media.trimStartSec + Math.max(0, localSec) * speed;
+  const swapped = ensureVideoSrc(video, media.url);
+  video.playbackRate = speed;
+
+  // A src swap resets the element to 0 at HAVE_NOTHING. Otherwise the element may
+  // already sit on the frame we want (the far side of a split), and re-seeking it
+  // would only stutter the hand-off.
+  if (!swapped && Math.abs(video.currentTime - sourceSec) <= SNAP_EPSILON) {
+    return { clipId, sourceSec, pending: false };
+  }
+  seekVideo(video, sourceSec);
+  return { clipId, sourceSec, pending: true };
+}
+
+// The element has reached the cue point and has a frame there, so its clock can
+// drive the playhead again.
+const isCueLanded = (video: PlaybackVideoElement, sourceSec: number): boolean =>
+  !video.seeking &&
+  video.readyState >= HAVE_CURRENT_DATA &&
+  video.currentTime >= sourceSec - SNAP_EPSILON;
+
+// A currentTime set at HAVE_NOTHING is only a default start position and some
+// browsers drop it, so the seek is re-issued once metadata exists.
+const reapplyPendingCue = (video: PlaybackVideoElement, sourceSec: number): void => {
+  if (video.seeking || video.readyState < HAVE_METADATA) return;
+  if (video.currentTime >= sourceSec - SNAP_EPSILON) return;
+  seekVideo(video, sourceSec);
+};
+
+// Advance the playhead by one animation frame, driving the shared <video> element
+// as it goes. Exported so the hand-off logic can be tested against a fake element.
+export function advancePlayhead(params: {
+  layout: TimelineLayout;
+  mediaFor: (itemId: string) => ClipMedia | undefined;
+  video: PlaybackVideoElement | null;
+  playheadSec: number;
+  dtSec: number;
+  cue: PlaybackCue | null;
+}): PlayheadFrame {
+  const { layout, mediaFor, video, playheadSec, dtSec, cue } = params;
+  const clip = clipAtTime(layout, playheadSec);
+  const media = clip ? mediaFor(clip.item.id) : undefined;
+
+  if (!clip || !video || media?.kind !== 'video' || !media.url) {
+    // Stills and gaps have no element clock: hold the frame and run on wall-clock.
+    if (video && !video.paused) video.pause();
+    // The cue describes where the element is pointed; it is stale the moment the
+    // playhead leaves a video clip, so the next video clip re-cues from scratch.
+    return { playheadSec: playheadSec + dtSec, cue: null };
+  }
+
+  let nextCue = cue;
+  if (!nextCue || nextCue.clipId !== clip.item.id) {
+    nextCue = cueVideoToClip(video, media, clip.item.id, playheadSec - clip.startSec);
+  }
+
+  const speed = clipSpeed(media);
+  if (video.playbackRate !== speed) video.playbackRate = speed;
+
+  if (nextCue?.pending) {
+    if (!isCueLanded(video, nextCue.sourceSec)) {
+      reapplyPendingCue(video, nextCue.sourceSec);
+      if (video.paused) void video.play().catch(() => undefined);
+      // currentTime here is the old clip's, or 0 mid-load — reading it would pin the
+      // playhead to the clip start until the seek lands. Wall-clock covers the gap.
+      return { playheadSec: playheadSec + dtSec, cue: nextCue };
+    }
+    nextCue = { ...nextCue, pending: false };
+  }
+
+  // The end of the clip is settled BEFORE play(): play() on an element whose
+  // playback has ended seeks it back to 0 (HTML spec), which restarts the clip and
+  // drags the playhead back to the clip start — the reported loop. `ended` is
+  // authoritative because a container's last frame routinely falls short of its
+  // declared duration, so currentTime alone may never reach the trim-out.
+  const clipEnd = media.trimStartSec + clip.durationSec * speed;
+  if (video.ended || video.currentTime >= clipEnd - endToleranceFor(speed)) {
+    return { playheadSec: clip.startSec + clip.durationSec, cue: nextCue };
+  }
+
+  if (video.paused) void video.play().catch(() => undefined);
+  return {
+    playheadSec: clip.startSec + Math.max(0, (video.currentTime - media.trimStartSec) / speed),
+    cue: nextCue,
+  };
+}
 
 export function usePlayheadPlayback(params: {
   layout: TimelineLayout;
@@ -42,40 +197,44 @@ export function usePlayheadPlayback(params: {
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
+  const cueRef = useRef<PlaybackCue | null>(null);
   const totalSec = layout.totalSec;
 
+  // The animation loop re-schedules itself, so a callback that closed over the
+  // layout would keep running against the geometry captured at play() — trimming or
+  // changing a clip's speed mid-playback would advance the playhead against stale
+  // durations. The loop reads the live layout through refs instead.
+  const layoutRef = useRef(layout);
+  const mediaForRef = useRef(mediaFor);
+  useEffect(() => {
+    layoutRef.current = layout;
+    mediaForRef.current = mediaFor;
+  }, [layout, mediaFor]);
+
   const setPlayhead = useCallback((sec: number) => {
-    const clamped = Math.max(0, Math.min(sec, totalSec));
+    const clamped = Math.max(0, Math.min(sec, layoutRef.current.totalSec));
     playheadRef.current = clamped;
     setPlayheadSecState(clamped);
-  }, [totalSec]);
-
-  const ensureVideoSrc = useCallback((video: HTMLVideoElement, url: string) => {
-    if (video.getAttribute('data-clip-src') !== url) {
-      video.src = url;
-      video.setAttribute('data-clip-src', url);
-    }
   }, []);
 
   // Seek (scrub): reflect a global time on the media without playing.
-  const seek = useCallback((sec: number) => {
-    setPlayhead(sec);
-    const clip = clipAtTime(layout, sec);
-    const video = videoRef.current;
-    if (!clip || !video) return;
-    const media = mediaFor(clip.item.id);
-    if (media?.kind === 'video' && media.url) {
-      ensureVideoSrc(video, media.url);
-      const speed = clipSpeed(media);
-      const local = Math.max(0, sec - clip.startSec);
-      try {
-        video.playbackRate = speed;
-        video.currentTime = media.trimStartSec + local * speed;
-      } catch {
-        // currentTime may throw before metadata loads; ignored — re-applied on tick.
-      }
-    }
-  }, [ensureVideoSrc, layout, mediaFor, setPlayhead]);
+  const seek = useCallback(
+    (sec: number) => {
+      setPlayhead(sec);
+      const clip = clipAtTime(layoutRef.current, playheadRef.current);
+      const video = videoRef.current;
+      if (!clip || !video) return;
+      const media = mediaForRef.current(clip.item.id);
+      if (!media) return;
+      cueRef.current = cueVideoToClip(
+        video,
+        media,
+        clip.item.id,
+        playheadRef.current - clip.startSec,
+      );
+    },
+    [setPlayhead],
+  );
 
   const stop = useCallback(() => {
     if (rafRef.current !== null) {
@@ -87,53 +246,41 @@ export function usePlayheadPlayback(params: {
     videoRef.current?.pause();
   }, []);
 
-  const tick = useCallback((ts: number) => {
-    const last = lastTsRef.current ?? ts;
-    const dt = (ts - last) / 1000;
-    lastTsRef.current = ts;
+  const tick = useCallback(
+    (ts: number) => {
+      const last = lastTsRef.current ?? ts;
+      lastTsRef.current = ts;
 
-    let next = playheadRef.current;
-    const clip = clipAtTime(layout, next);
-    const video = videoRef.current;
+      const frame = advancePlayhead({
+        layout: layoutRef.current,
+        mediaFor: mediaForRef.current,
+        video: videoRef.current,
+        playheadSec: playheadRef.current,
+        dtSec: (ts - last) / 1000,
+        cue: cueRef.current,
+      });
+      cueRef.current = frame.cue;
 
-    if (clip && video) {
-      const media = mediaFor(clip.item.id);
-      if (media?.kind === 'video' && media.url) {
-        ensureVideoSrc(video, media.url);
-        const speed = clipSpeed(media);
-        if (video.playbackRate !== speed) video.playbackRate = speed;
-        if (video.paused) void video.play().catch(() => undefined);
-        // clip.durationSec is output time; the source span consumed is × speed.
-        const clipEnd = media.trimStartSec + clip.durationSec * speed;
-        if (video.currentTime >= clipEnd - SNAP_EPSILON) {
-          next = clip.startSec + clip.durationSec;
-        } else {
-          next = clip.startSec + Math.max(0, (video.currentTime - media.trimStartSec) / speed);
-        }
-      } else {
-        if (!video.paused) video.pause();
-        next += dt;
+      if (frame.playheadSec >= layoutRef.current.totalSec) {
+        setPlayhead(layoutRef.current.totalSec);
+        stop();
+        return;
       }
-    } else {
-      next += dt;
-    }
-
-    if (next >= totalSec) {
-      setPlayhead(totalSec);
-      stop();
-      return;
-    }
-    setPlayhead(next);
-    rafRef.current = requestAnimationFrame(tick);
-  }, [ensureVideoSrc, layout, mediaFor, setPlayhead, stop, totalSec]);
+      setPlayhead(frame.playheadSec);
+      rafRef.current = requestAnimationFrame(tick);
+    },
+    [setPlayhead, stop],
+  );
 
   const play = useCallback(() => {
     if (totalSec <= 0) return;
-    if (playheadRef.current >= totalSec - SNAP_EPSILON) setPlayhead(0);
+    // Replaying from the end re-cues the element: it is parked on the last clip's
+    // trim-out, and without a seek the first tick would read that as an instant end.
+    if (playheadRef.current >= totalSec - SNAP_EPSILON) seek(0);
     lastTsRef.current = null;
     setIsPlaying(true);
     rafRef.current = requestAnimationFrame(tick);
-  }, [setPlayhead, tick, totalSec]);
+  }, [seek, tick, totalSec]);
 
   const pause = useCallback(() => stop(), [stop]);
   const toggle = useCallback(() => {
@@ -146,9 +293,12 @@ export function usePlayheadPlayback(params: {
     if (playheadRef.current > totalSec) setPlayhead(totalSec);
   }, [setPlayhead, totalSec]);
 
-  useEffect(() => () => {
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    },
+    [],
+  );
 
   return { videoRef, playheadSec, isPlaying, seek, play, pause, toggle };
 }

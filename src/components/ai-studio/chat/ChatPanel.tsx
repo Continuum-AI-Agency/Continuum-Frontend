@@ -1,9 +1,11 @@
 'use client';
 
-import type { ChatPanelModelId } from '@continuum/contracts';
+import type { ChatPanelModelId, ImageSize } from '@continuum/contracts';
 import {
   CHAT_PANEL_MODEL_IDS,
   getStatusBadgeLabel,
+  imageSizeSchema,
+  imageSizesForModel,
   isModelSelectable,
   MODEL_CATALOG,
 } from '@continuum/contracts';
@@ -49,7 +51,7 @@ type FormValues = {
   aspectRatio?: string;
   durationSeconds?: number;
   resolution?: string;
-  imageSize?: '1K' | '2K' | '4K';
+  imageSize?: ImageSize;
   negativePrompt?: string;
   seed?: number;
   cfgScale?: number;
@@ -62,7 +64,7 @@ const chatPanelFormSchema = z.object({
   aspectRatio: z.string().optional(),
   durationSeconds: z.number().optional(),
   resolution: z.string().optional(),
-  imageSize: z.enum(['1K', '2K', '4K']).optional(),
+  imageSize: imageSizeSchema.optional(),
   negativePrompt: z.string().optional(),
   seed: z.number().optional(),
   cfgScale: z.number().optional(),
@@ -373,7 +375,7 @@ export function ChatPanel({
           <div className="space-y-1">
             <span className="block text-xs text-gray-400">Image size</span>
             <div className="flex flex-wrap gap-2">
-              {(['1K', '2K', '4K'] as const).map((size) => (
+              {imageSizesForModel('nano-banana-pro').map((size) => (
                 <Button
                   key={size}
                   size="sm"

@@ -1,3 +1,4 @@
+import { coerceImageSize, imageResolutionFor } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type {
   BackendChatImageRequestPayload,
@@ -540,39 +541,28 @@ export function buildNanoGenPayload(
               : data.model === 'flux-2-max'
                 ? 'fal-ai/flux-2-max/edit'
                 : data.model;
-  const isHighFidelityNanoModel =
-    data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
-  const imageSize =
-    data.model === 'nano-banana-pro'
-      ? data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K'
-        ? data.imageSize
-        : '1K'
-      : data.model === 'nano-banana-2'
-        ? data.imageSize || '512px'
-        : undefined;
-  const resolution =
-    data.model === 'nano-banana'
-      ? '1024x1024'
-      : imageSize === '512px'
-        ? '512x512'
-        : imageSize === '2K'
-          ? '2048x2048'
-          : imageSize === '4K'
-            ? '4096x4096'
-            : '1024x1024';
+  // The size the model will actually be sent. Every value that is not legal FOR THIS
+  // MODEL — an agent-written "1024px", a 512px left behind by a switch to Pro — is
+  // corrected here rather than travelling on to a 400. `undefined` means the model
+  // takes no size at all (gemini-2.5-flash-image always renders 1024px).
+  const imageSize = coerceImageSize(data.model, data.imageSize);
+  const resolution = imageResolutionFor(data.model, imageSize);
+
+  let negativePrompt = typeof data.negativePrompt === 'string' ? data.negativePrompt : '';
+  const negativeInput = resolveInputValue(node.id, 'negative', resolvedData, allNodes, allEdges);
+  if (negativeInput?.text) {
+    negativePrompt = negativeInput.text;
+  }
 
   return {
     brandId,
     model: backendModel,
     medium: 'image',
     prompt,
-    negativePrompt:
-      typeof data.negativePrompt === 'string' && data.negativePrompt.trim()
-        ? data.negativePrompt
-        : undefined,
+    negativePrompt: negativePrompt.trim() ? negativePrompt : undefined,
     aspectRatio: data.aspectRatio || '16:9',
     resolution,
-    imageSize: isHighFidelityNanoModel ? imageSize : undefined,
+    imageSize,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
     referenceAssetIds: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
     skillIds: data.skillIds && data.skillIds.length > 0 ? data.skillIds : undefined,

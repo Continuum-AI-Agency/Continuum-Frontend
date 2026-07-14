@@ -1,29 +1,19 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer } from '@xyflow/react';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useStudioStore } from '../stores/useStudioStore';
-import { DocumentNodeData, CanvasDocument } from '../types';
-import { FileTextIcon, LinkBreak2Icon, UploadIcon, Cross2Icon } from '@radix-ui/react-icons';
-import { Library } from 'lucide-react';
-import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
-import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
-import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { isUploadOnDropEnabled } from '../utils/uploadReferenceFile';
-import { useToast } from '@/components/ui/ToastProvider';
-import { cn } from '@/lib/utils';
+import { Cross2Icon, FileTextIcon, LinkBreak2Icon, UploadIcon } from '@radix-ui/react-icons';
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useEdges } from '@xyflow/react';
-import { useNodeSelection } from '../contexts/PresenceContext';
+  Handle,
+  type NodeProps,
+  NodeResizer,
+  Position,
+  type Node as ReactFlowNode,
+  useEdges,
+} from '@xyflow/react';
+import { Copy, Library, Loader2, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import type { DocumentView } from '@/components/documents/types';
+import { useDocuments } from '@/components/documents/useDocuments';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -33,23 +23,33 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Copy, Loader2, Trash2 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { createBrandId } from '@/lib/onboarding/state';
-import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
+import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import {
   isAcceptedDocumentMime,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_MB,
 } from '@/lib/documents/uploadLimits';
-import { useDocuments } from '@/components/documents/useDocuments';
-import type { DocumentView } from '@/components/documents/types';
+import { createBrandId } from '@/lib/onboarding/state';
+import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { useStudioStore } from '../stores/useStudioStore';
+import type { CanvasDocument, DocumentNodeData } from '../types';
+import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -162,7 +162,9 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
   const [uploadStates, setUploadStates] = useState<Map<string, DocUploadState>>(new Map());
 
   const documents = data.documents ?? [];
-  const docConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'document').length;
+  const docConnections = edges.filter(
+    (edge) => edge.source === id && edge.sourceHandle === 'document',
+  ).length;
 
   // Realtime status subscription for all documents in this node that have a
   // sourceDocumentId — covers both local uploads (assigned after ingest returns)
@@ -175,79 +177,95 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
     liveDocById.current = map;
   }, [liveDocuments]);
 
-  const addDocuments = useCallback((newDocs: CanvasDocument[]) => {
-    const current = data.documents ?? [];
-    updateNodeData(id, { documents: [...current, ...newDocs] });
-    triggerSave();
-  }, [data.documents, id, triggerSave, updateNodeData]);
+  const addDocuments = useCallback(
+    (newDocs: CanvasDocument[]) => {
+      const current = data.documents ?? [];
+      updateNodeData(id, { documents: [...current, ...newDocs] });
+      triggerSave();
+    },
+    [data.documents, id, triggerSave, updateNodeData],
+  );
 
-  const removeDocument = useCallback((index: number) => {
-    const current = data.documents ?? [];
-    const next = [...current];
-    next.splice(index, 1);
-    updateNodeData(id, { documents: next });
-    triggerSave();
-  }, [data.documents, id, triggerSave, updateNodeData]);
+  const removeDocument = useCallback(
+    (index: number) => {
+      const current = data.documents ?? [];
+      const next = [...current];
+      next.splice(index, 1);
+      updateNodeData(id, { documents: next });
+      triggerSave();
+    },
+    [data.documents, id, triggerSave, updateNodeData],
+  );
 
   // Upload a local file through the embed_document pipeline, then patch the
   // canvas document entry with the returned documentId.
-  const ingestFile = useCallback(async (file: File, docName: string, insertIndex: number) => {
-    if (!isUploadOnDropEnabled() || !brandId) return;
+  const ingestFile = useCallback(
+    async (file: File, docName: string, insertIndex: number) => {
+      if (!brandId) return;
 
-    setUploadStates((prev) => new Map(prev).set(docName, 'processing'));
-    try {
-      const documentId = await ingestDocumentFile(file, brandId);
-      // Patch the canvas doc at insertIndex with the assigned documentId so
-      // the realtime subscription and enrich route can resolve it.
-      const current: CanvasDocument[] = useStudioStore.getState().nodes
-        .find((n) => n.id === id)
-        ? ((useStudioStore.getState().nodes.find((n) => n.id === id)?.data as DocumentNodeData).documents ?? [])
-        : (data.documents ?? []);
-      const next = [...current];
-      if (insertIndex < next.length) {
-        next[insertIndex] = { ...next[insertIndex], sourceDocumentId: documentId };
+      setUploadStates((prev) => new Map(prev).set(docName, 'processing'));
+      try {
+        const documentId = await ingestDocumentFile(file, brandId);
+        // Patch the canvas doc at insertIndex with the assigned documentId so
+        // the realtime subscription and enrich route can resolve it.
+        const current: CanvasDocument[] = useStudioStore.getState().nodes.find((n) => n.id === id)
+          ? ((useStudioStore.getState().nodes.find((n) => n.id === id)?.data as DocumentNodeData)
+              .documents ?? [])
+          : (data.documents ?? []);
+        const next = [...current];
+        if (insertIndex < next.length) {
+          next[insertIndex] = { ...next[insertIndex], sourceDocumentId: documentId };
+        }
+        updateNodeData(id, { documents: next });
+        triggerSave();
+        setUploadStates((prev) => {
+          const m = new Map(prev);
+          m.delete(docName);
+          return m;
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : `Failed to ingest ${file.name}`;
+        show({ title: 'Upload failed', description: msg, variant: 'error' });
+        setUploadStates((prev) => new Map(prev).set(docName, 'error'));
       }
-      updateNodeData(id, { documents: next });
-      triggerSave();
-      setUploadStates((prev) => {
-        const m = new Map(prev);
-        m.delete(docName);
-        return m;
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : `Failed to ingest ${file.name}`;
-      show({ title: 'Upload failed', description: msg, variant: 'error' });
-      setUploadStates((prev) => new Map(prev).set(docName, 'error'));
-    }
-  }, [brandId, data.documents, id, show, triggerSave, updateNodeData]);
+    },
+    [brandId, data.documents, id, show, triggerSave, updateNodeData],
+  );
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!brandId) {
-      show({ title: 'No brand selected', description: 'Select a brand before uploading documents.', variant: 'warning' });
-      return;
-    }
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!brandId) {
+        show({
+          title: 'No brand selected',
+          description: 'Select a brand before uploading documents.',
+          variant: 'warning',
+        });
+        return;
+      }
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
 
-    const current = data.documents ?? [];
-    const accepted: Array<{ file: File; doc: CanvasDocument }> = [];
+      const current = data.documents ?? [];
+      const accepted: Array<{ file: File; doc: CanvasDocument }> = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!isAcceptedDocumentMime(file.type)) continue;
-      accepted.push({ file, doc: { name: file.name, type: inferDocType(file.name, null) } });
-    }
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!isAcceptedDocumentMime(file.type)) continue;
+        accepted.push({ file, doc: { name: file.name, type: inferDocType(file.name, null) } });
+      }
 
-    if (accepted.length === 0) return;
+      if (accepted.length === 0) return;
 
-    const startIndex = current.length;
-    addDocuments(accepted.map(({ doc }) => doc));
+      const startIndex = current.length;
+      addDocuments(accepted.map(({ doc }) => doc));
 
-    for (let i = 0; i < accepted.length; i++) {
-      const { file, doc } = accepted[i];
-      void ingestFile(file, doc.name, startIndex + i);
-    }
-  }, [addDocuments, brandId, data.documents, ingestFile, show]);
+      for (let i = 0; i < accepted.length; i++) {
+        const { file, doc } = accepted[i];
+        void ingestFile(file, doc.name, startIndex + i);
+      }
+    },
+    [addDocuments, brandId, data.documents, ingestFile, show],
+  );
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -255,81 +273,106 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
     event.dataTransfer.dropEffect = 'copy';
   }, []);
 
-  const handleDrop = useCallback(async (event: React.DragEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const handleDrop = useCallback(
+    async (event: React.DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
 
-    const files = event.dataTransfer.files;
-    if (files && files.length > 0) {
-      if (!brandId) {
-        show({ title: 'No brand selected', description: 'Select a brand before uploading documents.', variant: 'warning' });
+      const files = event.dataTransfer.files;
+      if (files && files.length > 0) {
+        if (!brandId) {
+          show({
+            title: 'No brand selected',
+            description: 'Select a brand before uploading documents.',
+            variant: 'warning',
+          });
+          return;
+        }
+
+        const current = data.documents ?? [];
+        const accepted: Array<{ file: File; doc: CanvasDocument }> = [];
+        let rejectedCount = 0;
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!isAcceptedDocumentMime(file.type)) {
+            rejectedCount++;
+            continue;
+          }
+          accepted.push({ file, doc: { name: file.name, type: inferDocType(file.name, null) } });
+        }
+
+        if (rejectedCount > 0) {
+          show({
+            title: 'Some files ignored',
+            description: `${rejectedCount} file(s) were not a supported document type.`,
+            variant: 'warning',
+          });
+        }
+
+        if (accepted.length > 0) {
+          const startIndex = current.length;
+          addDocuments(accepted.map(({ doc }) => doc));
+          for (let i = 0; i < accepted.length; i++) {
+            const { file, doc } = accepted[i];
+            void ingestFile(file, doc.name, startIndex + i);
+          }
+        }
         return;
       }
 
-      const current = data.documents ?? [];
-      const accepted: Array<{ file: File; doc: CanvasDocument }> = [];
-      let rejectedCount = 0;
+      const rawPayload =
+        event.dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) ||
+        event.dataTransfer.getData(RF_DRAG_MIME) ||
+        event.dataTransfer.getData(TEXT_MIME);
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!isAcceptedDocumentMime(file.type)) {
-          rejectedCount++;
-          continue;
-        }
-        accepted.push({ file, doc: { name: file.name, type: inferDocType(file.name, null) } });
+      if (!rawPayload) return;
+
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      if (resolved.status === 'error') {
+        show({
+          title: resolved.title,
+          description: resolved.description,
+          variant: resolved.variant ?? 'error',
+        });
+        return;
       }
 
-      if (rejectedCount > 0) {
-        show({ title: 'Some files ignored', description: `${rejectedCount} file(s) were not a supported document type.`, variant: 'warning' });
+      if (resolved.nodeType !== 'document') {
+        show({
+          title: 'Unsupported asset',
+          description: 'Only document assets can be dropped here.',
+          variant: 'warning',
+        });
+        return;
       }
 
-      if (accepted.length > 0) {
-        const startIndex = current.length;
-        addDocuments(accepted.map(({ doc }) => doc));
-        for (let i = 0; i < accepted.length; i++) {
-          const { file, doc } = accepted[i];
-          void ingestFile(file, doc.name, startIndex + i);
-        }
+      const type = resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt';
+      if (resolved.sourceUrl || resolved.sourcePath) {
+        addDocuments([
+          {
+            name: resolved.fileName || 'Document',
+            type,
+            sourceUrl: resolved.sourceUrl,
+            storagePath: resolved.sourcePath,
+            bucket: resolved.bucket,
+            content: resolved.dataUrl,
+          },
+        ]);
+      } else {
+        addDocuments([{ name: resolved.fileName || 'Document', type, content: resolved.dataUrl }]);
       }
-      return;
-    }
-
-    const rawPayload =
-      event.dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) ||
-      event.dataTransfer.getData(RF_DRAG_MIME) ||
-      event.dataTransfer.getData(TEXT_MIME);
-
-    if (!rawPayload) return;
-
-    const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
-    if (resolved.status === 'error') {
-      show({ title: resolved.title, description: resolved.description, variant: resolved.variant ?? 'error' });
-      return;
-    }
-
-    if (resolved.nodeType !== 'document') {
-      show({ title: 'Unsupported asset', description: 'Only document assets can be dropped here.', variant: 'warning' });
-      return;
-    }
-
-    const type = resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt';
-    if (resolved.sourceUrl || resolved.sourcePath) {
-      addDocuments([{
-        name: resolved.fileName || 'Document',
-        type,
-        sourceUrl: resolved.sourceUrl,
-        storagePath: resolved.sourcePath,
-        bucket: resolved.bucket,
-        content: resolved.dataUrl,
-      }]);
-    } else {
-      addDocuments([{ name: resolved.fileName || 'Document', type, content: resolved.dataUrl }]);
-    }
-  }, [addDocuments, brandId, data.documents, ingestFile, show]);
+    },
+    [addDocuments, brandId, data.documents, ingestFile, show],
+  );
 
   const openPicker = useCallback(async () => {
     if (!brandId) {
-      show({ title: 'No brand selected', description: 'Select a brand first.', variant: 'warning' });
+      show({
+        title: 'No brand selected',
+        description: 'Select a brand first.',
+        variant: 'warning',
+      });
       return;
     }
     setPickerOpen(true);
@@ -355,21 +398,30 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
     }
   }, [brandId, show]);
 
-  const selectPlatformDoc = useCallback((row: PlatformDocRow) => {
-    const alreadyAdded = (data.documents ?? []).some((d) => d.sourceDocumentId === row.id);
-    if (alreadyAdded) {
-      show({ title: 'Already added', description: `"${row.name}" is already in this node.`, variant: 'warning' });
-      return;
-    }
-    const type = inferDocType(row.name, row.kind);
-    addDocuments([{
-      name: row.name,
-      type,
-      sourceDocumentId: row.id,
-      storagePath: row.storage_path ?? undefined,
-    }]);
-    setPickerOpen(false);
-  }, [addDocuments, data.documents, show]);
+  const selectPlatformDoc = useCallback(
+    (row: PlatformDocRow) => {
+      const alreadyAdded = (data.documents ?? []).some((d) => d.sourceDocumentId === row.id);
+      if (alreadyAdded) {
+        show({
+          title: 'Already added',
+          description: `"${row.name}" is already in this node.`,
+          variant: 'warning',
+        });
+        return;
+      }
+      const type = inferDocType(row.name, row.kind);
+      addDocuments([
+        {
+          name: row.name,
+          type,
+          sourceDocumentId: row.id,
+          storagePath: row.storage_path ?? undefined,
+        },
+      ]);
+      setPickerOpen(false);
+    },
+    [addDocuments, data.documents, show],
+  );
 
   return (
     <TooltipProvider>
@@ -381,7 +433,9 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
           {pickerLoading ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
           ) : platformDocs.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">No ready documents found for this brand.</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              No ready documents found for this brand.
+            </p>
           ) : (
             <ul className="nodrag nowheel max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
               {platformDocs.map((row) => (
@@ -411,8 +465,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
           {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone for document files; no semantic role applies */}
           <div
             className={cn(
-              "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
-              isSelectedByOther && "selected-by-other"
+              'relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow',
+              isSelectedByOther && 'selected-by-other',
             )}
             style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
             onDragOver={handleDragOver}
@@ -454,17 +508,27 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                 {documents.length > 0 ? (
                   <div className="nodrag flex-1 space-y-2 overflow-y-auto p-2">
                     {documents.map((doc, index) => {
-                      const { status, step } = resolveDocStatus(doc, uploadStates, liveDocById.current);
+                      const { status, step } = resolveDocStatus(
+                        doc,
+                        uploadStates,
+                        liveDocById.current,
+                      );
                       return (
-                        <div key={index} className="group/item flex items-center gap-2 rounded-md border border-border/70 bg-background/90 p-2 shadow-sm">
+                        <div
+                          key={index}
+                          className="group/item flex items-center gap-2 rounded-md border border-border/70 bg-background/90 p-2 shadow-sm"
+                        >
                           <div className="rounded bg-amber-500/10 p-1.5 text-amber-600">
-                            {status === 'processing'
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <FileTextIcon className="w-4 h-4" />
-                            }
+                            {status === 'processing' ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <FileTextIcon className="w-4 h-4" />
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="truncate text-xs font-medium text-foreground">{doc.name}</p>
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {doc.name}
+                            </p>
                             <p className="text-3xs uppercase text-muted-foreground">
                               {status === 'processing'
                                 ? (step ?? 'processing…')
@@ -472,8 +536,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                                   ? 'error'
                                   : doc.sourceDocumentId
                                     ? `${doc.type} · ready`
-                                    : doc.type
-                              }
+                                    : doc.type}
                             </p>
                           </div>
                           <button
@@ -527,7 +590,9 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                   type="source"
                   position={Position.Right}
                   id="document"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-document, #f59e0b)' }}
+                  style={{
+                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-document, #f59e0b)',
+                  }}
                   className="studio-handle !w-4 !h-4 !border-2 shadow-sm !-right-2 transition-transform hover:scale-125 top-1/2"
                 />
               </TooltipTrigger>
@@ -552,7 +617,10 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
             <LinkBreak2Icon className="mr-2 h-4 w-4" />
             Detach connections
           </ContextMenuItem>
-          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => deleteNode(id)}
+          >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
             <ContextMenuShortcut>⌫</ContextMenuShortcut>

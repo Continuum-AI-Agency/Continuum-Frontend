@@ -23,6 +23,23 @@ function normalizeString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function normalizeHttpUrl(value: unknown): string | undefined {
+  const normalized = normalizeString(value);
+  return normalized && HTTP_URL_PATTERN.test(normalized) ? normalized : undefined;
+}
+
+export function hasHydratableMediaReference(node: StudioNode): boolean {
+  if (node.type !== "image" && node.type !== "video") return false;
+  const data = node.data as Record<string, unknown>;
+  const currentValue = normalizeString(data[node.type]);
+  if (currentValue && parseDataUrl(currentValue)) return false;
+  return Boolean(
+    normalizeString(data.sourcePath) ||
+      normalizeHttpUrl(data.sourceUrl) ||
+      normalizeHttpUrl(currentValue)
+  );
+}
+
 function buildRemotePayload(
   sourcePath: string | undefined,
   sourceUrl: string | undefined
@@ -51,9 +68,8 @@ async function rehydrateMediaNode(
   }
 
   const sourcePath = normalizeString(data.sourcePath);
-  const sourceUrlFromData = normalizeString(data.sourceUrl);
-  const sourceUrlFromCurrentValue =
-    currentValue && HTTP_URL_PATTERN.test(currentValue) ? currentValue : undefined;
+  const sourceUrlFromData = normalizeHttpUrl(data.sourceUrl);
+  const sourceUrlFromCurrentValue = normalizeHttpUrl(currentValue);
   const sourceUrl = sourceUrlFromData ?? sourceUrlFromCurrentValue;
   const remotePayload = buildRemotePayload(sourcePath, sourceUrl);
 

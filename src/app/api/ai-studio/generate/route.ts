@@ -1,22 +1,23 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-import { mapBackendGenerationResponse } from "@/lib/ai-studio/backend";
-import { getApiBaseUrl } from "@/lib/api/config";
+import { mapBackendGenerationResponse } from '@/lib/ai-studio/backend';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { log } from '@/lib/observability/logger';
+import { getPostHogClient } from '@/lib/posthog-server';
 import {
-  aiStudioGenerationRequestSchema,
   type AiStudioGenerationRequest,
-} from "@/lib/schemas/aiStudio";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+  aiStudioGenerationRequestSchema,
+} from '@/lib/schemas/aiStudio';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   createFallbackJobFromRequest,
   markFallbackJobErrored,
   recordFallbackJob,
-} from "../fallback";
-import { getPostHogClient } from "@/lib/posthog-server";
+} from '../fallback';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 function buildBackendUrl(path: string): string {
   return new URL(path, getApiBaseUrl()).toString();
@@ -40,7 +41,9 @@ function toBackendPayload(payload: AiStudioGenerationRequest) {
 }
 
 function logError(message: string, detail?: unknown) {
-  console.error(`[ai-studio/generate] ${message}`, detail);
+  log.error(`[ai-studio/generate] ${message}`, detail, {
+    'http.route': '/api/ai-studio/generate',
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -48,14 +51,17 @@ export async function POST(request: NextRequest) {
   try {
     json = await request.json();
   } catch {
-    logError("Invalid JSON payload");
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    logError('Invalid JSON payload');
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
   const parsed = aiStudioGenerationRequestSchema.safeParse(json);
   if (!parsed.success) {
-    logError("Request schema validation failed", parsed.error.flatten());
-    return NextResponse.json({ error: "Invalid request payload", issues: parsed.error.flatten() }, { status: 422 });
+    logError('Request schema validation failed', parsed.error.flatten());
+    return NextResponse.json(
+      { error: 'Invalid request payload', issues: parsed.error.flatten() },
+      { status: 422 },
+    );
   }
   const requestContext = {
     brandProfileId: parsed.data.brandProfileId,
@@ -67,15 +73,18 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase.auth.getSession();
 
   if (error || !data.session?.access_token) {
-    logError("Unauthorized generate attempt", { error: error ?? "missing session", ...requestContext });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    logError('Unauthorized generate attempt', {
+      error: error ?? 'missing session',
+      ...requestContext,
+    });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const distinctId = data.session.user?.id ?? data.session.user?.email ?? "anonymous";
+  const distinctId = data.session.user?.id ?? data.session.user?.email ?? 'anonymous';
   const posthog = getPostHogClient();
   posthog.capture({
     distinctId,
-    event: "ai_studio_generation_requested",
+    event: 'ai_studio_generation_requested',
     properties: {
       brand_profile_id: parsed.data.brandProfileId,
       provider: parsed.data.provider,
@@ -86,21 +95,21 @@ export async function POST(request: NextRequest) {
 
   let response: Response;
   try {
-    response = await fetch(buildBackendUrl("/ai-studio/generate"), {
-      method: "POST",
+    response = await fetch(buildBackendUrl('/ai-studio/generate'), {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${data.session.access_token}`,
       },
       body: JSON.stringify(toBackendPayload(parsed.data)),
     });
   } catch (error) {
-    logError("Upstream unreachable", { error, ...requestContext });
+    logError('Upstream unreachable', { error, ...requestContext });
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
     return NextResponse.json(
-      { job: fallbackJob, meta: { fallback: true, reason: "upstream-unreachable" } },
-      { status: 202, headers: { "x-continuum-ai-studio": "fallback" } }
+      { job: fallbackJob, meta: { fallback: true, reason: 'upstream-unreachable' } },
+      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
     );
   }
 
@@ -112,7 +121,7 @@ export async function POST(request: NextRequest) {
       detail = await response.text();
     }
 
-    logError("Upstream returned error", { status: response.status, detail });
+    logError('Upstream returned error', { status: response.status, detail });
 
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
@@ -122,12 +131,12 @@ export async function POST(request: NextRequest) {
         job: fallbackJob,
         meta: {
           fallback: true,
-          reason: "upstream-error",
+          reason: 'upstream-error',
           status: response.status,
           detail,
         },
       },
-      { status: 202, headers: { "x-continuum-ai-studio": "fallback" } }
+      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
     );
   }
 
@@ -135,7 +144,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = await response.json();
   } catch (error) {
-    logError("Upstream returned non-JSON payload", error);
+    logError('Upstream returned non-JSON payload', error);
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
     return NextResponse.json(
@@ -143,10 +152,10 @@ export async function POST(request: NextRequest) {
         job: fallbackJob,
         meta: {
           fallback: true,
-          reason: "invalid-json",
+          reason: 'invalid-json',
         },
       },
-      { status: 202, headers: { "x-continuum-ai-studio": "fallback" } }
+      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
     );
   }
 
@@ -155,24 +164,24 @@ export async function POST(request: NextRequest) {
     recordFallbackJob(result.job);
     return NextResponse.json(result, { status: response.status });
   } catch (err) {
-    logError("Schema normalization failed", { err, ...requestContext });
+    logError('Schema normalization failed', { err, ...requestContext });
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
     markFallbackJobErrored(
       fallbackJob.brandProfileId,
       fallbackJob.id,
-      err instanceof Error ? err.message : String(err)
+      err instanceof Error ? err.message : String(err),
     );
     return NextResponse.json(
       {
         job: fallbackJob,
         meta: {
           fallback: true,
-          reason: "schema-mismatch",
+          reason: 'schema-mismatch',
           detail: err instanceof Error ? err.message : err,
         },
       },
-      { status: 202, headers: { "x-continuum-ai-studio": "fallback" } }
+      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
     );
   }
 }

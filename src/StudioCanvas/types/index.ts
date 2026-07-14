@@ -1,4 +1,4 @@
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import type { BrandBookPieceKind, ImageGeneratorModel, ImageSize } from '@continuum/contracts';
 import type {
   Connection,
   Edge,
@@ -19,6 +19,8 @@ export type {
   Connection,
   Edge,
   EdgeChange,
+  ImageGeneratorModel,
+  ImageSize,
   Node,
   NodeChange,
   OnConnect,
@@ -65,16 +67,14 @@ export type ImageStylePreset =
   | 'none';
 
 export interface NanoGenNodeData extends BaseNodeData {
-  model:
-    | 'nano-banana'
-    | 'nano-banana-pro'
-    | 'nano-banana-2'
-    | 'gpt-image-2'
-    | 'flux-2-pro'
-    | 'flux-2-max';
+  model: ImageGeneratorModel;
   positivePrompt: string;
+  // What the image must NOT contain. Fed by the `negative` handle or typed on the
+  // node; the Backend folds it into the instruction (Gemini image models have no
+  // negative-prompt parameter). Mirrors VideoGenNodeData.negativePrompt.
+  negativePrompt?: string;
   aspectRatio: string;
-  imageSize?: '512px' | '1K' | '2K' | '4K';
+  imageSize?: ImageSize;
   maxReferenceImages?: number;
   stylePreset?: ImageStylePreset;
   // Creative-direction skill ids applied to this generation; the Backend resolves

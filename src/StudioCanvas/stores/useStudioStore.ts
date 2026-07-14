@@ -1,28 +1,29 @@
-import type { CSSProperties } from 'react';
-import { create } from 'zustand';
 import {
   addEdge,
-  applyNodeChanges,
   applyEdgeChanges,
-  Edge,
-  OnNodesChange,
-  OnEdgesChange,
-  OnConnect,
-  Connection,
-  NodeChange,
-  EdgeChange,
+  applyNodeChanges,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type NodeChange,
+  type OnConnect,
+  type OnEdgesChange,
+  type OnNodesChange,
 } from '@xyflow/react';
+import type { CSSProperties } from 'react';
 import { toast } from 'sonner';
-import { StudioNode } from '../types';
+import { create } from 'zustand';
+import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
+import type { StudioNode } from '../types';
+import { resolveEdgeDataType } from '../utils/handleResolution';
 import {
-  isValidConnection,
-  getAllowedTargetHandles,
   getAllowedSourceHandles,
+  getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
+  isValidConnection,
 } from '../utils/isValidConnection';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import { isVideoGeneratorNodeType } from '../utils/videoModel';
-import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 export type InteractionMode = 'pan' | 'select';
@@ -84,17 +85,6 @@ interface StudioState {
   pasteNodes: () => void;
 }
 
-// Data type mapping for edges
-type DataType = 'text' | 'image' | 'video';
-
-const getDataTypeFromHandle = (handleId: string | null): DataType => {
-  if (!handleId) return 'text';
-  if (handleId === 'video' || handleId === 'ref-video') return 'video';
-  if (handleId.includes('image') || handleId.includes('frame')) return 'image';
-  if (handleId === 'text' || handleId.includes('prompt') || handleId === 'negative') return 'text';
-  return 'text';
-};
-
 const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): Connection => {
   const sourceNode = nodes.find((node) => node.id === connection.source);
   const targetNode = nodes.find((node) => node.id === connection.target);
@@ -103,8 +93,11 @@ const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): 
 
   const sourceHandle = connection.sourceHandle ?? '';
   const targetHandle = connection.targetHandle ?? '';
-  const isFrameHandle = ['first-frame', 'last-frame', 'ref-image', 'ref-images'].includes(sourceHandle);
-  const isImageSource = targetHandle === 'image' && (targetNode.type === 'image' || targetNode.type === 'nanoGen');
+  const isFrameHandle = ['first-frame', 'last-frame', 'ref-image', 'ref-images'].includes(
+    sourceHandle,
+  );
+  const isImageSource =
+    targetHandle === 'image' && (targetNode.type === 'image' || targetNode.type === 'nanoGen');
 
   if (isVideoGeneratorNodeType(sourceNode.type) && isFrameHandle && isImageSource) {
     return {
@@ -120,7 +113,7 @@ const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): 
 };
 
 const getEdgeStyle = (sourceHandle: string | null) => {
-  const dataType = getDataTypeFromHandle(sourceHandle);
+  const dataType = resolveEdgeDataType(sourceHandle);
 
   return {
     ['--edge-color' as keyof CSSProperties]: `var(--edge-${dataType})`,
@@ -186,8 +179,7 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     const allowedTargets = getAllowedTargetHandles(targetNode);
     // frame-N handles are dynamic (clip slots, frame references) — accept any
     // that start with known prefixes rather than enumerating every possible id.
-    const isDynamicHandle =
-      targetHandle.startsWith('frame-') || targetHandle.startsWith('clip-');
+    const isDynamicHandle = targetHandle.startsWith('frame-') || targetHandle.startsWith('clip-');
     const isValidTarget = allowedTargets.includes(targetHandle) || isDynamicHandle;
 
     if (!isValidTarget) {
@@ -238,7 +230,8 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     }
 
     const existingForHandle = nextEdges.filter(
-      (candidate) => candidate.target === edge.target && candidate.targetHandle === edge.targetHandle
+      (candidate) =>
+        candidate.target === edge.target && candidate.targetHandle === edge.targetHandle,
     ).length;
 
     const shouldCountAsImageReference =
@@ -248,7 +241,7 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
       const imageReferenceCount = nextEdges.filter(
         (candidate) =>
           candidate.target === edge.target &&
-          (candidate.targetHandle === 'ref-image' || candidate.targetHandle === 'ref-images')
+          (candidate.targetHandle === 'ref-image' || candidate.targetHandle === 'ref-images'),
       ).length;
       if (imageReferenceCount >= limit) {
         continue;
@@ -287,32 +280,34 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       .map((c) => (c as { id: string }).id);
 
     set((state) => {
-        const newNodes = applyNodeChanges(changes, state.nodes);
-        
-        const positionChanges = changes.filter(c => c.type === 'position');
-        const isDragging = positionChanges.some(
-          (c) => 'dragging' in c && c.dragging === true
-        );
-        const multipleMoving = positionChanges.length > 1;
-        const hasDragEnd = positionChanges.some(
-          (c) => 'dragging' in c && c.dragging === false
-        );
+      const newNodes = applyNodeChanges(changes, state.nodes);
 
-        if (isDragging || multipleMoving || !hasDragEnd) {
-            return {
-              nodes: newNodes,
-              deletedNodeIds: deletedNodes.length > 0 ? [...state.deletedNodeIds, ...deletedNodes] : state.deletedNodeIds,
-              saveTrigger: deletedNodes.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
-            };
-        }
+      const positionChanges = changes.filter((c) => c.type === 'position');
+      const isDragging = positionChanges.some((c) => 'dragging' in c && c.dragging === true);
+      const multipleMoving = positionChanges.length > 1;
+      const hasDragEnd = positionChanges.some((c) => 'dragging' in c && c.dragging === false);
 
-        const hasDimensions = newNodes.some(n => n.measured?.width || n.width);
-        
+      if (isDragging || multipleMoving || !hasDragEnd) {
         return {
-            nodes: hasDimensions ? resolveCollisions(newNodes) : newNodes,
-            deletedNodeIds: deletedNodes.length > 0 ? [...state.deletedNodeIds, ...deletedNodes] : state.deletedNodeIds,
-            saveTrigger: deletedNodes.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
+          nodes: newNodes,
+          deletedNodeIds:
+            deletedNodes.length > 0
+              ? [...state.deletedNodeIds, ...deletedNodes]
+              : state.deletedNodeIds,
+          saveTrigger: deletedNodes.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
         };
+      }
+
+      const hasDimensions = newNodes.some((n) => n.measured?.width || n.width);
+
+      return {
+        nodes: hasDimensions ? resolveCollisions(newNodes) : newNodes,
+        deletedNodeIds:
+          deletedNodes.length > 0
+            ? [...state.deletedNodeIds, ...deletedNodes]
+            : state.deletedNodeIds,
+        saveTrigger: deletedNodes.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
+      };
     });
   },
 
@@ -320,7 +315,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const deletedEdges = changes
       .filter((c) => c.type === 'remove')
       .map((c) => (c as { id: string }).id);
-    
+
     const nextEdges = applyEdgeChanges(changes, get().edges);
     set((state) => ({
       edges: normalizeEdges(nextEdges, state.nodes),
@@ -347,7 +342,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       className: 'studio-edge studio-edge--connected',
       style,
       data: {
-        dataType: getDataTypeFromHandle(normalized.sourceHandle),
+        dataType: resolveEdgeDataType(normalized.sourceHandle),
         pathType: edgeType,
       },
     };
@@ -364,14 +359,14 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       return { nodes, edges: normalizedEdges };
     });
   },
-  
+
   setEdges: (edges: Edge[]) => {
     set((state) => ({ edges: normalizeEdges(edges, state.nodes) }));
   },
 
   updateNodeData: (id: string, data: Partial<StudioNode['data']>) => {
     set((state) => {
-      const nodeIndex = state.nodes.findIndex(n => n.id === id);
+      const nodeIndex = state.nodes.findIndex((n) => n.id === id);
       if (nodeIndex === -1) return state;
 
       const updatedNode = {
@@ -442,9 +437,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       selected: false,
     };
 
-    set({ 
+    set({
       nodes: [...state.nodes, newNode],
-      saveTrigger: state.saveTrigger + 1
+      saveTrigger: state.saveTrigger + 1,
     });
   },
 
@@ -455,9 +450,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       deletedNodeIds: [...state.deletedNodeIds, id],
       deletedEdgeIds: [
         ...state.deletedEdgeIds,
-        ...state.edges
-          .filter((e) => e.source === id || e.target === id)
-          .map((e) => e.id),
+        ...state.edges.filter((e) => e.source === id || e.target === id).map((e) => e.id),
       ],
       saveTrigger: state.saveTrigger + 1,
     }));
@@ -482,10 +475,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   takeSnapshot: () => {
     set((state) => {
-      const newPast = [
-        ...state.history.past,
-        { nodes: state.nodes, edges: state.edges },
-      ].slice(-50); 
+      const newPast = [...state.history.past, { nodes: state.nodes, edges: state.edges }].slice(
+        -50,
+      );
 
       return {
         history: {
@@ -542,8 +534,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   clearDeletedIds: (nodeIds: string[], edgeIds: string[]) => {
     set((state) => ({
-      deletedNodeIds: state.deletedNodeIds.filter(id => !nodeIds.includes(id)),
-      deletedEdgeIds: state.deletedEdgeIds.filter(id => !edgeIds.includes(id)),
+      deletedNodeIds: state.deletedNodeIds.filter((id) => !nodeIds.includes(id)),
+      deletedEdgeIds: state.deletedEdgeIds.filter((id) => !edgeIds.includes(id)),
     }));
   },
 
@@ -568,13 +560,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set((state) => ({
       clipboard: selected,
       nodes: state.nodes.filter((n) => !n.selected),
-      edges: state.edges.filter(
-        (e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)
-      ),
-      deletedNodeIds: [
-        ...state.deletedNodeIds,
-        ...selected.map((n) => n.id),
-      ],
+      edges: state.edges.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)),
+      deletedNodeIds: [...state.deletedNodeIds, ...selected.map((n) => n.id)],
       deletedEdgeIds: [
         ...state.deletedEdgeIds,
         ...edges
@@ -603,9 +590,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }));
 
     set((state) => ({
-      nodes: state.nodes
-        .map((n) => ({ ...n, selected: false }))
-        .concat(pasted),
+      nodes: state.nodes.map((n) => ({ ...n, selected: false })).concat(pasted),
       saveTrigger: state.saveTrigger + 1,
     }));
   },

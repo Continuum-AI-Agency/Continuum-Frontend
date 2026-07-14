@@ -5,14 +5,18 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 
+const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
+
 describe('executeWorkflow', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     // Default: reference hydration is a no-op (returns inputs unchanged) so existing
     // scenarios behave identically; tests that exercise hydration override this.
+    rehydrateWorkflowMediaNodes.mockClear();
+    rehydrateWorkflowMediaNodes.mockImplementation(async (input: StudioNode[]) => input);
     mock.module('./rehydrateWorkflowMedia', () => ({
-      rehydrateWorkflowMediaNodes: mock(async (input: StudioNode[]) => input),
+      rehydrateWorkflowMediaNodes,
     }));
 
     // Reset store state
@@ -107,6 +111,153 @@ describe('executeWorkflow', () => {
     const updatedNode = finalNodes.find(n => n.id === '1');
     expect(updatedNode?.data.error).toBe('API Error');
     expect(updatedNode?.data.isComplete).toBe(false);
+  });
+
+  it('blocks an empty connected reference before clearing output or starting generation', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'upload-image',
+        position: { x: 0, y: 0 },
+        data: { image: undefined },
+        type: 'image',
+      },
+      {
+        id: 'generate-image',
+        position: { x: 200, y: 0 },
+        selected: true,
+        data: {
+          model: 'nano-banana',
+          positivePrompt: 'Use the reference image',
+          generatedImage: 'data:image/png;base64,keep_existing_output',
+          isComplete: true,
+        },
+        type: 'nanoGen',
+      },
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'reference-edge',
+        source: 'upload-image',
+        sourceHandle: 'image',
+        target: 'generate-image',
+        targetHandle: 'ref-image',
+      },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'new-output', mimeType: 'image/png' },
+    }));
+    const show = mock();
+    const controls = { ...buildControls(executeGeneration), show };
+
+    await executeWorkflow(controls as any, { forceRegenerateAll: true });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(0);
+    expect(show).toHaveBeenCalledWith({
+      title: 'Reference image required',
+      description: 'Add a reference image to run this flow.',
+      variant: 'error',
+    });
+    const finalNodes = useStudioStore.getState().nodes;
+    expect(finalNodes.find((node) => node.id === 'upload-image')?.selected).toBe(true);
+    expect(finalNodes.find((node) => node.id === 'generate-image')?.selected).toBe(false);
+    expect(finalNodes.find((node) => node.id === 'generate-image')?.data.generatedImage).toBe(
+      'data:image/png;base64,keep_existing_output',
+    );
+    expect(rehydrateWorkflowMediaNodes).toHaveBeenCalledTimes(0);
+  });
+
+  it('rejects blank or malformed durable reference metadata before hydration', async () => {
+    const invalidReferences = [
+      { sourcePath: '   ', sourceUrl: '\t' },
+      { sourceUrl: 'not-a-valid-http-url' },
+    ];
+
+    for (const [index, referenceData] of invalidReferences.entries()) {
+      useStudioStore.getState().setNodes([
+        {
+          id: `upload-image-${index}`,
+          position: { x: 0, y: 0 },
+          data: referenceData,
+          type: 'image',
+        },
+        {
+          id: `generate-image-${index}`,
+          position: { x: 200, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'Use the reference image' },
+          type: 'nanoGen',
+        },
+      ]);
+      useStudioStore.getState().setEdges([
+        {
+          id: `reference-edge-${index}`,
+          source: `upload-image-${index}`,
+          sourceHandle: 'image',
+          target: `generate-image-${index}`,
+          targetHandle: 'ref-image',
+        },
+      ]);
+      const executeGeneration = mock(async () => ({
+        success: true,
+        output: { type: 'image', base64: 'unexpected', mimeType: 'image/png' },
+      }));
+      const show = mock();
+
+      await executeWorkflow({ ...buildControls(executeGeneration), show } as any);
+
+      expect(executeGeneration).toHaveBeenCalledTimes(0);
+      expect(show).toHaveBeenCalledWith({
+        title: 'Reference image required',
+        description: 'Add a reference image to run this flow.',
+        variant: 'error',
+      });
+      expect(
+        useStudioStore.getState().nodes.find((node) => node.id === `upload-image-${index}`)
+          ?.selected,
+      ).toBe(true);
+    }
+
+    expect(rehydrateWorkflowMediaNodes).toHaveBeenCalledTimes(0);
+  });
+
+  it('keeps a valid generation visibly running until its request settles', async () => {
+    useStudioStore.getState().setNodes([
+      {
+        id: 'generate-image',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'Generate a launch image' },
+        type: 'nanoGen',
+      },
+    ]);
+
+    let resolveGeneration: ((result: unknown) => void) | undefined;
+    const request = new Promise((resolve) => {
+      resolveGeneration = resolve;
+    });
+    const executeGeneration = mock(() => request);
+    const execution = executeWorkflow(buildControls(executeGeneration) as any);
+
+    while (executeGeneration.mock.calls.length === 0) {
+      await Promise.resolve();
+    }
+    expect(
+      useStudioStore.getState().nodes.find((node) => node.id === 'generate-image')?.data
+        .isExecuting,
+    ).toBe(true);
+
+    resolveGeneration?.({
+      success: true,
+      output: { type: 'image', base64: 'finished', mimeType: 'image/png' },
+    });
+    await execution;
+
+    expect(
+      useStudioStore.getState().nodes.find((node) => node.id === 'generate-image')?.data
+        .isExecuting,
+    ).toBe(false);
   });
 
   it('should handle dependencies', async () => {
@@ -806,14 +957,18 @@ describe('executeWorkflow', () => {
     // inline fresh bytes at the chokepoint so the Backend gets base64 — not a dropped
     // or expired reference. This is the post-save shape of the sidebar-drop path.
     const freshBase64 = 'data:image/png;base64,FRESH_LIBRARY_BYTES';
-    mock.module('./rehydrateWorkflowMedia', () => ({
-      rehydrateWorkflowMediaNodes: mock(async (input: StudioNode[]) =>
-        input.map((node) =>
-          node.type === 'image'
-            ? { ...node, data: { ...node.data, image: freshBase64, sourceUrl: 'https://x/fresh.jpg' } }
-            : node
-        )
+    const hydrateDurableReference = mock(async (input: StudioNode[]) =>
+      input.map((node) =>
+        node.type === 'image'
+          ? {
+              ...node,
+              data: { ...node.data, image: freshBase64, sourceUrl: 'https://x/fresh.jpg' },
+            }
+          : node,
       ),
+    );
+    mock.module('./rehydrateWorkflowMedia', () => ({
+      rehydrateWorkflowMediaNodes: hydrateDurableReference,
     }));
 
     const nodes: StudioNode[] = [
@@ -842,6 +997,7 @@ describe('executeWorkflow', () => {
 
     await executeWorkflow(controls as any, { targetNodeId: 'nano', clearDownstream: false });
 
+    expect(hydrateDurableReference).toHaveBeenCalledTimes(1);
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     const payload = executeGeneration.mock.calls[0][1];
     expect(payload.reference_images?.[0]?.data).toBe('FRESH_LIBRARY_BYTES');

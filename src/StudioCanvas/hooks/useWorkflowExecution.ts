@@ -209,6 +209,12 @@ export function useWorkflowExecution() {
                         : undefined;
               const persistentImageUrl =
                 imageUrl && !imageUrl.startsWith('data:') ? imageUrl : undefined;
+              const sizeBytes =
+                typeof parsed.size_bytes === 'number'
+                  ? parsed.size_bytes
+                  : typeof parsed.storage?.size_bytes === 'number'
+                    ? parsed.storage.size_bytes
+                    : undefined;
 
               if (eventName === 'image' && (normalizedImageBase64 || persistentImageUrl)) {
                 console.info('[studio] image event received', {
@@ -227,6 +233,7 @@ export function useWorkflowExecution() {
                     url: persistentImageUrl,
                     storagePath: typeof parsed.path === 'string' ? parsed.path : undefined,
                     storageBucket: typeof parsed.bucket === 'string' ? parsed.bucket : undefined,
+                    sizeBytes,
                   };
                 }
               }
@@ -274,6 +281,7 @@ export function useWorkflowExecution() {
                   url: parsed.signed_url ?? parsed.storage?.signed_url ?? finalOutput.url,
                   storagePath: parsed.path,
                   storageBucket: parsed.bucket,
+                  sizeBytes: sizeBytes ?? finalOutput.sizeBytes,
                 };
               }
 
@@ -287,6 +295,7 @@ export function useWorkflowExecution() {
                   posterBase64: parsed.poster_base64,
                   storagePath: parsed.path,
                   storageBucket: parsed.bucket,
+                  sizeBytes,
                 };
               }
 
@@ -299,6 +308,7 @@ export function useWorkflowExecution() {
                     url: persistentImageUrl,
                     storagePath: typeof parsed.path === 'string' ? parsed.path : undefined,
                     storageBucket: typeof parsed.bucket === 'string' ? parsed.bucket : undefined,
+                    sizeBytes,
                   };
                 } else if (expectedMedium === 'video' && videoUrl) {
                   finalOutput = {

@@ -1,8 +1,14 @@
-import { describe, it, expect } from 'bun:test';
-import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload, toBackendPayload } from './buildNodePayload';
-import { StudioNode } from '../types';
-import { Edge } from '@xyflow/react';
-import { NodeOutput } from '../types/execution';
+import { describe, expect, it } from 'bun:test';
+import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
+import type { NodeOutput } from '../types/execution';
+import {
+  buildEnrichPayload,
+  buildExtendVideoPayload,
+  buildNanoGenPayload,
+  buildVeoPayload,
+  toBackendPayload,
+} from './buildNodePayload';
 import { getVideoGeneratorTargetHandles } from './videoModel';
 
 describe('buildNodePayload', () => {
@@ -74,6 +80,82 @@ describe('buildNodePayload', () => {
       const payload = buildNanoGenPayload(node, new Map(), [], []);
       expect(payload?.imageSize).toBe('512px');
       expect(payload?.resolution).toBe('512x512');
+    });
+
+    // The canvas agent writes node data directly and nothing used to check it. A node
+    // stamped `imageSize: "1024px"` — a value that exists nowhere in the system — was
+    // passed through RAW for nano-banana-2, and the Backend 400d every single run.
+    // nano-banana-pro was already clamped; nano-banana-2 was not.
+    it('should clamp an illegal imageSize on nano-banana-2 instead of passing it through', () => {
+      const node: StudioNode = {
+        id: 'gen_running',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana-2',
+          positivePrompt: 'A cat',
+          imageSize: '1024px' as never,
+        },
+      };
+
+      const payload = buildNanoGenPayload(node, new Map(), [], []);
+      expect(payload?.imageSize).toBe('1K');
+      expect(payload?.resolution).toBe('1024x1024');
+      expect(toBackendPayload(payload!).image_size).toBe('1K');
+    });
+
+    it('should clamp an illegal imageSize on nano-banana-pro too', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana-pro', positivePrompt: 'A cat', imageSize: '512px' },
+      };
+
+      expect(buildNanoGenPayload(node, new Map(), [], [])?.imageSize).toBe('1K');
+    });
+
+    // gemini-2.5-flash-image has no imageConfig.imageSize at all — it always renders
+    // 1024px. Sending a size would be a lie; claiming one on the node would be worse.
+    it('should send no imageSize for a model that takes none', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'A cat', imageSize: '2K' as never },
+      };
+
+      const payload = buildNanoGenPayload(node, new Map(), [], []);
+      expect(payload?.imageSize).toBeUndefined();
+      expect(payload?.resolution).toBe('1024x1024');
+    });
+
+    it('should read the negative prompt from a text node wired into the negative handle', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana-2', positivePrompt: 'A cat', negativePrompt: 'typed on node' },
+      };
+      const avoid: StudioNode = {
+        id: 'avoid',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'no watermarks, no text' },
+      };
+      const edges: Edge[] = [
+        {
+          id: 'e-neg',
+          source: 'avoid',
+          target: 'nano',
+          sourceHandle: 'text',
+          targetHandle: 'negative',
+        },
+      ];
+
+      const payload = buildNanoGenPayload(node, new Map(), [node, avoid], edges);
+      expect(payload?.negativePrompt).toBe('no watermarks, no text');
+      expect(toBackendPayload(payload!).negative_prompt).toBe('no watermarks, no text');
     });
 
     it('should prioritize edge inputs', () => {
@@ -173,15 +255,37 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'e1', source: 'f1', target: 'veo-lite', sourceHandle: 'image', targetHandle: 'first-frame' },
-        { id: 'e2', source: 'f2', target: 'veo-lite', sourceHandle: 'image', targetHandle: 'last-frame' },
-        { id: 'e3', source: 'ref', target: 'veo-lite', sourceHandle: 'image', targetHandle: 'ref-images' },
+        {
+          id: 'e1',
+          source: 'f1',
+          target: 'veo-lite',
+          sourceHandle: 'image',
+          targetHandle: 'first-frame',
+        },
+        {
+          id: 'e2',
+          source: 'f2',
+          target: 'veo-lite',
+          sourceHandle: 'image',
+          targetHandle: 'last-frame',
+        },
+        {
+          id: 'e3',
+          source: 'ref',
+          target: 'veo-lite',
+          sourceHandle: 'image',
+          targetHandle: 'ref-images',
+        },
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
       resolvedData.set('f1', { type: 'image', base64: 'first_base64', mimeType: 'image/png' });
       resolvedData.set('f2', { type: 'image', base64: 'last_base64', mimeType: 'image/png' });
-      resolvedData.set('ref', { type: 'image', base64: 'ignored_ref_base64', mimeType: 'image/png' });
+      resolvedData.set('ref', {
+        type: 'image',
+        base64: 'ignored_ref_base64',
+        mimeType: 'image/png',
+      });
 
       const payload = buildVeoPayload(node, resolvedData, [], edges);
       expect(payload).not.toBeNull();
@@ -222,7 +326,13 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'e1', source: 'text1', target: 'veo', sourceHandle: 'text', targetHandle: 'negative' },
+        {
+          id: 'e1',
+          source: 'text1',
+          target: 'veo',
+          sourceHandle: 'text',
+          targetHandle: 'negative',
+        },
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
@@ -241,8 +351,20 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'e1', source: 'f1', target: 'veo', sourceHandle: 'image', targetHandle: 'first-frame' },
-        { id: 'e2', source: 'f2', target: 'veo', sourceHandle: 'image', targetHandle: 'last-frame' },
+        {
+          id: 'e1',
+          source: 'f1',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'first-frame',
+        },
+        {
+          id: 'e2',
+          source: 'f2',
+          target: 'veo',
+          sourceHandle: 'image',
+          targetHandle: 'last-frame',
+        },
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
@@ -269,8 +391,20 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'v1', source: 'video-ref', target: 'kling', sourceHandle: 'video', targetHandle: 'ref-video' },
-        { id: 'i1', source: 'img-ref', target: 'kling', sourceHandle: 'image', targetHandle: 'ref-images' },
+        {
+          id: 'v1',
+          source: 'video-ref',
+          target: 'kling',
+          sourceHandle: 'video',
+          targetHandle: 'ref-video',
+        },
+        {
+          id: 'i1',
+          source: 'img-ref',
+          target: 'kling',
+          sourceHandle: 'image',
+          targetHandle: 'ref-images',
+        },
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
@@ -297,11 +431,21 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'i1', source: 'img-ref', target: 'pixverse', sourceHandle: 'image', targetHandle: 'ref-image' },
+        {
+          id: 'i1',
+          source: 'img-ref',
+          target: 'pixverse',
+          sourceHandle: 'image',
+          targetHandle: 'ref-image',
+        },
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
-      resolvedData.set('img-ref', { type: 'image', base64: 'pixverse_image', mimeType: 'image/png' });
+      resolvedData.set('img-ref', {
+        type: 'image',
+        base64: 'pixverse_image',
+        mimeType: 'image/png',
+      });
 
       const payload = buildVeoPayload(node, resolvedData, [], edges);
       expect(payload?.model).toBe('pixverse-v6');
@@ -330,7 +474,13 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'i1', source: 'img1', target: 'seedance', sourceHandle: 'image', targetHandle: 'ref-images' },
+        {
+          id: 'i1',
+          source: 'img1',
+          target: 'seedance',
+          sourceHandle: 'image',
+          targetHandle: 'ref-images',
+        },
       ];
       const resolvedData = new Map<string, NodeOutput>();
       resolvedData.set('img1', { type: 'image', base64: 'seedance_image', mimeType: 'image/png' });
@@ -409,7 +559,10 @@ describe('buildNodePayload', () => {
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
-      resolvedData.set('veo1', { type: 'video', url: 'https://cdn.continuum.test/videos/upstream.mp4' });
+      resolvedData.set('veo1', {
+        type: 'video',
+        url: 'https://cdn.continuum.test/videos/upstream.mp4',
+      });
 
       const payload = buildExtendVideoPayload(node, resolvedData, [], edges);
 
@@ -429,13 +582,31 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'e1', source: 'img1', target: 'string', sourceHandle: 'image', targetHandle: 'image' },
-        { id: 'e2', source: 'aud1', target: 'string', sourceHandle: 'audio', targetHandle: 'audio' },
-        { id: 'e3', source: 'doc1', target: 'string', sourceHandle: 'document', targetHandle: 'document' },
+        {
+          id: 'e1',
+          source: 'img1',
+          target: 'string',
+          sourceHandle: 'image',
+          targetHandle: 'image',
+        },
+        {
+          id: 'e2',
+          source: 'aud1',
+          target: 'string',
+          sourceHandle: 'audio',
+          targetHandle: 'audio',
+        },
+        {
+          id: 'e3',
+          source: 'doc1',
+          target: 'string',
+          sourceHandle: 'document',
+          targetHandle: 'document',
+        },
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
-      
+
       const allNodes: StudioNode[] = [
         node,
         {
@@ -448,17 +619,29 @@ describe('buildNodePayload', () => {
             sourceUrl: 'https://cdn.continuum.test/sample-image.png',
           },
         },
-        { id: 'aud1', type: 'audio', position: { x: 0, y: 0 }, data: { audio: 'data:audio/mp3;base64,aud_base64' } },
-        { id: 'doc1', type: 'document', position: { x: 0, y: 0 }, data: { documents: [{ content: 'doc content', name: 'doc.txt', type: 'txt' }] } },
+        {
+          id: 'aud1',
+          type: 'audio',
+          position: { x: 0, y: 0 },
+          data: { audio: 'data:audio/mp3;base64,aud_base64' },
+        },
+        {
+          id: 'doc1',
+          type: 'document',
+          position: { x: 0, y: 0 },
+          data: { documents: [{ content: 'doc content', name: 'doc.txt', type: 'txt' }] },
+        },
       ];
 
       const payload = await buildEnrichPayload(node, resolvedData, allNodes, edges, 'brand-1');
-      
+
       expect(payload).not.toBeNull();
       expect(payload?.prompt).toBe('Enrich this');
       expect(payload?.context?.images?.[0].data).toBe('img_base64');
       expect(payload?.context?.images?.[0].sourcePath).toBe('brand-assets/sample-image.png');
-      expect(payload?.context?.images?.[0].sourceUrl).toBe('https://cdn.continuum.test/sample-image.png');
+      expect(payload?.context?.images?.[0].sourceUrl).toBe(
+        'https://cdn.continuum.test/sample-image.png',
+      );
       expect(payload?.context?.audio?.data).toBe('aud_base64');
       expect(payload?.context?.documents?.[0].content).toBe('doc content');
     });
@@ -472,7 +655,13 @@ describe('buildNodePayload', () => {
       };
 
       const edges: Edge[] = [
-        { id: 'e1', source: 'vid1', target: 'string', sourceHandle: 'video', targetHandle: 'video' },
+        {
+          id: 'e1',
+          source: 'vid1',
+          target: 'string',
+          sourceHandle: 'video',
+          targetHandle: 'video',
+        },
       ];
 
       const allNodes: StudioNode[] = [
@@ -492,31 +681,49 @@ describe('buildNodePayload', () => {
       const payload = await buildEnrichPayload(node, new Map(), allNodes, edges, 'brand-1');
       expect(payload?.context?.video?.data).toBe('vid_base64');
       expect(payload?.context?.video?.sourcePath).toBe('brand-assets/sample-video.mp4');
-      expect(payload?.context?.video?.sourceUrl).toBe('https://cdn.continuum.test/sample-video.mp4');
+      expect(payload?.context?.video?.sourceUrl).toBe(
+        'https://cdn.continuum.test/sample-video.mp4',
+      );
     });
 
     it('should return an empty payload if no prompt and no inputs', async () => {
-        const node: StudioNode = {
-            id: 'string',
-            type: 'string',
-            position: { x: 0, y: 0 },
-            data: { value: '' },
-        };
-        const payload = await buildEnrichPayload(node, new Map(), [], [], 'brand-1');
-        expect(payload).not.toBeNull();
-        expect(payload?.prompt).toBe('');
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: '' },
+      };
+      const payload = await buildEnrichPayload(node, new Map(), [], [], 'brand-1');
+      expect(payload).not.toBeNull();
+      expect(payload?.prompt).toBe('');
     });
 
     it('inherits skills and brand-book pieces from the downstream image generator', async () => {
-      const node: StudioNode = { id: 'string', type: 'string', position: { x: 0, y: 0 }, data: { value: 'a hero shot' } };
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'a hero shot' },
+      };
       const genNode: StudioNode = {
         id: 'nano',
         type: 'nanoGen',
         position: { x: 0, y: 0 },
-        data: { model: 'nano-banana', positivePrompt: '', skillIds: ['skill-1'], brandBookPieces: ['voice', 'colors'] },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: '',
+          skillIds: ['skill-1'],
+          brandBookPieces: ['voice', 'colors'],
+        },
       };
       const edges: Edge[] = [
-        { id: 'e1', source: 'string', target: 'nano', sourceHandle: 'output', targetHandle: 'prompt' },
+        {
+          id: 'e1',
+          source: 'string',
+          target: 'nano',
+          sourceHandle: 'output',
+          targetHandle: 'prompt',
+        },
       ];
       const payload = await buildEnrichPayload(node, new Map(), [node, genNode], edges, 'brand-1');
       expect(payload?.skillIds).toEqual(['skill-1']);
@@ -524,7 +731,12 @@ describe('buildNodePayload', () => {
     });
 
     it('inherits the effective (default-full) brand book from an untagged video generator', async () => {
-      const node: StudioNode = { id: 'string', type: 'string', position: { x: 0, y: 0 }, data: { value: 'a promo clip' } };
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'a promo clip' },
+      };
       const genNode: StudioNode = {
         id: 'veo',
         type: 'veoDirector',
@@ -532,7 +744,13 @@ describe('buildNodePayload', () => {
         data: { model: 'veo-3.1', prompt: '', enhancePrompt: false },
       };
       const edges: Edge[] = [
-        { id: 'e1', source: 'string', target: 'veo', sourceHandle: 'output', targetHandle: 'prompt-in' },
+        {
+          id: 'e1',
+          source: 'string',
+          target: 'veo',
+          sourceHandle: 'output',
+          targetHandle: 'prompt-in',
+        },
       ];
       const payload = await buildEnrichPayload(node, new Map(), [node, genNode], edges, 'brand-1');
       expect(payload?.brandBookPieces).toEqual(['full']);
@@ -540,7 +758,12 @@ describe('buildNodePayload', () => {
     });
 
     it('defaults to the full brand book with no skills when unconnected to a generator', async () => {
-      const node: StudioNode = { id: 'string', type: 'string', position: { x: 0, y: 0 }, data: { value: 'a hero shot' } };
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'a hero shot' },
+      };
       const payload = await buildEnrichPayload(node, new Map(), [node], [], 'brand-1');
       expect(payload?.brandBookPieces).toEqual(['full']);
       expect(payload?.skillIds).toBeUndefined();
@@ -603,7 +826,11 @@ describe('buildNodePayload', () => {
         id: 'nano',
         type: 'nanoGen',
         position: { x: 0, y: 0 },
-        data: { model: 'nano-banana', positivePrompt: 'A cat', brandBookPieces: ['colors', 'voice'] },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: 'A cat',
+          brandBookPieces: ['colors', 'voice'],
+        },
       };
       const payload = buildNanoGenPayload(node, new Map(), [], [], 'brand-1');
       expect(toBackendPayload(payload!).brand_book_pieces).toEqual(['colors', 'voice']);

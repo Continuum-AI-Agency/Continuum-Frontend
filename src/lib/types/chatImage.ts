@@ -1,7 +1,7 @@
 // Shared types for chat-based image/video generation in AI Studio.
 // SupportedModel is kept in sync with MODEL_CATALOG in @continuum/contracts.
 
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import type { BrandBookPieceKind, ImageSize } from '@continuum/contracts';
 
 export type SupportedModel =
   | 'nano-banana'
@@ -60,7 +60,7 @@ export type ChatImageRequestPayload = {
   negativePrompt?: string;
   aspectRatio: string;
   resolution?: string;
-  imageSize?: '512px' | '1K' | '2K' | '4K'; // Pro/Nano Banana 2
+  imageSize?: ImageSize;
   referenceVideo?: RefVideo;
   durationSeconds?: 4 | 6 | 8;
   seed?: number;
@@ -130,7 +130,7 @@ export type BackendChatImageRequestPayload = {
   aspect_ratio: string;
   resolution?: string;
   duration_seconds?: '4' | '6' | '8';
-  image_size?: '512px' | '1K' | '2K' | '4K';
+  image_size?: ImageSize;
   reference_images?: {
     data?: string;
     image_url?: string;

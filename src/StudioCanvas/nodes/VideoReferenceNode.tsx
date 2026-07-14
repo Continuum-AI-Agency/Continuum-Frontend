@@ -39,7 +39,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoNodeData } from '../types';
 import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { isUploadOnDropEnabled, uploadReferenceFile } from '../utils/uploadReferenceFile';
+import { uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -144,7 +144,7 @@ export function VideoReferenceNode({
   // base64 preview remains the emergency fallback if the upload fails.
   const uploadLocalReference = useCallback(
     (file: File) => {
-      if (!isUploadOnDropEnabled() || !brandId) return;
+      if (!brandId) return;
       void uploadReferenceFile({ nodeId: id, file, brandId, field: 'video' }, { updateNodeData });
     },
     [brandId, id, updateNodeData],

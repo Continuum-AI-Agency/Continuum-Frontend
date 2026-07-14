@@ -27,7 +27,10 @@ import {
 import { compositeImages } from './compositeImages';
 import { buildDataUrl, parseDataUrl } from './dataUrl';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
-import { rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
+import {
+  hasHydratableMediaReference,
+  rehydrateWorkflowMediaNodes,
+} from './rehydrateWorkflowMedia';
 import { resolveClipSources } from './splice/resolveClipSources';
 import { checkSpliceSupport } from './splice/webcodecsSupport';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
@@ -52,6 +55,7 @@ const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
 type NodeReadiness = {
   ready: boolean;
   reason?: string;
+  blockedNodeId?: string;
   // The Video Editor (timelineEditor) is a manual break-point: it becomes
   // "awaiting" once its inputs resolve but a human hasn't rendered yet. The
   // scheduler parks awaiting nodes (and their descendants) instead of failing
@@ -274,20 +278,28 @@ const getPromptValue = (
   return { value: inlinePrompt, fromEdge: false };
 };
 
+type MissingOptionalInput = {
+  label: string;
+  blockedNodeId: string;
+};
+
 const findMissingOptionalInput = (
   node: StudioNode,
   incomingEdges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[],
-): string | undefined => {
+): MissingOptionalInput | undefined => {
   if (node.type === 'nanoGen') {
     const refEdges = incomingEdges.filter((edge) =>
       ['ref-image', 'ref-images'].includes(edge.targetHandle ?? ''),
     );
     for (const edge of refEdges) {
       if (!resolveImageInput(edge, resolvedOutputs, nodeById)) {
-        return edge.targetHandle ?? 'ref-images';
+        return {
+          label: edge.targetHandle ?? 'ref-images',
+          blockedNodeId: edge.source,
+        };
       }
     }
     return undefined;
@@ -299,20 +311,20 @@ const findMissingOptionalInput = (
       const handle = edge.targetHandle ?? '';
       if (handle === 'negative') {
         if (!resolveTextInput(edge, resolvedOutputs, nodeById, allEdges)) {
-          return handle;
+          return { label: handle, blockedNodeId: edge.source };
         }
       } else if (handle === 'ref-image' || handle === 'ref-images') {
         const supportsImageReferences =
           videoModel !== 'veo-3.1-fast' && videoModel !== 'veo-3.1-lite';
         if (supportsImageReferences && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
-          return handle;
+          return { label: handle, blockedNodeId: edge.source };
         }
       } else if (handle === 'ref-video') {
         if (
           videoModel === 'kling-omni' &&
           !resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: false })
         ) {
-          return handle;
+          return { label: handle, blockedNodeId: edge.source };
         }
       } else if (
         handle === 'first-frame' ||
@@ -321,7 +333,7 @@ const findMissingOptionalInput = (
       ) {
         const supportsFrames = videoModel === 'veo-3.1-fast' || videoModel === 'veo-3.1-lite';
         if (supportsFrames && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
-          return handle;
+          return { label: handle, blockedNodeId: edge.source };
         }
       }
     }
@@ -495,7 +507,11 @@ const getNodeReadiness = (
     edges,
   );
   if (missingOptional) {
-    return { ready: false, reason: `Missing connected input for ${missingOptional}` };
+    return {
+      ready: false,
+      reason: `Missing connected input for ${missingOptional.label}`,
+      blockedNodeId: missingOptional.blockedNodeId,
+    };
   }
 
   return { ready: true };
@@ -580,6 +596,110 @@ const nodeHasUsableOutput = (node: StudioNode): boolean => {
   );
 };
 
+const resolveRegenerationSet = (
+  executableNodes: StudioNode[],
+  edges: Edge[],
+  nodeById: Map<string, StudioNode>,
+  options: ExecuteWorkflowOptions,
+): Set<string> => {
+  const executableNodeIdSet = new Set(executableNodes.map((node) => node.id));
+  const roots = executableNodes
+    .filter((node) => {
+      if (options.forceRegenerateAll) return true;
+      if (options.targetNodeId === node.id) return true;
+      if (!nodeHasUsableOutput(node)) return true;
+      return nodeIsStale(node, edges, nodeById);
+    })
+    .map((node) => node.id);
+
+  return collectDownstreamClosure(roots, edges, executableNodeIdSet);
+};
+
+type WorkflowPreflightIssue = {
+  nodeId: string;
+  blockedNodeId: string;
+  reason: string;
+};
+
+const buildOptimisticPreflightOutputs = (
+  executableNodes: StudioNode[],
+  nodes: StudioNode[],
+): Map<string, NodeOutput> => {
+  const outputs = new Map<string, NodeOutput>();
+  for (const node of executableNodes) {
+    if (node.type === 'string' || node.type === 'videoDecode') {
+      outputs.set(node.id, { type: 'text', value: 'preflight-ready' });
+    } else if (node.type === 'nanoGen') {
+      outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
+    } else if (isMediaNodeType(node.type)) {
+      outputs.set(node.id, { type: 'video', url: 'data:video/mp4;base64,preflight-ready' });
+    }
+  }
+
+  for (const node of nodes) {
+    if (!hasHydratableMediaReference(node)) continue;
+    if (node.type === 'image') {
+      outputs.set(node.id, {
+        type: 'image',
+        base64: 'preflight-ready',
+        mimeType: 'image/png',
+      });
+    } else if (node.type === 'video') {
+      outputs.set(node.id, { type: 'video', url: 'data:video/mp4;base64,preflight-ready' });
+    }
+  }
+  return outputs;
+};
+
+const findWorkflowPreflightIssue = (
+  executableNodes: StudioNode[],
+  nodes: StudioNode[],
+  edges: Edge[],
+  mustRegenerate: Set<string>,
+): WorkflowPreflightIssue | undefined => {
+  const resolvedOutputs = buildOptimisticPreflightOutputs(executableNodes, nodes);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const failedNodes = new Set<string>();
+
+  for (const node of executableNodes) {
+    if (!mustRegenerate.has(node.id)) continue;
+    const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes);
+    if (readiness.ready || readiness.awaiting) continue;
+    return {
+      nodeId: node.id,
+      blockedNodeId: readiness.blockedNodeId ?? node.id,
+      reason: readiness.reason ?? 'Missing required inputs or prompt',
+    };
+  }
+
+  return undefined;
+};
+
+const surfacePreflightIssue = (
+  controls: ExecutorControls,
+  nodes: StudioNode[],
+  issue: WorkflowPreflightIssue,
+) => {
+  useStudioStore
+    .getState()
+    .setNodes(nodes.map((node) => ({ ...node, selected: node.id === issue.blockedNodeId })));
+  useStudioStore.getState().updateNodeData(issue.nodeId, {
+    isExecuting: false,
+    error: issue.reason,
+  });
+
+  const blockedNode = nodes.find((node) => node.id === issue.blockedNodeId);
+  const isMissingImageReference =
+    blockedNode?.type === 'image' && issue.reason.startsWith('Missing connected input for ref-image');
+  controls.show?.({
+    title: isMissingImageReference ? 'Reference image required' : 'Flow needs input',
+    description: isMissingImageReference
+      ? 'Add a reference image to run this flow.'
+      : `${issue.reason}. Fix the selected node, then run the flow again.`,
+    variant: 'error',
+  });
+};
+
 // Forward mirror of collectUpstreamClosure: every node reachable downstream of
 // the roots, bounded to `scope`. Used to cascade regeneration — when a node is
 // regenerated (empty, errored, edited, or the explicit target), every in-scope
@@ -632,13 +752,7 @@ const asTrimmedString = (value: unknown): string => (typeof value === 'string' ?
 const referenceNeedsHydration = (node: StudioNode): boolean => {
   const data = node.data as Record<string, unknown>;
   if (node.type === 'image' || node.type === 'video') {
-    const value = asTrimmedString(node.type === 'video' ? data.video : data.image);
-    if (value.startsWith('data:')) return false;
-    return (
-      typeof data.sourcePath === 'string' ||
-      typeof data.sourceUrl === 'string' ||
-      value.startsWith('http')
-    );
+    return hasHydratableMediaReference(node);
   }
   const imageValue = asTrimmedString(data.generatedImage);
   if (
@@ -732,6 +846,28 @@ export async function executeWorkflow(
       });
       return;
     }
+    const executableNodes = resolveExecutableNodes(
+      snapshot.nodes,
+      snapshot.edges,
+      options.targetNodeId,
+    );
+    const nodeById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+    const mustRegenerate = resolveRegenerationSet(
+      executableNodes,
+      snapshot.edges,
+      nodeById,
+      options,
+    );
+    const preflightIssue = findWorkflowPreflightIssue(
+      executableNodes,
+      snapshot.nodes,
+      snapshot.edges,
+      mustRegenerate,
+    );
+    if (preflightIssue) {
+      surfacePreflightIssue(controls, snapshot.nodes, preflightIssue);
+      return;
+    }
     await ensureReferenceMediaHydrated(snapshot.nodes, snapshot.edges, new Set(scopeNodeIds));
   }
 
@@ -762,24 +898,13 @@ export async function executeWorkflow(
     executableNodeIds,
   });
 
-  const executableNodeIdSet = new Set(executableNodeIds);
-
   // A run regenerates a node only when it must: the explicit Run target, a node
   // with no usable output (empty or errored), or a node edited since it
   // generated (signature drift). Everything downstream of such a node also
   // regenerates — its input just changed. Every other node that already has
   // content is reused. This unifies the per-node Run (scope = target + its
   // upstream closure) and the global Run-all (scope = all media nodes).
-  const regenerationRoots = executableNodes
-    .filter((node) => {
-      if (options.forceRegenerateAll) return true;
-      if (options.targetNodeId === node.id) return true;
-      if (!nodeHasUsableOutput(node)) return true;
-      return nodeIsStale(node, edges, nodeById);
-    })
-    .map((node) => node.id);
-
-  const mustRegenerate = collectDownstreamClosure(regenerationRoots, edges, executableNodeIdSet);
+  const mustRegenerate = resolveRegenerationSet(executableNodes, edges, nodeById, options);
 
   const resetNodeIds = executableNodes
     .filter((node) => mustRegenerate.has(node.id))
@@ -980,6 +1105,7 @@ export async function executeWorkflow(
       storagePath?: string;
       url?: string;
       mimeType: string;
+      sizeBytes?: number;
     },
   ) => {
     const brandProfileId = options.brandId;
@@ -988,22 +1114,26 @@ export async function executeWorkflow(
     const node = nodeById.get(nodeId);
     const data = (node?.data ?? {}) as { prompt?: unknown; model?: unknown };
     const fileName = asset.storagePath.split('/').pop() || `canvas-${asset.kind}`;
-    void registerCanvasOutput({
-      brandProfileId,
-      kind: asset.kind,
-      bucket: asset.bucket,
-      storagePath: asset.storagePath,
-      fileName,
-      mimeType: asset.mimeType,
-      originRef: {
-        kind: 'canvas',
-        roomId: options.roomId ?? null,
-        nodeId,
-        prompt: typeof data.prompt === 'string' ? data.prompt : null,
-        model: typeof data.model === 'string' ? data.model : null,
-        generator: node?.type ?? null,
+    void registerCanvasOutput(
+      {
+        brandProfileId,
+        kind: asset.kind,
+        bucket: asset.bucket,
+        storagePath: asset.storagePath,
+        fileName,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.sizeBytes,
+        originRef: {
+          kind: 'canvas',
+          roomId: options.roomId ?? null,
+          nodeId,
+          prompt: typeof data.prompt === 'string' ? data.prompt : null,
+          model: typeof data.model === 'string' ? data.model : null,
+          generator: node?.type ?? null,
+        },
       },
-    });
+      asset.kind === 'video' ? { videoSource: asset.url } : undefined,
+    );
   };
 
   // Stamp the signature of the inputs that produced this output so a later run
@@ -1061,6 +1191,7 @@ export async function executeWorkflow(
         storagePath: output.storagePath,
         url: persistentUrl,
         mimeType,
+        sizeBytes: output.sizeBytes,
       });
     } else if (output.type === 'video') {
       const persistentUrl = output.url && !output.url.startsWith('data:') ? output.url : undefined;
@@ -1080,6 +1211,7 @@ export async function executeWorkflow(
         storagePath: output.storagePath,
         url: persistentUrl,
         mimeType: 'video/mp4',
+        sizeBytes: output.sizeBytes,
       });
     } else if (output.type === 'text') {
       useStudioStore.getState().updateNodeData(nodeId, {
@@ -1221,6 +1353,13 @@ export async function executeWorkflow(
           previousInteractionId: result.interactionId,
         });
         useStudioStore.getState().triggerSave();
+        registerCanvasIfDurable(nodeId, {
+          kind: 'video',
+          bucket: result.output.storageBucket,
+          storagePath: result.output.storagePath,
+          url: result.output.url,
+          mimeType: 'video/mp4',
+        });
         updateNodeStatus(nodeId, 'completed');
         return true;
       }

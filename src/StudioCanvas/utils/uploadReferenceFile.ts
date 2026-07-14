@@ -18,11 +18,6 @@ import type { CanvasDocument, DocumentNodeData, ImageNodeData, VideoNodeData } f
 
 export const REFERENCE_UPLOAD_BUCKET = MEDIA_LIBRARY_BUCKET;
 
-// Client kill switch (default on). Set NEXT_PUBLIC_AI_STUDIO_UPLOAD_ON_DROP=false
-// to keep dropped files as local base64 only (legacy behavior).
-export const isUploadOnDropEnabled = (): boolean =>
-  process.env.NEXT_PUBLIC_AI_STUDIO_UPLOAD_ON_DROP !== 'false';
-
 export interface UploadReferenceResult {
   signedUrl: string;
   storagePath: string;

@@ -9,10 +9,11 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
-import type { UnfurlMediaItem } from '@continuum/contracts';
+import { createNodeData, type UnfurlMediaItem } from '@continuum/contracts';
 import {
   AtSign,
   FolderOpen,
+  Keyboard,
   Plus,
   ScanLine,
   ShieldCheck,
@@ -57,6 +58,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import {
   Select,
@@ -103,6 +105,7 @@ import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
+import { resolveSidebarDropTarget } from '../utils/resolveSidebarDropTarget';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorReferenceMode,
@@ -115,6 +118,7 @@ import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
+import { SourceDropNodePicker } from './SourceDropNodePicker';
 import { Toolbar } from './Toolbar';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -285,11 +289,11 @@ const createNodeConfig = (
   type: StudioCanvasNodeType,
   options?: { model?: VideoGeneratorModel },
 ): { data: Record<string, unknown>; style?: Record<string, number> } => {
+  // One factory for the node defaults (@continuum/contracts) — the canvas, the
+  // edge-drop menu and the agent write path must create the SAME node. It also sizes
+  // the node to its aspect ratio, so a 1:1 generation is not born in a 16:9 box.
   if (type === 'nanoGen') {
-    return {
-      data: { model: 'nano-banana-2', imageSize: '512px', positivePrompt: '', aspectRatio: '16:9' },
-      style: { width: 400, height: 225 },
-    };
+    return createNodeData('nanoGen');
   }
 
   if (type === 'videoGen' || type === 'veoDirector' || type === 'veoFast') {
@@ -765,6 +769,7 @@ function Flow({
     copySelectedNodes,
     cutSelectedNodes,
     pasteNodes,
+    defaultEdgeType,
   } = useStudioStore();
 
   const { remoteCursors, updateCursor, isLoading } = realtime;
@@ -798,7 +803,13 @@ function Flow({
     return () => cancelAnimationFrame(handle);
   }, [nodes, fitView]);
 
-  const { onConnectStart, onConnectEnd } = useEdgeDropNode();
+  const {
+    onConnectStart,
+    onConnectEnd,
+    pendingSourceDrop,
+    resolveSourceDropPick,
+    dismissSourceDropPick,
+  } = useEdgeDropNode();
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
@@ -1286,10 +1297,47 @@ function Flow({
         style,
       } as StudioNode;
 
-      setNodes(nodes.concat(newNode));
+      const dropTarget = resolveSidebarDropTarget(
+        event.clientX,
+        event.clientY,
+        assetNodeType,
+        nodes,
+        edges,
+      );
+
+      if (dropTarget) {
+        const newEdge: Edge = {
+          id: `e-${newNode.id}-${dropTarget.nodeId}-${Date.now()}`,
+          source: newNode.id,
+          sourceHandle: assetNodeType,
+          target: dropTarget.nodeId,
+          targetHandle: dropTarget.handleId,
+          type: 'dataType',
+          className: 'studio-edge studio-edge--connected',
+          data: {
+            dataType: assetNodeType,
+            pathType: defaultEdgeType,
+          },
+        };
+        setNodes(nodes.concat(newNode));
+        setEdges(edges.concat(newEdge));
+      } else {
+        setNodes(nodes.concat(newNode));
+      }
+
       triggerSave();
     },
-    [nodes, screenToFlowPosition, setNodes, show, takeSnapshot, triggerSave],
+    [
+      nodes,
+      edges,
+      screenToFlowPosition,
+      setNodes,
+      setEdges,
+      show,
+      takeSnapshot,
+      triggerSave,
+      defaultEdgeType,
+    ],
   );
 
   const isValidConnectionCallback = useCallback(
@@ -1328,6 +1376,9 @@ function Flow({
             onConnectEnd={onConnectEnd}
             isValidConnection={isValidConnectionCallback}
             connectionLineComponent={ConnectionLine}
+            // Default 20px is tight against our 12-16px handles, especially on
+            // video-generator nodes stacking up to 6 target handles closely.
+            connectionRadius={24}
             // While a modal editor owns the keyboard, disable React Flow's own
             // Backspace/Delete node-deletion. Spread conditionally: passing
             // deleteKeyCode={undefined} would still override the Canvas default
@@ -1415,6 +1466,15 @@ function Flow({
               />
             ))}
 
+            {pendingSourceDrop && (
+              <SourceDropNodePicker
+                candidates={pendingSourceDrop.candidates}
+                screenPosition={pendingSourceDrop.screenPosition}
+                onSelect={resolveSourceDropPick}
+                onDismiss={dismissSourceDropPick}
+              />
+            )}
+
             <Panel
               position="bottom-right"
               className="mb-4 mr-4 border-none bg-transparent p-0 shadow-none"
@@ -1422,29 +1482,44 @@ function Flow({
               <AIStudioChat brandProfileId={brandProfileId || ''} roomId={activeRoomId} />
             </Panel>
 
-            <Panel
-              position="bottom-center"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-background/80 backdrop-blur border-border/50"
-            >
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">
-                ⌘C
-              </kbd>
-              <span className="text-2xs text-muted-foreground">copy</span>
-              <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">
-                ⌘V
-              </kbd>
-              <span className="text-2xs text-muted-foreground">paste</span>
-              <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">
-                ⌘X
-              </kbd>
-              <span className="text-2xs text-muted-foreground">cut</span>
-              <span className="text-muted-foreground/30 select-none mx-0.5">·</span>
-              <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1.5 py-0.5 text-2xs font-mono text-muted-foreground">
-                Del
-              </kbd>
-              <span className="text-2xs text-muted-foreground">delete</span>
+            <Panel position="bottom-center" className="border-none bg-transparent p-0 shadow-none">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-2 bg-background/90 px-2.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
+                    aria-label="Show canvas keyboard shortcuts"
+                  >
+                    <Keyboard className="h-3.5 w-3.5" />
+                    Shortcuts
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="center" side="top" className="w-64 p-3">
+                  <p className="mb-2 text-xs font-medium text-foreground">Canvas shortcuts</p>
+                  <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">
+                    {[
+                      ['Copy selected nodes', '⌘ C'],
+                      ['Paste nodes', '⌘ V'],
+                      ['Cut selected nodes', '⌘ X'],
+                      ['Delete selected nodes', 'Delete'],
+                      ['Pan mode', 'H'],
+                      ['Select mode', 'V'],
+                      ['Fit view', 'Shift F'],
+                    ].map(([label, shortcut]) => (
+                      <div key={label} className="contents">
+                        <dt className="text-muted-foreground">{label}</dt>
+                        <dd>
+                          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground">
+                            {shortcut}
+                          </kbd>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </PopoverContent>
+              </Popover>
             </Panel>
           </Canvas>
         </ContextMenuTrigger>
@@ -1576,8 +1651,7 @@ function Flow({
         </ContextMenuContent>
       </ContextMenu>
       {/* Overlaid on the canvas rather than mounted as a React Flow Panel: the hero
-          state centres itself on an empty canvas, which the Panel grid cannot express,
-          and bottom-center is already taken by the keyboard-hint strip. */}
+          state centres itself on an empty canvas, which the Panel grid cannot express. */}
       <CanvasComposer
         brandProfileId={brandProfileId}
         roomId={activeRoomId}

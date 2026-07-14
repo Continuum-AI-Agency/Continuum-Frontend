@@ -1,4 +1,4 @@
-import { MODEL_CATALOG } from '@continuum/contracts';
+import { imageSizeSchema, MODEL_CATALOG } from '@continuum/contracts';
 import { z } from "zod";
 
 import { providerAspectRatioOptions } from "@/lib/schemas/aiStudio";
@@ -52,7 +52,7 @@ export const chatImageRequestBase = z.object({
   firstFrame: refImageSchema.optional(),
   lastFrame: refImageSchema.optional(),
   referenceVideo: refVideoSchema.optional(),
-  imageSize: z.enum(["1K", "2K", "4K"]).optional(),
+  imageSize: imageSizeSchema.optional(),
 });
 
 export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, ctx) => {

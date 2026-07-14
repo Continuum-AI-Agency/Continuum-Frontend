@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import React from 'react';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import { ImageNode } from './ImageNode';
-import { useStudioStore } from '../stores/useStudioStore';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { useStudioStore } from '../stores/useStudioStore';
+import { ImageNode } from './ImageNode';
 
 const updateNodeData = mock();
 let originalUpdateNodeData: any;
@@ -49,7 +49,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...defaultProps} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.getByText('Upload Image')).toBeTruthy();
@@ -69,7 +69,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithImage} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     const img = screen.getByAltText('Preview');
@@ -85,7 +85,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...defaultProps} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     const dropTarget = container.querySelector('div.relative.group') as HTMLElement;
@@ -106,7 +106,9 @@ describe('ImageNode', () => {
         markupLayer: undefined,
         hasMarkup: false,
         fileName: undefined,
+        assetId: undefined,
         sourcePath: undefined,
+        bucket: undefined,
         sourceUrl: undefined,
       });
     });
@@ -126,7 +128,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithImage} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     fireEvent.click(screen.getByLabelText('Clear image'));
@@ -138,7 +140,9 @@ describe('ImageNode', () => {
         markupLayer: undefined,
         hasMarkup: false,
         fileName: undefined,
+        assetId: undefined,
         sourcePath: undefined,
+        bucket: undefined,
         sourceUrl: undefined,
         aspectRatio: '1:1',
       });
@@ -159,7 +163,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithImage} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.getByLabelText('Markup image')).toBeTruthy();
@@ -171,7 +175,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...defaultProps} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.queryByLabelText('Markup image')).toBeNull();
@@ -194,7 +198,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithMarkup} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.getByText('Marked up')).toBeTruthy();
@@ -217,7 +221,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithMarkup} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     const overlayImg = screen.getByAltText('Markup overlay');
@@ -242,7 +246,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithMarkup} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     fireEvent.click(screen.getByLabelText('Clear image'));
@@ -254,7 +258,9 @@ describe('ImageNode', () => {
         markupLayer: undefined,
         hasMarkup: false,
         fileName: undefined,
+        assetId: undefined,
         sourcePath: undefined,
+        bucket: undefined,
         sourceUrl: undefined,
         aspectRatio: '1:1',
       });
@@ -276,7 +282,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...propsWithMarkup} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     const markupButton = screen.getByLabelText('Markup image');
@@ -286,7 +292,10 @@ describe('ImageNode', () => {
   it('should display a processing badge while a reference image is inlining', () => {
     const props = {
       ...defaultProps,
-      data: { image: 'https://scontent.cdninstagram.com/a.jpg', referenceStatus: 'processing' as const },
+      data: {
+        image: 'https://scontent.cdninstagram.com/a.jpg',
+        referenceStatus: 'processing' as const,
+      },
     };
 
     render(
@@ -294,7 +303,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...props} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.getByText('Processing')).toBeTruthy();
@@ -311,7 +320,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...props} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.getByText('Ready')).toBeTruthy();
@@ -328,7 +337,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...props} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.getByText('Failed')).toBeTruthy();
@@ -345,7 +354,7 @@ describe('ImageNode', () => {
         <ReactFlowProvider>
           <ImageNode {...props} />
         </ReactFlowProvider>
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     expect(screen.queryByText('Processing')).toBeNull();

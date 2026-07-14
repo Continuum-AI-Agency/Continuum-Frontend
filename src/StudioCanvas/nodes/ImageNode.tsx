@@ -1,3 +1,4 @@
+import type { ImageReformatCompletedData } from '@continuum/contracts';
 import {
   Cross1Icon,
   ImageIcon,
@@ -14,7 +15,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, Loader2, Scaling, Trash2, XCircle } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -22,6 +23,7 @@ import {
   ImageMarkupDialog,
   type ImageMarkupSaveResult,
 } from '@/components/ai-studio/markup/ImageMarkupDialog';
+import { ImageReformatDialog } from '@/components/library/reformat/ImageReformatDialog';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -59,11 +61,12 @@ import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
-import type { ImageNodeData, ImageReferenceType } from '../types';
+import type { ImageNodeData, ImageReferenceType, StudioNode } from '../types';
 import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { parseDataUrl } from '../utils/dataUrl';
+import { resolveCollisions } from '../utils/nodeCollisions';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { isUploadOnDropEnabled, uploadReferenceFile } from '../utils/uploadReferenceFile';
+import { uploadReferenceFile } from '../utils/uploadReferenceFile';
 import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -82,6 +85,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
   const [markupOpen, setMarkupOpen] = useState(false);
+  const [reformatOpen, setReformatOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -214,6 +218,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       markupLayer: undefined,
       hasMarkup: false,
       fileName: undefined,
+      assetId: undefined,
       sourcePath: undefined,
       bucket: undefined,
       sourceUrl: undefined,
@@ -251,7 +256,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   // remains the emergency fallback if the upload fails.
   const uploadLocalReference = useCallback(
     (file: File) => {
-      if (!isUploadOnDropEnabled() || !brandId) return;
+      if (!brandId) return;
       void uploadReferenceFile({ nodeId: id, file, brandId, field: 'image' }, { updateNodeData });
     },
     [brandId, id, updateNodeData],
@@ -369,12 +374,54 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       applyPreviewImage({
         src: resolved.dataUrl,
         fileName: resolved.fileName,
+        assetId: resolved.assetId,
         sourcePath: resolved.sourcePath,
         bucket: resolved.bucket,
         sourceUrl: resolved.sourceUrl,
       });
     },
     [applyPreviewImage, fileToDataUrl, show, uploadLocalReference],
+  );
+
+  const addReformattedNode = useCallback(
+    (result: ImageReformatCompletedData) => {
+      const store = useStudioStore.getState();
+      const sourceNode = store.getNodeById(id);
+      if (!sourceNode) return;
+      const dimensions = snapNodeDimensionsToAspectRatio({
+        aspectRatio: result.aspectRatio,
+        currentWidth: 260,
+        currentHeight: 260,
+        minWidth: 200,
+        minHeight: 200,
+        fallbackWidth: 260,
+      });
+      const derivedNode: StudioNode = {
+        id: `image-reformat-${result.assetId}`,
+        type: 'image',
+        position: {
+          x: sourceNode.position.x + (sourceNode.measured?.width ?? sourceNode.width ?? 260) + 40,
+          y: sourceNode.position.y,
+        },
+        style: { width: dimensions.width, height: dimensions.height },
+        data: {
+          label: result.fileName,
+          image: result.signedUrl,
+          originalImage: result.signedUrl,
+          fileName: result.fileName,
+          assetId: result.assetId,
+          sourcePath: result.storagePath,
+          bucket: result.bucket,
+          sourceUrl: result.signedUrl,
+          aspectRatio: result.aspectRatio,
+          referenceStatus: 'ready',
+        },
+      };
+      store.setNodes(resolveCollisions([...store.nodes, derivedNode]) as StudioNode[]);
+      store.triggerSave();
+      show({ title: `${result.aspectRatio} copy added`, variant: 'success' });
+    },
+    [id, show],
   );
 
   return (
@@ -430,6 +477,24 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   >
                     <UploadIcon className="h-3 w-3" />
                   </Button>
+                  {preview && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
+                      disabled={!data.assetId || !brandId}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setReformatOpen(true);
+                      }}
+                      title="Reformat image"
+                      aria-label="Reformat image"
+                    >
+                      <Scaling className="h-3 w-3" />
+                    </Button>
+                  )}
                   {preview && (
                     <Button
                       type="button"
@@ -617,6 +682,13 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           {preview && (
             <>
               <ContextMenuSeparator />
+              <ContextMenuItem
+                disabled={!data.assetId || !brandId}
+                onClick={() => setReformatOpen(true)}
+              >
+                <Scaling className="mr-2 h-4 w-4" />
+                Reformat Image
+              </ContextMenuItem>
               <ContextMenuItem onClick={() => setMarkupOpen(true)}>
                 <Pencil2Icon className="mr-2 h-4 w-4" />
                 Markup Image
@@ -656,6 +728,24 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+
+      {preview && data.assetId && brandId ? (
+        <ImageReformatDialog
+          open={reformatOpen}
+          onOpenChange={setReformatOpen}
+          brandId={brandId}
+          asset={{
+            id: data.assetId,
+            kind: 'image',
+            signedUrl: data.sourceUrl ?? preview,
+            width: undefined,
+            height: undefined,
+            title: data.label,
+            fileName: data.fileName ?? 'image',
+          }}
+          onCompleted={addReformattedNode}
+        />
+      ) : null}
 
       {preview && (
         <ImageMarkupDialog

@@ -1,4 +1,4 @@
-import type { BrandBookPieceKind, Edge, StudioNode } from './index';
+import type { BrandBookPieceKind, Edge, ImageSize, StudioNode } from './index';
 
 export type ExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -21,6 +21,7 @@ export type NodeOutput =
       url?: string;
       storagePath?: string;
       storageBucket?: string;
+      sizeBytes?: number;
     }
   | {
       type: 'video';
@@ -28,6 +29,7 @@ export type NodeOutput =
       posterBase64?: string;
       storagePath?: string;
       storageBucket?: string;
+      sizeBytes?: number;
     };
 
 export interface WorkflowExecutionContext {
@@ -107,7 +109,7 @@ export interface GenerationPayload {
   referenceAssetIds?: string[];
   aspectRatio?: string;
   resolution?: string;
-  imageSize?: '512px' | '1K' | '2K' | '4K';
+  imageSize?: ImageSize;
   durationSeconds?: number;
   referenceImages?: Array<{
     data?: string;

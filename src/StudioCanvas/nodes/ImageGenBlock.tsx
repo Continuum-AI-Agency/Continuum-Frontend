@@ -1,4 +1,11 @@
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import {
+  type BrandBookPieceKind,
+  coerceImageSize,
+  FIXED_IMAGE_PIXELS,
+  type ImageGeneratorModel,
+  imageSizesForModel,
+  supportsImageSize,
+} from '@continuum/contracts';
 import { CopyIcon, DownloadIcon, ImageIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
 import {
   Handle,
@@ -46,7 +53,11 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { NanoGenNodeData, StudioNode } from '../types';
-import { getAspectRatioValue, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import {
+  getAspectRatioValue,
+  simplifyAspectRatio,
+  snapNodeDimensionsToAspectRatio,
+} from '../utils/aspectRatioSizing';
 import { toggleBrandPiece } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
@@ -91,29 +102,16 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
 
   const handleModelChange = useCallback(
     (value: string) => {
-      const model = value as NanoGenNodeData['model'];
-      const currentSize = data.imageSize;
-      const isProSize = currentSize === '1K' || currentSize === '2K' || currentSize === '4K';
-      const isNano2Size = currentSize === '512px' || isProSize;
+      const model = value as ImageGeneratorModel;
 
       updateNode(id, (node) => ({
         ...node,
         data: {
           ...(node.data as NanoGenNodeData),
           model,
-          imageSize:
-            model === 'nano-banana' ||
-            model === 'gpt-image-2' ||
-            model === 'flux-2-pro' ||
-            model === 'flux-2-max'
-              ? undefined
-              : model === 'nano-banana-pro'
-                ? isProSize
-                  ? currentSize
-                  : '1K'
-                : isNano2Size
-                  ? currentSize
-                  : '512px',
+          // The new model decides what the current size means: undefined when it takes
+          // none, the same size when it still supports it, its default when it does not.
+          imageSize: coerceImageSize(model, (node.data as NanoGenNodeData).imageSize),
           maxReferenceImages:
             model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max'
               ? 1
@@ -122,7 +120,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       }));
       triggerSave();
     },
-    [data.imageSize, id, triggerSave, updateNode],
+    [id, triggerSave, updateNode],
   );
 
   const handleImageSizeChange = useCallback(
@@ -225,27 +223,59 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       console.warn('[studio] failed to re-sign expired image url', err);
     }
   }, [data, id]);
+  // The node renders its output in a fixed-ratio box inside an overflow-hidden card.
+  // When the node's own box does not carry the image's ratio the render is CLIPPED —
+  // a 1:1 image in the 400x225 default box lost its top and bottom, which read as an
+  // unrequested crop. Snap the node to what actually came back.
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement>) => {
+      const { naturalWidth, naturalHeight } = event.currentTarget;
+      if (!naturalWidth || !naturalHeight) return;
+      const rendered = simplifyAspectRatio(naturalWidth, naturalHeight);
+
+      updateNode(id, (node) => {
+        const next = snapNodeDimensionsToAspectRatio({
+          aspectRatio: rendered,
+          currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
+          currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
+          minWidth: 200,
+          minHeight: 200,
+          fallbackWidth: 400,
+        });
+
+        const current = node.style ?? {};
+        if (current.width === next.width && current.height === next.height) return node;
+        return { ...node, style: { ...current, width: next.width, height: next.height } };
+      });
+    },
+    [id, updateNode],
+  );
+
   const refImageLimit = data.maxReferenceImages ?? 14;
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = getAspectRatioValue(aspectRatio);
   const fileBaseName = `image-${id}`;
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const isHighFidelityNanoModel =
-    data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
-  const currentImageSize = data.imageSize || (data.model === 'nano-banana-2' ? '512px' : '1K');
+  const model = data.model ?? 'nano-banana-2';
+  const sizeOptions = imageSizesForModel(model);
+  const currentImageSize = coerceImageSize(model, data.imageSize);
   const modelLabel =
-    data.model === 'nano-banana-pro'
+    model === 'nano-banana-pro'
       ? 'Nano Banana Pro'
-      : data.model === 'nano-banana-2'
+      : model === 'nano-banana-2'
         ? 'Nano Banana 2'
-        : data.model === 'gpt-image-2'
+        : model === 'gpt-image-2'
           ? 'GPT Image 2'
-          : data.model === 'flux-2-pro'
+          : model === 'flux-2-pro'
             ? 'FLUX.2 Pro'
-            : data.model === 'flux-2-max'
+            : model === 'flux-2-max'
               ? 'FLUX.2 Max'
               : 'Nano Banana';
-  const generatorDescription = `${modelLabel}${isHighFidelityNanoModel ? ` • ${currentImageSize}` : ''} • ${aspectRatio}`;
+  // A model with no size parameter still renders at SOME size. Saying nothing let
+  // users believe the node had chosen one; say the size it actually produces.
+  const fixedPixels = FIXED_IMAGE_PIXELS[model];
+  const sizeLabel = currentImageSize ?? (fixedPixels ? `${fixedPixels}px (fixed)` : undefined);
+  const generatorDescription = [modelLabel, sizeLabel, aspectRatio].filter(Boolean).join(' • ');
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
@@ -331,6 +361,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         src={previewImage as string}
                         alt="Generated result"
                         className="h-full w-full object-contain"
+                        onLoad={handleImageLoad}
                         onError={handleImageError}
                       />
                     </AspectRatio>
@@ -393,6 +424,22 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               />
               <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
                 Prompt
+              </span>
+            </div>
+
+            <div
+              className="relative pointer-events-auto group/handle"
+              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+            >
+              <LimitedHandle
+                type="target"
+                position={Position.Left}
+                id="negative"
+                maxConnections={1}
+                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+              />
+              <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
+                Negative Prompt
               </span>
             </div>
 
@@ -466,19 +513,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             </ContextMenuCheckboxItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
-        {isHighFidelityNanoModel && (
+        {supportsImageSize(model) && (
           <ContextMenuSub>
             <ContextMenuSubTrigger>Size</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
-              {data.model === 'nano-banana-2' && (
-                <ContextMenuCheckboxItem
-                  checked={currentImageSize === '512px'}
-                  onClick={() => handleImageSizeChange('512px')}
-                >
-                  512px
-                </ContextMenuCheckboxItem>
-              )}
-              {(['1K', '2K', '4K'] as const).map((value) => (
+              {sizeOptions.map((value) => (
                 <ContextMenuCheckboxItem
                   key={value}
                   checked={currentImageSize === value}

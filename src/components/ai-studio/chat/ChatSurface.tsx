@@ -1,5 +1,6 @@
 'use client';
 
+import type { ImageSize } from '@continuum/contracts';
 import Image from 'next/image';
 import React from 'react';
 import { ImageMarkupDialog } from '@/components/ai-studio/markup/ImageMarkupDialog';
@@ -57,7 +58,7 @@ type ChatFormValues = {
   aspectRatio?: string;
   durationSeconds?: number;
   resolution?: string;
-  imageSize?: '1K' | '2K' | '4K';
+  imageSize?: ImageSize;
   negativePrompt?: string;
   seed?: number;
   cfgScale?: number;
