@@ -279,7 +279,7 @@ function skillToMentionSuggestion(skill: Skill, group = 'Skills'): AgentMentionS
       key: `skill:${skill.id}`,
       group,
       description: [
-        skill.kind === 'analytic' ? 'analytic' : 'creative direction',
+        skill.surface === 'visual' ? 'visual' : skill.surface === 'both' ? 'copy + visual' : 'copy',
         skill.description,
       ]
         .filter(Boolean)

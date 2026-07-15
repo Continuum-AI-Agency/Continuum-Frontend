@@ -68,7 +68,8 @@ export type SkillProposalCardData = {
   proposalId: string;
   brandId: string;
   name: string;
-  kind: 'creative_direction' | 'analytic';
+  kind: 'creative_direction';
+  surface: 'copy' | 'visual' | 'both';
   description: string | null;
   directives: string;
   tags: string[];

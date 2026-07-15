@@ -3,14 +3,23 @@
 // load_skill tool). DB rows are snake_case; these boundary shapes are camelCase
 // and the API layer maps between them.
 
-import { z } from "zod";
+import { z } from 'zod';
 
-// creative_direction: how content should look/sound/feel (the MVP focus).
-// analytic: repeatable audit / analysis workflows.
-export const skillKindSchema = z.enum(["creative_direction", "analytic"]);
+// How content should look / sound / feel. (There was historically an `analytic`
+// kind for audit workflows; nothing ever consumed it, so it has been retired —
+// every skill is creative direction now. The single-member enum is kept so DB
+// rows and the `kind` column still round-trip.)
+export const skillKindSchema = z.enum(['creative_direction']);
 export type SkillKind = z.infer<typeof skillKindSchema>;
 
-export const skillStatusSchema = z.enum(["active", "archived"]);
+// Which generator a skill steers: `copy` = text/editorial (organic agent),
+// `visual` = image/video generation (AI Studio), `both` = either. Pickers and
+// grounding filters key on this so a copy skill never clutters the visual surface
+// and a visual skill never clutters the copy surface.
+export const skillSurfaceSchema = z.enum(['copy', 'visual', 'both']);
+export type SkillSurface = z.infer<typeof skillSurfaceSchema>;
+
+export const skillStatusSchema = z.enum(['active', 'archived']);
 export type SkillStatus = z.infer<typeof skillStatusSchema>;
 
 // `directives` is the body injected into the agent's context when the skill is
@@ -29,6 +38,7 @@ export const skillSchema = z
     slug: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     kind: skillKindSchema,
+    surface: skillSurfaceSchema.default('both'),
     directives: z.string().min(1),
     tags: z.array(z.string()).default([]),
     status: skillStatusSchema,

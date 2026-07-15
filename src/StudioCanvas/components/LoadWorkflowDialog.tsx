@@ -1,9 +1,12 @@
+import {
+  Cross2Icon,
+  DotsHorizontalIcon,
+  DownloadIcon,
+  Pencil1Icon,
+  ReloadIcon,
+  TrashIcon,
+} from '@radix-ui/react-icons';
 import React from 'react';
-import { Cross2Icon, DotsHorizontalIcon, DownloadIcon, Pencil1Icon, ReloadIcon, TrashIcon } from '@radix-ui/react-icons';
-import { useReactFlow } from '@xyflow/react';
-import type { Edge } from '@xyflow/react';
-import type { StudioNode } from '../types';
-
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,15 +20,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
+  deleteAiStudioWorkflowAction,
   listAiStudioWorkflowsAction,
   updateAiStudioWorkflowAction,
-  deleteAiStudioWorkflowAction,
 } from '@/lib/ai-studio/workflowActions';
 import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
-import { useStudioStore } from '../stores/useStudioStore';
-import { normalizeWorkflowSnapshot } from '../utils/workflowSerialization';
+import { useApplyWorkflow } from '../hooks/useApplyWorkflow';
 import { filterWorkflowsByQuery, sortWorkflowsByRecency } from '../utils/workflowList';
-import { rehydrateWorkflowMediaNodes } from '../utils/rehydrateWorkflowMedia';
 
 const WORKFLOW_VISIBLE_ROWS = 6;
 const WORKFLOW_ROW_HEIGHT = 72;
@@ -89,7 +90,8 @@ function WorkflowRow({
   onRenameRequest: (workflow: AiStudioWorkflow) => void;
 }) {
   const isRenaming = mutationState.kind === 'renaming' && mutationState.workflowId === workflow.id;
-  const isConfirmingDelete = mutationState.kind === 'confirming-delete' && mutationState.workflowId === workflow.id;
+  const isConfirmingDelete =
+    mutationState.kind === 'confirming-delete' && mutationState.workflowId === workflow.id;
   const isDeleting = mutationState.kind === 'deleting' && mutationState.workflowId === workflow.id;
   const isSaving = mutationState.kind === 'saving' && mutationState.workflowId === workflow.id;
 
@@ -103,7 +105,8 @@ function WorkflowRow({
   }, [isRenaming]);
 
   if (isRenaming || isSaving) {
-    const pendingName = mutationState.kind === 'renaming' ? mutationState.pendingName : workflow.name;
+    const pendingName =
+      mutationState.kind === 'renaming' ? mutationState.pendingName : workflow.name;
     return (
       <div className="flex items-center gap-2 px-3 py-2">
         <Input
@@ -187,7 +190,9 @@ function WorkflowRow({
         onClick={() => void onApplyWorkflow(workflow)}
       >
         <p className="truncate text-sm font-medium text-primary">{workflow.name}</p>
-        {workflow.description && <p className="truncate text-xs text-secondary">{workflow.description}</p>}
+        {workflow.description && (
+          <p className="truncate text-xs text-secondary">{workflow.description}</p>
+        )}
         <p className="text-xs text-muted-foreground">
           Updated {formatTimestamp(workflow.updatedAt ?? workflow.createdAt)}
         </p>
@@ -211,9 +216,7 @@ function WorkflowRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuItem
-              onSelect={() => onRenameRequest(workflow)}
-            >
+            <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
               <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
               Rename
             </DropdownMenuItem>
@@ -254,7 +257,9 @@ function WorkflowPanel({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-primary">My Workflows</p>
-          <p className="text-xs text-muted-foreground">Your saved workflows — search, load, rename, or delete.</p>
+          <p className="text-xs text-muted-foreground">
+            Your saved workflows — search, load, rename, or delete.
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
@@ -265,7 +270,9 @@ function WorkflowPanel({
             onClick={onRefresh}
             disabled={!brandProfileId || isLoading}
             aria-label="Refresh workflows"
-            title={!brandProfileId ? 'Select a brand profile to load workflows.' : 'Refresh workflows'}
+            title={
+              !brandProfileId ? 'Select a brand profile to load workflows.' : 'Refresh workflows'
+            }
           >
             <ReloadIcon className="h-4 w-4" />
           </Button>
@@ -291,7 +298,11 @@ function WorkflowPanel({
         disabled={!brandProfileId}
       />
 
-      {!brandProfileId && <p className="text-xs text-muted-foreground">Select a brand profile to see your saved workflows.</p>}
+      {!brandProfileId && (
+        <p className="text-xs text-muted-foreground">
+          Select a brand profile to see your saved workflows.
+        </p>
+      )}
       {error && <p className="text-xs text-danger">{error}</p>}
 
       <div className="overflow-hidden rounded-md border border-subtle bg-surface">
@@ -337,8 +348,7 @@ export function LoadWorkflowDialog({
   onOpenChange,
   showTrigger = true,
 }: LoadWorkflowDialogProps) {
-  const { setNodes, setEdges, takeSnapshot, defaultEdgeType } = useStudioStore();
-  const { fitView } = useReactFlow();
+  const applyWorkflowToCanvas = useApplyWorkflow();
   const { show } = useToast();
   const [internalOpen, setInternalOpen] = React.useState(false);
   const [workflows, setWorkflows] = React.useState<AiStudioWorkflow[]>([]);
@@ -355,7 +365,7 @@ export function LoadWorkflowDialog({
       }
       onOpenChange?.(nextOpen);
     },
-    [onOpenChange, open]
+    [onOpenChange, open],
   );
 
   const fetchWorkflows = React.useCallback(async () => {
@@ -384,27 +394,17 @@ export function LoadWorkflowDialog({
     }
   }, [fetchWorkflows, isOpen]);
 
-  const filteredWorkflows = React.useMemo(() => filterWorkflowsByQuery(workflows, query), [query, workflows]);
+  const filteredWorkflows = React.useMemo(
+    () => filterWorkflowsByQuery(workflows, query),
+    [query, workflows],
+  );
 
   const applyWorkflow = React.useCallback(
     async (workflow: AiStudioWorkflow) => {
-      const snapshot = normalizeWorkflowSnapshot(
-        { nodes: (workflow.nodes ?? []) as unknown as StudioNode[], edges: (workflow.edges ?? []) as unknown as Edge[] },
-        defaultEdgeType
-      );
-      const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes);
-
-      takeSnapshot();
-      setNodes(hydratedNodes);
-      setEdges(snapshot.edges);
-      requestAnimationFrame(() => {
-        fitView({ padding: 0.2, duration: 300 });
-      });
-
-      show({ title: 'Workflow loaded', description: workflow.name, variant: 'success' });
+      await applyWorkflowToCanvas(workflow);
       setOpen(false);
     },
-    [defaultEdgeType, fitView, setEdges, setNodes, setOpen, show, takeSnapshot]
+    [applyWorkflowToCanvas, setOpen],
   );
 
   const handleRenameRequest = React.useCallback((workflow: AiStudioWorkflow) => {
@@ -429,7 +429,7 @@ export function LoadWorkflowDialog({
         setMutationState({ kind: 'idle' });
       }
     },
-    [brandProfileId, fetchWorkflows, show]
+    [brandProfileId, fetchWorkflows, show],
   );
 
   const handleDeleteRequest = React.useCallback((workflowId: string) => {
@@ -452,7 +452,7 @@ export function LoadWorkflowDialog({
         setMutationState({ kind: 'idle' });
       }
     },
-    [brandProfileId, fetchWorkflows, show]
+    [brandProfileId, fetchWorkflows, show],
   );
 
   const handleMutationCancel = React.useCallback(() => {

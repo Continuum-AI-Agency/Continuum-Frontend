@@ -20,7 +20,12 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const kindLabel = proposal.kind === 'analytic' ? 'Analytic' : 'Creative direction';
+  const surfaceLabel =
+    proposal.surface === 'visual'
+      ? 'Visual'
+      : proposal.surface === 'both'
+        ? 'Copy + Visual'
+        : 'Copy';
 
   async function save() {
     if (saving || saved) return;
@@ -31,6 +36,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
         brandId: proposal.brandId,
         name: name.trim(),
         kind: proposal.kind,
+        surface: proposal.surface,
         description: proposal.description,
         directives: directives.trim(),
         tags: proposal.tags,
@@ -48,7 +54,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
     <AgentDecisionCard className="p-4">
       <AgentCardEyebrow
         label="New skill"
-        right={<span className="shrink-0 text-xs text-muted-foreground">{kindLabel}</span>}
+        right={<span className="shrink-0 text-xs text-muted-foreground">{surfaceLabel}</span>}
       />
       {editing ? (
         <input
@@ -82,9 +88,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
 
       <div className="mt-3 flex items-center gap-2">
         {saved ? (
-          <span className="text-sm font-medium text-emerald-600">
-            Saved to your brand skills
-          </span>
+          <span className="text-sm font-medium text-emerald-600">Saved to your brand skills</span>
         ) : (
           <>
             <AgentButton

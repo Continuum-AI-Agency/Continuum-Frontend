@@ -80,8 +80,10 @@ export function GroundingPopover({
   const { brandTokens } = useBrandBook(brandId);
   const availability = React.useMemo(() => brandBookAvailability(brandTokens), [brandTokens]);
   const { all, isLoading } = useBrandSkills(brandId);
+  // Canvas nodes drive visual generation, so only visual/both skills belong here —
+  // copy skills steer the organic agent's text.
   const creativeSkills = React.useMemo(
-    () => all.filter((skill) => skill.kind === 'creative_direction' && skill.status === 'active'),
+    () => all.filter((skill) => skill.surface !== 'copy' && skill.status === 'active'),
     [all],
   );
 

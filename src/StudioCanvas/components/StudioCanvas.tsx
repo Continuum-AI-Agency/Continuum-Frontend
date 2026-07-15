@@ -113,10 +113,10 @@ import {
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
-import { CreateSkillFromSelectionDialog } from './CreateSkillFromSelectionDialog';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
+import { SaveStarterDialog } from './SaveStarterDialog';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { SourceDropNodePicker } from './SourceDropNodePicker';
 import { Toolbar } from './Toolbar';
@@ -814,13 +814,13 @@ function Flow({
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
-  const [isCreateSkillOpen, setIsCreateSkillOpen] = useState(false);
-  const [skillSelectionNodes, setSkillSelectionNodes] = useState<StudioNode[]>([]);
+  const [isSaveStarterOpen, setIsSaveStarterOpen] = useState(false);
+  const [starterSelectionNodes, setStarterSelectionNodes] = useState<StudioNode[]>([]);
   const hydratedPlannerSeedRef = useRef<string | null>(null);
 
-  const openCreateSkillFromSelection = useCallback(() => {
-    setSkillSelectionNodes(nodes.filter((node) => node.selected));
-    setIsCreateSkillOpen(true);
+  const openSaveStarter = useCallback(() => {
+    setStarterSelectionNodes(nodes.filter((node) => node.selected));
+    setIsSaveStarterOpen(true);
   }, [nodes]);
 
   // The Composer builds; the user runs. Same execution path as the toolbar's Run
@@ -1588,10 +1588,10 @@ function Flow({
           <ContextMenuItem
             inset
             disabled={!nodes.some((node) => node.selected)}
-            onSelect={openCreateSkillFromSelection}
+            onSelect={openSaveStarter}
           >
             <Sparkles className="mr-2 h-4 w-4" />
-            Create skill from selection
+            Save selection as starter
           </ContextMenuItem>
 
           <ContextMenuItem
@@ -1665,11 +1665,11 @@ function Flow({
         onOpenChange={setIsLoadWorkflowOpen}
         showTrigger={false}
       />
-      <CreateSkillFromSelectionDialog
-        open={isCreateSkillOpen}
-        onOpenChange={setIsCreateSkillOpen}
-        brandId={brandProfileId}
-        nodes={skillSelectionNodes}
+      <SaveStarterDialog
+        open={isSaveStarterOpen}
+        onOpenChange={setIsSaveStarterOpen}
+        brandProfileId={brandProfileId}
+        nodes={starterSelectionNodes}
       />
     </div>
   );

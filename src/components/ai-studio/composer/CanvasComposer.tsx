@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { StarterPickerButton } from './StarterPickerButton';
 import {
   type CanvasComposerState,
   type ComposerTurn,
@@ -96,6 +97,7 @@ export function CanvasComposer({
       >
         {expanded ? <Cross2Icon /> : <ChatBubbleIcon />}
       </Button>
+      <StarterPickerButton brandProfileId={brandProfileId} />
       <Textarea
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}

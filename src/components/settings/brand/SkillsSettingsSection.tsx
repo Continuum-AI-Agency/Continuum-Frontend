@@ -1,9 +1,9 @@
 'use client';
 
 // The skills browser for Settings → Skills — the one place skills are authored.
-// Home for the creative-direction + analytic skills the AI Studio canvas and the
-// organic agent apply. The agent chat only *applies* skills (composer picker /
-// @-mention) and deep-links here to manage them.
+// Home for the creative-direction skills the AI Studio canvas (visual surface) and
+// the organic agent (copy surface) apply. The agent chat only *applies* skills
+// (composer picker / @-mention) and deep-links here to manage them.
 
 import type { Skill } from '@continuum/contracts';
 import { ChevronLeft, Lock } from 'lucide-react';

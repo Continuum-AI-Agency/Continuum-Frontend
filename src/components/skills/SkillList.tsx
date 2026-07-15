@@ -21,6 +21,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SurfaceBadge({ surface }: { surface: Skill['surface'] }) {
+  const label = surface === 'visual' ? 'Visual' : surface === 'both' ? 'Both' : 'Copy';
+  return (
+    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      {label}
+    </span>
+  );
+}
+
 // Browse list for the skills browser: the brand's own skills (editable /
 // archivable) and the read-only first-party library.
 export function SkillList({
@@ -65,7 +74,10 @@ export function SkillList({
                 onClick={() => onEditAction(skill)}
                 className="min-w-0 flex-1 text-left"
               >
-                <span className="block truncate text-sm font-medium">{skill.name}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{skill.name}</span>
+                  <SurfaceBadge surface={skill.surface} />
+                </span>
                 {skill.description && (
                   <span className="block truncate text-xs text-muted-foreground">
                     {skill.description}
@@ -107,7 +119,10 @@ export function SkillList({
               className="flex items-start justify-between gap-2 rounded-md border border-dashed border-border/60 px-2.5 py-1.5 text-left"
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{skill.name}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{skill.name}</span>
+                  <SurfaceBadge surface={skill.surface} />
+                </span>
                 {skill.description && (
                   <span className="block truncate text-xs text-muted-foreground">
                     {skill.description}

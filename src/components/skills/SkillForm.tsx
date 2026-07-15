@@ -1,6 +1,6 @@
 'use client';
 
-import type { Skill, SkillKind } from '@continuum/contracts';
+import type { Skill, SkillSurface } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -15,9 +15,12 @@ type Props = {
   onSavedAction: () => void;
 };
 
-const KINDS: { value: SkillKind; label: string }[] = [
-  { value: 'creative_direction', label: 'Creative direction' },
-  { value: 'analytic', label: 'Analytic' },
+// Which generator the skill steers. Copy skills surface in the organic composer;
+// visual skills surface on the AI Studio canvas; both appear in each.
+const SURFACES: { value: SkillSurface; label: string }[] = [
+  { value: 'copy', label: 'Copy' },
+  { value: 'visual', label: 'Visual' },
+  { value: 'both', label: 'Both' },
 ];
 
 const parseTags = (raw: string): string[] =>
@@ -31,7 +34,7 @@ const parseTags = (raw: string): string[] =>
 // brand-skill endpoints; library templates are never edited here.
 export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
-  const [kind, setKind] = useState<SkillKind>(initial?.kind ?? 'creative_direction');
+  const [surface, setSurface] = useState<SkillSurface>(initial?.surface ?? 'both');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [directives, setDirectives] = useState(initial?.directives ?? '');
   const [tags, setTags] = useState((initial?.tags ?? []).join(', '));
@@ -48,7 +51,7 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
       if (initial) {
         await updateBrandSkill(initial.id, {
           name: name.trim(),
-          kind,
+          surface,
           description: description.trim() || null,
           directives: directives.trim(),
           tags: parseTags(tags),
@@ -57,7 +60,8 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
         await createBrandSkill({
           brandId,
           name: name.trim(),
-          kind,
+          kind: 'creative_direction',
+          surface,
           description: description.trim() || null,
           directives: directives.trim(),
           tags: parseTags(tags),
@@ -83,20 +87,20 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
       />
 
       <div className="flex gap-1.5">
-        {KINDS.map((k) => (
+        {SURFACES.map((s) => (
           <button
-            key={k.value}
+            key={s.value}
             type="button"
-            onClick={() => setKind(k.value)}
-            aria-pressed={kind === k.value}
+            onClick={() => setSurface(s.value)}
+            aria-pressed={surface === s.value}
             className={cn(
               'flex-1 rounded-md border px-2 py-1 text-sm font-medium transition-colors',
-              kind === k.value
+              surface === s.value
                 ? 'border-transparent bg-primary/10 text-foreground'
                 : 'border-border text-muted-foreground hover:bg-muted/60',
             )}
           >
-            {k.label}
+            {s.label}
           </button>
         ))}
       </div>

@@ -334,12 +334,14 @@ function parseSkillProposalCard(event: Record<string, unknown>): SkillProposalCa
   const name = readNonEmptyString(payload.name);
   const directives = typeof payload.directives === 'string' ? payload.directives : '';
   if (!proposalId || !brandId || !name || !directives) return null;
-  const kind = payload.kind === 'analytic' ? 'analytic' : 'creative_direction';
+  const surface =
+    payload.surface === 'visual' || payload.surface === 'both' ? payload.surface : 'copy';
   return {
     proposalId,
     brandId,
     name,
-    kind,
+    kind: 'creative_direction' as const,
+    surface,
     description: typeof payload.description === 'string' ? payload.description : null,
     directives,
     tags: Array.isArray(payload.tags)

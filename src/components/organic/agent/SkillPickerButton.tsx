@@ -37,6 +37,12 @@ export function SkillPickerButton({
 }: Props) {
   const [open, setOpen] = useState(false);
 
+  // The organic composer steers copy, so only copy/both skills belong here —
+  // `visual` skills are for the AI Studio canvas.
+  const isCopySurface = (skill: Skill) => skill.surface !== 'visual';
+  const copySkills = skills.filter(isCopySurface);
+  const copyTemplates = templates.filter(isCopySurface);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -59,7 +65,7 @@ export function SkillPickerButton({
                 : 'No skills yet — ask the agent to save one (e.g. “save this as a skill”), or create one in Settings.'}
             </CommandEmpty>
             <CommandGroup heading="Brand skills">
-              {skills.map((skill) => (
+              {copySkills.map((skill) => (
                 <CommandItem
                   key={skill.id}
                   value={`${skill.name} ${skill.description ?? ''}`}
@@ -77,9 +83,9 @@ export function SkillPickerButton({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {templates.length > 0 && (
+            {copyTemplates.length > 0 && (
               <CommandGroup heading="Library">
-                {templates.map((skill) => (
+                {copyTemplates.map((skill) => (
                   <CommandItem
                     key={skill.id}
                     value={`${skill.name} ${skill.description ?? ''}`}
