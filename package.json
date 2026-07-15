@@ -10,9 +10,10 @@
     "@radix-ui/react-primitive": "2.1.7"
   },
   "scripts": {
-    "dev": "bun run --bun next dev --turbopack",
-    "build": "bun run --bun next build --turbopack",
-    "start": "next start",
+    "dev": "bun --no-env-file scripts/run-frontend.ts --dev",
+    "dev:prod-supabase": "NEXT_PUBLIC_API_URL=http://localhost:4000 bun --no-env-file scripts/run-frontend.ts --dev --supabase=production",
+    "build": "bun --no-env-file scripts/run-frontend.ts --build",
+    "start": "bun --no-env-file scripts/run-frontend.ts --start",
     "lint": "cd .. && bun run agent:check -- --scope Continuum-Frontend",
     "typecheck": "bunx tsc --noEmit",
     "tests": "bun test --path-ignore-patterns '**/e2e/**'",

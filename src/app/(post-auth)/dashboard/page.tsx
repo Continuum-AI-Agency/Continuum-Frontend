@@ -1,70 +1,33 @@
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
-import { fetchBrandBook } from "@/lib/brands/brandBook";
-import { HomeBaseDashboard } from "@/components/dashboard/HomeBaseDashboard";
-import {
-  deriveDashboardSetup,
-  hasAnyAccount,
-} from "@/components/dashboard/first-run/setupState";
-import { PaidDashboardView } from "@/components/dashboard/views/PaidDashboardView";
-import { OrganicDashboardDataWrapper } from "@/components/dashboard/server/OrganicDashboardDataWrapper";
-import { PaidWidgetSkeleton, WidgetSkeleton } from "@/components/dashboard/skeletons/DashboardSkeletons";
+import { readLatestDailyDashboardSnapshot } from "@/lib/dashboard/dailySnapshot.server";
+import { DailyFocusDashboard } from "@/components/dashboard/DailyFocusDashboard";
+import { DailyDashboardWarmOnMount } from "@/components/dashboard/DailyDashboardWarmOnMount";
 
 type DashboardPageProps = {
   searchParams?: Promise<{ view?: string | string[] }>;
 };
 
-function resolveDashboardView(value: string | string[] | undefined) {
-  return value === "paid" ? "paid" : "organic";
-}
-
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
-  const activeView = resolveDashboardView(params?.view);
-  const { activeBrandId, user } = await getActiveBrandContext();
+  if (params?.view === "organic") redirect("/organic?tab=metrics");
+  if (params?.view === "paid") redirect("/scale");
+  const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
-  // First-run setup signals. fetchBrandIntegrationSummary is React-cache()d and
-  // is called again inside OrganicDashboardDataWrapper, so this does not add a
-  // second round-trip for the organic view.
-  const [brandIntegrations, userIntegrations, brandBook] = await Promise.all([
-    fetchBrandIntegrationSummary(activeBrandId),
-    user?.id
-      ? fetchUserIntegrationSummary(user.id)
-      : Promise.resolve(null),
-    fetchBrandBook(activeBrandId),
-  ]);
-
-  const setup = deriveDashboardSetup({
-    hasConnectedProviders: hasAnyAccount(userIntegrations),
-    hasAssignedAccounts: hasAnyAccount(brandIntegrations),
-    brandBook,
-  });
-
-  const activeViewSlot =
-    activeView === "paid" ? (
-      <Suspense fallback={<PaidWidgetSkeleton />}>
-        <PaidDashboardView brandId={activeBrandId} />
-      </Suspense>
-    ) : (
-      <Suspense fallback={<WidgetSkeleton />}>
-        <OrganicDashboardDataWrapper brandId={activeBrandId} />
-      </Suspense>
-    );
+  const snapshot = await readLatestDailyDashboardSnapshot(activeBrandId);
+  const timezone = snapshot?.document.timezone ?? "UTC";
+  const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(dateParts.map((part) => [part.type, part.value]));
+  const localDate = `${values.year}-${values.month}-${values.day}`;
+  const stale = !snapshot || snapshot.localDate !== localDate;
 
   return (
-    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full min-w-0 overflow-hidden">
-      <HomeBaseDashboard
-        activeView={activeView}
-        activeViewSlot={activeViewSlot}
-        setup={setup}
-        brandBookRefreshedAt={brandBook?.refreshed_at ?? null}
-      />
+    <div className="min-h-[var(--workspace-min-height,600px)] w-full min-w-0">
+      <DailyDashboardWarmOnMount brandId={activeBrandId} localDate={localDate} shouldWarm={stale} />
+      <DailyFocusDashboard document={snapshot?.document ?? null} generatedAt={snapshot?.generatedAt} stale={stale} />
     </div>
   );
 }

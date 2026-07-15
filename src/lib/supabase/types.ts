@@ -1538,6 +1538,7 @@ export type Database = {
           logo_path: string | null
           target_audience: Json | null
           tier: number
+          timezone: string
           updated_at: string
         }
         Insert: {
@@ -1557,6 +1558,7 @@ export type Database = {
           logo_path?: string | null
           target_audience?: Json | null
           tier?: number
+          timezone?: string
           updated_at?: string
         }
         Update: {
@@ -1576,6 +1578,7 @@ export type Database = {
           logo_path?: string | null
           target_audience?: Json | null
           tier?: number
+          timezone?: string
           updated_at?: string
         }
         Relationships: []
@@ -2420,6 +2423,66 @@ export type Database = {
             foreignKeyName: "creative_strategy_reports_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: true
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_daily_snapshots: {
+        Row: {
+          brand_id: string
+          composer_version: string
+          document: Json
+          generated_at: string
+          id: string
+          input_fingerprint: string
+          local_date: string
+          scoring_version: string
+          selection_trace: Json
+          source_watermarks: Json
+          status: string
+          timezone: string
+        }
+        Insert: {
+          brand_id: string
+          composer_version: string
+          document: Json
+          generated_at?: string
+          id?: string
+          input_fingerprint: string
+          local_date: string
+          scoring_version: string
+          selection_trace?: Json
+          source_watermarks?: Json
+          status: string
+          timezone: string
+        }
+        Update: {
+          brand_id?: string
+          composer_version?: string
+          document?: Json
+          generated_at?: string
+          id?: string
+          input_fingerprint?: string
+          local_date?: string
+          scoring_version?: string
+          selection_trace?: Json
+          source_watermarks?: Json
+          status?: string
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_daily_snapshots_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "dashboard_daily_snapshots_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
             referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
           },

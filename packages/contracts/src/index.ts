@@ -5,6 +5,7 @@ export * from './automations/index';
 export * from './brands/index';
 export * from './competitor-spy/index';
 export * from './creative-strategy/index';
+export * from './dashboard/index';
 export * from './documents/index';
 export * from './embedding/index';
 export * from './errors/integration-error';
