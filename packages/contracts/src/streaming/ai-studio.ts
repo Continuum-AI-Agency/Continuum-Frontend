@@ -10,6 +10,12 @@
 //   it fell back to inlining the bytes so the generation is not lost.
 
 import { z } from "zod";
+import {
+  responseDoneSchema,
+  responseErrorSchema,
+  toolCallSchema,
+  toolResultSchema,
+} from './agentFrames';
 
 const REFERENCE_SOURCE_MESSAGE = "reference image requires base64 data or image_url";
 
@@ -68,3 +74,43 @@ export const aiStudioVideoResultEventSchema = z.object({
   base64: z.string().optional(),
 });
 export type AiStudioVideoResultEvent = z.infer<typeof aiStudioVideoResultEventSchema>;
+
+const composerStartedSchema = z.object({
+  type: z.literal('composer.started'),
+  data: z.object({ roomId: z.string().min(1) }).loose(),
+});
+
+const composerStatusSchema = z.object({
+  type: z.literal('composer.status'),
+  data: z.object({ message: z.string() }).loose(),
+});
+
+const composerGraphSchema = z.object({
+  type: z.literal('composer.graph'),
+  data: z
+    .object({
+      nodeCount: z.number().int().nonnegative(),
+      edgeCount: z.number().int().nonnegative(),
+      addedNodeIds: z.array(z.string()),
+    })
+    .loose(),
+});
+
+const composerWarningSchema = z.object({
+  type: z.literal('composer.warning'),
+  data: z.object({ message: z.string() }).loose(),
+});
+
+export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
+  composerStartedSchema,
+  composerStatusSchema,
+  composerGraphSchema,
+  composerWarningSchema,
+  toolCallSchema,
+  toolResultSchema,
+  responseDoneSchema,
+  responseErrorSchema,
+]);
+
+export type AiStudioComposerFrame = z.infer<typeof aiStudioComposerFrameSchema>;
+export type AiStudioComposerFrameType = AiStudioComposerFrame['type'];

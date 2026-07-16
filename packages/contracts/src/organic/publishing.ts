@@ -17,10 +17,6 @@ export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
 export type PublishFormat = z.infer<typeof publishFormatSchema>;
 
 /** Match generator-written and user-written format strings at the boundary. */
-export function isCarouselFormat(format?: string | null): boolean {
-  return (format ?? '').trim().toLowerCase().includes('carousel');
-}
-
 /**
  * How a platform ingests media.
  *

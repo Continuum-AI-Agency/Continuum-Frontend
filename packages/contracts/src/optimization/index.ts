@@ -41,6 +41,7 @@ export {
 // Meta currency MAJOR->MINOR scaling, shared by the FE guardrail inputs, the apply
 // ledger/audit keys, and the Graph budget write. Never hardcode *100.
 export * from './currency';
+export * from './advisor';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
 export * from './mcp';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
