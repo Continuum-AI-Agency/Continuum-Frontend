@@ -36,6 +36,7 @@ import { fetchBrandDocuments } from '@/lib/brands/documents';
 import { fetchBrandProfileDetails } from '@/lib/brands/profile';
 import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import { fetchBillingSummary } from '@/lib/billing/server';
 import {
   createEmptyUserIntegrationSummary,
   fetchUserIntegrationSummary,
@@ -50,7 +51,7 @@ type SettingsPageProps = {
 };
 
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
-  const { activeBrandId, brandSummaries, permissions, activeBrandTier, user } =
+  const { activeBrandId, brandSummaries, permissions, user } =
     await getActiveBrandContext();
   const params = await searchParams;
   const initialSection = resolveSection(params?.section);
@@ -292,14 +293,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       </>
     );
   } else if (initialSection === 'billing') {
+    const billingSummary = await fetchBillingSummary(activeBrandId);
     activeSectionSlot = (
       <>
         {createBrandHeader(defaultBrandName)}
         <SettingsSection
           title="Billing & credits"
-          description="AI Studio tier, credits, and plan management."
+          description="Access, generation-credit health, and storage capacity for this brand."
         >
-          <BrandBillingPanel tier={activeBrandTier} />
+          <BrandBillingPanel summary={billingSummary} />
         </SettingsSection>
       </>
     );

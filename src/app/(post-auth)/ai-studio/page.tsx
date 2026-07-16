@@ -5,6 +5,7 @@ import AIStudioClient from "./AIStudioClient";
 import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { resolveInitialCanvasRoomId } from "@/lib/ai-studio/canvas-room.server";
+import { fetchEffectiveEntitlements } from '@/lib/billing/server';
 
 export const runtime = "nodejs";
 
@@ -19,13 +20,14 @@ function AIStudioSkeleton() {
 }
 
 export default async function AIStudioPage() {
-  const { activeBrandId, brandSummaries, activeBrandTier } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
-  if (activeBrandTier === 0) {
+  const entitlements = await fetchEffectiveEntitlements(activeBrandId);
+  if (!entitlements?.access.canvas) {
     return (
       <TierAccessRedirect description="AI Studio is a paid feature. Please contact an Administrator." />
     );

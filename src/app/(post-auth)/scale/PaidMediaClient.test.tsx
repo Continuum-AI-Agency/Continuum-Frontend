@@ -265,4 +265,20 @@ describe('PaidMediaClientPage brand context', () => {
     });
     expect(latestAssignedAccountIds).toBeUndefined();
   });
+
+  it('renders only Jaina when the brand has agent access without Paid Media access', () => {
+    const { container } = render(
+      <PaidMediaClientPage
+        brandProfileId="brand-a"
+        brandName="Brand A"
+        initialAccounts={[]}
+        initialAdAccountId={null}
+        jainaOnly
+      />,
+    );
+
+    expect(container.textContent).toContain('Jaina');
+    expect(container.textContent).not.toContain('Dashboard');
+    expect(container.textContent).not.toContain('Optimization');
+  });
 });

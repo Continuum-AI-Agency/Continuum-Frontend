@@ -121,6 +121,7 @@ type PaidMediaClientPageProps = {
   brandName: string;
   initialAccounts?: AdAccount[];
   initialAdAccountId?: string | null;
+  jainaOnly?: boolean;
 };
 
 type PaidMediaAccountContext = {
@@ -133,6 +134,7 @@ export default function PaidMediaClientPage({
   brandName,
   initialAccounts,
   initialAdAccountId,
+  jainaOnly = false,
 }: PaidMediaClientPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -182,7 +184,9 @@ export default function PaidMediaClientPage({
     },
     [setSelectedAdAccount],
   );
-  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(normalizedTabParam ?? 'dashboard');
+  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
+    jainaOnly ? 'jaina' : (normalizedTabParam ?? 'dashboard'),
+  );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const [isJainaFullscreen, setIsJainaFullscreen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
@@ -215,14 +219,16 @@ export default function PaidMediaClientPage({
   }, [brandProfileId, initialAdAccountId]);
 
   React.useEffect(() => {
-    if (normalizedTabParam) {
+    if (jainaOnly) {
+      setActiveTab('jaina');
+    } else if (normalizedTabParam) {
       setActiveTab((current) => (current === normalizedTabParam ? current : normalizedTabParam));
     }
-  }, [normalizedTabParam]);
+  }, [jainaOnly, normalizedTabParam]);
 
   const handleTabChange = (value: string) => {
     const normalizedTab = normalizePaidMediaTab(value);
-    if (!normalizedTab) return;
+    if (!normalizedTab || (jainaOnly && normalizedTab !== 'jaina')) return;
     setActiveTab(normalizedTab);
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', normalizedTab);
@@ -401,8 +407,12 @@ export default function PaidMediaClientPage({
         className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-[var(--app-shell-gap)] overflow-hidden"
       >
         <PageHeader
-          title="Scale"
-          description="Paid media command center — connect and assign an ad account to unlock campaign pacing, DCO actions, and Jaina."
+          title={jainaOnly ? 'Jaina' : 'Scale'}
+          description={
+            jainaOnly
+              ? 'Your brand intelligence agent for analysis and health reports.'
+              : 'Paid media command center — connect and assign an ad account to unlock campaign pacing, DCO actions, and Jaina.'
+          }
           className="px-[var(--app-shell-pad-inline)]"
         />
 
@@ -454,7 +464,7 @@ export default function PaidMediaClientPage({
               </>
             ) : null}
             <TabsList className="h-8">
-              <TabsTrigger
+              {!jainaOnly ? <TabsTrigger
                 value="dashboard"
                 className="px-3 text-xs"
                 onMouseEnter={() => {
@@ -465,8 +475,8 @@ export default function PaidMediaClientPage({
                 }}
               >
                 Dashboard
-              </TabsTrigger>
-              <TabsTrigger
+              </TabsTrigger> : null}
+              {!jainaOnly ? <TabsTrigger
                 value="performance"
                 className="px-3 text-xs"
                 onMouseEnter={() => {
@@ -479,7 +489,7 @@ export default function PaidMediaClientPage({
                 }}
               >
                 Optimization
-              </TabsTrigger>
+              </TabsTrigger> : null}
               <TabsTrigger
                 value="jaina"
                 data-tour-id="paid-jaina-tab"
@@ -497,7 +507,7 @@ export default function PaidMediaClientPage({
           </div>
         </div>
 
-        <TabsContent value="dashboard" className="box-border min-h-0 overflow-hidden">
+        {!jainaOnly ? <TabsContent value="dashboard" className="box-border min-h-0 overflow-hidden">
           {selectedAdAccount ? (
             <PaidMediaDashboard
               brandId={brandProfileId}
@@ -508,9 +518,9 @@ export default function PaidMediaClientPage({
           ) : (
             renderBlockedState()
           )}
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
+        {!jainaOnly ? <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
           {selectedAdAccount ? (
             <OptimizerTab
               brandId={brandProfileId}
@@ -520,7 +530,7 @@ export default function PaidMediaClientPage({
           ) : (
             renderBlockedState()
           )}
-        </TabsContent>
+        </TabsContent> : null}
 
         <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">
           <div

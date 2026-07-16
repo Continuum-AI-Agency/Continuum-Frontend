@@ -106,9 +106,10 @@ export function useWorkflowExecution() {
 
       let jobId: string | undefined;
       try {
+        const operationId = crypto.randomUUID();
         const res = await fetch(initUrl, {
           method: 'POST',
-          headers: await authedSseHeaders(),
+          headers: await authedSseHeaders({ 'X-Continuum-Operation-Id': operationId }),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
@@ -156,13 +157,14 @@ export function useWorkflowExecution() {
                 base64?: string;
                 data_url?: string;
                 bytes?: string;
+                size_bytes?: number;
                 mime_type?: string;
                 signed_url?: string;
                 download_url?: string;
                 url?: string;
                 video_url?: string;
                 poster_base64?: string;
-                storage?: { signed_url?: string };
+                storage?: { signed_url?: string; size_bytes?: number };
                 path?: string;
                 bucket?: string;
                 message?: string;
@@ -451,9 +453,10 @@ export function useWorkflowExecution() {
       const controller = registerController(nodeId);
       setStreamState({ status: 'starting', currentNodeId: nodeId });
       try {
+        const operationId = crypto.randomUUID();
         const response = await fetch(resolveInitUrl('/ai-studio/generate-video-omni'), {
           method: 'POST',
-          headers: await authedSseHeaders(),
+          headers: await authedSseHeaders({ 'X-Continuum-Operation-Id': operationId }),
           body: JSON.stringify(payload),
           signal: controller.signal,
         });

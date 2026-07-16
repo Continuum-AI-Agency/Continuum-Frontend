@@ -137,6 +137,8 @@ describe('uploadMediaAsset', () => {
     await uploadMediaAsset({ file: pngFile(), brandId: 'b1' }, { createClient: () => client });
 
     const register = bodies.find((b) => b.action === 'register');
+    const sign = bodies.find((b) => b.action === 'sign_upload');
+    expect(sign?.sizeBytes).toBe(pngFile().size);
     expect(register?.checksum).toBe(createHash('sha256').update('pixels').digest('hex'));
   });
 

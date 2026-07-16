@@ -56,7 +56,7 @@ function generateTypes() {
 
   const schemas =
     process.env.SUPABASE_SCHEMAS ||
-    'public,brand_profiles,organic,paid_media,brand_trends,brand_integrations,DCO_Campaigns,integrations,plugin_mcp';
+    'public,brand_profiles,organic,paid_media,brand_trends,brand_integrations,DCO_Campaigns,integrations,plugin_mcp,billing';
 
   const args = ['gen', 'types', 'typescript', '--project-id', projectRef, '--schema', schemas];
 
@@ -69,7 +69,7 @@ function generateTypes() {
 
     const outputPath = path.resolve(__dirname, '../src/lib/supabase/types.ts');
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, stdout, 'utf8');
+    fs.writeFileSync(outputPath, `${stdout.trimEnd()}\n`, 'utf8');
     console.log(`Supabase types generated for project: ${projectRef} (schemas: ${schemas})`);
     console.log(`→ ${outputPath}`);
   });

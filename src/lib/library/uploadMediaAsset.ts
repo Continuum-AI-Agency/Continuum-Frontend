@@ -106,7 +106,7 @@ async function invokeLibraryUpload(
 
 async function signUpload(
   supabase: SupabaseBrowserClient,
-  body: { brandId: string; fileName: string; mimeType: string },
+  body: { brandId: string; fileName: string; mimeType: string; sizeBytes: number },
 ): Promise<LibraryUploadTicket> {
   const data = await invokeLibraryUpload(supabase, { action: 'sign_upload', ...body });
   const parsed = libraryUploadTicketSchema.safeParse(data);
@@ -171,7 +171,7 @@ export async function uploadMediaAsset(
 
   const ticket =
     params.resume?.ticket ??
-    (await signUpload(supabase, { brandId, fileName: file.name, mimeType }));
+    (await signUpload(supabase, { brandId, fileName: file.name, mimeType, sizeBytes: file.size }));
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
   if (isProjectFile(mimeType)) {
     await uploadProjectFile(supabase, ticket, params, deps);

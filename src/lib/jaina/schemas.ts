@@ -15,6 +15,7 @@ import {
   chartSeriesConfigSchema as contractChartSeriesConfigSchema,
   checkpointBlockV2LenientSchema,
   degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
+  billingOperationIdSchema,
 } from "@continuum/contracts";
 import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
 import {
@@ -56,6 +57,7 @@ export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
 
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
+  requestId: billingOperationIdSchema.optional(),
   include_thoughts: z.boolean().optional(),
   force_report_artifact: z.boolean().optional(),
   message_metadata: agentMentionMetadataSchema.optional(),

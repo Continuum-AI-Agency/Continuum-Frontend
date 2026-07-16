@@ -116,6 +116,7 @@ export function useJainaChatStream() {
       try {
         payload = jainaChatRequestSchema.parse({
           query: input.query,
+          requestId: crypto.randomUUID(),
           include_thoughts: true,
           force_report_artifact: input.forceReportArtifact,
           message_metadata:

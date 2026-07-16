@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { fetchEffectiveEntitlements } from '@/lib/billing/server';
 import {
   fetchAssignedAdAccountIds,
   fetchTimelineAccounts,
@@ -14,10 +15,12 @@ export default async function PaidMediaPage() {
     redirect('/onboarding');
   }
 
-  // Permission gate: allow only tiers 1,2,3; tier 0 (or missing) is blocked.
-  if (activeBrandTier === 0) {
+  const entitlements = await fetchEffectiveEntitlements(activeBrandId);
+  const hasPaidMediaAccess = activeBrandTier > 0;
+
+  if (!hasPaidMediaAccess && !entitlements?.access.jaina) {
     return (
-      <TierAccessRedirect description="Paid Media is a paid feature. Please contact an Administrator." />
+      <TierAccessRedirect description="Jaina access is not enabled for this brand. Please contact an Administrator." />
     );
   }
 
@@ -26,10 +29,12 @@ export default async function PaidMediaPage() {
 
   // Fetch accounts in parallel with layout; campaign indexes load client-side
   // after account selection to avoid a sequential server waterfall.
-  const [initialAccounts, assignedAccountIds] = await Promise.all([
-    fetchTimelineAccounts(activeBrandId),
-    fetchAssignedAdAccountIds(activeBrandId),
-  ]);
+  const [initialAccounts, assignedAccountIds] = hasPaidMediaAccess
+    ? await Promise.all([
+        fetchTimelineAccounts(activeBrandId),
+        fetchAssignedAdAccountIds(activeBrandId),
+      ])
+    : [[], []];
 
   // Seed the selection with an ASSIGNED account so first paint never pins one the
   // brand can merely reach (which the optimizer would then reject). Prefer a
@@ -53,6 +58,7 @@ export default async function PaidMediaPage() {
         brandName={brandName}
         initialAccounts={initialAccounts}
         initialAdAccountId={firstAccountId}
+        jainaOnly={!hasPaidMediaAccess}
       />
     </div>
   );
