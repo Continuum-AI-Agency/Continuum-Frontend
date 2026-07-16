@@ -123,6 +123,7 @@ describe('mediaSourceSchema', () => {
       'clip',
       'reel',
       'meta_ad',
+      'figma',
     ]);
   });
 

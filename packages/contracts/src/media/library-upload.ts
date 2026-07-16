@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assetIntegrityStateSchema } from './creative-operations';
 
 /**
  * Contracts for the `library-upload` edge function. A locally selected/dropped
@@ -47,6 +48,7 @@ export const registerMediaRequestSchema = z
     // creative-DNA join against paid_media content hashes. Optional: digest
     // failures must never block an upload.
     checksum: z.string().min(1).optional(),
+    integrityState: assetIntegrityStateSchema.default('unknown'),
   })
   .strict();
 

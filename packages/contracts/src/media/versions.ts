@@ -5,6 +5,7 @@
 // assets get history without a migration backfill.
 
 import { z } from 'zod';
+import { assetIntegrityStateSchema } from './creative-operations';
 
 export const mediaAssetVersionSchema = z
   .object({
@@ -21,6 +22,7 @@ export const mediaAssetVersionSchema = z
     height: z.number().int().positive().nullable().optional(),
     durationMs: z.number().int().nonnegative().nullable().optional(),
     checksum: z.string().nullable().optional(),
+    integrityState: assetIntegrityStateSchema.optional(),
     note: z.string().nullable().optional(),
     createdBy: z.string().nullable().optional(),
     // Transient display fields resolved at read time.
@@ -31,6 +33,27 @@ export const mediaAssetVersionSchema = z
   })
   .strict();
 export type MediaAssetVersion = z.infer<typeof mediaAssetVersionSchema>;
+
+// A first comment or replacement needs a durable v1 row before it can name
+// the version it operates on. This is intentionally a narrow Creative
+// Operations command: the caller may only request the current asset head,
+// never supply file metadata or a creator id.
+export const ensureAssetHeadVersionRequestSchema = z
+  .object({
+    action: z.literal('ensure_head_version'),
+    brandId: z.string().uuid(),
+    assetId: z.string().uuid(),
+  })
+  .strict();
+export type EnsureAssetHeadVersionRequest = z.infer<typeof ensureAssetHeadVersionRequestSchema>;
+
+export const ensureAssetHeadVersionResponseSchema = z
+  .object({
+    headVersionId: z.string().min(1),
+    maxVersionNumber: z.number().int().positive(),
+  })
+  .strict();
+export type EnsureAssetHeadVersionResponse = z.infer<typeof ensureAssetHeadVersionResponseSchema>;
 
 // Sign step: mints a signed upload URL for the next version's bytes at
 // <brandId>/<assetId>/v<versionNumber>/<sanitizedName>.
@@ -67,6 +90,8 @@ export const registerVersionRequestSchema = z
     mimeType: z.string().min(1),
     sizeBytes: z.number().int().nonnegative(),
     note: z.string().max(2000).optional(),
+    integrityState: assetIntegrityStateSchema.optional(),
+    idempotencyKey: z.string().min(1).max(200).optional(),
   })
   .strict();
 export type RegisterVersionRequest = z.infer<typeof registerVersionRequestSchema>;
@@ -75,6 +100,7 @@ export const registerVersionResponseSchema = z
   .object({
     assetId: z.string().min(1),
     versionNumber: z.number().int().positive(),
+    versionId: z.string().min(1).optional(),
     versions: z.array(mediaAssetVersionSchema),
   })
   .strict();
@@ -87,6 +113,7 @@ export const rollbackVersionRequestSchema = z
     brandId: z.string().min(1),
     assetId: z.string().min(1),
     versionId: z.string().min(1),
+    idempotencyKey: z.string().min(1).max(200).optional(),
   })
   .strict();
 export type RollbackVersionRequest = z.infer<typeof rollbackVersionRequestSchema>;
@@ -97,3 +124,23 @@ export const listVersionsResponseSchema = z
   })
   .strict();
 export type ListVersionsResponse = z.infer<typeof listVersionsResponseSchema>;
+
+export const listAssetVersionsOperationSchema = z
+  .object({
+    action: z.literal('list_asset_versions'),
+    brandId: z.string().uuid(),
+    assetId: z.string().uuid(),
+  })
+  .strict();
+
+export const signVersionUploadOperationSchema = versionSignUploadRequestSchema.extend({
+  action: z.literal('sign_version_upload'),
+});
+
+export const registerAssetVersionOperationSchema = registerVersionRequestSchema.extend({
+  action: z.literal('register_asset_version'),
+});
+
+export const rollbackAssetVersionOperationSchema = rollbackVersionRequestSchema.extend({
+  action: z.literal('rollback_asset_version'),
+});

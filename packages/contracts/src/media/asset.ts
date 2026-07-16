@@ -4,6 +4,7 @@
 // maps between them.
 
 import { z } from 'zod';
+import { assetIntegrityStateSchema } from './creative-operations';
 
 // 'file' covers non-renderable source files (After Effects projects, RAW
 // bundles) stored for the future rendering backend; the grid shows a generic
@@ -48,6 +49,7 @@ export const mediaSourceSchema = z.enum([
   'clip',
   'reel',
   'meta_ad',
+  'figma',
 ]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
@@ -141,6 +143,8 @@ export const mediaAssetSchema = z
     originRef: z.record(z.string(), z.unknown()).nullable().optional(),
     status: mediaStatusSchema,
     reviewStatus: mediaReviewStatusSchema.default('none'),
+    headVersionId: z.string().nullable().optional(),
+    integrityState: assetIntegrityStateSchema.optional(),
     checksum: z.string().nullable().optional(),
     title: z.string().nullable().optional(),
     description: z.string().nullable().optional(),

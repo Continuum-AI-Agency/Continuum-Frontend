@@ -30,6 +30,7 @@ export const imageReformatRequestSchema = z
     mode: imageReformatModeSchema,
     preset: imageReformatPresetSchema,
     focalPoint: imageReformatFocalPointSchema.optional(),
+    outputMode: z.enum(['derivative', 'new_version']).optional(),
   })
   .strict();
 export type ImageReformatRequest = z.infer<typeof imageReformatRequestSchema>;
@@ -38,6 +39,9 @@ const reformatRequestDataSchema = z.object({ requestId: z.string().uuid() }).str
 
 export const imageReformatCompletedDataSchema = reformatRequestDataSchema.extend({
   assetId: z.string().uuid(),
+  versionId: z.string().uuid(),
+  sourceVersionId: z.string().uuid(),
+  outputMode: z.enum(['derivative', 'new_version']),
   signedUrl: z.string().url(),
   bucket: z.string().min(1),
   storagePath: z.string().min(1),

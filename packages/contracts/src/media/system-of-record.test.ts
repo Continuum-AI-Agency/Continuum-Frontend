@@ -9,7 +9,13 @@ import {
 import { mergeMatches } from './metadataSearch';
 import { reviewPingRequestSchema } from './notifications';
 import { reviewTransitionRequestSchema } from './review';
-import { createShareLinkRequestSchema } from './share';
+import {
+  createExternalReviewerSessionOperationSchema,
+  createExternalShareCommentOperationSchema,
+  createShareLinkRequestSchema,
+  decideExternalShareReviewOperationSchema,
+  publicSharePayloadSchema,
+} from './share';
 import { registerVersionRequestSchema } from './versions';
 
 const baseAsset = {
@@ -45,6 +51,38 @@ describe('asset schema (library v2)', () => {
 });
 
 describe('comment annotations', () => {
+  it('parses point and freehand image annotations', () => {
+    expect(commentAnnotationSchema.parse({ kind: 'point', x: 0.25, y: 0.75 })).toEqual({
+      kind: 'point',
+      x: 0.25,
+      y: 0.75,
+    });
+    expect(
+      commentAnnotationSchema.parse({
+        kind: 'freehand',
+        points: [
+          { x: 0.1, y: 0.2 },
+          { x: 0.3, y: 0.4 },
+        ],
+      }),
+    ).toEqual({
+      kind: 'freehand',
+      points: [
+        { x: 0.1, y: 0.2 },
+        { x: 0.3, y: 0.4 },
+      ],
+    });
+  });
+
+  it('rejects one-point freehand annotations', () => {
+    expect(
+      commentAnnotationSchema.safeParse({
+        kind: 'freehand',
+        points: [{ x: 0.1, y: 0.2 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it('parses a normalized box annotation', () => {
     const parsed = commentAnnotationSchema.parse({
       kind: 'box',
@@ -198,6 +236,86 @@ describe('share links', () => {
       collectionId: 'col1',
     });
     expect(ok.success).toBe(true);
+  });
+
+  it('keeps public reviewer sessions token-scoped and validates commenter identity', () => {
+    expect(
+      createExternalReviewerSessionOperationSchema.safeParse({
+        action: 'create_external_reviewer_session',
+        token: 'share-token-with-enough-entropy',
+        displayName: 'Alex Reviewer',
+        email: 'alex@example.com',
+      }).success,
+    ).toBe(true);
+    expect(
+      createExternalReviewerSessionOperationSchema.safeParse({
+        action: 'create_external_reviewer_session',
+        token: 'share-token-with-enough-entropy',
+        email: 'not-an-email',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires exact asset and version identity on external comments', () => {
+    const base = {
+      action: 'create_external_share_comment' as const,
+      token: 'share-token-with-enough-entropy',
+      sessionToken: 'reviewer-session-token-with-enough-entropy',
+      assetId: 'asset-1',
+      body: 'Please tighten this frame.',
+    };
+    expect(createExternalShareCommentOperationSchema.safeParse(base).success).toBe(false);
+    expect(
+      createExternalShareCommentOperationSchema.safeParse({ ...base, versionId: 'version-2' })
+        .success,
+    ).toBe(true);
+  });
+
+  it('binds external approval decisions to the exact shared version', () => {
+    expect(
+      decideExternalShareReviewOperationSchema.safeParse({
+        action: 'decide_external_share_review',
+        token: 'share-token-with-enough-entropy',
+        sessionToken: 'reviewer-session-token-with-enough-entropy',
+        assetId: 'asset-1',
+        versionId: 'version-2',
+        decision: 'approved',
+      }).success,
+    ).toBe(true);
+    expect(
+      decideExternalShareReviewOperationSchema.safeParse({
+        action: 'decide_external_share_review',
+        token: 'share-token-with-enough-entropy',
+        sessionToken: 'reviewer-session-token-with-enough-entropy',
+        assetId: 'asset-1',
+        decision: 'approved',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('represents all-version shares as exact version wrappers rather than duplicate bare assets', () => {
+    const asset = mediaAssetSchema.parse(baseAsset);
+    const parsed = publicSharePayloadSchema.parse({
+      scope: 'asset',
+      assets: [
+        { asset: { ...asset, headVersionId: 'v2' }, versionId: 'v2', versionNumber: 2, isHead: true },
+        { asset: { ...asset, headVersionId: 'v1' }, versionId: 'v1', versionNumber: 1, isHead: false },
+      ],
+      comments: [],
+      policy: {
+        versionMode: 'all',
+        pinnedVersionId: null,
+        allowComments: true,
+        allowApproval: false,
+        allowDownload: true,
+        showMetadata: true,
+        showCustomFields: false,
+        requireIdentity: false,
+        hasPasscode: false,
+      },
+      reviewer: null,
+    });
+    expect(parsed.assets.map((entry) => entry.versionId)).toEqual(['v2', 'v1']);
   });
 });
 
