@@ -135,6 +135,49 @@ export const trendsSseSnapshotDataSchema = z
   .loose();
 export type TrendsSseSnapshotData = z.infer<typeof trendsSseSnapshotDataSchema>;
 
+export const trendsReadSectionSchema = z.enum(['trends', 'events', 'questions']);
+export type TrendsReadSection = z.infer<typeof trendsReadSectionSchema>;
+
+const trendsReadFrameBaseSchema = z.object({
+  eventId: z.string().min(1),
+  seq: z.number().int().nonnegative(),
+  ts: z.string().min(1),
+});
+
+export const trendsReadFrameSchema = z.discriminatedUnion('type', [
+  trendsReadFrameBaseSchema.extend({
+    type: z.literal('trends.read.snapshot'),
+    data: z.object({
+      brandId: z.string().uuid(),
+      generationId: z.string().uuid(),
+      anchorTs: z.string().min(1),
+    }),
+  }),
+  trendsReadFrameBaseSchema.extend({
+    type: z.literal('trends.read.section'),
+    data: z.object({
+      section: trendsReadSectionSchema,
+      items: z.array(z.unknown()),
+      count: z.number().int().nonnegative(),
+    }),
+  }),
+  trendsReadFrameBaseSchema.extend({
+    type: z.literal('trends.read.section_error'),
+    data: z.object({
+      section: trendsReadSectionSchema,
+      code: z.string().min(1),
+    }),
+  }),
+  trendsReadFrameBaseSchema.extend({
+    type: z.literal('trends.read.done'),
+    data: z.object({
+      complete: z.boolean(),
+      failedSections: z.array(trendsReadSectionSchema),
+    }),
+  }),
+]);
+export type TrendsReadFrame = z.infer<typeof trendsReadFrameSchema>;
+
 // POST /api/trends/jobs/start response envelope. Loose union of the "processing"
 // (new job + stream channel) and "reused_generation" (fresh <5d cache) variants.
 export const trendsJobStartResponseSchema = z
