@@ -81,6 +81,8 @@ export type AdSetSnapshot = {
   /** Raw Meta optimization_goal (e.g. OFFSITE_CONVERSIONS, APP_INSTALLS).
    *  Metadata for objective grouping / onboarding suggestions — not used in scoring. */
   optimization_goal?: string;
+  /** Resolved KPI field used to judge this ad set; absent for legacy snapshots. */
+  kpiField?: keyof WindowMetrics;
   /** Parent campaign — metadata so the enrollment picker can group ad sets under
    *  their campaign. Not used in scoring. */
   campaignId?: string;

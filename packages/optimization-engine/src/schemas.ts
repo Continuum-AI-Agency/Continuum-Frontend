@@ -64,6 +64,9 @@ export const AdSetSnapshotSchema = z.object({
   audienceType: AudienceTypeSchema.optional(),
   frequency7d: z.number().nonnegative().optional(),
   optimization_goal: z.string().optional(),
+  kpiField: z
+    .enum(['purchases', 'appInstalls', 'signups', 'leads', 'landingPageViews', 'impressions'])
+    .optional(),
   campaignId: z.string().optional(),
   campaignName: z.string().optional(),
   adCount: z.number().int().nonnegative().optional(),
