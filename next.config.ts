@@ -21,9 +21,13 @@ const nextConfig: NextConfig = {
   // Parallel local benches can opt into an isolated build directory instead
   // of contending with a developer's existing `.next/dev/lock`.
   ...(distDir ? { distDir } : {}),
-  // Keep generated route types from isolated benches out of the primary
-  // tsconfig so a benchmark never mutates the developer's compiler inputs.
-  ...(tsconfigPath ? { typescript: { tsconfigPath } } : {}),
+  // `bun run build` performs the same strict TypeScript gate in a fresh process
+  // before Turbopack. Keeping it separate prevents Next's large type graph from
+  // competing with retained compiler memory on Vercel's two-core builder.
+  typescript: {
+    ignoreBuildErrors: true,
+    ...(tsconfigPath ? { tsconfigPath } : {}),
+  },
   // The isolated browser benches use 127.0.0.1 rather than localhost so their
   // cookies and local Supabase host match. Keep Turbopack HMR quiet there.
   ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ['127.0.0.1'] } : {}),

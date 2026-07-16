@@ -11,10 +11,11 @@
   },
   "scripts": {
     "dev": "bun run --bun next dev --turbopack",
-    "build": "bun run --bun next build --turbopack",
+    "build": "bun run typecheck:build && bun run --bun next build --turbopack",
     "start": "next start",
     "lint": "cd .. && bun run agent:check -- --scope Continuum-Frontend",
     "typecheck": "bunx tsc --noEmit",
+    "typecheck:build": "tsc --noEmit --pretty false --incremental false --project ${NEXT_TSCONFIG_PATH:-tsconfig.json}",
     "tests": "bun test --path-ignore-patterns '**/e2e/**'",
     "test": "bun run tests",
     "test:e2e": "playwright test",
