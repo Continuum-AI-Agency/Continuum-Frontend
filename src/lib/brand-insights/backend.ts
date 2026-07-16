@@ -565,7 +565,12 @@ function normalizeTimestamp(value?: string | null): string | undefined {
   const normalized = value.includes('T') ? value : value.replace(' ', 'T');
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  return normalized;
+  // Canonicalize to UTC ISO-8601 with a `Z` suffix. Postgres/PostgREST serialize
+  // timestamptz with a numeric offset (e.g. `...+00`), which strict
+  // `z.string().datetime()` schemas (e.g. contracts trendsWeekSummarySchema)
+  // reject — a single offset-form week timestamp would otherwise throw the whole
+  // read mapping and blank the panel ("No trends yet") for brands with history.
+  return parsed.toISOString();
 }
 
 function normalizeUnknownMessage(value: unknown): string | undefined {

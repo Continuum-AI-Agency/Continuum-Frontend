@@ -34,4 +34,29 @@ describe('LibraryFilterBar', () => {
     expect(screen.queryByRole('group', { name: 'Filter by source' })).toBeNull();
     expect(screen.getByRole('group', { name: 'Filter by format' })).toBeDefined();
   });
+
+  it('collapses page taxonomy and tags into one searchable filter control', () => {
+    render(
+      <LibraryFilterBar
+        source="all"
+        kind="all"
+        onSourceChange={() => {}}
+        onKindChange={() => {}}
+        mediaType="all"
+        onMediaTypeChange={() => {}}
+        createdWith={[]}
+        onCreatedWithChange={() => {}}
+        tagOptions={[
+          { tag: 'launch', count: 12 },
+          { tag: 'winning', count: 7 },
+        ]}
+        selectedTags={['launch']}
+        onTagsChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Filter 1' })).toBeDefined();
+    expect(screen.getByText('launch')).toBeDefined();
+    expect(screen.queryByRole('group', { name: 'Filter by format' })).toBeNull();
+  });
 });

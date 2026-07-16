@@ -22,6 +22,11 @@ import { ExemplarThumb } from './ExemplarThumb';
 
 const MAX_THUMBS = 4;
 
+// Bound the table so a long list of mined insights scrolls in place instead of
+// stretching the card. Taller than the briefing panels since each row carries a
+// thumbnail strip; the sticky header stays pinned while the body scrolls.
+const WHATS_WORKING_TABLE_MAX_HEIGHT = 420;
+
 function KindBadge({ kind }: { kind: string }) {
   return (
     <span className="rounded bg-accent/15 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-accent">
@@ -150,6 +155,7 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
+      maxHeight={WHATS_WORKING_TABLE_MAX_HEIGHT}
       defaultSort={{ columnId: 'confidence', direction: 'desc' }}
       expandedContent={(row) => <ExpandedInsight row={row} />}
       contextMenu={(row) => {

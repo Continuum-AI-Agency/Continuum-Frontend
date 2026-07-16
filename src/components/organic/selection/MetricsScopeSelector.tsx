@@ -1,20 +1,24 @@
 'use client';
 
-// Platform → separator → account selector for organic metrics.
-// single: Account/Posts tab (one platform, one account).
-// multi: Compare tab (many platforms, many accounts, color-coded).
+// Account scope selection for organic metrics.
+// single: Overview / Post performance — one merged account combobox (pick platform+account together).
+// multi: Compare — one multi-select combobox (checkbox rows grouped by platform, color-coded).
 
 import type { OrganicMetricPlatform } from '@continuum/contracts';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import * as React from 'react';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
-import {
-  accountSeriesKey,
-  assignSeriesColors,
-  SERIES_COLORS,
-} from '@/lib/organic/blendAccounts';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { accountSeriesKey, assignSeriesColors, SERIES_COLORS } from '@/lib/organic/blendAccounts';
 import { cn } from '@/lib/utils';
 
 export type ScopeAccount = {
@@ -44,11 +48,10 @@ const PLATFORM_LABELS: Record<OrganicMetricPlatform, string> = {
 export type MetricsScopeSelectorProps = {
   accountsByPlatform: AccountsByPlatform;
   mode: 'single' | 'multi';
-  /** single mode */
+  /** single mode: current platform+account and a combined setter */
   platform?: OrganicMetricPlatform;
-  onPlatformChange?: (platform: OrganicMetricPlatform) => void;
   accountId?: string | null;
-  onAccountChange?: (accountId: string) => void;
+  onSelect?: (platform: OrganicMetricPlatform, accountId: string) => void;
   /** multi mode */
   selectedPlatforms?: OrganicMetricPlatform[];
   onSelectedPlatformsChange?: (platforms: OrganicMetricPlatform[]) => void;
@@ -61,112 +64,23 @@ function connectedPlatforms(accountsByPlatform: AccountsByPlatform): OrganicMetr
   return PLATFORM_ORDER.filter((p) => (accountsByPlatform[p]?.length ?? 0) > 0);
 }
 
-export function MetricsScopeSelector({
-  accountsByPlatform,
-  mode,
-  platform,
-  onPlatformChange,
-  accountId,
-  onAccountChange,
-  selectedPlatforms = [],
-  onSelectedPlatformsChange,
-  selectedAccountKeys = [],
-  onSelectedAccountKeysChange,
-  className,
-}: MetricsScopeSelectorProps) {
+function keyOf(account: ScopeAccount): string {
+  return accountSeriesKey(account.platform, account.integrationAccountId);
+}
+
+function flattenAccounts(
+  accountsByPlatform: AccountsByPlatform,
+  platforms: OrganicMetricPlatform[],
+): ScopeAccount[] {
+  return platforms.flatMap((p) => accountsByPlatform[p] ?? []);
+}
+
+export function MetricsScopeSelector(props: MetricsScopeSelectorProps) {
+  const { accountsByPlatform, mode, className } = props;
   const available = React.useMemo(
     () => connectedPlatforms(accountsByPlatform),
     [accountsByPlatform],
   );
-
-  const activePlatforms: OrganicMetricPlatform[] =
-    mode === 'single'
-      ? platform
-        ? [platform]
-        : available.slice(0, 1)
-      : selectedPlatforms.length > 0
-        ? selectedPlatforms
-        : available;
-
-  const accountsForBar = React.useMemo(() => {
-    const list: ScopeAccount[] = [];
-    for (const p of activePlatforms) {
-      for (const account of accountsByPlatform[p] ?? []) {
-        list.push(account);
-      }
-    }
-    return list;
-  }, [accountsByPlatform, activePlatforms]);
-
-  const colorByKey = React.useMemo(() => {
-    const keys = accountsForBar.map((a) =>
-      accountSeriesKey(a.platform, a.integrationAccountId),
-    );
-    return assignSeriesColors(keys);
-  }, [accountsForBar]);
-
-  const selectedKeySet = React.useMemo(
-    () => new Set(selectedAccountKeys),
-    [selectedAccountKeys],
-  );
-
-  const togglePlatformMulti = (p: OrganicMetricPlatform) => {
-    if (!onSelectedPlatformsChange || !onSelectedAccountKeysChange) return;
-    const has = selectedPlatforms.includes(p);
-    if (has) {
-      if (selectedPlatforms.length === 1) return;
-      const nextPlatforms = selectedPlatforms.filter((x) => x !== p);
-      onSelectedPlatformsChange(nextPlatforms);
-      const allowed = new Set(
-        nextPlatforms.flatMap((plat) =>
-          (accountsByPlatform[plat] ?? []).map((a) =>
-            accountSeriesKey(a.platform, a.integrationAccountId),
-          ),
-        ),
-      );
-      const nextKeys = selectedAccountKeys.filter((k) => allowed.has(k));
-      onSelectedAccountKeysChange(
-        nextKeys.length > 0
-          ? nextKeys
-          : nextPlatforms.flatMap((plat) =>
-              (accountsByPlatform[plat] ?? []).map((a) =>
-                accountSeriesKey(a.platform, a.integrationAccountId),
-              ),
-            ),
-      );
-    } else {
-      const nextPlatforms = [...selectedPlatforms, p];
-      onSelectedPlatformsChange(nextPlatforms);
-      const added = (accountsByPlatform[p] ?? []).map((a) =>
-        accountSeriesKey(a.platform, a.integrationAccountId),
-      );
-      onSelectedAccountKeysChange([...new Set([...selectedAccountKeys, ...added])]);
-    }
-  };
-
-  const selectAllOnPlatform = (p: OrganicMetricPlatform) => {
-    if (!onSelectedAccountKeysChange) return;
-    const keys = (accountsByPlatform[p] ?? []).map((a) =>
-      accountSeriesKey(a.platform, a.integrationAccountId),
-    );
-    if (mode === 'multi') {
-      const without = selectedAccountKeys.filter((k) => !k.startsWith(`${p}:`));
-      onSelectedAccountKeysChange([...without, ...keys]);
-      if (onSelectedPlatformsChange && !selectedPlatforms.includes(p)) {
-        onSelectedPlatformsChange([...selectedPlatforms, p]);
-      }
-    }
-  };
-
-  const toggleAccountMulti = (key: string) => {
-    if (!onSelectedAccountKeysChange) return;
-    if (selectedKeySet.has(key)) {
-      if (selectedAccountKeys.length === 1) return;
-      onSelectedAccountKeysChange(selectedAccountKeys.filter((k) => k !== key));
-    } else {
-      onSelectedAccountKeysChange([...selectedAccountKeys, key]);
-    }
-  };
 
   if (available.length === 0) {
     return (
@@ -178,105 +92,284 @@ export function MetricsScopeSelector({
 
   return (
     <div
-      className={cn('flex flex-col gap-2.5', className)}
+      className={cn('flex items-center gap-2', className)}
       data-tour-id="metrics-scope-selector"
       data-mode={mode}
     >
-      <div className="flex flex-wrap items-center gap-2" data-tour-id="metrics-scope-platforms">
-        <span className="text-2xs uppercase tracking-wide text-muted-foreground">Platform</span>
-        {available.map((p) => {
-          const selected =
-            mode === 'single' ? platform === p : selectedPlatforms.includes(p);
-          const count = accountsByPlatform[p]?.length ?? 0;
-          return (
-            <Button
-              key={p}
-              type="button"
-              size="sm"
-              variant={selected ? 'default' : 'outline'}
-              className="h-8 gap-1.5 px-2.5 text-xs"
-              data-tour-id={`scope-platform-${p}`}
-              data-selected={selected ? 'true' : 'false'}
-              onClick={() => {
-                if (mode === 'single') onPlatformChange?.(p);
-                else togglePlatformMulti(p);
-              }}
-            >
-              <PlatformIcon platform={p} size={14} />
-              {PLATFORM_LABELS[p]}
-              {count > 1 ? (
-                <Badge variant="secondary" className="h-4 px-1 text-2xs">
-                  {count}
-                </Badge>
-              ) : null}
-            </Button>
-          );
-        })}
-      </div>
-
-      <Separator data-tour-id="metrics-scope-separator" />
-
-      <div className="flex flex-wrap items-center gap-2" data-tour-id="metrics-scope-accounts">
-        <span className="text-2xs uppercase tracking-wide text-muted-foreground">Accounts</span>
-        {accountsForBar.map((account, index) => {
-          const key = accountSeriesKey(account.platform, account.integrationAccountId);
-          const color = colorByKey.get(key) ?? SERIES_COLORS[index % SERIES_COLORS.length];
-          const selected =
-            mode === 'single'
-              ? accountId === account.integrationAccountId
-              : selectedKeySet.has(key);
-
-          return (
-            <button
-              key={key}
-              type="button"
-              data-tour-id={`scope-account-${key}`}
-              data-selected={selected ? 'true' : 'false'}
-              onClick={() => {
-                if (mode === 'single') onAccountChange?.(account.integrationAccountId);
-                else toggleAccountMulti(key);
-              }}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                selected
-                  ? 'border-primary/40 bg-primary/10 text-foreground'
-                  : 'border-border bg-background text-muted-foreground',
-              )}
-            >
-              <span
-                className="size-2 shrink-0 rounded-full"
-                style={{ background: color }}
-                aria-hidden
-              />
-              {activePlatforms.length > 1 ? (
-                <PlatformIcon platform={account.platform} size={12} />
-              ) : null}
-              <span className="max-w-[12rem] truncate">{account.name}</span>
-            </button>
-          );
-        })}
-
-        {mode === 'multi' &&
-          activePlatforms.map((p) => {
-            const count = accountsByPlatform[p]?.length ?? 0;
-            if (count < 2) return null;
-            const allSelected = (accountsByPlatform[p] ?? []).every((a) =>
-              selectedKeySet.has(accountSeriesKey(a.platform, a.integrationAccountId)),
-            );
-            return (
-              <Button
-                key={`all-${p}`}
-                type="button"
-                size="sm"
-                variant={allSelected ? 'secondary' : 'ghost'}
-                className="h-7 border border-dashed px-2 text-2xs"
-                onClick={() => selectAllOnPlatform(p)}
-              >
-                All {PLATFORM_LABELS[p]}
-              </Button>
-            );
-          })}
-      </div>
+      {mode === 'single' ? (
+        <SingleAccountCombobox
+          accountsByPlatform={accountsByPlatform}
+          available={available}
+          platform={props.platform}
+          accountId={props.accountId ?? null}
+          onSelect={props.onSelect}
+        />
+      ) : (
+        <MultiAccountCombobox
+          accountsByPlatform={accountsByPlatform}
+          available={available}
+          selectedAccountKeys={props.selectedAccountKeys ?? []}
+          onSelectedAccountKeysChange={props.onSelectedAccountKeysChange}
+          onSelectedPlatformsChange={props.onSelectedPlatformsChange}
+        />
+      )}
     </div>
+  );
+}
+
+type SingleAccountComboboxProps = {
+  accountsByPlatform: AccountsByPlatform;
+  available: OrganicMetricPlatform[];
+  platform?: OrganicMetricPlatform;
+  accountId: string | null;
+  onSelect?: (platform: OrganicMetricPlatform, accountId: string) => void;
+};
+
+function SingleAccountCombobox({
+  accountsByPlatform,
+  available,
+  platform,
+  accountId,
+  onSelect,
+}: SingleAccountComboboxProps) {
+  const [open, setOpen] = React.useState(false);
+
+  const selected = React.useMemo(() => {
+    if (!platform || !accountId) return null;
+    return (
+      (accountsByPlatform[platform] ?? []).find(
+        (account) => account.integrationAccountId === accountId,
+      ) ?? null
+    );
+  }, [accountsByPlatform, platform, accountId]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          data-tour-id="metrics-scope-account-trigger"
+          className="h-8 min-w-[12rem] max-w-[20rem] justify-between gap-2 px-2.5 text-xs font-normal"
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            {selected ? <PlatformIcon platform={selected.platform} size={14} /> : null}
+            <span className="truncate">{selected ? selected.name : 'Select account'}</span>
+          </span>
+          <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-[280px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search accounts…" className="h-9 text-xs" />
+          <CommandList>
+            <CommandEmpty>No accounts found.</CommandEmpty>
+            {available.map((p) => (
+              <CommandGroup key={p} heading={PLATFORM_LABELS[p]}>
+                {(accountsByPlatform[p] ?? []).map((account) => {
+                  const isSelected =
+                    platform === account.platform && accountId === account.integrationAccountId;
+                  return (
+                    <CommandItem
+                      key={keyOf(account)}
+                      value={`${account.name} ${account.integrationAccountId}`}
+                      keywords={[account.integrationAccountId, PLATFORM_LABELS[p]]}
+                      onSelect={() => {
+                        onSelect?.(account.platform, account.integrationAccountId);
+                        setOpen(false);
+                      }}
+                      className="cursor-pointer gap-2"
+                    >
+                      <Check
+                        className={cn(
+                          'size-3.5 shrink-0',
+                          isSelected ? 'opacity-100' : 'opacity-0',
+                        )}
+                        aria-hidden
+                      />
+                      <PlatformIcon platform={account.platform} size={14} />
+                      <span className="truncate text-xs">{account.name}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+type MultiAccountComboboxProps = {
+  accountsByPlatform: AccountsByPlatform;
+  available: OrganicMetricPlatform[];
+  selectedAccountKeys: string[];
+  onSelectedAccountKeysChange?: (keys: string[]) => void;
+  onSelectedPlatformsChange?: (platforms: OrganicMetricPlatform[]) => void;
+};
+
+function MultiAccountCombobox({
+  accountsByPlatform,
+  available,
+  selectedAccountKeys,
+  onSelectedAccountKeysChange,
+  onSelectedPlatformsChange,
+}: MultiAccountComboboxProps) {
+  const [open, setOpen] = React.useState(false);
+
+  const allAccounts = React.useMemo(
+    () => flattenAccounts(accountsByPlatform, available),
+    [accountsByPlatform, available],
+  );
+
+  const colorByKey = React.useMemo(() => assignSeriesColors(allAccounts.map(keyOf)), [allAccounts]);
+
+  const selectedKeySet = React.useMemo(() => new Set(selectedAccountKeys), [selectedAccountKeys]);
+
+  // selectedPlatforms is derived: a platform is selected iff ≥1 of its accounts
+  // is selected. Emitting both keeps OrganicCompareView's platform state in sync
+  // without a separate platform control.
+  const emit = React.useCallback(
+    (nextKeys: string[]) => {
+      onSelectedAccountKeysChange?.(nextKeys);
+      const keySet = new Set(nextKeys);
+      const nextPlatforms = available.filter((p) =>
+        (accountsByPlatform[p] ?? []).some((account) => keySet.has(keyOf(account))),
+      );
+      onSelectedPlatformsChange?.(nextPlatforms);
+    },
+    [accountsByPlatform, available, onSelectedAccountKeysChange, onSelectedPlatformsChange],
+  );
+
+  const toggleAccount = (key: string) => {
+    if (selectedKeySet.has(key)) {
+      if (selectedAccountKeys.length === 1) return; // keep at least one
+      emit(selectedAccountKeys.filter((k) => k !== key));
+    } else {
+      emit([...selectedAccountKeys, key]);
+    }
+  };
+
+  const togglePlatformAll = (p: OrganicMetricPlatform, allOn: boolean) => {
+    const keys = (accountsByPlatform[p] ?? []).map(keyOf);
+    if (allOn) {
+      const next = selectedAccountKeys.filter((k) => !keys.includes(k));
+      if (next.length === 0) return; // keep at least one
+      emit(next);
+    } else {
+      emit([...new Set([...selectedAccountKeys, ...keys])]);
+    }
+  };
+
+  const count = selectedAccountKeys.length;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          data-tour-id="metrics-scope-accounts-trigger"
+          className="h-8 min-w-[12rem] max-w-[24rem] justify-between gap-2 px-2.5 text-xs font-normal"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="flex -space-x-1" aria-hidden>
+              {selectedAccountKeys.slice(0, 4).map((key, index) => (
+                <span
+                  key={key}
+                  className="size-2 rounded-full ring-1 ring-background"
+                  style={{
+                    background: colorByKey.get(key) ?? SERIES_COLORS[index % SERIES_COLORS.length],
+                  }}
+                />
+              ))}
+            </span>
+            <span className="truncate">
+              {count} {count === 1 ? 'account' : 'accounts'}
+            </span>
+          </span>
+          <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search accounts…" className="h-9 text-xs" />
+          <CommandList>
+            <CommandEmpty>No accounts found.</CommandEmpty>
+            {available.map((p) => {
+              const accounts = accountsByPlatform[p] ?? [];
+              const allOn =
+                accounts.length > 0 &&
+                accounts.every((account) => selectedKeySet.has(keyOf(account)));
+              return (
+                <CommandGroup
+                  key={p}
+                  heading={
+                    <span className="flex items-center gap-1.5">
+                      <PlatformIcon platform={p} size={12} />
+                      {PLATFORM_LABELS[p]}
+                    </span>
+                  }
+                >
+                  {accounts.length > 1 ? (
+                    <CommandItem
+                      value={`toggle all ${PLATFORM_LABELS[p]}`}
+                      onSelect={() => togglePlatformAll(p, allOn)}
+                      className="cursor-pointer gap-2 text-2xs text-muted-foreground"
+                    >
+                      <span className="size-4 shrink-0" aria-hidden />
+                      {allOn
+                        ? `Deselect all ${PLATFORM_LABELS[p]}`
+                        : `Select all ${PLATFORM_LABELS[p]}`}
+                    </CommandItem>
+                  ) : null}
+                  {accounts.map((account, index) => {
+                    const key = keyOf(account);
+                    const isSelected = selectedKeySet.has(key);
+                    return (
+                      <CommandItem
+                        key={key}
+                        value={`${account.name} ${account.integrationAccountId}`}
+                        keywords={[account.integrationAccountId]}
+                        onSelect={() => toggleAccount(key)}
+                        className="cursor-pointer gap-2"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-4 shrink-0 items-center justify-center rounded-[4px] border',
+                            isSelected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input',
+                          )}
+                          aria-hidden
+                        >
+                          {isSelected ? <Check className="size-3" /> : null}
+                        </span>
+                        <span
+                          className="size-2 shrink-0 rounded-full"
+                          style={{
+                            background:
+                              colorByKey.get(key) ?? SERIES_COLORS[index % SERIES_COLORS.length],
+                          }}
+                          aria-hidden
+                        />
+                        <span className="truncate text-xs">{account.name}</span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              );
+            })}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -1,5 +1,7 @@
 import {
   type CustomFieldFilter,
+  DEFAULT_LIBRARY_SORT,
+  librarySortSchema,
   mediaKindSchema,
   mediaReviewStatusSchema,
   mediaSourceSchema,
@@ -14,7 +16,12 @@ import {
   carouselSignablePaths,
   EXCLUDE_CAROUSEL_SLIDES_FILTER,
 } from '@/lib/media/carousel';
-import { kindMatchOrFilter, paginateByMembership, parseTagsParam } from '@/lib/media/filters';
+import {
+  getLibrarySortOrder,
+  kindMatchOrFilter,
+  paginateByMembership,
+  parseTagsParam,
+} from '@/lib/media/filters';
 import { rowToSignedMediaAsset } from '@/lib/media/mapper';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from '@/lib/media/schema';
 import { assetSignablePaths, mintSignedUrls } from '@/lib/media/signed-urls';
@@ -33,6 +40,7 @@ const querySchema = z.object({
   kind: mediaKindSchema.optional(),
   tags: z.string().optional(),
   reviewStatus: mediaReviewStatusSchema.optional(),
+  sort: librarySortSchema.default(DEFAULT_LIBRARY_SORT),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(96).default(PAGE_SIZE),
 });
@@ -57,13 +65,14 @@ export async function GET(request: Request) {
     kind: url.searchParams.get('kind') ?? undefined,
     tags: url.searchParams.get('tags') ?? undefined,
     reviewStatus: url.searchParams.get('reviewStatus') ?? undefined,
+    sort: url.searchParams.get('sort') ?? undefined,
     offset: url.searchParams.get('offset') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, collectionId, source, kind, reviewStatus, offset, limit } = parsed.data;
+  const { brandId, collectionId, source, kind, reviewStatus, sort, offset, limit } = parsed.data;
   const tags = parseTagsParam(parsed.data.tags);
 
   // A malformed filter must fail loudly: dropping it would widen the result set,
@@ -196,8 +205,10 @@ export async function GET(request: Request) {
     rows = paged.page;
     nextOffset = paged.nextOffset;
   } else {
+    const order = getLibrarySortOrder(sort);
     const { data, error } = await query
-      .order('created_at', { ascending: false })
+      .order(order.column, { ascending: order.ascending })
+      .order('id', { ascending: true })
       .range(offset, offset + limit - 1);
     if (error) {
       console.error('[library/assets] assets query failed', error);

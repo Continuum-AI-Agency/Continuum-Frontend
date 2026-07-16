@@ -4,6 +4,10 @@
 
 import {
   CAROUSEL_SLIDE_TAG,
+  DEFAULT_LIBRARY_SORT,
+  type LibraryBrowseQuery,
+  type LibraryMediaType,
+  type LibrarySort,
   type MediaKind,
   type MediaReviewStatus,
   type MediaSearchFilters,
@@ -34,11 +38,29 @@ export const MEDIA_SOURCES: FilterOption<MediaSource>[] = [
   { value: 'clip', label: 'Clips' },
   { value: 'reel', label: 'Reels' },
   { value: 'backfill', label: 'Imported' },
+  { value: 'figma', label: 'Figma' },
 ];
 
 export const SOURCE_FILTERS: FilterOption<SourceFilterValue>[] = [
   { value: 'all', label: 'All' },
   ...MEDIA_SOURCES,
+];
+
+// Sources describe how an asset entered or was created in Continuum. They are
+// deliberately an advanced facet, not top-level folders: a Reel is still a
+// video and a HyperFrame may be an image or video.
+export const CREATION_METHOD_GROUPS: FilterOption<MediaSource>[] = [
+  { value: 'upload', label: 'Upload' },
+  { value: 'ai_generated', label: 'AI generated' },
+  { value: 'canvas', label: 'Canvas' },
+  { value: 'inspiration', label: 'Inspiration' },
+  { value: 'meta_ad', label: 'Ad import' },
+  { value: 'hyperframe', label: 'HyperFrame' },
+  { value: 'chat_upload', label: 'Chat upload' },
+  { value: 'clip', label: 'Clip' },
+  { value: 'reel', label: 'Reel' },
+  { value: 'backfill', label: 'Imported' },
+  { value: 'figma', label: 'Figma' },
 ];
 
 // Per-source display label keyed by source value. Derived from MEDIA_SOURCES so
@@ -51,7 +73,46 @@ export const KIND_FILTERS: FilterOption<KindFilterValue>[] = [
   { value: 'all', label: 'All' },
   { value: 'image', label: 'Images' },
   { value: 'video', label: 'Videos' },
+  { value: 'file', label: 'Project files' },
 ];
+
+export const LIBRARY_SORT_OPTIONS: FilterOption<LibrarySort>[] = [
+  { value: 'created_desc', label: 'Recently added' },
+  { value: 'updated_desc', label: 'Recently updated' },
+  { value: 'name_asc', label: 'Name A–Z' },
+  { value: 'name_desc', label: 'Name Z–A' },
+  { value: 'size_desc', label: 'Largest first' },
+  { value: 'duration_desc', label: 'Longest first' },
+  { value: 'most_used', label: 'Most used' },
+  { value: 'best_performing', label: 'Best performing' },
+  { value: 'manual', label: 'Manual collection order' },
+];
+
+export type LibrarySortOrder = {
+  column: 'created_at' | 'updated_at' | 'file_name' | 'size_bytes' | 'duration_ms';
+  ascending: boolean;
+};
+
+export function getLibrarySortOrder(sort: LibrarySort): LibrarySortOrder {
+  switch (sort) {
+    case 'updated_desc':
+      return { column: 'updated_at', ascending: false };
+    case 'name_asc':
+      return { column: 'file_name', ascending: true };
+    case 'name_desc':
+      return { column: 'file_name', ascending: false };
+    case 'size_desc':
+      return { column: 'size_bytes', ascending: false };
+    case 'duration_desc':
+      return { column: 'duration_ms', ascending: false };
+    case 'created_desc':
+      return { column: 'created_at', ascending: false };
+    case 'most_used':
+    case 'best_performing':
+    case 'manual':
+      throw new Error(`${sort} is available only through the cursor browse read model`);
+  }
+}
 
 export type LibraryQueryInput = {
   brandId: string;
@@ -59,9 +120,60 @@ export type LibraryQueryInput = {
   source?: SourceFilterValue | null;
   kind?: KindFilterValue | null;
   tags?: readonly string[] | null;
+  sort?: LibrarySort | null;
   offset?: number;
   limit?: number;
 };
+
+export function mediaTypeToKind(mediaType: LibraryMediaType): MediaKind | null {
+  if (mediaType === 'image' || mediaType === 'video') return mediaType;
+  if (mediaType === 'project_file') return 'file';
+  return null;
+}
+
+export function kindToMediaType(kind: MediaKind | null | undefined): LibraryMediaType {
+  if (kind === 'image' || kind === 'video') return kind;
+  if (kind === 'file') return 'project_file';
+  return 'all';
+}
+
+function setList(params: URLSearchParams, key: string, values: readonly string[]): void {
+  if (values.length > 0) params.set(key, values.join(','));
+}
+
+/** Canonical URL/API representation shared by grid, board, and saved views. */
+export function buildLibraryBrowseParams(
+  query: LibraryBrowseQuery,
+  options: { includeBrandId?: boolean; cursor?: string | null } = {},
+): URLSearchParams {
+  const params = new URLSearchParams();
+  if (options.includeBrandId !== false) params.set('brandId', query.brandId);
+  if (query.mediaType !== 'all') params.set('mediaType', query.mediaType);
+  setList(params, 'createdWith', query.createdWith);
+  setList(params, 'placements', query.placements);
+  setList(params, 'tags', query.tags);
+  setList(params, 'reviewStatuses', query.reviewStatuses);
+  setList(params, 'ownerIds', query.ownerIds);
+  setList(params, 'campaignIds', query.campaignIds);
+  setList(params, 'usageRights', query.usageRights);
+  if (query.collectionId) params.set('collection', query.collectionId);
+  if (query.used !== undefined && query.used !== null) params.set('used', String(query.used));
+  if (query.shared !== undefined && query.shared !== null) {
+    params.set('shared', String(query.shared));
+  }
+  if (query.leadingOnly) params.set('leadingOnly', 'true');
+  if (query.search) params.set('search', query.search);
+  if (query.sort !== DEFAULT_LIBRARY_SORT) params.set('sort', query.sort);
+  if (query.performanceWindow !== 'd30') {
+    params.set('performanceWindow', query.performanceWindow);
+  }
+  if (query.layout !== 'grid') params.set('layout', query.layout);
+  if (query.boardGroupBy !== 'review_status') params.set('boardGroupBy', query.boardGroupBy);
+  const cursor = options.cursor === undefined ? query.cursor : options.cursor;
+  if (cursor) params.set('cursor', cursor);
+  if (query.limit !== 48) params.set('limit', String(query.limit));
+  return params;
+}
 
 // Build the query string for GET /api/library/assets. "all"/empty filters are
 // omitted so the endpoint treats them as unset (no .eq applied server-side).
@@ -71,6 +183,7 @@ export function buildLibraryQuery(input: LibraryQueryInput): URLSearchParams {
   if (input.source && input.source !== 'all') params.set('source', input.source);
   if (input.kind && input.kind !== 'all') params.set('kind', input.kind);
   if (input.tags && input.tags.length > 0) params.set('tags', input.tags.join(','));
+  if (input.sort && input.sort !== DEFAULT_LIBRARY_SORT) params.set('sort', input.sort);
   if (typeof input.offset === 'number') params.set('offset', String(input.offset));
   if (typeof input.limit === 'number') params.set('limit', String(input.limit));
   return params;

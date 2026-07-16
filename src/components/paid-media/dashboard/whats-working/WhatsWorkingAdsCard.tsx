@@ -278,7 +278,7 @@ export function WhatsWorkingAdsCard({ brandId }: { brandId: string }) {
         </Tabs>
       </header>
 
-      <div className="space-y-2 p-2">
+      <div className="max-h-[36rem] space-y-2 overflow-y-auto p-2">
         <InsightDataTable
           columns={columns}
           defaultSort={{ columnId: 'winRate', direction: 'desc' }}

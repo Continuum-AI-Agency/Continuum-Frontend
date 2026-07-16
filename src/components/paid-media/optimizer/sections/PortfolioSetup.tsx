@@ -34,6 +34,7 @@ import {
   SparklesIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
+import Link from 'next/link';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +50,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PAID_SETUP_CONNECT_HREF } from '../../paid-setup-diagnostics';
 import { BudgetHint, SetupAdvisor, TargetHint, useSetupAdvice } from '../advisor/SetupAdvisor';
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
@@ -77,7 +79,7 @@ function suggestEmptyMessage(reason: string | null, level: PortfolioLevel): stri
     case 'tracking_gaps':
       return 'Ad sets are spending but none has tracked conversions yet — set up conversion tracking, or create a portfolio manually below.';
     case 'not_permitted':
-      return "This ad account isn't linked to the current brand, so we couldn't read its ad sets. Reconnect it in Integrations, then try again.";
+      return "This ad account isn't assigned to this brand, so the optimizer can't read its ad sets. Assign it in Settings → Integrations, then try again.";
     default:
       return "No grouped suggestions yet — the optimizer groups ad sets once this account's metrics are available. Create a portfolio manually below in the meantime.";
   }
@@ -307,6 +309,11 @@ export function PortfolioSetup({
             <p className="text-muted-foreground text-xs">
               {suggestEmptyMessage(suggestReason, level)}
             </p>
+            {suggestReason === 'not_permitted' ? (
+              <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
+                <Link href={PAID_SETUP_CONNECT_HREF}>Manage assignments</Link>
+              </Button>
+            ) : null}
           </div>
         ) : (
           // A grid, not a stack. Three suggestions used to leave ~60% of a full-width row empty.

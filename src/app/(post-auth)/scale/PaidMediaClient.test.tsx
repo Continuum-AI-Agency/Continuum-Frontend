@@ -13,6 +13,11 @@ let latestOptimizerPrefetch: (() => void) | null = null;
 let latestPlatformChange: ((platform: 'linkedin') => void) | null = null;
 let latestAccountSelect: ((accountId: string) => void) | null = null;
 let latestSelectorPlatform: string | null = null;
+let latestAssignedAccountIds: string[] | null | undefined;
+let optimizerAdAccounts: { data: Array<{ account_id: string }>; isSuccess: boolean } = {
+  data: [],
+  isSuccess: false,
+};
 let dynamicComponentIndex = 0;
 
 mock.module('next/dynamic', () => ({
@@ -60,6 +65,7 @@ mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
     };
     return latestOptimizerPrefetch;
   },
+  useOptimizerAdAccounts: () => optimizerAdAccounts,
 }));
 
 mock.module('@/lib/prefetch/paid-media-cache', () => ({
@@ -72,9 +78,11 @@ mock.module('@/components/paid-media/AdAccountSelector', () => ({
   AdAccountSelector: (props: {
     onSelect: (accountId: string) => void;
     platform: string;
+    assignedAccountIds?: string[] | null;
   }) => {
     latestAccountSelect = props.onSelect;
     latestSelectorPlatform = props.platform;
+    latestAssignedAccountIds = props.assignedAccountIds;
     return <div data-testid="ad-account-selector" />;
   },
 }));
@@ -128,6 +136,8 @@ describe('PaidMediaClientPage brand context', () => {
     latestPlatformChange = null;
     latestAccountSelect = null;
     latestSelectorPlatform = null;
+    latestAssignedAccountIds = undefined;
+    optimizerAdAccounts = { data: [], isSuccess: false };
 
     globalThis.requestIdleCallback = ((callback: IdleRequestCallback) => {
       callback({ didTimeout: false, timeRemaining: () => 50 });
@@ -206,5 +216,53 @@ describe('PaidMediaClientPage brand context', () => {
         adAccountId: 'linkedin-account-b',
       });
     });
+  });
+
+  it('scopes the selector to brand-ASSIGNED accounts for meta, and unfilters for linkedin', async () => {
+    optimizerAdAccounts = {
+      data: [{ account_id: 'act_assigned_1' }, { account_id: 'act_assigned_2' }],
+      isSuccess: true,
+    };
+
+    render(
+      <PaidMediaClientPage
+        brandProfileId="brand-a"
+        brandName="Brand A"
+        initialAccounts={[{ id: 'act_assigned_1', name: 'Assigned One' }]}
+        initialAdAccountId="act_assigned_1"
+      />,
+    );
+
+    // Meta (default): the selector receives exactly the optimizer's assigned set,
+    // so it can only ever offer an account the optimizer will admit.
+    await waitFor(() => {
+      expect(latestAssignedAccountIds).toEqual(['act_assigned_1', 'act_assigned_2']);
+    });
+
+    // LinkedIn is not covered by list_brand_ad_accounts — the set must be undefined
+    // (unfiltered) so the picker isn't emptied of every legitimately-connected row.
+    act(() => latestPlatformChange?.('linkedin'));
+    await waitFor(() => {
+      expect(latestSelectorPlatform).toBe('linkedin');
+      expect(latestAssignedAccountIds).toBeUndefined();
+    });
+  });
+
+  it('leaves the selector unfiltered while the assigned lookup is unresolved (no dead-end on outage)', async () => {
+    optimizerAdAccounts = { data: [], isSuccess: false };
+
+    render(
+      <PaidMediaClientPage
+        brandProfileId="brand-a"
+        brandName="Brand A"
+        initialAccounts={[{ id: 'act_reachable', name: 'Reachable' }]}
+        initialAdAccountId="act_reachable"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(latestSelectorPlatform).toBe('meta');
+    });
+    expect(latestAssignedAccountIds).toBeUndefined();
   });
 });

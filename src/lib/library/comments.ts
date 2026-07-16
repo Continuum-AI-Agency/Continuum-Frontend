@@ -8,9 +8,14 @@ import {
   type DeleteCommentRequest,
   listCommentsResponseSchema,
   type MediaComment,
-  mediaCommentSchema,
   type UpdateCommentRequest,
 } from '@continuum/contracts';
+import {
+  createAssetCommentOperation,
+  deleteAssetCommentOperation,
+  updateAssetCommentOperation,
+} from '@/lib/library/creativeOperations';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 // Snake_case shape of a media.comments row as delivered by PostgREST selects
 // and realtime postgres_changes payloads (replica identity full).
@@ -25,6 +30,8 @@ export type MediaCommentRow = {
   resolved_at: string | null;
   resolved_by: string | null;
   created_by: string | null;
+  external_reviewer_session_id?: string | null;
+  visibility?: 'internal' | 'shared' | 'external';
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -158,30 +165,16 @@ export async function listComments(brandId: string, assetId: string): Promise<Me
 }
 
 export async function createComment(input: CreateCommentRequest): Promise<MediaComment> {
-  const response = await fetch('/api/library/comments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+  return createAssetCommentOperation(createSupabaseBrowserClient(), {
+    ...input,
+    idempotencyKey: input.idempotencyKey ?? crypto.randomUUID(),
   });
-  const parsed = mediaCommentSchema.parse(await parseJsonOrThrow(response));
-  return parsed;
 }
 
 export async function updateComment(input: UpdateCommentRequest): Promise<MediaComment> {
-  const response = await fetch('/api/library/comments', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const parsed = mediaCommentSchema.parse(await parseJsonOrThrow(response));
-  return parsed;
+  return updateAssetCommentOperation(createSupabaseBrowserClient(), input);
 }
 
 export async function deleteComment(input: DeleteCommentRequest): Promise<void> {
-  const response = await fetch('/api/library/comments', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  await parseJsonOrThrow(response);
+  await deleteAssetCommentOperation(createSupabaseBrowserClient(), input);
 }

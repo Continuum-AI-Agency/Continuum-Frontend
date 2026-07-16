@@ -3,7 +3,10 @@
 // with the admin client and returns assets carrying short-lived signed URLs.
 
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
+import { ShareAccessChallenge } from './ShareAccessChallenge';
 import { loadSharePayload } from './loadSharePayload';
+import { reviewerSessionCookieName } from './reviewerSession.server';
 import { SharePayloadView } from './SharePayloadView';
 import { ShareUnavailableCard } from './ShareUnavailableCard';
 
@@ -16,7 +19,18 @@ export const metadata: Metadata = {
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const result = await loadSharePayload(token);
+  const cookieStore = await cookies();
+  const reviewerSession = cookieStore.get(reviewerSessionCookieName(token))?.value;
+  const result = await loadSharePayload(token, reviewerSession);
+  if (!result.ok && result.reason === 'challenge') {
+    return (
+      <ShareAccessChallenge
+        token={token}
+        needsPasscode={result.needsPasscode}
+        requireIdentity={result.requireIdentity}
+      />
+    );
+  }
   if (!result.ok) return <ShareUnavailableCard reason={result.reason} />;
-  return <SharePayloadView payload={result.payload} />;
+  return <SharePayloadView token={token} payload={result.payload} />;
 }

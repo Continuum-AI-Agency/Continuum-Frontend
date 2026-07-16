@@ -17,6 +17,7 @@ import {
 } from '@continuum/contracts';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
 import { attachVideoPoster } from './videoPoster';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
@@ -26,6 +27,8 @@ export const MEDIA_LIBRARY_BUCKET = 'media-library';
 // Browsers report source-project files (.aep) with an empty MIME; the edge fn
 // requires a non-empty one and derives kind 'file' for non-image/video.
 const FALLBACK_MIME_TYPE = 'application/octet-stream';
+const MAX_BUFFERED_CHECKSUM_BYTES = 64 * 1024 * 1024;
+export const MAX_PROJECT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 
 function resolveMimeType(file: File): string {
   return file.type || FALLBACK_MIME_TYPE;
@@ -35,6 +38,7 @@ function resolveMimeType(file: File): string {
 // future creative-DNA join against paid_media.content_hash. Fail-soft: a
 // digest failure (e.g. a file too large to buffer) never blocks the upload.
 async function computeChecksum(file: File): Promise<string | null> {
+  if (file.size > MAX_BUFFERED_CHECKSUM_BYTES) return null;
   try {
     const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
@@ -57,7 +61,24 @@ export interface UploadMediaAssetDeps {
   createClient?: () => SupabaseBrowserClient;
   /** Injected for tests; decodes a frame in the browser and persists it. */
   attachPoster?: typeof attachVideoPoster;
+  resumableUpload?: typeof resumableStorageUpload;
+  supabaseUrl?: string;
+  anonKey?: string;
 }
+
+export type UploadResumeState = {
+  ticket: LibraryUploadTicket;
+  uploadUrl: string | null;
+};
+
+export type UploadMediaAssetParams = {
+  file: File;
+  brandId: string;
+  signal?: AbortSignal;
+  resume?: UploadResumeState | null;
+  onResumeState?: (state: UploadResumeState) => void;
+  onProgress?: (progress: ResumableUploadProgress) => void;
+};
 
 // supabase-js wraps a non-2xx edge response in a FunctionsHttpError whose
 // `.context` is the raw Response. Pull the edge fn's `{ message }` body out of it
@@ -106,18 +127,65 @@ async function uploadToTicket(
   if (error) throw new Error(`upload to storage failed: ${error.message}`);
 }
 
+function isProjectFile(mimeType: string): boolean {
+  return !mimeType.startsWith('image/') && !mimeType.startsWith('video/');
+}
+
+async function uploadProjectFile(
+  supabase: SupabaseBrowserClient,
+  ticket: LibraryUploadTicket,
+  params: UploadMediaAssetParams,
+  deps: UploadMediaAssetDeps,
+): Promise<void> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) {
+    throw new Error(error?.message ?? 'A signed-in session is required for resumable upload');
+  }
+  const supabaseUrl = deps.supabaseUrl ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) throw new Error('NEXT_PUBLIC_SUPABASE_URL is required for resumable upload');
+
+  await (deps.resumableUpload ?? resumableStorageUpload)({
+    file: params.file,
+    bucket: ticket.bucket,
+    objectPath: ticket.path,
+    accessToken: data.session.access_token,
+    supabaseUrl,
+    anonKey: deps.anonKey ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    uploadUrl: params.resume?.uploadUrl,
+    signal: params.signal,
+    onUploadUrl: (uploadUrl) => params.onResumeState?.({ ticket, uploadUrl }),
+    onProgress: params.onProgress,
+  });
+}
+
 export async function uploadMediaAsset(
-  params: { file: File; brandId: string },
+  params: UploadMediaAssetParams,
   deps: UploadMediaAssetDeps = {},
 ): Promise<UploadMediaAssetResult> {
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
   const { file, brandId } = params;
   const mimeType = resolveMimeType(file);
+  if (isProjectFile(mimeType) && file.size > MAX_PROJECT_FILE_BYTES) {
+    throw new Error('file_too_large: Project files must be 5 GB or smaller');
+  }
 
-  const ticket = await signUpload(supabase, { brandId, fileName: file.name, mimeType });
-  await uploadToTicket(supabase, ticket, file);
+  const ticket =
+    params.resume?.ticket ??
+    (await signUpload(supabase, { brandId, fileName: file.name, mimeType }));
+  params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
+  if (isProjectFile(mimeType)) {
+    await uploadProjectFile(supabase, ticket, params, deps);
+  } else {
+    await uploadToTicket(supabase, ticket, file);
+    params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
+  }
 
   const checksum = await computeChecksum(file);
+  const integrityState = checksum
+    ? 'verified'
+    : file.size > MAX_BUFFERED_CHECKSUM_BYTES
+      ? 'skipped_large_file'
+      : 'unknown';
   const data = await invokeLibraryUpload(supabase, {
     action: 'register',
     brandId,
@@ -128,6 +196,7 @@ export async function uploadMediaAsset(
     mimeType,
     sizeBytes: file.size,
     ...(checksum ? { checksum } : {}),
+    integrityState,
   });
 
   const ok = registerMediaResponseSchema.safeParse(data);

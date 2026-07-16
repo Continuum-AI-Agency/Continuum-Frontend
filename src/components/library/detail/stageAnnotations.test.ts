@@ -48,6 +48,25 @@ const TIME_ON_V2 = comment({
   annotation: { kind: 'time', timeMs: 9000, endMs: 12000 },
   createdAt: '2026-07-06T00:00:00.000Z',
 });
+const POINT_ON_V2 = comment({
+  id: 'c-point-v2',
+  versionId: V2,
+  annotation: { kind: 'point', x: 0.25, y: 0.75 },
+  createdAt: '2026-07-06T01:00:00.000Z',
+});
+const FREEHAND_ON_V2 = comment({
+  id: 'c-freehand-v2',
+  versionId: V2,
+  annotation: {
+    kind: 'freehand',
+    points: [
+      { x: 0.1, y: 0.2 },
+      { x: 0.2, y: 0.3 },
+      { x: 0.4, y: 0.35 },
+    ],
+  },
+  createdAt: '2026-07-06T02:00:00.000Z',
+});
 
 // The chain the modal runs: thread → partition by the viewed version → pins.
 function pinsFor(comments: MediaComment[], viewedVersionId: string) {
@@ -81,7 +100,13 @@ describe('buildStageAnnotations under version viewing', () => {
     const { imagePins, videoMarkers } = pinsFor([BOX_ON_V1, TIME_ON_V1, BOX_ON_V2, TIME_ON_V2], V1);
 
     expect(imagePins.map((p) => p.id)).toEqual(['c-box-v1']);
-    expect(imagePins[0]?.box).toEqual({ kind: 'box', x: 0.1, y: 0.1, width: 0.3, height: 0.3 });
+    expect(imagePins[0]?.annotation).toEqual({
+      kind: 'box',
+      x: 0.1,
+      y: 0.1,
+      width: 0.3,
+      height: 0.3,
+    });
     expect(videoMarkers.map((m) => m.id)).toEqual(['c-time-v1']);
     expect(videoMarkers.map((m) => m.timeMs)).toEqual([1500]);
     // The v2 notes are now the ones that address bytes nobody is looking at.
@@ -121,5 +146,22 @@ describe('buildStageAnnotations under version viewing', () => {
     });
 
     expect(imagePins[0]?.selected).toBe(true);
+  });
+
+  it('keeps point and freehand geometry on image pins instead of treating it as video time', () => {
+    const { imagePins, videoMarkers } = pinsFor([POINT_ON_V2, FREEHAND_ON_V2], V2);
+
+    expect(imagePins.map((pin) => pin.annotation)).toEqual([
+      { kind: 'point', x: 0.25, y: 0.75 },
+      {
+        kind: 'freehand',
+        points: [
+          { x: 0.1, y: 0.2 },
+          { x: 0.2, y: 0.3 },
+          { x: 0.4, y: 0.35 },
+        ],
+      },
+    ]);
+    expect(videoMarkers).toEqual([]);
   });
 });

@@ -3,13 +3,13 @@
 import {
   CAROUSEL_SLIDE_TAG,
   type CustomFieldFilter,
+  type LibraryBrowsePage,
+  type LibraryBrowseQuery,
   type MediaAsset,
-  type MediaKind,
-  type MediaSource,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseFieldFiltersParam, serializeFieldFilters } from '@/lib/library/customFields';
-import { buildLibraryQuery, parseTagsParam } from '@/lib/media/filters';
+import { buildLibraryBrowseParams, buildLibraryQuery, mediaTypeToKind } from '@/lib/media/filters';
 import type { MediaAssetRow } from '@/lib/media/schema';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -46,6 +46,8 @@ function rowToStub(row: MediaAssetRow): MediaAsset {
     originRef: row.origin_ref,
     status: row.status,
     reviewStatus: row.review_status ?? 'none',
+    headVersionId: row.head_version_id ?? null,
+    integrityState: row.integrity_state ?? 'unknown',
     checksum: row.checksum ?? null,
     title: row.title,
     description: row.description,
@@ -69,19 +71,17 @@ export type UseMediaLibraryResult = {
 };
 
 export function useMediaLibrary(params: {
-  brandId: string;
-  collectionId: string | null;
-  source: MediaSource | null;
-  kind: MediaKind | null;
-  tags?: readonly string[];
+  query: LibraryBrowseQuery;
   fieldFilters?: readonly CustomFieldFilter[];
   seed: MediaAsset[];
+  initialNextCursor: string | null;
 }): UseMediaLibraryResult {
-  const { brandId, collectionId, source, kind, seed } = params;
-  // Stable identity keyed on content, so effect/callback deps don't churn when
-  // the caller passes a fresh array of the same tags each render.
-  const tagsKey = (params.tags ?? []).join(',');
-  const activeTags = useMemo(() => parseTagsParam(tagsKey), [tagsKey]);
+  const { query, seed, initialNextCursor } = params;
+  const brandId = query.brandId;
+  const queryKey = buildLibraryBrowseParams(query, {
+    includeBrandId: true,
+    cursor: null,
+  }).toString();
   // Same trick for the custom-field filters: the serialized param IS the key, and
   // parsing it back is what the listing route does with it anyway.
   const fieldFiltersKey = serializeFieldFilters(params.fieldFilters ?? []);
@@ -90,18 +90,30 @@ export function useMediaLibrary(params: {
     return parsed.ok ? parsed.filters : [];
   }, [fieldFiltersKey]);
   const [assets, setAssets] = useState<MediaAsset[]>(seed);
-  const [hasMore, setHasMore] = useState(seed.length >= PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(initialNextCursor !== null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const offsetRef = useRef(seed.length);
+  const cursorRef = useRef<string | null>(initialNextCursor);
+  const legacyOffsetRef = useRef(seed.length);
 
-  const buildQuery = useCallback(
+  const buildLegacyFieldQuery = useCallback(
     (offset: number) => {
+      const legacySort = [
+        'created_desc',
+        'updated_desc',
+        'name_asc',
+        'name_desc',
+        'size_desc',
+        'duration_desc',
+      ].includes(query.sort)
+        ? query.sort
+        : 'created_desc';
       const sp = buildLibraryQuery({
         brandId,
-        collectionId,
-        source,
-        kind,
-        tags: activeTags,
+        collectionId: query.collectionId,
+        source: query.createdWith[0],
+        kind: mediaTypeToKind(query.mediaType),
+        tags: query.tags,
+        sort: legacySort,
         offset,
         limit: PAGE_SIZE,
       });
@@ -110,28 +122,37 @@ export function useMediaLibrary(params: {
       }
       return sp.toString();
     },
-    [brandId, collectionId, source, kind, activeTags, activeFieldFilters],
+    [brandId, query, activeFieldFilters],
   );
 
-  // Re-seed when the SSR payload changes (e.g. collection navigation). The RSC
-  // seed is neither tag- nor field-aware, so with either filter active page 0
-  // comes from the API instead of the seed.
+  const buildCursorQuery = useCallback(
+    (cursor: string | null) =>
+      buildLibraryBrowseParams(query, { includeBrandId: true, cursor }).toString(),
+    [query],
+  );
+
+  // The RSC seed is canonical and facet-aware. Custom fields are still resolved
+  // by the legacy route until they join the grouped browse read model.
   useEffect(() => {
-    if (activeTags.length === 0 && activeFieldFilters.length === 0) {
+    if (activeFieldFilters.length === 0) {
       setAssets(seed);
-      setHasMore(seed.length >= PAGE_SIZE);
-      offsetRef.current = seed.length;
+      cursorRef.current = initialNextCursor;
+      setHasMore(initialNextCursor !== null);
+      legacyOffsetRef.current = seed.length;
       return;
     }
     let cancelled = false;
     setLoadingMore(true);
-    fetch(`/api/library/assets?${buildQuery(0)}`)
-      .then((r) => r.json())
+    fetch(`/api/library/assets?${buildLegacyFieldQuery(0)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`Library field query failed (${r.status})`);
+        return r.json();
+      })
       .then((data: { items?: MediaAsset[]; nextOffset?: number | null }) => {
         if (cancelled) return;
         const incoming = data.items ?? [];
         setAssets(incoming);
-        offsetRef.current = incoming.length;
+        legacyOffsetRef.current = incoming.length;
         setHasMore(data.nextOffset != null);
       })
       .catch((err: unknown) => {
@@ -146,29 +167,54 @@ export function useMediaLibrary(params: {
     return () => {
       cancelled = true;
     };
-  }, [seed, activeTags, activeFieldFilters, buildQuery]);
+  }, [seed, initialNextCursor, queryKey, activeFieldFilters, buildLegacyFieldQuery]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
 
-    fetch(`/api/library/assets?${buildQuery(offsetRef.current)}`)
-      .then((r) => r.json())
-      .then((data: { items?: MediaAsset[]; nextOffset?: number | null }) => {
+    const request =
+      activeFieldFilters.length > 0
+        ? fetch(`/api/library/assets?${buildLegacyFieldQuery(legacyOffsetRef.current)}`).then(
+            async (response) => {
+              if (!response.ok) throw new Error(`Library field query failed (${response.status})`);
+              const page = (await response.json()) as {
+                items?: MediaAsset[];
+                nextOffset?: number | null;
+              };
+              return {
+                items: page.items ?? [],
+                nextCursor: page.nextOffset == null ? null : String(page.nextOffset),
+              } satisfies LibraryBrowsePage;
+            },
+          )
+        : fetch(`/api/library/browse?${buildCursorQuery(cursorRef.current)}`).then(
+            async (response) => {
+              if (!response.ok) throw new Error(`Library browse failed (${response.status})`);
+              return (await response.json()) as LibraryBrowsePage;
+            },
+          );
+
+    request
+      .then((data) => {
         const incoming = data.items ?? [];
         setAssets((prev) => {
           const seen = new Set(prev.map((a) => a.id));
           return [...prev, ...incoming.filter((a) => !seen.has(a.id))];
         });
-        offsetRef.current += incoming.length;
-        setHasMore(data.nextOffset != null);
+        if (activeFieldFilters.length > 0) {
+          legacyOffsetRef.current += incoming.length;
+        } else {
+          cursorRef.current = data.nextCursor;
+        }
+        setHasMore(data.nextCursor !== null);
       })
       .catch((err: unknown) => {
         console.error('[useMediaLibrary] loadMore failed', err);
         setHasMore(false);
       })
       .finally(() => setLoadingMore(false));
-  }, [buildQuery, hasMore, loadingMore]);
+  }, [activeFieldFilters, buildCursorQuery, buildLegacyFieldQuery, hasMore, loadingMore]);
 
   // Fills a realtime-inserted asset's signed URL (INSERT payloads carry none).
   const hydrateSignedUrl = useCallback(
@@ -211,15 +257,37 @@ export function useMediaLibrary(params: {
             // answered from the asset row at all (the values live in their own
             // table, and a brand-new asset holds none), so an insert under one is
             // left to the next fetch rather than guessed at.
-            if (collectionId || activeFieldFilters.length > 0) return;
+            if (query.collectionId || activeFieldFilters.length > 0) return;
+            if (query.sort !== 'created_desc') return;
+            if (
+              query.placements.length > 0 ||
+              query.campaignIds.length > 0 ||
+              query.usageRights.length > 0 ||
+              query.used != null ||
+              query.shared != null ||
+              query.leadingOnly ||
+              query.search
+            ) {
+              return;
+            }
             const inserted = payload.new as MediaAssetRow;
             const insertedTags = inserted.tags ?? [];
             // Carousel slide rows never render as grid tiles — the cover row
             // (which follows in the same batch) represents the group.
             if (insertedTags.includes(CAROUSEL_SLIDE_TAG)) return;
-            if (source && inserted.source !== source) return;
+            if (query.createdWith.length > 0 && !query.createdWith.includes(inserted.source)) {
+              return;
+            }
+            const kind = mediaTypeToKind(query.mediaType);
             if (kind && inserted.kind !== kind) return;
-            if (activeTags.length > 0 && !activeTags.every((t) => insertedTags.includes(t))) {
+            if (query.mediaType === 'carousel') return;
+            if (
+              query.reviewStatuses.length > 0 &&
+              !query.reviewStatuses.includes(inserted.review_status ?? 'none')
+            ) {
+              return;
+            }
+            if (query.tags.length > 0 && !query.tags.every((tag) => insertedTags.includes(tag))) {
               return;
             }
             setAssets((prev) => {
@@ -238,7 +306,7 @@ export function useMediaLibrary(params: {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [brandId, collectionId, source, kind, activeTags, activeFieldFilters, hydrateSignedUrl]);
+  }, [brandId, queryKey, query, activeFieldFilters, hydrateSignedUrl]);
 
   return useMemo(
     () => ({ assets, hasMore, loadingMore, loadMore }),

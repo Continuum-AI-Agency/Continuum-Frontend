@@ -2,9 +2,8 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { Scaling } from 'lucide-react';
-import { useState } from 'react';
 
-import { ImageReformatDialog } from '@/components/library/reformat/ImageReformatDialog';
+import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -15,10 +14,9 @@ export type SmartResizeMenuProps = {
 };
 
 export function SmartResizeMenu({ brandId, asset, onAssetChanged }: SmartResizeMenuProps) {
-  const [open, setOpen] = useState(false);
   const disabled = asset.kind !== 'image' || !asset.signedUrl;
   const button = (
-    <Button variant="outline" size="sm" disabled={disabled} onClick={() => setOpen(true)}>
+    <Button variant="outline" size="sm" disabled={disabled}>
       <Scaling className="size-3.5" aria-hidden />
       Reformat
     </Button>
@@ -36,15 +34,13 @@ export function SmartResizeMenu({ brandId, asset, onAssetChanged }: SmartResizeM
           </Tooltip>
         </TooltipProvider>
       ) : (
-        button
+        <QuickReformatMenu
+          asset={asset}
+          brandId={brandId}
+          trigger={button}
+          onCompleted={() => onAssetChanged?.()}
+        />
       )}
-      <ImageReformatDialog
-        open={open}
-        onOpenChange={setOpen}
-        brandId={brandId}
-        asset={asset}
-        onCompleted={() => onAssetChanged?.()}
-      />
     </>
   );
 }

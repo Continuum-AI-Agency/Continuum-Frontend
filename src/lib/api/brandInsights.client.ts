@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  currentWeekStartUtc,
   parseFrame,
   type TrendsReadFrame,
   trendsReadFrameSchema,
@@ -28,19 +29,6 @@ function toIsoDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
-function toUtcMidnight(value: Date) {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
-}
-
-function getCurrentWeekStartUtc() {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const offsetToMonday = (day + 6) % 7;
-  const currentDateAtMidnight = toUtcMidnight(now);
-  currentDateAtMidnight.setUTCDate(currentDateAtMidnight.getUTCDate() - offsetToMonday);
-  return currentDateAtMidnight;
-}
-
 function parseWeekStartDate(weekStartDate: string) {
   const parsed = new Date(`${weekStartDate}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) {
@@ -66,7 +54,7 @@ function resolveRequiredWindow(input: {
     ? parseIsoTimestamp(input.windowStart, 'windowStart')
     : input.weekStartDate
       ? parseWeekStartDate(input.weekStartDate)
-      : getCurrentWeekStartUtc();
+      : currentWeekStartUtc();
 
   const resolvedWindowEndDate = input.windowEnd
     ? parseIsoTimestamp(input.windowEnd, 'windowEnd')

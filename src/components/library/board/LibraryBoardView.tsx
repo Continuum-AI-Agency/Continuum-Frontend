@@ -73,6 +73,10 @@ export type LibraryBoardViewProps = {
   /** Bumped by the viewer after a detail-modal mutation so the lanes re-read. */
   refreshKey?: number;
   onOpenDetail: (asset: MediaAsset) => void;
+  selectedAssetIds?: ReadonlySet<string>;
+  onToggleSelected?: (asset: MediaAsset) => void;
+  groupBy: string;
+  onGroupByChange: (groupBy: string) => void;
 };
 
 function boardQuery(
@@ -163,11 +167,14 @@ export function LibraryBoardView({
   assetsOverride,
   refreshKey = 0,
   onOpenDetail,
+  selectedAssetIds,
+  onToggleSelected,
+  groupBy,
+  onGroupByChange,
 }: LibraryBoardViewProps) {
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeAsset, setActiveAsset] = useState<MediaAsset | null>(null);
-  const [groupByFieldId, setGroupByFieldId] = useState<string | null>(null);
   const [optionByAssetId, setOptionByAssetId] = useState<Map<string, string>>(new Map());
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -179,7 +186,10 @@ export function LibraryBoardView({
 
   // A field deleted (or made non-groupable) while it was the board's group-by
   // must not strand the board on a dimension that no longer exists.
-  const groupField = groupableFields.find((field) => field.id === groupByFieldId) ?? null;
+  const groupField =
+    groupBy === 'review_status'
+      ? null
+      : (groupableFields.find((field) => field.id === groupBy) ?? null);
   const grouping: BoardGrouping = useMemo(
     () => (groupField ? { kind: 'custom_field', field: groupField } : REVIEW_GROUPING),
     [groupField],
@@ -312,7 +322,7 @@ export function LibraryBoardView({
         <GroupByPicker
           label={groupField?.name ?? REVIEW_GROUPING_LABEL}
           fields={groupableFields}
-          onSelect={setGroupByFieldId}
+          onSelect={(fieldId) => onGroupByChange(fieldId ?? 'review_status')}
         />
         {loadError ? <p className="text-2xs text-destructive">{loadError}</p> : null}
       </div>
@@ -324,7 +334,13 @@ export function LibraryBoardView({
       >
         <div className="flex flex-1 gap-3 overflow-x-auto pb-2">
           {lanes.map((lane) => (
-            <BoardColumn key={lane.id} lane={lane} onOpenDetail={onOpenDetail} />
+            <BoardColumn
+              key={lane.id}
+              lane={lane}
+              onOpenDetail={onOpenDetail}
+              selectedAssetIds={selectedAssetIds}
+              onToggleSelected={onToggleSelected}
+            />
           ))}
         </div>
         <DragOverlay dropAnimation={null}>

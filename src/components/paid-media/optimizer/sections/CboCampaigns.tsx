@@ -43,7 +43,7 @@ function softFailMessage(
 ): string {
   switch (reason) {
     case 'not_permitted':
-      return "This ad account isn't linked to the current brand — reconnect it in Integrations, then try again.";
+      return "This ad account isn't assigned to this brand. Assign it in Settings → Integrations, then try again.";
     case 'no_adsets':
       return 'This campaign has no ad sets to convert yet.';
     case 'no_token':

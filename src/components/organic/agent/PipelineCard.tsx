@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import {
   Carousel,
   CarouselContent,
@@ -21,11 +23,9 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { Progress } from '@/components/ui/progress';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
-import { useDraftStoryboard } from '../hooks/useDraftStoryboard';
+import { useDraftRealizedImages, useDraftStoryboard } from '../hooks/useDraftStoryboard';
 import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
 import type {
   CheckpointState,
@@ -272,9 +272,19 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   // Fall back to the persisted draft's storyboard (re-signed on calendar load) when
   // the live blueprint frame didn't populate card.preview — the expand job usually
   // finishes after the chat stream closes, so this is the reliable inline source.
+  const realizedImages = useDraftRealizedImages(card.draftId);
   const draftStoryboard = useDraftStoryboard(card.draftId);
   const cardImages = resolvePreviewImages(card.preview);
-  const previewImages = cardImages.length > 0 ? cardImages : draftStoryboard;
+  // Final realized media (re-signed on calendar load) wins over the live blueprint
+  // preview and the storyboard concept, so the card upgrades to the finished image
+  // after "Generate media"; before realize, the live blueprint frame wins over the
+  // durable storyboard fallback.
+  const previewImages =
+    realizedImages.length > 0
+      ? realizedImages
+      : cardImages.length > 0
+        ? cardImages
+        : draftStoryboard;
 
   // Approve-through media actions, wired exactly like ConceptCard's: Enrich while
   // only text exists, Generate media once the blueprint landed. Neither shows once

@@ -1,18 +1,18 @@
+import { createHash } from 'node:crypto';
 import {
   type RegisteredAssetOriginRef,
   registerCanvasAssetRequestSchema,
 } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
+import { registerGeneratedAssetOperation } from '@/lib/library/creativeOperations';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import {
   type AssetProvenance,
   buildCanvasAssetRow,
   collectContributingAssetIds,
-  mergeOriginRefLineage,
   readSeedSourceAssetId,
   shouldAnalyzeCanvasAsset,
 } from '@/lib/media/canvas-register';
-import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -47,44 +47,57 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdminClient();
   const provenance = await resolveProvenance(admin, input.brandProfileId, input.originRef);
   const row = buildCanvasAssetRow(input, user.id, provenance);
-
-  // Idempotent on (bucket, storage_path): a canvas re-run that reuses the same
-  // storage object will not create a duplicate. With ignoreDuplicates the insert
-  // is skipped on conflict and select returns [].
-  const { data: inserted, error } = await mediaSchema(admin)
-    .from('assets')
-    .upsert(row, { onConflict: 'bucket,storage_path', ignoreDuplicates: true })
-    .select('id');
-
-  if (error) {
-    console.warn('[register-canvas] upsert failed', {
-      storagePath: input.storagePath,
-      error: error.message,
+  try {
+    const identity = `${input.bucket}\0${input.storagePath}`;
+    const registered = await registerGeneratedAssetOperation(supabase, {
+      brandId: row.brand_id,
+      kind: row.kind,
+      bucket: row.bucket,
+      storagePath: row.storage_path,
+      fileName: row.file_name,
+      mimeType: row.mime_type,
+      width: row.width,
+      height: row.height,
+      durationMs: row.duration_ms,
+      sizeBytes: row.size_bytes,
+      source: row.source,
+      operation: input.originRef.kind === 'resize' ? 'quick_resize' : 'canvas_generation',
+      originRef: row.origin_ref,
+      sourceAssetIds: provenance
+        ? [
+            ...new Set(
+              [provenance.sourceAssetId, ...provenance.sourceAssetIds].filter(
+                (id): id is string => typeof id === 'string',
+              ),
+            ),
+          ]
+        : [],
+      tags: [],
+      integrityState: 'unknown',
+      idempotencyKey: `canvas:${createHash('sha256').update(identity).digest('hex')}`,
     });
-    return NextResponse.json({ error: 'Query failed' }, { status: 500 });
-  }
 
-  const insertedRow = (inserted ?? [])[0] as { id: string } | undefined;
-
-  if (insertedRow) {
-    if (shouldAnalyzeCanvasAsset(input.kind)) {
+    // The analysis enqueue is intentionally outside the registration transaction:
+    // the durable asset/version/lineage graph already exists if the provider is
+    // unavailable, and a duplicate registration does not spend twice.
+    if (registered.status === 'created' && shouldAnalyzeCanvasAsset(input.kind)) {
       enqueueAnalyze({
         brandId: input.brandProfileId,
-        assetId: insertedRow.id,
+        assetId: registered.assetId,
         storagePath: input.storagePath,
         bucket: input.bucket,
         mimeType: input.mimeType,
         fileName: input.fileName,
       });
     }
-    return NextResponse.json({ assetId: insertedRow.id });
+    return NextResponse.json({ assetId: registered.assetId });
+  } catch (error) {
+    console.warn('[register-canvas] Creative Operations registration failed', {
+      storagePath: input.storagePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ error: 'Operation failed' }, { status: 500 });
   }
-
-  // Conflict: the asset was already registered — by an earlier run, or by the AI
-  // Studio backend the moment it stored the bytes. Recover its id and fold in any
-  // lineage that row is missing; do not re-analyze.
-  const existingId = await stampLineageOnExistingAsset(admin, input, provenance);
-  return NextResponse.json({ assetId: existingId });
 }
 
 // A canvas output inherits every Library asset that fed the generating node — the
@@ -132,42 +145,6 @@ async function resolveProvenance(
     });
     return null;
   }
-}
-
-// Returns the id of the row already sitting at (bucket, storage_path), after
-// merging in any lineage it does not carry yet. Best-effort on the write: a failed
-// lineage patch still returns the id, because the caller's asset does exist.
-async function stampLineageOnExistingAsset(
-  admin: AdminClient,
-  input: { bucket: string; storagePath: string; brandProfileId: string },
-  provenance: AssetProvenance | null,
-): Promise<string | null> {
-  const { data: existing } = await mediaSchema(admin)
-    .from('assets')
-    .select('id, origin_ref')
-    .eq('bucket', input.bucket)
-    .eq('storage_path', input.storagePath)
-    .eq('brand_id', input.brandProfileId)
-    .maybeSingle();
-
-  const row = existing as { id: string; origin_ref: unknown } | null;
-  if (!row) return null;
-  if (!provenance) return row.id;
-
-  const merged = mergeOriginRefLineage(row.origin_ref, provenance);
-  if (!merged) return row.id;
-
-  const { error } = await mediaSchema(admin)
-    .from('assets')
-    .update({ origin_ref: merged })
-    .eq('id', row.id);
-  if (error) {
-    console.warn('[register-canvas] lineage merge failed', {
-      assetId: row.id,
-      error: error.message,
-    });
-  }
-  return row.id;
 }
 
 // Tier-gated inside the edge function. Fire-and-forget; never blocks the response.

@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-shell-review-*/
 /out/
 
 # production
@@ -86,3 +87,6 @@ calendar/
 /playwright-report/
 /blob-report/
 /.playwright/
+
+# Generated shell-review and E2E Next.js worktrees must not be Tailwind sources.
+/tmp/continuum-next-e2e-shell/

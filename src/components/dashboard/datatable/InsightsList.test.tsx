@@ -33,8 +33,9 @@ describe('InsightsList', () => {
 
   afterEach(() => cleanup());
 
-  it('renders text severity, label, insight, and detail for each item', () => {
+  it('renders an accessible severity label, category label, insight, and detail for each item', () => {
     render(<InsightsList title="Insights" items={items} />);
+    // The severity cue is a tinted icon; its label stays in the DOM for assistive tech.
     expect(screen.getByText('Positive')).toBeDefined();
     expect(screen.getByText('Needs attention')).toBeDefined();
     expect(screen.getByText('Reach is up')).toBeDefined();

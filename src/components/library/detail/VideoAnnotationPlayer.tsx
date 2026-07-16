@@ -112,7 +112,7 @@ export function VideoAnnotationPlayer({
     .filter((m) => m.selected && m.box)
     .map((m) => ({
       id: m.id,
-      box: m.box as NormalizedBox,
+      annotation: { kind: 'box' as const, ...(m.box as NormalizedBox) },
       label: m.initials,
       title: m.title,
       selected: true,
@@ -157,8 +157,11 @@ export function VideoAnnotationPlayer({
           showPinMarkers={false}
           onSelectPin={onSelectMarker}
           drawEnabled={draftTimeMs !== null && !playing}
-          draftBox={draftBox}
-          onDraftBox={setDraftBox}
+          tool="box"
+          draftAnnotation={draftBox ? { kind: 'box', ...draftBox } : null}
+          onDraftAnnotation={(annotation) =>
+            setDraftBox(annotation?.kind === 'box' ? annotation : null)
+          }
         />
       </div>
 

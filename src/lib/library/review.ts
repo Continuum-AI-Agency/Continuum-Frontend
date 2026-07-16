@@ -8,6 +8,8 @@ import {
   type ReviewTransitionResponse,
   reviewTransitionResponseSchema,
 } from '@continuum/contracts';
+import { transitionAssetReviewOperation } from '@/lib/library/creativeOperations';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
@@ -22,17 +24,11 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 export async function transitionReviewStatus(
   request: ReviewTransitionRequest,
 ): Promise<ReviewTransitionResponse> {
-  const response = await fetch('/api/library/review', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+  const result = await transitionAssetReviewOperation(createSupabaseBrowserClient(), {
+    ...request,
+    idempotencyKey: crypto.randomUUID(),
   });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Updating the review status failed'));
-  }
-  const parsed = reviewTransitionResponseSchema.safeParse(await response.json());
-  if (!parsed.success) throw new Error('Review transition response was malformed');
-  return parsed.data;
+  return reviewTransitionResponseSchema.parse(result);
 }
 
 export async function listReviewEvents(params: {

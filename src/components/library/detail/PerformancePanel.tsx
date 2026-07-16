@@ -220,9 +220,7 @@ function MetaRankings({ metrics }: { metrics: DeploymentAd['metrics'] }) {
             key={key}
             className={cn(
               'rounded px-1 py-0.5 text-3xs tabular-nums',
-              weak
-                ? 'bg-destructive/10 text-destructive'
-                : 'bg-muted text-muted-foreground',
+              weak ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground',
             )}
             title={
               weak
@@ -488,11 +486,18 @@ function UsedIn({ usage }: { usage: AssetUsage }) {
       <ul className="space-y-1">
         {usage.derivedAssets.map((derived) => (
           <li
-            key={derived.assetId}
+            key={`${derived.assetId}:${derived.derivedVersionId ?? 'legacy'}`}
             className="flex items-baseline justify-between gap-2 rounded-md border border-border px-2 py-1.5"
+            style={{ marginLeft: `${Math.min(derived.depth - 1, 4) * 8}px` }}
           >
-            <span className="truncate text-2xs text-foreground">
-              {derived.title ?? derived.fileName}
+            <span className="min-w-0">
+              <span className="block truncate text-2xs text-foreground">
+                {derived.title ?? derived.fileName}
+              </span>
+              <span className="block truncate text-3xs text-muted-foreground">
+                {derived.depth > 1 ? `${derived.depth} hops · ` : ''}
+                {derived.operation?.replaceAll('_', ' ') ?? 'legacy relation'}
+              </span>
             </span>
             <span className="shrink-0 text-3xs uppercase tracking-wide text-muted-foreground">
               {derived.kind}

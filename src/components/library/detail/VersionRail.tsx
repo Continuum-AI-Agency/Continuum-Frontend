@@ -11,7 +11,16 @@
 // and the comment partition need it too, so the rail no longer owns the fetch.
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
-import { Columns2, FileIcon, Loader2, MessageSquare, Plus, RotateCcw } from 'lucide-react';
+import {
+  Columns2,
+  FileIcon,
+  Loader2,
+  MessageSquare,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -28,7 +37,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { rollbackAssetVersion, uploadNewAssetVersion } from '@/lib/library/versions';
+import {
+  rollbackAssetVersion,
+  uploadNewAssetVersion,
+  type VersionUploadResumeState,
+} from '@/lib/library/versions';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
@@ -236,25 +249,58 @@ export function VersionRail({
   onChanged,
 }: VersionRailProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadPaused, setUploadPaused] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const resumeStateRef = useRef<VersionUploadResumeState | null>(null);
+  const uploadControllerRef = useRef<AbortController | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
   const [rollbackTarget, setRollbackTarget] = useState<MediaAssetVersion | null>(null);
   const [compareTarget, setCompareTarget] = useState<MediaAssetVersion | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelected = async (file: File | null) => {
-    if (!file) return;
+  const runUpload = async (file: File, resume: VersionUploadResumeState | null) => {
+    const controller = new AbortController();
+    uploadControllerRef.current = controller;
+    setUploadFile(file);
+    setUploadPaused(false);
     setUploading(true);
     try {
-      const result = await uploadNewAssetVersion({ brandId, assetId: asset.id, file });
+      const result = await uploadNewAssetVersion({
+        brandId,
+        assetId: asset.id,
+        file,
+        resume,
+        signal: controller.signal,
+        onResumeState: (state) => {
+          resumeStateRef.current = state;
+        },
+        onProgress: ({ percentage }) => setUploadProgress(percentage),
+      });
       onVersionsChanged(result.versions);
       toast.success(`Version v${result.versionNumber} uploaded`);
       onChanged?.();
+      setUploadFile(null);
+      resumeStateRef.current = null;
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err) {
-      toast.error(`Version upload failed · ${(err as Error).message}`);
+      if ((err as { name?: string }).name === 'AbortError') {
+        setUploadPaused(true);
+      } else {
+        toast.error(`Version upload failed · ${(err as Error).message}`);
+      }
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      uploadControllerRef.current = null;
     }
+  };
+
+  const handleFileSelected = async (file: File | null) => {
+    if (!file) return;
+    resumeStateRef.current = null;
+    setUploadProgress(0);
+    await runUpload(file, null);
   };
 
   const handleRollbackConfirmed = async () => {
@@ -291,20 +337,46 @@ export function VersionRail({
         <h3 className="text-xs font-medium text-muted-foreground">
           Versions{versions && versions.length > 0 ? ` · ${versions.length}` : ''}
         </h3>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          disabled={uploading || rollingBack}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {uploading ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
-          New version
-        </Button>
+        <div className="flex items-center gap-1">
+          {uploading && asset.kind === 'file' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => uploadControllerRef.current?.abort()}
+            >
+              <Pause className="size-3" />
+              Pause {uploadProgress}%
+            </Button>
+          ) : uploadPaused && uploadFile && asset.kind === 'file' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => void runUpload(uploadFile, resumeStateRef.current)}
+            >
+              <Play className="size-3" />
+              Resume {uploadProgress}%
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            disabled={uploading || rollingBack}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+            {asset.kind === 'file' ? 'Upload new version' : 'New version'}
+          </Button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
+          accept={asset.kind === 'file' ? '.aep,.AEP' : `${asset.kind}/*`}
           className="hidden"
           aria-hidden="true"
           tabIndex={-1}

@@ -12,12 +12,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { useSession } from '@/hooks/useSession';
+import { requestAssetReviewOperation } from '@/lib/library/creativeOperations';
 import {
   fetchReviewPingTargets,
   type ReviewPingTarget,
   selectablePingTargets,
   sendReviewPing,
 } from '@/lib/notifications/reviewPing';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type RequestReviewButtonProps = {
   brandId: string;
@@ -65,6 +67,13 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
     setSubmitting(true);
     try {
       const trimmedMessage = message.trim();
+      await requestAssetReviewOperation(createSupabaseBrowserClient(), {
+        brandId,
+        assetId: asset.id,
+        reviewerUserIds: [...selectedIds],
+        ...(trimmedMessage ? { note: trimmedMessage } : {}),
+        idempotencyKey: crypto.randomUUID(),
+      });
       const result = await sendReviewPing({
         brandId,
         assetId: asset.id,

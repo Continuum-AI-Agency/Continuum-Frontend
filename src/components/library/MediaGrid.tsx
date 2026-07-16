@@ -21,6 +21,8 @@ type Props = {
   className?: string;
   onOpenDetail?: (asset: MediaAsset) => void;
   onAssetChanged?: () => void;
+  selectedAssetIds?: ReadonlySet<string>;
+  onToggleSelected?: (asset: MediaAsset) => void;
 };
 
 const cardVariants: Variants = {
@@ -44,6 +46,8 @@ export function MediaGrid({
   className,
   onOpenDetail,
   onAssetChanged,
+  selectedAssetIds,
+  onToggleSelected,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -95,6 +99,8 @@ export function MediaGrid({
               captionStyle={captionStyle}
               onOpen={onOpenDetail}
               onAssetChanged={onAssetChanged}
+              selected={selectedAssetIds?.has(asset.id)}
+              onToggleSelected={onToggleSelected}
             />
           ))}
         </div>
@@ -116,6 +122,8 @@ export function MediaGrid({
                   captionStyle={captionStyle}
                   onOpen={onOpenDetail}
                   onAssetChanged={onAssetChanged}
+                  selected={selectedAssetIds?.has(asset.id)}
+                  onToggleSelected={onToggleSelected}
                 />
               </motion.div>
             ))}

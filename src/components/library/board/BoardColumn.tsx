@@ -13,9 +13,13 @@ import type { BoardLane } from './boardGrouping';
 export function BoardColumn({
   lane,
   onOpenDetail,
+  selectedAssetIds,
+  onToggleSelected,
 }: {
   lane: BoardLane;
   onOpenDetail: (asset: MediaAsset) => void;
+  selectedAssetIds?: ReadonlySet<string>;
+  onToggleSelected?: (asset: MediaAsset) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: lane.id });
 
@@ -36,7 +40,13 @@ export function BoardColumn({
         )}
       >
         {lane.assets.map((asset) => (
-          <BoardCard key={asset.id} asset={asset} onOpen={onOpenDetail} />
+          <BoardCard
+            key={asset.id}
+            asset={asset}
+            onOpen={onOpenDetail}
+            selected={selectedAssetIds?.has(asset.id)}
+            onToggleSelected={onToggleSelected}
+          />
         ))}
         {lane.assets.length === 0 ? (
           <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 p-3">

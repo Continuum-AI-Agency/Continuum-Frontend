@@ -64,9 +64,13 @@ export function BoardCardContent({ asset }: { asset: MediaAsset }) {
 export function BoardCard({
   asset,
   onOpen,
+  selected = false,
+  onToggleSelected,
 }: {
   asset: MediaAsset;
   onOpen: (asset: MediaAsset) => void;
+  selected?: boolean;
+  onToggleSelected?: (asset: MediaAsset) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: asset.id,
@@ -74,19 +78,41 @@ export function BoardCard({
   });
 
   return (
-    <button
+    <div
       ref={setNodeRef}
-      type="button"
-      onClick={() => onOpen(asset)}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
-        'block w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group relative block w-full touch-none rounded-md outline-none',
+        selected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
         isDragging && 'opacity-40',
       )}
-      {...listeners}
-      {...attributes}
     >
-      <BoardCardContent asset={asset} />
-    </button>
+      <button
+        type="button"
+        onClick={() => onOpen(asset)}
+        className="block w-full cursor-grab rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        {...listeners}
+        {...attributes}
+      >
+        <BoardCardContent asset={asset} />
+      </button>
+      {onToggleSelected ? (
+        <button
+          type="button"
+          aria-label={selected ? `Deselect ${asset.title ?? asset.fileName}` : `Select ${asset.title ?? asset.fileName}`}
+          aria-pressed={selected}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelected(asset);
+          }}
+          className={cn(
+            'absolute left-2 top-2 flex size-5 items-center justify-center rounded border bg-background/90 text-primary shadow-sm backdrop-blur transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            selected ? 'border-primary opacity-100' : 'opacity-0 group-hover:opacity-100',
+          )}
+        >
+          {selected ? <span aria-hidden>✓</span> : null}
+        </button>
+      ) : null}
+    </div>
   );
 }

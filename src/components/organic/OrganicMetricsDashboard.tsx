@@ -2683,26 +2683,16 @@ export function OrganicMetricsDashboard({
               mode="single"
               accountsByPlatform={scopeAccountsByPlatform}
               platform={platform}
-              onPlatformChange={(next) => {
-                startTransition(() => {
-                  setPlatform(next);
-                  const first = accountsByPlatform[next]?.[0]?.integrationAccountId ?? null;
-                  if (first) {
-                    setSelectedAccountByPlatform((current) => ({
-                      ...current,
-                      [next]: first,
-                    }));
-                    setSelection(brandId, next, first);
-                  }
-                });
-              }}
               accountId={selectedAccountId}
-              onAccountChange={(value) => {
-                setSelectedAccountByPlatform((current) => ({
-                  ...current,
-                  [platform]: value,
-                }));
-                setSelection(brandId, platform, value);
+              onSelect={(nextPlatform, accountId) => {
+                startTransition(() => {
+                  setPlatform(nextPlatform);
+                  setSelectedAccountByPlatform((current) => ({
+                    ...current,
+                    [nextPlatform]: accountId,
+                  }));
+                  setSelection(brandId, nextPlatform, accountId);
+                });
               }}
             />
           </div>

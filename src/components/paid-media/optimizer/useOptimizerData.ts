@@ -326,10 +326,10 @@ async function createPortfolio(request: CreatePortfolioRequest): Promise<{ portf
   if (error) {
     const code = pgErrorCode(error);
     // 42501 = insufficient_privilege — the RPC raises it when the ad account is
-    // not linked to this brand. Surface a clean inline message, not a stack.
+    // not assigned to this brand. Surface a clean inline message, not a stack.
     const message =
       code === '42501'
-        ? "That ad account isn't connected to this brand."
+        ? "This ad account isn't assigned to this brand. Assign it in Settings → Integrations."
         : 'Could not create the portfolio. The optimizer backend may not be reachable yet.';
     throw new OptimizerRpcError(message, code);
   }

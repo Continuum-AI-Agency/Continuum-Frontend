@@ -19,7 +19,13 @@ const nextConfig: NextConfig = {
   // Keep generated route types from isolated benches out of the primary
   // tsconfig so a benchmark never mutates the developer's compiler inputs.
   ...(tsconfigPath ? { typescript: { tsconfigPath } } : {}),
+  // The isolated browser benches use 127.0.0.1 rather than localhost so their
+  // cookies and local Supabase host match. Keep Turbopack HMR quiet there.
+  ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ['127.0.0.1'] } : {}),
   images: {
+    // Next 16 rejects private IPs in the optimizer by default. Local Supabase
+    // signed URLs are intentionally private and only available in development.
+    ...(process.env.NODE_ENV === 'development' ? { dangerouslyAllowLocalIP: true } : {}),
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/sign/**' },
       // The local Supabase stack signs from http://127.0.0.1:54321; without this

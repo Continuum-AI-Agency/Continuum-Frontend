@@ -7,7 +7,10 @@ import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
-import { usePrefetchOptimizerOverview } from '@/components/paid-media/optimizer/useOptimizerData';
+import {
+  useOptimizerAdAccounts,
+  usePrefetchOptimizerOverview,
+} from '@/components/paid-media/optimizer/useOptimizerData';
 import { PaidSetupDiagnostics } from '@/components/paid-media/PaidSetupDiagnostics';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -157,6 +160,19 @@ export default function PaidMediaClientPage({
   const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const prefetchOptimizerOverview = usePrefetchOptimizerOverview(brandProfileId, selectedAdAccount);
+
+  // The optimizer admits only ad accounts ASSIGNED to this brand
+  // (plugin_mcp.list_brand_ad_accounts). Scope the picker to that exact set so it
+  // can never offer an account the optimizer rejects with "isn't linked to this
+  // brand". That RPC covers meta + google only — LinkedIn stays unfiltered. While
+  // the query loads or errors we pass undefined so the selector shows everything
+  // (an outage must never dead-end the picker).
+  const optimizerAccounts = useOptimizerAdAccounts(brandProfileId);
+  const assignedAccountIds = React.useMemo(() => {
+    if (platform !== 'meta' && platform !== 'google-ads') return undefined;
+    if (!optimizerAccounts.isSuccess) return undefined;
+    return optimizerAccounts.data.map((account) => account.account_id);
+  }, [platform, optimizerAccounts.isSuccess, optimizerAccounts.data]);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
   const handlePlatformChange = React.useCallback(
@@ -398,6 +414,7 @@ export default function PaidMediaClientPage({
               selectedAccountId={selectedAdAccount}
               onSelect={setSelectedAdAccount}
               initialTimelineAccounts={initialAccounts}
+              assignedAccountIds={assignedAccountIds}
             />
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">

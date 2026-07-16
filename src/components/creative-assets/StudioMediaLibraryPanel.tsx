@@ -5,7 +5,7 @@ import type { MediaAsset } from '@continuum/contracts';
 import { AlertTriangle, ImageOff, Loader2, Play, Scaling, Search } from 'lucide-react';
 import React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
-import { ImageReformatDialog } from '@/components/library/reformat/ImageReformatDialog';
+import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { setStudioAssetDragData } from '@/lib/creative-assets/studioAssetDrop';
@@ -96,7 +96,6 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
   const url = sanitizeCreativeAssetUrl(asset.signedUrl);
   const isVideo = asset.kind === 'video';
   const label = asset.title ?? asset.fileName;
-  const [reformatOpen, setReformatOpen] = React.useState(false);
 
   // Detail surfaces on hover (in context), not on click. Drag-to-canvas stays
   // on the trigger via dragstart; click is intentionally left free.
@@ -133,19 +132,21 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
             )}
 
             {!isVideo && url ? (
-              <button
-                type="button"
-                aria-label={`Reformat ${label}`}
-                title="Reformat image"
-                className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setReformatOpen(true);
-                }}
-              >
-                <Scaling className="h-3.5 w-3.5" />
-              </button>
+              <QuickReformatMenu
+                asset={asset}
+                brandId={brandId}
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={`Reformat ${label}`}
+                    title="Reformat image"
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Scaling className="h-3.5 w-3.5" />
+                  </button>
+                }
+              />
             ) : null}
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -155,12 +156,6 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
         </HoverCardTrigger>
         <StudioAssetHoverDetail asset={asset} url={url} isVideo={isVideo} label={label} />
       </HoverCard>
-      <ImageReformatDialog
-        open={reformatOpen}
-        onOpenChange={setReformatOpen}
-        brandId={brandId}
-        asset={asset}
-      />
     </>
   );
 }

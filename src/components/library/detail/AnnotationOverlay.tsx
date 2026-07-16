@@ -1,12 +1,13 @@
 'use client';
 
 // Annotation surface shared by the image stage and the paused video frame:
-// renders existing annotation boxes (numbered pins + outlines), supports
-// drag-to-draw a new normalized box, and anchors a composer to the draft box.
+// renders existing spatial annotations (numbered pins + geometry), supports
+// point, rectangle, and freehand drafts, and anchors a composer to the draft.
 // All geometry is normalized 0..1 against the object-contain content rect so
 // pins land on the pixels regardless of letterboxing.
 
 import { useCallback, useRef, useState } from 'react';
+import type { CommentAnnotation } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
 import {
   type CssRect,
@@ -22,11 +23,14 @@ import {
 
 export type OverlayPin = {
   id: string;
-  box: NormalizedBox;
+  annotation: SpatialAnnotation;
   label: string;
   title: string;
   selected: boolean;
 };
+
+export type SpatialAnnotation = Exclude<CommentAnnotation, { kind: 'time' }>;
+export type AnnotationTool = SpatialAnnotation['kind'];
 
 type Props = {
   containerSize: Size | null;
@@ -36,15 +40,98 @@ type Props = {
   showPinMarkers?: boolean;
   onSelectPin?: (id: string | null) => void;
   drawEnabled: boolean;
-  draftBox: NormalizedBox | null;
-  onDraftBox?: (box: NormalizedBox | null) => void;
-  /** Composer anchored to the draft box. */
+  tool?: AnnotationTool;
+  draftAnnotation: SpatialAnnotation | null;
+  onDraftAnnotation?: (annotation: SpatialAnnotation | null) => void;
+  /** Composer anchored to the draft annotation. */
   composer?: React.ReactNode;
   composerWidth?: number;
 };
 
 function boxStyle(rect: CssRect): React.CSSProperties {
   return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+}
+
+function annotationBounds(annotation: SpatialAnnotation): NormalizedBox {
+  if (annotation.kind === 'box') return annotation;
+  if (annotation.kind === 'point') {
+    return { x: annotation.x, y: annotation.y, width: 0, height: 0 };
+  }
+  const xs = annotation.points.map((point) => point.x);
+  const ys = annotation.points.map((point) => point.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return {
+    x,
+    y,
+    width: Math.max(...xs) - x,
+    height: Math.max(...ys) - y,
+  };
+}
+
+function annotationAnchor(annotation: SpatialAnnotation): NormalizedPoint {
+  if (annotation.kind === 'point') return annotation;
+  if (annotation.kind === 'box') return { x: annotation.x, y: annotation.y };
+  return annotation.points[0] ?? { x: 0, y: 0 };
+}
+
+function SpatialShape({
+  annotation,
+  contentRect,
+  draft = false,
+}: {
+  annotation: SpatialAnnotation;
+  contentRect: CssRect;
+  draft?: boolean;
+}) {
+  const colorClass = draft ? 'border-dashed' : '';
+  if (annotation.kind === 'box') {
+    return (
+      <div
+        className={cn(
+          'pointer-events-none absolute rounded-sm border-2 border-primary bg-primary/10',
+          colorClass,
+        )}
+        style={boxStyle(normalizedBoxToCssRect(annotation, contentRect))}
+      />
+    );
+  }
+  if (annotation.kind === 'point') {
+    return (
+      <div
+        className={cn(
+          'pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-primary/20',
+          colorClass,
+        )}
+        style={{
+          left: contentRect.left + annotation.x * contentRect.width,
+          top: contentRect.top + annotation.y * contentRect.height,
+        }}
+      />
+    );
+  }
+  const points = annotation.points
+    .map((point) => `${point.x * contentRect.width},${point.y * contentRect.height}`)
+    .join(' ');
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute overflow-visible"
+      style={boxStyle(contentRect)}
+      viewBox={`0 0 ${contentRect.width} ${contentRect.height}`}
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="hsl(var(--primary))"
+        strokeWidth="3"
+        strokeDasharray={draft ? '5 4' : undefined}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
 }
 
 export function AnnotationOverlay({
@@ -54,14 +141,16 @@ export function AnnotationOverlay({
   showPinMarkers = true,
   onSelectPin,
   drawEnabled,
-  draftBox,
-  onDraftBox,
+  tool = 'box',
+  draftAnnotation,
+  onDraftAnnotation,
   composer,
   composerWidth = 288,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [dragStart, setDragStart] = useState<NormalizedPoint | null>(null);
   const [dragCurrent, setDragCurrent] = useState<NormalizedPoint | null>(null);
+  const [freehandPoints, setFreehandPoints] = useState<NormalizedPoint[]>([]);
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
 
   const pointFromEvent = useCallback(
@@ -77,41 +166,71 @@ export function AnnotationOverlay({
     [contentRect],
   );
 
-  const canDraw = drawEnabled && !draftBox && Boolean(contentRect) && Boolean(onDraftBox);
+  const canDraw =
+    drawEnabled && !draftAnnotation && Boolean(contentRect) && Boolean(onDraftAnnotation);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!canDraw || e.button !== 0) return;
     const point = pointFromEvent(e);
     if (!point) return;
+    if (tool === 'point') {
+      onDraftAnnotation?.({ kind: 'point', ...point });
+      return;
+    }
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragStart(point);
     setDragCurrent(point);
+    if (tool === 'freehand') setFreehandPoints([point]);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragStart) return;
     const point = pointFromEvent(e);
-    if (point) setDragCurrent(point);
+    if (!point) return;
+    setDragCurrent(point);
+    if (tool === 'freehand') {
+      setFreehandPoints((current) => {
+        const previous = current[current.length - 1];
+        if (!previous || Math.hypot(point.x - previous.x, point.y - previous.y) >= 0.002) {
+          return current.length >= 1024 ? current : [...current, point];
+        }
+        return current;
+      });
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!dragStart) return;
     const end = pointFromEvent(e) ?? dragCurrent ?? dragStart;
     const box = normalizedBoxFromPoints(dragStart, end);
+    const completedFreehand =
+      tool === 'freehand'
+        ? [...freehandPoints, end].filter(
+            (point, index, points) =>
+              index === 0 || point.x !== points[index - 1]?.x || point.y !== points[index - 1]?.y,
+          )
+        : [];
     setDragStart(null);
     setDragCurrent(null);
-    if (isMeaningfulBox(box)) {
-      onDraftBox?.(box);
+    setFreehandPoints([]);
+    if (tool === 'freehand' && completedFreehand.length >= 2) {
+      onDraftAnnotation?.({ kind: 'freehand', points: completedFreehand.slice(0, 1024) });
+    } else if (tool === 'box' && isMeaningfulBox(box)) {
+      onDraftAnnotation?.({ kind: 'box', ...box });
     } else {
       onSelectPin?.(null);
     }
   };
 
-  const liveDragBox =
-    dragStart && dragCurrent ? normalizedBoxFromPoints(dragStart, dragCurrent) : null;
+  const liveAnnotation: SpatialAnnotation | null =
+    tool === 'freehand' && freehandPoints.length >= 2
+      ? { kind: 'freehand', points: freehandPoints }
+      : dragStart && dragCurrent
+        ? { kind: 'box', ...normalizedBoxFromPoints(dragStart, dragCurrent) }
+        : null;
   const anchor =
-    draftBox && contentRect && containerSize
-      ? composerAnchor(draftBox, contentRect, containerSize, composerWidth)
+    draftAnnotation && contentRect && containerSize
+      ? composerAnchor(annotationBounds(draftAnnotation), contentRect, containerSize, composerWidth)
       : null;
 
   return (
@@ -126,16 +245,11 @@ export function AnnotationOverlay({
     >
       {contentRect &&
         pins.map((pin) => {
-          const rect = normalizedBoxToCssRect(pin.box, contentRect);
+          const marker = annotationAnchor(pin.annotation);
           const outlined = pin.selected || hoveredPinId === pin.id;
           return (
             <div key={pin.id}>
-              {outlined && (
-                <div
-                  className="pointer-events-none absolute rounded-sm border-2 border-primary bg-primary/10"
-                  style={boxStyle(rect)}
-                />
-              )}
+              {outlined && <SpatialShape annotation={pin.annotation} contentRect={contentRect} />}
               {showPinMarkers && (
                 <button
                   type="button"
@@ -156,7 +270,10 @@ export function AnnotationOverlay({
                       ? 'scale-110 bg-primary text-primary-foreground ring-2 ring-background'
                       : 'bg-background text-foreground ring-1 ring-border hover:scale-110',
                   )}
-                  style={{ left: rect.left, top: rect.top }}
+                  style={{
+                    left: contentRect.left + marker.x * contentRect.width,
+                    top: contentRect.top + marker.y * contentRect.height,
+                  }}
                 >
                   {pin.label}
                 </button>
@@ -165,18 +282,12 @@ export function AnnotationOverlay({
           );
         })}
 
-      {contentRect && liveDragBox && (
-        <div
-          className="pointer-events-none absolute rounded-sm border-2 border-dashed border-primary bg-primary/10"
-          style={boxStyle(normalizedBoxToCssRect(liveDragBox, contentRect))}
-        />
+      {contentRect && liveAnnotation && (
+        <SpatialShape annotation={liveAnnotation} contentRect={contentRect} draft />
       )}
 
-      {contentRect && draftBox && (
-        <div
-          className="pointer-events-none absolute rounded-sm border-2 border-primary bg-primary/10"
-          style={boxStyle(normalizedBoxToCssRect(draftBox, contentRect))}
-        />
+      {contentRect && draftAnnotation && (
+        <SpatialShape annotation={draftAnnotation} contentRect={contentRect} />
       )}
 
       {anchor && composer && (

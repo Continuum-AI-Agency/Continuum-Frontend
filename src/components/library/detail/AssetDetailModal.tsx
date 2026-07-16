@@ -49,6 +49,7 @@ import { useAssetTranscript } from './useAssetTranscript';
 import { useAssetVersions } from './useAssetVersions';
 import { VersionRail } from './VersionRail';
 import { VideoAnnotationPlayer } from './VideoAnnotationPlayer';
+import { VideoInsightsPanel } from './VideoInsightsPanel';
 import { ViewingVersionBanner } from './ViewingVersionBanner';
 
 export type AssetDetailModalProps = {
@@ -62,7 +63,7 @@ export type AssetDetailModalProps = {
 // Performance and Fields are further sidebar destinations alongside the two the
 // transcript module knows about; neither has a say in `preferredSidebarTab`, so
 // they widen the tab union here rather than in transcriptSegments.
-type DetailSidebarTab = SidebarTab | 'performance' | 'fields';
+type DetailSidebarTab = SidebarTab | 'performance' | 'fields' | 'insights';
 
 function assetMetaLine(asset: MediaAsset): string {
   const parts: string[] = [
@@ -301,7 +302,7 @@ function AssetDetailDialog({
       <DialogContent
         showOverlay={false}
         onInteractOutside={(event) => event.preventDefault()}
-        className="fixed inset-y-4 right-4 left-auto flex h-auto w-[min(56rem,calc(100vw-2rem))] max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-none"
+        className="fixed inset-4 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-none"
       >
         <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 pr-14">
           <div className="min-w-0">
@@ -343,9 +344,7 @@ function AssetDetailDialog({
                   pins={imagePins}
                   onSelectPin={setSelectedCommentId}
                   posting={posting}
-                  onPostAnnotated={(body, box) =>
-                    void post({ body, annotation: { kind: 'box', ...box } })
-                  }
+                  onPostAnnotated={(body, annotation) => void post({ body, annotation })}
                 />
               ) : stage.kind === 'video' ? (
                 <VideoAnnotationPlayer
@@ -426,7 +425,7 @@ function AssetDetailDialog({
           </div>
 
           <aside className="flex w-[360px] shrink-0 flex-col border-l border-border">
-            <div className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-2">
+            <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-3 py-2">
               <SidebarTabButton
                 active={sidebarTab === 'comments'}
                 onClick={() => chooseTab('comments')}
@@ -445,6 +444,14 @@ function AssetDetailDialog({
                   Transcript
                 </SidebarTabButton>
               )}
+              {transcriptEnabled && asset.videoInsights ? (
+                <SidebarTabButton
+                  active={sidebarTab === 'insights'}
+                  onClick={() => chooseTab('insights')}
+                >
+                  Insights
+                </SidebarTabButton>
+              ) : null}
               <SidebarTabButton
                 active={sidebarTab === 'fields'}
                 onClick={() => chooseTab('fields')}
@@ -463,6 +470,8 @@ function AssetDetailDialog({
               <AssetFieldsPanel brandId={brandId} assetId={asset.id} />
             ) : sidebarTab === 'performance' ? (
               <PerformancePanel brandId={brandId} assetId={asset.id} />
+            ) : sidebarTab === 'insights' && transcriptEnabled && asset.videoInsights ? (
+              <VideoInsightsPanel insights={asset.videoInsights} onSeek={seekTo} />
             ) : sidebarTab === 'transcript' && transcriptEnabled ? (
               <TranscriptPanel
                 view={transcript.view}

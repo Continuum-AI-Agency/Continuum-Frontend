@@ -4,10 +4,16 @@
 // composer anchored to it; existing annotated threads render as numbered pins
 // whose boxes outline on hover/selection.
 
-import { ImageOff } from 'lucide-react';
+import type { CommentAnnotation } from '@continuum/contracts';
+import { BoxSelect, ImageOff, MousePointer2, Pencil } from 'lucide-react';
 import { useState } from 'react';
-import { AnnotationOverlay, type OverlayPin } from './AnnotationOverlay';
-import type { NormalizedBox } from './annotationGeometry';
+import { Button } from '@/components/ui/button';
+import {
+  type AnnotationTool,
+  AnnotationOverlay,
+  type OverlayPin,
+  type SpatialAnnotation,
+} from './AnnotationOverlay';
 import { CommentComposer } from './CommentComposer';
 import { useStageGeometry } from './useStageGeometry';
 
@@ -17,7 +23,7 @@ type Props = {
   pins: OverlayPin[];
   onSelectPin: (id: string | null) => void;
   posting: boolean;
-  onPostAnnotated: (body: string, box: NormalizedBox) => void;
+  onPostAnnotated: (body: string, annotation: SpatialAnnotation) => void;
 };
 
 export function ImageAnnotationLayer({
@@ -29,7 +35,8 @@ export function ImageAnnotationLayer({
   onPostAnnotated,
 }: Props) {
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
-  const [draftBox, setDraftBox] = useState<NormalizedBox | null>(null);
+  const [tool, setTool] = useState<AnnotationTool>('point');
+  const [draftAnnotation, setDraftAnnotation] = useState<SpatialAnnotation | null>(null);
   const [mediaError, setMediaError] = useState(false);
 
   if (!src || mediaError) {
@@ -42,6 +49,40 @@ export function ImageAnnotationLayer({
 
   return (
     <div ref={containerRef} className="relative size-full select-none">
+      <div
+        className="absolute left-3 top-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur"
+        role="toolbar"
+        aria-label="Image annotation tools"
+      >
+        {(
+          [
+            { value: 'point', label: 'Point', icon: MousePointer2 },
+            { value: 'box', label: 'Rectangle', icon: BoxSelect },
+            { value: 'freehand', label: 'Freehand', icon: Pencil },
+          ] as const satisfies ReadonlyArray<{
+            value: Exclude<CommentAnnotation['kind'], 'time'>;
+            label: string;
+            icon: typeof MousePointer2;
+          }>
+        ).map(({ value, label, icon: Icon }) => (
+          <Button
+            key={value}
+            type="button"
+            size="icon"
+            variant={tool === value ? 'secondary' : 'ghost'}
+            className="size-8"
+            aria-label={`${label} annotation`}
+            aria-pressed={tool === value}
+            title={label}
+            onClick={() => {
+              setTool(value);
+              setDraftAnnotation(null);
+            }}
+          >
+            <Icon className="size-3.5" />
+          </Button>
+        ))}
+      </div>
       {/* Signed storage URL rendered at natural fit for pixel-accurate annotation geometry; next/image transforms would skew the measured intrinsic size. */}
       {/* biome-ignore lint/performance/noImgElement: annotation math needs the untransformed intrinsic frame */}
       <img
@@ -61,19 +102,20 @@ export function ImageAnnotationLayer({
         pins={pins}
         onSelectPin={onSelectPin}
         drawEnabled
-        draftBox={draftBox}
-        onDraftBox={setDraftBox}
+        tool={tool}
+        draftAnnotation={draftAnnotation}
+        onDraftAnnotation={setDraftAnnotation}
         composer={
-          draftBox ? (
+          draftAnnotation ? (
             <CommentComposer
-              placeholder="Comment on this region..."
+              placeholder="Comment on this annotation..."
               busy={posting}
               autoFocus
               onSubmit={(body) => {
-                onPostAnnotated(body, draftBox);
-                setDraftBox(null);
+                onPostAnnotated(body, draftAnnotation);
+                setDraftAnnotation(null);
               }}
-              onCancel={() => setDraftBox(null)}
+              onCancel={() => setDraftAnnotation(null)}
             />
           ) : undefined
         }

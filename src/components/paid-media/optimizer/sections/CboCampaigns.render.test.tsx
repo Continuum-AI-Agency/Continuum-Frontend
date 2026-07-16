@@ -140,6 +140,23 @@ describe('CboCampaigns', () => {
     expect(getByText('Reconnect Meta to preview the conversion.')).toBeTruthy();
   });
 
+  it('tells the user to ASSIGN (not reconnect) an unassigned account', () => {
+    convertState.data = { ok: false, reason: 'not_permitted', adset_budgets: [] };
+    const { getByText } = render(
+      <CboCampaigns
+        brandId="b1"
+        accountId="act_1"
+        currency="USD"
+        sections={[section({ campaignId: 'c1' })]}
+      />,
+    );
+    expect(
+      getByText(
+        "This ad account isn't assigned to this brand. Assign it in Settings → Integrations, then try again.",
+      ),
+    ).toBeTruthy();
+  });
+
   it('shows a loading state while the preview computes', () => {
     convertState.isPending = true;
     const { getByText } = render(

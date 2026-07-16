@@ -2,21 +2,23 @@ import 'server-only';
 
 import type {
   CustomFieldFilter,
+  LibrarySort,
   MediaAsset,
   MediaCollection,
   MediaKind,
   MediaSource,
 } from '@continuum/contracts';
+import { DEFAULT_LIBRARY_SORT } from '@continuum/contracts';
 import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
-import { kindMatchOrFilter, paginateByMembership } from './filters';
+import { getLibrarySortOrder, kindMatchOrFilter, paginateByMembership } from './filters';
 import { rowToSignedMediaAsset } from './mapper';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';
-import { mediaSchema } from './supabase-media';
 import { sumActiveMediaAssetBytes } from './storage-usage';
+import { mediaSchema } from './supabase-media';
 
 const PAGE_SIZE = 48;
 
@@ -31,6 +33,7 @@ export async function fetchMediaAssets(
     source?: MediaSource;
     kind?: MediaKind;
     tags?: readonly string[];
+    sort?: LibrarySort;
   } = {},
 ): Promise<MediaAsset[]> {
   const client = await createSupabaseServerClient();
@@ -126,7 +129,11 @@ export async function fetchMediaAssets(
     const members = (data ?? []) as unknown as MediaAssetRow[];
     rows = paginateByMembership(members, assetIds, 0, limit).page;
   } else {
-    const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
+    const order = getLibrarySortOrder(options.sort ?? DEFAULT_LIBRARY_SORT);
+    const { data, error } = await query
+      .order(order.column, { ascending: order.ascending })
+      .order('id', { ascending: true })
+      .limit(limit);
     if (error) {
       console.error('[media/fetchers] assets query failed', error);
       return [];

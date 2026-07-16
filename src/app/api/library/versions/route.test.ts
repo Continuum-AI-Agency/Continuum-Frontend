@@ -98,9 +98,212 @@ function seed(params: { asset?: FakeRow; versions?: FakeRow[] } = {}): FakeDb {
   });
 }
 
+function operationFailure(message: string, status: number) {
+  return { data: null, error: { message, context: new Response(null, { status }) } };
+}
+
+function versionResponse(db: FakeDb, head: FakeRow) {
+  const rows = [...versionsOf(db)].sort(
+    (left, right) => Number(right.version_number) - Number(left.version_number),
+  );
+  const headVersionId = rows.find(
+    (row) => row.bucket === head.bucket && row.storage_path === head.storage_path,
+  )?.id;
+  return {
+    versions: rows.map((row) => ({
+      id: row.id,
+      brandId: row.brand_id,
+      assetId: row.asset_id,
+      versionNumber: row.version_number,
+      bucket: row.bucket,
+      storagePath: row.storage_path,
+      fileName: row.file_name,
+      mimeType: row.mime_type,
+      sizeBytes: row.size_bytes,
+      width: row.width,
+      height: row.height,
+      durationMs: row.duration_ms,
+      checksum: row.checksum,
+      note: row.note,
+      createdBy: row.created_by,
+      authorName:
+        row.created_by === USER_ID
+          ? 'uploader@continuum.test'
+          : row.created_by === 'creator-1'
+            ? 'creator@continuum.test'
+            : null,
+      signedUrl: `https://signed/${String(row.storage_path)}`,
+      isHead: row.id === headVersionId,
+      createdAt: row.created_at,
+    })),
+  };
+}
+
+function ensureV1(
+  db: FakeDb,
+  head: FakeRow,
+): { maxVersionNumber: number } | ReturnType<typeof operationFailure> {
+  if (versionsOf(db).length === 0) {
+    const insert = db.insert('media.asset_versions', {
+      brand_id: head.brand_id,
+      asset_id: head.id,
+      version_number: 1,
+      bucket: head.bucket,
+      storage_path: head.storage_path,
+      file_name: head.file_name,
+      mime_type: head.mime_type,
+      size_bytes: head.size_bytes,
+      width: head.width,
+      height: head.height,
+      duration_ms: head.duration_ms,
+      checksum: head.checksum,
+      note: null,
+      created_by: head.created_by,
+    });
+    if (insert.error && insert.error.code !== '23505')
+      return operationFailure(insert.error.message, 500);
+  }
+  const newest = [...versionsOf(db)].sort(
+    (left, right) => Number(right.version_number) - Number(left.version_number),
+  )[0];
+  return { maxVersionNumber: Number(newest?.version_number ?? 1) };
+}
+
+function fakeCreativeOperations(db: FakeDb, body: Record<string, unknown>) {
+  const head = db
+    .rows('media.assets')
+    .find((row) => row.id === body.assetId && row.brand_id === body.brandId);
+  if (!head) return operationFailure('Asset not found', 404);
+
+  if (body.action === 'list_asset_versions')
+    return { data: versionResponse(db, head), error: null };
+
+  if (body.action === 'register_asset_version') {
+    const bucket = body.bucket;
+    const storagePath = body.storagePath;
+    if (
+      typeof bucket !== 'string' ||
+      typeof storagePath !== 'string' ||
+      bucket !== head.bucket ||
+      !storagePath.startsWith(`${String(body.brandId)}/${String(body.assetId)}/`)
+    ) {
+      return operationFailure('Invalid storage location', 422);
+    }
+    const ensured = ensureV1(db, head);
+    if ('error' in ensured) return ensured;
+    const versionNumber = ensured.maxVersionNumber + 1;
+    const insert = db.insert('media.asset_versions', {
+      brand_id: body.brandId,
+      asset_id: body.assetId,
+      version_number: versionNumber,
+      bucket,
+      storage_path: storagePath,
+      file_name: body.fileName,
+      mime_type: body.mimeType,
+      size_bytes: body.sizeBytes,
+      width: null,
+      height: null,
+      duration_ms: null,
+      checksum: null,
+      note: body.note ?? null,
+      created_by: USER_ID,
+    });
+    if (insert.error)
+      return operationFailure(insert.error.message, insert.error.code === '23505' ? 409 : 500);
+    Object.assign(head, {
+      bucket,
+      storage_path: storagePath,
+      file_name: body.fileName,
+      mime_type: body.mimeType,
+      size_bytes: body.sizeBytes,
+      width: null,
+      height: null,
+      duration_ms: null,
+      checksum: null,
+    });
+    if (head.review_status === 'approved' || head.review_status === 'needs_changes') {
+      const fromStatus = head.review_status;
+      head.review_status = 'in_review';
+      head.review_status_updated_at = '2026-07-11T00:00:00Z';
+      db.insert('media.asset_review_events', {
+        brand_id: body.brandId,
+        asset_id: body.assetId,
+        from_status: fromStatus,
+        to_status: 'in_review',
+        actor: USER_ID,
+        note: `v${versionNumber} uploaded — review reset`,
+      });
+    }
+    return {
+      data: { assetId: body.assetId, versionNumber, ...versionResponse(db, head) },
+      error: null,
+    };
+  }
+
+  if (body.action === 'rollback_asset_version') {
+    const target = versionsOf(db).find((row) => row.id === body.versionId);
+    if (!target) return operationFailure('Version not found', 404);
+    if (target.bucket === head.bucket && target.storage_path === head.storage_path) {
+      return {
+        data: {
+          assetId: body.assetId,
+          versionNumber: target.version_number,
+          ...versionResponse(db, head),
+        },
+        error: null,
+      };
+    }
+    const versionNumber = Math.max(...versionsOf(db).map((row) => Number(row.version_number))) + 1;
+    const { id: _id, created_at: _createdAt, ...targetCopy } = target;
+    const insert = db.insert('media.asset_versions', {
+      ...targetCopy,
+      version_number: versionNumber,
+      note: `Rolled back to v${String(target.version_number)}`,
+      created_by: USER_ID,
+    });
+    if (insert.error)
+      return operationFailure(insert.error.message, insert.error.code === '23505' ? 409 : 500);
+    Object.assign(head, {
+      bucket: target.bucket,
+      storage_path: target.storage_path,
+      file_name: target.file_name,
+      mime_type: target.mime_type,
+      size_bytes: target.size_bytes,
+      width: target.width,
+      height: target.height,
+      duration_ms: target.duration_ms,
+      checksum: target.checksum,
+    });
+    return {
+      data: { assetId: body.assetId, versionNumber, ...versionResponse(db, head) },
+      error: null,
+    };
+  }
+
+  return operationFailure('Unexpected operation', 400);
+}
+
 function useDb(db: FakeDb): FakeDb {
-  hooks.__testCreateSupabaseAdminClient = () => createFakeSupabaseClient({ db, userId: USER_ID });
+  const client = createFakeSupabaseClient({
+    db,
+    userId: USER_ID,
+    userEmail: 'uploader@continuum.test',
+  });
+  Object.assign(client as object, {
+    functions: {
+      invoke: async (_name: string, input: { body: Record<string, unknown> }) =>
+        fakeCreativeOperations(db, input.body),
+    },
+  });
+  hooks.__testCreateSupabaseServerClient = () => Promise.resolve(client);
+  hooks.__testCreateSupabaseAdminClient = () => {
+    throw new Error('Version routes must not construct an admin client');
+  };
   return db;
+}
+
+function useDbForGet(db: FakeDb): FakeDb {
+  return useDb(db);
 }
 
 function jsonRequest(method: string, body: unknown) {
@@ -337,7 +540,7 @@ describe('POST /api/library/versions — stale review verdicts', () => {
 
 describe('GET /api/library/versions', () => {
   it('lists versions newest first, flags the head, and resolves authors', async () => {
-    useDb(
+    useDbForGet(
       seed({
         versions: [
           versionRow({ id: 'row-v1', version_number: 1, storage_path: 'somewhere/else.png' }),
@@ -359,7 +562,7 @@ describe('GET /api/library/versions', () => {
   });
 
   it('returns an empty list for a never-versioned asset (a read never materializes v1)', async () => {
-    const db = useDb(seed());
+    const db = useDbForGet(seed());
 
     const query = new URLSearchParams({ brandId: BRAND_ID, assetId: ASSET_ID });
     const response = await GET(

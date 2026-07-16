@@ -24,7 +24,7 @@ import {
 import { mediaSchema } from '@/lib/media/supabase-media';
 
 const COMMENT_SELECT =
-  'id, brand_id, asset_id, version_id, parent_comment_id, body, annotation, resolved_at, resolved_by, created_by, created_at, updated_at, deleted_at';
+  'id, brand_id, asset_id, version_id, parent_comment_id, body, annotation, resolved_at, resolved_by, created_by, external_reviewer_session_id, visibility, created_at, updated_at, deleted_at';
 
 // A reviewer skims; they do not page. Beyond this many open threads on one
 // asset the page is noise, so the newest threads win and the rest are dropped.
@@ -38,6 +38,7 @@ const MAX_COMMENT_ROWS = 2000;
 export type LoadShareCommentsInput = {
   brandId: string;
   assetIds: string[];
+  versionIdsByAsset?: Readonly<Record<string, string>>;
 };
 
 // Whitelist projection. Listing the fields explicitly (rather than spreading and
@@ -46,6 +47,7 @@ export type LoadShareCommentsInput = {
 function toPublicComment(comment: {
   id: string;
   assetId: string;
+  versionId?: string | null;
   parentCommentId?: string | null;
   body: string;
   annotation?: PublicShareComment['annotation'];
@@ -55,6 +57,7 @@ function toPublicComment(comment: {
   const parsed = publicShareCommentSchema.safeParse({
     id: comment.id,
     assetId: comment.assetId,
+    versionId: comment.versionId ?? null,
     parentCommentId: comment.parentCommentId ?? null,
     body: comment.body,
     annotation: comment.annotation ?? null,
@@ -73,8 +76,15 @@ function toPublicComment(comment: {
 function publicCommentsForAsset(
   rows: MediaCommentRow[],
   authors: Map<string, CommentAuthor>,
+  externalAuthors: ReadonlyMap<string, string>,
 ): PublicShareComment[] {
-  const comments = rows.map((row) => commentRowToMediaComment(row, authors));
+  const comments = rows.map((row) => {
+    const comment = commentRowToMediaComment(row, authors);
+    const externalName = row.external_reviewer_session_id
+      ? externalAuthors.get(row.external_reviewer_session_id)
+      : null;
+    return externalName ? { ...comment, authorName: externalName } : comment;
+  });
   // buildCommentThreads already splits open from resolved by the ROOT's
   // resolved_at and nests one level of replies, which is exactly the public rule.
   const open = buildCommentThreads(comments).open.slice(-MAX_THREADS_PER_ASSET);
@@ -91,7 +101,7 @@ function publicCommentsForAsset(
 // replies) across every shared asset, in the order the assets were given.
 export async function loadShareComments(
   admin: SupabaseClient,
-  { brandId, assetIds }: LoadShareCommentsInput,
+  { brandId, assetIds, versionIdsByAsset = {} }: LoadShareCommentsInput,
 ): Promise<PublicShareComment[]> {
   if (assetIds.length === 0) return [];
 
@@ -100,6 +110,7 @@ export async function loadShareComments(
     .select(COMMENT_SELECT)
     .eq('brand_id', brandId)
     .in('asset_id', assetIds)
+    .in('visibility', ['shared', 'external'])
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
     .limit(MAX_COMMENT_ROWS);
@@ -111,10 +122,29 @@ export async function loadShareComments(
     return [];
   }
 
-  const rows = (data ?? []) as unknown as MediaCommentRow[];
+  const rows = ((data ?? []) as unknown as MediaCommentRow[]).filter((row) => {
+    const versionId = versionIdsByAsset[row.asset_id];
+    return !versionId || row.version_id === versionId;
+  });
   if (rows.length === 0) return [];
 
-  const authors = await fetchBrandAuthors(admin, brandId);
+  const externalSessionIds = [
+    ...new Set(rows.flatMap((row) => row.external_reviewer_session_id ?? [])),
+  ];
+  const [authors, externalSessions] = await Promise.all([
+    fetchBrandAuthors(admin, brandId),
+    externalSessionIds.length > 0
+      ? mediaSchema(admin)
+          .from('external_reviewer_sessions')
+          .select('id, display_name')
+          .in('id', externalSessionIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const externalAuthors = new Map(
+    ((externalSessions.data ?? []) as Array<{ id: string; display_name: string | null }>).flatMap(
+      (session) => (session.display_name ? [[session.id, session.display_name] as const] : []),
+    ),
+  );
 
   const rowsByAsset = new Map<string, MediaCommentRow[]>();
   for (const row of rows) {
@@ -124,6 +154,6 @@ export async function loadShareComments(
   }
 
   return assetIds.flatMap((assetId) =>
-    publicCommentsForAsset(rowsByAsset.get(assetId) ?? [], authors),
+    publicCommentsForAsset(rowsByAsset.get(assetId) ?? [], authors, externalAuthors),
   );
 }

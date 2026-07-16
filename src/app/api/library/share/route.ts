@@ -45,7 +45,7 @@ function requestOrigin(request: Request): string {
 async function shareTargetExists(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   input: {
-    scope: 'asset' | 'collection';
+    scope: 'asset' | 'collection' | 'selection';
     brandId: string;
     assetId?: string;
     collectionId?: string;
@@ -61,6 +61,7 @@ async function shareTargetExists(
       .maybeSingle();
     return Boolean(data);
   }
+  if (input.scope === 'selection') return false;
   const { data } = await mediaSchema(admin)
     .from('collections')
     .select('id')
@@ -84,6 +85,12 @@ export async function POST(request: Request) {
 
   const caller = await authorizeBrandCaller(parsed.data.brandId);
   if (caller instanceof NextResponse) return caller;
+  if (parsed.data.scope === 'selection') {
+    return NextResponse.json(
+      { error: 'Selection shares are available through Creative Operations.' },
+      { status: 410 },
+    );
+  }
 
   const admin = createSupabaseAdminClient();
   if (!(await shareTargetExists(admin, parsed.data))) {

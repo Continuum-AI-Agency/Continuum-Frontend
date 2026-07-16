@@ -43,13 +43,13 @@ export function buildStageAnnotations(params: {
     const annotation = thread.root.annotation;
     if (!annotation) continue;
 
-    if (annotation.kind === 'box') {
+    if (annotation.kind !== 'time') {
       pinNumber += 1;
       const label = String(pinNumber);
       pinLabels.set(thread.root.id, label);
       imagePins.push({
         id: thread.root.id,
-        box: annotation,
+        annotation,
         label,
         title: commentTitle(thread.root),
         selected: thread.root.id === selectedCommentId,

@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Loader2, RefreshCw, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
-
+import { TRENDS_REUSE_DAYS } from '@continuum/contracts';
+import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { TrendGenerationProgress } from '@/components/brand-insights/TrendGenerationProgress';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useSmoothTrendProgress } from '@/hooks/useSmoothTrendProgress';
+import { revalidateBrandInsights } from '@/lib/actions/brandInsights';
 import {
   generateBrandInsights,
   isTerminalBrandInsightsStatus,
   subscribeToBrandInsightsJob,
-} from "@/lib/api/brandInsights.client";
-import { buildBrandInsightsProgressSteps } from "@/lib/brand-insights/progress";
-import { revalidateBrandInsights } from "@/lib/actions/brandInsights";
-import { useSmoothTrendProgress } from "@/hooks/useSmoothTrendProgress";
-import { TrendGenerationProgress } from "@/components/brand-insights/TrendGenerationProgress";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/ToastProvider";
-import { cn } from "@/lib/utils";
+} from '@/lib/api/brandInsights.client';
+import { buildBrandInsightsProgressSteps } from '@/lib/brand-insights/progress';
+import { cn } from '@/lib/utils';
 
-// Matches the backend reuse window (findFreshCompletedGeneration withinDays: 5):
+// Matches the backend reuse window (findFreshCompletedGeneration withinDays):
 // within this window a click re-pulls the cached generation; past it the backend
 // regenerates. The single button reflects that to the user.
-const STALE_AFTER_DAYS = 5;
+const STALE_AFTER_DAYS = TRENDS_REUSE_DAYS;
 
 type Props = {
   brandId: string;
@@ -39,7 +39,12 @@ function ageInDays(iso?: string): number | null {
   return Math.floor((Date.now() - timestamp) / 86_400_000);
 }
 
-export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle = false, force = false }: Props) {
+export function BrandInsightsGenerateButton({
+  brandId,
+  lastGeneratedAt,
+  subtle = false,
+  force = false,
+}: Props) {
   const router = useRouter();
   const { show } = useToast();
   const [generationId, setGenerationId] = useState<string | null>(null);
@@ -54,7 +59,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
   const completedToastGenerationRef = useRef<string | null>(null);
 
   const isWorking = isPending || Boolean(generationId);
-  const isFailureStatus = status === "failed" || status === "error" || status === "not_found";
+  const isFailureStatus = status === 'failed' || status === 'error' || status === 'not_found';
   const isWorkflowRunning =
     isPending || Boolean(generationId) || (status ? !isTerminalBrandInsightsStatus(status) : false);
   const showProgress = isWorkflowRunning || isFailureStatus || Boolean(error);
@@ -63,28 +68,28 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
   const isStale = ageDays === null || ageDays >= STALE_AFTER_DAYS;
 
   const buttonLabel = useMemo(() => {
-    if (generationId) return "Generating…";
-    if (isPending) return "Starting…";
-    if (force) return "Refresh Trends";
-    return isStale ? "Regenerate Trends" : "Refresh Trends";
+    if (generationId) return 'Generating…';
+    if (isPending) return 'Starting…';
+    if (force) return 'Refresh Trends';
+    return isStale ? 'Regenerate Trends' : 'Refresh Trends';
   }, [generationId, isPending, isStale, force]);
 
   // Relative age caption, hidden while a run is in flight (the progress row
   // takes over). Null when we have no prior generation to describe.
   const ageLabel = useMemo(() => {
     if (isWorking || ageDays === null) return null;
-    if (ageDays <= 0) return "Up to date";
-    return isStale ? `${ageDays}d old` : "Up to date";
+    if (ageDays <= 0) return 'Up to date';
+    return isStale ? `${ageDays}d old` : 'Up to date';
   }, [isWorking, ageDays, isStale]);
 
   const progressSteps = useMemo(() => {
     const steps = buildBrandInsightsProgressSteps({ stage, status });
-    const showAwaitingStrategic = stage === "awaiting_strategic_analysis";
+    const showAwaitingStrategic = stage === 'awaiting_strategic_analysis';
     return steps.filter((step) => {
-      if (step.id === "awaiting_strategic_analysis" && !showAwaitingStrategic) {
+      if (step.id === 'awaiting_strategic_analysis' && !showAwaitingStrategic) {
         return false;
       }
-      if (step.id === "failed" && !isFailureStatus) {
+      if (step.id === 'failed' && !isFailureStatus) {
         return false;
       }
       return true;
@@ -92,11 +97,11 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
   }, [stage, status, isFailureStatus]);
 
   const currentLabel = useMemo(
-    () => progressSteps.find((s) => s.status === "current")?.label ?? "Queued",
-    [progressSteps]
+    () => progressSteps.find((s) => s.status === 'current')?.label ?? 'Queued',
+    [progressSteps],
   );
 
-  const isTerminal = isFailureStatus || status === "completed";
+  const isTerminal = isFailureStatus || status === 'completed';
   const { displayPercent, etaSeconds } = useSmoothTrendProgress({
     targetPercent: progressPercent ?? 0,
     remainingMs,
@@ -108,7 +113,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
       stopTrackingRef.current?.();
       stopTrackingRef.current = null;
     },
-    []
+    [],
   );
 
   // Busting the tagged Data Cache (tags.brandInsights) is what actually pulls
@@ -126,22 +131,22 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
   const handleRun = () => {
     setError(null);
     setStatus(null);
-    setStage("queued");
+    setStage('queued');
     setProgressPercent(null);
     setRemainingMs(undefined);
     setStageMessage(null);
     startTransition(async () => {
       try {
         const result = await generateBrandInsights({ brandId, forceRegenerate: force });
-        if (result.status === "processing" && result.generationId) {
+        if (result.status === 'processing' && result.generationId) {
           const activeGenerationId = result.generationId;
           setGenerationId(activeGenerationId);
-          setStatus(result.jobStatus ?? "running");
+          setStatus(result.jobStatus ?? 'running');
           const awaitingStrategic =
-            result.jobStatus === "pending" &&
+            result.jobStatus === 'pending' &&
             (result.dependencyStrategicAnalysis?.required === true ||
-              result.dependencyStrategicAnalysis?.status === "pending");
-          setStage(awaitingStrategic ? "awaiting_strategic_analysis" : "queued");
+              result.dependencyStrategicAnalysis?.status === 'pending');
+          setStage(awaitingStrategic ? 'awaiting_strategic_analysis' : 'queued');
           setStageMessage(result.message ?? null);
           stopTrackingRef.current?.();
           stopTrackingRef.current = subscribeToBrandInsightsJob({
@@ -152,22 +157,30 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
               setStatus(next.status);
               setStage((previous) => {
                 if (next.stage) return next.stage;
-                if (next.status === "completed") return "completed";
-                if (next.status === "failed" || next.status === "error" || next.status === "not_found") return "failed";
+                if (next.status === 'completed') return 'completed';
+                if (
+                  next.status === 'failed' ||
+                  next.status === 'error' ||
+                  next.status === 'not_found'
+                )
+                  return 'failed';
                 return previous;
               });
               setProgressPercent(next.progressPercent ?? null);
-              if (typeof next.runtime?.remainingMs === "number") {
+              if (typeof next.runtime?.remainingMs === 'number') {
                 setRemainingMs(next.runtime.remainingMs);
               }
               setStageMessage(next.stageMessage ?? next.errorDetail ?? next.message ?? null);
               if (isTerminalBrandInsightsStatus(next.status)) {
-                if (next.status === "completed" && completedToastGenerationRef.current !== activeGenerationId) {
+                if (
+                  next.status === 'completed' &&
+                  completedToastGenerationRef.current !== activeGenerationId
+                ) {
                   completedToastGenerationRef.current = activeGenerationId;
                   show({
-                    title: "Brand insights ready",
-                    description: "Trend generation completed successfully.",
-                    variant: "success",
+                    title: 'Brand insights ready',
+                    description: 'Trend generation completed successfully.',
+                    variant: 'success',
                   });
                 }
                 stopTrackingRef.current?.();
@@ -177,10 +190,10 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
               }
             },
             onMessage: (message) => {
-              if (typeof message.progressPercent === "number") {
+              if (typeof message.progressPercent === 'number') {
                 setProgressPercent(message.progressPercent);
               }
-              if (typeof message.runtime?.remainingMs === "number") {
+              if (typeof message.runtime?.remainingMs === 'number') {
                 setRemainingMs(message.runtime.remainingMs);
               }
               if (message.stageMessage) {
@@ -192,7 +205,9 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
               if (message.status) {
                 setStatus(message.status);
               } else if (message.stage) {
-                setStatus((current) => (isTerminalBrandInsightsStatus(current) ? current : "running"));
+                setStatus((current) =>
+                  isTerminalBrandInsightsStatus(current) ? current : 'running',
+                );
               }
             },
             onError: (streamError) => {
@@ -203,14 +218,14 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
           // Fresh (<5d) generation reused by the backend — nothing to stream,
           // just re-pull the page so the latest saved trends render.
           show({
-            title: "Trends up to date",
-            description: "Showing the latest saved trends.",
-            variant: "success",
+            title: 'Trends up to date',
+            description: 'Showing the latest saved trends.',
+            variant: 'success',
           });
           await refreshInsights();
         }
       } catch (runError) {
-        setError(runError instanceof Error ? runError.message : "Unable to start generation");
+        setError(runError instanceof Error ? runError.message : 'Unable to start generation');
       }
     });
   };
@@ -218,7 +233,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
   const Icon = force ? RefreshCw : isStale ? Sparkles : RefreshCw;
 
   return (
-    <div className={cn("flex flex-col items-end gap-1.5", showProgress ? "w-full" : "w-auto")}>
+    <div className={cn('flex flex-col items-end gap-1.5', showProgress ? 'w-full' : 'w-auto')}>
       <div className="flex items-center gap-2">
         {ageLabel && !subtle ? (
           <span className="text-xs tabular-nums text-muted-foreground">{ageLabel}</span>
@@ -226,16 +241,20 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt, subtle =
         <Button
           onClick={handleRun}
           disabled={isWorking}
-          variant={subtle ? "ghost" : "default"}
+          variant={subtle ? 'ghost' : 'default'}
           size="sm"
           aria-label={subtle ? buttonLabel : undefined}
           title={subtle ? buttonLabel : undefined}
           className={cn(
-            "h-7 text-xs",
-            subtle ? "w-7 px-0 text-muted-foreground hover:text-foreground" : "px-2",
+            'h-7 text-xs',
+            subtle ? 'w-7 px-0 text-muted-foreground hover:text-foreground' : 'px-2',
           )}
         >
-          {isWorking ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />}
+          {isWorking ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Icon className="size-3.5" />
+          )}
           {!subtle && buttonLabel}
         </Button>
       </div>

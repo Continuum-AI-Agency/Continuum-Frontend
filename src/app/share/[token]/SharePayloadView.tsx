@@ -7,7 +7,12 @@
 // Read-only throughout: comments are displayed, never authored. There is no
 // composer on this page and no mutation seam to reach one.
 
-import type { MediaAsset, PublicShareComment, PublicSharePayload } from '@continuum/contracts';
+import type {
+  MediaAsset,
+  PublicShareAsset,
+  PublicShareComment,
+  PublicSharePayload,
+} from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
 import { initialsFor } from '@/lib/library/comments';
 import {
@@ -17,6 +22,8 @@ import {
   ShareCommentThreads,
 } from './ShareCommentThreads';
 import { type ShareTimeMarker, ShareVideoPlayer } from './ShareVideoPlayer';
+import { ExternalCommentComposer } from './ExternalCommentComposer';
+import { ExternalApprovalControl } from './ExternalApprovalControl';
 
 const MARKER_TITLE_MAX = 80;
 
@@ -72,15 +79,90 @@ function timeMarkersFor(threads: PublicShareThread[]): ShareTimeMarker[] {
   });
 }
 
-function AssetPreview({ asset, markers }: { asset: MediaAsset; markers: ShareTimeMarker[] }) {
+function PublicImageAnnotations({ comments }: { comments: PublicShareComment[] }) {
+  const annotations = comments.flatMap((comment) =>
+    comment.annotation && comment.annotation.kind !== 'time'
+      ? [{ id: comment.id, annotation: comment.annotation }]
+      : [],
+  );
+  if (annotations.length === 0) return null;
+  return (
+    <svg
+      viewBox="0 0 1000 1000"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 size-full"
+      aria-label="Review annotations"
+    >
+      {annotations.map(({ id, annotation }, index) => {
+        if (annotation.kind === 'box') {
+          return (
+            <rect
+              key={id}
+              x={annotation.x * 1000}
+              y={annotation.y * 1000}
+              width={annotation.width * 1000}
+              height={annotation.height * 1000}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              className="text-primary"
+            />
+          );
+        }
+        if (annotation.kind === 'freehand') {
+          const points = annotation.points.map((point) => `${point.x * 1000},${point.y * 1000}`).join(' ');
+          return (
+            <polyline
+              key={id}
+              points={points}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-primary"
+            />
+          );
+        }
+        return (
+          <g key={id} className="text-primary">
+            <circle cx={annotation.x * 1000} cy={annotation.y * 1000} r="18" fill="currentColor" />
+            <text
+              x={annotation.x * 1000}
+              y={annotation.y * 1000 + 7}
+              textAnchor="middle"
+              fontSize="22"
+              fill="white"
+            >
+              {index + 1}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function AssetPreview({
+  asset,
+  markers,
+  comments,
+}: {
+  asset: MediaAsset;
+  markers: ShareTimeMarker[];
+  comments: PublicShareComment[];
+}) {
   if (asset.kind === 'image' && asset.signedUrl) {
     return (
-      // Signed storage URLs are transient and cross-origin; next/image adds nothing here.
-      <img
-        src={asset.signedUrl}
-        alt={asset.title ?? asset.fileName}
-        className="max-h-[70vh] w-full rounded-lg border border-border object-contain"
-      />
+      <div className="relative overflow-hidden rounded-lg border border-border">
+        {/* Signed storage URLs are transient and cross-origin; next/image adds nothing here. */}
+        <img
+          src={asset.signedUrl}
+          alt={asset.title ?? asset.fileName}
+          className="max-h-[70vh] w-full object-contain"
+        />
+        <PublicImageAnnotations comments={comments} />
+      </div>
     );
   }
   if (asset.kind === 'video' && asset.signedUrl) {
@@ -124,12 +206,27 @@ function AssetPreview({ asset, markers }: { asset: MediaAsset; markers: ShareTim
 }
 
 function SharedAssetTile({
-  asset,
+  sharedAsset,
   comments,
+  allowDownload,
+  showMetadata,
+  token,
+  allowComments,
+  hasIdentity,
+  hasPasscode,
+  allowApproval,
 }: {
-  asset: MediaAsset;
+  sharedAsset: PublicShareAsset;
   comments: PublicShareComment[];
+  allowDownload: boolean;
+  showMetadata: boolean;
+  token: string;
+  allowComments: boolean;
+  hasIdentity: boolean;
+  hasPasscode: boolean;
+  allowApproval: boolean;
 }) {
+  const { asset, versionId, versionNumber, isHead } = sharedAsset;
   const threads = buildPublicShareThreads(comments);
   // Box-annotated images show their threads but no pin overlay: the share page
   // renders the frame, not the annotation stage.
@@ -137,12 +234,41 @@ function SharedAssetTile({
 
   return (
     <div className="flex flex-col gap-2">
-      <AssetPreview asset={asset} markers={markers} />
+      <AssetPreview asset={asset} markers={markers} comments={comments} />
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-sm text-foreground">{asset.title ?? asset.fileName}</p>
-        <DownloadButton asset={asset} />
+        <div className="min-w-0">
+          <p className="truncate text-sm text-foreground">{asset.title ?? asset.fileName}</p>
+          <p className="text-2xs text-muted-foreground">
+            Version {versionNumber}{isHead ? ' · Latest' : ''}
+          </p>
+        </div>
+        {allowDownload ? <DownloadButton asset={asset} /> : null}
       </div>
+      {showMetadata ? (
+        <p className="text-xs text-muted-foreground">
+          {asset.mimeType}
+          {formatBytes(asset.sizeBytes) ? ` · ${formatBytes(asset.sizeBytes)}` : ''}
+        </p>
+      ) : null}
       <ShareCommentThreads threads={threads} />
+      {allowComments ? (
+        <ExternalCommentComposer
+          token={token}
+          assetId={asset.id}
+          versionId={versionId}
+          hasIdentity={hasIdentity}
+          hasPasscode={hasPasscode}
+        />
+      ) : null}
+      {allowApproval ? (
+        <ExternalApprovalControl
+          token={token}
+          assetId={asset.id}
+          versionId={versionId}
+          hasIdentity={hasIdentity}
+          hasPasscode={hasPasscode}
+        />
+      ) : null}
     </div>
   );
 }
@@ -157,15 +283,36 @@ function commentsByAsset(comments: PublicShareComment[]): Map<string, PublicShar
   return grouped;
 }
 
-export function SharePayloadView({ payload }: { payload: PublicSharePayload }) {
+export function SharePayloadView({
+  token,
+  payload,
+}: {
+  token: string;
+  payload: PublicSharePayload;
+}) {
   const heading =
     payload.scope === 'collection'
       ? (payload.collectionName ?? 'Shared collection')
-      : (payload.assets[0]?.title ?? payload.assets[0]?.fileName ?? 'Shared asset');
+      : (payload.assets[0]?.asset.title ??
+        payload.assets[0]?.asset.fileName ??
+        'Shared asset');
   const grouped = commentsByAsset(payload.comments);
 
-  const tiles = payload.assets.map((asset) => (
-    <SharedAssetTile key={asset.id} asset={asset} comments={grouped.get(asset.id) ?? []} />
+  const tiles = payload.assets.map((sharedAsset) => (
+    <SharedAssetTile
+      key={`${sharedAsset.asset.id}:${sharedAsset.versionId}`}
+      sharedAsset={sharedAsset}
+      comments={(grouped.get(sharedAsset.asset.id) ?? []).filter(
+        (comment) => comment.versionId === sharedAsset.versionId,
+      )}
+      allowDownload={payload.policy.allowDownload}
+      showMetadata={payload.policy.showMetadata}
+      token={token}
+      allowComments={payload.policy.allowComments}
+      hasIdentity={Boolean(payload.reviewer)}
+      hasPasscode={payload.policy.hasPasscode}
+      allowApproval={payload.policy.allowApproval}
+    />
   ));
 
   return (

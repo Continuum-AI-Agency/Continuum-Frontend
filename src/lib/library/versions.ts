@@ -16,6 +16,14 @@ import {
   versionSignUploadResponseSchema,
 } from '@continuum/contracts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import {
+  listAssetVersions as listAssetVersionsOperation,
+  registerAssetVersion as registerAssetVersionOperation,
+  rollbackAssetVersion as rollbackAssetVersionOperation,
+  signVersionUpload as signVersionUploadOperation,
+} from './creativeOperations';
+import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
+import { MAX_PROJECT_FILE_BYTES } from './uploadMediaAsset';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -33,89 +41,136 @@ export async function listAssetVersions(params: {
   brandId: string;
   assetId: string;
 }): Promise<MediaAssetVersion[]> {
-  const query = new URLSearchParams({ brandId: params.brandId, assetId: params.assetId });
-  const response = await fetch(`/api/library/versions?${query.toString()}`);
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Loading versions failed'));
-  }
-  const parsed = listVersionsResponseSchema.safeParse(await response.json());
-  if (!parsed.success) throw new Error('Version list response was malformed');
-  return parsed.data.versions;
+  const result = await listAssetVersionsOperation(createSupabaseBrowserClient(), params);
+  return listVersionsResponseSchema.parse(result).versions;
 }
 
 export async function signVersionUpload(
   request: VersionSignUploadRequest,
 ): Promise<VersionSignUploadResponse> {
-  const response = await fetch('/api/library/versions/sign', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-  });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Signing the upload failed'));
-  }
-  const parsed = versionSignUploadResponseSchema.safeParse(await response.json());
-  if (!parsed.success) throw new Error('Sign response was malformed');
-  return parsed.data;
+  const result = await signVersionUploadOperation(createSupabaseBrowserClient(), request);
+  return versionSignUploadResponseSchema.parse(result);
 }
 
 export async function registerAssetVersion(
   request: RegisterVersionRequest,
 ): Promise<RegisterVersionResponse> {
-  const response = await fetch('/api/library/versions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+  const result = await registerAssetVersionOperation(createSupabaseBrowserClient(), {
+    ...request,
+    idempotencyKey: request.idempotencyKey ?? crypto.randomUUID(),
   });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Registering the version failed'));
-  }
-  const parsed = registerVersionResponseSchema.safeParse(await response.json());
-  if (!parsed.success) throw new Error('Register response was malformed');
-  return parsed.data;
+  return registerVersionResponseSchema.parse(result);
 }
 
 export async function rollbackAssetVersion(
   request: RollbackVersionRequest,
 ): Promise<RegisterVersionResponse> {
-  const response = await fetch('/api/library/versions', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+  const result = await rollbackAssetVersionOperation(createSupabaseBrowserClient(), {
+    ...request,
+    idempotencyKey: request.idempotencyKey ?? crypto.randomUUID(),
   });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, 'Rollback failed'));
-  }
-  const parsed = registerVersionResponseSchema.safeParse(await response.json());
-  if (!parsed.success) throw new Error('Rollback response was malformed');
-  return parsed.data;
+  return registerVersionResponseSchema.parse(result);
 }
 
 export interface UploadNewAssetVersionDeps {
   createClient?: () => SupabaseBrowserClient;
+  signUpload?: typeof signVersionUpload;
+  registerVersion?: typeof registerAssetVersion;
+  resumableUpload?: typeof resumableStorageUpload;
+  supabaseUrl?: string;
+  anonKey?: string;
+}
+
+export type VersionUploadResumeState = {
+  ticket: VersionSignUploadResponse;
+  uploadUrl: string | null;
+};
+
+function isAfterEffectsProject(file: File): boolean {
+  return file.name.trim().toLocaleLowerCase().endsWith('.aep');
+}
+
+async function uploadProjectVersion(params: {
+  supabase: SupabaseBrowserClient;
+  ticket: VersionSignUploadResponse;
+  file: File;
+  resume: VersionUploadResumeState | null;
+  signal?: AbortSignal;
+  onResumeState?: (state: VersionUploadResumeState) => void;
+  onProgress?: (progress: ResumableUploadProgress) => void;
+  deps: UploadNewAssetVersionDeps;
+}): Promise<void> {
+  const { data, error } = await params.supabase.auth.getSession();
+  if (error || !data.session?.access_token) {
+    throw new Error(error?.message ?? 'A signed-in session is required for resumable upload');
+  }
+  const supabaseUrl = params.deps.supabaseUrl ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) throw new Error('NEXT_PUBLIC_SUPABASE_URL is required for resumable upload');
+  await (params.deps.resumableUpload ?? resumableStorageUpload)({
+    file: params.file,
+    bucket: params.ticket.bucket,
+    objectPath: params.ticket.path,
+    accessToken: data.session.access_token,
+    supabaseUrl,
+    anonKey: params.deps.anonKey ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    uploadUrl: params.resume?.uploadUrl,
+    signal: params.signal,
+    onUploadUrl: (uploadUrl) => params.onResumeState?.({ ticket: params.ticket, uploadUrl }),
+    onProgress: params.onProgress,
+  });
 }
 
 export async function uploadNewAssetVersion(
-  params: { brandId: string; assetId: string; file: File; note?: string },
+  params: {
+    brandId: string;
+    assetId: string;
+    file: File;
+    note?: string;
+    resume?: VersionUploadResumeState | null;
+    signal?: AbortSignal;
+    onResumeState?: (state: VersionUploadResumeState) => void;
+    onProgress?: (progress: ResumableUploadProgress) => void;
+  },
   deps: UploadNewAssetVersionDeps = {},
 ): Promise<RegisterVersionResponse> {
   const { brandId, assetId, file, note } = params;
   const contentType = file.type || 'application/octet-stream';
+  const isProjectFile = isAfterEffectsProject(file);
+  if (isProjectFile && file.size > MAX_PROJECT_FILE_BYTES) {
+    throw new Error('file_too_large: Project files must be 5 GB or smaller');
+  }
 
-  const ticket = await signVersionUpload({
-    brandId,
-    assetId,
-    fileName: file.name,
-    mimeType: contentType,
-  });
+  const ticket =
+    params.resume?.ticket ??
+    (await (deps.signUpload ?? signVersionUpload)({
+      brandId,
+      assetId,
+      fileName: file.name,
+      mimeType: contentType,
+    }));
+  params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
 
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
-  const { error } = await supabase.storage
-    .from(ticket.bucket)
-    .uploadToSignedUrl(ticket.path, ticket.token, file, { contentType });
-  if (error) throw new Error(`Upload to storage failed: ${error.message}`);
+  if (isProjectFile) {
+    await uploadProjectVersion({
+      supabase,
+      ticket,
+      file,
+      resume: params.resume ?? null,
+      signal: params.signal,
+      onResumeState: params.onResumeState,
+      onProgress: params.onProgress,
+      deps,
+    });
+  } else {
+    const { error } = await supabase.storage
+      .from(ticket.bucket)
+      .uploadToSignedUrl(ticket.path, ticket.token, file, { contentType });
+    if (error) throw new Error(`Upload to storage failed: ${error.message}`);
+    params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
+  }
 
-  return registerAssetVersion({
+  return (deps.registerVersion ?? registerAssetVersion)({
     brandId,
     assetId,
     bucket: ticket.bucket,
@@ -124,5 +179,8 @@ export async function uploadNewAssetVersion(
     mimeType: contentType,
     sizeBytes: file.size,
     note,
+    integrityState:
+      isProjectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
+    idempotencyKey: `version:${assetId}:${ticket.path}`,
   });
 }

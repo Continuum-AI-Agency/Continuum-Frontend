@@ -19,6 +19,7 @@ export function FilePreviewStage({ brandId, asset }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ext = fileExtension(asset.fileName);
+  const isAfterEffects = ext === 'AEP';
 
   const download = async () => {
     setDownloading(true);
@@ -48,7 +49,13 @@ export function FilePreviewStage({ brandId, asset }: Props) {
   return (
     <div className="flex size-full flex-col items-center justify-center gap-4 p-8">
       <div className="relative">
-        <FileIcon className="size-16 text-muted-foreground/40" strokeWidth={1.25} />
+        {isAfterEffects ? (
+          <span className="flex size-20 items-center justify-center rounded-2xl bg-[#00005b] text-2xl font-semibold tracking-tight text-[#9999ff] shadow-sm">
+            Ae
+          </span>
+        ) : (
+          <FileIcon className="size-16 text-muted-foreground/40" strokeWidth={1.25} />
+        )}
         {ext && (
           <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
             {ext}
@@ -60,6 +67,17 @@ export function FilePreviewStage({ brandId, asset }: Props) {
         <p className="max-w-md truncate text-sm font-medium">{asset.fileName}</p>
         <p className="text-xs text-muted-foreground">
           {asset.mimeType} · {formatBytes(asset.sizeBytes ?? 0)}
+        </p>
+        {isAfterEffects ? (
+          <p className="text-xs font-medium text-foreground/80">Adobe After Effects project</p>
+        ) : null}
+        <p className="text-xs text-muted-foreground/70">
+          Modified{' '}
+          {new Date(asset.updatedAt).toLocaleString(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })}
+          {asset.createdBy ? ` · Uploader ${asset.createdBy.slice(0, 8)}` : ''}
         </p>
         <p className="text-xs text-muted-foreground/60">
           Source file — no preview. Download to open it in its native app.

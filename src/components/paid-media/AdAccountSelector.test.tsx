@@ -137,4 +137,84 @@ describe('AdAccountSelector', () => {
     fireEvent.click(retryButton);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
+
+  // The merged list is [act_1034406624919675 (SMB), act_9530520017061961 (Parsed Inc)].
+  // Only the second is assigned to the brand.
+
+  it('with assignedAccountIds, auto-selects an ASSIGNED account and skips the unassigned first row', async () => {
+    render(
+      <AdAccountSelector
+        brandId="brand_123"
+        selectedAccountId={null}
+        onSelect={mockSelect}
+        assignedAccountIds={['act_9530520017061961']}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockSelect).toHaveBeenCalledWith('act_9530520017061961');
+    });
+    // Never the unassigned account, even though it is first in the merged list.
+    expect(mockSelect).not.toHaveBeenCalledWith('act_1034406624919675');
+  });
+
+  it('matches assigned ids prefix-insensitively (bare vs act_)', async () => {
+    render(
+      <AdAccountSelector
+        brandId="brand_123"
+        selectedAccountId={null}
+        onSelect={mockSelect}
+        assignedAccountIds={['9530520017061961']}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockSelect).toHaveBeenCalledWith('act_9530520017061961');
+    });
+  });
+
+  it('re-selects an assigned account when the current selection is not assigned (server-seeded foreign id)', async () => {
+    render(
+      <AdAccountSelector
+        brandId="brand_123"
+        selectedAccountId="act_1034406624919675"
+        onSelect={mockSelect}
+        assignedAccountIds={['act_9530520017061961']}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockSelect).toHaveBeenCalledWith('act_9530520017061961');
+    });
+  });
+
+  it('with an empty assigned set, shows the recovery path instead of the reachable superset', async () => {
+    const { findByRole } = render(
+      <AdAccountSelector
+        brandId="brand_123"
+        selectedAccountId={null}
+        onSelect={mockSelect}
+        assignedAccountIds={[]}
+      />,
+    );
+
+    const connectLink = await findByRole('link', { name: /connect ad account/i });
+    expect(connectLink.getAttribute('href')).toBe(PAID_SETUP_CONNECT_HREF);
+    expect(mockSelect).not.toHaveBeenCalled();
+  });
+
+  it('leaves auto-select unchanged when assignedAccountIds is undefined (feature off)', async () => {
+    render(
+      <AdAccountSelector
+        brandId="brand_123"
+        selectedAccountId={null}
+        onSelect={mockSelect}
+        assignedAccountIds={undefined}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockSelect).toHaveBeenCalledWith('act_1034406624919675');
+    });
+  });
 });

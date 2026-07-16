@@ -5,7 +5,7 @@
 // account; media.share_links is deny-all RLS, so all traffic goes through
 // /api/library/share via the typed fetchers in @/lib/library/share.
 
-import type { MediaAsset, ShareLink } from '@continuum/contracts';
+import type { MediaAsset, ShareLink, ShareVersionMode } from '@continuum/contracts';
 import { Check, Copy, Link2, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -43,11 +43,40 @@ function linkLabel(link: ShareLink): string {
   return `Expires ${new Date(link.expiresAt).toLocaleDateString()}`;
 }
 
+function PolicyToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-muted-foreground">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="size-3.5 rounded border-border"
+      />
+      {label}
+    </label>
+  );
+}
+
 export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [expiry, setExpiry] = useState<string>('30');
+  const [versionMode, setVersionMode] = useState<ShareVersionMode>('live');
+  const [allowComments, setAllowComments] = useState(true);
+  const [allowApproval, setAllowApproval] = useState(false);
+  const [allowDownload, setAllowDownload] = useState(true);
+  const [showMetadata, setShowMetadata] = useState(true);
+  const [requireIdentity, setRequireIdentity] = useState(false);
+  const [passcode, setPasscode] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +107,17 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
         brandId,
         scope: 'asset',
         assetId: asset.id,
+        versionMode: allowApproval ? 'pinned' : versionMode,
+        ...((versionMode === 'pinned' || allowApproval) && asset.headVersionId
+          ? { pinnedVersionId: asset.headVersionId }
+          : {}),
+        allowComments,
+        allowApproval,
+        allowDownload,
+        showMetadata,
+        showCustomFields: false,
+        requireIdentity,
+        ...(passcode.trim() ? { passcode: passcode.trim() } : {}),
         ...(expiry === 'never' ? {} : { expiresInDays: Number(expiry) }),
       });
       setLinks((prev) => [link, ...prev]);
@@ -89,7 +129,19 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
     } finally {
       setCreating(false);
     }
-  }, [brandId, asset.id, expiry]);
+  }, [
+    brandId,
+    asset.id,
+    asset.headVersionId,
+    expiry,
+    versionMode,
+    allowComments,
+    allowApproval,
+    allowDownload,
+    showMetadata,
+    requireIdentity,
+    passcode,
+  ]);
 
   const handleCopy = useCallback(async (link: ShareLink) => {
     try {
@@ -123,9 +175,23 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-3">
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2">
+          <Select
+            value={allowApproval ? 'pinned' : versionMode}
+            onValueChange={(value: ShareVersionMode) => setVersionMode(value)}
+            disabled={allowApproval}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Versions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="live">Live latest</SelectItem>
+              <SelectItem value="pinned">Current version</SelectItem>
+              <SelectItem value="all">All versions</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={expiry} onValueChange={setExpiry}>
-            <SelectTrigger className="h-8 flex-1 text-xs">
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Expiry" />
             </SelectTrigger>
             <SelectContent>
@@ -136,7 +202,33 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={() => void handleCreate()} disabled={creating}>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+          <PolicyToggle label="Comments" checked={allowComments} onChange={setAllowComments} />
+          <PolicyToggle label="Approval" checked={allowApproval} onChange={setAllowApproval} />
+          <PolicyToggle label="Downloads" checked={allowDownload} onChange={setAllowDownload} />
+          <PolicyToggle label="Metadata" checked={showMetadata} onChange={setShowMetadata} />
+          <PolicyToggle
+            label="Require identity"
+            checked={requireIdentity}
+            onChange={setRequireIdentity}
+          />
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="password"
+            value={passcode}
+            onChange={(event) => setPasscode(event.target.value)}
+            placeholder="Optional passcode"
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+          <Button
+            size="sm"
+            onClick={() => void handleCreate()}
+            disabled={creating || ((versionMode === 'pinned' || allowApproval) && !asset.headVersionId)}
+          >
             {creating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
             Create link
           </Button>

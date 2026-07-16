@@ -12,6 +12,15 @@ export type ShareLinkRow = {
   scope: ShareLinkScope;
   asset_id: string | null;
   collection_id: string | null;
+  version_mode: 'live' | 'pinned' | 'all';
+  pinned_version_id: string | null;
+  allow_comments: boolean;
+  allow_approval: boolean;
+  allow_download: boolean;
+  show_metadata: boolean;
+  show_custom_fields: boolean;
+  require_identity: boolean;
+  passcode_hash: string | null;
   permissions: 'view';
   created_by: string | null;
   expires_at: string | null;
@@ -43,7 +52,11 @@ export function buildShareUrl(origin: string, token: string): string {
   return `${origin.replace(/\/+$/, '')}/share/${token}`;
 }
 
-export function rowToShareLink(row: ShareLinkRow, origin?: string): ShareLink {
+export function rowToShareLink(
+  row: ShareLinkRow,
+  origin?: string,
+  assetIds: string[] = [],
+): ShareLink {
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -51,7 +64,19 @@ export function rowToShareLink(row: ShareLinkRow, origin?: string): ShareLink {
     scope: row.scope,
     assetId: row.asset_id,
     collectionId: row.collection_id,
+    assetIds,
     permissions: row.permissions,
+    policy: {
+      versionMode: row.version_mode,
+      pinnedVersionId: row.pinned_version_id,
+      allowComments: row.allow_comments,
+      allowApproval: row.allow_approval,
+      allowDownload: row.allow_download,
+      showMetadata: row.show_metadata,
+      showCustomFields: row.show_custom_fields,
+      requireIdentity: row.require_identity,
+      hasPasscode: row.passcode_hash !== null,
+    },
     createdBy: row.created_by,
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,

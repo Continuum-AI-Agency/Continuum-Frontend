@@ -36,6 +36,7 @@ function commentRow(overrides: Partial<MediaCommentRow> & { id: string }): Media
 function fakeAdmin(
   rows: MediaCommentRow[],
   permissions: PermissionRow[] = [{ user_id: 'user-1', email: 'jane.doe@acme.com' }],
+  externalSessions: Array<{ id: string; display_name: string | null }> = [],
 ): { client: SupabaseClient; commentCalls: FilterCall[] } {
   const commentCalls: FilterCall[] = [];
 
@@ -61,6 +62,9 @@ function fakeAdmin(
         if (name === 'brand_profiles' && table === 'permissions') {
           return builder({ data: permissions, error: null });
         }
+        if (name === 'media' && table === 'external_reviewer_sessions') {
+          return builder({ data: externalSessions, error: null });
+        }
         throw new Error(`unexpected read: ${name}.${table}`);
       },
     }),
@@ -84,6 +88,10 @@ describe('loadShareComments', () => {
 
     expect(commentCalls).toContainEqual({ method: 'eq', args: ['brand_id', BRAND_ID] });
     expect(commentCalls).toContainEqual({ method: 'in', args: ['asset_id', [ASSET_ID]] });
+    expect(commentCalls).toContainEqual({
+      method: 'in',
+      args: ['visibility', ['shared', 'external']],
+    });
     expect(commentCalls).toContainEqual({ method: 'is', args: ['deleted_at', null] });
   });
 
@@ -160,9 +168,29 @@ describe('loadShareComments', () => {
       'createdAt',
       'id',
       'parentCommentId',
+      'versionId',
     ]);
     expect(JSON.stringify(comments)).not.toContain('jane.doe@acme.com');
     expect(JSON.stringify(comments)).not.toContain('user-1');
+  });
+
+  it('uses an external reviewer display name without exposing their email', async () => {
+    const { client } = fakeAdmin(
+      [
+        commentRow({
+          id: 'external-comment',
+          created_by: null,
+          external_reviewer_session_id: 'reviewer-session-1',
+          visibility: 'external',
+        }),
+      ],
+      [],
+      [{ id: 'reviewer-session-1', display_name: 'Alex Reviewer' }],
+    );
+
+    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    expect(comments[0]?.authorName).toBe('Alex Reviewer');
+    expect(JSON.stringify(comments)).not.toContain('external_reviewer_session_id');
   });
 
   it('caps the open threads it returns per asset, keeping the newest', async () => {
@@ -197,21 +225,14 @@ describe('loadShareComments', () => {
   });
 
   it('degrades to an empty feed when the comment read fails', async () => {
+    const failedQuery: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'in', 'is', 'order']) {
+      failedQuery[method] = () => failedQuery;
+    }
+    failedQuery.limit = () => Promise.resolve({ data: null, error: { message: 'boom' } });
     const client = {
       schema: () => ({
-        from: () => ({
-          select: () => ({
-            eq: () => ({
-              in: () => ({
-                is: () => ({
-                  order: () => ({
-                    limit: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
+        from: () => failedQuery,
       }),
     } as unknown as SupabaseClient;
 

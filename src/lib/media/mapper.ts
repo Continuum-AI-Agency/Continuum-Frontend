@@ -47,6 +47,8 @@ export function rowToMediaAsset(
     originRef: row.origin_ref,
     status: row.status,
     reviewStatus: row.review_status ?? 'none',
+    headVersionId: row.head_version_id ?? null,
+    integrityState: row.integrity_state ?? 'unknown',
     checksum: row.checksum ?? null,
     title: row.title,
     description: row.description,
@@ -55,6 +57,7 @@ export function rowToMediaAsset(
     adCreativeAnalysis: row.ad_creative_analysis
       ? (row.ad_creative_analysis as MediaAsset['adCreativeAnalysis'])
       : null,
+    videoInsights: row.video_insights ?? null,
     thumbnailPath: row.thumbnail_path ?? null,
     embeddingModel: row.embedding_model,
     hasImageEmbedding: row.has_image_embedding,

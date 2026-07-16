@@ -30,6 +30,12 @@ const VALID_REGISTER = {
 
 function makeClient(opts: FakeClientOptions) {
   const client = {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: 'user-jwt' } },
+        error: null,
+      }),
+    },
     functions: {
       invoke: async (_name: string, args: { body: Record<string, unknown> }) => {
         const action = args.body.action;
@@ -154,16 +160,85 @@ describe('uploadMediaAsset', () => {
   it('falls back to application/octet-stream for extension-only files like .aep', async () => {
     const calls: string[] = [];
     const bodies: Record<string, unknown>[] = [];
-    const client = makeClient({ calls, bodies });
+    const client = makeClient({
+      calls,
+      bodies,
+      sign: {
+        data: { ...VALID_TICKET, bucket: 'media-source', path: 'b1/asset-1/intro.aep' },
+        error: null,
+      },
+    });
     const aep = new File(['project'], 'intro.aep', { type: '' });
+    const resumableCalls: unknown[] = [];
 
-    await uploadMediaAsset({ file: aep, brandId: 'b1' }, { createClient: () => client });
+    await uploadMediaAsset(
+      { file: aep, brandId: 'b1' },
+      {
+        createClient: () => client,
+        supabaseUrl: 'https://db.test',
+        resumableUpload: async (params) => {
+          resumableCalls.push(params);
+          return { uploadUrl: 'https://db.test/upload/id' };
+        },
+      },
+    );
 
     const sign = bodies.find((b) => b.action === 'sign_upload');
     const register = bodies.find((b) => b.action === 'register');
     expect(sign?.mimeType).toBe('application/octet-stream');
     expect(register?.mimeType).toBe('application/octet-stream');
     expect(sign?.fileName).toBe('intro.aep');
+    expect(calls).toEqual(['invoke:sign_upload', 'invoke:register']);
+    expect(resumableCalls).toEqual([
+      expect.objectContaining({
+        bucket: 'media-source',
+        objectPath: 'b1/asset-1/intro.aep',
+        accessToken: 'user-jwt',
+      }),
+    ]);
+  });
+
+  it('never buffers a large project file to compute its checksum', async () => {
+    const calls: string[] = [];
+    const bodies: Record<string, unknown>[] = [];
+    const client = makeClient({
+      calls,
+      bodies,
+      sign: {
+        data: { ...VALID_TICKET, bucket: 'media-source', path: 'b1/asset-1/large.aep' },
+        error: null,
+      },
+    });
+    const aep = new File(['small test body'], 'large.aep', { type: '' });
+    Object.defineProperty(aep, 'size', { value: 65 * 1024 * 1024 });
+    Object.defineProperty(aep, 'arrayBuffer', {
+      value: () => Promise.reject(new Error('must not be called')),
+    });
+
+    await uploadMediaAsset(
+      { file: aep, brandId: 'b1' },
+      {
+        createClient: () => client,
+        supabaseUrl: 'https://db.test',
+        resumableUpload: async () => ({ uploadUrl: 'https://db.test/upload/id' }),
+      },
+    );
+
+    const register = bodies.find((body) => body.action === 'register');
+    expect(register).toBeDefined();
+    expect('checksum' in (register ?? {})).toBe(false);
+  });
+
+  it('rejects an uppercase .AEP above the 5 GB object limit before signing', async () => {
+    const calls: string[] = [];
+    const client = makeClient({ calls });
+    const aep = new File(['stub'], 'Campaign.AEP', { type: '' });
+    Object.defineProperty(aep, 'size', { value: 5 * 1024 * 1024 * 1024 + 1 });
+
+    await expect(
+      uploadMediaAsset({ file: aep, brandId: 'b1' }, { createClient: () => client }),
+    ).rejects.toThrow('file_too_large');
+    expect(calls).toEqual([]);
   });
 
   it('throws when the sign response is not a valid ticket', async () => {

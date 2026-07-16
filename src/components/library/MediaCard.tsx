@@ -30,7 +30,7 @@ import { useClipCaptionPreference } from './hooks/useClipCaptionPreference';
 import { useClipQualityPreference } from './hooks/useClipQualityPreference';
 import { useGenerateClips } from './hooks/useGenerateClips';
 import { MediaBoundingBoxes } from './MediaBoundingBoxes';
-import { ImageReformatDialog } from './reformat/ImageReformatDialog';
+import { QuickReformatMenu } from './reformat/QuickReformatMenu';
 
 type Props = {
   brandId: string;
@@ -40,6 +40,8 @@ type Props = {
   captionStyle?: CaptionStyle;
   onOpen?: (asset: MediaAsset) => void;
   onAssetChanged?: () => void;
+  selected?: boolean;
+  onToggleSelected?: (asset: MediaAsset) => void;
 };
 
 const BADGE_BASE =
@@ -169,9 +171,16 @@ function Thumbnail({
 
   if (asset.kind === 'file') {
     const ext = fileExtension(asset.fileName);
+    const isAfterEffects = ext === 'AEP';
     return (
       <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
-        <FileIcon className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
+        {isAfterEffects ? (
+          <span className="flex size-10 items-center justify-center rounded-lg bg-[#00005b] text-sm font-semibold tracking-tight text-[#9999ff]">
+            Ae
+          </span>
+        ) : (
+          <FileIcon className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
+        )}
         {ext && (
           <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
             {ext}
@@ -180,6 +189,9 @@ function Thumbnail({
         <span className="max-w-full truncate text-2xs text-muted-foreground/70">
           {asset.fileName}
         </span>
+        {isAfterEffects ? (
+          <span className="text-2xs text-muted-foreground/60">After Effects project</span>
+        ) : null}
       </div>
     );
   }
@@ -388,7 +400,7 @@ function MediaCardHoverDetail({
 
         {tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
-            {tags.slice(0, 8).map((tag) => (
+            {tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
                 className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground"
@@ -396,6 +408,11 @@ function MediaCardHoverDetail({
                 {tag}
               </span>
             ))}
+            {tags.length > 3 ? (
+              <span className="rounded-md bg-muted/70 px-1.5 py-0.5 text-2xs text-muted-foreground">
+                +{tags.length - 3}
+              </span>
+            ) : null}
           </div>
         ) : null}
 
@@ -464,6 +481,8 @@ export function MediaCard({
   captionStyle,
   onOpen,
   onAssetChanged,
+  selected = false,
+  onToggleSelected,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const { generate, isGenerating, progress } = useGenerateClips();
@@ -477,7 +496,6 @@ export function MediaCard({
   });
   const canGenerateClips = asset.kind === 'video' && asset.status === 'ready';
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
-  const [reformatOpen, setReformatOpen] = useState(false);
 
   return (
     <>
@@ -501,6 +519,7 @@ export function MediaCard({
             className={cn(
               'group flex flex-col overflow-hidden rounded-lg border border-border/70 bg-card',
               'transition-[border-color] hover:border-foreground/20',
+              selected && 'border-primary ring-2 ring-primary/20',
               onOpen &&
                 'cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
             )}
@@ -508,6 +527,25 @@ export function MediaCard({
             transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
           >
             <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+              {onToggleSelected ? (
+                <button
+                  type="button"
+                  aria-label={`${selected ? 'Deselect' : 'Select'} ${asset.title ?? asset.fileName}`}
+                  aria-pressed={selected}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleSelected(asset);
+                  }}
+                  className={cn(
+                    'absolute left-2 top-2 z-10 flex size-7 items-center justify-center rounded-md border bg-background/90 shadow-sm backdrop-blur transition-opacity',
+                    selected
+                      ? 'border-primary bg-primary text-primary-foreground opacity-100'
+                      : 'border-border text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100',
+                  )}
+                >
+                  <Check className="size-3.5" />
+                </button>
+              ) : null}
               {asset.carousel && asset.carousel.slideCount > 1 ? (
                 <CarouselThumbnail
                   slides={asset.carousel.slides}
@@ -523,19 +561,22 @@ export function MediaCard({
               )}
               <StatusBadge status={asset.status} />
               {asset.kind === 'image' && asset.signedUrl ? (
-                <button
-                  type="button"
-                  title="Reformat image"
-                  aria-label={`Reformat ${asset.title ?? asset.fileName}`}
-                  className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setReformatOpen(true);
-                  }}
-                >
-                  <Scaling className="size-3.5" />
-                </button>
+                <QuickReformatMenu
+                  asset={asset}
+                  brandId={brandId}
+                  onCompleted={() => onAssetChanged?.()}
+                  trigger={
+                    <button
+                      type="button"
+                      title="Reformat image"
+                      aria-label={`Reformat ${asset.title ?? asset.fileName}`}
+                      className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Scaling className="size-3.5" />
+                    </button>
+                  }
+                />
               ) : null}
             </div>
 
@@ -583,13 +624,6 @@ export function MediaCard({
         </HoverCardTrigger>
         <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
       </HoverCard>
-      <ImageReformatDialog
-        open={reformatOpen}
-        onOpenChange={setReformatOpen}
-        brandId={brandId}
-        asset={asset}
-        onCompleted={() => onAssetChanged?.()}
-      />
     </>
   );
 }

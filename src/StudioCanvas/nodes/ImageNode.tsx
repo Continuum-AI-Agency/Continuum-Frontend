@@ -1,4 +1,8 @@
-import type { ImageReformatCompletedData } from '@continuum/contracts';
+import {
+  IMAGE_REFORMAT_ASPECT_RATIOS,
+  IMAGE_REFORMAT_PRESETS,
+  type ImageReformatCompletedData,
+} from '@continuum/contracts';
 import {
   Cross1Icon,
   ImageIcon,
@@ -15,7 +19,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { CheckCircle2, Copy, Loader2, Scaling, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, Crop, Expand, Loader2, Scaling, Trash2, XCircle } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -23,7 +27,10 @@ import {
   ImageMarkupDialog,
   type ImageMarkupSaveResult,
 } from '@/components/ai-studio/markup/ImageMarkupDialog';
-import { ImageReformatDialog } from '@/components/library/reformat/ImageReformatDialog';
+import {
+  QuickReformatMenu,
+  useQuickReformat,
+} from '@/components/library/reformat/QuickReformatMenu';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -85,7 +92,6 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
   const [markupOpen, setMarkupOpen] = useState(false);
-  const [reformatOpen, setReformatOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -423,6 +429,18 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     },
     [id, show],
   );
+  const quickReformat = useQuickReformat({
+    brandId,
+    asset:
+      preview && data.assetId
+        ? {
+            id: data.assetId,
+            kind: 'image',
+            signedUrl: data.sourceUrl ?? preview,
+          }
+        : null,
+    onCompleted: addReformattedNode,
+  });
 
   return (
     <TooltipProvider>
@@ -478,22 +496,29 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                     <UploadIcon className="h-3 w-3" />
                   </Button>
                   {preview && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="secondary"
-                      className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
-                      disabled={!data.assetId || !brandId}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setReformatOpen(true);
+                    <QuickReformatMenu
+                      asset={{
+                        id: data.assetId ?? '',
+                        kind: 'image',
+                        signedUrl: data.sourceUrl ?? preview,
                       }}
-                      title="Reformat image"
-                      aria-label="Reformat image"
-                    >
-                      <Scaling className="h-3 w-3" />
-                    </Button>
+                      brandId={brandId ?? ''}
+                      onCompleted={addReformattedNode}
+                      trigger={
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="secondary"
+                          className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
+                          disabled={!data.assetId || !brandId}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          title="Reformat image"
+                          aria-label="Reformat image"
+                        >
+                          <Scaling className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
                   )}
                   {preview && (
                     <Button
@@ -682,13 +707,48 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           {preview && (
             <>
               <ContextMenuSeparator />
-              <ContextMenuItem
-                disabled={!data.assetId || !brandId}
-                onClick={() => setReformatOpen(true)}
-              >
-                <Scaling className="mr-2 h-4 w-4" />
-                Reformat Image
-              </ContextMenuItem>
+              <ContextMenuSub>
+                <ContextMenuSubTrigger
+                  disabled={quickReformat.unavailable || Boolean(quickReformat.running)}
+                >
+                  <Scaling className="mr-2 h-4 w-4" />
+                  Reformat image
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-52">
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger>
+                      <Crop className="mr-2 h-4 w-4" />
+                      Fast crop
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-48">
+                      {IMAGE_REFORMAT_PRESETS.map((preset) => (
+                        <ContextMenuItem
+                          key={preset}
+                          onClick={() => void quickReformat.reformat('crop', preset)}
+                        >
+                          {IMAGE_REFORMAT_ASPECT_RATIOS[preset]}
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger>
+                      <Expand className="mr-2 h-4 w-4" />
+                      Smart expand
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-48">
+                      {IMAGE_REFORMAT_PRESETS.map((preset) => (
+                        <ContextMenuItem
+                          key={preset}
+                          onClick={() => void quickReformat.reformat('smart_expand', preset)}
+                        >
+                          {IMAGE_REFORMAT_ASPECT_RATIOS[preset]}
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
               <ContextMenuItem onClick={() => setMarkupOpen(true)}>
                 <Pencil2Icon className="mr-2 h-4 w-4" />
                 Markup Image
@@ -728,24 +788,6 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-
-      {preview && data.assetId && brandId ? (
-        <ImageReformatDialog
-          open={reformatOpen}
-          onOpenChange={setReformatOpen}
-          brandId={brandId}
-          asset={{
-            id: data.assetId,
-            kind: 'image',
-            signedUrl: data.sourceUrl ?? preview,
-            width: undefined,
-            height: undefined,
-            title: data.label,
-            fileName: data.fileName ?? 'image',
-          }}
-          onCompleted={addReformattedNode}
-        />
-      ) : null}
 
       {preview && (
         <ImageMarkupDialog

@@ -16,13 +16,12 @@ import {
 } from '@/lib/library/comments';
 import {
   type AssetHeadRow,
-  ensureHeadVersion,
   loadAssetHead,
   resolveHeadVersionId,
 } from '@/lib/library/ensureHeadVersion';
+import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -123,11 +122,14 @@ async function resolveCommentVersion(params: {
   }
 
   // Nothing named: the author was looking at the head. An asset that was never
-  // re-uploaded has no version rows at all, so v1 is materialized here — on the
-  // admin client, because the backfill preserves the asset creator as created_by
-  // and RLS forbids a member from writing another user's created_by.
+  // re-uploaded has no version rows at all, so v1 is materialized by the
+  // Creative Operations Edge Function. It verifies this caller before using
+  // the platform-managed service role to preserve the asset creator.
   try {
-    const { headVersionId } = await ensureHeadVersion(createSupabaseAdminClient(), params.head);
+    const { headVersionId } = await ensureAssetHeadVersion(params.supabase, {
+      brandId: params.brandId,
+      assetId: params.head.id,
+    });
     return { versionId: headVersionId };
   } catch (error) {
     console.error('[library/comments] head version resolution failed', error);

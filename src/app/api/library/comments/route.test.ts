@@ -73,7 +73,12 @@ function versionRow(overrides: FakeRow & { id: string; version_number: number })
 }
 
 function seed(
-  params: { asset?: FakeRow; versions?: FakeRow[]; comments?: FakeRow[] } = {},
+  params: {
+    asset?: FakeRow;
+    versions?: FakeRow[];
+    comments?: FakeRow[];
+    edgeEnsure?: (db: FakeDb) => Promise<{ headVersionId: string }>;
+  } = {},
 ): FakeDb {
   const db = new FakeDb({
     'media.assets': [params.asset ?? assetRow()],
@@ -87,6 +92,53 @@ function seed(
     db,
     userId: USER_ID,
     userEmail: 'commenter@continuum.test',
+  });
+  Object.assign(client as object, {
+    functions: {
+      invoke: async (name: string) => {
+        if (name !== 'library-creative-operations') {
+          return { data: null, error: new Error(`Unexpected Edge Function: ${name}`) };
+        }
+        if (params.edgeEnsure) return { data: await params.edgeEnsure(db), error: null };
+
+        const asset = db.rows('media.assets')[0];
+        if (!asset) return { data: null, error: new Error('Missing asset') };
+        let versions = db.rows('media.asset_versions');
+        if (versions.length === 0) {
+          const insert = db.insert('media.asset_versions', {
+            brand_id: asset.brand_id,
+            asset_id: asset.id,
+            version_number: 1,
+            bucket: asset.bucket,
+            storage_path: asset.storage_path,
+            file_name: asset.file_name,
+            mime_type: asset.mime_type,
+            size_bytes: asset.size_bytes,
+            width: asset.width,
+            height: asset.height,
+            duration_ms: asset.duration_ms,
+            checksum: asset.checksum,
+            note: null,
+            created_by: asset.created_by,
+          });
+          if (insert.error && insert.error.code !== '23505') {
+            return { data: null, error: new Error(insert.error.message) };
+          }
+          versions = db.rows('media.asset_versions');
+        }
+        const ordered = [...versions].sort(
+          (left, right) => Number(right.version_number) - Number(left.version_number),
+        );
+        const newest = ordered[0];
+        const head = ordered.find(
+          (row) => row.bucket === asset.bucket && row.storage_path === asset.storage_path,
+        );
+        return {
+          data: { headVersionId: head?.id ?? newest?.id, maxVersionNumber: newest?.version_number },
+          error: null,
+        };
+      },
+    },
   });
   hooks.__testCreateSupabaseServerClient = () => Promise.resolve(client);
   hooks.__testCreateSupabaseAdminClient = () => client;
@@ -125,6 +177,27 @@ afterEach(() => {
 });
 
 describe('POST /api/library/comments — every comment is pinned to a version', () => {
+  it('uses the Creative Operations Edge Function for the privileged v1 backfill', async () => {
+    const db = seed({
+      edgeEnsure: async (database) => {
+        const headVersionId = 'b1c2d3e4-5f60-4789-8abc-1234567890de';
+        database.rows('media.asset_versions').push(versionRow({ id: headVersionId, version_number: 1 }));
+        return { headVersionId, maxVersionNumber: 1 };
+      },
+    });
+    hooks.__testCreateSupabaseAdminClient = () => {
+      throw new Error('The route must not construct an admin client for a comment backfill');
+    };
+
+    const response = await POST(
+      postRequest({ brandId: BRAND_ID, assetId: ASSET_ID, body: 'Edge-backed v1' }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(versionsOf(db)).toHaveLength(1);
+    expect(commentsOf(db)[0]?.version_id).toBe('b1c2d3e4-5f60-4789-8abc-1234567890de');
+  });
+
   it('materializes v1 and pins a comment on a never-versioned asset to it', async () => {
     const db = seed();
 

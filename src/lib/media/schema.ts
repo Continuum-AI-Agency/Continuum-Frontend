@@ -2,7 +2,13 @@
 // yet include the `media` schema. Kept in sync with the migration manually.
 // Map to the camelCase MediaAsset contract shape via rowToMediaAsset().
 
-import type { MediaKind, MediaReviewStatus, MediaSource } from '@continuum/contracts';
+import type {
+  AssetIntegrityState,
+  MediaKind,
+  MediaReviewStatus,
+  MediaSource,
+  VideoCreativeInsights,
+} from '@continuum/contracts';
 
 export type MediaAssetRow = {
   id: string;
@@ -23,6 +29,8 @@ export type MediaAssetRow = {
   // Optional so pre-v2 cached payloads/fixtures without the columns still
   // typecheck; the mapper defaults them ('none' / null).
   review_status?: MediaReviewStatus;
+  head_version_id?: string | null;
+  integrity_state?: AssetIntegrityState;
   checksum?: string | null;
   progress_step: string | null;
   error_code: string | null;
@@ -32,6 +40,7 @@ export type MediaAssetRow = {
   tags: string[] | null;
   ad_creative_analysis: Record<string, unknown> | null;
   detected_objects: Record<string, unknown>[] | null;
+  video_insights?: VideoCreativeInsights | null;
   // Poster image inside the asset's own bucket (v1.6). Optional so fixtures and
   // cached payloads written before the column existed still typecheck.
   thumbnail_path?: string | null;
@@ -52,9 +61,9 @@ export type MediaAssetRow = {
 export const MEDIA_ASSET_SELECT =
   'id, brand_id, created_by, kind, bucket, storage_path, file_name, mime_type, ' +
   'size_bytes, width, height, duration_ms, source, origin_ref, status, ' +
-  'review_status, checksum, ' +
+  'review_status, head_version_id, integrity_state, checksum, ' +
   'progress_step, error_code, error_message, title, description, tags, ' +
-  'ad_creative_analysis, detected_objects, thumbnail_path, embedding_model, has_image_embedding, ' +
+  'ad_creative_analysis, detected_objects, video_insights, thumbnail_path, embedding_model, has_image_embedding, ' +
   'created_at, updated_at, deleted_at';
 
 export type MediaCollectionRow = {
