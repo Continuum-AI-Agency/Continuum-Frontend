@@ -10,14 +10,21 @@ import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 // the call without it.
 //
 // One helper so the two callers cannot drift apart on this again.
+//
+// Throws rather than sending a headerless request: a missing token used to produce
+// an opaque backend 401 ("brand access denied") that had nothing to do with brand
+// access — the caller is expected to catch this and surface a clear sign-in error.
 export async function authedSseHeaders(
   extra?: Record<string, string>,
 ): Promise<Record<string, string>> {
   const token = await getBrowserAccessToken();
+  if (!token) {
+    throw new Error('Not signed in — please sign in again and retry.');
+  }
   return {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    Authorization: `Bearer ${token}`,
     ...extra,
   };
 }

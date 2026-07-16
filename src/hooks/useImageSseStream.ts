@@ -55,8 +55,8 @@ export function useImageSseStream() {
       abortRef.current = controller;
 
       let jobId: string | undefined;
-      const headers = await authedSseHeaders();
       try {
+        const headers = await authedSseHeaders();
         const res = await fetch(initUrl, {
           method: 'POST',
           headers,

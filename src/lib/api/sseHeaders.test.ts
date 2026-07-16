@@ -31,9 +31,9 @@ describe('authedSseHeaders', () => {
     });
   });
 
-  it('omits Authorization entirely when there is no session, rather than sending "Bearer null"', async () => {
+  it('throws instead of sending a headerless request when there is no session', async () => {
     token = null;
-    expect(await authedSseHeaders()).not.toHaveProperty('Authorization');
+    await expect(authedSseHeaders()).rejects.toThrow('Not signed in');
   });
 
   it('lets a caller add headers without dropping the bearer', async () => {
