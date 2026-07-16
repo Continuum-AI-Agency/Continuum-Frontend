@@ -99,6 +99,8 @@ type OrganicCalendarWorkspaceClientProps = {
   initialWeekStart?: string | null;
   initialSelectedDraftId?: string | null;
   initialView?: 'week' | 'month' | 'list';
+  initialComposeTrendId?: string | null;
+  initialComposePlatform?: OrganicPlatformKey | null;
   postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform;
 };
 
@@ -132,6 +134,8 @@ function OrganicCalendarWorkspaceInner({
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
+  initialComposeTrendId,
+  initialComposePlatform,
   postedContentAccountsByPlatform,
 }: OrganicCalendarWorkspaceClientProps) {
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
@@ -606,6 +610,7 @@ function OrganicCalendarWorkspaceInner({
   const [aiComposer, setAiComposer] = React.useState<{
     platform: OrganicPlatformKey;
     scheduledAt: string;
+    seedTrendIds?: string[];
   } | null>(null);
 
   const handleGoDraft = React.useCallback(
@@ -627,7 +632,11 @@ function OrganicCalendarWorkspaceInner({
         const scheduledAt = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
           ? `${dayId}T12:00:00.000Z`
           : new Date().toISOString();
-        setAiComposer({ platform: platform as OrganicPlatformKey, scheduledAt });
+        setAiComposer({
+          platform: platform as OrganicPlatformKey,
+          scheduledAt,
+          ...(context?.trendId && { seedTrendIds: [context.trendId] }),
+        });
         return;
       }
       createQuickDraft({
@@ -641,6 +650,38 @@ function OrganicCalendarWorkspaceInner({
     },
     [createQuickDraft, defaultCreateDayId],
   );
+
+  // One-click "Generate from this trend": open the composer pre-seeded with the
+  // trend tagged, on the trend's best schedulable platform.
+  const handleGenerateFromTrend = React.useCallback(
+    (trend: Trend) => {
+      const platform =
+        trend.platforms.find((p) => activePlatforms.includes(p)) ?? activePlatforms[0];
+      setTrendsDrawerOpen(false);
+      handleGoDraft({ platform, trendId: trend.id });
+    },
+    [activePlatforms, handleGoDraft],
+  );
+
+  // Apply a dashboard deep link (/organic?composeTrendId=…) on mount (once):
+  // open the composer seeded with that trend, mirroring the initialView pattern.
+  const appliedComposeTrendRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialComposeTrendId || appliedComposeTrendRef.current) return;
+    appliedComposeTrendRef.current = true;
+    const trend = resolvedTrends.find((t) => t.id === initialComposeTrendId);
+    if (trend) {
+      handleGenerateFromTrend(trend);
+      return;
+    }
+    // The composer submits seeded ids from state, so the handoff works even when
+    // the trend row isn't in the planner's projection (its chip just won't render).
+    handleGoDraft({
+      platform: initialComposePlatform ?? undefined,
+      trendId: initialComposeTrendId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { handleOpenInAiStudio, handleOpenDraftInAiStudio } = useAiStudioHandoff({
     brandProfileId,
@@ -1100,6 +1141,7 @@ function OrganicCalendarWorkspaceInner({
                   activePlatforms={activePlatforms}
                   maxSelections={maxTrendSelections}
                   onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                  onGenerateFromTrend={handleGenerateFromTrend}
                   onFetch={brandProfileId ? refreshTrends : undefined}
                   isFetching={isFetchingTrends}
                 />
@@ -1115,6 +1157,7 @@ function OrganicCalendarWorkspaceInner({
                     scheduledAt={aiComposer.scheduledAt}
                     trends={resolvedTrends}
                     platformAccountIds={platformAccountIds}
+                    initialTrendIds={aiComposer.seedTrendIds}
                   />
                 )}
               </motion.section>

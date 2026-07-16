@@ -65,6 +65,7 @@ import {
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { z } from 'zod';
+import { toBrowserReachableStorageUrl } from '@/lib/media/storage-url';
 
 const CREATIVE_OPERATIONS_FUNCTION = 'library-creative-operations';
 
@@ -76,6 +77,20 @@ export class CreativeOperationError extends Error {
     super(message);
     this.name = 'CreativeOperationError';
   }
+}
+
+function normalizeCreativeOperationStorageUrls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeCreativeOperationStorageUrls);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      key === 'signedUrl' && typeof entry === 'string'
+        ? toBrowserReachableStorageUrl(entry, process.env.NEXT_PUBLIC_SUPABASE_URL)
+        : normalizeCreativeOperationStorageUrls(entry),
+    ]),
+  );
 }
 
 async function invokeCreativeOperation<T>(
@@ -106,7 +121,7 @@ async function invokeCreativeOperation<T>(
       response?.status ?? null,
     );
   }
-  return responseSchema.parse(data);
+  return responseSchema.parse(normalizeCreativeOperationStorageUrls(data));
 }
 
 // The Edge Function owns the only privileged Library operation in this path:

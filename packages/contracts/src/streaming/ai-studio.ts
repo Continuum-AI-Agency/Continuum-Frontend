@@ -9,7 +9,7 @@
 //   `base64`/`data_url` are present only when the Backend's upload/sign failed and
 //   it fell back to inlining the bytes so the generation is not lost.
 
-import { z } from "zod";
+import { z } from 'zod';
 import {
   responseDoneSchema,
   responseErrorSchema,
@@ -17,7 +17,7 @@ import {
   toolResultSchema,
 } from './agentFrames';
 
-const REFERENCE_SOURCE_MESSAGE = "reference image requires base64 data or image_url";
+const REFERENCE_SOURCE_MESSAGE = 'reference image requires base64 data or image_url';
 
 // One reference image input. At least one of { data, image_url, url, or
 // storage_bucket+storage_path } must be present. `url` is accepted as an alias
@@ -27,20 +27,20 @@ const REFERENCE_SOURCE_MESSAGE = "reference image requires base64 data or image_
 // how a generated canvas image round-trips back as a reference.
 export const aiStudioReferenceImageSchema = z
   .object({
-    data: z.string().min(10, "reference image data must be base64").optional(),
+    data: z.string().min(10, 'reference image data must be base64').optional(),
     image_url: z.string().min(1).optional(),
     url: z.string().min(1).optional(),
     storage_bucket: z.string().min(1).optional(),
     storage_path: z.string().min(1).optional(),
-    mime_type: z.string().default("image/png"),
+    mime_type: z.string().default('image/png'),
     filename: z.string().optional(),
   })
   .superRefine((image, ctx) => {
     const hasStorageCoords = Boolean(image.storage_bucket && image.storage_path);
     if (!(image.data ?? image.image_url ?? image.url) && !hasStorageCoords) {
       ctx.addIssue({
-        code: "custom",
-        path: ["data"],
+        code: 'custom',
+        path: ['data'],
         message: REFERENCE_SOURCE_MESSAGE,
       });
     }
@@ -75,6 +75,16 @@ export const aiStudioVideoResultEventSchema = z.object({
 });
 export type AiStudioVideoResultEvent = z.infer<typeof aiStudioVideoResultEventSchema>;
 
+// ---------------------------------------------------------------------------
+// Canvas Composer — the in-app "prompt -> workflow" agent stream
+// ---------------------------------------------------------------------------
+//
+// NARRATION ONLY. The nodes themselves never travel this stream: the agent writes
+// them to brand_profiles.canvas_sessions and the open canvas merges the row over
+// Realtime (useCanvasRealtime). Anything here that looks like graph state is a
+// notification about a write that already landed, not the payload of one — so a
+// dropped frame costs the user a progress line, never a node.
+
 const composerStartedSchema = z.object({
   type: z.literal('composer.started'),
   data: z.object({ roomId: z.string().min(1) }).loose(),
@@ -85,6 +95,9 @@ const composerStatusSchema = z.object({
   data: z.object({ message: z.string() }).loose(),
 });
 
+// Emitted after each CAS write lands. `addedNodeIds` are the ids as they exist on
+// the canvas (post ref-namespacing), so the Frontend can select/zoom them and the
+// bench can assert on `.react-flow__node[data-id=...]`.
 const composerGraphSchema = z.object({
   type: z.literal('composer.graph'),
   data: z
@@ -96,6 +109,8 @@ const composerGraphSchema = z.object({
     .loose(),
 });
 
+// A connection the canvas rules refused, or an op that could not apply. The build
+// still lands — the agent is told what was dropped and may repair it next step.
 const composerWarningSchema = z.object({
   type: z.literal('composer.warning'),
   data: z.object({ message: z.string() }).loose(),

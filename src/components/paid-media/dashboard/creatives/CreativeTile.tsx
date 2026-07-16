@@ -1,15 +1,17 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { PlayIcon } from "lucide-react";
+import { PlayIcon } from 'lucide-react';
+import * as React from 'react';
 
-import { Badge } from "@/components/ui/badge";
-import type { ActionLog } from "@/lib/types/dco";
-import { cn } from "@/lib/utils";
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromCreativeAd } from '@/components/chat/media/media';
+import { Badge } from '@/components/ui/badge';
+import type { ActionLog } from '@/lib/types/dco';
+import { cn } from '@/lib/utils';
 
-import { CreativeHoverCard } from "./CreativeHoverCard";
-import { nearestAspectLabel } from "./filterAndSortCreatives";
-import type { CreativeAd, OpenCreativeDetail } from "./types";
+import { CreativeHoverCard } from './CreativeHoverCard';
+import { nearestAspectLabel } from './filterAndSortCreatives';
+import type { CreativeAd, OpenCreativeDetail } from './types';
 
 type CreativeTileProps = {
   ad: CreativeAd;
@@ -19,6 +21,10 @@ type CreativeTileProps = {
   metricValue: string;
   logs: ActionLog[];
   adSetName: string | null;
+  /** Fresh re-resolved URL when the ad's Meta CDN thumbnail expired. */
+  freshUrl?: string | null;
+  /** Fired once when the thumbnail URL fails to load (expired Meta CDN URL). */
+  onRecoverCreative?: (adId: string) => void;
   onToggleSelect: (adId: string) => void;
   onOpenDetail: (detail: OpenCreativeDetail) => void;
 };
@@ -31,19 +37,20 @@ export function CreativeTile({
   metricValue,
   logs,
   adSetName,
+  freshUrl,
+  onRecoverCreative,
   onToggleSelect,
   onOpenDetail,
 }: CreativeTileProps) {
   const [ratio, setRatio] = React.useState<string | null>(null);
-  const imageUrl = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
-  const title = ad.creative?.title || ad.name || "Untitled ad";
-  const isVideo = ad.creative?.format === "video" || Boolean(ad.creative?.videoId);
-
-  const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
-    const { naturalWidth, naturalHeight } = event.currentTarget;
-    const label = nearestAspectLabel(naturalWidth, naturalHeight);
-    if (label) setRatio(label);
-  };
+  const title = ad.creative?.title || ad.name || 'Untitled ad';
+  const isVideo = ad.creative?.format === 'video' || Boolean(ad.creative?.videoId);
+  // The tile renders its own Video/ratio pills, so the media badge stays off.
+  const media = React.useMemo(() => {
+    const base = mediaFromCreativeAd(ad);
+    if (!base) return null;
+    return { ...base, url: freshUrl ?? base.url, badge: undefined };
+  }, [ad, freshUrl]);
 
   return (
     <CreativeHoverCard
@@ -62,25 +69,27 @@ export function CreativeTile({
         onClick={() => onToggleSelect(ad.id)}
         disabled={disabled}
         aria-pressed={isSelected}
-        aria-label={`${isSelected ? "Deselect" : "Select"} ad ${title}`}
+        aria-label={`${isSelected ? 'Deselect' : 'Select'} ad ${title}`}
         className={cn(
-          "group/tile flex w-full cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+          'group/tile flex w-full cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
           isSelected
-            ? "border-primary/60 ring-1 ring-primary/40"
-            : "border-border/70 hover:bg-muted/40",
-          disabled && "cursor-not-allowed opacity-55"
+            ? 'border-primary/60 ring-1 ring-primary/40'
+            : 'border-border/70 hover:bg-muted/40',
+          disabled && 'cursor-not-allowed opacity-55',
         )}
       >
         <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted/50">
-          {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- Meta creative URLs are dynamic CDN hosts, not static at build time
-            <img
-              src={imageUrl}
-              alt={title}
-              className="h-full w-full object-cover transition-transform duration-200 motion-safe:group-hover/tile:scale-105"
-              loading="lazy"
-              onLoad={handleImageLoad}
+          {media ? (
+            <ChatMediaThumb
+              media={media}
+              className="rounded-none"
+              fallbackSeed={title}
+              onRecover={() => onRecoverCreative?.(ad.id)}
+              onLoadDimensions={({ width, height }) => {
+                const label = nearestAspectLabel(width, height);
+                if (label) setRatio(label);
+              }}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
@@ -109,8 +118,8 @@ export function CreativeTile({
             <span className="truncate text-xs text-muted-foreground">
               {metricLabel} · {metricValue}
             </span>
-            <Badge variant={isSelected ? "default" : "secondary"} className="shrink-0 text-2xs">
-              {isSelected ? "Selected" : "Select"}
+            <Badge variant={isSelected ? 'default' : 'secondary'} className="shrink-0 text-2xs">
+              {isSelected ? 'Selected' : 'Select'}
             </Badge>
           </div>
         </div>

@@ -31,7 +31,7 @@ import type { AdSetSnapshot, OptimizationObjective, WindowMetrics } from './inde
 import { getOptimizationMetricDefinition } from './service';
 
 /** The engine's fallback when a portfolio stores no cpa_target
- *  (@continuum/optimization-engine config.ts). Mirrored here so the advisor can NAME the
+ *  (the backend optimizer config). Mirrored here so the advisor can NAME the
  *  number the user is silently opting into. Keep in step with the engine. */
 export const ENGINE_DEFAULT_CPA_TARGET = 50;
 

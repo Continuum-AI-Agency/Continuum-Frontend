@@ -37,6 +37,10 @@ export const omniGenRequestSchema = z
     // Grounding inputs from the node (resolved server-side into the prompt).
     skillIds: z.array(z.string().min(1)).optional(),
     brandBookPieces: z.array(z.string().min(1)).optional(),
+    // Library asset ids of the reference creatives. The Backend folds what they
+    // actually EARNED into the prompt as <asset_performance>, so a variant is made
+    // knowing how the original performed rather than blind.
+    referenceAssetIds: z.array(z.string().min(1)).max(14).optional(),
     // Required for edit turns — the interaction id of the clip being edited.
     previousInteractionId: z.string().min(1).optional(),
   })

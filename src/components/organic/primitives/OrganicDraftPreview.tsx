@@ -40,9 +40,12 @@ import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
+import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
+import { resolveDraftHook } from '@/lib/virality/draftHook';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { BlueprintStoryboard, resolveStoryboardFrames } from './BlueprintStoryboard';
 import { CarouselSlideStrip } from './CarouselSlideStrip';
+import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import {
   EnrichmentLadder,
   MediaEnrichmentSummary,
@@ -58,7 +61,6 @@ import { PostMetaChips } from './PostMetaChips';
 import { PreviewMediaDropZone } from './PreviewMediaDropZone';
 import { resolvePreviewAspectRatio, resolvePreviewMaxWidth } from './social-preview-utils';
 import type { OrganicCalendarDraft } from './types';
-import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft;
@@ -760,6 +762,8 @@ export function OrganicDraftPreview({
   const previewMaxWidth = resolvePreviewMaxWidth(selectedPlatform);
   const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform, draft.format);
   const creativeDirection = resolveCreativeDirection(draft);
+  // The agent-generated hook, if this draft has been generated. Scored on view.
+  const draftHook = resolveDraftHook(draft);
 
   // Media placement hook — the single write path for user-supplied creatives.
   const placement = useDraftMediaPlacement(draft.id);
@@ -1144,6 +1148,18 @@ export function OrganicDraftPreview({
             className="mx-auto flex w-full flex-col gap-3"
             style={{ maxWidth: `${previewMaxWidth}px` }}
           >
+            {draftHook && brandProfileId ? (
+              <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/90 px-3 py-2">
+                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Hook
+                </span>
+                <p className="min-w-0 flex-1 truncate text-sm text-foreground" title={draftHook}>
+                  {draftHook}
+                </p>
+                <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
+              </div>
+            ) : null}
+
             {creativeOpen && (
               <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
                 <InlinePreviewTextarea

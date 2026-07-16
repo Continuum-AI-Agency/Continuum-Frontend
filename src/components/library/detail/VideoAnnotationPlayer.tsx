@@ -118,7 +118,7 @@ export function VideoAnnotationPlayer({
       selected: true,
     }));
 
-  if (!src || mediaError) {
+  if (!src) {
     return (
       <div className="flex size-full items-center justify-center text-muted-foreground">
         <ImageOff className="size-8 text-muted-foreground/40" />
@@ -150,6 +150,19 @@ export function VideoAnnotationPlayer({
           onPause={() => setPlaying(false)}
           onError={() => setMediaError(true)}
         />
+        {mediaError ? (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center bg-muted/80 text-muted-foreground"
+            role="status"
+          >
+            <div className="flex flex-col items-center gap-2 text-center">
+              <ImageOff className="size-8 text-muted-foreground/40" aria-hidden />
+              <span className="text-xs">
+                Video preview unavailable. Timeline comments remain available.
+              </span>
+            </div>
+          </div>
+        ) : null}
         <AnnotationOverlay
           containerSize={containerSize}
           contentRect={contentRect}

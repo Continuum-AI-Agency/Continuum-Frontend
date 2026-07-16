@@ -60,6 +60,8 @@ type OrganicCalendarWorkspaceProps = {
   initialWeekStart?: string | null;
   initialSelectedDraftId?: string | null;
   initialView?: 'week' | 'month' | 'list';
+  initialComposeTrendId?: string | null;
+  initialComposePlatform?: OrganicPlatformKey | null;
   postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform;
 };
 
@@ -77,6 +79,8 @@ export function OrganicCalendarWorkspace({
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
+  initialComposeTrendId,
+  initialComposePlatform,
   postedContentAccountsByPlatform,
 }: OrganicCalendarWorkspaceProps) {
   const { weekStart: resolvedWeekStart } = resolvePlannerInitialDates({
@@ -102,6 +106,8 @@ export function OrganicCalendarWorkspace({
       userId={userId}
       instagramAccountId={instagramAccountId}
       initialView={initialView}
+      initialComposeTrendId={initialComposeTrendId}
+      initialComposePlatform={initialComposePlatform}
       postedContentAccountsByPlatform={postedContentAccountsByPlatform}
     />
   );

@@ -2,13 +2,13 @@
 
 import { format, parseISO } from 'date-fns';
 import { AlertCircle, Loader2, X } from 'lucide-react';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromPreviewUrls } from '@/components/chat/media/media';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import { mediaFromPreviewUrls } from '@/components/chat/media/media';
-import { useDraftStoryboard } from '../hooks/useDraftStoryboard';
+import { useDraftRealizedImages, useDraftStoryboard } from '../hooks/useDraftStoryboard';
 import type { AgentJobState } from './types';
 
 type JobGridProps = {
@@ -87,9 +87,11 @@ function JobCard({
   onCancelAction?: (jobId: string) => void;
 }) {
   const scheduledLabel = formatScheduledAt(job.scheduledAt);
-  // Durable storyboard from the persisted draft, so a deferred (storyboard-only)
-  // post still shows a thumbnail even when the live blueprint frame never arrived.
+  // Durable media from the persisted draft (re-signed on calendar load) — the
+  // reliable source for restored sessions, where the signed URLs baked into old
+  // chat frames have long expired.
   const draftStoryboard = useDraftStoryboard(job.draftId);
+  const draftRealized = useDraftRealizedImages(job.draftId);
 
   if (job.status === 'queued') {
     return (
@@ -182,14 +184,17 @@ function JobCard({
     const cta = job.placement?.content?.cta ?? null;
     const trendId = card?.trendId ?? job.placement?.seed?.trendId ?? job.trendId ?? null;
     const topic = card?.topic ?? job.placement?.content?.titleTopic ?? null;
-    // Prefer realized media (durable signed storageUrl), else the storyboard
-    // preview from the blueprint job. Never base64.
+    // FRESH draft-derived URLs first (realized final media, then storyboard —
+    // both re-signed on calendar load), THEN the frame-payload URLs. The frame
+    // URLs are only fresh during a live stream; in a restored session they are
+    // days-old signed URLs that render as dead gray tiles. Never base64.
     const thumbnailUrl =
+      draftRealized[0] ??
+      draftStoryboard[0] ??
       job.placement?.publishingAssets?.find(
         (asset) => typeof asset.storageUrl === 'string' && asset.storageUrl.length > 0,
       )?.storageUrl ??
       job.previewImages?.[0] ??
-      draftStoryboard[0] ??
       null;
 
     const previewCard = (
@@ -210,6 +215,7 @@ function JobCard({
               <ChatMediaThumb
                 media={mediaFromPreviewUrls(`job:${job.jobId}`, [thumbnailUrl], format)[0]}
                 className="rounded-none"
+                fallbackSeed={topic ?? caption}
               />
             </div>
           )}

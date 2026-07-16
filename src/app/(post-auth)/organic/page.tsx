@@ -39,10 +39,14 @@ async function OrganicContent({
   initialSelectedDraftId,
   initialWeekStart,
   initialView,
+  initialComposeTrendId,
+  initialComposePlatform,
 }: {
   initialSelectedDraftId: string | null;
   initialWeekStart: string | null;
   initialView: 'week' | 'month' | 'list';
+  initialComposeTrendId: string | null;
+  initialComposePlatform: OrganicPlatformKey | null;
 }) {
   const { activeBrandId, brandSummaries } = await getActiveBrandContext();
   if (!activeBrandId) {
@@ -371,6 +375,8 @@ async function OrganicContent({
             initialSelectedDraftId={initialSelectedDraftId}
             initialWeekStart={initialWeekStart}
             initialView={initialView}
+            initialComposeTrendId={initialComposeTrendId}
+            initialComposePlatform={initialComposePlatform}
             postedContentAccountsByPlatform={metricAccountsByPlatform}
           />
         }
@@ -420,12 +426,15 @@ async function OrganicContent({
 }
 
 const VALID_VIEWS = ['week', 'month', 'list'] as const;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function OrganicPage({ searchParams }: OrganicPageProps) {
   const resolvedSearchParams = (searchParams ? await searchParams : undefined) ?? {};
   const initialSelectedDraftIdRaw = resolvedSearchParams.draftId;
   const initialWeekStartRaw = resolvedSearchParams.weekStartId ?? resolvedSearchParams.weekStart;
   const initialViewRaw = resolvedSearchParams.view;
+  const composeTrendIdRaw = resolvedSearchParams.composeTrendId;
+  const composePlatformRaw = resolvedSearchParams.composePlatform;
   const initialSelectedDraftId =
     typeof initialSelectedDraftIdRaw === 'string' && initialSelectedDraftIdRaw.trim().length > 0
       ? initialSelectedDraftIdRaw
@@ -439,6 +448,17 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
     (VALID_VIEWS as readonly string[]).includes(initialViewRaw)
       ? (initialViewRaw as 'week' | 'month' | 'list')
       : 'month';
+  // Dashboard "Generate from this trend" deep link — only real (uuid) trend ids
+  // can anchor a one-shot generation, so anything else is dropped here.
+  const initialComposeTrendId =
+    typeof composeTrendIdRaw === 'string' && UUID_RE.test(composeTrendIdRaw)
+      ? composeTrendIdRaw
+      : null;
+  const initialComposePlatform =
+    typeof composePlatformRaw === 'string' &&
+    (ORGANIC_MVP_PLATFORM_KEYS as readonly string[]).includes(composePlatformRaw)
+      ? (composePlatformRaw as OrganicPlatformKey)
+      : null;
 
   return (
     <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
@@ -447,6 +467,8 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
           initialSelectedDraftId={initialSelectedDraftId}
           initialWeekStart={initialWeekStart}
           initialView={initialView}
+          initialComposeTrendId={initialComposeTrendId}
+          initialComposePlatform={initialComposePlatform}
         />
       </Suspense>
     </div>

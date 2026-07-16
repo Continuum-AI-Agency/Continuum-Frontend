@@ -162,7 +162,8 @@ export function useWorkflowExecution() {
                 url?: string;
                 video_url?: string;
                 poster_base64?: string;
-                storage?: { signed_url?: string };
+                size_bytes?: number;
+                storage?: { signed_url?: string; size_bytes?: number };
                 path?: string;
                 bucket?: string;
                 message?: string;

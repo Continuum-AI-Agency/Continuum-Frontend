@@ -16,11 +16,6 @@ export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
 export type PublishFormat = z.infer<typeof publishFormatSchema>;
 
-/** Match generator-written and user-written format strings at the boundary. */
-export function isCarouselFormat(format?: string | null): boolean {
-  return (format ?? '').trim().toLowerCase().includes('carousel');
-}
-
 /**
  * How a platform ingests media.
  *
@@ -84,6 +79,9 @@ export const publishErrorCodeSchema = z.enum([
   // Compliance gate reasons (see assertPublishable):
   'quality_failed',
   'media_missing',
+  // The draft resolved to no caption at all. A platform accepts a container with no caption
+  // param and posts it blank, so this fails closed rather than publishing an empty post.
+  'caption_missing',
   'hyperframe_mp4_not_ready',
   // The draft's format is not offered by its platform.
   'unsupported_format',

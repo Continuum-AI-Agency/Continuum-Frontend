@@ -13,7 +13,7 @@
 // so a comment looks and behaves identically wherever a video is reviewed.
 
 import { Pause, Play } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
 import {
   TimelineMarkerStrip,
@@ -37,18 +37,46 @@ export function ShareVideoPlayer({ src, posterUrl, label, durationMsHint, marker
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(durationMsHint ?? 0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
-  const seekTo = (ms: number) => {
+  const seekTo = useCallback((ms: number) => {
     const video = videoRef.current;
-    if (video) video.currentTime = ms / 1000;
+    if (video) {
+      const seconds = ms / 1000;
+      video.currentTime = seconds;
+
+      // With preload="metadata", Chromium can accept a seek while it only has
+      // HAVE_METADATA and then snap the playhead back to zero as the first media
+      // range arrives. Re-apply that same seek once frame data is available so
+      // a public review marker always lands on the commented frame.
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        video.addEventListener(
+          'loadeddata',
+          () => {
+            video.currentTime = seconds;
+          },
+          { once: true },
+        );
+      }
+    }
     setCurrentMs(ms);
-  };
+  }, []);
+
+  useEffect(() => setHydrated(true), []);
 
   const selectMarker = (marker: ShareTimeMarker) => {
     videoRef.current?.pause();
-    seekTo(marker.timeMs);
     setSelectedId(marker.id);
   };
+
+  // Marker selection changes the controlled scrubber and its selected styling
+  // in one commit. Seek after that commit so the old scrubber value cannot win
+  // the race and snap the public-review playhead back to zero.
+  useEffect(() => {
+    if (!selectedId) return;
+    const marker = markers.find((candidate) => candidate.id === selectedId);
+    if (marker) seekTo(marker.timeMs);
+  }, [markers, seekTo, selectedId]);
 
   return (
     <div className="flex flex-col rounded-lg border border-border bg-black">
@@ -73,6 +101,7 @@ export function ShareVideoPlayer({ src, posterUrl, label, durationMsHint, marker
           variant="ghost"
           size="icon"
           aria-label={playing ? 'Pause' : 'Play'}
+          disabled={!hydrated}
           onClick={() => (playing ? videoRef.current?.pause() : void videoRef.current?.play())}
         >
           {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -88,6 +117,7 @@ export function ShareVideoPlayer({ src, posterUrl, label, durationMsHint, marker
             durationMs={durationMs}
             selectedId={selectedId}
             onSelect={selectMarker}
+            readOnly={!hydrated}
           />
           <input
             type="range"
@@ -96,6 +126,7 @@ export function ShareVideoPlayer({ src, posterUrl, label, durationMsHint, marker
             max={Math.max(durationMs, 1)}
             step={100}
             value={Math.min(currentMs, durationMs || currentMs)}
+            disabled={!hydrated}
             onChange={(event) => seekTo(Number(event.target.value))}
             className="h-1.5 w-full cursor-pointer accent-primary"
           />

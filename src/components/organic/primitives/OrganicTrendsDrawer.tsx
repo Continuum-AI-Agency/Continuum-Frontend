@@ -1,26 +1,22 @@
-"use client"
+'use client';
 
-import { TrendWorkbench } from "./TrendWorkbench"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
-import type { Trend } from "@/lib/organic/trends"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { Trend } from '@/lib/organic/trends';
+import { TrendWorkbench } from './TrendWorkbench';
 
 type OrganicTrendsDrawerProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  trends: Trend[]
-  selectedTrendIds: string[]
-  activePlatforms: OrganicPlatformKey[]
-  maxSelections?: number
-  onToggleTrend: (trendId: string) => void
-  onFetch?: () => void
-  isFetching?: boolean
-}
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  trends: Trend[];
+  selectedTrendIds: string[];
+  activePlatforms: OrganicPlatformKey[];
+  maxSelections?: number;
+  onToggleTrend: (trendId: string) => void;
+  onGenerateFromTrend?: (trend: Trend) => void;
+  onFetch?: () => void;
+  isFetching?: boolean;
+};
 
 export function OrganicTrendsDrawer({
   open,
@@ -30,6 +26,7 @@ export function OrganicTrendsDrawer({
   activePlatforms,
   maxSelections,
   onToggleTrend,
+  onGenerateFromTrend,
   onFetch,
   isFetching,
 }: OrganicTrendsDrawerProps) {
@@ -49,11 +46,12 @@ export function OrganicTrendsDrawer({
             activePlatforms={activePlatforms}
             maxSelections={maxSelections}
             onToggleTrend={onToggleTrend}
+            onGenerateFromTrend={onGenerateFromTrend}
             onFetch={onFetch}
             isFetching={isFetching}
           />
         </div>
       </SheetContent>
     </Sheet>
-  )
+  );
 }

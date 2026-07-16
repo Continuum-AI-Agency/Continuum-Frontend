@@ -2,7 +2,15 @@
 
 import { CheckIcon, LightningBoltIcon, UpdateIcon } from '@radix-ui/react-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, ChevronDown, ExternalLink, Heart, Loader2, MessageCircle } from 'lucide-react';
+import {
+  Activity,
+  ChevronDown,
+  ExternalLink,
+  Heart,
+  Loader2,
+  MessageCircle,
+  Sparkles,
+} from 'lucide-react';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -48,10 +56,15 @@ type TrendWorkbenchProps = {
   activePlatforms: OrganicPlatformKey[];
   maxSelections?: number;
   onToggleTrend: (trendId: string) => void;
+  onGenerateFromTrend?: (trend: Trend) => void;
   onFetch?: () => void;
   isFetching?: boolean;
   brandProfileId?: string;
 };
+
+// Only real (uuid) trends can anchor a durable one-shot job; seeded slug trends
+// (DEFAULT_TRENDS) get no generate affordance.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const MOMENTUM_DOT_TONE: Record<Trend['momentum'], string> = {
   rising: 'bg-emerald-500',
@@ -130,6 +143,7 @@ type TrendTableRowProps = {
   isSelected: boolean;
   trendType: ResolvedTrendType;
   onToggleTrend: (trendId: string) => void;
+  onGenerateFromTrend?: (trend: Trend) => void;
   brandProfileId?: string;
 };
 
@@ -225,6 +239,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
   isSelected,
   trendType,
   onToggleTrend,
+  onGenerateFromTrend,
   brandProfileId,
 }: TrendTableRowProps) {
   const [expanded, setExpanded] = React.useState(false);
@@ -255,6 +270,15 @@ const TrendTableRow = React.memo(function TrendTableRow({
     event.stopPropagation();
     setExpanded((prev) => !prev);
   }, []);
+
+  const handleGenerateClick = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      onGenerateFromTrend?.(trend);
+    },
+    [onGenerateFromTrend, trend],
+  );
+  const canGenerate = Boolean(onGenerateFromTrend) && UUID_RE.test(trend.id);
 
   const meta = trend.meta;
   const confidenceLabel = formatConfidence(meta?.confidence);
@@ -394,6 +418,18 @@ const TrendTableRow = React.memo(function TrendTableRow({
           )}
         </TableCell>
         <TableCell className="align-top text-right">
+          {canGenerate ? (
+            <button
+              type="button"
+              data-row-control
+              aria-label="Generate content from this trend"
+              title="Generate content from this trend"
+              onClick={handleGenerateClick}
+              className="rounded p-1 text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-primary focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
           <button
             type="button"
             data-row-control
@@ -506,6 +542,7 @@ export function TrendWorkbench({
   activePlatforms,
   maxSelections,
   onToggleTrend,
+  onGenerateFromTrend,
   onFetch,
   isFetching = false,
   brandProfileId,
@@ -829,6 +866,7 @@ export function TrendWorkbench({
                       isSelected={selectedTrendIdSet.has(trend.id)}
                       trendType={trendTypeById.get(trend.id) ?? 'trend'}
                       onToggleTrend={onToggleTrend}
+                      onGenerateFromTrend={onGenerateFromTrend}
                       brandProfileId={brandProfileId}
                     />
                   ))}

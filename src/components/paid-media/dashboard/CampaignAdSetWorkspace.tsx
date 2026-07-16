@@ -3152,6 +3152,8 @@ export function CampaignAdSetWorkspace({
                   >
                     <CreativeGallery
                       ads={focusedAdSetAds}
+                      brandId={brandId}
+                      accountId={accountId}
                       focusedAdSetName={focusedScopedAdSet.name}
                       loadState={focusedAdSetAdsState?.status ?? 'idle'}
                       errorCode={focusedAdSetAdsState?.errorCode}

@@ -18,10 +18,12 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
+import { viralityScoreForAsset } from '@/lib/virality/assetScore';
 import { ClipCaptionToggle } from './ClipCaptionToggle';
 import { ClipProgressStrip } from './ClipProgressStrip';
 import { ClipQualityToggle } from './ClipQualityToggle';
@@ -155,6 +157,18 @@ function StatusBadge({ status }: { status: MediaAsset['status'] }) {
         {content}
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// A saved clip already carries its virality score (origin_ref.scoreStub, written at
+// register time) — surface it on the card so the grade survives past generation.
+function ClipViralityBadge({ asset }: { asset: MediaAsset }) {
+  const virality = viralityScoreForAsset(asset);
+  if (!virality) return null;
+  return (
+    <div className="absolute right-2 top-2 rounded-full bg-background/90 p-0.5 shadow-sm backdrop-blur">
+      <ViralityScoreBadge overall={virality.overall} grade={virality.grade} />
+    </div>
   );
 }
 
@@ -349,7 +363,7 @@ function MediaCardHoverDetail({
   const objects = asset.detectedObjects ?? [];
 
   return (
-    <HoverCardContent side="right" align="start" className="w-80">
+    <HoverCardContent side="right" align="start" className="z-40 w-80">
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
           {asset.signedUrl && asset.kind === 'image' ? (
@@ -488,6 +502,8 @@ export function MediaCard({
   const { generate, isGenerating, progress } = useGenerateClips();
   const { quality, setQuality } = useClipQualityPreference();
   const { captionsEnabled, setCaptionsEnabled } = useClipCaptionPreference();
+  const [hoverDetailOpen, setHoverDetailOpen] = useState(false);
+  const suppressHoverDetailRef = useRef(false);
   const priority = (index ?? Infinity) < 10;
   const formattedDate = new Date(asset.createdAt).toLocaleDateString(undefined, {
     month: 'short',
@@ -496,10 +512,27 @@ export function MediaCard({
   });
   const canGenerateClips = asset.kind === 'video' && asset.status === 'ready';
   const activeProgress = progress && progress.sourceAssetId === asset.id ? progress : null;
+  const openDetail = () => {
+    // Hover content is portalled above the grid. Close it before docking the
+    // workspace so its preview can never intercept annotation/comment actions.
+    suppressHoverDetailRef.current = true;
+    setHoverDetailOpen(false);
+    onOpen?.(asset);
+  };
+
+  const handleHoverDetailOpenChange = (open: boolean) => {
+    if (open && suppressHoverDetailRef.current) return;
+    setHoverDetailOpen(open);
+  };
 
   return (
     <>
-      <HoverCard openDelay={150} closeDelay={100}>
+      <HoverCard
+        open={hoverDetailOpen}
+        onOpenChange={handleHoverDetailOpenChange}
+        openDelay={150}
+        closeDelay={100}
+      >
         <HoverCardTrigger asChild>
           {/* The whole card opens the detail takeover; inner controls (clip tools,
             copy, carousel paging) stopPropagation so they keep their own click.
@@ -509,11 +542,16 @@ export function MediaCard({
             role="button"
             tabIndex={0}
             aria-label={`Open ${asset.title ?? asset.fileName}`}
-            onClick={() => onOpen?.(asset)}
+            onClick={openDetail}
+            onPointerEnter={() => {
+              // Opening the modal causes a synthetic leave on the covered card.
+              // Only a fresh enter after the modal closes may re-enable preview.
+              if (suppressHoverDetailRef.current) suppressHoverDetailRef.current = false;
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                onOpen?.(asset);
+                openDetail();
               }
             }}
             className={cn(
@@ -560,6 +598,7 @@ export function MediaCard({
                 />
               )}
               <StatusBadge status={asset.status} />
+              <ClipViralityBadge asset={asset} />
               {asset.kind === 'image' && asset.signedUrl ? (
                 <QuickReformatMenu
                   asset={asset}

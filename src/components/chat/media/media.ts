@@ -134,6 +134,97 @@ export function mediaFromFetchedPost(post: FetchedPostLike): ChatMedia | null {
   };
 }
 
+const isHttpUrl = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && /^https?:\/\//.test(value);
+
+/**
+ * Paid dashboard ad (CreativeTile / CreativeHoverCard shape). Meta never hands the
+ * dashboard a playable MP4 — only a still — so a video-format ad renders as an
+ * image with a "Video" badge; `kind: 'video'` here would put a JPEG in a <video>.
+ */
+export function mediaFromCreativeAd(ad: {
+  id: string;
+  name?: string | null;
+  creative?: {
+    id: string;
+    title?: string | null;
+    thumbnailUrl?: string | null;
+    imageUrl?: string | null;
+    format?: string | null;
+    videoId?: string | null;
+  } | null;
+}): ChatMedia | null {
+  const url = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
+  if (!url) return null;
+  const isVideo = ad.creative?.format === 'video' || Boolean(ad.creative?.videoId);
+  return {
+    id: ad.id,
+    url,
+    kind: 'image',
+    name: ad.creative?.title ?? ad.name ?? undefined,
+    badge: isVideo ? 'Video' : undefined,
+  };
+}
+
+/** What's-Working paid verdict row. Stills only; absorbs the http guard. */
+export function mediaFromPaidVerdict(verdict: {
+  adId: string;
+  adName: string | null;
+  thumbnailUrl: string | null;
+  permalinkUrl: string | null;
+}): ChatMedia | null {
+  if (!isHttpUrl(verdict.thumbnailUrl)) return null;
+  return {
+    id: verdict.adId,
+    url: verdict.thumbnailUrl,
+    kind: 'image',
+    name: verdict.adName ?? verdict.adId,
+    permalink: isHttpUrl(verdict.permalinkUrl) ? verdict.permalinkUrl : undefined,
+  };
+}
+
+/**
+ * Competitor paid snapshot plus its separately-fetched signed storage URL. The
+ * persisted creative can be an MP4, and the signed URL carries its real
+ * extension — so resolveMediaKind gives video snapshots actual video rendering.
+ */
+export function mediaFromCompetitorAdSnapshot(
+  entry: {
+    snapshotId: string;
+    competitorName: string;
+    body?: string | null;
+    snapshotUrl?: string | null;
+  },
+  creativeUrl: string | null,
+): ChatMedia | null {
+  if (!creativeUrl) return null;
+  return {
+    id: entry.snapshotId,
+    url: creativeUrl,
+    kind: resolveMediaKind({ url: creativeUrl }),
+    name: entry.competitorName,
+    caption: entry.body ?? undefined,
+    permalink: entry.snapshotUrl ?? undefined,
+  };
+}
+
+/** Jaina checkpoint media-map entry (inline hover previews). Stills only. */
+export function mediaFromJainaMediaEntry(entry: {
+  entity_type: string;
+  entity_id: string;
+  image_url?: string | null;
+  thumbnail_url?: string | null;
+}): ChatMedia | null {
+  const url = entry.thumbnail_url ?? entry.image_url ?? null;
+  if (!url) return null;
+  return {
+    id: `${entry.entity_type}:${entry.entity_id}`,
+    url,
+    kind: 'image',
+    name: `${entry.entity_type} ${entry.entity_id}`,
+  };
+}
+
 /**
  * Generation previews, storyboard frames and publishing assets: bare URLs plus the draft's format.
  * The format matters — a generated reel is an MP4, and rendering it as a still is why generated

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  mediaFromCompetitorAdSnapshot,
   mediaFromCreative,
+  mediaFromCreativeAd,
   mediaFromFetchedPost,
+  mediaFromJainaMediaEntry,
+  mediaFromPaidVerdict,
   mediaFromPersistedAttachments,
   mediaFromPreviewUrls,
   resolveMediaKind,
@@ -120,5 +124,113 @@ describe('mediaFromPersistedAttachments', () => {
 
   it('returns nothing when the turn had no attachments', () => {
     expect(mediaFromPersistedAttachments('m1', undefined)).toEqual([]);
+  });
+});
+
+describe('mediaFromCreativeAd', () => {
+  it('renders a video-format ad as an image with a Video badge — Meta hands the dashboard stills only', () => {
+    const media = mediaFromCreativeAd({
+      id: 'ad1',
+      name: 'Ad one',
+      creative: {
+        id: 'cr1',
+        title: 'Hook headline',
+        thumbnailUrl: 'https://cdn.fbcdn.net/thumb.jpg',
+        format: 'video',
+        videoId: 'v1',
+      },
+    });
+    expect(media).toMatchObject({
+      id: 'ad1',
+      url: 'https://cdn.fbcdn.net/thumb.jpg',
+      kind: 'image',
+      badge: 'Video',
+      name: 'Hook headline',
+    });
+  });
+
+  it('falls back to imageUrl and omits the badge for static ads', () => {
+    const media = mediaFromCreativeAd({
+      id: 'ad2',
+      name: 'Ad two',
+      creative: { id: 'cr2', imageUrl: 'https://cdn/img.jpg' },
+    });
+    expect(media).toMatchObject({ url: 'https://cdn/img.jpg', kind: 'image', name: 'Ad two' });
+    expect(media?.badge).toBeUndefined();
+  });
+
+  it('returns null when the creative has no still at all', () => {
+    expect(mediaFromCreativeAd({ id: 'ad3', creative: { id: 'cr3' } })).toBeNull();
+    expect(mediaFromCreativeAd({ id: 'ad4', creative: null })).toBeNull();
+  });
+});
+
+describe('mediaFromPaidVerdict', () => {
+  it('absorbs the http guard and carries the permalink', () => {
+    const media = mediaFromPaidVerdict({
+      adId: 'a1',
+      adName: 'Winner',
+      thumbnailUrl: 'https://cdn/th.jpg',
+      permalinkUrl: 'https://facebook.com/ad',
+    });
+    expect(media).toMatchObject({
+      id: 'a1',
+      url: 'https://cdn/th.jpg',
+      kind: 'image',
+      permalink: 'https://facebook.com/ad',
+    });
+  });
+
+  it('returns null for a missing or non-http thumbnail', () => {
+    expect(
+      mediaFromPaidVerdict({ adId: 'a2', adName: null, thumbnailUrl: null, permalinkUrl: null }),
+    ).toBeNull();
+    expect(
+      mediaFromPaidVerdict({
+        adId: 'a3',
+        adName: null,
+        thumbnailUrl: 'data:image/png;base64,x',
+        permalinkUrl: null,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('mediaFromCompetitorAdSnapshot', () => {
+  it('resolves video from the signed storage URL extension', () => {
+    const media = mediaFromCompetitorAdSnapshot(
+      { snapshotId: 's1', competitorName: 'Rival', snapshotUrl: 'https://meta/ad' },
+      'https://proj.supabase.co/storage/v1/object/sign/creatives/s1.mp4?token=t',
+    );
+    expect(media).toMatchObject({ id: 's1', kind: 'video', permalink: 'https://meta/ad' });
+  });
+
+  it('renders image snapshots as images and null without a URL', () => {
+    const media = mediaFromCompetitorAdSnapshot(
+      { snapshotId: 's2', competitorName: 'Rival' },
+      'https://proj.supabase.co/storage/v1/object/sign/creatives/s2.jpg?token=t',
+    );
+    expect(media?.kind).toBe('image');
+    expect(
+      mediaFromCompetitorAdSnapshot({ snapshotId: 's3', competitorName: 'Rival' }, null),
+    ).toBeNull();
+  });
+});
+
+describe('mediaFromJainaMediaEntry', () => {
+  it('prefers the thumbnail and stays a still', () => {
+    const media = mediaFromJainaMediaEntry({
+      entity_type: 'ad',
+      entity_id: '123',
+      image_url: 'https://cdn/full.jpg',
+      thumbnail_url: 'https://cdn/th.jpg',
+    });
+    expect(media).toMatchObject({ id: 'ad:123', url: 'https://cdn/th.jpg', kind: 'image' });
+  });
+
+  it('returns null when the entry has no URL', () => {
+    expect(
+      mediaFromJainaMediaEntry({ entity_type: 'ad', entity_id: '1', image_url: null }),
+    ).toBeNull();
   });
 });

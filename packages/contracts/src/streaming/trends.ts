@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Canonical Trends V2 contract. Both the Backend emit side
 // (App/trends/events/generationEvents.ts + workflow setProgress) and the
@@ -7,17 +7,17 @@ import { z } from "zod";
 // drift independently. See root AGENTS.md section 4 (Shared contracts).
 
 export const trendsStageSchema = z.enum([
-  "awaiting_strategic_analysis",
-  "queued",
-  "scraping",
-  "raw_search",
-  "synthesis",
-  "web_enrichment",
-  "questions",
-  "secondary_platform_eval",
-  "persisting",
-  "completed",
-  "failed",
+  'awaiting_strategic_analysis',
+  'queued',
+  'scraping',
+  'raw_search',
+  'synthesis',
+  'web_enrichment',
+  'questions',
+  'secondary_platform_eval',
+  'persisting',
+  'completed',
+  'failed',
 ]);
 export type TrendsStage = z.infer<typeof trendsStageSchema>;
 
@@ -25,17 +25,17 @@ export type TrendsStage = z.infer<typeof trendsStageSchema>;
 export const TRENDS_STAGE_ORDER = trendsStageSchema.options;
 
 export const TRENDS_STAGE_LABELS: Record<TrendsStage, string> = {
-  awaiting_strategic_analysis: "Awaiting Strategic Analysis",
-  queued: "Queued",
-  scraping: "Scraping",
-  raw_search: "Raw Search",
-  synthesis: "Synthesis",
-  web_enrichment: "Web Enrichment",
-  questions: "Questions",
-  secondary_platform_eval: "Secondary Platform Eval",
-  persisting: "Persisting",
-  completed: "Completed",
-  failed: "Failed",
+  awaiting_strategic_analysis: 'Awaiting Strategic Analysis',
+  queued: 'Queued',
+  scraping: 'Scraping',
+  raw_search: 'Raw Search',
+  synthesis: 'Synthesis',
+  web_enrichment: 'Web Enrichment',
+  questions: 'Questions',
+  secondary_platform_eval: 'Secondary Platform Eval',
+  persisting: 'Persisting',
+  completed: 'Completed',
+  failed: 'Failed',
 };
 
 // Nominal progress anchor (percent) the Backend emits at each stage boundary.
@@ -59,17 +59,17 @@ export function trendsStageLabel(stage: string | null | undefined): string {
   if (stage && stage in TRENDS_STAGE_LABELS) {
     return TRENDS_STAGE_LABELS[stage as TrendsStage];
   }
-  return "Working";
+  return 'Working';
 }
 
-export const trendsGenerationStatusSchema = z.enum(["pending", "running", "completed", "failed"]);
+export const trendsGenerationStatusSchema = z.enum(['pending', 'running', 'completed', 'failed']);
 export type TrendsGenerationStatus = z.infer<typeof trendsGenerationStatusSchema>;
 
 export const trendsGenerationEventTypeSchema = z.enum([
-  "job_started",
-  "status_update",
-  "job_completed",
-  "job_failed",
+  'job_started',
+  'status_update',
+  'job_completed',
+  'job_failed',
 ]);
 export type TrendsGenerationEventType = z.infer<typeof trendsGenerationEventTypeSchema>;
 
@@ -81,6 +81,42 @@ export const trendsRuntimeSchema = z.object({
   max_duration_ms: z.number().positive(),
 });
 export type TrendsRuntime = z.infer<typeof trendsRuntimeSchema>;
+
+/**
+ * Durable, terminal-only timing data for a server-authoritative Trends run.
+ * It deliberately records lane/tool activity as observations, not client
+ * controlled progress, so benchmarks can attribute latency after completion.
+ */
+export const trendsGenerationTelemetrySchema = z.object({
+  version: z.literal(1),
+  total_duration_ms: z.number().nonnegative(),
+  stages: z.array(
+    z.object({
+      name: z.string().min(1),
+      attempt: z.number().int().positive(),
+      duration_ms: z.number().nonnegative(),
+      ok: z.boolean(),
+    }),
+  ),
+  lanes: z.record(z.string(), z.record(z.string(), z.unknown())),
+  evidence: z.object({
+    mode: z.enum(['social', 'shared_web', 'heuristic']),
+    quality_gate: z.enum(['social_sufficient', 'social_insufficient']),
+    cache_status: z.enum(['not_applicable', 'hit', 'miss']),
+    /** Total cited evidence available to the generation. */
+    item_count: z.number().int().nonnegative(),
+    /** Cited web research shards available to the generation. */
+    web_item_count: z.number().int().nonnegative(),
+    /** Cited, curated social evidence available to the generation. */
+    social_item_count: z.number().int().nonnegative(),
+    /** Raw social signals considered by the server-side curator. */
+    social_signal_count: z.number().int().nonnegative(),
+    queries: z.array(z.string()),
+    provider_outcomes: z.array(z.unknown()),
+    warnings: z.array(z.string()),
+  }),
+});
+export type TrendsGenerationTelemetry = z.infer<typeof trendsGenerationTelemetrySchema>;
 
 // Canonical in-process generation event (camelCase). The Backend's
 // TrendsGenerationEvent IS this type; publish/subscribe and Redis relay use it.
@@ -112,7 +148,10 @@ export const trendsSseMessageDataSchema = z
     progress_percent: z.number().nullable().optional(),
     stage_message: z.string().nullable().optional(),
     payload: z
-      .object({ runtime: trendsRuntimeSchema.optional() })
+      .object({
+        runtime: trendsRuntimeSchema.optional(),
+        generation_telemetry: trendsGenerationTelemetrySchema.optional(),
+      })
       .loose()
       .optional(),
     created_at: z.string().optional(),
@@ -135,6 +174,12 @@ export const trendsSseSnapshotDataSchema = z
   .loose();
 export type TrendsSseSnapshotData = z.infer<typeof trendsSseSnapshotDataSchema>;
 
+/**
+ * Immutable, completed-generation read frames. Unlike the job SSE stream these
+ * frames never expose in-flight synthesis: the server resolves a completed
+ * generation before it writes the snapshot frame, then shards the independent
+ * persisted sections so the UI can render whichever query completes first.
+ */
 export const trendsReadSectionSchema = z.enum(['trends', 'events', 'questions']);
 export type TrendsReadSection = z.infer<typeof trendsReadSectionSchema>;
 

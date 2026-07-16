@@ -540,11 +540,8 @@ function SuggestionRow({
       {previewOpen && canPreview ? (
         <div className="border-t border-border/60 p-3">
           <PortfolioPreview
-            brandId={brandId}
             snapshots={snapshots}
             objective={objective}
-            mode={mode}
-            dailyTotal={suggestion.daily_total}
             currency={currency}
           />
         </div>

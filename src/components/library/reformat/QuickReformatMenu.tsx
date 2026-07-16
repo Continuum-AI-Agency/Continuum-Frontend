@@ -34,7 +34,17 @@ const LABELS: Record<ImageReformatPreset, string> = {
   landscape: 'Landscape',
 };
 
-type ReformatSourceAsset = Pick<MediaAsset, 'id' | 'kind' | 'signedUrl'>;
+type ReformatSourceAsset = Pick<MediaAsset, 'id' | 'kind'> & Partial<Pick<MediaAsset, 'signedUrl'>>;
+
+// The backend resolves the authoritative private object from the asset id. A
+// signed URL is only a preview convenience and may expire or arrive after the
+// card itself, so it must never gate a durable transform.
+export function canQuickReformat(
+  asset: ReformatSourceAsset | null,
+  brandId: string | null | undefined,
+): boolean {
+  return Boolean(asset && brandId && asset.kind === 'image');
+}
 
 export function useQuickReformat({
   asset,
@@ -46,7 +56,7 @@ export function useQuickReformat({
   onCompleted?(data: ImageReformatCompletedData, preset: ImageReformatPreset): void;
 }) {
   const [running, setRunning] = useState<string | null>(null);
-  const unavailable = !asset || !brandId || asset.kind !== 'image' || !asset.signedUrl;
+  const unavailable = !canQuickReformat(asset, brandId);
 
   const reformat = useCallback(
     async (

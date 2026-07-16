@@ -148,6 +148,7 @@ export function AiPostComposer({
   scheduledAt,
   trends,
   platformAccountIds,
+  initialTrendIds,
   onCreated,
 }: {
   open: boolean;
@@ -157,12 +158,17 @@ export function AiPostComposer({
   scheduledAt: string;
   trends: Trend[];
   platformAccountIds?: Record<string, string>;
+  initialTrendIds?: string[];
   onCreated?: (response: OneShotPostResponse) => void;
 }) {
   const [angle, setAngle] = React.useState('');
   const [guidance, setGuidance] = React.useState('');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
-  const [selectedTrendIds, setSelectedTrendIds] = React.useState<string[]>([]);
+  // Seeded via useState initializer: the workspace mounts a fresh composer per
+  // open, so a "Generate from this trend" entry point needs no sync effect.
+  const [selectedTrendIds, setSelectedTrendIds] = React.useState<string[]>(() =>
+    (initialTrendIds ?? []).filter((id) => UUID_RE.test(id)),
+  );
   const [selectedMetricRefs, setSelectedMetricRefs] = React.useState<string[]>([]);
   const [selectedInsightRefs, setSelectedInsightRefs] = React.useState<string[]>([]);
   const [selectedAngleRefs, setSelectedAngleRefs] = React.useState<string[]>([]);

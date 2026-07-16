@@ -1,22 +1,24 @@
-"use client";
+'use client';
 
-import { useCreativeUrl } from "@/lib/api/competitorSpy";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import type { TimelineEntry } from "@continuum/contracts";
-import { SaveToBoardButton } from "./SaveToBoardButton";
+import type { TimelineEntry } from '@continuum/contracts';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromCompetitorAdSnapshot } from '@/components/chat/media/media';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useCreativeUrl } from '@/lib/api/competitorSpy';
+import { SaveToBoardButton } from './SaveToBoardButton';
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return '—';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatCompactList(values: string[]): string {
-  if (values.length === 0) return "";
-  const visible = values.slice(0, 2).join(", ");
+  if (values.length === 0) return '';
+  const visible = values.slice(0, 2).join(', ');
   return values.length > 2 ? `${visible} +${values.length - 2}` : visible;
 }
 
@@ -28,7 +30,11 @@ function daysActive(firstSeenAt: string, lastSeenAt: string): number {
 }
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <Badge variant="secondary" className="text-2xs capitalize text-foreground/80">{children}</Badge>;
+  return (
+    <Badge variant="secondary" className="text-2xs capitalize text-foreground/80">
+      {children}
+    </Badge>
+  );
 }
 
 export function AdSnapshotCard({
@@ -41,7 +47,13 @@ export function AdSnapshotCard({
   brandId?: string;
 }) {
   const hasMedia = entry.hasCreativeMedia ?? false;
-  const { data: creativeUrl } = useCreativeUrl(entry.snapshotId, hasMedia);
+  const { data: creativeUrl, refetch: refetchCreativeUrl } = useCreativeUrl(
+    entry.snapshotId,
+    hasMedia,
+  );
+  // Persisted competitor creatives can be MP4s — the adapter resolves kind from
+  // the signed URL's extension, so video snapshots render as real video.
+  const media = mediaFromCompetitorAdSnapshot(entry, creativeUrl ?? null);
   const analysis = entry.analysis ?? null;
   const metadata = entry.publicMetadata;
   const platformLabel = formatCompactList(metadata?.platforms ?? entry.platforms);
@@ -50,16 +62,20 @@ export function AdSnapshotCard({
   return (
     <Card className="gap-0 overflow-hidden rounded-lg border-border py-0 shadow-sm">
       <div className="relative aspect-[4/5] w-full bg-muted">
-        {creativeUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- arbitrary, short-lived signed URLs
-          <img src={creativeUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        {media ? (
+          <ChatMediaThumb
+            media={media}
+            className="rounded-none"
+            fallbackSeed={entry.competitorName}
+            onRecover={() => void refetchCreativeUrl()}
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            {hasMedia ? "Loading…" : "No creative"}
+            {hasMedia ? 'Loading…' : 'No creative'}
           </div>
         )}
         <Badge
-          variant={entry.status === "active" ? "success" : "secondary"}
+          variant={entry.status === 'active' ? 'success' : 'secondary'}
           className="absolute left-2 top-2 text-2xs capitalize shadow-sm"
         >
           {entry.status}
@@ -79,7 +95,9 @@ export function AdSnapshotCard({
           </span>
         </div>
 
-        {entry.body ? <p className="line-clamp-3 text-xs text-muted-foreground">{entry.body}</p> : null}
+        {entry.body ? (
+          <p className="line-clamp-3 text-xs text-muted-foreground">{entry.body}</p>
+        ) : null}
 
         <div className="grid gap-1 border-t border-border/70 pt-2 text-2xs text-muted-foreground">
           {metadata?.creationTime ? <span>Created {formatDate(metadata.creationTime)}</span> : null}
@@ -87,7 +105,7 @@ export function AdSnapshotCard({
           {metadata?.deliveryStart ? (
             <span>
               Delivery {formatDate(metadata.deliveryStart)}
-              {metadata.deliveryStop ? ` to ${formatDate(metadata.deliveryStop)}` : ""}
+              {metadata.deliveryStop ? ` to ${formatDate(metadata.deliveryStop)}` : ''}
             </span>
           ) : null}
           {platformLabel ? <span>Platforms {platformLabel}</span> : null}
@@ -97,10 +115,12 @@ export function AdSnapshotCard({
         {analysis ? (
           <div className="flex flex-wrap gap-1">
             {analysis.sentiment ? <Pill>{analysis.sentiment}</Pill> : null}
-            {analysis.hookArchetype ? <Pill>{analysis.hookArchetype.replace(/_/g, " ")}</Pill> : null}
+            {analysis.hookArchetype ? (
+              <Pill>{analysis.hookArchetype.replace(/_/g, ' ')}</Pill>
+            ) : null}
             {analysis.primaryTheme ? <Pill>{analysis.primaryTheme}</Pill> : null}
           </div>
-        ) : entry.analysisStatus && entry.analysisStatus !== "done" ? (
+        ) : entry.analysisStatus && entry.analysisStatus !== 'done' ? (
           <span className="text-2xs text-muted-foreground">analysis {entry.analysisStatus}</span>
         ) : null}
 
@@ -108,7 +128,10 @@ export function AdSnapshotCard({
           <span className="truncate">{metadata?.pageName ?? entry.competitorName}</span>
           <div className="flex shrink-0 items-center gap-1.5">
             {brandId ? (
-              <SaveToBoardButton brandId={brandId} request={{ kind: "paid", snapshotId: entry.snapshotId }} />
+              <SaveToBoardButton
+                brandId={brandId}
+                request={{ kind: 'paid', snapshotId: entry.snapshotId }}
+              />
             ) : null}
             {entry.snapshotUrl ? (
               <Button asChild variant="link" size="xs" className="h-auto p-0 text-xs">

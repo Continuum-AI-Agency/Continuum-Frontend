@@ -14,7 +14,7 @@ export type SmartResizeMenuProps = {
 };
 
 export function SmartResizeMenu({ brandId, asset, onAssetChanged }: SmartResizeMenuProps) {
-  const disabled = asset.kind !== 'image' || !asset.signedUrl;
+  const disabled = asset.kind !== 'image';
   const button = (
     <Button variant="outline" size="sm" disabled={disabled}>
       <Scaling className="size-3.5" aria-hidden />
@@ -30,7 +30,7 @@ export function SmartResizeMenu({ brandId, asset, onAssetChanged }: SmartResizeM
             <TooltipTrigger asChild>
               <span>{button}</span>
             </TooltipTrigger>
-            <TooltipContent>Reformat requires a stored image.</TooltipContent>
+            <TooltipContent>Reformat is available for images.</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       ) : (

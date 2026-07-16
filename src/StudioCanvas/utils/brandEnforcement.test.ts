@@ -10,6 +10,7 @@ import {
   isEntireBookEnforced,
   isPieceEnforced,
   toggleBrandPiece,
+  toggleSkillId,
 } from './brandEnforcement';
 
 describe('effective / enforced helpers', () => {
@@ -69,6 +70,20 @@ describe('toggleBrandPiece', () => {
 
   it('adds a single piece to an empty (off) selection', () => {
     expect(toggleBrandPiece([], 'colors')).toEqual(['colors']);
+  });
+});
+
+describe('toggleSkillId', () => {
+  it('adds a skill to an empty (undefined) selection', () => {
+    expect(toggleSkillId(undefined, 'skill-1')).toEqual(['skill-1']);
+  });
+
+  it('adds a skill to an existing selection', () => {
+    expect(toggleSkillId(['skill-1'], 'skill-2')).toEqual(['skill-1', 'skill-2']);
+  });
+
+  it('removes a skill already in the selection', () => {
+    expect(toggleSkillId(['skill-1', 'skill-2'], 'skill-1')).toEqual(['skill-2']);
   });
 });
 

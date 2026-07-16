@@ -48,8 +48,6 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { BrandBookMenu } from '../components/BrandBookMenu';
-import { CreativeSkillMenu, toggleSkillId } from '../components/CreativeSkillMenu';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { GroundingChip } from '../components/GroundingChip';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -57,7 +55,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { OmniGenNodeData, OmniVariation } from '../types';
 import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
-import { toggleBrandPiece } from '../utils/brandEnforcement';
+import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 
@@ -329,7 +327,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            <div className="absolute -top-3 left-2 z-10">
+            <div className="absolute -top-3 left-3 z-10">
               <GroundingChip
                 brandId={brandId}
                 skillIds={data.skillIds}
@@ -350,6 +348,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             <Toolbar
               isVisible={isToolbarVisible}
               position={Position.Top}
+              align="end"
               className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
             >
               <Button
@@ -628,16 +627,6 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
-          <CreativeSkillMenu
-            brandId={brandId}
-            selectedSkillIds={data.skillIds ?? []}
-            onToggle={handleToggleSkill}
-          />
-          <BrandBookMenu
-            brandId={brandId}
-            pieces={data.brandBookPieces}
-            onToggle={handleToggleBrandPiece}
-          />
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
             <PlayIcon className="mr-2 h-4 w-4" />

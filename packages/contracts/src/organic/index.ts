@@ -10,6 +10,6 @@ export * from './metricCatalog';
 export * from './metrics';
 export * from './one-shot';
 export * from './persistedFrames';
-export * from './publishing';
 export * from './publish-body';
+export * from './publishing';
 export * from './quick-create';

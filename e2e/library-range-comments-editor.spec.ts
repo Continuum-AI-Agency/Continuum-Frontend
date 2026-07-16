@@ -43,6 +43,8 @@ const BUCKET = 'media-library';
 
 const SOURCE_ID = 'aaaaaaaa-0000-4000-8000-00000000cee1';
 const EXTRA_ID = 'aaaaaaaa-0000-4000-8000-00000000cee2';
+const SOURCE_VERSION_ID = 'aaaaaaaa-0000-4000-8000-00000000cee4';
+const EXTRA_VERSION_ID = 'aaaaaaaa-0000-4000-8000-00000000cee5';
 const SOURCE_TITLE = 'Bench range clip';
 const EXTRA_TITLE = 'Bench range extra clip';
 const SHARE_TOKEN = 'bench-range-share-token';
@@ -127,11 +129,21 @@ async function openCard(page: Page, title: string): Promise<Locator> {
 }
 
 async function waitForMetadata(video: Locator): Promise<number> {
-  await expect
-    .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState >= 1), {
-      timeout: 30_000,
-    })
-    .toBe(true);
+  try {
+    await expect
+      .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState >= 1), {
+        timeout: 30_000,
+      })
+      .toBe(true);
+  } catch (cause) {
+    const state = await video.evaluate((el: HTMLVideoElement) => ({
+      currentSrc: el.currentSrc,
+      error: el.error?.message ?? null,
+      networkState: el.networkState,
+      readyState: el.readyState,
+    }));
+    throw new Error(`Video metadata did not load: ${JSON.stringify(state)}`, { cause });
+  }
   // The component floors the decoded duration into ms; mirror it exactly rather
   // than assuming the encoder produced precisely 4000.
   return video.evaluate((el: HTMLVideoElement) => Math.floor(el.duration * 1000));
@@ -184,20 +196,70 @@ test.beforeAll(async ({ browser }) => {
   ]);
   expect(seeded.error).toBeNull();
 
+  const versions = await mediaTable(admin, 'asset_versions').insert([
+    {
+      id: SOURCE_VERSION_ID,
+      brand_id: BRAND_ID,
+      asset_id: SOURCE_ID,
+      version_number: 1,
+      bucket: BUCKET,
+      storage_path: clipPath(SOURCE_ID),
+      file_name: 'bench-range-clip.mp4',
+      mime_type: 'video/mp4',
+      duration_ms: 4000,
+      width: 640,
+      height: 360,
+      created_by: OWNER_USER_ID,
+    },
+    {
+      id: EXTRA_VERSION_ID,
+      brand_id: BRAND_ID,
+      asset_id: EXTRA_ID,
+      version_number: 1,
+      bucket: BUCKET,
+      storage_path: clipPath(EXTRA_ID),
+      file_name: 'bench-range-clip.mp4',
+      mime_type: 'video/mp4',
+      duration_ms: 4000,
+      width: 640,
+      height: 360,
+      created_by: OWNER_USER_ID,
+    },
+  ]);
+  expect(versions.error).toBeNull();
+  expect(
+    (
+      await mediaTable(admin, 'assets')
+        .update({ head_version_id: SOURCE_VERSION_ID })
+        .eq('id', SOURCE_ID)
+    ).error,
+  ).toBeNull();
+  expect(
+    (
+      await mediaTable(admin, 'assets')
+        .update({ head_version_id: EXTRA_VERSION_ID })
+        .eq('id', EXTRA_ID)
+    ).error,
+  ).toBeNull();
+
   const comments = await mediaTable(admin, 'comments').insert([
     {
       brand_id: BRAND_ID,
       asset_id: SOURCE_ID,
+      version_id: SOURCE_VERSION_ID,
       body: RANGE_BODY,
       annotation: { kind: 'time', timeMs: RANGE_START_MS, endMs: RANGE_END_MS },
       created_by: OWNER_USER_ID,
+      visibility: 'shared',
     },
     {
       brand_id: BRAND_ID,
       asset_id: SOURCE_ID,
+      version_id: SOURCE_VERSION_ID,
       body: POINT_BODY,
       annotation: { kind: 'time', timeMs: POINT_MS },
       created_by: OWNER_USER_ID,
+      visibility: 'shared',
     },
   ]);
   expect(comments.error).toBeNull();
@@ -273,7 +335,9 @@ test('set-in / set-out: the posted comment carries endMs on the wire', async ({ 
 
   // In-point at the playhead (0:00).
   await dialog.getByRole('button', { name: /^Comment at 0:0/ }).click();
-  await expect(dialog.getByPlaceholder('Comment at this moment...')).toBeVisible({ timeout: 60_000 });
+  await expect(dialog.getByPlaceholder('Comment at this moment...')).toBeVisible({
+    timeout: 60_000,
+  });
 
   // Move the playhead to 0:03 the way a reviewer does — through the transport —
   // then set the out-point there.
@@ -296,10 +360,15 @@ test('set-in / set-out: the posted comment carries endMs on the wire', async ({ 
   await expect(composer).toBeVisible({ timeout: 60_000 });
   await composer.fill('Bench span from the transport');
 
-  const posted = page.waitForRequest(
-    (request) => request.url().includes('/api/library/comments') && request.method() === 'POST',
-  );
-  await dialog.getByRole('button', { name: 'Post', exact: true }).click();
+  const posted = page.waitForRequest((request) => {
+    if (!request.url().includes('/functions/v1/library-creative-operations')) return false;
+    try {
+      return request.postDataJSON()?.action === 'create_asset_comment';
+    } catch {
+      return false;
+    }
+  });
+  await composer.locator('xpath=..').getByRole('button', { name: 'Post', exact: true }).click();
   const body = (await posted).postDataJSON() as {
     annotation?: { kind?: string; timeMs?: number; endMs?: number };
   };
@@ -313,7 +382,7 @@ test('set-in / set-out: the posted comment carries endMs on the wire', async ({ 
   await context.close();
 });
 
-test('share page: markers render and seek for an ANONYMOUS reader, with no way to author', async ({
+test('share page: markers render and seek, while anonymous feedback requires identity', async ({
   browser,
 }) => {
   // No storageState: a genuinely signed-out browser, which is what a share link
@@ -328,7 +397,10 @@ test('share page: markers render and seek for an ANONYMOUS reader, with no way t
 
   const rangeMarker = page.getByRole('button', { name: /^Comment from 0:01\s*[–-]\s*0:02:/ });
   await expect(rangeMarker).toHaveCount(1, { timeout: 60_000 });
-  await expect(page.getByRole('button', { name: /^Comment at 0:03:/ })).toHaveCount(1, { timeout: 60_000 });
+  await expect(rangeMarker).toHaveAttribute('data-time-ms', '1000');
+  await expect(page.getByRole('button', { name: /^Comment at 0:03:/ })).toHaveCount(1, {
+    timeout: 60_000,
+  });
 
   await rangeMarker.click();
   await expect
@@ -336,10 +408,13 @@ test('share page: markers render and seek for an ANONYMOUS reader, with no way t
     .toBeGreaterThan(0.85);
   expect(await video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeLessThan(1.15);
 
-  // Read-only by construction: no composer, no reply, no resolve, nothing to type in.
-  await expect(page.locator('textarea')).toHaveCount(0);
-  await expect(page.getByRole('textbox')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Post$/i })).toHaveCount(0);
+  // Open collaboration: anyone with the link can view, while commenting asks
+  // for a name and email before the external reviewer session is minted.
+  await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveAttribute('required', '');
+  await expect(page.getByRole('textbox', { name: 'Email' })).toHaveAttribute('required', '');
+  await expect(
+    page.getByRole('textbox', { name: 'Leave a comment on this version…' }),
+  ).toHaveAttribute('required', '');
   await expect(page.getByRole('button', { name: /repl(y|ies)|resolve|delete/i })).toHaveCount(0);
 
   await context.close();
@@ -359,16 +434,8 @@ test('library editor: a cut survives closing the dialog (timeline_drafts round-t
   await expect(editor.getByText('Video editor')).toBeVisible({ timeout: 30_000 });
 
   // A never-cut asset opens on a seeded timeline: the video alone, one clip.
-  const clips = editor.getByRole('button', { name: 'Remove clip' });
+  const clips = editor.getByTestId('timeline-clip');
   await expect(clips).toHaveCount(1, { timeout: 30_000 });
-
-  const saved = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/library/timeline-drafts') &&
-      response.request().method() === 'PUT' &&
-      response.ok(),
-    { timeout: 30_000 },
-  );
 
   await editor.getByRole('button', { name: 'Add media' }).click();
   const picker = page.getByRole('dialog').last();
@@ -377,7 +444,26 @@ test('library editor: a cut survives closing the dialog (timeline_drafts round-t
   await picker.getByRole('button', { name: /^Add 1$/ }).click();
 
   // In the bin — now put it on the timeline.
-  await editor.getByRole('button', { name: `Add ${EXTRA_TITLE} to the timeline` }).click();
+  const saved = page.waitForResponse(
+    (response) => {
+      if (
+        !response.url().includes('/api/library/timeline-drafts') ||
+        response.request().method() !== 'PUT' ||
+        !response.ok()
+      ) {
+        return false;
+      }
+      try {
+        return response.request().postDataJSON()?.document?.items?.length === 2;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 30_000 },
+  );
+  await editor
+    .getByRole('button', { name: `Add ${EXTRA_TITLE} to the timeline`, exact: true })
+    .click();
   await expect(clips).toHaveCount(2);
   await saved;
 
@@ -400,7 +486,7 @@ test('library editor: a cut survives closing the dialog (timeline_drafts round-t
   expect(restored.draft?.document?.items).toHaveLength(2);
   expect(restored.draft?.document?.pool).toHaveLength(2);
 
-  await expect(reopened.getByRole('button', { name: 'Remove clip' })).toHaveCount(2, {
+  await expect(reopened.getByTestId('timeline-clip')).toHaveCount(2, {
     timeout: 30_000,
   });
   await expect(reopened.getByText(EXTRA_TITLE).first()).toBeVisible();

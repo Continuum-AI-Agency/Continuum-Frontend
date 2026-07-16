@@ -1,38 +1,41 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { MagnifyingGlassIcon, ReloadIcon } from "@radix-ui/react-icons";
-
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import { Input } from "@/components/ui/input";
-import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
+import type { IntegrationErrorCode } from '@continuum/contracts';
+import { MagnifyingGlassIcon, ReloadIcon } from '@radix-ui/react-icons';
+import * as React from 'react';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
+import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import type { IntegrationErrorCode } from "@continuum/contracts";
-import type { ActionLog } from "@/lib/types/dco";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
+import type { ActionLog } from '@/lib/types/dco';
+import { cn } from '@/lib/utils';
 
-import { CreativeTile } from "./CreativeTile";
-import { filterAndSortCreatives } from "./filterAndSortCreatives";
+import { CreativeTile } from './CreativeTile';
+import { filterAndSortCreatives } from './filterAndSortCreatives';
 import type {
   CreativeAd,
   CreativeMetricKey,
   CreativeSortKey,
   CreativeStatusFilter,
   OpenCreativeDetail,
-} from "./types";
+} from './types';
 
-type CreativeGalleryLoadState = "idle" | "loading" | "success" | "error";
+type CreativeGalleryLoadState = 'idle' | 'loading' | 'success' | 'error';
 
 type CreativeGalleryProps = {
   ads: CreativeAd[];
+  /** Recovery context for expired Meta thumbnail URLs (fresh re-resolve). */
+  brandId?: string | null;
+  accountId?: string | null;
   focusedAdSetName: string | null;
   loadState: CreativeGalleryLoadState;
   errorCode?: IntegrationErrorCode;
@@ -53,30 +56,32 @@ type CreativeGalleryProps = {
 };
 
 const SORT_OPTIONS: ReadonlyArray<{ key: CreativeSortKey; label: string }> = [
-  { key: "spend", label: "Spend" },
-  { key: "roas", label: "ROAS" },
-  { key: "ctr", label: "CTR" },
-  { key: "clicks", label: "Clicks" },
-  { key: "name", label: "Name" },
+  { key: 'spend', label: 'Spend' },
+  { key: 'roas', label: 'ROAS' },
+  { key: 'ctr', label: 'CTR' },
+  { key: 'clicks', label: 'Clicks' },
+  { key: 'name', label: 'Name' },
 ];
 
 const STATUS_OPTIONS: ReadonlyArray<{ key: CreativeStatusFilter; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "paused", label: "Paused" },
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'paused', label: 'Paused' },
 ];
 
-const GRID_CLASS = "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+const GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 export function CreativeGallery({
   ads,
+  brandId,
+  accountId,
   focusedAdSetName,
   loadState,
   errorCode,
   errorMessage,
   retryAfter,
-  platform = "meta",
-  segmentLabelSingular = "ad set",
+  platform = 'meta',
+  segmentLabelSingular = 'ad set',
   onRetry,
   selectedIds,
   selectionCount,
@@ -88,23 +93,24 @@ export function CreativeGallery({
   logs,
   onOpenDetail,
 }: CreativeGalleryProps) {
-  const [query, setQuery] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<CreativeSortKey>("spend");
-  const [statusFilter, setStatusFilter] = React.useState<CreativeStatusFilter>("all");
+  const [query, setQuery] = React.useState('');
+  const [sortKey, setSortKey] = React.useState<CreativeSortKey>('spend');
+  const [statusFilter, setStatusFilter] = React.useState<CreativeStatusFilter>('all');
   const [selectedOnly, setSelectedOnly] = React.useState(false);
+  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId: accountId });
 
   const visible = React.useMemo(
     () => filterAndSortCreatives(ads, { query, sortKey, statusFilter, selectedOnly, selectedIds }),
-    [ads, query, sortKey, statusFilter, selectedOnly, selectedIds]
+    [ads, query, sortKey, statusFilter, selectedOnly, selectedIds],
   );
 
   const metricLabel = labelForMetric(activeMetric);
-  const isBusy = loadState === "idle" || loadState === "loading";
-  const hasFilters = query.trim().length > 0 || statusFilter !== "all" || selectedOnly;
+  const isBusy = loadState === 'idle' || loadState === 'loading';
+  const hasFilters = query.trim().length > 0 || statusFilter !== 'all' || selectedOnly;
 
   const resetFilters = () => {
-    setQuery("");
-    setStatusFilter("all");
+    setQuery('');
+    setStatusFilter('all');
     setSelectedOnly(false);
   };
 
@@ -113,14 +119,14 @@ export function CreativeGallery({
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">
-            Creatives{focusedAdSetName ? ` · ${focusedAdSetName}` : ""}
+            Creatives{focusedAdSetName ? ` · ${focusedAdSetName}` : ''}
           </h3>
           <p className="text-xs text-muted-foreground">
             Select up to {selectionLimit} creatives to overlay KPI trends.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {loadState === "success" ? (
+          {loadState === 'success' ? (
             <span>
               {visible.length} of {ads.length}
             </span>
@@ -163,7 +169,7 @@ export function CreativeGallery({
               key={option.key}
               type="button"
               size="sm"
-              variant={statusFilter === option.key ? "default" : "outline"}
+              variant={statusFilter === option.key ? 'default' : 'outline'}
               aria-pressed={statusFilter === option.key}
               onClick={() => setStatusFilter(option.key)}
               className="text-xs"
@@ -176,7 +182,7 @@ export function CreativeGallery({
         <Button
           type="button"
           size="sm"
-          variant={selectedOnly ? "default" : "outline"}
+          variant={selectedOnly ? 'default' : 'outline'}
           aria-pressed={selectedOnly}
           onClick={() => setSelectedOnly((value) => !value)}
           className="text-xs"
@@ -185,7 +191,7 @@ export function CreativeGallery({
         </Button>
       </div>
 
-      {loadState === "error" ? (
+      {loadState === 'error' ? (
         <div className="space-y-2">
           <IntegrationErrorBanner
             errorCode={errorCode}
@@ -201,7 +207,10 @@ export function CreativeGallery({
       ) : isBusy ? (
         <div className={GRID_CLASS} aria-hidden>
           {Array.from({ length: 10 }).map((_, index) => (
-            <Skeleton key={`creative-skeleton-${index}`} className="aspect-[4/5] w-full rounded-lg" />
+            <Skeleton
+              key={`creative-skeleton-${index}`}
+              className="aspect-[4/5] w-full rounded-lg"
+            />
           ))}
         </div>
       ) : ads.length === 0 ? (
@@ -228,6 +237,8 @@ export function CreativeGallery({
                 metricValue={formatMetric(activeMetric, ad.metrics?.[activeMetric] ?? 0)}
                 logs={logs}
                 adSetName={focusedAdSetName}
+                freshUrl={freshUrlById[ad.id] ?? null}
+                onRecoverCreative={recover}
                 onToggleSelect={onToggleSelect}
                 onOpenDetail={onOpenDetail}
               />
@@ -239,17 +250,11 @@ export function CreativeGallery({
   );
 }
 
-function EmptyState({
-  message,
-  children,
-}: {
-  message: string;
-  children?: React.ReactNode;
-}) {
+function EmptyState({ message, children }: { message: string; children?: React.ReactNode }) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 p-8 text-center"
+        'flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 p-8 text-center',
       )}
     >
       <p className="text-xs text-muted-foreground">{message}</p>

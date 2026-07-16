@@ -1,47 +1,29 @@
 'use client';
 
-// "Campaigns today + what-if" preview for a suggested portfolio, shown in
-// onboarding BEFORE the operator commits. Left: the group's ad sets as they are
-// now (current budget, 14d spend, CPA). Right: what the optimizer WOULD do if
-// applied — computed client-side by running the pure engine in the browser
-// (runWhatIf), rendered through the same ReallocationFlow viz the live surface
-// uses. Nothing is persisted; this is a dry-run.
+// Read-only account baseline shown before portfolio creation. Allocation and
+// recommendations are computed only by the backend optimizer after creation.
 
 import type {
   AdSetSnapshot,
-  OptimizationModeDto,
   OptimizationObjective,
 } from '@continuum/contracts';
 import * as React from 'react';
 
-import { ReallocationFlow } from '../charts/ReallocationFlow';
-import { deriveCpa, formatCpa, formatCurrency, humanize } from '../format';
-import { recommendationInsightKey } from '../insightKey';
-import { campaignRows, runWhatIf } from '../preview/whatIf';
-import { RecommendationInsight } from './RecommendationInsight';
+import { deriveCpa, formatCpa, formatCurrency } from '../format';
+import { campaignRows } from '../preview/whatIf';
 
 type PortfolioPreviewProps = {
-  brandId: string;
   snapshots: AdSetSnapshot[];
   objective: OptimizationObjective;
-  mode: OptimizationModeDto;
-  dailyTotal: number;
   currency?: string | null;
 };
 
 export function PortfolioPreview({
-  brandId,
   snapshots,
   objective,
-  mode,
-  dailyTotal,
   currency,
 }: PortfolioPreviewProps) {
   const rows = React.useMemo(() => campaignRows(snapshots, objective), [snapshots, objective]);
-  const whatIf = React.useMemo(
-    () => runWhatIf(snapshots, { objective, mode, total: dailyTotal }),
-    [snapshots, objective, mode, dailyTotal],
-  );
 
   if (rows.length === 0) {
     return (
@@ -52,9 +34,14 @@ export function PortfolioPreview({
   }
 
   return (
-    <div className="grid gap-4 rounded-lg border border-border/60 bg-muted/10 p-3 lg:grid-cols-2">
+    <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
       <section>
-        <p className="mb-1.5 text-2xs font-semibold text-muted-foreground">Ad sets today</p>
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <p className="text-2xs font-semibold text-muted-foreground">Ad sets today</p>
+          <span className="text-3xs text-muted-foreground">
+            Recommendations are calculated by the backend after creation
+          </span>
+        </div>
         <div className="overflow-x-auto rounded-md border border-border/60 bg-card">
           <table className="w-full text-2xs">
             <thead className="text-muted-foreground">
@@ -88,42 +75,6 @@ export function PortfolioPreview({
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section>
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-2xs font-semibold text-muted-foreground">
-            If applied · {humanize(mode)} mode
-          </p>
-          <span className="text-3xs text-muted-foreground">preview only — nothing applied</span>
-        </div>
-        {whatIf ? (
-          <div className="space-y-2">
-            <ReallocationFlow currency={currency} items={whatIf.items} />
-            {whatIf.recommendations.length > 0 ? (
-              <div className="space-y-1.5">
-                {whatIf.recommendations.map((rec) => (
-                  <div
-                    className="rounded-md border border-border/60 bg-card px-2.5 py-1.5"
-                    key={recommendationInsightKey(rec)}
-                  >
-                    <RecommendationInsight
-                      adsetId={rec.adsetId}
-                      brandId={brandId}
-                      kind={rec.kind}
-                      reason={rec.reason}
-                      severity={rec.severity}
-                      trigger={rec.trigger}
-                    />
-                    <p className="mt-0.5 text-3xs text-muted-foreground">{rec.reason}</p>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Not enough signal to simulate a cycle.</p>
-        )}
       </section>
     </div>
   );

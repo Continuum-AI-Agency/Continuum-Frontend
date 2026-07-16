@@ -20,10 +20,12 @@ const OWNER_PASSWORD = 'localdev123';
 const BUCKET = 'media-library';
 const ASSET_ID = 'aaaaaaaa-0000-4000-8000-00000000d101';
 const CREATIVE_FILE_NAME = 'crisp-silver-lynx-20260713-c19435.jpg';
+const VERSION_FILE_NAME = `v2-${Date.now()}-${CREATIVE_FILE_NAME}`;
 const CREATIVE_TITLE = CREATIVE_FILE_NAME;
 const COMMENT_BODY = 'The highlight needs a little more breathing room.';
 
 const sourcePath = `${BRAND_ID}/${ASSET_ID}/${CREATIVE_FILE_NAME}`;
+const versionPath = `${BRAND_ID}/${ASSET_ID}/v2/${VERSION_FILE_NAME}`;
 
 let storageState: PlaywrightStorageState;
 let admin: SupabaseClient;
@@ -90,6 +92,18 @@ async function openCreative(page: Page) {
   return page.getByRole('dialog').first();
 }
 
+function isCreativeOperationResponse(
+  response: import('@playwright/test').Response,
+  action: string,
+) {
+  if (!response.url().includes('/functions/v1/library-creative-operations')) return false;
+  try {
+    return response.request().postDataJSON()?.action === action;
+  } catch {
+    return false;
+  }
+}
+
 async function versionRows() {
   const { data, error } = await media(admin)
     .from('asset_versions')
@@ -118,8 +132,14 @@ test.beforeAll(async ({ browser }) => {
   jpegBytes = await createBrowserJpeg(browser);
   expect(jpegBytes.byteLength).toBeGreaterThan(10_000);
 
+  const bucket = await admin.storage.getBucket(BUCKET);
+  if (!bucket.data) {
+    const created = await admin.storage.createBucket(BUCKET, { public: false });
+    expect(created.error).toBeNull();
+  }
+
   await media(admin).from('assets').delete().eq('id', ASSET_ID);
-  await admin.storage.from(BUCKET).remove([sourcePath]);
+  await admin.storage.from(BUCKET).remove([sourcePath, versionPath]);
 
   const upload = await admin.storage
     .from(BUCKET)
@@ -150,7 +170,9 @@ test.afterAll(async () => {
   if (!admin) return;
   const rows = await versionRows().catch(() => []);
   await media(admin).from('assets').delete().eq('id', ASSET_ID);
-  await admin.storage.from(BUCKET).remove([sourcePath, ...rows.map((row) => row.storage_path)]);
+  await admin.storage
+    .from(BUCKET)
+    .remove([sourcePath, versionPath, ...rows.map((row) => row.storage_path)]);
 });
 
 test('a centered creative workspace posts a comment, materializes v1 through Edge, and uploads v2', async ({
@@ -176,18 +198,14 @@ test('a centered creative workspace posts a comment, materializes v1 through Edg
   await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(1);
   await page.keyboard.press('Escape');
 
-  const image = dialog.getByRole('img', { name: CREATIVE_TITLE });
+  // The version rail also renders a thumbnail with the same accessible name;
+  // the first match is the full annotation stage in DOM order.
+  const image = dialog.getByRole('img', { name: CREATIVE_TITLE }).first();
   await expect(image).toBeVisible({ timeout: 60_000 });
   const overlay = dialog.getByTestId('annotation-overlay');
   const overlayBox = await overlay.boundingBox();
   if (!overlayBox) throw new Error('Image annotation overlay did not lay out');
 
-  const commentPosted = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/library/comments') &&
-      response.request().method() === 'POST' &&
-      response.status() === 201,
-  );
   await page.mouse.move(
     overlayBox.x + overlayBox.width * 0.24,
     overlayBox.y + overlayBox.height * 0.28,
@@ -201,12 +219,13 @@ test('a centered creative workspace posts a comment, materializes v1 through Edg
     },
   );
   await page.mouse.up();
-  const composer = dialog.getByPlaceholder('Comment on this region...');
+  const composer = dialog.getByPlaceholder('Comment on this annotation...');
   await expect(composer).toBeVisible({ timeout: 30_000 });
   await composer.fill(COMMENT_BODY);
   await composer.locator('xpath=..').getByRole('button', { name: 'Post', exact: true }).click();
-  await commentPosted;
 
+  // Lifecycle mutations go browser → Edge directly. The durable rows are the
+  // authoritative observable, independent of transport URL or optimistic UI.
   await expect.poll(async () => (await versionRows()).length).toBe(1);
   const [v1] = await versionRows();
   expect(v1).toMatchObject({ version_number: 1, storage_path: sourcePath });
@@ -219,29 +238,35 @@ test('a centered creative workspace posts a comment, materializes v1 through Edg
   expect(commentError).toBeNull();
   expect(comment).toMatchObject({ body: COMMENT_BODY, version_id: v1?.id });
 
-  const signed = page.waitForResponse(
-    (response) => response.url().includes('/api/library/versions/sign') && response.ok(),
+  const signed = page.waitForResponse((response) =>
+    isCreativeOperationResponse(response, 'sign_version_upload'),
   );
-  const registered = page.waitForResponse(
+  const uploaded = page.waitForResponse(
     (response) =>
-      response.url().includes('/api/library/versions') &&
-      !response.url().includes('/sign') &&
-      response.request().method() === 'POST' &&
-      response.ok(),
+      response.request().method() === 'PUT' &&
+      response.url().includes('/storage/v1/object/upload/sign/'),
+  );
+  const registered = page.waitForResponse((response) =>
+    isCreativeOperationResponse(response, 'register_asset_version'),
   );
   await dialog.locator('input[type="file"]').setInputFiles({
-    name: CREATIVE_FILE_NAME,
+    name: VERSION_FILE_NAME,
     mimeType: 'image/jpeg',
     buffer: jpegBytes,
   });
-  await signed;
-  await registered;
+  const signedResponse = await signed;
+  expect(signedResponse.ok(), await signedResponse.text()).toBe(true);
+  const uploadedResponse = await uploaded;
+  expect(uploadedResponse.ok(), await uploadedResponse.text()).toBe(true);
+  const registeredResponse = await registered;
+  expect(registeredResponse.ok(), await registeredResponse.text()).toBe(true);
 
+  await expect.poll(async () => (await versionRows()).length, { timeout: 60_000 }).toBe(2);
   await expect(dialog.getByText('Versions · 2')).toBeVisible({ timeout: 30_000 });
   const [first, second] = await versionRows();
   expect(first).toMatchObject({ version_number: 1, storage_path: sourcePath });
   expect(second?.version_number).toBe(2);
-  expect(second?.storage_path).toContain(`/v2/${CREATIVE_FILE_NAME}`);
+  expect(second?.storage_path).toBe(versionPath);
   const { data: head, error: headError } = await media(admin)
     .from('assets')
     .select('storage_path')

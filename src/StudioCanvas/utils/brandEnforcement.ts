@@ -1,9 +1,9 @@
-// Canvas-side helpers for brand-book enforcement on generation nodes. The stored
-// value is `brandBookPieces` on node data; these helpers give it default-ON
-// semantics (undefined ⇒ the whole brand book) and the toggle logic the context
-// menu uses. The Backend renders the tagged pieces into an authoritative forced
-// block (App/ai-studio/services/brand-enforcement.ts) — this is the mirror of the
-// skillIds mechanism, but structured.
+// Canvas-side helpers for brand-book and creative-skill enforcement on
+// generation nodes. The stored values are `brandBookPieces` and `skillIds` on
+// node data; these helpers give brandBookPieces default-ON semantics (undefined
+// ⇒ the whole brand book) and the toggle logic the grounding popover uses for
+// both. The Backend renders the tagged pieces into an authoritative forced
+// block (App/ai-studio/services/brand-enforcement.ts).
 
 import {
   type BrandBookPieceKind,
@@ -169,4 +169,12 @@ export function toggleBrandPiece(
 
   const next = CONCRETE_BRAND_BOOK_PIECES.filter((piece) => concrete.has(piece));
   return next.length === CONCRETE_BRAND_BOOK_PIECES.length ? ['full'] : next;
+}
+
+// Pure toggle used by each node's updateNode callback for the skillIds half of
+// grounding — the mirror of toggleBrandPiece above, structured for the other
+// half of the same setting.
+export function toggleSkillId(skillIds: string[] | undefined, skillId: string): string[] {
+  const current = skillIds ?? [];
+  return current.includes(skillId) ? current.filter((id) => id !== skillId) : [...current, skillId];
 }

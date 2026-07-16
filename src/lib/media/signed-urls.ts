@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { toBrowserReachableStorageUrl } from './storage-url';
 
 const SIGNED_URL_TTL_SECONDS = 3600; // 1 hour
 
@@ -37,7 +38,7 @@ export async function mintSignedUrl(storagePath: string, bucket: string): Promis
     console.error('[media/signed-urls] Failed to sign URL', { bucket, storagePath, error });
     return null;
   }
-  return data.signedUrl;
+  return toBrowserReachableStorageUrl(data.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL);
 }
 
 // Signs a batch of paths that may span multiple buckets. Returns a Map keyed by
@@ -70,7 +71,10 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
       }
       for (const item of data) {
         if (item.signedUrl && item.path) {
-          map.set(item.path, item.signedUrl);
+          map.set(
+            item.path,
+            toBrowserReachableStorageUrl(item.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL),
+          );
         }
       }
     }),

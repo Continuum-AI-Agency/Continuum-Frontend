@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from 'lucide-react';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -42,6 +42,9 @@ type BrandInsightsDataTableProps = {
   isLoading?: boolean;
   density?: 'default' | 'compact';
   scrollWithinSection?: boolean;
+  // Optional trailing per-row action cell; the table stays generic (it also
+  // serves events/questions), so consumers decide what a row can do.
+  renderRowAction?: (row: BrandInsightsTableRow) => ReactNode;
 };
 
 function normalizePlatform(platform: string) {
@@ -113,6 +116,7 @@ export function BrandInsightsDataTable({
   isLoading = false,
   density = 'default',
   scrollWithinSection = false,
+  renderRowAction,
 }: BrandInsightsDataTableProps) {
   const [query, setQuery] = useState('');
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
@@ -283,6 +287,11 @@ export function BrandInsightsDataTable({
                       )}
                     </button>
                   </TableHead>
+                  {renderRowAction ? (
+                    <TableHead className={cn('w-10 px-2', compact ? 'py-1.5' : 'py-2')}>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -392,13 +401,18 @@ export function BrandInsightsDataTable({
                             ) : null}
                           </div>
                         </TableCell>
+                        {renderRowAction ? (
+                          <TableCell className={cn('w-10 px-2 align-middle', rowPaddingClass)}>
+                            {renderRowAction(row)}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                       {isExpanded ? (
                         <TableRow
                           id={`brand-insights-row-details-${row.id}`}
                           className="animate-in fade-in-0 duration-150 bg-muted/20 hover:bg-muted/20"
                         >
-                          <TableCell colSpan={2} className="px-3 pb-4">
+                          <TableCell colSpan={renderRowAction ? 3 : 2} className="px-3 pb-4">
                             {hoverDetails.length > 0 ? (
                               <dl className="grid gap-2 sm:grid-cols-2">
                                 {hoverDetails.map((detail) => (

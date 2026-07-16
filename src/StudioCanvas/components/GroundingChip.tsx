@@ -130,7 +130,12 @@ export function GroundingChip({
           </TooltipTrigger>
           <TooltipContent side="top">{tooltip}</TooltipContent>
         </Tooltip>
-        <PopoverContent align="start" side="top" className="nodrag nopan w-72 p-2">
+        <PopoverContent
+          align="start"
+          side="top"
+          collisionPadding={16}
+          className="nodrag nopan w-80 p-2"
+        >
           <GroundingPopover
             brandId={brandId}
             skillIds={ids}

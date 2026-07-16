@@ -3,7 +3,8 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Cross2Icon, ImageIcon, VideoIcon } from '@radix-ui/react-icons';
-import React, { useCallback } from 'react';
+import type React from 'react';
+import { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ClipWaveform } from './ClipWaveform';
 import { useClipMediaPreview } from './useClipMediaPreview';
@@ -77,6 +78,7 @@ export function TimelineClipBlock({
     // biome-ignore lint/a11y/useKeyWithClickEvents: selection mirrors the dnd-kit keyboard handlers on this element
     <div
       ref={setNodeRef}
+      data-testid="timeline-clip"
       style={style}
       onClick={onSelect}
       className={cn(

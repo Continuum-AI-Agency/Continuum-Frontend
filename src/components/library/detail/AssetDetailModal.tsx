@@ -382,8 +382,13 @@ function AssetDetailDialog({
                   older version would be a lie about what they would edit, so they
                   are withdrawn and the banner says why. */}
               {viewingHead ? (
-                <div className="absolute inset-x-0 bottom-0 flex justify-center p-3">
-                  <div className="flex items-center gap-1 rounded-full border border-border bg-background/85 p-1 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/70">
+                <div
+                  className={cn(
+                    'pointer-events-none absolute inset-x-0 flex p-3',
+                    stage.kind === 'video' ? 'top-0 justify-end' : 'bottom-0 justify-center',
+                  )}
+                >
+                  <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border bg-background/85 p-1 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/70">
                     <QuickLookButton
                       brandId={brandId}
                       asset={asset}

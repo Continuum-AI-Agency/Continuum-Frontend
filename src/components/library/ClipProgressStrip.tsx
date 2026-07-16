@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
-import { motion } from "motion/react";
-import { Loader2, Check, AlertCircle, Scissors } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { ClipGenerationProgress } from "./hooks/useGenerateClips";
+import { AlertCircle, Check, Loader2, Scissors } from 'lucide-react';
+import { motion } from 'motion/react';
+import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
+import { cn } from '@/lib/utils';
+import type { ClipGenerationProgress } from './hooks/useGenerateClips';
 
 // Stateless per-card clip-generation strip: a stage pill while the backend plans,
 // then one pill per section as the browser cuts. Modeled on UploadStrip.
@@ -25,19 +26,26 @@ export function ClipProgressStrip({ progress }: { progress: ClipGenerationProgre
         <span
           key={section.index}
           className={cn(
-            "flex items-center gap-1 rounded-lg border px-2 py-1 text-xs",
-            section.status === "pending" && "border-border/50 bg-muted/40 text-muted-foreground/70",
-            section.status === "active" && "border-border/60 bg-muted/60 text-muted-foreground",
-            section.status === "done" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-            section.status === "error" && "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400",
+            'flex items-center gap-1 rounded-lg border px-2 py-1 text-xs',
+            section.status === 'pending' && 'border-border/50 bg-muted/40 text-muted-foreground/70',
+            section.status === 'active' && 'border-border/60 bg-muted/60 text-muted-foreground',
+            section.status === 'done' &&
+              'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+            section.status === 'error' &&
+              'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
           )}
           title={section.title}
         >
-          {section.status === "active" && <Loader2 className="size-2.5 shrink-0 animate-spin" />}
-          {section.status === "done" && <Check className="size-2.5 shrink-0" />}
-          {section.status === "error" && <AlertCircle className="size-2.5 shrink-0" />}
-          {section.status === "pending" && <Scissors className="size-2.5 shrink-0" />}
+          {section.status === 'active' && <Loader2 className="size-2.5 shrink-0 animate-spin" />}
+          {section.status === 'done' && <Check className="size-2.5 shrink-0" />}
+          {section.status === 'error' && <AlertCircle className="size-2.5 shrink-0" />}
+          {section.status === 'pending' && <Scissors className="size-2.5 shrink-0" />}
           <span className="max-w-[90px] truncate">{section.title}</span>
+          <ViralityScoreBadge
+            overall={section.viralityOverall ?? null}
+            grade={section.viralityGrade ?? null}
+            className="ml-0.5"
+          />
         </span>
       ))}
     </motion.div>

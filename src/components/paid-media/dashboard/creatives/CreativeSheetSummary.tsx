@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import { cn } from "@/lib/utils";
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { cn } from '@/lib/utils';
 
-import type { RotationEvent } from "./types";
+import type { RotationEvent } from './types';
 
 type AdSummary = {
   name: string;
@@ -21,11 +22,11 @@ type CreativeSheetSummaryProps = {
 function formatOccurredAt(iso: string): string {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return iso;
-  return new Date(ms).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+  return new Date(ms).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -36,14 +37,12 @@ export function CreativeSheetSummary({
   className,
 }: CreativeSheetSummaryProps) {
   return (
-    <div className={cn("flex gap-3", className)}>
+    <div className={cn('flex gap-3', className)}>
       <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-muted/50">
         {ad.imageUrl ? (
-          <img
-            src={ad.imageUrl}
-            alt={ad.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
+          <ChatMediaThumb
+            media={{ id: ad.name, url: ad.imageUrl, kind: 'image', name: ad.name }}
+            fallbackSeed={ad.name}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-2xs text-muted-foreground">
@@ -58,7 +57,7 @@ export function CreativeSheetSummary({
         ) : null}
         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
           <span>
-            {rotationCount} rotation{rotationCount === 1 ? "" : "s"}
+            {rotationCount} rotation{rotationCount === 1 ? '' : 's'}
           </span>
           {latestSwap ? (
             <>

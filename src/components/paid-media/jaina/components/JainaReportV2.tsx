@@ -1,14 +1,17 @@
 'use client';
 
-import { FileDownIcon } from 'lucide-react';
+import { BookIcon, FileDownIcon } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
+import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { BlockRenderer } from '../blocks/BlockRenderer';
+import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
 import { downloadJainaReportV2Pdf } from '../reportExport';
 
@@ -75,9 +78,14 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
       ) : null}
 
       {sources.length > 0 ? (
-        <div className="text-xs text-muted-foreground/70">
-          <span className="font-medium">Sources:</span> {sources.join(', ')}
-        </div>
+        <Sources className="mb-0">
+          <SourcesTrigger count={sources.length} />
+          <SourcesContent>
+            {sources.map((source) => (
+              <Source key={source} href="#" title={source} />
+            ))}
+          </SourcesContent>
+        </Sources>
       ) : null}
     </div>
   );
@@ -98,6 +106,10 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
   );
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
+  // Derived from the rendered blocks rather than `_meta.has_citations` (the FE
+  // report meta schema does not carry that flag), so the badge reflects exactly
+  // the citations the report can surface.
+  const citationCount = useMemo(() => countBlockCitations(report.blocks), [report.blocks]);
   // Export the LIVE rendered report (real Recharts charts) as a theme-matched
   // PDF — the front-end is the single source of rendering truth.
   const handlePdfExport = useCallback(async () => {
@@ -115,6 +127,19 @@ export function JainaReportV2({ report, isStreaming, onSuggestionClick }: JainaR
   const content = (
     <section className="mt-4 space-y-4">
       <div ref={reportRef} className="space-y-4">
+        {citationCount > 0 ? (
+          <div className="flex items-center">
+            <Badge
+              variant="secondary"
+              className="gap-1"
+              aria-label={`Sourced from ${citationCount} citations`}
+            >
+              <BookIcon className="size-3" aria-hidden="true" />
+              Sourced · {citationCount}
+            </Badge>
+          </div>
+        ) : null}
+
         {report.executive_summary ? (
           <SafeMarkdown
             content={report.executive_summary}

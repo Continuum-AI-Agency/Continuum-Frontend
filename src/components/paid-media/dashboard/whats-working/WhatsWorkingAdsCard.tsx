@@ -13,6 +13,8 @@ import type {
   PaidFunnelStage,
 } from '@continuum/contracts';
 import { useMemo, useState } from 'react';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { mediaFromPaidVerdict } from '@/components/chat/media/media';
 import {
   type InsightColumn,
   InsightDataTable,
@@ -72,16 +74,13 @@ function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
 }
 
 function VerdictRow({ verdict }: { verdict: PaidCreativeVerdict }) {
-  const thumb = isHttp(verdict.thumbnailUrl) ? verdict.thumbnailUrl : null;
+  const media = mediaFromPaidVerdict(verdict);
   const body = (
     <>
-      {thumb ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          alt={verdict.adName ?? verdict.adId}
-          className="h-9 w-9 shrink-0 rounded object-cover"
-          src={thumb}
-        />
+      {media ? (
+        <span className="relative block size-9 shrink-0 overflow-hidden rounded">
+          <ChatMediaThumb media={media} fallbackSeed={verdict.adName ?? verdict.adId} />
+        </span>
       ) : (
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded bg-muted text-3xs text-muted-foreground">
           AD

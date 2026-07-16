@@ -85,6 +85,10 @@ export function resolvePublishFormat(format?: string | null): PublishFormat {
   return 'POST';
 }
 
+export function isCarouselFormat(format?: string | null): boolean {
+  return resolvePublishFormat(format) === 'CAROUSEL';
+}
+
 export function inferPostType(draft: PublishableDraft): PublishFormat {
   return resolvePublishFormat(draft.format);
 }
