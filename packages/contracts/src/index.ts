@@ -19,3 +19,4 @@ export * from './prompts/index';
 export * from './skills/index';
 export * from './streaming/index';
 export * from './trends/index';
+export * from './virality/index';

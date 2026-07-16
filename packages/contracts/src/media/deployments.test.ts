@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   assetPerformanceSchema,
+  assetUsageSchema,
   assetVersionRollupSchema,
   isInferredLinkMethod,
   recordDeploymentInputSchema,
@@ -132,5 +133,30 @@ describe('assetVersionRollupSchema', () => {
   it('rejects a trust flag outside the vocabulary', () => {
     const result = assetVersionRollupSchema.safeParse({ trustFlags: ['looks_fine'] });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('assetUsageSchema', () => {
+  it('preserves the exact-version operation and graph depth for downstream creatives', () => {
+    const parsed = assetUsageSchema.parse({
+      derivedAssets: [
+        {
+          assetId: 'asset-2',
+          fileName: 'variant.mp4',
+          title: 'Cowboy hook variant',
+          kind: 'video',
+          source: 'ai_generated',
+          createdAt: '2026-07-15T00:00:00Z',
+          depth: 2,
+          operation: 'clip_generation',
+          sourceVersionId: 'version-1',
+          derivedVersionId: 'version-2',
+        },
+      ],
+    });
+
+    expect(parsed.derivedAssets[0]).toEqual(
+      expect.objectContaining({ depth: 2, operation: 'clip_generation' }),
+    );
   });
 });

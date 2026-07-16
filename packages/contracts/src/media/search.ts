@@ -21,11 +21,6 @@ export const mediaSearchFiltersSchema = z
     source: mediaSourceSchema.optional(),
     collectionId: z.string().min(1).optional(),
     reviewStatus: mediaReviewStatusSchema.optional(),
-    // Custom-field filters must survive a search, not be dropped by it. A filter
-    // the search path ignored would hand back the very assets the user filtered
-    // out — the one lie a filter UI cannot tell. The route resolves these to an
-    // asset-id allowlist and pushes it INTO the ranking RPCs, exactly as the
-    // other filters are pushed, rather than trimming an already-truncated top-K.
     fieldFilters: z.array(customFieldFilterSchema).max(20).optional(),
   })
   .strict();

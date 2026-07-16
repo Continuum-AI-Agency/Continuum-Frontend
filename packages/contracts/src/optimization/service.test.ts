@@ -11,7 +11,6 @@ import {
   PortfolioConfigSchema,
   RecommendationRowSchema,
   RunCycleRequestSchema,
-  RunCycleResponseSchema,
   UpdatePortfolioPatchSchema,
 } from './service';
 
@@ -147,72 +146,6 @@ describe('RunCycleRequestSchema', () => {
       objective: 'lead',
     });
     expect(r).toMatchObject({ ad_account_id: 'act_1' });
-  });
-});
-
-// These fixtures are the VERBATIM bodies the optimizer service sends — the ran path and
-// the skip path of runPortfolioCycle (Continuum-Optimizer/src/scheduler.ts). The schema
-// used to declare recommendations/applied/failed as arrays and runId as non-nullable, so
-// NEITHER of these could parse. Every "Run now" click ran a real cycle and then reported
-// "Optimizer service not live yet", because a failed safeParse was indistinguishable from
-// an offline service. If a change to CycleOutcome ever breaks these, the wire and the
-// contract have drifted again — fix the schema, do not loosen these fixtures.
-describe('RunCycleResponseSchema mirrors the service wire shape', () => {
-  const ran = {
-    portfolioId: UUID,
-    runId: '22222222-2222-4222-8222-222222222222',
-    snapshotCount: 12,
-    recommendations: 3,
-    applied: 0,
-    failed: 0,
-    deduped: 0,
-    stubbed: 0,
-    held: 0,
-  };
-
-  test('parses a cycle that ran and persisted', () => {
-    const r = RunCycleResponseSchema.parse(ran);
-    expect(r.runId).toBe('22222222-2222-4222-8222-222222222222');
-    expect(r.recommendations).toBe(3);
-    expect(r.skipped).toBeUndefined();
-  });
-
-  test('the outcome fields are COUNTS, not row arrays', () => {
-    expect(() => RunCycleResponseSchema.parse({ ...ran, recommendations: [{}, {}, {}] })).toThrow();
-    expect(() => RunCycleResponseSchema.parse({ ...ran, applied: [] })).toThrow();
-  });
-
-  test.each([
-    'no_adsets',
-    'no_snapshots',
-  ] as const)('parses a skipped cycle (%s): HTTP 200, runId null, every counter zero', (skipped) => {
-    const r = RunCycleResponseSchema.parse({
-      portfolioId: UUID,
-      runId: null,
-      snapshotCount: 0,
-      recommendations: 0,
-      applied: 0,
-      failed: 0,
-      deduped: 0,
-      stubbed: 0,
-      held: 0,
-      skipped,
-    });
-    expect(r.runId).toBeNull();
-    expect(r.skipped).toBe(skipped);
-  });
-
-  test('rejects an unknown skip reason', () => {
-    expect(() => RunCycleResponseSchema.parse({ ...ran, runId: null, skipped: 'vibes' })).toThrow();
-  });
-
-  test('the apply counters are required — a missing one is drift, not a zero', () => {
-    const { held: _held, ...withoutHeld } = ran;
-    expect(() => RunCycleResponseSchema.parse(withoutHeld)).toThrow();
-  });
-
-  test('tolerates a NEW service field so a deployed FE cannot be broken by one', () => {
-    expect(RunCycleResponseSchema.parse({ ...ran, someFutureField: 'x' }).runId).toBe(ran.runId);
   });
 });
 

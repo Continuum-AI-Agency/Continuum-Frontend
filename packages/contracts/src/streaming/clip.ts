@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { clipPlanSchema, clipScoreSchema } from "../media/clip";
+import { z } from 'zod';
+import { clipPlanSchema, clipScoreSchema } from '../media/clip';
 
 /**
  * NDJSON progress frames for `POST /api/clips/generate`. The backend job
@@ -7,60 +7,65 @@ import { clipPlanSchema, clipScoreSchema } from "../media/clip";
  * the browser cuts/stitches each section and reports `section_*` outcomes.
  */
 export const clipGenerationStageEnum = z.enum([
-  "queued",
-  "transcribing",
-  "sectioning",
-  "planning",
-  "cutting",
-  "persisting",
+  'queued',
+  'transcribing',
+  'sectioning',
+  'planning',
+  'cutting',
+  'persisting',
 ]);
 
-export const clipGenerationFrameSchema = z.discriminatedUnion("type", [
+export const clipGenerationFrameSchema = z.discriminatedUnion('type', [
   z
     .object({
-      type: z.literal("job_started"),
+      type: z.literal('job_started'),
       jobId: z.string().min(1),
       sourceAssetId: z.string().min(1),
     })
     .strict(),
   z
     .object({
-      type: z.literal("stage"),
+      type: z.literal('stage'),
       stage: clipGenerationStageEnum,
       message: z.string().nullable().optional(),
     })
     .strict(),
   z
     .object({
-      type: z.literal("clip_plan_ready"),
+      type: z.literal('clip_plan_ready'),
       plan: clipPlanSchema,
       sourceSignedUrl: z.string().min(1),
+      // Generation-level score (legacy; the first section's, for older readers).
       score: clipScoreSchema,
+      // Per-section virality-backed scores, aligned to plan.sections order. Default
+      // [] so pre-virality emitters still parse; the browser prefers the matching
+      // per-section score and falls back to `score`.
+      scores: z.array(clipScoreSchema).default([]),
     })
     .strict(),
-  z.object({ type: z.literal("section_started"), index: z.number().int().min(0) }).strict(),
+  z.object({ type: z.literal('section_started'), index: z.number().int().min(0) }).strict(),
   z
     .object({
-      type: z.literal("section_ready"),
+      type: z.literal('section_ready'),
       index: z.number().int().min(0),
       assetId: z.string().min(1),
     })
     .strict(),
   z
     .object({
-      type: z.literal("section_failed"),
+      type: z.literal('section_failed'),
       index: z.number().int().min(0),
       error: z.string(),
     })
     .strict(),
   z
     .object({
-      type: z.literal("job_completed"),
+      type: z.literal('job_completed'),
       ready: z.number().int().nonnegative(),
       failed: z.number().int().nonnegative(),
     })
     .strict(),
-  z.object({ type: z.literal("job_failed"), error: z.string() }).strict(),
+  z.object({ type: z.literal('job_failed'), error: z.string() }).strict(),
 ]);
 
 export type ClipGenerationStage = z.infer<typeof clipGenerationStageEnum>;

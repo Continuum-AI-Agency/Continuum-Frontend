@@ -105,6 +105,35 @@ export const transcriptSegmentSchema = z
   .strict();
 export type TranscriptSegment = z.infer<typeof transcriptSegmentSchema>;
 
+export const videoCreativeInsightsSchema = z
+  .object({
+    summary: z.string(),
+    hook: z
+      .object({
+        startMs: z.number().int().nonnegative(),
+        endMs: z.number().int().nonnegative(),
+        text: z.string().nullable(),
+        archetype: z.string().nullable(),
+        strengths: z.array(z.string()).default([]),
+        risks: z.array(z.string()).default([]),
+      })
+      .strict(),
+    chapters: z
+      .array(
+        z
+          .object({
+            startMs: z.number().int().nonnegative(),
+            endMs: z.number().int().positive(),
+            title: z.string().min(1),
+            summary: z.string().nullable(),
+          })
+          .strict(),
+      )
+      .default([]),
+  })
+  .strict();
+export type VideoCreativeInsights = z.infer<typeof videoCreativeInsightsSchema>;
+
 // Structured output the Gemini vision call must return for analyze_media.
 // transcript/transcriptSegments are populated on the video path only; a silent
 // clip yields an empty transcript (`''` / `[]`), which is a valid analysis —
@@ -118,6 +147,7 @@ export const mediaAnalysisResultSchema = z
     adCreativeAnalysis: adCreativeAnalysisSchema.nullable().optional(),
     transcript: z.string().nullable().optional(),
     transcriptSegments: z.array(transcriptSegmentSchema).nullable().optional(),
+    videoInsights: videoCreativeInsightsSchema.nullable().optional(),
   })
   .strict();
 export type MediaAnalysisResult = z.infer<typeof mediaAnalysisResultSchema>;
@@ -156,6 +186,7 @@ export const mediaAssetSchema = z
     transcript: z.string().nullable().optional(),
     transcriptSegments: z.array(transcriptSegmentSchema).nullable().optional(),
     transcriptSource: z.string().nullable().optional(),
+    videoInsights: videoCreativeInsightsSchema.nullable().optional(),
     embeddingModel: z.string().nullable().optional(),
     hasImageEmbedding: z.boolean().default(false),
     createdAt: z.string(),

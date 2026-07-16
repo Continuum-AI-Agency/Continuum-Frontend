@@ -1,4 +1,5 @@
-import { z } from "zod";
+import { z } from 'zod';
+import { viralityScoreSchema } from '../virality/score';
 
 /**
  * Contracts for the OpusClip-style clip-generation pipeline. A long-form Library
@@ -86,7 +87,7 @@ export const clipPlanSchema = z
  */
 export const clipScoreComparedAgainstSchema = z
   .object({
-    source: z.literal("organic_awareness_top_posts"),
+    source: z.literal('organic_awareness_top_posts'),
     windowDays: z.number().int().positive(),
     postIds: z.array(z.string()),
     topHookRate: z.number().nullable(),
@@ -95,9 +96,14 @@ export const clipScoreComparedAgainstSchema = z
 
 export const clipScoreSchema = z
   .object({
-    status: z.enum(["pending", "scored"]),
+    status: z.enum(['pending', 'scored']),
     hookPotential: z.number().nullable(),
     comparedAgainst: clipScoreComparedAgainstSchema.nullable(),
+    // The richer virality breakdown (components + grade + grounding). Optional so
+    // the legacy `pending` stubs — which carry only hookPotential — still parse;
+    // set once a clip is actually scored, with hookPotential mirroring
+    // virality.overall for backward-compatible readers.
+    virality: viralityScoreSchema.optional(),
     computedAt: z.string(),
   })
   .strict();
@@ -122,8 +128,7 @@ export const registerClipRequestSchema = z
     bucket: z.string().min(1),
     storagePath: z.string().min(1),
     fileName: z.string().min(1),
-    mimeType: z.literal("video/mp4"),
-    sizeBytes: z.number().int().nonnegative(),
+    mimeType: z.literal('video/mp4'),
     durationSec: z.number().positive(),
     section: clipPlanSectionSchema,
     transcriptExcerpt: z.string().optional(),
@@ -134,7 +139,7 @@ export const registerClipRequestSchema = z
 export const registerClipResponseSchema = z
   .object({
     ok: z.literal(true),
-    status: z.enum(["ready", "exists"]),
+    status: z.enum(['ready', 'exists']),
     assetId: z.string(),
   })
   .strict();
@@ -142,7 +147,7 @@ export const registerClipResponseSchema = z
 export const registerClipErrorSchema = z
   .object({
     ok: z.literal(false),
-    status: z.literal("error"),
+    status: z.literal('error'),
     message: z.string(),
   })
   .strict();
@@ -154,7 +159,7 @@ export const clipSignUploadRequestSchema = z
   .object({
     brandId: z.string().min(1),
     sourceAssetId: z.string().min(1),
-    target: z.enum(["audio", "clip"]),
+    target: z.enum(['audio', 'clip']),
     sectionIndex: z.number().int().min(0).optional(),
     fileName: z.string().min(1).optional(),
   })

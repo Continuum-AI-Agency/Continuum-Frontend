@@ -238,6 +238,13 @@ export const derivedAssetSchema = z
     kind: z.string(),
     source: z.string(),
     createdAt: z.string(),
+    // Exact graph metadata. Legacy JSON-only relations may not have version IDs,
+    // but normalized lineage always does. `depth` makes transitive descendants
+    // visible without flattening them into immediate children.
+    depth: z.number().int().positive().default(1),
+    operation: z.string().nullable().optional(),
+    sourceVersionId: z.string().nullable().optional(),
+    derivedVersionId: z.string().nullable().optional(),
   })
   .strip();
 export type DerivedAsset = z.infer<typeof derivedAssetSchema>;

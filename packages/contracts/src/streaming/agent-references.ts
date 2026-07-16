@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
 export const agentMentionReferenceTypeSchema = z.enum([
   'trend',
@@ -18,9 +18,9 @@ export const agentMentionReferenceTypeSchema = z.enum([
   'creative_insight',
   'organic_insight',
   'kpi',
-]);
+])
 
-export const agentMentionReferenceSourceSchema = z.enum(['organic', 'jaina']);
+export const agentMentionReferenceSourceSchema = z.enum(['organic', 'jaina'])
 
 export const agentMentionReferenceSchema = z.object({
   id: z.string().min(1),
@@ -28,23 +28,11 @@ export const agentMentionReferenceSchema = z.object({
   label: z.string().min(1),
   source: agentMentionReferenceSourceSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
-// A file the user attached to the composer. Already uploaded and signed by the Frontend before the
-// turn is sent; `storagePath` outlives the signed URL so an expired link can be re-minted.
-export const agentAttachmentSchema = z.object({
-  url: z.string().min(1),
-  name: z.string().optional(),
-  mediaType: z.string().optional(),
-  storagePath: z.string().optional(),
-});
+})
 
 export const agentMentionMetadataSchema = z.object({
   references: z.array(agentMentionReferenceSchema).default([]),
-  // Persisted on the user turn so a resumed transcript still renders what was attached to it.
-  attachments: z.array(agentAttachmentSchema).optional(),
-});
+})
 
-export type AgentAttachment = z.infer<typeof agentAttachmentSchema>;
-export type AgentMentionReference = z.infer<typeof agentMentionReferenceSchema>;
-export type AgentMentionMetadata = z.infer<typeof agentMentionMetadataSchema>;
+export type AgentMentionReference = z.infer<typeof agentMentionReferenceSchema>
+export type AgentMentionMetadata = z.infer<typeof agentMentionMetadataSchema>

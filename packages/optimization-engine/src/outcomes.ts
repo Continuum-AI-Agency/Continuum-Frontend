@@ -37,24 +37,12 @@ export type DecisionKind =
   | 'freeze'
   | 'pause_recommended'
   | 'creative_refresh'
-  | 'audience_expand'
-  // Creative-level decisions. The ledger grades these like any other: it asks whether the
-  // ad set got cheaper afterwards. That is the honest test of "we told you to make more of
-  // this creative" — and the only way we will ever learn whether the variation loop works.
-  | 'pause_ad'
-  | 'variate_creative'
-  | 'seed_experiment';
+  | 'audience_expand';
 
-/** Decisions whose thesis is "this should produce MORE / cheaper results". A cut is graded
- *  the opposite way, so mislabelling one grades it backwards — a good pause would score as
- *  a failure. `pause_ad` is a CUT (we removed a creative); the two creative-experiment
- *  kinds are grows (we added creatives, betting the ad set gets cheaper). */
 const GROW_KINDS: ReadonlySet<DecisionKind> = new Set([
   'budget_increase',
   'creative_refresh',
   'audience_expand',
-  'variate_creative',
-  'seed_experiment',
 ]);
 
 /** At-decision metrics frozen onto the decision row (jsonb `baseline`). */

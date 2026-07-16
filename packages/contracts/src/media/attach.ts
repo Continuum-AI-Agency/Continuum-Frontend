@@ -13,9 +13,12 @@
  * Every output is stamped `mediaStatus: 'user_supplied'`.
  */
 
-import { z } from 'zod';
-import type { OrganicMediaSuggestion, OrganicPublishingAsset } from '../streaming/organic-pipeline';
-import { type MediaAsset, mediaKindSchema } from './asset';
+import { z } from "zod";
+import { mediaKindSchema, type MediaAsset } from "./asset";
+import type {
+  OrganicMediaSuggestion,
+  OrganicPublishingAsset,
+} from "../streaming/organic-pipeline";
 
 /**
  * A library creative selected to become a post's media. `assetId` is the
@@ -38,22 +41,8 @@ export const creativeRefSchema = z
   .strict();
 export type CreativeRef = z.infer<typeof creativeRefSchema>;
 
-/**
- * The media the headless generation produced. A user-supplied creative must CLEAR these, not
- * merely sit alongside them — the patch is spread over the existing mediaSuggestion (and, on the
- * backend, merged into content_json), so a key that is merely absent leaves the old generation
- * in place. `null` is what survives JSON, which `undefined` does not.
- */
-type ClearedMediaOutputs = {
-  assets?: OrganicMediaSuggestion['assets'] | null;
-  assetBase64?: string | null;
-  reel?: OrganicMediaSuggestion['reel'] | null;
-  hyperframe?: OrganicMediaSuggestion['hyperframe'] | null;
-};
-
 export type ShapedUserSuppliedMedia = {
-  mediaSuggestionPatch: Omit<Partial<OrganicMediaSuggestion>, keyof ClearedMediaOutputs> &
-    ClearedMediaOutputs;
+  mediaSuggestionPatch: Partial<OrganicMediaSuggestion>;
   publishingAssets: OrganicPublishingAsset[];
 };
 
@@ -74,13 +63,13 @@ export function creativeRefFromAsset(asset: MediaAsset): CreativeRef {
 
 function imagePublishingAsset(creative: CreativeRef, slideIndex?: number): OrganicPublishingAsset {
   return {
-    role: 'primary',
-    kind: 'image',
+    role: "primary",
+    kind: "image",
     ...(slideIndex !== undefined ? { slideIndex } : {}),
     assetId: creative.assetId,
     bucket: creative.bucket,
     storagePath: creative.storagePath,
-    storageUrl: creative.signedUrl ?? '',
+    storageUrl: creative.signedUrl ?? "",
     mimeType: creative.mimeType,
     width: creative.width,
     height: creative.height,
@@ -95,29 +84,29 @@ function imagePublishingAsset(creative: CreativeRef, slideIndex?: number): Organ
 export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSuppliedMedia {
   const list = creatives.filter(Boolean);
   if (list.length === 0) {
-    throw new Error('shapeUserSuppliedMedia: at least one creative is required');
+    throw new Error("shapeUserSuppliedMedia: at least one creative is required");
   }
   const primary = list[0];
 
   // VIDEO / REEL — a single user video fills the reel slot.
-  if (primary.kind === 'video') {
+  if (primary.kind === "video") {
     return {
       publishingAssets: [
         {
-          role: 'primary',
-          kind: 'video',
+          role: "primary",
+          kind: "video",
           assetId: primary.assetId,
           bucket: primary.bucket,
           storagePath: primary.storagePath,
-          storageUrl: primary.signedUrl ?? '',
+          storageUrl: primary.signedUrl ?? "",
           mimeType: primary.mimeType,
           width: primary.width,
           height: primary.height,
         },
       ],
       mediaSuggestionPatch: {
-        kind: 'reel',
-        mediaStatus: 'user_supplied',
+        kind: "reel",
+        mediaStatus: "user_supplied",
         mimeType: primary.mimeType,
         reel: {
           generated: true,
@@ -137,8 +126,8 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
     return {
       publishingAssets: list.map((creative, index) => imagePublishingAsset(creative, index)),
       mediaSuggestionPatch: {
-        kind: 'carousel',
-        mediaStatus: 'user_supplied',
+        kind: "carousel",
+        mediaStatus: "user_supplied",
         assets: list.map((creative, index) => ({
           role: `slide_${index + 1}`,
           order: index + 1,
@@ -158,8 +147,8 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
   return {
     publishingAssets: [imagePublishingAsset(primary)],
     mediaSuggestionPatch: {
-      kind: 'image',
-      mediaStatus: 'user_supplied',
+      kind: "image",
+      mediaStatus: "user_supplied",
       url: primary.storagePath,
       bucket: primary.bucket,
       assetUrl: primary.signedUrl,
@@ -167,14 +156,6 @@ export function shapeUserSuppliedMedia(creatives: CreativeRef[]): ShapedUserSupp
       mimeType: primary.mimeType,
       width: primary.width,
       height: primary.height,
-      // The patch is spread over the existing mediaSuggestion, so any media the headless
-      // generation left behind has to be cleared EXPLICITLY — omitting these keys leaves a
-      // generated carousel's slides in place, and the assertPublishable gate (and anything
-      // else reading mediaSuggestion) still sees the old generation as this draft's media.
-      assets: null,
-      assetBase64: null,
-      reel: null,
-      hyperframe: null,
     },
   };
 }

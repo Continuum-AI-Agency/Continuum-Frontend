@@ -107,10 +107,7 @@ export function reallocate(
     current: x.s.currentBudget,
     floor,
     velocityDown: x.s.currentBudget * (1 - downPctFor(x.s)),
-    // A creative-drag ad set keeps its budget but may not GROW it: raising an ad set whose
-    // money is landing on a creative we already judged funds the loser, not the ad set.
-    // Down-moves are untouched — this withholds a raise, it does not starve.
-    velocityUp: x.s.noRaise ? x.s.currentBudget : x.s.currentBudget * (1 + upPct),
+    velocityUp: x.s.currentBudget * (1 + upPct),
   }));
 
   const solved = solve(solverItems, pool, cfg);
@@ -124,11 +121,7 @@ export function reallocate(
     const share = isEligible(s) && denom > 0 ? eff / denom : 0;
     const raw = isEligible(s) ? share * pool : 0;
     const velocityCapped = isEligible(s)
-      ? clamp(
-          raw,
-          s.currentBudget * (1 - downPctFor(s)),
-          s.noRaise ? s.currentBudget : s.currentBudget * (1 + upPct),
-        )
+      ? clamp(raw, s.currentBudget * (1 - downPctFor(s)), s.currentBudget * (1 + upPct))
       : s.currentBudget;
 
     let finalBudget: number;

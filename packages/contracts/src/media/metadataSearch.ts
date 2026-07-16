@@ -31,6 +31,8 @@ import {
   mediaSourceSchema,
   type TranscriptSegment,
   transcriptSegmentSchema,
+  type VideoCreativeInsights,
+  videoCreativeInsightsSchema,
 } from './asset';
 import { type MediaSearchResultItem, mediaSearchResultItemSchema } from './search';
 
@@ -79,6 +81,7 @@ export const MEDIA_ASSET_SELECT_COLUMNS = [
   'transcript',
   'transcript_segments',
   'transcript_source',
+  'video_insights',
   'thumbnail_path',
   'embedding_model',
   'has_image_embedding',
@@ -162,6 +165,7 @@ export interface MediaAssetRow {
   transcript?: string | null;
   transcript_segments?: unknown;
   transcript_source?: string | null;
+  video_insights?: unknown;
   // v1.6 poster column. Optional for the same reason: an older column set still
   // type-checks.
   thumbnail_path?: string | null;
@@ -223,6 +227,11 @@ function parseTranscriptSegments(raw: unknown): TranscriptSegment[] | null {
   });
 }
 
+function parseVideoInsights(raw: unknown): VideoCreativeInsights | null {
+  const parsed = videoCreativeInsightsSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
 // Maps a hydrated DB row + a freshly-minted signed URL into the boundary
 // MediaAsset. Always produces a schema-valid asset (jsonb is parsed
 // defensively) so a single malformed row cannot fail the whole search.
@@ -253,6 +262,7 @@ export function mapMediaRowToAsset(row: MediaAssetRow, signedUrl: string | null)
     transcript: row.transcript ?? null,
     transcriptSegments: parseTranscriptSegments(row.transcript_segments),
     transcriptSource: row.transcript_source ?? null,
+    videoInsights: parseVideoInsights(row.video_insights),
     thumbnailPath: row.thumbnail_path ?? null,
     embeddingModel: row.embedding_model,
     hasImageEmbedding: row.has_image_embedding,

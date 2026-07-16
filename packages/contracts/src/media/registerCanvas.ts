@@ -1,16 +1,11 @@
 // Request/response for POST /api/library/register-canvas — the bridge that
 // registers an already-stored AI Studio output into the media library so it is
-// browsable and (later) agent-queryable. Register-in-place: the generator wrote
-// the bytes to its own bucket, we only record the media.assets row.
+// browsable and agent-queryable. Register-in-place: the generator wrote the
+// bytes to its own bucket, and Creative Operations records the durable asset.
 
 import { z } from 'zod';
 import { imageReformatModeSchema } from './reformat';
 
-// Structured provenance stored on media.assets.origin_ref for canvas creations.
-// kind:"canvas" is the discriminant agents/backfills key on. The Library assets
-// that fed the generation are NOT on the wire: the route reads them back off the
-// persisted graph, which is both more complete (it sees every reference node) and
-// not client-assertable.
 export const canvasOriginRefSchema = z
   .object({
     kind: z.literal('canvas'),
@@ -23,15 +18,10 @@ export const canvasOriginRefSchema = z
   .strict();
 export type CanvasOriginRef = z.infer<typeof canvasOriginRefSchema>;
 
-// A Library asset reframed for a placement by Smart resize. This generation runs
-// outside a canvas, so there is no graph to read the lineage back off — the caller
-// names the asset it reframed. The route re-checks brand access before trusting it,
-// so the worst a caller can do is mislabel lineage inside its own brand.
 export const resizeOriginRefSchema = z
   .object({
     kind: z.literal('resize'),
     sourceAssetId: z.string().uuid(),
-    /** Placement preset id, e.g. "ig-story-reel". */
     preset: z.string().min(1),
     aspectRatio: z.string().min(1),
     mode: imageReformatModeSchema.optional(),
@@ -49,7 +39,7 @@ export type RegisteredAssetOriginRef = z.infer<typeof registeredAssetOriginRefSc
 export const registerCanvasAssetRequestSchema = z
   .object({
     brandProfileId: z.string().uuid(),
-    // Studio outputs are always renderable media — never 'file' source uploads.
+    // Studio outputs are renderable media; source project files stay in Library.
     kind: z.enum(['image', 'video']),
     bucket: z.string().min(1),
     storagePath: z.string().min(1),
@@ -66,7 +56,6 @@ export type RegisterCanvasAssetRequest = z.infer<typeof registerCanvasAssetReque
 
 export const registerCanvasAssetResponseSchema = z
   .object({
-    // null when registration was skipped (flag off) or could not be resolved.
     assetId: z.string().nullable(),
   })
   .strict();
