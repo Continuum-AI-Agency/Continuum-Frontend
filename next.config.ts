@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
 
@@ -10,7 +11,11 @@ const tsconfigPath = process.env.NEXT_TSCONFIG_PATH?.trim();
 // Monorepo root (one level up from Continuum-Frontend/). Vercel runs the build
 // command from Continuum-Frontend, so derive this from cwd rather than
 // __dirname, which can be rewritten by Next's config loader.
-const workspaceRoot = path.resolve(process.cwd(), '..');
+const currentDirectory = process.cwd();
+const monorepoRoot = path.resolve(currentDirectory, '..');
+const workspaceRoot = existsSync(path.join(monorepoRoot, 'packages/contracts'))
+  ? monorepoRoot
+  : currentDirectory;
 
 const nextConfig: NextConfig = {
   // Parallel local benches can opt into an isolated build directory instead

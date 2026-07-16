@@ -20,8 +20,10 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next/wpd/types/**/*.ts",
@@ -29,9 +31,12 @@
   ],
   "exclude": [
     "node_modules",
+    "tmp/**",
+    "e2e/**",
     "calendar/**",
     "supabase/functions/**",
     "tests/**",
+    "**/*.bench.*",
     "**/__tests__/**",
     "**/*.test.*",
     "**/*.spec.*"
