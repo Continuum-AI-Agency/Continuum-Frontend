@@ -1,126 +1,158 @@
-import { test, describe } from "node:test";
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-import { chatImageRequestSchema, getAspectsForModel } from "./chatImageRequest";
+import { chatImageRequestSchema, getAspectsForModel } from './chatImageRequest';
 
 const baseRef = {
-  id: "r1",
-  name: "ref",
-  path: "bucket/file.png",
-  mime: "image/png",
-  base64: "dGVzdA==",
+  id: 'r1',
+  name: 'ref',
+  path: 'bucket/file.png',
+  mime: 'image/png',
+  base64: 'dGVzdA==',
 };
 
-describe("chatImageRequestSchema", () => {
-  test("nano-banana accepts valid resolution", () => {
+describe('chatImageRequestSchema', () => {
+  test('nano-banana accepts valid resolution', () => {
     const parsed = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "nano-banana",
-      prompt: "A test",
-      aspectRatio: "1:1",
-      resolution: "1024x1024",
+      brandProfileId: 'brand-1',
+      model: 'nano-banana',
+      prompt: 'A test',
+      aspectRatio: '1:1',
+      resolution: '1024x1024',
     });
-    assert.ok(parsed.success, parsed.success ? "" : parsed.error.message);
+    assert.ok(parsed.success, parsed.success ? '' : parsed.error.message);
   });
 
-  test("nano-banana rejects bad resolution format", () => {
+  test('nano-banana rejects bad resolution format', () => {
     const parsed = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "nano-banana",
-      prompt: "bad res",
-      aspectRatio: "1:1",
-      resolution: "abc",
+      brandProfileId: 'brand-1',
+      model: 'nano-banana',
+      prompt: 'bad res',
+      aspectRatio: '1:1',
+      resolution: 'abc',
     });
     assert.ok(!parsed.success);
   });
 
-  test("pro image requires image_size and aspect_ratio", () => {
+  test('pro image requires image_size and aspect_ratio', () => {
     const missing = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "gemini-3-pro-image-preview",
-      prompt: "test",
+      brandProfileId: 'brand-1',
+      model: 'gemini-3-pro-image-preview',
+      prompt: 'test',
     });
     assert.ok(!missing.success);
 
     const valid = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "gemini-3-pro-image-preview",
-      prompt: "test",
-      aspectRatio: getAspectsForModel("gemini-3-pro-image-preview")[0],
-      imageSize: "2K",
+      brandProfileId: 'brand-1',
+      model: 'gemini-3-pro-image-preview',
+      prompt: 'test',
+      aspectRatio: getAspectsForModel('gemini-3-pro-image-preview')[0],
+      imageSize: '2K',
     });
-    assert.ok(valid.success, valid.success ? "" : valid.error.message);
+    assert.ok(valid.success, valid.success ? '' : valid.error.message);
   });
 
-  test("video requires aspect ratio and allowed resolution", () => {
+  test('video requires aspect ratio and allowed resolution', () => {
     const badRes = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "veo-3-1",
-      prompt: "vid",
-      aspectRatio: "16:9",
-      resolution: "4k",
+      brandProfileId: 'brand-1',
+      model: 'veo-3-1',
+      prompt: 'vid',
+      aspectRatio: '16:9',
+      resolution: '4k',
     });
     assert.ok(!badRes.success);
 
     const missingAspect = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "veo-3-1",
-      prompt: "vid",
-      resolution: "720p",
+      brandProfileId: 'brand-1',
+      model: 'veo-3-1',
+      prompt: 'vid',
+      resolution: '720p',
     });
     assert.ok(!missingAspect.success);
   });
 
-  test("image refs limited to 14", () => {
+  test('video 1080p requires an 8-second duration', () => {
+    const badPair = chatImageRequestSchema.safeParse({
+      brandProfileId: 'brand-1',
+      model: 'veo-3-1',
+      prompt: 'vid',
+      aspectRatio: '16:9',
+      resolution: '1080p',
+      durationSeconds: 6,
+    });
+    assert.ok(!badPair.success);
+
+    const validPair = chatImageRequestSchema.safeParse({
+      brandProfileId: 'brand-1',
+      model: 'veo-3-1',
+      prompt: 'vid',
+      aspectRatio: '16:9',
+      resolution: '1080p',
+      durationSeconds: 8,
+    });
+    assert.ok(validPair.success, validPair.success ? '' : validPair.error.message);
+
+    const shortAt720 = chatImageRequestSchema.safeParse({
+      brandProfileId: 'brand-1',
+      model: 'veo-3-1',
+      prompt: 'vid',
+      aspectRatio: '16:9',
+      resolution: '720p',
+      durationSeconds: 6,
+    });
+    assert.ok(shortAt720.success, shortAt720.success ? '' : shortAt720.error.message);
+  });
+
+  test('image refs limited to 14', () => {
     const refs = Array.from({ length: 15 }, (_, i) => ({ ...baseRef, id: `r${i}` }));
     const parsed = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "nano-banana",
-      prompt: "test",
-      aspectRatio: "1:1",
+      brandProfileId: 'brand-1',
+      model: 'nano-banana',
+      prompt: 'test',
+      aspectRatio: '1:1',
       refs,
     });
     assert.ok(!parsed.success);
   });
 
-  test("video refs limited to 3", () => {
+  test('video refs limited to 3', () => {
     const refs = Array.from({ length: 4 }, (_, i) => ({ ...baseRef, id: `r${i}` }));
     const parsed = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "veo-3-1",
-      prompt: "test",
-      aspectRatio: "16:9",
-      resolution: "720p",
+      brandProfileId: 'brand-1',
+      model: 'veo-3-1',
+      prompt: 'test',
+      aspectRatio: '16:9',
+      resolution: '720p',
       refs,
     });
     assert.ok(!parsed.success);
   });
 
-  test("kling-omni allows up to 7 refs without reference video", () => {
+  test('kling-omni allows up to 7 refs without reference video', () => {
     const refs = Array.from({ length: 7 }, (_, i) => ({ ...baseRef, id: `k${i}` }));
     const parsed = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "kling-omni",
-      prompt: "test",
-      aspectRatio: "16:9",
-      resolution: "720p",
+      brandProfileId: 'brand-1',
+      model: 'kling-omni',
+      prompt: 'test',
+      aspectRatio: '16:9',
+      resolution: '720p',
       refs,
     });
-    assert.ok(parsed.success, parsed.success ? "" : parsed.error.message);
+    assert.ok(parsed.success, parsed.success ? '' : parsed.error.message);
   });
 
-  test("kling-omni limits refs to 4 when reference video is provided", () => {
+  test('kling-omni limits refs to 4 when reference video is provided', () => {
     const refs = Array.from({ length: 5 }, (_, i) => ({ ...baseRef, id: `kref${i}` }));
     const parsed = chatImageRequestSchema.safeParse({
-      brandProfileId: "brand-1",
-      model: "kling-omni",
-      prompt: "test",
-      aspectRatio: "16:9",
-      resolution: "720p",
+      brandProfileId: 'brand-1',
+      model: 'kling-omni',
+      prompt: 'test',
+      aspectRatio: '16:9',
+      resolution: '720p',
       referenceVideo: {
-        id: "vid-1",
-        mime: "video/mp4",
-        base64: "dmlkZW8=",
+        id: 'vid-1',
+        mime: 'video/mp4',
+        base64: 'dmlkZW8=',
       },
       refs,
     });

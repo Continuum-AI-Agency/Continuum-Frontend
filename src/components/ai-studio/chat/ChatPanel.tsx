@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { getAspectsForModel, getMediumForModel } from '@/lib/schemas/chatImageRequest';
+import { VEO_RESOLUTION_DURATION_NOTE } from '@/lib/schemas/chatImageRequest';
 import type {
   PromptTemplate,
   PromptTemplateCreateInput,
@@ -147,10 +148,20 @@ export function ChatPanel({
 
   const model = form.watch('model');
   const medium = mediumForModel(model);
+  const resolution = form.watch('resolution');
+  const durationSeconds = form.watch('durationSeconds');
+  // Veo 3.1 only renders 1080p at an 8-second duration; 720p accepts 4/6/8s.
+  const resolutionRequires8s = medium === 'video' && resolution === '1080p';
   const aspectOptions = React.useMemo(
     () => getAspectsForModel(model, hasAnyReferences),
     [getAspectsForModel, model, hasAnyReferences],
   );
+
+  React.useEffect(() => {
+    if (resolutionRequires8s && durationSeconds !== 8) {
+      form.setValue('durationSeconds', 8);
+    }
+  }, [resolutionRequires8s, durationSeconds, form]);
 
   React.useEffect(() => {
     onModelChange?.(model);
@@ -172,7 +183,13 @@ export function ChatPanel({
       const nextResolution = allowedVideoResolutions.includes(current ?? '') ? current : '720p';
       form.setValue('resolution', nextResolution);
       form.setValue('imageSize', undefined);
-      if (!form.getValues('durationSeconds')) form.setValue('durationSeconds', 8);
+      const currentDuration = form.getValues('durationSeconds');
+      // Veo 3.1 renders 1080p only at 8s; force 8s there, and default to 8s when unset.
+      if (nextResolution === '1080p' && currentDuration !== 8) {
+        form.setValue('durationSeconds', 8);
+      } else if (!currentDuration) {
+        form.setValue('durationSeconds', 8);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, aspectOptions, medium]);
@@ -407,17 +424,29 @@ export function ChatPanel({
               className="flex gap-4"
               disabled={disabled || isStreaming}
             >
-              {([4, 6, 8] as const).map((d) => (
-                <label
-                  key={d}
-                  htmlFor={`duration-${d}`}
-                  className="flex items-center gap-1.5 text-sm"
-                >
-                  <RadioGroupItem id={`duration-${d}`} value={String(d)} />
-                  {d}
-                </label>
-              ))}
+              {([4, 6, 8] as const).map((d) => {
+                const optionDisabled = resolutionRequires8s && d !== 8;
+                return (
+                  <label
+                    key={d}
+                    htmlFor={`duration-${d}`}
+                    className={`flex items-center gap-1.5 text-sm ${
+                      optionDisabled ? 'opacity-40' : ''
+                    }`}
+                  >
+                    <RadioGroupItem
+                      id={`duration-${d}`}
+                      value={String(d)}
+                      disabled={optionDisabled}
+                    />
+                    {d}
+                  </label>
+                );
+              })}
             </RadioGroup>
+            {resolutionRequires8s ? (
+              <span className="block text-xs text-gray-400">{VEO_RESOLUTION_DURATION_NOTE}</span>
+            ) : null}
           </div>
         ) : null}
 
