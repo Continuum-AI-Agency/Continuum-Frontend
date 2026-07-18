@@ -3,10 +3,7 @@
 // Read-only account baseline shown before portfolio creation. Allocation and
 // recommendations are computed only by the backend optimizer after creation.
 
-import type {
-  AdSetSnapshot,
-  OptimizationObjective,
-} from '@continuum/contracts';
+import type { AdSetSnapshot, OptimizationObjective } from '@continuum/contracts';
 import * as React from 'react';
 
 import { deriveCpa, formatCpa, formatCurrency } from '../format';
@@ -18,11 +15,7 @@ type PortfolioPreviewProps = {
   currency?: string | null;
 };
 
-export function PortfolioPreview({
-  snapshots,
-  objective,
-  currency,
-}: PortfolioPreviewProps) {
+export function PortfolioPreview({ snapshots, objective, currency }: PortfolioPreviewProps) {
   const rows = React.useMemo(() => campaignRows(snapshots, objective), [snapshots, objective]);
 
   if (rows.length === 0) {

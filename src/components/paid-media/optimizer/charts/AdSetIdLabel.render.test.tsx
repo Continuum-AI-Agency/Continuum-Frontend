@@ -21,4 +21,22 @@ describe('AdSetIdLabel', () => {
     expect(el.className).toContain('text-2xs');
     expect(el.className).not.toMatch(/text-\[\d/);
   });
+
+  it('renders the human name (not mono) with the raw id kept in the title', () => {
+    const { getByText, queryByText } = render(
+      <AdSetIdLabel id="act_123::adset_456" name="Prospecting — Broad" />,
+    );
+    const el = getByText('Prospecting — Broad');
+    expect(el.getAttribute('title')).toBe('Prospecting — Broad · act_123::adset_456');
+    // The name replaces the raw id on the surface (id lives only in the title).
+    expect(queryByText('act_123::adset_456')).toBeNull();
+    expect(el.className).not.toContain('font-mono');
+  });
+
+  it('falls back to the mono raw id when the name is empty', () => {
+    const { getByText } = render(<AdSetIdLabel id="act_123::adset_456" name="" />);
+    const el = getByText('act_123::adset_456');
+    expect(el.className).toContain('font-mono');
+    expect(el.getAttribute('title')).toBe('act_123::adset_456');
+  });
 });

@@ -12,10 +12,10 @@ afterEach(cleanup);
 
 const [gainer, , held] = cycleItemsMixed;
 
-function renderRow(item: (typeof cycleItemsMixed)[number]) {
+function renderRow(item: (typeof cycleItemsMixed)[number], name?: string) {
   return render(
     <TooltipProvider>
-      <CpaConfidenceBar item={item} maxCpa={74} currency="USD" />
+      <CpaConfidenceBar item={item} maxCpa={74} currency="USD" name={name} />
     </TooltipProvider>,
   );
 }
@@ -36,5 +36,18 @@ describe('CpaConfidenceBar', () => {
     expect(container.textContent).toContain('$16');
     expect(container.textContent).toContain('$30');
     expect(container.textContent).toContain('55ev');
+  });
+
+  it('shows the human ad-set name (id kept in the title) when a name is supplied', () => {
+    const { getByText, queryByText } = renderRow(gainer, 'Prospecting — Broad');
+    const label = getByText('Prospecting — Broad');
+    expect(label.getAttribute('title')).toBe('Prospecting — Broad · act_1::adset_gainer');
+    expect(queryByText('act_1::adset_gainer')).toBeNull();
+  });
+
+  it('labels a held ad set with its name, not the raw id', () => {
+    const { getByText } = renderRow(held, 'Retargeting — 30d');
+    expect(getByText('Retargeting — 30d')).toBeTruthy();
+    expect(getByText('Held · CBO/lifetime')).toBeTruthy();
   });
 });

@@ -324,7 +324,6 @@ export function PortfolioSetup({
               return (
                 <SuggestionRow
                   key={suggestion.name}
-                  brandId={brandId}
                   suggestion={suggestion}
                   snapshots={groupSnapshots}
                   currency={resolvedCurrency}
@@ -433,7 +432,6 @@ function TrackingGapBanner({
 }
 
 function SuggestionRow({
-  brandId,
   suggestion,
   snapshots,
   currency,
@@ -441,7 +439,6 @@ function SuggestionRow({
   busy,
   onCreate,
 }: {
-  brandId: string;
   suggestion: PortfolioSuggestion;
   snapshots: AdSetSnapshot[];
   currency: string | null;
@@ -539,11 +536,7 @@ function SuggestionRow({
       ) : null}
       {previewOpen && canPreview ? (
         <div className="border-t border-border/60 p-3">
-          <PortfolioPreview
-            snapshots={snapshots}
-            objective={objective}
-            currency={currency}
-          />
+          <PortfolioPreview snapshots={snapshots} objective={objective} currency={currency} />
         </div>
       ) : null}
     </div>

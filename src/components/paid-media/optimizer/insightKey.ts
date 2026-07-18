@@ -9,9 +9,11 @@
 function fnv1a(input: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
+    // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a is defined via XOR
     hash ^= input.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
+  // biome-ignore lint/suspicious/noBitwiseOperators: unsigned 32-bit coercion for the hash digest
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 

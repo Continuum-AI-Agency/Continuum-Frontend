@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { AdSetSnapshot, WindowMetrics } from '@continuum/contracts';
+import { getOptimizationMetricDefinition, OptimizationObjectiveSchema } from '@continuum/contracts';
 import type { CampaignSection } from './campaignGroups';
 import {
   buildCampaignSections,
@@ -469,5 +470,33 @@ describe('objective awareness', () => {
     const [asLead] = buildCampaignSections(mixed(), 'adset', 'lead');
     expect(asPurchase.adsets.find((i) => i.id === 'buys-purchases')?.cpa).toBe(10);
     expect(asLead.adsets.find((i) => i.id === 'buys-purchases')?.cpa).toBeNull();
+  });
+
+  // A conversations ad set (a messaging account's real KPI) matches only its own objective.
+  // Before the metric definitions covered the new objectives, this comparison read
+  // `undefined.kpiField` and crashed — so this doubles as the D1 regression lock.
+  it('matches a conversations ad set under `conversations` and flags it under `purchase`', () => {
+    const convoFleet = () => [
+      snap({ id: 'buys-convos', campaignId: 'c1', campaignName: 'C', kpiField: 'conversations' }),
+    ];
+    const [matched] = buildCampaignSections(convoFleet(), 'adset', 'conversations');
+    expect(matched.adsets[0].mismatch).toBe(false);
+    const [mismatched] = buildCampaignSections(convoFleet(), 'adset', 'purchase');
+    expect(mismatched.adsets[0].mismatch).toBe(true);
+  });
+
+  it('never throws through the metric-definition lookup for any of the 11 objectives', () => {
+    const snapshots = [
+      snap({ id: 'buys-convos', campaignId: 'c1', campaignName: 'C', kpiField: 'conversations' }),
+      snap({ id: 'buys-purchases', campaignId: 'c1', campaignName: 'C', kpiField: 'purchases' }),
+      snap({ id: 'inherits', campaignId: 'c1', campaignName: 'C' }),
+    ];
+    expect(OptimizationObjectiveSchema.options).toHaveLength(11);
+    for (const objective of OptimizationObjectiveSchema.options) {
+      expect(() => buildCampaignSections(snapshots, 'adset', objective)).not.toThrow();
+      const def = getOptimizationMetricDefinition(objective);
+      expect(def.kpiField.length).toBeGreaterThan(0);
+      expect(def.costLabel.length).toBeGreaterThan(0);
+    }
   });
 });

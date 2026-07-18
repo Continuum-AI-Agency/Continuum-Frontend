@@ -77,7 +77,9 @@ export function AdSetTimeline({
 
   const colorByAd = useMemo(() => {
     const map = new Map<string, string>();
-    chartable.forEach((trend, index) => map.set(trend.ad_id, PALETTE[index % PALETTE.length]));
+    chartable.forEach((trend, index) => {
+      map.set(trend.ad_id, PALETTE[index % PALETTE.length]);
+    });
     return map;
   }, [chartable]);
   const adById = useMemo(() => new Map(ads.map((ad) => [ad.id, ad])), [ads]);

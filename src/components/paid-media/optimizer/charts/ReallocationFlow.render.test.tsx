@@ -26,4 +26,29 @@ describe('ReallocationFlow', () => {
     expect(container.innerHTML).toContain('bg-destructive');
     expect(container.innerHTML).not.toMatch(/emerald-|rose-/);
   });
+
+  it('reads human ad-set names when nameById resolves them, keeping the id in the title', () => {
+    const nameById = new Map([
+      ['act_1::adset_gainer', 'Prospecting — Broad'],
+      ['act_1::adset_loser', 'Retargeting — 30d'],
+    ]);
+    const { getByText, queryByText } = render(
+      <ReallocationFlow items={cycleItemsMixed} currency="USD" nameById={nameById} />,
+    );
+    const gainer = getByText('Prospecting — Broad');
+    expect(gainer.getAttribute('title')).toBe('Prospecting — Broad · act_1::adset_gainer');
+    expect(getByText('Retargeting — 30d')).toBeTruthy();
+    // Raw ids no longer surface once a name is resolved.
+    expect(queryByText('act_1::adset_gainer')).toBeNull();
+    expect(queryByText('act_1::adset_loser')).toBeNull();
+  });
+
+  it('falls back to the raw id for an ad set missing from nameById', () => {
+    const nameById = new Map([['act_1::adset_gainer', 'Prospecting — Broad']]);
+    const { getByText } = render(
+      <ReallocationFlow items={cycleItemsMixed} currency="USD" nameById={nameById} />,
+    );
+    expect(getByText('Prospecting — Broad')).toBeTruthy();
+    expect(getByText('act_1::adset_loser')).toBeTruthy();
+  });
 });

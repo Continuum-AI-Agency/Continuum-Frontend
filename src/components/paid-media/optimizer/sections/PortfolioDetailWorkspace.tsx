@@ -115,6 +115,12 @@ export function PortfolioDetailWorkspace({
   const actionsByTs = buildCycleActionMap(report);
   const pacing = (latestRun as { pacing?: unknown } | null)?.pacing ?? null;
   const metric = getOptimizationMetricDefinition(portfolio.objective);
+  // Human ad-set names for the action surface. The enrolled roster stores each name
+  // at enroll time, so raw Meta ids never have to leak into the labels; falls back
+  // to the id wherever a name is unknown.
+  const adsetNameById = new Map(
+    enrolledQuery.data.map((adset) => [adset.adset_id, adset.adset_name ?? '']),
+  );
 
   const funnelWindow = sumFunnelWindow(
     snapshotsQuery.data,
@@ -281,7 +287,7 @@ export function PortfolioDetailWorkspace({
             <p className="text-3xs text-muted-foreground">
               {applyModeExplainer(portfolio.apply_mode)}
             </p>
-            <ReallocationFlow currency={currency} items={items} />
+            <ReallocationFlow currency={currency} items={items} nameById={adsetNameById} />
             <HeldChangesPanel
               adAccountId={adAccountId}
               brandId={brandId}
@@ -322,7 +328,7 @@ export function PortfolioDetailWorkspace({
             items.map((item) => (
               <AdsetActionMenu
                 key={item.adset_id}
-                label={item.adset_id.split('::').pop() ?? item.adset_id}
+                label={adsetNameById.get(item.adset_id) || item.adset_id}
                 onHold={() => undefined}
               >
                 <button
@@ -340,6 +346,7 @@ export function PortfolioDetailWorkspace({
                     denominatorMultiplier={metric.denominatorMultiplier}
                     item={item}
                     maxCpa={maxCiCpa}
+                    name={adsetNameById.get(item.adset_id) || undefined}
                   />
                 </button>
               </AdsetActionMenu>
@@ -352,7 +359,7 @@ export function PortfolioDetailWorkspace({
             <OptimizerPanel
               meta={
                 <span className="text-3xs text-muted-foreground">
-                  {selectedAdsetId.split('::').pop()}
+                  {adsetNameById.get(selectedAdsetId) || selectedAdsetId}
                 </span>
               }
               title="Creatives"

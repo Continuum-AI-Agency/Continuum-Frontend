@@ -19,9 +19,12 @@ import { pct } from './chartScale';
 type ReallocationFlowProps = {
   items: CycleItemRow[];
   currency?: string | null;
+  // Human ad-set names keyed by adset_id (from the enrolled roster). When a row's
+  // id is present the bar reads its name instead of the raw Meta id.
+  nameById?: Map<string, string>;
 };
 
-export function ReallocationFlow({ items, currency }: ReallocationFlowProps) {
+export function ReallocationFlow({ items, currency, nameById }: ReallocationFlowProps) {
   const { gaining, losing, maxAbs, totalMoved } = splitReallocation(items);
   const movedCount = gaining.length + losing.length;
 
@@ -36,10 +39,23 @@ export function ReallocationFlow({ items, currency }: ReallocationFlowProps) {
       </p>
 
       {gaining.length > 0 ? (
-        <FlowSection label="Gaining" rows={gaining} maxAbs={maxAbs} currency={currency} positive />
+        <FlowSection
+          label="Gaining"
+          rows={gaining}
+          maxAbs={maxAbs}
+          currency={currency}
+          nameById={nameById}
+          positive
+        />
       ) : null}
       {losing.length > 0 ? (
-        <FlowSection label="Losing" rows={losing} maxAbs={maxAbs} currency={currency} />
+        <FlowSection
+          label="Losing"
+          rows={losing}
+          maxAbs={maxAbs}
+          currency={currency}
+          nameById={nameById}
+        />
       ) : null}
     </div>
   );
@@ -50,12 +66,14 @@ function FlowSection({
   rows,
   maxAbs,
   currency,
+  nameById,
   positive,
 }: {
   label: string;
   rows: FlowRow[];
   maxAbs: number;
   currency?: string | null;
+  nameById?: Map<string, string>;
   positive?: boolean;
 }) {
   return (
@@ -71,7 +89,7 @@ function FlowSection({
             : '';
         return (
           <div key={row.adsetId} className="flex items-center gap-2">
-            <AdSetIdLabel id={row.adsetId} />
+            <AdSetIdLabel id={row.adsetId} name={nameById?.get(row.adsetId) || undefined} />
             <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted/40">
               <div
                 className={

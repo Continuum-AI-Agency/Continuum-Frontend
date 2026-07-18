@@ -21,6 +21,7 @@ type CpaConfidenceBarProps = {
   maxCpa: number;
   currency?: string | null;
   denominatorMultiplier?: number;
+  name?: string;
 };
 
 export function CpaConfidenceBar({
@@ -28,13 +29,14 @@ export function CpaConfidenceBar({
   maxCpa,
   currency,
   denominatorMultiplier = 1,
+  name,
 }: CpaConfidenceBarProps) {
   const freezeReason = item.diagnostics?.freezeReason;
 
   if (freezeReason) {
     return (
       <div className="flex items-center gap-3">
-        <AdSetIdLabel id={item.adset_id} />
+        <AdSetIdLabel id={item.adset_id} name={name} />
         <div className="flex flex-1 items-center">
           <HeldPill reason={freezeReason} />
         </div>
@@ -58,7 +60,7 @@ export function CpaConfidenceBar({
 
   return (
     <div className="flex items-center gap-3">
-      <AdSetIdLabel id={item.adset_id} />
+      <AdSetIdLabel id={item.adset_id} name={name} />
       <div className="relative h-3.5 min-w-0 flex-1">
         {hasInterval ? (
           <div

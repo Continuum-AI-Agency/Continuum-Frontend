@@ -1,10 +1,7 @@
 // Read-only account baseline for portfolio onboarding. Optimizer execution is
 // backend-owned; the browser never imports or runs the allocation engine.
 
-import type {
-  AdSetSnapshot,
-  OptimizationObjective,
-} from '@continuum/contracts';
+import type { AdSetSnapshot, OptimizationObjective } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 
 export type CampaignRow = {
