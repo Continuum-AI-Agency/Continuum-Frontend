@@ -1,50 +1,53 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { PageHeader } from "@/components/shared/PageHeader";
-import { useShortcut } from "@/lib/keyboard/useShortcut";
-import { useAwarenessReport } from "@/lib/api/competitorSpy";
-import { InspirationBrowser } from "@/components/competitors/InspirationBrowser";
-import { CompetitorSearchPalette } from "./CompetitorSearchPalette";
-import { BoardsPanel } from "./BoardsPanel";
-import { AwarenessReportView } from "./AwarenessReportView";
-import { CompetitorsTab } from "./CompetitorsTab";
+import { useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { InspirationBrowser } from '@/components/competitors/InspirationBrowser';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { useShortcut } from '@/lib/keyboard/useShortcut';
+import { BoardsPanel } from './BoardsPanel';
+import { CompetitorSearchPalette } from './CompetitorSearchPalette';
+import { CompetitorsTab } from './CompetitorsTab';
+import { CompetitiveReportView } from './report/CompetitiveReportView';
+import { useCompetitorScan } from './report/useCompetitorScan';
 
-type TabId = "overview" | "inspiration" | "boards" | "competitors";
+type TabId = 'overview' | 'inspiration' | 'boards' | 'competitors';
 
 const TABS: Array<{ id: TabId; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "inspiration", label: "Inspiration" },
-  { id: "boards", label: "Boards" },
-  { id: "competitors", label: "Competitors" },
+  { id: 'overview', label: 'Report' },
+  { id: 'inspiration', label: 'Inspiration' },
+  { id: 'boards', label: 'Boards' },
+  { id: 'competitors', label: 'Competitors' },
 ];
 
 // Dashboard spy shortcuts deep-link a sub-view via ?tab=; legacy organic|paid
 // links resolve to the unified Inspiration tab. Initial value only — in-page
 // switching uses local state.
 function resolveTab(value: string | null): TabId {
-  if (value === "boards" || value === "competitors") return value;
-  if (value === "inspiration" || value === "organic" || value === "paid") return "inspiration";
-  return "overview";
+  if (value === 'boards' || value === 'competitors') return value;
+  if (value === 'inspiration' || value === 'organic' || value === 'paid') return 'inspiration';
+  return 'overview';
 }
 
 function tabClass(active: boolean): string {
   return `-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-    active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+    active
+      ? 'border-primary text-foreground'
+      : 'border-transparent text-muted-foreground hover:text-foreground'
   }`;
 }
 
 export function CompetitorSpyClient({ brandId }: { brandId: string }) {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<TabId>(() => resolveTab(searchParams.get("tab")));
+  const [tab, setTab] = useState<TabId>(() => resolveTab(searchParams.get('tab')));
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const { data: awareness } = useAwarenessReport(brandId);
+  // Hoisted here so the scan stream survives tab switches (tab bodies unmount).
+  const scan = useCompetitorScan(brandId);
 
   useShortcut(
-    "competitor-spy-search",
-    { key: "/", description: "Search competitors", allowInInput: false },
+    'competitor-spy-search',
+    { key: '/', description: 'Search competitors', allowInInput: false },
     (event) => {
       event.preventDefault();
       setPaletteOpen(true);
@@ -68,7 +71,11 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
         }
       />
 
-      <div role="tablist" aria-label="Competitor spy sections" className="flex gap-1 border-b border-border">
+      <div
+        role="tablist"
+        aria-label="Competitor spy sections"
+        className="flex gap-1 border-b border-border"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -84,29 +91,35 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
       </div>
 
       <div className="flex-1 overflow-auto">
-        {tab === "overview" ? <AwarenessReportView report={awareness ?? null} /> : null}
+        {tab === 'overview' ? (
+          <CompetitiveReportView
+            brandId={brandId}
+            scan={scan}
+            onManageCompetitors={() => setTab('competitors')}
+          />
+        ) : null}
 
-        {tab === "inspiration" ? (
+        {tab === 'inspiration' ? (
           <InspirationBrowser
             brandId={brandId}
             defaultSource="all"
             showRail
             showSync
-            onManageCompetitors={() => setTab("competitors")}
+            onManageCompetitors={() => setTab('competitors')}
           />
         ) : null}
 
-        {tab === "boards" ? <BoardsPanel brandId={brandId} /> : null}
+        {tab === 'boards' ? <BoardsPanel brandId={brandId} /> : null}
 
-        {tab === "competitors" ? <CompetitorsTab brandId={brandId} /> : null}
+        {tab === 'competitors' ? <CompetitorsTab brandId={brandId} /> : null}
       </div>
 
       <CompetitorSearchPalette
         brandId={brandId}
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        onSelectCompetitor={() => setTab("inspiration")}
-        onTrackNew={() => setTab("competitors")}
+        onSelectCompetitor={() => setTab('inspiration')}
+        onTrackNew={() => setTab('competitors')}
       />
     </div>
   );

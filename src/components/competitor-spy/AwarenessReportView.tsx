@@ -25,7 +25,7 @@ function MetricGrid({ metrics }: { metrics: Metric[] }) {
   return <MetricStrip items={metrics.map((m) => ({ label: m.label, value: String(m.value) }))} />;
 }
 
-function CountList({ items }: { items: CountItem[] }) {
+export function CountList({ items }: { items: CountItem[] }) {
   if (items.length === 0)
     return <p className="py-4 text-center text-xs text-muted-foreground">No data yet.</p>;
   const max = Math.max(...items.map((i) => i.count), 1);
@@ -67,7 +67,7 @@ function Feed({ rows }: { rows: FeedRow[] }) {
   );
 }
 
-function BlockCard({ block }: { block: AwarenessBlock }) {
+export function BlockCard({ block }: { block: AwarenessBlock }) {
   const data = (block.data ?? {}) as Record<string, unknown>;
   return (
     <section className="rounded-lg border border-border bg-card">

@@ -22,6 +22,10 @@ import type {
   SaveItemRequest,
   TimelineEntry,
 } from '@continuum/contracts';
+import {
+  type CompetitiveReportResponse,
+  competitiveReportResponseSchema,
+} from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api/http';
 
@@ -194,6 +198,13 @@ export async function fetchAwareness(brandId: string): Promise<AwarenessReportPa
   return res.report;
 }
 
+export async function fetchCompetitiveReport(brandId: string): Promise<CompetitiveReportResponse> {
+  return request<CompetitiveReportResponse>({
+    path: `${BASE}/gap-report?brandId=${encodeURIComponent(brandId)}`,
+    schema: competitiveReportResponseSchema,
+  });
+}
+
 export async function fetchCreativeSignedUrl(snapshotId: string): Promise<string | null> {
   try {
     const res = await request<{ signedUrl: string }>({
@@ -284,6 +295,7 @@ const keys = {
       p.limit ?? null,
     ] as const,
   awareness: (brandId: string) => ['competitor-spy', 'awareness', brandId] as const,
+  gapReport: (brandId: string) => ['competitor-spy', 'gap-report', brandId] as const,
   creative: (snapshotId: string) => ['competitor-spy', 'creative', snapshotId] as const,
   pageSearch: (brandId: string, q: string) =>
     ['competitor-spy', 'page-search', brandId, q] as const,
@@ -371,6 +383,15 @@ export function useAwarenessReport(brandId: string) {
     queryKey: keys.awareness(brandId),
     queryFn: () => fetchAwareness(brandId),
     enabled: Boolean(brandId),
+  });
+}
+
+export function useCompetitiveReport(brandId: string) {
+  return useQuery({
+    queryKey: keys.gapReport(brandId),
+    queryFn: () => fetchCompetitiveReport(brandId),
+    enabled: Boolean(brandId),
+    staleTime: 60_000,
   });
 }
 
