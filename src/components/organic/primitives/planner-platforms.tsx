@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
-import type { OrganicCalendarDay, OrganicPlatformTag } from './types';
+import type { OrganicCalendarDay, OrganicCalendarPostedContent, OrganicPlatformTag } from './types';
 
 export type PlannerPlatformKey = OrganicPlatformTag | 'x';
 
@@ -36,10 +36,11 @@ export type PlannerPlatform = {
   label: string;
   shortLabel: string;
   Icon: typeof Instagram;
+  canCreate: boolean;
   comingSoon?: boolean;
 };
 
-const PLATFORM_META: Record<PlannerPlatformKey, PlannerPlatform> = {
+const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate'>> = {
   instagram: {
     key: 'instagram',
     label: 'Instagram',
@@ -82,6 +83,15 @@ const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = ['instagram', 'linkedin
 
 const COMING_SOON_ORDER: PlannerPlatformKey[] = ['facebook', 'youtube', 'tiktok', 'x'];
 
+const DISPLAY_PLATFORM_ORDER: PlannerPlatformKey[] = [
+  'instagram',
+  'linkedin',
+  'facebook',
+  'youtube',
+  'tiktok',
+  'x',
+];
+
 // A planner row is expensive: every one of its seven cells claims a whole cell's worth
 // of vertical space. So a row has to earn its keep — a platform gets a row only if the
 // brand can actually post to it (a connected account) or already has posts on it.
@@ -96,6 +106,7 @@ export function comingSoonPlannerPlatforms(): PlannerPlatform[] {
   return COMING_SOON_ORDER.map((platform) => ({
     ...PLATFORM_META[platform],
     Icon: PLATFORM_META[platform].Icon ?? CircleDashed,
+    canCreate: false,
     comingSoon: true,
   }));
 }
@@ -103,34 +114,41 @@ export function comingSoonPlannerPlatforms(): PlannerPlatform[] {
 export function buildPlannerPlatforms(
   activePlatforms: OrganicPlatformKey[],
   days: OrganicCalendarDay[],
+  postedContent: OrganicCalendarPostedContent[] = [],
   options: BuildPlannerPlatformsOptions = {},
 ): PlannerPlatform[] {
-  const scheduled = new Set<OrganicPlatformTag>();
+  const visible = new Set<PlannerPlatformKey>();
 
   activePlatforms.forEach((platform) => {
-    if (SCHEDULABLE_PLATFORM_ORDER.includes(platform)) {
-      scheduled.add(platform);
-    }
+    visible.add(platform);
   });
   days.forEach((day) => {
     day.slots.forEach((draft) => {
       draft.platforms.forEach((platform) => {
-        if (SCHEDULABLE_PLATFORM_ORDER.includes(platform)) {
-          scheduled.add(platform);
-        }
+        visible.add(platform);
       });
     });
   });
+  postedContent.forEach((post) => visible.add(post.platform));
 
   // A planner with no rows would have nowhere to drop a post and no "+" to press, so
   // the default channel always survives the filter.
-  if (scheduled.size === 0) scheduled.add('instagram');
+  if (!SCHEDULABLE_PLATFORM_ORDER.some((platform) => visible.has(platform))) {
+    visible.add('instagram');
+  }
 
-  const schedulablePlatforms = SCHEDULABLE_PLATFORM_ORDER.filter((platform) =>
-    scheduled.has(platform),
-  ).map((platform) => PLATFORM_META[platform]);
+  const meaningfulPlatforms = DISPLAY_PLATFORM_ORDER.filter((platform) =>
+    visible.has(platform),
+  ).map((platform) => ({
+    ...PLATFORM_META[platform],
+    canCreate: SCHEDULABLE_PLATFORM_ORDER.includes(platform as OrganicPlatformTag),
+  }));
 
-  if (!options.includeComingSoon) return schedulablePlatforms;
+  if (!options.includeComingSoon) return meaningfulPlatforms;
 
-  return [...schedulablePlatforms, ...comingSoonPlannerPlatforms()];
+  const meaningfulKeys = new Set(meaningfulPlatforms.map((platform) => platform.key));
+  return [
+    ...meaningfulPlatforms,
+    ...comingSoonPlannerPlatforms().filter((platform) => !meaningfulKeys.has(platform.key)),
+  ];
 }

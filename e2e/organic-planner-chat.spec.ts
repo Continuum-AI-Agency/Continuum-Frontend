@@ -17,8 +17,8 @@ import { mintSessionWithPassword } from './support/auth';
 //
 // What it proves:
 //   #182  every status renders its own readable pill (Draft / Scheduled / Published / Failed),
-//         a channel with no account and no posts claims no row, and a hovered card reveals the
-//         full title/copy it clamps at rest.
+//         a channel with no account and no posts claims no row, a channel with a persisted post
+//         remains visible as read-only, and a hovered card reveals the full title/copy it clamps.
 //   #177  a user turn and an assistant turn are told apart at a glance (the assistant carries a
 //         mark + name, the reader keeps the tinted bubble) and turns are not crammed together.
 //   Product-review polish: the Plan → Generate → Review → Schedule workflow, planning insight,
@@ -27,7 +27,9 @@ import { mintSessionWithPassword } from './support/auth';
 //
 // Un-exercised hop, stated explicitly: no live agent turn is streamed. The transcript renders
 // PERSISTED turns through the same components a live stream feeds, which is the surface both
-// bugs are about; token-level streaming is out of scope for this bench.
+// bugs are about; token-level streaming is out of scope for this bench. The Week test opens the
+// real one-shot composer but does not spend an external model call; synchronous response-to-grid
+// insertion is covered by the focused mapper/workspace tests.
 
 const LOCAL_OWNER_EMAIL = 'local@continuum.test';
 const LOCAL_OWNER_PASSWORD = 'localdev123';
@@ -37,6 +39,7 @@ const brandId = '00000000-0000-4000-8000-0000000000b2';
 const BENCH_SESSION_PREFIX = 'bench-planner-chat-';
 const SESSION_ID = `${BENCH_SESSION_PREFIX}${Date.now()}`;
 const BENCH_CLIENT_KEY_PREFIX = 'bench-planner-';
+const BENCH_PUBLISHED_POST_PREFIX = 'bench-planner-published-';
 const SCREENSHOT_DIR =
   process.env.PLANNER_BENCH_SCREENSHOT_DIR ?? 'e2e/__screenshots__/organic-planner-chat';
 
@@ -138,6 +141,29 @@ function draftRows() {
   });
 }
 
+function publishedPostRow() {
+  const publishedAt = `${dayIdOffsetFromToday(0)}T15:00:00.000Z`;
+  const platformPostId = `${BENCH_PUBLISHED_POST_PREFIX}${Date.now()}`;
+
+  return {
+    brand_id: brandId,
+    platform: 'facebook',
+    platform_account_id: 'bench-facebook-page',
+    platform_post_id: platformPostId,
+    instagram_post_id: null,
+    ig_user_id: null,
+    draft_id: null,
+    post_type: 'POST',
+    caption: 'BENCH PUBLISHED CAPTION. This real persisted Facebook post is read-only in Week.',
+    media_urls: [],
+    content_snapshot: {
+      title: 'BENCH Published Facebook — read-only week quick look',
+    },
+    permalink: 'https://www.facebook.com/bench-planner-post',
+    published_at: publishedAt,
+  };
+}
+
 function chatRows() {
   const base = Date.now() - 10 * 60_000;
   const at = (offset: number) => new Date(base + offset * 60_000).toISOString();
@@ -209,6 +235,12 @@ async function purgeBenchRows(supabase: SupabaseClient): Promise<void> {
     .delete()
     .eq('brand_id', brandId)
     .like('client_key', `${BENCH_CLIENT_KEY_PREFIX}%`);
+  await supabase
+    .schema('organic')
+    .from('organic_published_posts')
+    .delete()
+    .eq('brand_id', brandId)
+    .like('platform_post_id', `${BENCH_PUBLISHED_POST_PREFIX}%`);
 }
 
 async function setActiveBrand(supabase: SupabaseClient, activeBrandId: string): Promise<void> {
@@ -264,7 +296,7 @@ async function repairOnboarding(supabase: SupabaseClient): Promise<void> {
 }
 
 async function openPlanner(page: Page) {
-  await page.goto('/organic?tab=planner', { waitUntil: 'domcontentloaded' });
+  await page.goto('/organic?tab=planner&view=week', { waitUntil: 'domcontentloaded' });
   await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Planner', exact: true })).toBeVisible({
     timeout: 90_000,
@@ -306,6 +338,11 @@ test.describe('organic planner + agent chat', () => {
     await purgeBenchRows(supabase);
 
     await supabase.schema('organic').from('organic_calendar_drafts').insert(draftRows());
+    await supabase
+      .schema('organic')
+      .from('organic_published_posts')
+      .insert(publishedPostRow())
+      .throwOnError();
 
     await supabase
       .schema('organic')
@@ -335,7 +372,7 @@ test.describe('organic planner + agent chat', () => {
     if (previousActiveBrandId) await setActiveBrand(supabase, previousActiveBrandId);
   });
 
-  test('#182 the week grid says each draft status in a word, and hides the channel it cannot post to', async () => {
+  test('#182 Week is a first-class creation and cross-platform viewing surface', async () => {
     await openPlanner(page);
 
     // Workflow hierarchy and a single primary action stay visible above the real week.
@@ -365,11 +402,36 @@ test.describe('organic planner + agent chat', () => {
       ).toBeVisible();
     }
 
-    // LinkedIn has no connected account for the fixture brand and no posts, so it claims no row.
-    // Instagram — which has both — keeps its own.
+    // Facebook has no connected account but does have a real persisted post, so Week keeps it as
+    // a read-only row. Instagram remains the schedulable channel.
     const platformRail = page.locator('[data-tour-id="organic-calendar"]');
     await expect(platformRail.getByText('Instagram', { exact: true }).first()).toBeVisible();
-    await expect(platformRail.getByText('LinkedIn', { exact: true })).toHaveCount(0);
+    await expect(platformRail.getByText('Facebook', { exact: true }).first()).toBeVisible();
+    await expect(platformRail.getByText('view', { exact: true }).first()).toBeVisible();
+
+    // Published content opens a cross-device quick look and links to the source, without exposing
+    // a create control for the read-only platform.
+    await page
+      .getByRole('button', {
+        name: 'View posted content: BENCH Published Facebook — read-only week quick look',
+      })
+      .click();
+    await expect(page.getByText('BENCH PUBLISHED CAPTION.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Open post/ })).toHaveAttribute(
+      'href',
+      'https://www.facebook.com/bench-planner-post',
+    );
+    await page.keyboard.press('Escape');
+
+    // Every schedulable Week cell exposes the one-shot tool directly; selecting it opens the real
+    // composer pre-seeded with that cell's date and platform.
+    await page
+      .locator('button[aria-label^="Add post for"][aria-label$="Instagram"]:visible')
+      .first()
+      .click();
+    await page.getByRole('menuitem').filter({ hasText: 'AI one-shot post' }).click();
+    await expect(page.getByRole('dialog', { name: 'Create with AI' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.screenshot({
       path: `${SCREENSHOT_DIR}/planner-week-statuses.png`,

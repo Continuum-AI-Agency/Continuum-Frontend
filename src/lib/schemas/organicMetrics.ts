@@ -1,41 +1,41 @@
-import { z } from "zod";
 import {
   metricComparisonSchema,
   organicMetricsSchema,
   organicPostBreakdownPointSchema,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
+import { z } from 'zod';
 
-// Canonical cross-boundary metric shapes live in @continuum/contracts; re-exported
-// here so existing `@/lib/schemas/organicMetrics` import sites keep working.
-export { metricComparisonSchema, organicMetricsSchema, organicPostBreakdownPointSchema };
 export type {
   MetricComparison,
   OrganicMetrics,
   OrganicPostBreakdownPoint,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
+// Canonical cross-boundary metric shapes live in @continuum/contracts; re-exported
+// here so existing `@/lib/schemas/organicMetrics` import sites keep working.
+export { metricComparisonSchema, organicMetricsSchema, organicPostBreakdownPointSchema };
 
 // Meta demographic timeframes and other long-form aliases occasionally leak into
 // organic analytics responses (and older cache rows). Coerce them onto the
 // dashboard's canonical presets before the enum check.
 const ORGANIC_DATE_RANGE_PRESET_ALIASES: Record<string, string> = {
-  last_7_days: "last_7d",
-  last_14_days: "last_14d",
-  last_30_days: "last_30d",
+  last_7_days: 'last_7d',
+  last_14_days: 'last_14d',
+  last_30_days: 'last_30d',
 };
 
 const organicDateRangePresetEnum = z.enum([
-  "today",
-  "yesterday",
-  "previous_day",
-  "last_7d",
-  "last_14d",
-  "last_30d",
-  "last_month",
-  "custom",
+  'today',
+  'yesterday',
+  'previous_day',
+  'last_7d',
+  'last_14d',
+  'last_30d',
+  'last_month',
+  'custom',
 ]);
 
 export const organicDateRangePresetSchema = z.preprocess((value) => {
-  if (typeof value !== "string") return value;
+  if (typeof value !== 'string') return value;
   return ORGANIC_DATE_RANGE_PRESET_ALIASES[value] ?? value;
 }, organicDateRangePresetEnum);
 
@@ -59,8 +59,8 @@ export const interactionBreakdownsSchema = z.record(z.string(), z.record(z.strin
 
 export const insightsRequestSchema = z.object({
   metrics: z.array(z.string()),
-  metric_type: z.enum(["total_value", "time_series"]).optional(),
-  period: z.enum(["day", "lifetime"]).optional(),
+  metric_type: z.enum(['total_value', 'time_series']).optional(),
+  period: z.enum(['day', 'lifetime']).optional(),
   breakdown: z.union([z.string(), z.array(z.string())]).optional(),
   timeframe: z.string().optional(),
   since: z.string().optional(),
@@ -96,10 +96,23 @@ export const instagramOrganicMetricsSchema = z.object({
 
 export type InstagramOrganicMetrics = z.infer<typeof instagramOrganicMetricsSchema>;
 
-export const organicPlatformSchema = z.enum(["instagram", "facebook", "youtube", "x", "tiktok", "linkedin"]);
+export const organicPlatformSchema = z.enum([
+  'instagram',
+  'facebook',
+  'youtube',
+  'x',
+  'tiktok',
+  'linkedin',
+]);
 export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
 
-export const organicAnalyticsScopeSchema = z.enum(["account", "posts", "all", "kpis", "demographics"]);
+export const organicAnalyticsScopeSchema = z.enum([
+  'account',
+  'posts',
+  'all',
+  'kpis',
+  'demographics',
+]);
 export type OrganicAnalyticsScope = z.infer<typeof organicAnalyticsScopeSchema>;
 
 export const organicTrendPointSchema = z.object({
@@ -249,6 +262,20 @@ export const linkedInOrganicPostSchema = organicPostSchema.extend({
 
 export type LinkedInOrganicPost = z.infer<typeof linkedInOrganicPostSchema>;
 
+// The connected account's own public identity, as the platform reports it.
+// URLs stay plain strings here, matching permalink/mediaUrl above: a display
+// field must never fail the whole response's parse over a malformed value.
+export const organicAccountProfileSchema = z.object({
+  displayName: z.string().nullable().optional(),
+  username: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
+  profileUrl: z.string().nullable().optional(),
+  isVerified: z.boolean().nullable().optional(),
+});
+
+export type OrganicAccountProfile = z.infer<typeof organicAccountProfileSchema>;
+
 const organicMetricsResponseBaseSchema = z.object({
   scope: organicAnalyticsScopeSchema.optional(),
   accountId: z.string(),
@@ -258,6 +285,7 @@ const organicMetricsResponseBaseSchema = z.object({
   fetchedAt: z.string().optional(),
   range: organicRangeSchema,
   warnings: z.array(z.string()).optional(),
+  accountProfile: organicAccountProfileSchema.optional(),
   metrics: organicMetricsSchema,
   interactionBreakdowns: interactionBreakdownsSchema.optional(),
   // Period-over-period: this window vs the equal-length prior window (`current`
@@ -276,16 +304,16 @@ const organicMetricsResponseBaseSchema = z.object({
 });
 
 export const instagramOrganicMetricsResponseSchema = organicMetricsResponseBaseSchema.extend({
-  platform: z.enum(["instagram", "facebook", "youtube", "x", "tiktok"]),
+  platform: z.enum(['instagram', 'facebook', 'youtube', 'x', 'tiktok']),
   posts: z.array(organicPostSchema).optional(),
 });
 
 export const linkedInOrganicMetricsResponseSchema = organicMetricsResponseBaseSchema.extend({
-  platform: z.literal("linkedin"),
+  platform: z.literal('linkedin'),
   posts: z.array(linkedInOrganicPostSchema).optional(),
 });
 
-export const organicMetricsResponseSchema = z.discriminatedUnion("platform", [
+export const organicMetricsResponseSchema = z.discriminatedUnion('platform', [
   instagramOrganicMetricsResponseSchema,
   linkedInOrganicMetricsResponseSchema,
 ]);

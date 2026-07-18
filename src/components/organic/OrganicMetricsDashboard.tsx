@@ -21,6 +21,7 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { DisabledControl } from '@/components/organic/DisabledControl';
 import { describeExportBlock, describeRefreshBlock } from '@/components/organic/disabledReasons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';
+import { OrganicAccountProfileHeader } from '@/components/organic/OrganicAccountProfileHeader';
 import { mergePostWithFreshMedia } from '@/components/organic/organicPostMediaRecovery';
 import { PostMediaPreviewImage } from '@/components/organic/PostMediaPreviewImage';
 import { PostCommentsPanel } from '@/components/organic/primitives/PostCommentsPanel';
@@ -34,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { organicPlatformLabel } from '@/lib/organic/platforms';
 
 const OrganicAudienceLocationMapCard = dynamic(
   () =>
@@ -1571,6 +1573,12 @@ function Dashboard({
 
   return (
     <div className="flex flex-col gap-2 min-h-0 pb-6">
+      {isAccountView && data.accountProfile ? (
+        <OrganicAccountProfileHeader
+          profile={data.accountProfile}
+          platformLabel={organicPlatformLabel(platform)}
+        />
+      ) : null}
       {isAccountView && rangePreset === 'today' ? (
         <span className="mb-1 block text-xs text-muted-foreground">
           Today so far — deltas compare today (partial) against yesterday.

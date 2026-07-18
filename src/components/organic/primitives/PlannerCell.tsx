@@ -2,18 +2,27 @@ import { useDroppable } from '@dnd-kit/core';
 import { Plus } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
+import { parseTimeLabelToMinutes } from './calendar-utils';
 import { DraggableDraftCard } from './DraggableDraftCard';
+import { PostedContentQuickLook } from './PostedContentQuickLook';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
-import type { OrganicCalendarDraft, OrganicPlatformTag, OrganicSeedDragPayload } from './types';
+import type {
+  OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
+  OrganicPlatformTag,
+  OrganicSeedDragPayload,
+} from './types';
 
 type PlannerCellProps = {
   dayId: string;
   platform: PlannerPlatform;
   drafts: OrganicCalendarDraft[];
+  postedContent: OrganicCalendarPostedContent[];
   selectedDraftId: string | null;
   selectedDraftIdSet: ReadonlySet<string>;
   showGhosts: boolean;
@@ -40,6 +49,7 @@ export const PlannerCell = React.memo(function PlannerCell({
   dayId,
   platform,
   drafts,
+  postedContent,
   selectedDraftId,
   selectedDraftIdSet,
   showGhosts,
@@ -57,6 +67,7 @@ export const PlannerCell = React.memo(function PlannerCell({
   onCreatePost,
 }: PlannerCellProps) {
   const isComingSoon = Boolean(platform.comingSoon);
+  const canCreate = platform.canCreate && !isComingSoon;
   const droppableId = `planner-cell::${dayId}::${platform.key}`;
   const { setNodeRef, isOver } = useDroppable({
     id: droppableId,
@@ -65,7 +76,7 @@ export const PlannerCell = React.memo(function PlannerCell({
       dayId,
       platform: platform.key,
     },
-    disabled: isComingSoon,
+    disabled: !canCreate,
   });
 
   const ghosts = useCalendarStore((state) => (showGhosts ? state.ghosts[dayId] || 0 : 0));
@@ -73,11 +84,22 @@ export const PlannerCell = React.memo(function PlannerCell({
   const setFocusedDayId = useCalendarStore((state) => state.setFocusedDayId);
   const isFocusedDay = focusedDayId === dayId;
 
-  const visibleDrafts = drafts;
+  const timelineItems = React.useMemo(
+    () =>
+      [
+        ...drafts.map((draft) => ({ kind: 'draft' as const, item: draft })),
+        ...postedContent.map((post) => ({ kind: 'posted' as const, item: post })),
+      ].sort((a, b) => {
+        const timeA = parseTimeLabelToMinutes(a.item.timeLabel) ?? 0;
+        const timeB = parseTimeLabelToMinutes(b.item.timeLabel) ?? 0;
+        return timeA - timeB;
+      }),
+    [drafts, postedContent],
+  );
   // Grid rows size to their tallest cell, so an empty cell only has to be tall enough to
   // be a drop target. A whole row of them (a connected channel with nothing planned this
   // week) then collapses instead of claiming a post's worth of height seven times over.
-  const isEmptyCell = visibleDrafts.length === 0 && ghosts === 0;
+  const isEmptyCell = timelineItems.length === 0 && ghosts === 0;
 
   const handleNativeDrop = (event: React.DragEvent<HTMLDivElement>) => {
     const rawData = event.dataTransfer.getData('application/json');
@@ -85,7 +107,7 @@ export const PlannerCell = React.memo(function PlannerCell({
 
     try {
       const data = JSON.parse(rawData) as OrganicSeedDragPayload;
-      if (!isComingSoon) {
+      if (canCreate) {
         onNativeDrop(dayId, '09:00', data, platform.key as OrganicPlatformTag);
       }
     } catch (error) {
@@ -114,12 +136,12 @@ export const PlannerCell = React.memo(function PlannerCell({
         !isLastColumn && 'border-r',
         isLastColumn && 'border-r-0',
         isLastRow && 'border-b-0',
-        isOver && !isComingSoon && 'bg-primary/10',
+        isOver && canCreate && 'bg-primary/10',
         isToday && 'bg-primary/[0.03]',
         isFocusedDay && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/40',
       )}
       onDragOver={(event) => {
-        if (!isComingSoon && event.dataTransfer.types.includes('application/json')) {
+        if (canCreate && event.dataTransfer.types.includes('application/json')) {
           event.preventDefault();
         }
       }}
@@ -131,25 +153,29 @@ export const PlannerCell = React.memo(function PlannerCell({
           !compact && !isComingSoon && 'max-h-[clamp(180px,32dvh,460px)] overflow-y-auto pr-1',
         )}
       >
-        {visibleDrafts.map((draft) => (
-          <DraggableDraftCard
-            key={draft.id}
-            draft={draft}
-            isSelected={draft.id === selectedDraftId}
-            isMultiSelected={selectedDraftIdSet.has(draft.id)}
-            onSelect={onSelectDraft}
-            onToggleSelection={onToggleSelection}
-            onRegenerate={onRegenerate}
-            onClearFailure={onClearFailure}
-            onEnrich={onEnrich}
-            onRealize={onRealize}
-          />
-        ))}
+        {timelineItems.map(({ kind, item }) =>
+          kind === 'draft' ? (
+            <DraggableDraftCard
+              key={`draft-${item.id}`}
+              draft={item}
+              isSelected={item.id === selectedDraftId}
+              isMultiSelected={selectedDraftIdSet.has(item.id)}
+              onSelect={onSelectDraft}
+              onToggleSelection={onToggleSelection}
+              onRegenerate={onRegenerate}
+              onClearFailure={onClearFailure}
+              onEnrich={onEnrich}
+              onRealize={onRealize}
+            />
+          ) : (
+            <PostedContentQuickLook key={`posted-${item.id}`} post={item} compact={compact} />
+          ),
+        )}
 
         {Array.from({ length: ghosts }).map((_, index) => (
-          <div
+          <Skeleton
             key={`ghost-${dayId}-${platform.key}-${index}`}
-            className="h-16 animate-pulse rounded-lg border border-dashed border-border bg-muted/40"
+            className="h-16 border border-dashed border-border bg-muted/70"
           />
         ))}
 
@@ -162,30 +188,33 @@ export const PlannerCell = React.memo(function PlannerCell({
           >
             Soon
           </div>
-        ) : (
+        ) : canCreate ? (
           <AddPostMenu dayId={dayId} platformKey={platform.key} onCreatePost={onCreatePost}>
             <Button
               type="button"
               variant="outline"
-              size="icon-sm"
+              size={isEmptyCell ? 'sm' : 'icon-sm'}
               className={cn(
-                'mx-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150',
-                compact ? 'h-6 w-6' : 'h-7 w-7',
+                'mx-auto transition-opacity duration-150',
+                isEmptyCell
+                  ? 'w-full border-dashed text-muted-foreground'
+                  : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100',
               )}
               aria-label={`Add post for ${dayId} ${platform.label}`}
             >
-              <Plus className="size-3.5" />
+              <Plus data-icon={isEmptyCell ? 'inline-start' : undefined} />
+              {isEmptyCell ? 'Create' : null}
             </Button>
           </AddPostMenu>
-        )}
+        ) : null}
       </div>
     </div>
   );
 
-  if (isComingSoon) return cellSurface;
+  if (!canCreate) return cellSurface;
 
   // Right-click anywhere on the cell offers the same create actions as its "+"
-  // menu, preset to this day and platform. Coming-soon cells stay inert.
+  // menu, preset to this day and platform. Read-only and coming-soon cells stay inert.
   return (
     <AddPostContextMenu
       dayId={dayId}

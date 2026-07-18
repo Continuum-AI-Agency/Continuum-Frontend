@@ -1,6 +1,10 @@
 'use client';
 
-import { DEFAULT_REEL_VIDEO_BATCH_MAX, type PublishPlatform } from '@continuum/contracts';
+import {
+  DEFAULT_REEL_VIDEO_BATCH_MAX,
+  type OneShotPostResponse,
+  type PublishPlatform,
+} from '@continuum/contracts';
 import { Cross2Icon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
@@ -17,6 +21,7 @@ import { readSavedAccountSelection } from '@/lib/organic/account-selection';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
@@ -255,7 +260,6 @@ function OrganicCalendarWorkspaceInner({
     initialWeekStart: initialWeekStart ?? undefined,
     persistedWeekStartId,
   });
-  const [localGridViewMode, setLocalGridViewMode] = React.useState<'day' | 'week'>('week');
   const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false);
 
   // Apply initialView from URL search param on mount (once)
@@ -315,7 +319,10 @@ function OrganicCalendarWorkspaceInner({
 
   const {
     posts: postedContent,
+    isLoading: isLoadingPostedContent,
     isFetchingExternal: isFetchingPostedContent,
+    error: postedContentError,
+    retry: retryPostedContent,
     fetchExternalPosts,
   } = useCalendarPostedContent({
     brandProfileId,
@@ -371,6 +378,13 @@ function OrganicCalendarWorkspaceInner({
     next.setDate(weekStart.getDate() + 7);
     handleWeekChange(next);
   }, [handleWeekChange, weekStart]);
+
+  const handleToday = React.useCallback(() => {
+    const today = new Date();
+    clearAll();
+    setWeekStart(startOfWeek(today));
+    setFocusedDayId(formatDayId(today));
+  }, [clearAll, setFocusedDayId, setWeekStart]);
 
   const handlePreviousMonth = React.useCallback(() => {
     const prev = new Date(monthAnchorDate);
@@ -521,16 +535,15 @@ function OrganicCalendarWorkspaceInner({
     brandProfileId ?? '',
   );
 
-  // Only channels the brand can actually post to (or already has posts on) become rows.
-  // The not-yet-supported channels stay in the list but PlannerMatrix keeps them behind
-  // its own collapsed "inactive platforms" strip rather than four permanent empty rows.
+  // Rows represent either a creation channel or a platform with content worth viewing.
+  // Unsupported empty platforms stay out of the matrix so the week remains scan-friendly.
   const plannerPlatforms = React.useMemo(
-    () => buildPlannerPlatforms(activePlatforms, calendarDays, { includeComingSoon: true }),
-    [activePlatforms, calendarDays],
+    () => buildPlannerPlatforms(activePlatforms, calendarDays, postedContent),
+    [activePlatforms, calendarDays, postedContent],
   );
 
   const schedulableChannels = React.useMemo(
-    () => plannerPlatforms.filter((platform) => !platform.comingSoon).length,
+    () => plannerPlatforms.filter((platform) => platform.canCreate).length,
     [plannerPlatforms],
   );
 
@@ -649,6 +662,20 @@ function OrganicCalendarWorkspaceInner({
       });
     },
     [createQuickDraft, defaultCreateDayId],
+  );
+
+  const handleOneShotCreated = React.useCallback(
+    (response: OneShotPostResponse) => {
+      const created = mapOneShotPostResponseToCalendarDraft(response);
+      if (!created) {
+        void refetchCalendarDrafts();
+        return;
+      }
+
+      addDraft(created.dayId, created.draft);
+      handleSelect(created.draft.id, false);
+    },
+    [addDraft, handleSelect, refetchCalendarDrafts],
   );
 
   // One-click "Generate from this trend": open the composer pre-seeded with the
@@ -1035,14 +1062,17 @@ function OrganicCalendarWorkspaceInner({
                           <TimeGridCanvas
                             days={visibleWeekDays}
                             platforms={plannerPlatforms}
+                            postedContent={postedContent}
                             selectedDraftId={selectedId}
                             selectedDraftIds={selectedIds}
                             rangeTitle={weekTitle}
                             rangeSubtitle={weekSubtitle}
-                            viewMode={localGridViewMode}
-                            onViewModeChange={setLocalGridViewMode}
                             onPreviousWeek={handlePreviousWeek}
+                            onToday={handleToday}
                             onNextWeek={handleNextWeek}
+                            isLoadingPostedContent={isLoadingPostedContent}
+                            postedContentError={postedContentError}
+                            onRetryPostedContent={retryPostedContent}
                             onCreatePost={(context) =>
                               handleGoDraft({
                                 dayId: context?.dayId,
@@ -1158,6 +1188,7 @@ function OrganicCalendarWorkspaceInner({
                     trends={resolvedTrends}
                     platformAccountIds={platformAccountIds}
                     initialTrendIds={aiComposer.seedTrendIds}
+                    onCreated={handleOneShotCreated}
                   />
                 )}
               </motion.section>

@@ -3,6 +3,7 @@ import * as React from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -48,15 +49,19 @@ export const AddPostMenu = React.memo(function AddPostMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-52">
-        {MANUAL_ADD_POST_ACTIONS.map((action) => (
-          <DropdownMenuItem key={action.id} onSelect={() => select(action.options)}>
-            <AddPostActionBody action={action} />
+        <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>
+            <AddPostActionBody action={AI_ONE_SHOT_ACTION} />
           </DropdownMenuItem>
-        ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>
-          <AddPostActionBody action={AI_ONE_SHOT_ACTION} />
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          {MANUAL_ADD_POST_ACTIONS.map((action) => (
+            <DropdownMenuItem key={action.id} onSelect={() => select(action.options)}>
+              <AddPostActionBody action={action} />
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

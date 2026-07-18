@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import {
   organicAnalyticsScopeSchema,
   organicDateRangePresetSchema,
-} from "@/lib/schemas/organicMetrics";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+} from '@/lib/schemas/organicMetrics';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const requestSchema = z.object({
   brandId: z.string(),
@@ -28,6 +28,10 @@ type TikTokUserInfo = {
   open_id: string;
   display_name?: string;
   username?: string;
+  avatar_url?: string;
+  bio_description?: string;
+  profile_deep_link?: string;
+  is_verified?: boolean;
   follower_count?: number;
   following_count?: number;
   likes_count?: number;
@@ -47,7 +51,7 @@ type TikTokVideo = {
 };
 
 type TikTokEdgeResponse = {
-  platform: "tiktok";
+  platform: 'tiktok';
   externalAccountId: string;
   warnings?: string[];
   userInfo?: TikTokUserInfo | null;
@@ -57,7 +61,7 @@ type TikTokEdgeResponse = {
 function normalizeTikTokResponse(
   data: TikTokEdgeResponse,
   integrationAccountId: string,
-  rangePreset: string
+  rangePreset: string,
 ) {
   const userInfo = data.userInfo ?? null;
   const videos = data.videos ?? [];
@@ -73,7 +77,7 @@ function normalizeTikTokResponse(
     mediaUrl: v.cover_image_url ?? null,
     permalink: v.share_url,
     timestamp: v.create_time ? new Date(v.create_time * 1000).toISOString() : undefined,
-    mediaType: "VIDEO",
+    mediaType: 'VIDEO',
     metrics: {
       likes: v.like_count ?? 0,
       comments: v.comment_count ?? 0,
@@ -83,14 +87,24 @@ function normalizeTikTokResponse(
   }));
 
   return {
-    platform: "tiktok" as const,
+    platform: 'tiktok' as const,
     accountId: data.externalAccountId ?? integrationAccountId,
     integrationAccountId,
     range: {
       preset: rangePreset,
-      since: "",
-      until: "",
+      since: '',
+      until: '',
     },
+    accountProfile: userInfo
+      ? {
+          displayName: userInfo.display_name ?? null,
+          username: userInfo.username ?? null,
+          avatarUrl: userInfo.avatar_url ?? null,
+          bio: userInfo.bio_description ?? null,
+          profileUrl: userInfo.profile_deep_link ?? null,
+          isVerified: userInfo.is_verified ?? null,
+        }
+      : undefined,
     metrics: {
       subscribers: userInfo?.follower_count ?? 0,
       following: userInfo?.following_count ?? 0,
@@ -111,7 +125,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = requestSchema.safeParse(body);
@@ -122,34 +136,34 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !sessionData.session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const { data, error } = await supabase.functions.invoke("organic-reporting/tiktok", {
+    const { data, error } = await supabase.functions.invoke('organic-reporting/tiktok', {
       body: {
         brandId: parsed.data.brandId,
         integrationAccountId: parsed.data.integrationAccountId,
-        scope: "all",
+        scope: 'all',
         forceRefresh: parsed.data.forceRefresh ?? false,
       },
     });
 
     if (error) {
       return NextResponse.json(
-        { error: "Failed to fetch TikTok organic analytics from edge function" },
-        { status: 500 }
+        { error: 'Failed to fetch TikTok organic analytics from edge function' },
+        { status: 500 },
       );
     }
 
     const normalized = normalizeTikTokResponse(
       data as TikTokEdgeResponse,
       parsed.data.integrationAccountId,
-      parsed.data.range.preset
+      parsed.data.range.preset,
     );
     return NextResponse.json(normalized);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load TikTok organic analytics";
+    const message = err instanceof Error ? err.message : 'Failed to load TikTok organic analytics';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

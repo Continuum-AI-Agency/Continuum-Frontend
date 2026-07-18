@@ -63,6 +63,7 @@ import {
   type OrganicSessionMessage,
 } from '@/lib/organic/agent-sessions';
 import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
+import { mapPlacementToDraft } from '@/lib/organic/mapPlacementToDraft';
 import { useBrandPrompts } from '@/lib/organic/prompts-api';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { useCalendarStore } from '@/lib/organic/store';
@@ -83,7 +84,6 @@ import { deriveOrganicAnchors, milestonesForMessage } from './deriveOrganicAncho
 import { JobGrid } from './JobGrid';
 import { MediaLibrarySearchResults } from './MediaLibrarySearchResults';
 import { MessageActions } from './MessageActions';
-import { mapPlacementToDraft } from './mapPlacementToDraft';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
 import { OrganicThinkingPanel } from './OrganicThinkingPanel';
 import { ToolCallPipelineCards } from './PipelinePlacementGrid';

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import { buildPlannerPlatforms } from './planner-platforms';
-import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicPlatformTag } from './types';
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
+  OrganicPlatformTag,
+} from './types';
 
 function makeDraft(platform: OrganicPlatformTag): OrganicCalendarDraft {
   return {
@@ -55,11 +60,31 @@ describe('buildPlannerPlatforms', () => {
     const platforms = buildPlannerPlatforms([], [makeDay()]);
 
     expect(platformKeys(platforms)).toEqual(['instagram']);
+    expect(platforms[0]?.canCreate).toBe(true);
+  });
+
+  it('shows published platforms as read-only rows', () => {
+    const postedContent: OrganicCalendarPostedContent[] = [
+      {
+        id: 'youtube-post',
+        source: 'external',
+        platform: 'youtube',
+        timestamp: '2026-02-23T15:00:00.000Z',
+        dayId: '2026-02-23',
+        timeLabel: '3:00 PM',
+        title: 'Published video',
+      },
+    ];
+
+    const platforms = buildPlannerPlatforms([], [makeDay()], postedContent);
+
+    expect(platformKeys(platforms)).toEqual(['instagram', 'youtube']);
+    expect(platforms.find((platform) => platform.key === 'youtube')?.canCreate).toBe(false);
   });
 
   it('leaves the not-yet-supported channels out unless they are explicitly asked for', () => {
     const withoutComingSoon = buildPlannerPlatforms(['instagram'], [makeDay()]);
-    const withComingSoon = buildPlannerPlatforms(['instagram'], [makeDay()], {
+    const withComingSoon = buildPlannerPlatforms(['instagram'], [makeDay()], [], {
       includeComingSoon: true,
     });
 

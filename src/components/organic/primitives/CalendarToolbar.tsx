@@ -57,7 +57,9 @@ function StatusLegend() {
             <Badge variant="success">Published</Badge>
             <Badge variant="destructive">Failed</Badge>
           </div>
-          <p className="text-2xs text-muted-foreground">Every status is labeled; color is secondary.</p>
+          <p className="text-2xs text-muted-foreground">
+            Every status is labeled; color is secondary.
+          </p>
         </div>
       </PopoverContent>
     </Popover>
@@ -223,6 +225,8 @@ export function CalendarToolbar({
   // draftsCount already counts placeholder slots, so an empty calendar is the whole
   // condition for the planning note.
   const showPlanningNote = !isGenerating && draftsCount === 0;
+  const scopeLabel =
+    viewMode === 'week' ? 'This week' : viewMode === 'month' ? 'This month' : 'Visible range';
 
   return (
     <ContextMenu>
@@ -275,17 +279,19 @@ export function CalendarToolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                    This week · {selectedTrendCount}
+                    {scopeLabel} · {selectedTrendCount}
                     {typeof maxTrendSelections === 'number' ? `/${maxTrendSelections}` : ''} trends
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>Trend references selected for the current planning week</TooltipContent>
+                <TooltipContent>
+                  Trend references selected for the current planning week
+                </TooltipContent>
               </Tooltip>
               {postedContentCount > 0 ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge variant="outline" className="text-2xs uppercase tracking-wide">
-                      This week · {postedContentCount} posted
+                      {scopeLabel} · {postedContentCount} posted
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>Published posts loaded into this planning week</TooltipContent>
@@ -327,11 +333,7 @@ export function CalendarToolbar({
               <Separator orientation="vertical" className="h-5" />
               {isGenerating ? (
                 <DisabledControl hint={addHint}>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled
-                  >
+                  <Button type="button" size="sm" disabled>
                     <PlusIcon className="animate-pulse" data-icon="inline-start" />
                     Create content
                   </Button>

@@ -14,6 +14,7 @@ import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
   OrganicPlatformTag,
   OrganicSeedDragPayload,
 } from './types';
@@ -21,6 +22,7 @@ import type {
 type PlannerMatrixProps = {
   days: OrganicCalendarDay[];
   platforms: PlannerPlatform[];
+  postedContent: OrganicCalendarPostedContent[];
   selectedDraftId: string | null;
   selectedDraftIds: string[];
   todayId: string;
@@ -40,6 +42,7 @@ type PlannerMatrixProps = {
 };
 
 const EMPTY_DRAFTS: OrganicCalendarDraft[] = [];
+const EMPTY_POSTED_CONTENT: OrganicCalendarPostedContent[] = [];
 
 function DayHeader({
   dayId,
@@ -62,7 +65,7 @@ function DayHeader({
     <AddPostContextMenu dayId={dayId} onCreatePost={onCreatePost}>
       <div
         className={cn(
-          'sticky top-0 z-20 border-r border-b border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0',
+          'sticky top-0 z-20 snap-start border-r border-b border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0',
           isToday ? 'bg-primary/[0.05]' : 'bg-background/95',
         )}
       >
@@ -84,6 +87,7 @@ function DayHeader({
 export function PlannerMatrix({
   days,
   platforms,
+  postedContent,
   selectedDraftId,
   selectedDraftIds,
   todayId,
@@ -106,7 +110,8 @@ export function PlannerMatrix({
     [platforms],
   );
   const visiblePlatforms = React.useMemo(
-    () => (showInactivePlatforms ? platforms : platforms.filter((platform) => !platform.comingSoon)),
+    () =>
+      showInactivePlatforms ? platforms : platforms.filter((platform) => !platform.comingSoon),
     [platforms, showInactivePlatforms],
   );
 
@@ -128,20 +133,12 @@ export function PlannerMatrix({
           return;
         }
 
-        const platforms = new Set(
-          draft.platforms.filter(
-            (platform): platform is OrganicPlatformTag =>
-              platform === 'instagram' || platform === 'linkedin',
-          ),
-        );
-
-        platforms.forEach((platform) => {
+        new Set(draft.platforms).forEach((platform) => {
           byPlatform[platform].push(draft);
         });
       });
 
-      const schedulablePlatforms: OrganicPlatformTag[] = ['instagram', 'linkedin'];
-      schedulablePlatforms.forEach((platform) => {
+      (Object.keys(byPlatform) as OrganicPlatformTag[]).forEach((platform) => {
         const sorted = [...byPlatform[platform]].sort((a, b) => {
           const minutesA = parseTimeLabelToMinutes(a.timeLabel) ?? 0;
           const minutesB = parseTimeLabelToMinutes(b.timeLabel) ?? 0;
@@ -154,8 +151,19 @@ export function PlannerMatrix({
     return map;
   }, [days]);
 
+  const postedByCell = React.useMemo(() => {
+    const map = new Map<string, OrganicCalendarPostedContent[]>();
+    postedContent.forEach((post) => {
+      const key = `${post.dayId}::${post.platform}`;
+      const entries = map.get(key) ?? [];
+      entries.push(post);
+      map.set(key, entries);
+    });
+    return map;
+  }, [postedContent]);
+
   return (
-    <div className="relative min-h-0 flex-1 overflow-auto rounded-lg ring-1 ring-border/45 bg-background/90">
+    <div className="relative min-h-0 flex-1 snap-x snap-proximity overflow-auto rounded-lg bg-background/90 ring-1 ring-border/45">
       <AnimatePresence>
         {gridStatus === 'running' ? (
           <motion.div
@@ -178,8 +186,8 @@ export function PlannerMatrix({
           </motion.div>
         ) : null}
       </AnimatePresence>
-      <div className="min-w-[880px]">
-        <div className="grid grid-cols-[96px_repeat(7,minmax(124px,1fr))]">
+      <div className="min-w-[58rem]">
+        <div className="grid grid-cols-[6rem_repeat(7,minmax(7.5rem,1fr))]">
           <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
             Platform
           </div>
@@ -228,6 +236,10 @@ export function PlannerMatrix({
                   >
                     soon
                   </Badge>
+                ) : !platform.canCreate ? (
+                  <Badge variant="muted" className="h-4 px-1 text-3xs">
+                    view
+                  </Badge>
                 ) : null}
               </div>
 
@@ -239,6 +251,7 @@ export function PlannerMatrix({
                       dayId={day.id}
                       platform={platform}
                       drafts={[]}
+                      postedContent={[]}
                       selectedDraftId={selectedDraftId}
                       selectedDraftIdSet={selectedDraftIdSet}
                       showGhosts={false}
@@ -261,6 +274,8 @@ export function PlannerMatrix({
                 const schedulablePlatformKey = platform.key as OrganicPlatformTag;
                 const cellDrafts =
                   draftsByCell.get(`${day.id}::${schedulablePlatformKey}`) ?? EMPTY_DRAFTS;
+                const cellPostedContent =
+                  postedByCell.get(`${day.id}::${schedulablePlatformKey}`) ?? EMPTY_POSTED_CONTENT;
 
                 return (
                   <PlannerCell
@@ -268,6 +283,7 @@ export function PlannerMatrix({
                     dayId={day.id}
                     platform={platform}
                     drafts={cellDrafts}
+                    postedContent={cellPostedContent}
                     selectedDraftId={selectedDraftId}
                     selectedDraftIdSet={selectedDraftIdSet}
                     showGhosts={platformIndex === 0}

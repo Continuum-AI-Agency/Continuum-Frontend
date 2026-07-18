@@ -56,15 +56,15 @@ export const AddPostContextMenu = React.memo(function AddPostContextMenu({
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
         <ContextMenuLabel className="text-xs text-muted-foreground">{heading}</ContextMenuLabel>
+        <ContextMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>
+          <AddPostActionBody action={AI_ONE_SHOT_ACTION} />
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         {MANUAL_ADD_POST_ACTIONS.map((action) => (
           <ContextMenuItem key={action.id} onSelect={() => select(action.options)}>
             <AddPostActionBody action={action} />
           </ContextMenuItem>
         ))}
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => select(AI_ONE_SHOT_ACTION.options)}>
-          <AddPostActionBody action={AI_ONE_SHOT_ACTION} />
-        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

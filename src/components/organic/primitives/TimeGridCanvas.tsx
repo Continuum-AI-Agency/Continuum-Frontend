@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatDayId } from './calendar-utils';
 import { PlannerHeader } from './PlannerHeader';
 import { PlannerMatrix } from './PlannerMatrix';
@@ -11,19 +14,27 @@ import type {
   PlannerPlatform,
   PlannerPlatformKey,
 } from './planner-platforms';
-import type { OrganicCalendarDay, OrganicPlatformTag, OrganicSeedDragPayload } from './types';
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarPostedContent,
+  OrganicPlatformTag,
+  OrganicSeedDragPayload,
+} from './types';
 
 type TimeGridCanvasProps = {
   days: OrganicCalendarDay[];
   platforms: PlannerPlatform[];
+  postedContent: OrganicCalendarPostedContent[];
   selectedDraftId: string | null;
   selectedDraftIds: string[];
   rangeTitle: string;
   rangeSubtitle?: string;
-  viewMode: 'day' | 'week';
-  onViewModeChange: (mode: 'day' | 'week') => void;
   onPreviousWeek: () => void;
+  onToday: () => void;
   onNextWeek: () => void;
+  isLoadingPostedContent?: boolean;
+  postedContentError?: string | null;
+  onRetryPostedContent?: () => void;
   onCreatePost: (options?: {
     dayId?: string;
     platform?: PlannerPlatformKey;
@@ -48,14 +59,17 @@ type TimeGridCanvasProps = {
 export function TimeGridCanvas({
   days,
   platforms,
+  postedContent,
   selectedDraftId,
   selectedDraftIds,
   rangeTitle,
   rangeSubtitle,
-  viewMode,
-  onViewModeChange,
   onPreviousWeek,
+  onToday,
   onNextWeek,
+  isLoadingPostedContent = false,
+  postedContentError,
+  onRetryPostedContent,
   onCreatePost,
   onSelectDraft,
   onToggleSelection,
@@ -72,15 +86,37 @@ export function TimeGridCanvas({
       <PlannerHeader
         title={rangeTitle}
         subtitle={rangeSubtitle}
-        viewMode={viewMode}
-        onViewModeChange={onViewModeChange}
         onPreviousWeek={onPreviousWeek}
+        onToday={onToday}
         onNextWeek={onNextWeek}
       />
+
+      {isLoadingPostedContent ? (
+        <div className="flex items-center gap-2 px-1" role="status">
+          <span className="sr-only">Loading published posts</span>
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+      ) : null}
+
+      {postedContentError ? (
+        <Alert variant="destructive" className="px-3 py-2">
+          <AlertTitle>Posted content could not be loaded</AlertTitle>
+          <AlertDescription>
+            <span>{postedContentError}</span>
+            {onRetryPostedContent ? (
+              <Button type="button" size="xs" variant="outline" onClick={onRetryPostedContent}>
+                Try again
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <PlannerMatrix
         days={days}
         platforms={platforms}
+        postedContent={postedContent}
         selectedDraftId={selectedDraftId}
         selectedDraftIds={selectedDraftIds}
         todayId={todayId}

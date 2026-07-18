@@ -21,6 +21,7 @@ import { AddPostMenu } from './AddPostMenu';
 import { formatDayId } from './calendar-utils';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { statusFrameClasses } from './draft-card-styles';
+import { PostedContentPreview } from './PostedContentQuickLook';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import type {
   OrganicCalendarDay,
@@ -155,62 +156,6 @@ function DraftChip({
   );
 }
 
-function PostedContentHover({ post }: { post: OrganicCalendarPostedContent }) {
-  const mediaUrl = post.thumbnailUrl ?? post.mediaUrl;
-
-  return (
-    <div className="w-[272px] overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/20">
-      {mediaUrl ? (
-        <div className="aspect-square overflow-hidden bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl}
-            alt={post.title}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        </div>
-      ) : null}
-      <div className="space-y-2 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5">
-            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-              Posted
-            </span>
-            {isCarouselMediaType(post.mediaType) ? (
-              <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <GalleryHorizontalEnd className="size-3" />
-                Carousel
-              </span>
-            ) : null}
-          </span>
-          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-            {post.platform} {post.timeLabel}
-          </span>
-        </div>
-        <p className="line-clamp-2 text-sm font-semibold leading-tight text-foreground">
-          {post.title}
-        </p>
-        {post.caption ? (
-          <p className="line-clamp-5 text-xs leading-relaxed text-muted-foreground">
-            {post.caption}
-          </p>
-        ) : null}
-        {post.permalink ? (
-          <a
-            href={post.permalink}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex text-xs font-medium text-primary hover:underline"
-          >
-            Open post
-          </a>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
   const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? 'bg-emerald-600/80 text-white';
   const isCarousel = isCarouselMediaType(post.mediaType);
@@ -239,7 +184,7 @@ function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
         className="p-0 border-none bg-transparent shadow-none"
         avoidCollisions
       >
-        <PostedContentHover post={post} />
+        <PostedContentPreview post={post} />
       </HoverCardContent>
     </HoverCard>
   );

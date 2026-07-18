@@ -33,10 +33,13 @@ type PublishedPostRow = {
   content_snapshot: unknown;
   created_at: string;
   draft_id: string | null;
-  ig_user_id: string;
-  instagram_post_id: string;
+  ig_user_id: string | null;
+  instagram_post_id: string | null;
   media_urls: unknown;
   permalink: string | null;
+  platform: string;
+  platform_account_id: string;
+  platform_post_id: string;
   post_type: string;
   published_at: string;
 };
@@ -126,12 +129,14 @@ function mapPublishedPost(
   const mediaUrl =
     freshThumbnailUrl ?? readMediaUrl(row.media_urls) ?? readMediaUrl(snapshot.mediaUrls);
   const { dayId, timeLabel } = mapTimestampToPostFields(timestamp);
+  const platform = normalizeCalendarPlatform(row.platform);
 
   return {
-    id: `published:${row.instagram_post_id}`,
+    id: `published:${platform}:${row.platform_post_id}`,
     source: 'published_posts',
-    platform: 'instagram',
-    externalPostId: row.instagram_post_id,
+    platform,
+    integrationAccountId: row.platform_account_id,
+    externalPostId: row.platform_post_id,
     timestamp,
     dayId,
     timeLabel,
@@ -316,7 +321,7 @@ export async function POST(request: Request) {
   const { data, error } = await organicSchema
     .from('organic_published_posts')
     .select(
-      'brand_id, caption, content_snapshot, created_at, draft_id, ig_user_id, instagram_post_id, media_urls, permalink, post_type, published_at',
+      'brand_id, caption, content_snapshot, created_at, draft_id, ig_user_id, instagram_post_id, media_urls, permalink, platform, platform_account_id, platform_post_id, post_type, published_at',
     )
     .eq('brand_id', parsed.data.brandId)
     .or(
