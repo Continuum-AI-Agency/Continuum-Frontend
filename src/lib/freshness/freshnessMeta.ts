@@ -6,13 +6,13 @@
 
 import {
   deriveFreshnessMeta,
-  freshnessFromDiagnosticsMeta,
   type FreshnessInput,
   type FreshnessMeta,
-} from "@continuum/contracts";
+  freshnessFromDiagnosticsMeta,
+} from '@continuum/contracts';
 
-export type { FreshnessMeta, FreshnessStatus } from "@continuum/contracts";
-export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from "@continuum/contracts";
+export type { FreshnessMeta, FreshnessStatus } from '@continuum/contracts';
+export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from '@continuum/contracts';
 
 // The common surface case: a card knows only its own last-synced timestamp
 // (e.g. a competitor row's last_resolved_at, a dashboard module's synced_at).
@@ -20,7 +20,22 @@ export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from "@continuum/co
 // optional so the same helper covers the richer surfaces too.
 export function freshnessFromSyncedAt(
   lastSyncedAt: string | null | undefined,
-  extra: Omit<FreshnessInput, "lastSyncedAt"> = {},
+  extra: Omit<FreshnessInput, 'lastSyncedAt'> = {},
 ): FreshnessMeta {
   return deriveFreshnessMeta({ ...extra, lastSyncedAt: lastSyncedAt ?? null });
+}
+
+// Human-readable "how long ago" for a cache age in seconds. Shared so every
+// freshness surface renders the same phrasing ("just now", "5m ago", "3h ago",
+// "2d ago") instead of re-deriving it per card. Returns null when the age is
+// unknown so callers can hide the label rather than print a placeholder.
+export function formatFreshnessAge(cacheAgeSeconds: number | null): string | null {
+  if (cacheAgeSeconds === null) return null;
+  if (cacheAgeSeconds < 60) return 'just now';
+  const minutes = Math.floor(cacheAgeSeconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
