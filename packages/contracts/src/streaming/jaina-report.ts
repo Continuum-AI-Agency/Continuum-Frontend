@@ -20,7 +20,7 @@
  * subpaths.
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Shared item schemas referenced by multiple block variants
@@ -31,7 +31,7 @@ export const insightItemSchema = z.object({
   title: z.string().optional(),
   text: z.string(),
   impact: z.string().nullable().default(null),
-  severity: z.enum(["positive", "neutral", "watch", "risk"]).default("neutral"),
+  severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
   confidence: z.string().nullable().default(null),
   evidence: z.array(z.string()).default([]),
 });
@@ -42,7 +42,7 @@ export const citationSchema = z.object({
   id: z.string().min(1),
   tool: z.string().min(1),
   cache_key: z.string().nullable().default(null),
-  label: z.string().default(""),
+  label: z.string().default(''),
 });
 export type Citation = z.infer<typeof citationSchema>;
 
@@ -51,16 +51,16 @@ export type Citation = z.infer<typeof citationSchema>;
 // ---------------------------------------------------------------------------
 
 export const blockCategorySchema = z.enum([
-  "narrative",
-  "metric_grid",
-  "chart",
-  "data_table",
-  "insight_list",
-  "comparison",
+  'narrative',
+  'metric_grid',
+  'chart',
+  'data_table',
+  'insight_list',
+  'comparison',
 ]);
 export type BlockCategory = z.infer<typeof blockCategorySchema>;
 
-export const blockPrioritySchema = z.enum(["primary", "secondary", "supplementary"]);
+export const blockPrioritySchema = z.enum(['primary', 'secondary', 'supplementary']);
 export type BlockPriority = z.infer<typeof blockPrioritySchema>;
 
 // Exported so the Backend's local Gemini-synthesis schemas can extend the same
@@ -70,7 +70,7 @@ export const blockBaseSchema = z.object({
   category: blockCategorySchema,
   scope: z.string().min(1),
   title: z.string().min(1),
-  priority: blockPrioritySchema.default("secondary"),
+  priority: blockPrioritySchema.default('secondary'),
 });
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ export const blockBaseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const narrativeBlockSchema = blockBaseSchema.extend({
-  category: z.literal("narrative"),
+  category: z.literal('narrative'),
   body: z.string().min(1),
   highlights: z.array(insightItemSchema).default([]),
   citations: z.array(citationSchema).default([]),
@@ -93,16 +93,23 @@ export const metricItemSchema = z.object({
   label: z.string(),
   value: z.union([z.number(), z.string()]),
   unit: z.string().nullable().default(null),
-  format: z.enum(["number", "currency", "percent", "multiplier"]).default("number"),
+  format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
   change: z.number().nullable().default(null),
-  change_direction: z.enum(["up", "down", "flat"]).nullable().default(null),
-  severity: z.enum(["positive", "neutral", "watch", "risk"]).default("neutral"),
+  change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
+  severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
 });
 export type MetricItem = z.infer<typeof metricItemSchema>;
 
 export const metricGridBlockSchema = blockBaseSchema.extend({
-  category: z.literal("metric_grid"),
+  category: z.literal('metric_grid'),
   metrics: z.array(metricItemSchema).min(1),
+  /**
+   * When set, the grid was materialized server-side from a registered
+   * `scalar_group` dataset (values verbatim from tool output — never
+   * model-authored). Null/absent = legacy hand-authored grid. Mirrors the
+   * chart/data_table harness field; nullable for full FE backward compatibility.
+   */
+  dataset_id: z.string().nullable().default(null),
 });
 export type MetricGridBlock = z.infer<typeof metricGridBlockSchema>;
 
@@ -111,13 +118,13 @@ export type MetricGridBlock = z.infer<typeof metricGridBlockSchema>;
 // ---------------------------------------------------------------------------
 
 export const chartTypeSchema = z.enum([
-  "bar",
-  "line",
-  "area",
-  "pie",
-  "doughnut",
-  "stacked_bar",
-  "radar",
+  'bar',
+  'line',
+  'area',
+  'pie',
+  'doughnut',
+  'stacked_bar',
+  'radar',
 ]);
 export type ChartType = z.infer<typeof chartTypeSchema>;
 
@@ -133,7 +140,7 @@ export type ChartSeriesConfig = z.infer<typeof chartSeriesConfigSchema>;
 // `chartBlockSchema` below; composing on this base then re-parsing against
 // `chartBlockSchema` re-applies them.
 export const chartBlockBaseSchema = blockBaseSchema.extend({
-  category: z.literal("chart"),
+  category: z.literal('chart'),
   chart_type: chartTypeSchema,
   data: z.array(z.record(z.string(), z.union([z.string(), z.number()]))).min(1),
   chart_config: z.record(z.string(), chartSeriesConfigSchema),
@@ -141,7 +148,7 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
   value_key: z.string().nullable().default(null),
   x_axis_label: z.string().nullable().default(null),
   y_axis_label: z.string().nullable().default(null),
-  value_format: z.enum(["number", "currency", "percent", "multiplier"]).default("number"),
+  value_format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
   annotation: z.string().nullable().default(null),
   description: z.string().nullable().default(null),
   // Data-harness provenance: when set, `data` was deterministically materialized
@@ -168,20 +175,18 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
  * Shared by `chartBlockSchema` and the union's chart branch so both enforce the
  * same rules without re-parsing.
  */
-const SLICE_KEYED_CHART_TYPES = new Set(["pie", "doughnut"]);
+const SLICE_KEYED_CHART_TYPES = new Set(['pie', 'doughnut']);
 
 const addChartInvariantIssues = (
   block: z.infer<typeof chartBlockBaseSchema>,
   ctx: z.RefinementCtx,
 ): void => {
   const rows = block.data;
-  const missingCategory = rows.some(
-    (row) => !Object.prototype.hasOwnProperty.call(row, block.category_key),
-  );
+  const missingCategory = rows.some((row) => !Object.hasOwn(row, block.category_key));
   if (missingCategory) {
     ctx.addIssue({
-      code: "custom",
-      path: ["data"],
+      code: 'custom',
+      path: ['data'],
       message: `category_key "${block.category_key}" is missing from one or more data rows`,
     });
   }
@@ -190,13 +195,11 @@ const addChartInvariantIssues = (
   if (SLICE_KEYED_CHART_TYPES.has(block.chart_type)) return;
 
   for (const key of Object.keys(block.chart_config)) {
-    const presentInAnyRow = rows.some((row) =>
-      Object.prototype.hasOwnProperty.call(row, key),
-    );
+    const presentInAnyRow = rows.some((row) => Object.hasOwn(row, key));
     if (!presentInAnyRow) {
       ctx.addIssue({
-        code: "custom",
-        path: ["chart_config", key],
+        code: 'custom',
+        path: ['chart_config', key],
         message: `chart_config series key "${key}" never appears in data rows`,
       });
     }
@@ -215,13 +218,15 @@ export const tableColumnSchema = z.object({
   label: z.string(),
   // "creative" renders a lazy-loaded creative preview cell (hover) using the
   // matching `row_meta[i].creative` ref; all other formats render as values.
-  format: z.enum(["text", "number", "currency", "percent", "multiplier", "creative"]).default("text"),
-  align: z.enum(["left", "center", "right"]).default("left"),
+  format: z
+    .enum(['text', 'number', 'currency', 'percent', 'multiplier', 'creative'])
+    .default('text'),
+  align: z.enum(['left', 'center', 'right']).default('left'),
 });
 export type TableColumn = z.infer<typeof tableColumnSchema>;
 
 export const dataTableBlockSchema = blockBaseSchema.extend({
-  category: z.literal("data_table"),
+  category: z.literal('data_table'),
   columns: z.array(tableColumnSchema).min(1),
   rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.null()]))).min(1),
   notes: z.string().nullable().default(null),
@@ -237,19 +242,19 @@ export type DataTableBlock = z.infer<typeof dataTableBlockSchema>;
 // ---------------------------------------------------------------------------
 
 export const insightListItemSchema = z.object({
-  item_type: z.enum(["insight", "action", "recommendation", "question"]),
+  item_type: z.enum(['insight', 'action', 'recommendation', 'question']),
   title: z.string(),
   summary: z.string(),
   rationale: z.string().min(1),
   impact: z.string().min(1),
-  severity: z.enum(["positive", "neutral", "watch", "risk"]).default("neutral"),
-  priority: z.string().default("now"),
+  severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
+  priority: z.string().default('now'),
   cite_ids: z.array(z.string()).default([]),
 });
 export type InsightListItem = z.infer<typeof insightListItemSchema>;
 
 export const insightListBlockSchema = blockBaseSchema.extend({
-  category: z.literal("insight_list"),
+  category: z.literal('insight_list'),
   items: z.array(insightListItemSchema).min(1),
   citations: z.array(citationSchema).default([]),
 });
@@ -264,16 +269,16 @@ export const comparisonPairSchema = z.object({
   before: z.union([z.number(), z.string()]),
   after: z.union([z.number(), z.string()]),
   unit: z.string().nullable().default(null),
-  format: z.enum(["number", "currency", "percent", "multiplier"]).default("number"),
+  format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
   change: z.number().nullable().default(null),
-  change_direction: z.enum(["up", "down", "flat"]).nullable().default(null),
-  severity: z.enum(["positive", "neutral", "watch", "risk"]).default("neutral"),
+  change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
+  severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
   cite_ids: z.array(z.string()).default([]),
 });
 export type ComparisonPair = z.infer<typeof comparisonPairSchema>;
 
 export const comparisonBlockSchema = blockBaseSchema.extend({
-  category: z.literal("comparison"),
+  category: z.literal('comparison'),
   before_label: z.string(),
   after_label: z.string(),
   pairs: z.array(comparisonPairSchema).min(1),
@@ -291,7 +296,7 @@ export type ComparisonBlock = z.infer<typeof comparisonBlockSchema>;
 // discriminates AND enforces chart renderability.
 // ---------------------------------------------------------------------------
 
-const checkpointBlockV2UnionSchema = z.discriminatedUnion("category", [
+const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockSchema,
   metricGridBlockSchema,
   chartBlockBaseSchema,
@@ -301,7 +306,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion("category", [
 ]);
 
 export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
-  if (block.category === "chart") {
+  if (block.category === 'chart') {
     addChartInvariantIssues(block, ctx);
   }
 });
@@ -321,30 +326,28 @@ export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
 // Accepts any object carrying a valid V2 `category`; all other fields pass
 // through unchecked. Legacy/non-V2 categories are excluded so they still fall
 // to the Frontend's legacy parse path.
-export const checkpointBlockV2LenientSchema = z
-  .object({ category: blockCategorySchema })
-  .loose();
+export const checkpointBlockV2LenientSchema = z.object({ category: blockCategorySchema }).loose();
 export type CheckpointBlockV2Lenient = z.infer<typeof checkpointBlockV2LenientSchema>;
 
 const asBlockRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
+  typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 
 const blockStringOrFallback = (value: unknown, fallback: string): string =>
-  typeof value === "string" && value.trim().length > 0 ? value : fallback;
+  typeof value === 'string' && value.trim().length > 0 ? value : fallback;
 
 // Fail-visible degradation: turn any block into a narrative placeholder so a
 // section that was produced but cannot render is surfaced, not silently lost.
 export const degradeToNarrativeBlockV2 = (block: unknown): NarrativeBlock => {
   const rec = asBlockRecord(block);
-  const category = typeof rec.category === "string" ? rec.category : "content";
+  const category = typeof rec.category === 'string' ? rec.category : 'content';
   return narrativeBlockSchema.parse({
-    block_id: blockStringOrFallback(rec.block_id, "block_degraded"),
-    category: "narrative",
-    scope: blockStringOrFallback(rec.scope, "account"),
-    title: blockStringOrFallback(rec.title, "Section unavailable"),
-    priority: "supplementary",
+    block_id: blockStringOrFallback(rec.block_id, 'block_degraded'),
+    category: 'narrative',
+    scope: blockStringOrFallback(rec.scope, 'account'),
+    title: blockStringOrFallback(rec.title, 'Section unavailable'),
+    priority: 'supplementary',
     body: `This ${category} block could not be rendered.`,
     highlights: [],
   });
@@ -355,7 +358,7 @@ export const degradeToNarrativeBlockV2 = (block: unknown): NarrativeBlock => {
 // ---------------------------------------------------------------------------
 
 export const checkpointMetaSchema = z.object({
-  schema_version: z.literal("2"),
+  schema_version: z.literal('2'),
   block_count: z.number(),
   has_charts: z.boolean(),
   has_media: z.boolean(),
