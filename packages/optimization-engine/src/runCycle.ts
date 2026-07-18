@@ -1,0 +1,159 @@
+// ---------------------------------------------------------------------------
+// runCycle() — the full optimization cycle, end to end:
+//   pacing -> classify -> triggers (recommendations + starve) -> reallocate
+// The mode shapes the budget boundary:
+//   balanced   — spend the planned total exactly (overflow => breach best)
+//   efficiency — planned total is a CEILING; underspend if it doesn't fit
+//   scale      — may grow up to maxBudget while the portfolio meets target
+// ---------------------------------------------------------------------------
+
+import { classifyPortfolio } from './classify';
+import { portfolioConfidence } from './confidence';
+import type { DeepPartial, EngineConfig } from './config';
+import { resolveConfig } from './config';
+import { reallocate } from './engine';
+import { evaluateCreative } from './creative';
+import { evaluateFatigue } from './fatigue';
+import { sum } from './internal/math';
+import { computePacing } from './pacing';
+import { kpiEvents } from './scoring';
+import { evaluateTriggers } from './triggers';
+import type {
+  AdSetSnapshot,
+  CycleResult,
+  OptimizationMode,
+  OptimizationObjective,
+  PacingResult,
+  PacingState,
+} from './types';
+
+export type CycleOptions = {
+  mode?: OptimizationMode; // default 'balanced'
+  pacing?: PacingState; // if given, pacing decides the daily total
+  total?: number; // explicit total when no pacing state is provided
+  maxBudget?: number; // ceiling for 'scale' mode
+  weeklyGrowthPct?: number; // step for 'scale' mode (default 0.05)
+  objective?: OptimizationObjective; // selects the calibrated profile + KPI
+  /** Prior smoothed composite per ad set id (EWMA state from the last cycle). */
+  priorComposites?: Record<string, number>;
+  config?: DeepPartial<EngineConfig>;
+};
+
+export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
+  const mode: OptimizationMode = opts.mode ?? 'balanced';
+  const configOverride: DeepPartial<EngineConfig> = { objective: opts.objective, ...opts.config };
+  const baseCfg = resolveConfig(configOverride);
+
+  // --- Pacing: the planned daily total ----------------------------------
+  let pacing: PacingResult;
+  let plannedTotal: number;
+  if (opts.pacing) {
+    pacing = computePacing(opts.pacing);
+    plannedTotal = pacing.dailyTotal;
+  } else {
+    plannedTotal = opts.total ?? sum(snapshots.map((s) => s.currentBudget));
+    pacing = {
+      dailyTotal: plannedTotal,
+      idealCumulative: 0,
+      pacingRatio: 1,
+      status: 'on_track',
+      note: 'No pacing state: using the provided total.',
+    };
+  }
+
+  // --- One currency per pool --------------------------------------------
+  // The reallocation ranks ad sets on events-per-dollar. That comparison is only
+  // meaningful when the "event" is the same thing for every member: a $39 messaging
+  // conversation and a $256 lead are not interchangeable, and an ad set buying the
+  // cheaper event wins on "efficiency" by definition and drains the pool.
+  //
+  // So an ad set whose DECLARED goal resolves to a different currency than the portfolio
+  // prices is frozen, not compared. This runs BEFORE the triggers on purpose — unlike the
+  // no_conversions abstain below, where surfacing a pause rec still helps a human. Here we
+  // cannot judge the ad set at all in this portfolio's currency, and a confident pause
+  // recommendation computed in the wrong one is worse than silence.
+  //
+  // The fix is a portfolio that prices what the ad set actually buys; the onboarding
+  // suggest step proposes one portfolio per currency for exactly this reason.
+  const currencyChecked = snapshots.map((s) => {
+    if (!baseCfg.kpiField || !s.kpiField || s.freeze) return s;
+    if (s.kpiField === baseCfg.kpiField) return s;
+    return { ...s, freeze: true as const, freezeReason: 'kpi_mismatch' as const };
+  });
+
+  // --- Classify, then run triggers, then mark starved -------------------
+  const classified = classifyPortfolio(currencyChecked, baseCfg);
+  const { recommendations: pauseRecs, starveIds } = evaluateTriggers(classified, baseCfg);
+  // Fatigue is independent of pauses: it never starves, and skips ad sets a pause
+  // trigger already flagged (avoid double-noise on the same ad set).
+  const fatigueRecs = evaluateFatigue(classified, baseCfg, starveIds);
+
+  // Stage C — the creative triggers. An ad set is a budget and an audience; the thing that
+  // works or doesn't is the creative inside it. Two creatives in the SAME ad set (same
+  // audience, same budget) measured 2.22x apart on cost per result — a gap no budget
+  // decision can close, because the money was already in the right ad set and on the wrong
+  // ad. Skips ad sets a pause trigger already condemned: no point proposing a creative
+  // experiment inside a set we are about to shut off.
+  const creative = evaluateCreative(classified, baseCfg, starveIds);
+  const recommendations = [...pauseRecs, ...fatigueRecs, ...creative.recommendations];
+
+  const starved = classified.map((s) => {
+    const next =
+      starveIds.has(s.id) && s.status !== 'frozen' ? { ...s, status: 'starved' as const } : s;
+    // Withhold the RAISE (not the budget) from an ad set whose spend sits on a creative we
+    // have already judged. Implemented as an upper bound of currentBudget in the solver, so
+    // conservation still holds and the headroom flows to ad sets that can use it.
+    return creative.noRaiseIds.has(next.id) ? { ...next, noRaise: true as const } : next;
+  });
+
+  // Abstain (D5): an established ACTIVE ad set that is spending but has ZERO KPI
+  // events in the decision window has no signal to score on — hold its budget
+  // (freeze) rather than let the velocity floor bleed it down cycle after cycle on
+  // a measurement it can't trust. Runs AFTER triggers, so any pause/fatigue rec for
+  // it is still surfaced for human review; only 'active' items abstain — a
+  // trigger-starved item is a decided down-move, not an abstain.
+  //
+  // This now means what it says. Before the currency work above, an ad set buying an
+  // event the engine had no field for (messaging conversations, thruplays, engagement)
+  // counted ZERO events no matter how many it actually produced, and landed here — so
+  // "no conversions" was reported about ad sets that were converting fine, and the ones
+  // doing most of an account's work were the ones held. A missing measurement is not a
+  // measurement of zero. Mismatched currencies are now frozen as `kpi_mismatch` above,
+  // which leaves this abstain to mean only what it was meant to: we counted the right
+  // event, and there were none.
+  const prepared = starved.map((s) => {
+    if (s.status !== 'active' || s.freeze) return s;
+    if (s.windows.d14.spend <= 0 || kpiEvents(s.windows.d14, baseCfg) > 0) return s;
+    return { ...s, freeze: true as const, freezeReason: 'no_conversions' as const };
+  });
+
+  // --- Mode shapes the boundary -----------------------------------------
+  let total = plannedTotal;
+  let overflowMode: EngineConfig['overflowMode'] = 'breach_best';
+
+  if (mode === 'efficiency') {
+    // planned total is a ceiling; never force-spend on bad inventory
+    overflowMode = 'underspend';
+  } else if (mode === 'scale') {
+    overflowMode = 'breach_best';
+    const totSpend = sum(prepared.map((s) => s.windows.d14.spend));
+    const totEvents = sum(prepared.map((s) => kpiEvents(s.windows.d14, baseCfg)));
+    const portfolioCpp = totEvents > 0 ? totSpend / totEvents : Infinity;
+    const meetsTarget = portfolioCpp <= baseCfg.cpaTarget;
+    if (meetsTarget && opts.maxBudget) {
+      const step = 1 + (opts.weeklyGrowthPct ?? 0.05);
+      total = Math.min(opts.maxBudget, plannedTotal * step);
+    }
+  }
+
+  const reallocation = reallocate(
+    prepared,
+    total,
+    { ...configOverride, overflowMode },
+    opts.priorComposites,
+  );
+
+  const confidence = portfolioConfidence(prepared, baseCfg);
+
+  return { mode, pacing, reallocation, recommendations, confidence };
+}

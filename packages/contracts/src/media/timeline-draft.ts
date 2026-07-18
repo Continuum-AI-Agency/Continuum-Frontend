@@ -69,6 +69,17 @@ export const timelineDraftCaptionWordSchema = z
   .strict();
 export type TimelineDraftCaptionWord = z.infer<typeof timelineDraftCaptionWordSchema>;
 
+export const timelineDraftCaptionCueSchema = z
+  .object({
+    id: z.string().min(1),
+    startSec: z.number().nonnegative(),
+    endSec: z.number().positive(),
+    words: z.array(timelineDraftCaptionWordSchema).min(1),
+    style: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+export type TimelineDraftCaptionCue = z.infer<typeof timelineDraftCaptionCueSchema>;
+
 export const timelineDraftDocumentSchema = z
   .object({
     schemaVersion: z.literal(TIMELINE_DRAFT_SCHEMA_VERSION),
@@ -79,6 +90,7 @@ export const timelineDraftDocumentSchema = z
     exportPresetId: z.string().min(1).optional(),
     markers: z.array(z.number().min(0)).optional(),
     captionsEnabled: z.boolean().optional(),
+    captionCues: z.array(timelineDraftCaptionCueSchema).optional(),
     captionWords: z.array(timelineDraftCaptionWordSchema).optional(),
     captionStyle: z.record(z.string(), z.unknown()).optional(),
   })

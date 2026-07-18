@@ -4,10 +4,10 @@
 // serializeFrame, Frontend reads via parseFrame. Mirrors the onboarding
 // inspirations stream pattern.
 
-import { z } from "zod";
+import { z } from 'zod';
 
 const competitorStartedFrame = z.object({
-  type: z.literal("competitor_started"),
+  type: z.literal('competitor_started'),
   data: z
     .object({
       competitorId: z.string(),
@@ -19,7 +19,7 @@ const competitorStartedFrame = z.object({
 });
 
 const snapshotDiffFrame = z.object({
-  type: z.literal("snapshot_diff"),
+  type: z.literal('snapshot_diff'),
   data: z
     .object({
       competitorId: z.string(),
@@ -32,17 +32,17 @@ const snapshotDiffFrame = z.object({
 });
 
 const mediaExtractedFrame = z.object({
-  type: z.literal("media_extracted"),
+  type: z.literal('media_extracted'),
   data: z
     .object({
       snapshotId: z.string(),
-      status: z.enum(["stored", "failed", "skipped"]),
+      status: z.enum(['stored', 'failed', 'skipped']),
     })
     .loose(),
 });
 
 const creativeAnalyzedFrame = z.object({
-  type: z.literal("creative_analyzed"),
+  type: z.literal('creative_analyzed'),
   data: z
     .object({
       snapshotId: z.string(),
@@ -56,7 +56,7 @@ const creativeAnalyzedFrame = z.object({
 });
 
 const paidPageResolvedFrame = z.object({
-  type: z.literal("paid_page_resolved"),
+  type: z.literal('paid_page_resolved'),
   data: z
     .object({
       competitorId: z.string(),
@@ -69,7 +69,7 @@ const paidPageResolvedFrame = z.object({
 });
 
 const paidPageNeedsReviewFrame = z.object({
-  type: z.literal("paid_page_needs_review"),
+  type: z.literal('paid_page_needs_review'),
   data: z
     .object({
       competitorId: z.string(),
@@ -80,18 +80,18 @@ const paidPageNeedsReviewFrame = z.object({
 });
 
 const competitorSkippedFrame = z.object({
-  type: z.literal("competitor_skipped"),
+  type: z.literal('competitor_skipped'),
   data: z
     .object({
       competitorId: z.string(),
       competitorName: z.string(),
-      reason: z.enum(["missing_meta_page_id", "archived", "brand_mismatch"]),
+      reason: z.enum(['missing_meta_page_id', 'archived', 'brand_mismatch']),
     })
     .loose(),
 });
 
 const awarenessBlockFrame = z.object({
-  type: z.literal("awareness_block"),
+  type: z.literal('awareness_block'),
   data: z
     .object({
       blockType: z.string(),
@@ -101,7 +101,7 @@ const awarenessBlockFrame = z.object({
 });
 
 const runCompletedFrame = z.object({
-  type: z.literal("run_completed"),
+  type: z.literal('run_completed'),
   data: z
     .object({
       runId: z.string(),
@@ -115,7 +115,7 @@ const runCompletedFrame = z.object({
 });
 
 const runErrorFrame = z.object({
-  type: z.literal("run_error"),
+  type: z.literal('run_error'),
   data: z
     .object({
       message: z.string(),
@@ -124,7 +124,83 @@ const runErrorFrame = z.object({
     .loose(),
 });
 
-export const competitorSpyStreamFrameSchema = z.discriminatedUnion("type", [
+// --- One-click scan frames (POST /api/competitor-ad-spy/scan) -------------
+// The scan pipeline wraps the sync frames above with stage lifecycle +
+// discovery/aggregation/gap frames so the FE report skeleton hydrates live.
+
+export const competitorScanStageSchema = z.enum([
+  'ensure_competitors',
+  'resolve_pages',
+  'sync',
+  'analyze',
+  'variant_families',
+  'aggregate',
+  'gap',
+  'awareness',
+]);
+export type CompetitorScanStage = z.infer<typeof competitorScanStageSchema>;
+
+const scanStageFrame = z.object({
+  type: z.literal('scan_stage'),
+  data: z
+    .object({
+      stage: competitorScanStageSchema,
+      status: z.enum(['started', 'completed', 'skipped']),
+      counts: z.record(z.string(), z.number()).optional(),
+    })
+    .loose(),
+});
+
+const competitorPromotedFrame = z.object({
+  type: z.literal('competitor_promoted'),
+  data: z
+    .object({
+      promoted: z.number().int().nonnegative(),
+      resolved: z.number().int().nonnegative(),
+    })
+    .loose(),
+});
+
+const angleMapReadyFrame = z.object({
+  type: z.literal('angle_map_ready'),
+  data: z
+    .object({
+      rows: z.number().int().nonnegative(),
+      snapshots: z.number().int().nonnegative(),
+      v2Labeled: z.number().int().nonnegative(),
+    })
+    .loose(),
+});
+
+const gapReportReadyFrame = z.object({
+  type: z.literal('gap_report_ready'),
+  data: z
+    .object({
+      status: z.enum(['ready', 'empty']),
+      gaps: z.number().int().nonnegative(),
+      absent: z.number().int().nonnegative(),
+      losing: z.number().int().nonnegative(),
+      battlegrounds: z.number().int().nonnegative(),
+      edges: z.number().int().nonnegative(),
+    })
+    .loose(),
+});
+
+const scanCompletedFrame = z.object({
+  type: z.literal('scan_completed'),
+  data: z
+    .object({
+      competitorsProcessed: z.number().int().nonnegative(),
+      snapshotsInserted: z.number().int().nonnegative(),
+      snapshotsUpdated: z.number().int().nonnegative(),
+      analysisCompleted: z.number().int().nonnegative(),
+      gaps: z.number().int().nonnegative(),
+      durationMs: z.number().int().nonnegative(),
+    })
+    .loose(),
+});
+
+export const competitorSpyStreamFrameSchema = z.discriminatedUnion('type', [
   competitorStartedFrame,
   snapshotDiffFrame,
   mediaExtractedFrame,
@@ -135,6 +211,11 @@ export const competitorSpyStreamFrameSchema = z.discriminatedUnion("type", [
   awarenessBlockFrame,
   runCompletedFrame,
   runErrorFrame,
+  scanStageFrame,
+  competitorPromotedFrame,
+  angleMapReadyFrame,
+  gapReportReadyFrame,
+  scanCompletedFrame,
 ]);
 export type CompetitorSpyStreamFrame = z.infer<typeof competitorSpyStreamFrameSchema>;
-export type CompetitorSpyFrameType = CompetitorSpyStreamFrame["type"];
+export type CompetitorSpyFrameType = CompetitorSpyStreamFrame['type'];

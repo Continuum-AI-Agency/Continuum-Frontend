@@ -5,6 +5,7 @@
 // assets get history without a migration backfill.
 
 import { z } from 'zod';
+import { assetPreviewSchema } from './asset-renditions';
 import { assetIntegrityStateSchema } from './creative-operations';
 
 export const mediaAssetVersionSchema = z
@@ -28,6 +29,7 @@ export const mediaAssetVersionSchema = z
     // Transient display fields resolved at read time.
     authorName: z.string().nullable().optional(),
     signedUrl: z.string().nullable().optional(),
+    preview: assetPreviewSchema.nullable().optional(),
     isHead: z.boolean().default(false),
     createdAt: z.string(),
   })

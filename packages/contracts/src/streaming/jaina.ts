@@ -23,76 +23,68 @@ export type JainaStreamEvent<TType extends string = string, TData = Record<strin
 // ---------------------------------------------------------------------------
 
 export type JainaForwardableType =
-  | "state.delta"
-  | "response.plan.delta"
-  | "hitl.paused"
-  | "tool.call"
-  | "tool.result"
-  | "tool.batch"
-  | "handoff.start"
-  | "handoff.complete"
-  | "agent.envelope"
-  | "agent.spawn"
-  | "agent.complete"
-  | "response.objectives"
-  | "response.objective.updated"
-  | "response.report_artifact_job.started"
-  | "response.block.delta"
-  | "adk.event"
-  | "error";
+  | 'state.delta'
+  | 'response.plan.delta'
+  | 'hitl.paused'
+  | 'tool.call'
+  | 'tool.result'
+  | 'tool.batch'
+  | 'handoff.start'
+  | 'handoff.complete'
+  | 'agent.envelope'
+  | 'agent.spawn'
+  | 'agent.complete'
+  | 'response.objectives'
+  | 'response.objective.updated'
+  | 'response.report_artifact_job.started'
+  | 'response.block.delta'
+  | 'adk.event'
+  | 'error';
 
 // ---------------------------------------------------------------------------
 // Categorical event-type unions (kept stable across the Zod migration)
 // ---------------------------------------------------------------------------
 
 export type JainaResponseType =
-  | "response.created"
-  | "response.output_item.added"
-  | "response.output_item.done"
-  | "response.content_part.added"
-  | "response.content_part.done"
-  | "response.output_text.delta"
-  | "response.output_json.delta"
-  | "response.done"
-  | "response.error"
-  | "response.plan_ready"
-  | "response.plan.requested"
-  | "response.plan.decision"
-  | "response.run.created"
-  | "response.heartbeat"
-  | "response.checkpoint_report"
-  | "response.checkpoint_report.delta"
-  | "response.checkpoint_report.error"
-  | "response.report_assembly"
-  | "response.report_artifact_job.started"
-  | "response.objectives"
-  | "response.objective.updated"
-  | "response.progress"
-  | "response.clarification_request"
-  | "response.block.delta";
+  | 'response.created'
+  | 'response.output_item.added'
+  | 'response.output_item.done'
+  | 'response.content_part.added'
+  | 'response.content_part.done'
+  | 'response.output_text.delta'
+  | 'response.output_json.delta'
+  | 'response.done'
+  | 'response.error'
+  | 'response.plan_ready'
+  | 'response.plan.requested'
+  | 'response.plan.decision'
+  | 'response.run.created'
+  | 'response.heartbeat'
+  | 'response.checkpoint_report'
+  | 'response.checkpoint_report.delta'
+  | 'response.checkpoint_report.error'
+  | 'response.report_assembly'
+  | 'response.report_artifact_job.started'
+  | 'response.objectives'
+  | 'response.objective.updated'
+  | 'response.progress'
+  | 'response.clarification_request'
+  | 'response.block.delta';
 
-export type JainaCanvasType =
-  | "canvas.actions.proposed"
-  | "canvas.context.loaded";
+export type JainaCanvasType = 'canvas.actions.proposed' | 'canvas.context.loaded';
 
-export type JainaAgentType =
-  | "agent.spawn"
-  | "agent.complete"
-  | "agent.envelope";
+export type JainaAgentType = 'agent.spawn' | 'agent.complete' | 'agent.envelope';
 
-export type JainaToolType =
-  | "tool.call"
-  | "tool.result"
-  | "tool.batch";
+export type JainaToolType = 'tool.call' | 'tool.result' | 'tool.batch';
 
 export type JainaArtifactType =
-  | "artifact.delta"
-  | "state.delta"
-  | "thought"
-  | "adk.event"
-  | "hitl.paused"
-  | "handoff.start"
-  | "handoff.complete";
+  | 'artifact.delta'
+  | 'state.delta'
+  | 'thought'
+  | 'adk.event'
+  | 'hitl.paused'
+  | 'handoff.start'
+  | 'handoff.complete';
 
 export type JainaStreamFrameType =
   | JainaResponseType
@@ -100,7 +92,7 @@ export type JainaStreamFrameType =
   | JainaAgentType
   | JainaToolType
   | JainaArtifactType
-  | "error";
+  | 'error';
 
 export type JainaStreamFrame = JainaStreamEvent<JainaStreamFrameType, Record<string, unknown>>;
 
@@ -170,11 +162,16 @@ export type JainaAgentSpawnEventData = {
 export type JainaAgentCompleteEventData = {
   agent_id: string;
   task_id: string;
-  status: "completed" | "failed" | "partial";
+  status: 'completed' | 'failed' | 'partial';
   duration_ms: number;
   error?: string;
   display_name?: string | null;
   name?: string | null;
+  /** Digest-fidelity observability: what the worker actually returned. */
+  evidence_count?: number;
+  insight_count?: number;
+  recommendation_count?: number;
+  has_key_metrics?: boolean;
 };
 
 /** data shape for type: "state.delta". */

@@ -1,20 +1,12 @@
-import { z } from 'zod';
 import {
-  coerceNodeConfig,
   createNodeData,
   type GraphEdgeLike,
   type GraphNodeLike,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
-  isStudioNodeType,
-  isTimelineMediaHandle,
   isValidConnection,
-  nodeStyleFor,
   STUDIO_NODE_TYPES,
   type StudioNodeType,
-  TIMELINE_MEDIA_INPUT_HANDLE,
-  type TimelineItemSpec,
-  timelineItemSpecSchema,
   type WorkflowMediaKind,
 } from './workflow-graph';
 
@@ -52,6 +44,9 @@ export interface WorkflowGraph {
 const COLUMN_SPACING = 360;
 const ROW_SPACING = 220;
 
+const isStudioNodeType = (type: string): type is StudioNodeType =>
+  (STUDIO_NODE_TYPES as readonly string[]).includes(type);
+
 function inferDataType(sourceHandle?: string | null): string {
   switch (sourceHandle) {
     case 'image':
@@ -72,22 +67,14 @@ export type ResolveResult =
   | { ok: true; sourceHandle: string; targetHandle: string }
   | { ok: false; reason: string };
 
-/**
- * Rank the target handles a role hint could mean, most-likely first.
- *
- * An exact name match and a same-family match score the SAME, so the sort stays
- * stable and the canvas's own handle order breaks the tie. That order is
- * authoritative: `getAllowedTargetHandles` lists the handle each node actually
- * renders first. Scoring an exact match higher instead would send `role: 'prompt'`
- * on a video generator to `prompt` — legal by the rules, but VideoGenBlock /
- * VeoFastBlock / OmniGenBlock only render `prompt-in`, so the edge would land on a
- * handle that does not exist on screen.
- */
 function orderCandidates(candidates: string[], roleHint?: string): string[] {
   if (!roleHint) return candidates;
-  const inSameFamily = (handle: string): boolean =>
-    handle === roleHint || handle.includes(roleHint) || roleHint.includes(handle);
-  return [...candidates].sort((a, b) => Number(inSameFamily(b)) - Number(inSameFamily(a)));
+  const score = (handle: string): number => {
+    if (handle === roleHint) return 0;
+    if (handle.includes(roleHint) || roleHint.includes(handle)) return 1;
+    return 2;
+  };
+  return [...candidates].sort((a, b) => score(a) - score(b));
 }
 
 export function resolveConnection(
@@ -116,48 +103,6 @@ export function resolveConnection(
     ok: false,
     reason: `no compatible handle from ${sourceNode.type ?? '?'} to ${targetNode.type ?? '?'}${opts.roleHint ? ` (role ${opts.roleHint})` : ''}`,
   };
-}
-
-type ResolveGrowingResult =
-  | { ok: true; sourceHandle: string; targetHandle: string; grownTarget?: WorkflowNode }
-  | { ok: false; reason: string };
-
-const newClipSlotId = (suffix: number): string => {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return `slot-${suffix}`;
-  }
-};
-
-/**
- * resolveConnection, plus one growth rule: a videoEditor (Video Splicer) ships with
- * two clip slots and each slot takes exactly one clip, so the THIRD clip an agent
- * wires in would be refused — not because the graph is invalid, but because nobody
- * told the node to grow. The canvas UI grows slots by hand; the agent path grows
- * them here. Any other failure (wrong source kind, etc.) still fails the same way:
- * the retry against the grown node fails too, and the original reason stands.
- */
-function resolveGrowingSlots(
-  sourceNode: WorkflowNode,
-  targetNode: WorkflowNode,
-  opts: { roleHint?: string; edges?: GraphEdgeLike[] },
-): ResolveGrowingResult {
-  const first = resolveConnection(sourceNode, targetNode, opts);
-  if (first.ok || targetNode.type !== 'videoEditor') return first;
-
-  const data = targetNode.data as { clipSlots?: Array<{ id?: string; order?: number }> };
-  const slots = Array.isArray(data.clipSlots) ? data.clipSlots : [];
-  const grown: WorkflowNode = {
-    ...targetNode,
-    data: {
-      ...targetNode.data,
-      clipSlots: [...slots, { id: newClipSlotId(slots.length + 1), order: slots.length }],
-    },
-  };
-  const retry = resolveConnection(sourceNode, grown, opts);
-  if (!retry.ok) return first;
-  return { ...retry, grownTarget: grown };
 }
 
 function makeEdge(
@@ -278,14 +223,10 @@ export function buildWorkflowGraph(
       errors.push(`connection references missing node: ${spec.from_ref} → ${spec.to_ref}`);
       continue;
     }
-    const resolved = resolveGrowingSlots(from, to, { roleHint: spec.role, edges });
+    const resolved = resolveConnection(from, to, { roleHint: spec.role, edges });
     if (!resolved.ok) {
       errors.push(resolved.reason);
       continue;
-    }
-    if (resolved.grownTarget) {
-      nodeById.set(to.id, resolved.grownTarget);
-      nodes[nodes.indexOf(to)] = resolved.grownTarget;
     }
     edges.push(makeEdge(from.id, resolved.sourceHandle, to.id, resolved.targetHandle));
   }
@@ -342,8 +283,6 @@ export function mergeGraphs(base: WorkflowGraph, incoming: WorkflowGraph): Workf
 // ---------------------------------------------------------------------------
 
 export interface AttachMediaInput {
-  /** media.assets id, when the media came from the Library. Persisted on the node
-   *  so the generation it feeds can be traced back to it. */
   assetId?: string;
   bucket: string;
   storagePath: string;
@@ -361,8 +300,7 @@ export type WorkflowEditOp =
   | { op: 'rewire'; from: string; to: string; role?: string }
   | { op: 'attach_media'; id: string; media: AttachMediaInput }
   | { op: 'detach_media'; id: string }
-  | { op: 'rename'; id: string; label: string }
-  | { op: 'set_timeline'; id: string; items: TimelineItemSpec[] };
+  | { op: 'rename'; id: string; label: string };
 
 export interface ApplyResult {
   graph: WorkflowGraph;
@@ -376,19 +314,7 @@ const REFERENCE_NODE_KIND: Record<string, WorkflowMediaKind> = {
   document: 'document',
 };
 
-// `assetId` is part of the media, not decoration: it is the only durable link
-// from a node back to the Library asset it holds, and register-canvas reads it
-// off the persisted graph to answer "what did this generation come from". A
-// detach that left it behind would credit the next generation to media the node
-// no longer carries.
-const MEDIA_DATA_KEYS = [
-  'assetId',
-  'sourcePath',
-  'bucket',
-  'sourceUrl',
-  'fileName',
-  'referenceType',
-];
+const MEDIA_DATA_KEYS = ['sourcePath', 'bucket', 'sourceUrl', 'fileName', 'referenceType'];
 
 export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResult {
   let nodes: WorkflowNode[] = [...graph.nodes];
@@ -426,29 +352,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         break;
       }
       case 'update_node': {
-        // Timeline placements have their own validated op. Letting update_node
-        // write `items` raw invites exactly one failure mode: an agent mimicking
-        // the read-projection's compact strings, which renders three empty clips.
-        const target = nodes.find((n) => n.id === op.id);
-        if (target?.type === 'timelineEditor' && 'items' in op.data) {
-          errors.push(`set "${op.id}" timeline items with the set_timeline op, not update_node`);
-          break;
-        }
-        // The other door into a node's config. add_node goes through createNodeData,
-        // which coerces; without the same guard here an illegal enum (imageSize:
-        // "1024px") lands on the node and 400s the generation endpoint at Run time.
-        const patch = isStudioNodeType(target?.type ?? '')
-          ? coerceNodeConfig(target?.type as StudioNodeType, op.data, target?.data ?? {}).data
-          : op.data;
-        if (
-          !replaceNode(op.id, (n) => {
-            const data = dropUndefined({ ...n.data, ...patch });
-            const style = isStudioNodeType(n.type) ? nodeStyleFor(n.type, data) : undefined;
-            return style
-              ? { ...n, data, style, width: style.width, height: style.height }
-              : { ...n, data };
-          })
-        ) {
+        if (!replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, ...op.data } }))) {
           errors.push(`node "${op.id}" not found`);
         }
         break;
@@ -462,26 +366,14 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
       case 'connect': {
         const result = connectNodes(nodes, edges, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
-        else {
-          if (result.grownTarget) {
-            const grown = result.grownTarget;
-            nodes = nodes.map((n) => (n.id === grown.id ? grown : n));
-          }
-          edges = [...edges, result.edge];
-        }
+        else edges = [...edges, result.edge];
         break;
       }
       case 'rewire': {
         edges = edges.filter((e) => e.source !== op.from);
         const result = connectNodes(nodes, edges, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
-        else {
-          if (result.grownTarget) {
-            const grown = result.grownTarget;
-            nodes = nodes.map((n) => (n.id === grown.id ? grown : n));
-          }
-          edges = [...edges, result.edge];
-        }
+        else edges = [...edges, result.edge];
         break;
       }
       case 'disconnect': {
@@ -518,9 +410,6 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
           ...n,
           data: {
             ...n.data,
-            // Written even when undefined: attaching different media to a node
-            // that already held a Library asset must not leave the old id behind.
-            assetId: op.media.assetId,
             sourcePath: op.media.storagePath,
             bucket: op.media.bucket,
             fileName: op.media.fileName,
@@ -537,46 +426,6 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         }
         break;
       }
-      case 'set_timeline': {
-        const node = nodes.find((n) => n.id === op.id);
-        if (!node) {
-          errors.push(`node "${op.id}" not found`);
-          break;
-        }
-        if (node.type !== 'timelineEditor') {
-          errors.push(`node "${op.id}" (${node.type}) has no timeline; only timelineEditor does`);
-          break;
-        }
-
-        // Wiring a clip into the pool is what makes it placeable. An item naming a
-        // node that is not connected to `media-in` renders nothing at all — and
-        // renders nothing SILENTLY, which is the worst way for this to fail.
-        const pooled = new Set(
-          edges
-            .filter((e) => e.target === op.id && isTimelineMediaHandle(e.targetHandle))
-            .map((e) => e.source),
-        );
-        const orphans = op.items.filter((item) => !pooled.has(item.sourceNodeId));
-        if (orphans.length > 0) {
-          const names = [...new Set(orphans.map((o) => o.sourceNodeId))].join(', ');
-          errors.push(
-            `cannot place ${names} on "${op.id}": connect each clip to its ${TIMELINE_MEDIA_INPUT_HANDLE} handle first`,
-          );
-          break;
-        }
-
-        const items = [...op.items]
-          .sort((a, b) => a.order - b.order)
-          .map((item, index) => ({
-            ...item,
-            id: `ti:${op.id}:${index}:${item.sourceNodeId}`,
-            order: index,
-          }));
-        // `committed: false` re-arms the manual gate: the human opens the editor,
-        // reviews the cut the agent laid down, and presses Render & Continue.
-        replaceNode(op.id, (n) => ({ ...n, data: { ...n.data, items, committed: false } }));
-        break;
-      }
     }
   }
 
@@ -591,34 +440,19 @@ function connectNodes(
   fromId: string,
   toId: string,
   role?: string,
-): { ok: true; edge: WorkflowEdge; grownTarget?: WorkflowNode } | { ok: false; reason: string } {
+): { ok: true; edge: WorkflowEdge } | { ok: false; reason: string } {
   const from = nodes.find((n) => n.id === fromId);
   const to = nodes.find((n) => n.id === toId);
   if (!from || !to)
     return { ok: false, reason: `connect references missing node: ${fromId} → ${toId}` };
-  const resolved = resolveGrowingSlots(from, to, { roleHint: role, edges });
+  const resolved = resolveConnection(from, to, { roleHint: role, edges });
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
-  return {
-    ok: true,
-    edge: makeEdge(from.id, resolved.sourceHandle, to.id, resolved.targetHandle),
-    ...(resolved.grownTarget ? { grownTarget: resolved.grownTarget } : {}),
-  };
+  return { ok: true, edge: makeEdge(from.id, resolved.sourceHandle, to.id, resolved.targetHandle) };
 }
 
 function dropKeys(data: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   const next = { ...data };
   for (const key of keys) delete next[key];
-  return next;
-}
-
-// A coerced patch clears a field it invalidated by setting it to undefined (an
-// imageSize on a model that takes none). Merging that in would leave the key present
-// and undefined on a persisted node; drop it instead.
-function dropUndefined(data: Record<string, unknown>): Record<string, unknown> {
-  const next: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) next[key] = value;
-  }
   return next;
 }
 
@@ -677,93 +511,3 @@ export function validateWorkflowGraph(graph: {
 
   return { ok: issues.length === 0, issues };
 }
-
-// ---------------------------------------------------------------------------
-// Wire schemas
-// ---------------------------------------------------------------------------
-//
-// The specs an agent emits. Defined here, next to the functions that consume
-// them, so the MCP `studio_workflow` tool and the in-app Canvas Composer share one
-// action space instead of each hand-rolling a slightly different zod union.
-
-const dataRecordSchema = z.record(z.string(), z.unknown());
-
-export const nodeSpecSchema = z
-  .object({
-    ref: z.string().min(1).describe('Your name for this node; also becomes its id.'),
-    type: z.string().min(1).describe('One of the canvas node types.'),
-    data: dataRecordSchema.optional().describe('Config overrides, e.g. { model, positivePrompt }.'),
-  })
-  .strict();
-
-export const connectSpecSchema = z
-  .object({
-    from_ref: z.string().min(1),
-    to_ref: z.string().min(1),
-    role: z
-      .string()
-      .optional()
-      .describe('What the input is for — "prompt", "negative", "first-frame", "ref-images".'),
-  })
-  .strict();
-
-export const attachMediaSchema = z
-  .object({
-    assetId: z
-      .string()
-      .optional()
-      .describe('media.assets id when the media comes from the Library; keeps the usage trail.'),
-    bucket: z.string(),
-    storagePath: z.string(),
-    fileName: z.string().optional(),
-    mediaKind: z.enum(['image', 'video', 'audio', 'document']),
-    referenceType: z.string().optional(),
-  })
-  .strict();
-
-export const workflowEditOpSchema = z.discriminatedUnion('op', [
-  z
-    .object({
-      op: z.literal('add_node'),
-      ref: z.string(),
-      type: z.string(),
-      data: dataRecordSchema.optional(),
-    })
-    .strict(),
-  z.object({ op: z.literal('remove_node'), id: z.string() }).strict(),
-  z.object({ op: z.literal('update_node'), id: z.string(), data: dataRecordSchema }).strict(),
-  z
-    .object({
-      op: z.literal('connect'),
-      from: z.string(),
-      to: z.string(),
-      role: z.string().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      op: z.literal('disconnect'),
-      from: z.string().optional(),
-      to: z.string().optional(),
-      targetHandle: z.string().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      op: z.literal('rewire'),
-      from: z.string(),
-      to: z.string(),
-      role: z.string().optional(),
-    })
-    .strict(),
-  z.object({ op: z.literal('attach_media'), id: z.string(), media: attachMediaSchema }).strict(),
-  z.object({ op: z.literal('detach_media'), id: z.string() }).strict(),
-  z.object({ op: z.literal('rename'), id: z.string(), label: z.string() }).strict(),
-  z
-    .object({
-      op: z.literal('set_timeline'),
-      id: z.string(),
-      items: z.array(timelineItemSpecSchema).max(40),
-    })
-    .strict(),
-]);

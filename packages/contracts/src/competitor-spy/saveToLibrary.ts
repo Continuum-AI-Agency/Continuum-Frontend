@@ -28,6 +28,8 @@ export const CAROUSEL_SLIDE_TAG = 'carousel-slide';
 // origin_ref so the Library can page through all slides without a sibling query.
 export const competitorPostSlideRefSchema = z.object({
   slideIndex: z.number().int().nonnegative(),
+  assetId: z.string().uuid().optional(),
+  assetVersionId: z.string().uuid().nullable().optional(),
   kind: instagramMediaKindSchema,
   bucket: z.string(),
   storagePath: z.string(),

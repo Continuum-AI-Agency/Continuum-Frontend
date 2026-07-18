@@ -129,9 +129,23 @@ export const registerClipRequestSchema = z
     storagePath: z.string().min(1),
     fileName: z.string().min(1),
     mimeType: z.literal('video/mp4'),
+    sizeBytes: z.number().int().nonnegative(),
     durationSec: z.number().positive(),
     section: clipPlanSectionSchema,
     transcriptExcerpt: z.string().optional(),
+    captionCues: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            startSec: z.number().nonnegative(),
+            endSec: z.number().positive(),
+            words: z.array(clipWordSchema).min(1),
+          })
+          .strict(),
+      )
+      .optional(),
+    captionStyle: z.record(z.string(), z.unknown()).optional(),
     score: clipScoreSchema,
   })
   .strict();
@@ -182,6 +196,18 @@ export type ClipPlanSection = z.infer<typeof clipPlanSectionSchema>;
 export type ClipPlan = z.infer<typeof clipPlanSchema>;
 export type ClipScore = z.infer<typeof clipScoreSchema>;
 export type ClipGenerateRequest = z.infer<typeof clipGenerateRequestSchema>;
+
+export const captionTranscribeRequestSchema = z
+  .object({
+    brandId: z.string().min(1),
+    audioBucket: z.string().min(1),
+    audioStoragePath: z.string().min(1),
+  })
+  .strict();
+export type CaptionTranscribeRequest = z.infer<typeof captionTranscribeRequestSchema>;
+
+export const captionTranscribeResponseSchema = timestampedTranscriptSchema;
+export type CaptionTranscribeResponse = z.infer<typeof captionTranscribeResponseSchema>;
 export type RegisterClipRequest = z.infer<typeof registerClipRequestSchema>;
 export type RegisterClipResponse = z.infer<typeof registerClipResponseSchema>;
 export type RegisterClipError = z.infer<typeof registerClipErrorSchema>;

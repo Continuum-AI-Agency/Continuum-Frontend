@@ -6,28 +6,26 @@
 // indexes competitors', and adds the sentiment/hook/theme fields that schema lacks.
 // Plain objects (not .strict()) so an LLM adding an extra key does not fail parse.
 
-import { z } from "zod";
+import { z } from 'zod';
+import {
+  creativeAssetTypeSchema,
+  creativeFunnelStageSchema,
+  creativeHookArchetypeSchema,
+} from '../creative-strategy/taxonomy';
 
 export const competitorAdSentimentLabelSchema = z.enum([
-  "positive",
-  "neutral",
-  "negative",
-  "aspirational",
-  "urgent",
+  'positive',
+  'neutral',
+  'negative',
+  'aspirational',
+  'urgent',
 ]);
 export type CompetitorAdSentimentLabel = z.infer<typeof competitorAdSentimentLabelSchema>;
 
-export const competitorAdHookArchetypeSchema = z.enum([
-  "problem_agitation",
-  "social_proof",
-  "scarcity",
-  "curiosity_gap",
-  "authority",
-  "transformation",
-  "value_stack",
-  "comparison",
-  "unknown",
-]);
+// The hook-archetype vocabulary lives in the shared cross-side taxonomy
+// (creative-strategy/taxonomy.ts); re-exported under the historical name so
+// existing consumers keep compiling.
+export const competitorAdHookArchetypeSchema = creativeHookArchetypeSchema;
 export type CompetitorAdHookArchetype = z.infer<typeof competitorAdHookArchetypeSchema>;
 
 export const competitorAdSentimentSchema = z.object({
@@ -52,6 +50,15 @@ export const competitorAdAnalysisSchema = competitorAdSentimentSchema.extend({
   primaryText: z.string().nullable(),
   callToAction: z.string().nullable(),
   textOverlay: z.string().nullable(),
+  // Taxonomy v2: the strategic angle / funnel stage / asset type, on the SAME
+  // vocabulary as the brand's own paid labels (creative-strategy/taxonomy.ts)
+  // so the gap analysis can join the two sides. v1 rows lack these — defaults
+  // keep old persisted analyses parsing; aggregations that need them filter on
+  // taxonomyVersion >= 2.
+  angle: z.string().nullable().default(null),
+  funnelStage: creativeFunnelStageSchema.default('unknown'),
+  assetType: creativeAssetTypeSchema.default('unknown'),
+  taxonomyVersion: z.number().int().default(1),
   // Whether the analysis saw the actual creative image (true) or degraded to
   // copy-only because media extraction failed/was skipped (false).
   analyzedFromImage: z.boolean().default(false),

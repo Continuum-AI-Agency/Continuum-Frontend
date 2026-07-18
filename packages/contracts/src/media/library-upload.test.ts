@@ -88,6 +88,7 @@ describe("registerMediaResponseSchema", () => {
       ok: true,
       status: "ready",
       assetId: "asset-1",
+      versionId: "11111111-1111-4111-8111-111111111111",
       storagePath: "b1/asset-1/photo.png",
       signedUrl: "https://signed.example/photo.png",
     });
@@ -100,6 +101,7 @@ describe("registerMediaResponseSchema", () => {
         ok: true,
         status: "exists",
         assetId: "asset-1",
+        versionId: "11111111-1111-4111-8111-111111111111",
         storagePath: "b1/asset-1/photo.png",
         signedUrl: "https://signed.example/photo.png",
       }).success,

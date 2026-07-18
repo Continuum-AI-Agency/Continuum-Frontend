@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-import { brandBookPieceKindSchema } from './brand-enforcement';
+import { brandBookPieceKindSchema } from "./brand-enforcement";
 
 // The request a Studio Canvas text box sends when the user hits "Enrich Prompt".
 // Enrichment is grounded by the SAME data piece a generation node carries:
@@ -10,7 +10,7 @@ import { brandBookPieceKindSchema } from './brand-enforcement';
 // (buildEnrichPayload) and the Backend (promptEnrichmentSchema) speak this shape.
 
 const enrichImageContextSchema = z.object({
-  type: z.enum(['base64', 'url']),
+  type: z.enum(["base64", "url"]),
   data: z.string().optional(),
   imageUrl: z.string().optional(),
   mimeType: z.string(),
@@ -19,13 +19,13 @@ const enrichImageContextSchema = z.object({
 });
 
 const enrichAudioContextSchema = z.object({
-  type: z.literal('base64'),
+  type: z.literal("base64"),
   data: z.string(),
   mimeType: z.string(),
 });
 
 const enrichVideoContextSchema = z.object({
-  type: z.enum(['base64', 'url']),
+  type: z.enum(["base64", "url"]),
   data: z.string().optional(),
   imageUrl: z.string().optional(),
   mimeType: z.string(),
@@ -35,7 +35,7 @@ const enrichVideoContextSchema = z.object({
 
 const enrichDocumentContextSchema = z.object({
   name: z.string(),
-  type: z.enum(['pdf', 'txt']).default('txt'),
+  type: z.enum(["pdf", "txt"]).default("txt"),
   extractedText: z.string().optional(),
   sourceUrl: z.string().optional(),
   sourceDocumentId: z.string().optional(),
@@ -51,8 +51,8 @@ export const enrichPromptContextSchema = z.object({
 export type EnrichPromptContext = z.infer<typeof enrichPromptContextSchema>;
 
 export const enrichPromptRequestSchema = z.object({
-  prompt: z.string().default(''),
-  brandId: z.string().min(1, 'brandId is required'),
+  prompt: z.string().default(""),
+  brandId: z.string().min(1, "brandId is required"),
   context: enrichPromptContextSchema.optional(),
   // Grounding data piece — inherited from the downstream generation node.
   skillIds: z.array(z.string().min(1)).max(20).optional(),

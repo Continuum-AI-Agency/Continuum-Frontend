@@ -4,6 +4,7 @@
 // maps between them.
 
 import { z } from 'zod';
+import { assetPreviewSchema } from './asset-renditions';
 import { assetIntegrityStateSchema } from './creative-operations';
 
 // 'file' covers non-renderable source files (After Effects projects, RAW
@@ -197,6 +198,9 @@ export const mediaAssetSchema = z
     thumbnailPath: z.string().nullable().optional(),
     // Transient signed URL for `thumbnailPath`, minted per-request like signedUrl.
     thumbnailUrl: z.string().nullable().optional(),
+    // Exact-version preview. `thumbnail*` remains a read-only compatibility
+    // fallback until every historical row has a rendition.
+    preview: assetPreviewSchema.nullable().optional(),
     // Present only on the cover row of a saved multi-slide group (e.g. a competitor
     // carousel): the ordered, signed slides so the Library renders one grouped tile
     // the viewer can page through instead of N loose cards. Transient (signed
@@ -207,13 +211,17 @@ export const mediaAssetSchema = z
         slides: z.array(
           z.object({
             slideIndex: z.number().int().nonnegative(),
+            assetId: z.string().uuid().nullable().optional(),
+            assetVersionId: z.string().uuid().nullable().optional(),
             kind: mediaKindSchema,
             signedUrl: z.string().nullable(),
+            preview: assetPreviewSchema.nullable().optional(),
           }),
         ),
       })
       .nullable()
       .optional(),
+    groupId: z.string().uuid().nullable().optional(),
   })
   .strict();
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;

@@ -59,6 +59,7 @@ export const registerMediaResponseSchema = z
     ok: z.literal(true),
     status: z.enum(['ready', 'exists']),
     assetId: z.string(),
+    versionId: z.string().uuid(),
     storagePath: z.string(),
     signedUrl: z.string().min(1),
   })

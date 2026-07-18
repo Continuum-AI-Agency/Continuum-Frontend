@@ -11,7 +11,7 @@
 import {
   FreezeReasonSchema,
   OptimizationObjectiveSchema,
-} from './engine-contracts';
+} from '@continuum/optimization-engine/schemas';
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
 
@@ -52,11 +52,6 @@ export const OptimizationMetricDefinitionSchema = z.object({
     'leads',
     'landingPageViews',
     'impressions',
-    'conversations',
-    'linkClicks',
-    'thruplays',
-    'postEngagement',
-    'clicks',
   ]),
   resultLabel: z.string(),
   costLabel: z.string(),
@@ -116,52 +111,6 @@ const OPTIMIZATION_METRIC_DEFINITIONS: Record<
     costLabel: 'CPM',
     targetLabel: 'Target CPM',
     denominatorMultiplier: 1_000,
-  },
-  // The currencies real Meta ad sets declare but the original six objectives could not
-  // express. Naming them precisely is the point: a "cost per conversation" rendered as
-  // "CPA" is how a $39.48 messaging thread gets read as a $255.98 failed lead. The labels
-  // mirror KPI_COST_LABEL in ../paid/kpi.ts — one vocabulary, not two.
-  conversations: {
-    objective: 'conversations',
-    kpiField: 'conversations',
-    resultLabel: 'Conversations',
-    costLabel: 'Cost per conversation',
-    targetLabel: 'Target cost per conversation',
-    denominatorMultiplier: 1,
-  },
-  link_clicks: {
-    objective: 'link_clicks',
-    kpiField: 'linkClicks',
-    resultLabel: 'Link clicks',
-    costLabel: 'Cost per link click',
-    targetLabel: 'Target cost per link click',
-    denominatorMultiplier: 1,
-  },
-  thruplays: {
-    objective: 'thruplays',
-    kpiField: 'thruplays',
-    resultLabel: 'ThruPlays',
-    costLabel: 'Cost per ThruPlay',
-    targetLabel: 'Target cost per ThruPlay',
-    denominatorMultiplier: 1,
-  },
-  post_engagement: {
-    objective: 'post_engagement',
-    kpiField: 'postEngagement',
-    resultLabel: 'Engagements',
-    costLabel: 'Cost per engagement',
-    targetLabel: 'Target cost per engagement',
-    denominatorMultiplier: 1,
-  },
-  clicks: {
-    objective: 'clicks',
-    kpiField: 'clicks',
-    resultLabel: 'Clicks',
-    // NOT "CPA". This counts every click including likes and comments — the weakest proxy
-    // there is, and the one an ad that never converted anything looks good on.
-    costLabel: 'Cost per click',
-    targetLabel: 'Target cost per click',
-    denominatorMultiplier: 1,
   },
 };
 
@@ -289,51 +238,21 @@ export const RunCycleRequestSchema = z.union([
 ]);
 export type RunCycleRequest = z.infer<typeof RunCycleRequestSchema>;
 
-/** Why a cycle produced no run. Both are HTTP 200 with `runId: null` — a skip is a
- *  SUCCESSFUL, ACTIONABLE outcome, not an outage:
- *    - `no_adsets`    — nothing is enrolled in the portfolio yet.
- *    - `no_snapshots` — ingest returned nothing for the enrolled entities (an expired
- *                       Meta token, or no active/spending ad sets).
- *  Mirrors CycleOutcome['skipped'] (Continuum-Optimizer/src/types.ts). */
-export const CycleSkipReasonSchema = z.enum(['no_adsets', 'no_snapshots']);
-export type CycleSkipReason = z.infer<typeof CycleSkipReasonSchema>;
-
-/** POST /cycle response — mirrors the optimizer service's CycleOutcome EXACTLY
- *  (Continuum-Optimizer/src/types.ts; produced by runPortfolioCycle, scheduler.ts,
- *  on both its ran path and its skip path).
- *
- *  Every outcome field is a COUNT, not a row array. The rows themselves are read back
- *  through optimizer_get_portfolio_performance (CycleRunReportSchema below) — this
- *  envelope only tallies what the cycle did.
- *
- *  DELIBERATELY NARROW, and that is not a violation of the "wire DTOs stay loose" rule:
- *  that rule is for read models the DB hands us as opaque jsonb. This is a struct we
- *  author on BOTH sides, and a loose schema here is precisely what let the Frontend
- *  mis-read a real, persisted run as an outage — `recommendations`/`applied`/`failed`
- *  were declared as arrays while the service has always sent counts, so safeParse could
- *  never succeed and every "Run now" click reported "Optimizer service not live yet".
- *  `.loose()` is applied ONLY so a NEW service-side field cannot break a deployed FE;
- *  do NOT give the counters defaults, which would resurrect that same class of bug. */
-export const RunCycleResponseSchema = z
-  .object({
-    portfolioId: z.string().uuid(),
-    /** null IFF the cycle was SKIPPED — no optimizer.cycle_runs row was persisted. */
-    runId: z.string().uuid().nullable(),
-    snapshotCount: z.number().int().nonnegative(),
-    /** How many recommendations the engine raised this cycle. */
-    recommendations: z.number().int().nonnegative(),
-    applied: z.number().int().nonnegative(),
-    failed: z.number().int().nonnegative(),
-    /** Writes skipped because the ledger showed the same target already applied/in-flight. */
-    deduped: z.number().int().nonnegative(),
-    /** Changed budgets NOT written because the applier is a dry-run/soak stub. */
-    stubbed: z.number().int().nonnegative(),
-    /** Autopilot changes parked over the %-cap for per-item human approval. */
-    held: z.number().int().nonnegative(),
-    /** Present ONLY on a skipped cycle. */
-    skipped: CycleSkipReasonSchema.optional(),
-  })
-  .loose();
+/** POST /cycle response — mirrors the optimizer service's CycleOutcome. One run's
+ *  outcome: the persisted run id, how many ad-set snapshots it scored, the engine
+ *  recommendations it raised, and (in autopilot) the platform apply results.
+ *  `recommendations` / `applied` / `failed` stay loose arrays: recommendations are
+ *  the engine `Recommendation` shape and apply rows carry platform response jsonb;
+ *  the FE narrows what it renders (see the "wire DTOs stay loose" rule). */
+export const RunCycleResponseSchema = z.object({
+  portfolioId: z.string().uuid().nullable(),
+  runId: z.string().uuid(),
+  snapshotCount: z.number().int().nonnegative(),
+  recommendations: z.array(z.record(z.string(), z.unknown())),
+  applied: z.array(z.record(z.string(), z.unknown())),
+  failed: z.array(z.record(z.string(), z.unknown())),
+  skipped: z.array(z.record(z.string(), z.unknown())).optional(),
+});
 export type RunCycleResponse = z.infer<typeof RunCycleResponseSchema>;
 
 /** FE performance-tab read model — the shape optimizer_get_portfolio_performance
@@ -412,19 +331,11 @@ export const RecommendationRowSchema = z
   .object({
     id: z.string().uuid(),
     adset_id: z.string(),
-    /** The specific AD this is about. Non-null on the creative-level kinds (pause_ad,
-     *  variate_creative); null on the ad-set-level ones. Without it, "your creative is worn
-     *  out" across five creatives gives you five suspects and no defendant. */
-    ad_id: z.string().nullable().optional(),
-    // pause | creative_refresh | audience_expand | pause_ad | variate_creative | seed_experiment
-    kind: z.string(),
+    kind: z.string(), // pause | creative_refresh | audience_expand
     trigger: z.string(),
     severity: z.string().nullable(),
     reason: z.string().nullable(),
     status: z.string(),
-    /** The generation seed on a variate_creative / seed_experiment: the winning creative's
-     *  labels, its Library asset, and the deterministic citations the brief is grounded on. */
-    seed: z.record(z.string(), z.unknown()).nullable().optional(),
     created_at: z.string().optional(),
   })
   .loose();
@@ -455,7 +366,7 @@ export const OptimizerInsightResponseSchema = z.object({
 export type OptimizerInsightResponse = z.infer<typeof OptimizerInsightResponseSchema>;
 
 /** Cycle-level Confidence (optimizer.cycle_runs.confidence jsonb). Aligned with
- *  the optimizer wire `Confidence` shape (see ConfidenceSchema)
+ *  the engine `Confidence` shape (see @continuum/optimization-engine ConfidenceSchema)
  *  but kept `.loose()` and all-optional for DB reads — the row is opaque jsonb and
  *  older rows may predate a field. `band` stays a loose string on read. */
 export const RunConfidenceSchema = z

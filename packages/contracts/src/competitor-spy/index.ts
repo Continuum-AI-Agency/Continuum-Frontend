@@ -295,6 +295,10 @@ export type AwarenessReport = z.infer<typeof awarenessReportSchema>;
 // Shared DI read cores (paid ads + organic posts). Imported here last so their
 // type-only imports of the shapes above resolve without a runtime cycle.
 export * from './adsQuery';
+// The "what they're scaling" aggregation (angle map) rows + payload.
+export * from './angleMap';
+// The own-vs-competitor gap report (V2 headline artifact).
+export * from './gapReport';
 // Health-chip projection over the status enums above (Brand Spy competitor chips).
 export * from './health-chip';
 export * from './organicQuery';

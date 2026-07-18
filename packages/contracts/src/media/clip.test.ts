@@ -163,6 +163,7 @@ describe("registerClipRequestSchema", () => {
       storagePath: "b1/clips/asset-1/0.mp4",
       fileName: "0.mp4",
       mimeType: "video/mp4",
+      sizeBytes: 1024,
       durationSec: 18,
       section: {
         index: 0,

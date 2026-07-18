@@ -256,12 +256,3 @@ export const ProposedActionSchema = z.object({
 });
 
 export type ProposedAction = z.infer<typeof ProposedActionSchema>;
-
-export type WindowMetrics = z.infer<typeof WindowMetricsSchema>;
-export type OptimizationObjective = z.infer<typeof OptimizationObjectiveSchema>;
-export type AdSetStatus = z.infer<typeof AdSetStatusSchema>;
-export type AudienceType = z.infer<typeof AudienceTypeSchema>;
-export type AdSetSnapshot = z.infer<typeof AdSetSnapshotSchema>;
-export type WindowWeights = z.infer<typeof WindowWeightsSchema>;
-export type EngineConfig = z.infer<typeof EngineConfigSchema>;
-export type Confidence = z.infer<typeof ConfidenceSchema>;

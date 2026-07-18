@@ -11,9 +11,9 @@
 // Field-level resilience: every field except the identity/timestamp anchors is
 // optional/nullable so a partial row never drops the whole record at the boundary.
 
-import { z } from 'zod';
+import { z } from "zod";
 
-export const organicChatRoleSchema = z.enum(['user', 'assistant']);
+export const organicChatRoleSchema = z.enum(["user", "assistant"]);
 export type OrganicChatRole = z.infer<typeof organicChatRoleSchema>;
 
 /**
@@ -66,8 +66,5 @@ export type OrganicChatMessageDto = z.infer<typeof organicChatMessageDtoSchema>;
 
 export const organicChatMessagesResponseSchema = z.object({
   messages: z.array(organicChatMessageDtoSchema),
-  // created_at to page strictly before; null once the whole transcript is loaded. Absent on
-  // responses from a backend that predates pagination, which reads as "no older page".
-  nextCursor: z.string().nullable().optional(),
 });
 export type OrganicChatMessagesResponse = z.infer<typeof organicChatMessagesResponseSchema>;

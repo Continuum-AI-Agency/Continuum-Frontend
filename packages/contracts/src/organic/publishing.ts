@@ -16,6 +16,7 @@ export type PublishPlatform = z.infer<typeof publishPlatformSchema>;
 export const publishFormatSchema = z.enum(['POST', 'REEL', 'CAROUSEL']);
 export type PublishFormat = z.infer<typeof publishFormatSchema>;
 
+/** Match generator-written and user-written format strings at the boundary. */
 /**
  * How a platform ingests media.
  *

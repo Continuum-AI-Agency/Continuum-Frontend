@@ -18,17 +18,15 @@
 
 import { z } from 'zod';
 import { firstPartyCreativeAnalysisSchema } from './analysis';
+import { creativeAssetTypeSchema, creativeFunnelStageSchema } from './taxonomy';
 
-export const paidFunnelStageSchema = z.enum(['tof', 'mof', 'bof', 'unknown']);
+// Funnel-stage and asset-type vocabularies live in the shared cross-side
+// taxonomy (./taxonomy.ts — also consumed by competitor-spy analysis, so the
+// gap join speaks one language); re-exported under the historical paid names.
+export const paidFunnelStageSchema = creativeFunnelStageSchema;
 export type PaidFunnelStage = z.infer<typeof paidFunnelStageSchema>;
 
-export const paidAssetTypeSchema = z.enum([
-  'static_image',
-  'video',
-  'carousel',
-  'catalog',
-  'unknown',
-]);
+export const paidAssetTypeSchema = creativeAssetTypeSchema;
 export type PaidAssetType = z.infer<typeof paidAssetTypeSchema>;
 
 // What the labeler actually saw. 'thumbnail_transcript_copy' is the default
@@ -106,7 +104,6 @@ export const creativeWinRateDimensionSchema = z.enum([
   'visual_style',
 ]);
 export type CreativeWinRateDimension = z.infer<typeof creativeWinRateDimensionSchema>;
-
 
 export const paidMetricWindowSchema = z.enum(['d7', 'd14', 'd30']);
 export type PaidMetricWindow = z.infer<typeof paidMetricWindowSchema>;
@@ -272,7 +269,6 @@ export const paidCreativeReportSchema = z.object({
   }),
 });
 export type PaidCreativeReport = z.infer<typeof paidCreativeReportSchema>;
-
 
 // ---------------------------------------------------------------------------
 // Vector signals — "this creative is winning at something its ad set isn't buying"

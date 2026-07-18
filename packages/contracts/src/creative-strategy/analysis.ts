@@ -12,12 +12,12 @@
 // same rule as competitor-spy.
 
 import { z } from 'zod';
-import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
+import { creativeHookArchetypeSchema } from './taxonomy';
 
-// The hook-archetype vocabulary is shared with competitor-spy; re-exported under a
-// surface-neutral name so callers do not reach across into competitor-spy.
-export const creativeHookArchetypeSchema = competitorAdHookArchetypeSchema;
-export type CreativeHookArchetype = z.infer<typeof creativeHookArchetypeSchema>;
+// The hook-archetype vocabulary lives in the shared cross-side taxonomy
+// (./taxonomy.ts); re-exported here so existing consumers keep their import
+// path. competitor-spy/analysis.ts re-exports the same schema — one vocabulary.
+export { type CreativeHookArchetype, creativeHookArchetypeSchema } from './taxonomy';
 
 export const creativeSentimentLabelSchema = z.enum([
   'positive',
