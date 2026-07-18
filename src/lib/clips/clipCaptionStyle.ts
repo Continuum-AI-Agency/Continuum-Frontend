@@ -4,25 +4,56 @@
 // is best-effort (the worker can only render it if the device resolves the family).
 
 export type CaptionStyle = {
-  textColor: string
-  highlightColor: string
-  outlineColor: string
+  textColor: string;
+  highlightColor: string;
+  outlineColor: string;
   // Brand display family, best-effort. Prepended to the renderer's system stack;
   // silently falls back when the family isn't available to the OffscreenCanvas.
-  fontFamily?: string
-}
+  fontFamily?: string;
+  fontSizeFrac?: number;
+  outlineWidthFrac?: number;
+  position?: CaptionPosition;
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+};
+
+export type CaptionPosition = { xFrac: number; yFrac: number };
+export type CaptionStyleOverride = Partial<CaptionStyle>;
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
-  textColor: "#ffffff",
-  highlightColor: "#ffd400",
-  outlineColor: "#000000",
-}
+  textColor: '#ffffff',
+  highlightColor: '#ffd400',
+  outlineColor: '#000000',
+  fontSizeFrac: 0.055,
+  outlineWidthFrac: 0.18,
+  position: { xFrac: 0.5, yFrac: 0.88 },
+};
 
 // Structural input (not the server-only BrandStyle type) so this module stays free
 // of "use server" imports and safe to bundle anywhere.
 export type BrandStyleInput = {
   colors: string[]
   typography: { primary: string | null }
+}
+
+export function resolveCaptionStyle(
+  base: CaptionStyle | undefined,
+  override?: CaptionStyleOverride,
+): CaptionStyle {
+  const position = {
+    ...DEFAULT_CAPTION_STYLE.position,
+    ...base?.position,
+    ...override?.position,
+  };
+  return {
+    ...DEFAULT_CAPTION_STYLE,
+    ...base,
+    ...override,
+    position: {
+      xFrac: position.xFrac ?? DEFAULT_CAPTION_STYLE.position!.xFrac,
+      yFrac: position.yFrac ?? DEFAULT_CAPTION_STYLE.position!.yFrac,
+    },
+  };
 }
 
 const HEX = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i
@@ -62,5 +93,5 @@ export function buildCaptionStyle(brandStyle: BrandStyleInput | null | undefined
   const highlightColor =
     relativeLuminance(primary) > PALE_HIGHLIGHT_LUMINANCE ? DEFAULT_CAPTION_STYLE.highlightColor : normalizeHex(primary)
 
-  return { textColor: "#ffffff", highlightColor, outlineColor: "#000000", fontFamily }
+  return { ...DEFAULT_CAPTION_STYLE, highlightColor, fontFamily }
 }

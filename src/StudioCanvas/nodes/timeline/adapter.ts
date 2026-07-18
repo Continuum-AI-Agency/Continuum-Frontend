@@ -15,7 +15,7 @@
 import type { ReactNode } from 'react';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
-import type { CaptionWord } from '../../utils/splice/captionCues';
+import type { CaptionCue, CaptionWord } from '../../utils/splice/captionCues';
 import type {
   TimelineOverlayRenderItem,
   TimelineRenderItem,
@@ -31,6 +31,9 @@ export interface TimelineDocument {
   exportPresetId?: string;
   markers?: number[];
   captionsEnabled?: boolean;
+  // Caption cues are the editable authoring model. captionWords remains a
+  // read-compatible fallback for older canvas sessions and Library drafts.
+  captionCues?: CaptionCue[];
   captionWords?: CaptionWord[];
   captionStyle?: CaptionStyle;
 }

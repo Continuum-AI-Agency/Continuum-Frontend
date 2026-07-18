@@ -50,6 +50,7 @@ function documentFromNodeData(data: TimelineEditorNodeData): TimelineDocument {
     exportPresetId: data.exportPresetId,
     markers: data.markers,
     captionsEnabled: data.captionsEnabled,
+    captionCues: data.captionCues,
     captionWords: data.captionWords,
     captionStyle: data.captionStyle,
   };
@@ -72,6 +73,7 @@ export function applyDocumentPatch(
     exportPresetId: next.exportPresetId,
     markers: next.markers,
     captionsEnabled: next.captionsEnabled,
+    captionCues: next.captionCues,
     captionWords: next.captionWords,
     captionStyle: next.captionStyle,
   };

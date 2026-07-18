@@ -78,8 +78,9 @@ export type ComposeTimelineOptions = {
   // these dimensions (aspect conversion); otherwise the first clip's size is used.
   targetWidth?: number;
   targetHeight?: number;
-  // Auto-caption words (already in OUTPUT time). When present they are grouped into
-  // rolling cues and burned into every frame at the current output timestamp.
+  // Editable caption cues (already in OUTPUT time) take precedence over the
+  // flat-word compatibility input.
+  captionCues?: CaptionCue[];
   captionWords?: CaptionWord[];
   captionStyle?: CaptionStyle;
   onProgress?: (progress: SpliceProgress) => void;
@@ -221,8 +222,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
   throwIfAborted(signal);
 
   // Auto-caption cues (words are already output-time; group into rolling lines).
-  const captionCues: CaptionCue[] | undefined =
-    options.captionWords && options.captionWords.length > 0
+  const captionCues: CaptionCue[] | undefined = options.captionCues?.length
+    ? options.captionCues
+    : options.captionWords?.length
       ? groupWordsIntoCues([...options.captionWords].sort((a, b) => a.startSec - b.startSec))
       : undefined;
   const captionStyle = options.captionStyle;

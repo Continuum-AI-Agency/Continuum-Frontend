@@ -124,6 +124,7 @@ async function handleStartTimeline(
       audioBitrate: input.audioBitrate,
       targetWidth: input.targetWidth,
       targetHeight: input.targetHeight,
+      captionCues: input.captionCues,
       captionWords: input.captionWords,
       captionStyle: input.captionStyle,
       signal: activeAbortController.signal,

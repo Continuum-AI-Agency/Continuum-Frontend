@@ -1,3 +1,5 @@
+import type { CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
+
 // Word-synced caption cues for the browser splice engine. The cut concatenates N
 // source keep-ranges into one clip with dead space removed, so a word's source
 // time does NOT map linearly to its position in the output. These helpers re-map
@@ -7,7 +9,13 @@
 // unit-test under bun and run inside the splice worker.
 
 export type CaptionWord = { text: string; startSec: number; endSec: number };
-export type CaptionCue = { startSec: number; endSec: number; words: CaptionWord[] };
+export type CaptionCue = {
+  id: string;
+  startSec: number;
+  endSec: number;
+  words: CaptionWord[];
+  style?: CaptionStyleOverride;
+};
 type SourceRange = { startSec: number; endSec: number };
 
 export type BuildCaptionCuesOptions = {
@@ -58,7 +66,12 @@ export function groupWordsIntoCues(
   let current: CaptionWord[] = [];
   const flush = () => {
     if (current.length === 0) return;
-    cues.push({ startSec: current[0].startSec, endSec: current[current.length - 1].endSec, words: current });
+    cues.push({
+      id: `caption-${cues.length + 1}`,
+      startSec: current[0].startSec,
+      endSec: current[current.length - 1].endSec,
+      words: current,
+    });
     current = [];
   };
 
@@ -82,6 +95,38 @@ export function buildCaptionCues(
   opts: BuildCaptionCuesOptions = {},
 ): CaptionCue[] {
   return groupWordsIntoCues(rebaseWordsToOutput(words, ranges), opts);
+}
+
+export function captionCueText(cue: CaptionCue): string {
+  return cue.words.map((word) => word.text).join(' ');
+}
+
+export function wordsForCaptionText(text: string, startSec: number, endSec: number): CaptionWord[] {
+  const tokens = text.split(/\s+/).map((token) => token.trim()).filter(Boolean);
+  const span = Math.max(0.01, endSec - startSec);
+  const totalWeight = tokens.reduce((sum, token) => sum + token.length, 0) || tokens.length;
+  let cursor = startSec;
+  return tokens.map((token, index) => {
+    const next = index === tokens.length - 1
+      ? endSec
+      : Math.min(endSec, cursor + span * (token.length / totalWeight));
+    const word = { text: token, startSec: cursor, endSec: next };
+    cursor = next;
+    return word;
+  });
+}
+
+export function updateCaptionCue(
+  cue: CaptionCue,
+  patch: Partial<Pick<CaptionCue, 'startSec' | 'endSec' | 'style'>> & { text?: string },
+): CaptionCue {
+  const startSec = patch.startSec ?? cue.startSec;
+  const endSec = Math.max(startSec + 0.01, patch.endSec ?? cue.endSec);
+  const words = patch.text === undefined
+    ? wordsForCaptionText(captionCueText(cue), startSec, endSec)
+    : wordsForCaptionText(patch.text, startSec, endSec);
+  const style = Object.prototype.hasOwnProperty.call(patch, 'style') ? patch.style : cue.style;
+  return { ...cue, ...patch, startSec, endSec, words, style };
 }
 
 // Cues are ordered and non-overlapping, and there are only a handful per clip, so

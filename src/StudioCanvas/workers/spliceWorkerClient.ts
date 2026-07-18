@@ -1,5 +1,5 @@
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import type { CaptionWord } from '../utils/splice/captionCues';
+import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 import type {
   SingleSourceWorkerRange,
   SpliceWorkerInbound,
@@ -44,6 +44,7 @@ export type RunTimelineInWorkerOptions = {
   audioBitrate?: number;
   targetWidth?: number;
   targetHeight?: number;
+  captionCues?: CaptionCue[];
   captionWords?: CaptionWord[];
   captionStyle?: CaptionStyle;
   signal?: AbortSignal;
@@ -232,6 +233,7 @@ export function runTimelineInWorker(
     audioBitrate,
     targetWidth,
     targetHeight,
+    captionCues,
     captionWords,
     captionStyle,
   } = options;
@@ -247,6 +249,7 @@ export function runTimelineInWorker(
       audioBitrate,
       targetWidth,
       targetHeight,
+      captionCues,
       captionWords,
       captionStyle,
     },

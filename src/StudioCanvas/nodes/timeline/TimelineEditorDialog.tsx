@@ -27,12 +27,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
+import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineInputSource } from '../../types';
 import { clipEffectsToCss, resolveTextOverlays, speedFor } from '../../utils/render/effectSpec';
 import { DEFAULT_EXPORT_PRESET_ID, EXPORT_PRESETS } from '../../utils/render/exportPresets';
 import { headFadeFor, tailFadeFor, transitionOverlayAt } from '../../utils/render/transitions';
 import { findActiveCue, groupWordsIntoCues } from '../../utils/splice/captionCues';
 import type { TimelineEditorAdapter, TimelineRenderSinkKind } from './adapter';
+import { CaptionEditor } from './CaptionEditor';
 import { ClipInspector } from './ClipInspector';
 import { buildClipPlacements } from './commentMapping';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
@@ -382,19 +384,27 @@ export function TimelineEditorDialog({
     return { url, kind, opacity: Math.min(1, (localOut - tailStart) / dur) };
   })();
 
-  // Active caption line at the playhead (auto-captions), shown in the preview when
-  // captions are enabled. Exact karaoke burn-in is in the export.
-  const captionWords = document.captionWords;
+  const captionCues = useMemo(
+    () => document.captionCues ?? (document.captionWords?.length ? groupWordsIntoCues(document.captionWords) : []),
+    [document.captionCues, document.captionWords],
+  );
   const captionsEnabled = document.captionsEnabled;
-  const captionCues = useMemo(() => {
-    if (!captionsEnabled || !captionWords || captionWords.length === 0) return undefined;
-    return groupWordsIntoCues([...captionWords].sort((a, b) => a.startSec - b.startSec));
-  }, [captionsEnabled, captionWords]);
-  const activeCaption = captionCues
-    ? (findActiveCue(captionCues, playback.playheadSec)
-        ?.words.map((word) => word.text)
-        .join(' ') ?? undefined)
+  const [selectedCaptionId, setSelectedCaptionId] = useState<string | undefined>(undefined);
+  const activeCaption = captionsEnabled
+    ? (findActiveCue(captionCues, playback.playheadSec) ?? undefined)
     : undefined;
+  const updateCaptionCues = useCallback(
+    (nextCues: typeof captionCues) => {
+      patchDocument((current) => ({
+        ...current,
+        captionCues: nextCues,
+        captionWords: undefined,
+        captionsEnabled: nextCues.length > 0,
+        captionStyle: current.captionStyle ?? DEFAULT_CAPTION_STYLE,
+      }));
+    },
+    [patchDocument],
+  );
 
   const renderProgress = Math.max(0, Math.min(1, progress));
   const renderDisabled = isRendering || items.length === 0 || (support ? !support.ok : false);
@@ -419,16 +429,16 @@ export function TimelineEditorDialog({
               className="gap-1.5 text-xs"
               onClick={() => captions.generate()}
               disabled={captions.isGenerating || isRendering || items.length === 0}
-              title="Transcribe the timeline audio with Gemini and add captions"
+              title="Transcribe the timeline audio with word-level timing"
             >
               <ChatBubbleIcon className="h-3.5 w-3.5" />
               {captions.isGenerating
                 ? 'Captioning…'
-                : (captionWords?.length ?? 0) > 0
+                : captionCues.length > 0
                   ? 'Re-caption'
                   : 'Auto-captions'}
             </Button>
-            {(captionWords?.length ?? 0) > 0 ? (
+            {captionCues.length > 0 ? (
               // biome-ignore lint/a11y/noLabelWithoutControl: label wraps its Switch control
               <label className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                 <Switch
@@ -543,10 +553,23 @@ export function TimelineEditorDialog({
                   fadeOverlay={activeFadeOverlay}
                   crossfade={activeCrossfade}
                   caption={activeCaption}
+                  captionStyle={document.captionStyle}
+                  onCaptionPositionChange={(position) => {
+                    if (!activeCaption) return;
+                    setSelectedCaptionId(activeCaption.id);
+                    updateCaptionCues(
+                      captionCues.map((cue) =>
+                        cue.id === activeCaption.id
+                          ? { ...cue, style: { ...cue.style, position } }
+                          : cue,
+                      ),
+                    );
+                  }}
                 />
               </div>
-              <div className="min-h-0">
-                <ClipInspector
+              <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+                <div className="min-h-[220px]">
+                  <ClipInspector
                   item={inspectorItem}
                   context={inspectingOverlay ? 'overlay' : 'base'}
                   durationSec={inspectorDuration}
@@ -591,8 +614,21 @@ export function TimelineEditorDialog({
                     if (!inspectingOverlay && selectedItemId)
                       model.setTransition(selectedItemId, transition);
                   }}
-                  onClose={clearSelection}
-                />
+                    onClose={clearSelection}
+                  />
+                </div>
+                {captionCues.length > 0 ? (
+                  <CaptionEditor
+                    cues={captionCues}
+                    selectedId={selectedCaptionId}
+                    style={document.captionStyle}
+                    onSelect={setSelectedCaptionId}
+                    onChangeCues={updateCaptionCues}
+                    onChangeStyle={(captionStyle) =>
+                      patchDocument((current) => ({ ...current, captionStyle }))
+                    }
+                  />
+                ) : null}
               </div>
             </div>
 

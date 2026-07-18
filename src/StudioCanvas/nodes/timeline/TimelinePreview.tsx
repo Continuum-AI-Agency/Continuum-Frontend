@@ -4,8 +4,9 @@ import { VideoIcon } from '@radix-ui/react-icons';
 import { Pause, Play } from 'lucide-react';
 import type React from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { resolveCaptionStyle, type CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import type { CaptionCue } from '../../utils/splice/captionCues';
 
 function formatTime(sec: number): string {
   const safe = Number.isFinite(sec) && sec > 0 ? sec : 0;
@@ -32,6 +33,8 @@ export function TimelinePreview({
   fadeOverlay,
   crossfade,
   caption,
+  captionStyle,
+  onCaptionPositionChange,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   showVideo: boolean;
@@ -49,9 +52,9 @@ export function TimelinePreview({
   fadeOverlay?: { color: string; alpha: number } | null;
   // Incoming clip's frame faded in over the current one during a cross-dissolve.
   crossfade?: { url: string; kind: 'video' | 'image'; opacity: number };
-  // Active auto-caption line at the playhead (lower-third). Karaoke burn-in is exact
-  // in the export; the preview shows the plain line.
-  caption?: string;
+  caption?: CaptionCue;
+  captionStyle?: CaptionStyle;
+  onCaptionPositionChange?: (position: { xFrac: number; yFrac: number }) => void;
 }) {
   return (
     <div className="flex h-full flex-col gap-2">
@@ -129,17 +132,36 @@ export function TimelinePreview({
 
         {caption ? (
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-[12%] flex justify-center px-4"
+            className="absolute flex max-w-[90%] -translate-x-1/2 -translate-y-1/2 touch-none justify-center px-4"
             aria-hidden="true"
+            onPointerDown={(event) => {
+              if (!onCaptionPositionChange) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!onCaptionPositionChange || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+              if (!bounds) return;
+              onCaptionPositionChange({
+                xFrac: Math.max(0.05, Math.min(0.95, (event.clientX - bounds.left) / bounds.width)),
+                yFrac: Math.max(0.05, Math.min(0.95, (event.clientY - bounds.top) / bounds.height)),
+              });
+            }}
+            style={{
+              left: `${resolveCaptionStyle(captionStyle, caption.style).position!.xFrac * 100}%`,
+              top: `${resolveCaptionStyle(captionStyle, caption.style).position!.yFrac * 100}%`,
+              cursor: onCaptionPositionChange ? 'grab' : undefined,
+            }}
           >
             <span
-              className="max-w-[90%] text-center font-bold uppercase leading-tight text-white"
+              className="max-w-[90%] text-center font-bold uppercase leading-tight"
               style={{
-                fontSize: '5.5cqh',
-                textShadow: '0 0 0.18em rgba(0,0,0,0.9), 0 0 0.06em rgba(0,0,0,1)',
+                fontSize: `${resolveCaptionStyle(captionStyle, caption.style).fontSizeFrac! * 100}cqh`,
+                color: resolveCaptionStyle(captionStyle, caption.style).textColor,
+                textShadow: `0 0 0.18em ${resolveCaptionStyle(captionStyle, caption.style).outlineColor}`,
               }}
             >
-              {caption}
+              {caption.words.map((word) => word.text).join(' ')}
             </span>
           </div>
         ) : null}

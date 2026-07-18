@@ -15,6 +15,7 @@ import {
 } from '@/lib/clips/clipQuality';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { extractAudioWav } from '@/StudioCanvas/utils/clip/extractAudioWav';
+import { buildCaptionCues } from '@/StudioCanvas/utils/splice/captionCues';
 import { runSingleSourceSpliceInWorker } from '@/StudioCanvas/workers/spliceWorkerClient';
 
 // Browser orchestration for clip generation: cut each section from the single
@@ -47,8 +48,7 @@ export type CutAndPersistSectionParams = {
   // User-selected output quality; caps the on-device encode resolution. Defaults
   // to 1080p when omitted.
   quality?: ClipQuality;
-  // Burn word-synced captions into the clip from the section's transcript words.
-  // Defaults to off when omitted.
+  // Store an editable caption draft with the clean generated clip.
   captionsEnabled?: boolean;
   // Brand-derived caption colors/font; only applied when captions are enabled.
   captionStyle?: CaptionStyle;
@@ -80,6 +80,21 @@ async function uploadToTicket(
       contentType: blob.type || 'application/octet-stream',
     });
   if (error) throw new Error(`upload to storage failed: ${error.message}`);
+}
+
+export async function uploadCaptionAudio(params: {
+  brandId: string;
+  sourceAssetId: string;
+  audioBlob: Blob;
+}): Promise<{ audioBucket: string; audioStoragePath: string }> {
+  const supabase = createSupabaseBrowserClient();
+  const ticket = await signUpload(supabase, {
+    brandId: params.brandId,
+    sourceAssetId: params.sourceAssetId,
+    target: 'audio',
+  });
+  await uploadToTicket(supabase, ticket, params.audioBlob);
+  return { audioBucket: ticket.bucket, audioStoragePath: ticket.path };
 }
 
 export async function extractAndUploadAudio(
@@ -117,16 +132,14 @@ export async function cutAndPersistSection(
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
   const splice = deps.splice ?? runSingleSourceSpliceInWorker;
 
-  const withCaptions = Boolean(captionsEnabled && section.words.length > 0);
+  const captionCues = captionsEnabled && section.words.length > 0
+    ? buildCaptionCues(section.words, section.keepRanges)
+    : undefined;
   onStage?.('Cutting…');
   const spliced = await splice({
     blob: sourceBlob,
     ranges: section.keepRanges.map((r) => ({ startSec: r.startSec, endSec: r.endSec })),
     maxShortEdgePx: clipQualityToShortEdge(quality ?? DEFAULT_CLIP_QUALITY),
-    captionWords: withCaptions
-      ? section.words.map((w) => ({ text: w.text, startSec: w.startSec, endSec: w.endSec }))
-      : undefined,
-    captionStyle: withCaptions ? captionStyle : undefined,
     signal,
   });
 
@@ -152,6 +165,8 @@ export async function cutAndPersistSection(
       durationSec: spliced.durationSec,
       section,
       transcriptExcerpt: section.transcriptExcerpt,
+      captionCues,
+      captionStyle: captionCues ? captionStyle : undefined,
       score,
     });
     const { data, error } = await supabase.functions.invoke('clip-asset', {

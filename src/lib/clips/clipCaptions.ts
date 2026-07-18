@@ -1,8 +1,5 @@
-// User toggle for burning word-synced captions into generated clips. Like clip
-// quality, this is purely a browser-encode parameter (the splice worker draws the
-// captions onto each frame), so it never crosses the FE<->BE boundary and stays
-// frontend-local rather than in contracts. Defaults ON. Persisted as a remembered
-// UI preference (allowed localStorage use: non-critical, ephemeral).
+// User toggle for saving an editable word-synced caption draft alongside generated
+// clips. It is a remembered UI preference and defaults on.
 
 export const CLIP_CAPTIONS_STORAGE_KEY = "continuum:clip-captions"
 export const DEFAULT_CLIP_CAPTIONS_ENABLED = true

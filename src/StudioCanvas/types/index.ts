@@ -12,7 +12,7 @@ import type {
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
-import type { CaptionWord } from '../utils/splice/captionCues';
+import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 
 export type {
   BrandBookPieceKind,
@@ -294,6 +294,7 @@ export interface TimelineEditorNodeData extends BaseNodeData {
   // Auto-captions (Gemini-transcribed, output-time words). When captionsEnabled,
   // the render burns them in and the preview shows them at the playhead.
   captionsEnabled?: boolean;
+  captionCues?: CaptionCue[];
   captionWords?: CaptionWord[];
   captionStyle?: CaptionStyle;
   progress?: number;

@@ -107,7 +107,7 @@ describe('cutAndPersistSection', () => {
     expect(stages).toEqual(['Cutting…', 'Uploading…', 'Saving…']);
   });
 
-  it('forwards mapped caption words to the splice only when captions are enabled', async () => {
+  it('preserves rebased editable caption cues without burning pixels into the clean clip', async () => {
     const { client } = makeFakeSupabase();
     const makeSplice = () =>
       mock(async () => ({
@@ -130,10 +130,18 @@ describe('cutAndPersistSection', () => {
       },
       { createClient: client, splice: spliceOn as never },
     );
-    expect((spliceOn.mock.calls[0][0] as { captionWords?: unknown[] }).captionWords).toEqual([
-      { text: 'hello', startSec: 0, endSec: 0.5 },
-      { text: 'world', startSec: 0.6, endSec: 1.0 },
-    ]);
+    expect((spliceOn.mock.calls[0][0] as { captionWords?: unknown[] }).captionWords).toBeUndefined();
+    expect((client as unknown as { functions: { invoke: ReturnType<typeof mock> } })().functions.invoke.mock.calls[1][1].body)
+      .toMatchObject({
+        captionCues: [
+          {
+            words: [
+              { text: 'hello', startSec: 0, endSec: 0.5 },
+              { text: 'world', startSec: 0.6, endSec: 1.0 },
+            ],
+          },
+        ],
+      });
 
     const spliceOff = makeSplice();
     await cutAndPersistSection(
@@ -151,7 +159,7 @@ describe('cutAndPersistSection', () => {
     ).toBeUndefined();
   });
 
-  it('forwards the brand caption style only when captions are enabled', async () => {
+  it('stores the brand caption style with editable cues instead of forwarding it to the splice', async () => {
     const { client } = makeFakeSupabase();
     const style = {
       textColor: '#ffffff',
@@ -181,7 +189,7 @@ describe('cutAndPersistSection', () => {
       },
       { createClient: client, splice: spliceOn as never },
     );
-    expect((spliceOn.mock.calls[0][0] as { captionStyle?: unknown }).captionStyle).toEqual(style);
+    expect((spliceOn.mock.calls[0][0] as { captionStyle?: unknown }).captionStyle).toBeUndefined();
 
     const spliceOff = makeSplice();
     await cutAndPersistSection(

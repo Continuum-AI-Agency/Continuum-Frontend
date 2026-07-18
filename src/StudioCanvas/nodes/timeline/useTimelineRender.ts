@@ -87,14 +87,15 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       try {
         const resolved = await resolveSources(items);
         const resolvedOverlays = await resolveOverlays(overlayTracks);
-        const captionsOn =
-          Boolean(document.captionsEnabled) && (document.captionWords?.length ?? 0) > 0;
+        const captionsOn = Boolean(document.captionsEnabled) &&
+          ((document.captionCues?.length ?? 0) > 0 || (document.captionWords?.length ?? 0) > 0);
         const result = await runTimelineInWorker({
           items: resolved,
           overlays: resolvedOverlays,
           videoBitrate: exportPreset.videoBitrate,
           targetWidth: exportPreset.width ?? undefined,
           targetHeight: exportPreset.height ?? undefined,
+          captionCues: captionsOn ? document.captionCues : undefined,
           captionWords: captionsOn ? document.captionWords : undefined,
           captionStyle: captionsOn ? document.captionStyle : undefined,
           signal: controller.signal,

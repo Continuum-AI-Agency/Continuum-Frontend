@@ -1,7 +1,7 @@
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
-import type { CaptionWord } from '../utils/splice/captionCues';
+import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
 
 export type WorkerClipInput = {
   slotId: string;
@@ -77,6 +77,7 @@ export type SpliceWorkerInbound =
       targetWidth?: number;
       targetHeight?: number;
       // Auto-caption words (output-time) + style, burned in when present.
+      captionCues?: CaptionCue[];
       captionWords?: CaptionWord[];
       captionStyle?: CaptionStyle;
     }
