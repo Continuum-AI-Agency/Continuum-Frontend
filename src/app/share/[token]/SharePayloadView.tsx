@@ -152,6 +152,66 @@ function AssetPreview({
   markers: ShareTimeMarker[];
   comments: PublicShareComment[];
 }) {
+  if (asset.carousel && asset.carousel.slides.length > 1) {
+    return (
+      <div className="grid grid-cols-1 gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 sm:grid-cols-2">
+        {asset.carousel.slides.map((slide) =>
+          slide.signedUrl ? (
+            slide.kind === 'video' ? (
+              <video
+                key={slide.assetId ?? slide.slideIndex}
+                src={slide.signedUrl}
+                controls
+                playsInline
+                className="aspect-square size-full bg-black object-contain"
+              >
+                <track kind="captions" />
+              </video>
+            ) : (
+              <img
+                key={slide.assetId ?? slide.slideIndex}
+                src={slide.signedUrl}
+                alt={`${asset.title ?? asset.fileName} · slide ${slide.slideIndex + 1}`}
+                className="aspect-square size-full object-contain"
+              />
+            )
+          ) : (
+            <div
+              key={slide.assetId ?? slide.slideIndex}
+              className="flex aspect-square items-center justify-center text-xs text-muted-foreground"
+            >
+              Slide {slide.slideIndex + 1} unavailable
+            </div>
+          ),
+        )}
+      </div>
+    );
+  }
+  const preview = asset.preview?.state === 'ready' ? asset.preview : null;
+  if (preview?.kind === 'image' && preview.signedUrl) {
+    return (
+      <div className="relative overflow-hidden rounded-lg border border-border">
+        <img
+          src={preview.signedUrl}
+          alt={asset.title ?? asset.fileName}
+          className="max-h-[70vh] w-full object-contain"
+        />
+        <PublicImageAnnotations comments={comments} />
+      </div>
+    );
+  }
+  if (preview?.kind === 'video' && preview.signedUrl) {
+    return (
+      <video
+        src={preview.signedUrl}
+        controls
+        playsInline
+        className="max-h-[70vh] w-full rounded-lg border border-border bg-black"
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
   if (asset.kind === 'image' && asset.signedUrl) {
     return (
       <div className="relative overflow-hidden rounded-lg border border-border">

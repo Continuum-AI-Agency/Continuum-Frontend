@@ -3,7 +3,6 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import React, { Suspense } from 'react';
-import { BrandSwitcherMenu } from '@/components/navigation/BrandSwitcherMenu';
 import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -54,7 +53,6 @@ function DashboardHeaderInner() {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
-        <BrandSwitcherMenu triggerId="global-brand-switcher" />
         <NotificationsBell />
       </div>
     </header>

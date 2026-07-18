@@ -1,24 +1,42 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
 
-export default function MockOAuthPopup() {
+function PopupStatus({ provider }: { provider: string }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        placeItems: 'center',
+        minHeight: '100vh',
+        fontFamily: 'sans-serif',
+      }}
+    >
+      <div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Connecting {provider}…</div>
+        <div style={{ color: '#666' }}>This window will close automatically.</div>
+      </div>
+    </div>
+  );
+}
+
+function MockOAuthPopupContent() {
   const params = useSearchParams();
-  const provider = useMemo(() => params.get("provider") ?? "mock", [params]);
-  const context = useMemo(() => params.get("context") ?? "onboarding", [params]);
+  const provider = params.get('provider') ?? 'mock';
+  const context = params.get('context') ?? 'onboarding';
 
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
         window.opener?.postMessage(
           {
-            type: "oauth:success",
+            type: 'oauth:success',
             provider,
             context,
             accountId: `acct_${provider}`,
           },
-          window.location.origin
+          window.location.origin,
         );
       } catch {
         // ignore postMessage errors and allow the popup to close
@@ -28,13 +46,13 @@ export default function MockOAuthPopup() {
     return () => clearTimeout(timer);
   }, [provider, context]);
 
-  return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "100vh", fontFamily: "sans-serif" }}>
-      <div>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Connecting {provider}…</div>
-        <div style={{ color: "#666" }}>This window will close automatically.</div>
-      </div>
-    </div>
-  );
+  return <PopupStatus provider={provider} />;
 }
 
+export default function MockOAuthPopup() {
+  return (
+    <Suspense fallback={<PopupStatus provider="account" />}>
+      <MockOAuthPopupContent />
+    </Suspense>
+  );
+}

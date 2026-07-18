@@ -11,8 +11,15 @@ import {
   type ShareLinkRow,
   shareLinkStatus,
 } from '@/lib/library/shareValidation';
-import { rowToMediaAsset } from '@/lib/media/mapper';
+import { buildCarousel, carouselSignablePaths } from '@/lib/media/carousel';
+import { rowToSignedMediaAsset } from '@/lib/media/mapper';
+import {
+  buildAssetPreview,
+  loadAssetRenditions,
+  renditionSignablePaths,
+} from '@/lib/media/renditions';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from '@/lib/media/schema';
+import { assetSignablePaths, type SignablePath } from '@/lib/media/signed-urls';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { loadShareComments } from './loadShareComments';
@@ -75,13 +82,13 @@ function rowAtVersion(row: MediaAssetRow, version: VersionRow): MediaAssetRow {
 // Signs each asset's storage path from its own bucket (media-library,
 // media-source, ...). Mirrors src/lib/media/signed-urls.ts, which is bound to
 // the user-scoped server client and therefore unusable on this anonymous page.
-async function signAssets(admin: AdminClient, rows: MediaAssetRow[]): Promise<Map<string, string>> {
+async function signAssets(admin: AdminClient, paths: SignablePath[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   const pathsByBucket = new Map<string, string[]>();
-  for (const row of rows) {
-    const existing = pathsByBucket.get(row.bucket);
-    if (existing) existing.push(row.storage_path);
-    else pathsByBucket.set(row.bucket, [row.storage_path]);
+  for (const item of paths) {
+    const existing = pathsByBucket.get(item.bucket);
+    if (existing) existing.push(item.path);
+    else pathsByBucket.set(item.bucket, [item.path]);
   }
 
   await Promise.all(
@@ -253,12 +260,18 @@ export async function loadSharePayload(
   const loaded = await loadAssetRows(admin, link);
   if (!loaded) return { ok: false, reason: 'missing' };
 
+  const sharedRows = loaded.entries.map((entry) => entry.row);
+  const renditions = await loadAssetRenditions(
+    admin,
+    loaded.entries.map((entry) => entry.versionId),
+  );
   // Signing and the comment read are independent reads over the same rows.
   const [signedByPath, comments] = await Promise.all([
-    signAssets(
-      admin,
-      loaded.entries.map((entry) => entry.row),
-    ),
+    signAssets(admin, [
+      ...assetSignablePaths(sharedRows),
+      ...carouselSignablePaths(sharedRows),
+      ...renditionSignablePaths(renditions),
+    ]),
     link.allow_comments
       ? loadShareComments(admin, {
           brandId: link.brand_id,
@@ -268,12 +281,17 @@ export async function loadSharePayload(
       : Promise.resolve([]),
   ]);
 
-  const assets: PublicShareAsset[] = loaded.entries.map((entry) => ({
-    asset: rowToMediaAsset(entry.row, signedByPath.get(entry.row.storage_path) ?? null),
-    versionId: entry.versionId,
-    versionNumber: entry.versionNumber,
-    isHead: entry.isHead,
-  }));
+  const assets: PublicShareAsset[] = loaded.entries.map((entry) => {
+    const preview = buildAssetPreview(entry.row, renditions, signedByPath);
+    const base = rowToSignedMediaAsset(entry.row, signedByPath, preview);
+    const carousel = buildCarousel(entry.row, signedByPath);
+    return {
+      asset: carousel ? { ...base, carousel } : base,
+      versionId: entry.versionId,
+      versionNumber: entry.versionNumber,
+      isHead: entry.isHead,
+    };
+  });
 
   return {
     ok: true,

@@ -11,7 +11,11 @@ import { FormAlert } from '@/components/auth/FormAlert';
 import { FormInput } from '@/components/auth/FormInput';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { type MagicLinkInput, magicLinkSchema } from '@/lib/auth/schemas';
+import {
+  magicLinkFormSchema,
+  type PasswordSignInInput,
+  passwordSignInSchema,
+} from '@/lib/auth/schemas';
 
 type LoginFormProps = {
   redirectTo?: string;
@@ -19,23 +23,45 @@ type LoginFormProps = {
 };
 
 export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
-  const { sendMagicLink, signInWithGooglePopup, isPending, isGooglePending, error, clearError } =
-    useAuth({ initialError });
+  const {
+    sendMagicLink,
+    signInWithPassword,
+    signInWithGooglePopup,
+    isPending,
+    isGooglePending,
+    error,
+    clearError,
+  } = useAuth({ initialError });
   const [emailSent, setEmailSent] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
+  const [usePassword, setUsePassword] = useState(false);
 
   const {
     register,
     handleSubmit,
+    resetField,
     formState: { errors },
-  } = useForm<MagicLinkInput>({
-    resolver: zodResolver(magicLinkSchema),
-    defaultValues: { email: '' },
+  } = useForm<PasswordSignInInput>({
+    resolver: zodResolver(usePassword ? passwordSignInSchema : magicLinkFormSchema),
+    defaultValues: { email: '', password: '' },
   });
 
-  const onSubmit = async (data: MagicLinkInput) => {
+  const onSubmit = async (data: PasswordSignInInput) => {
     clearError();
     setSubmittedEmail(data.email);
+
+    if (usePassword) {
+      const success = await signInWithPassword({
+        email: data.email,
+        password: data.password,
+        redirectTo,
+      });
+      if (success) {
+        const posthog = await import('posthog-js');
+        posthog.default.capture('user_logged_in', { method: 'password', email: data.email });
+      }
+      return;
+    }
 
     const success = await sendMagicLink({ email: data.email, redirectTo });
     if (success) {
@@ -43,6 +69,12 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
       posthog.default.capture('user_logged_in', { method: 'magic_link', email: data.email });
       setEmailSent(true);
     }
+  };
+
+  const toggleSignInMethod = () => {
+    clearError();
+    resetField('password');
+    setUsePassword((current) => !current);
   };
 
   const handleResend = async () => {
@@ -57,13 +89,21 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
     >
-      <section className="glass-panel rounded-[1.75rem] border-subtle p-5 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.55)] sm:rounded-[2rem] sm:p-8">
+      {/* `layout` lets the panel morph its height when the password field
+          appears, rather than snapping to the new size. */}
+      <motion.section
+        layout
+        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        className="glass-panel rounded-[1.75rem] border-subtle p-5 shadow-[0_24px_70px_-28px_rgba(15,23,42,0.55)] sm:rounded-[2rem] sm:p-8"
+      >
         <div className="mb-5 sm:mb-8">
           <h1 className="mb-1 text-balance text-2xl font-bold tracking-tight text-primary sm:mb-2 sm:text-3xl">
             Welcome to Continuum
           </h1>
           <p className="text-pretty text-sm leading-6 text-secondary sm:text-base">
-            Enter your email and we&apos;ll send you a secure sign-in link.
+            {usePassword
+              ? 'Enter your email and password to sign in.'
+              : "Enter your email and we'll send you a secure sign-in link."}
           </p>
         </div>
 
@@ -79,6 +119,25 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
             error={errors.email?.message}
             disabled={isPending}
           />
+
+          {usePassword && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <FormInput
+                {...register('password')}
+                id="password"
+                type="password"
+                label="Password"
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                error={errors.password?.message}
+                disabled={isPending}
+              />
+            </motion.div>
+          )}
 
           <Button
             type="submit"
@@ -97,12 +156,28 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
             {isPending ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Sending link...
+                {usePassword ? 'Signing in...' : 'Sending link...'}
               </span>
+            ) : usePassword ? (
+              'Sign in'
             ) : (
               'Send sign-in link'
             )}
           </Button>
+
+          {/* `text-secondary` is a custom utility (globals.css) resolving to a
+              muted grey. Do NOT add an opacity modifier — `text-secondary/70`
+              resolves to the unrelated Tailwind `--secondary` cyan instead. */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={toggleSignInMethod}
+              disabled={isPending}
+              className="rounded text-xs text-secondary opacity-70 transition-opacity hover:underline hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {usePassword ? 'magic link' : 'password login'}
+            </button>
+          </div>
         </form>
 
         <div className="relative my-6">
@@ -170,7 +245,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
             </Link>
           </p>
         </div>
-      </section>
+      </motion.section>
     </motion.div>
   ) : (
     <motion.div

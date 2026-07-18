@@ -6,6 +6,7 @@ import { getLocalStorageJSON, removeLocalStorage, setLocalStorageJSON } from '@/
 import { STORAGE_KEY_THEME } from '@/lib/storage-keys';
 import {
   applyThemeAppearanceToRoot,
+  readThemeAppearanceFromRoot,
   type ThemeAppearance,
   type ThemeMode,
 } from '@/lib/theme/themeDom';
@@ -47,7 +48,11 @@ export function ThemeProvider({
   initialAppearance?: ThemeAppearance;
 }) {
   const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? 'light');
-  const [appearance, setAppearance] = useState<ThemeAppearance>(initialAppearance ?? 'light');
+  const [appearance, setAppearance] = useState<ThemeAppearance>(() => {
+    if (initialAppearance) return initialAppearance;
+    if (typeof document === 'undefined') return 'light';
+    return readThemeAppearanceFromRoot(document.documentElement) ?? 'light';
+  });
 
   // Sync appearance with mode and system preference
   useEffect(() => {
@@ -59,12 +64,6 @@ export function ThemeProvider({
       const nextAppearance: ThemeAppearance = resolvedDark ? 'dark' : 'light';
       setAppearance(nextAppearance);
       applyDomTheme(nextAppearance);
-      try {
-        // Persist current resolved appearance for SSR to pick up on next request
-        document.cookie = `appearance=${nextAppearance}; Path=/; Max-Age=31536000; SameSite=Lax`;
-      } catch {
-        // no-op
-      }
     };
 
     compute();
@@ -85,12 +84,6 @@ export function ThemeProvider({
       removeLocalStorage(STORAGE_KEY_THEME);
     } else {
       setLocalStorageJSON(STORAGE_KEY_THEME, mode);
-    }
-    try {
-      // Persist the selected mode for informational purposes (not used for SSR directly)
-      document.cookie = `themeMode=${mode}; Path=/; Max-Age=31536000; SameSite=Lax`;
-    } catch {
-      // no-op
     }
   }, [mode]);
 

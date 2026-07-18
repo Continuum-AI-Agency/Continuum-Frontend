@@ -1,15 +1,16 @@
-"use client";
+'use client';
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 import {
   logoutAction,
-  signInWithGoogleAction,
   sendMagicLinkAction,
-} from "@/lib/auth/actions";
-import type { MagicLinkInput } from "@/lib/auth/schemas";
-import { openCenteredPopup, waitForPopupMessage } from "@/lib/popup";
-import { buildOAuthStartUrl } from "@/lib/oauth";
+  signInWithGoogleAction,
+  signInWithPasswordAction,
+} from '@/lib/auth/actions';
+import type { MagicLinkInput, PasswordSignInInput } from '@/lib/auth/schemas';
+import { buildOAuthStartUrl } from '@/lib/oauth';
+import { openCenteredPopup, waitForPopupMessage } from '@/lib/popup';
 
 type UseAuthOptions = {
   initialError?: string;
@@ -55,13 +56,35 @@ export function useAuth(options?: UseAuthOptions) {
     });
   };
 
+  const signInWithPassword = async (input: PasswordSignInInput): Promise<boolean> => {
+    setError(null);
+
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        const result = await signInWithPasswordAction(input);
+
+        if (!result.success) {
+          setError(result.error);
+          resolve(false);
+          return;
+        }
+
+        // The action set the session cookie server-side; refresh so the server
+        // tree re-renders as authenticated before navigating.
+        router.refresh();
+        router.replace(result.data.redirectPath);
+        resolve(true);
+      });
+    });
+  };
+
   const signInWithGooglePopup = async (redirectTo?: string): Promise<void> => {
     setError(null);
     setIsGooglePending(true);
 
     try {
-      const url = buildOAuthStartUrl("google", "login", { popup: true });
-      const popup = openCenteredPopup(url, "Continue with Google");
+      const url = buildOAuthStartUrl('google', 'login', { popup: true });
+      const popup = openCenteredPopup(url, 'Continue with Google');
 
       if (!popup) {
         const result = await signInWithGoogleAction(redirectTo);
@@ -74,32 +97,32 @@ export function useAuth(options?: UseAuthOptions) {
       }
 
       type OAuthSuccess = {
-        type: "oauth:success";
+        type: 'oauth:success';
         provider: string | null;
         context: string;
         accountId: string | null;
       };
       type OAuthError = {
-        type: "oauth:error";
+        type: 'oauth:error';
         provider: string | null;
         context: string;
         message: string;
       };
 
       const message = await Promise.race<OAuthSuccess | OAuthError>([
-        waitForPopupMessage<OAuthSuccess>("oauth:success", {
-          predicate: (m) => (m as OAuthSuccess).context === "login",
+        waitForPopupMessage<OAuthSuccess>('oauth:success', {
+          predicate: (m) => (m as OAuthSuccess).context === 'login',
           timeoutMs: 120000,
         }),
-        waitForPopupMessage<OAuthError>("oauth:error", {
-          predicate: (m) => (m as OAuthError).context === "login",
+        waitForPopupMessage<OAuthError>('oauth:error', {
+          predicate: (m) => (m as OAuthError).context === 'login',
           timeoutMs: 120000,
         }),
       ]);
 
-      if ((message as OAuthError).type === "oauth:error") {
+      if ((message as OAuthError).type === 'oauth:error') {
         const err = message as OAuthError;
-        setError(err.message || "Authentication failed. Please try again");
+        setError(err.message || 'Authentication failed. Please try again');
         return;
       }
 
@@ -108,10 +131,10 @@ export function useAuth(options?: UseAuthOptions) {
       } catch {}
 
       router.refresh();
-      const nextRedirect = redirectTo ?? "/dashboard";
+      const nextRedirect = redirectTo ?? '/dashboard';
       router.replace(nextRedirect);
     } catch {
-      setError("Authentication failed. Please try again");
+      setError('Authentication failed. Please try again');
     } finally {
       setIsGooglePending(false);
     }
@@ -122,6 +145,7 @@ export function useAuth(options?: UseAuthOptions) {
   return {
     logout,
     sendMagicLink,
+    signInWithPassword,
     signInWithGooglePopup,
     isPending,
     isGooglePending,

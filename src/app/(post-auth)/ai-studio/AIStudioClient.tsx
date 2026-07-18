@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import React from 'react';
 import { CreativeLibrarySidebar } from '@/components/creative-assets/CreativeLibrarySidebar';
-import { BrandSwitcherMenu } from '@/components/navigation/BrandSwitcherMenu';
 import {
   buildAiStudioStorageKey,
   type PlannerAiStudioHandoff,
@@ -72,9 +71,6 @@ export default function AIStudioClient({
           <div className="flex items-baseline gap-3">
             <h1 className="text-base font-semibold text-white">AI Studio</h1>
             <span className="text-sm text-gray-400">Build flows for {brandName}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <BrandSwitcherMenu />
           </div>
         </div>
 
