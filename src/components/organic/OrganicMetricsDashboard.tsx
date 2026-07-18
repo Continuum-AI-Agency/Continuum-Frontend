@@ -24,6 +24,7 @@ import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkelet
 import { mergePostWithFreshMedia } from '@/components/organic/organicPostMediaRecovery';
 import { PostMediaPreviewImage } from '@/components/organic/PostMediaPreviewImage';
 import { PostCommentsPanel } from '@/components/organic/primitives/PostCommentsPanel';
+import { FreshnessBadge } from '@/components/shared/state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { freshnessFromSyncedAt } from '@/lib/freshness/freshnessMeta';
 
 const OrganicAudienceLocationMapCard = dynamic(
   () =>
@@ -2572,6 +2574,10 @@ export function OrganicMetricsDashboard({
           <BrandTrendsHeaderModule brandId={brandId} brandInsights={brandInsights} />
 
           <Separator orientation="vertical" className="h-5" />
+
+          {viewMode !== 'compare' && state.status === 'success' && state.data.fetchedAt ? (
+            <FreshnessBadge side="bottom" freshness={freshnessFromSyncedAt(state.data.fetchedAt)} />
+          ) : null}
 
           <DisabledControl
             side="bottom"
