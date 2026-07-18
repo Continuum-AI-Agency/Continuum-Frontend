@@ -2575,8 +2575,11 @@ export function OrganicMetricsDashboard({
 
           <Separator orientation="vertical" className="h-5" />
 
-          {viewMode !== 'compare' && state.status === 'success' && state.data.fetchedAt ? (
-            <FreshnessBadge side="bottom" freshness={freshnessFromSyncedAt(state.data.fetchedAt)} />
+          {viewMode !== 'compare' && dashboardData?.fetchedAt ? (
+            <FreshnessBadge
+              side="bottom"
+              freshness={freshnessFromSyncedAt(dashboardData.fetchedAt)}
+            />
           ) : null}
 
           <DisabledControl

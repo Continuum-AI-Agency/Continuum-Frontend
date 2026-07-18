@@ -56,7 +56,10 @@ function formatExactTime(iso: string | null): string | null {
   if (!iso) return null;
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return null;
-  return new Date(ts).toLocaleString();
+  // UTC, not the ambient locale/timezone: toLocaleString() differs between the
+  // SSR host and the browser and would trip React hydration. An ISO-derived
+  // string renders identically on server and client.
+  return `${new Date(ts).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
 type FreshnessBadgeProps = {
