@@ -1,0 +1,28 @@
+{
+  "maxGrowthPercent": 10,
+  "budgets": [
+    {
+      "name": "shared application runtime",
+      "source": "rootMainFiles",
+      "baselineBytes": 656148
+    },
+    {
+      "name": "root layout",
+      "directory": "static/chunks/app",
+      "filePrefix": "layout-",
+      "baselineBytes": 17731
+    },
+    {
+      "name": "login route",
+      "directory": "static/chunks/app/(auth)/login",
+      "filePrefix": "page-",
+      "baselineBytes": 20126
+    },
+    {
+      "name": "authenticated layout",
+      "directory": "static/chunks/app/(post-auth)",
+      "filePrefix": "layout-",
+      "baselineBytes": 102292
+    }
+  ]
+}

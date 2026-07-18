@@ -5,6 +5,7 @@
   "buildCommand": "bun run build",
   "devCommand": "bun run dev",
   "outputDirectory": ".next",
+  "ignoreCommand": "bun scripts/vercel-ignore-build.mjs",
   "git": {
     "deploymentEnabled": {
       "main": true,

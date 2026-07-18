@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".next/cache/tsconfig.build.tsbuildinfo"
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/contracts/**/*.ts",
+    "packages/contracts/**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tmp/**",
+    "e2e/**",
+    "calendar/**",
+    "supabase/functions/**",
+    "tests/**",
+    "**/*.bench.*",
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    ".next/dev/**",
+    ".next/wpd/**"
+  ]
+}
