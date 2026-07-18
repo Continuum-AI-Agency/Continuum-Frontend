@@ -1,45 +1,46 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
+import { useMemo } from 'react';
+import { EvidenceTooltip } from './EvidenceTooltip';
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  AreaChart,
   Area,
-  PieChart,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
   Pie,
-  RadarChart,
-  Radar,
-  PolarGrid,
+  PieChart,
   PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
   XAxis,
   YAxis,
-  CartesianGrid,
-} from "recharts";
+} from 'recharts';
 import {
+  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import type { ChartBlockV2 } from "@/lib/jaina/schemas";
+} from '@/components/ui/chart';
+import type { ChartBlockV2 } from '@/lib/jaina/schemas';
 
 type ChartBlockProps = { block: ChartBlockV2; isStreaming: boolean };
 
 // Compact, human line for a datapoint's harness metadata (entity, source) —
 // shown under the axis label in the tooltip when the chart is dataset-backed.
 function formatDatapointMeta(meta: Record<string, unknown>, categoryKey: string): string | null {
-  const entityType = typeof meta.entity_type === "string" ? meta.entity_type : null;
-  const entityId = typeof meta.entity_id === "string" ? meta.entity_id : null;
+  const entityType = typeof meta.entity_type === 'string' ? meta.entity_type : null;
+  const entityId = typeof meta.entity_id === 'string' ? meta.entity_id : null;
   if (entityType && entityId) return `${entityType} · ${entityId}`;
   const parts: string[] = [];
   for (const [key, value] of Object.entries(meta)) {
     if (key === categoryKey) continue;
-    if (typeof value === "string" || typeof value === "number") parts.push(`${key}: ${value}`);
+    if (typeof value === 'string' || typeof value === 'number') parts.push(`${key}: ${value}`);
   }
-  return parts.length > 0 ? parts.join(" · ") : null;
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 export function ChartBlock({ block }: ChartBlockProps) {
@@ -48,9 +49,9 @@ export function ChartBlock({ block }: ChartBlockProps) {
   const metaByCategory = useMemo(() => {
     const map = new Map<string, Record<string, unknown>>();
     for (const entry of block.data_meta ?? []) {
-      if (!entry || typeof entry !== "object") continue;
+      if (!entry || typeof entry !== 'object') continue;
       const key = (entry as Record<string, unknown>)[block.category_key];
-      if (typeof key === "string" || typeof key === "number") {
+      if (typeof key === 'string' || typeof key === 'number') {
         map.set(String(key), entry as Record<string, unknown>);
       }
     }
@@ -62,11 +63,12 @@ export function ChartBlock({ block }: ChartBlockProps) {
       <ChartTooltipContent
         labelFormatter={(value, payload) => {
           const categoryValue = payload?.[0]?.payload?.[block.category_key];
-          const meta = categoryValue != null ? metaByCategory.get(String(categoryValue)) : undefined;
+          const meta =
+            categoryValue != null ? metaByCategory.get(String(categoryValue)) : undefined;
           const detail = meta ? formatDatapointMeta(meta, block.category_key) : null;
           return (
             <span className="flex flex-col gap-0.5">
-              <span>{String(value ?? categoryValue ?? "")}</span>
+              <span>{String(value ?? categoryValue ?? '')}</span>
               {detail ? (
                 <span className="text-2xs font-normal text-muted-foreground">{detail}</span>
               ) : null}
@@ -98,7 +100,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
 
   let chart: React.ReactNode;
 
-  if (block.chart_type === "line") {
+  if (block.chart_type === 'line') {
     chart = (
       <LineChart data={block.data}>
         {sharedCartesian}
@@ -113,8 +115,8 @@ export function ChartBlock({ block }: ChartBlockProps) {
         ))}
       </LineChart>
     );
-  } else if (block.chart_type === "bar" || block.chart_type === "stacked_bar") {
-    const isStacked = block.chart_type === "stacked_bar";
+  } else if (block.chart_type === 'bar' || block.chart_type === 'stacked_bar') {
+    const isStacked = block.chart_type === 'stacked_bar';
     chart = (
       <BarChart data={block.data}>
         {sharedCartesian}
@@ -123,12 +125,12 @@ export function ChartBlock({ block }: ChartBlockProps) {
             key={key}
             dataKey={key}
             fill={`var(--color-${key})`}
-            stackId={isStacked ? "stack" : undefined}
+            stackId={isStacked ? 'stack' : undefined}
           />
         ))}
       </BarChart>
     );
-  } else if (block.chart_type === "area") {
+  } else if (block.chart_type === 'area') {
     chart = (
       <AreaChart data={block.data}>
         {sharedCartesian}
@@ -144,7 +146,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         ))}
       </AreaChart>
     );
-  } else if (block.chart_type === "radar") {
+  } else if (block.chart_type === 'radar') {
     chart = (
       <RadarChart data={block.data}>
         <PolarGrid />
@@ -167,9 +169,9 @@ export function ChartBlock({ block }: ChartBlockProps) {
         <ChartTooltip content={tooltipContent} />
         <Pie
           data={block.data}
-          dataKey={block.value_key ?? configKeys[0] ?? "value"}
+          dataKey={block.value_key ?? configKeys[0] ?? 'value'}
           nameKey={block.category_key}
-          innerRadius={block.chart_type === "doughnut" ? "50%" : 0}
+          innerRadius={block.chart_type === 'doughnut' ? '50%' : 0}
         />
       </PieChart>
     );
@@ -177,19 +179,18 @@ export function ChartBlock({ block }: ChartBlockProps) {
 
   return (
     <div>
-      <h4 className="mb-2 text-sm font-semibold text-foreground">{block.title}</h4>
+      <div className="mb-2 flex items-center gap-1.5">
+        <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
+        <EvidenceTooltip provenance={block.provenance} datasetId={block.dataset_id} />
+      </div>
       {block.description ? (
-        <p className="mb-2 text-xs leading-5 text-muted-foreground">
-          {block.description}
-        </p>
+        <p className="mb-2 text-xs leading-5 text-muted-foreground">{block.description}</p>
       ) : null}
       <ChartContainer config={chartConfig} className="h-[280px] w-full">
         {chart}
       </ChartContainer>
       {block.annotation ? (
-        <p className="mt-1.5 text-xs italic text-muted-foreground/70">
-          {block.annotation}
-        </p>
+        <p className="mt-1.5 text-xs italic text-muted-foreground/70">{block.annotation}</p>
       ) : null}
     </div>
   );

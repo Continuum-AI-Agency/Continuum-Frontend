@@ -1,16 +1,20 @@
-"use client";
+'use client';
 
-import type { DataTableBlockV2 } from "@/lib/jaina/schemas";
-import { formatValue } from "@/lib/jaina/formatValue";
-import { MediaText } from "./mediaText";
-import { CreativeCell } from "./CreativeCell";
+import { formatValue } from '@/lib/jaina/formatValue';
+import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
+import { CreativeCell } from './CreativeCell';
+import { EvidenceTooltip } from './EvidenceTooltip';
+import { MediaText } from './mediaText';
 
 type DataTableBlockProps = { block: DataTableBlockV2; isStreaming: boolean };
 
 export function DataTableBlock({ block }: DataTableBlockProps) {
   return (
     <div>
-      <h4 className="mb-2 text-sm font-semibold text-foreground">{block.title}</h4>
+      <div className="mb-2 flex items-center gap-1.5">
+        <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
+        <EvidenceTooltip provenance={block.provenance} datasetId={block.dataset_id} />
+      </div>
       <div className="overflow-x-auto rounded-lg border border-border/60">
         <table className="w-full text-sm">
           <thead>
@@ -18,7 +22,7 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
               {block.columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`px-3 py-2 text-xs font-medium text-muted-foreground text-${column.align ?? "left"}`}
+                  className={`px-3 py-2 text-xs font-medium text-muted-foreground text-${column.align ?? 'left'}`}
                 >
                   {column.label}
                 </th>
@@ -32,20 +36,20 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                   const raw = row[column.key];
                   const displayValue =
                     raw == null
-                      ? "—"
+                      ? '—'
                       : formatValue(raw as string | number, column.format ?? undefined);
                   return (
                     <td
                       key={column.key}
                       className="px-3 py-2 tabular-nums"
-                      style={{ textAlign: column.align ?? "left" }}
+                      style={{ textAlign: column.align ?? 'left' }}
                     >
-                      {column.format === "creative" ? (
+                      {column.format === 'creative' ? (
                         <CreativeCell
                           label={String(displayValue)}
                           creative={block.row_meta?.[rowIndex]?.creative}
                         />
-                      ) : !column.format || column.format === "text" ? (
+                      ) : !column.format || column.format === 'text' ? (
                         <MediaText>{displayValue}</MediaText>
                       ) : (
                         displayValue

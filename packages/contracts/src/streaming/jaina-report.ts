@@ -63,6 +63,33 @@ export type BlockCategory = z.infer<typeof blockCategorySchema>;
 export const blockPrioritySchema = z.enum(['primary', 'secondary', 'supplementary']);
 export type BlockPriority = z.infer<typeof blockPrioritySchema>;
 
+/**
+ * Trust-but-verify provenance for a rendered block. `source: 'computed'` means
+ * the backend materialized every value verbatim from a registered dataset
+ * (real API responses captured during the run — never model-typed numbers);
+ * `'model'` means the block was authored by the model from gathered evidence.
+ * The FE surfaces this on a hover affordance so users can verify where the
+ * numbers came from. Nullable/absent = legacy block (treat as 'model').
+ */
+export const blockProvenanceSchema = z.object({
+  source: z.enum(['computed', 'model']),
+  /** Tool that fetched the underlying data, e.g. "get_top_ads". */
+  tool: z.string().nullable().default(null),
+  period: z
+    .object({
+      since: z.string().nullable().default(null),
+      until: z.string().nullable().default(null),
+      requested_label: z.string().nullable().default(null),
+    })
+    .nullable()
+    .default(null),
+  /** Human label of the entity the data covers (campaign/account name). */
+  entity_label: z.string().nullable().default(null),
+  /** Number of underlying rows / points / metrics materialized. */
+  record_count: z.number().nullable().default(null),
+});
+export type BlockProvenance = z.infer<typeof blockProvenanceSchema>;
+
 // Exported so the Backend's local Gemini-synthesis schemas can extend the same
 // base (they stay Backend-local but must share this shape).
 export const blockBaseSchema = z.object({
@@ -71,6 +98,7 @@ export const blockBaseSchema = z.object({
   scope: z.string().min(1),
   title: z.string().min(1),
   priority: blockPrioritySchema.default('secondary'),
+  provenance: blockProvenanceSchema.nullable().default(null),
 });
 
 // ---------------------------------------------------------------------------
