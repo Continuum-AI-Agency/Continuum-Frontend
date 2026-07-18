@@ -15,6 +15,8 @@ export const EXCLUDE_CAROUSEL_SLIDES_FILTER = `{${CAROUSEL_SLIDE_TAG}}`;
 
 interface StoredSlideRef {
   slideIndex: number;
+  assetId: string | null;
+  assetVersionId: string | null;
   kind: 'image' | 'video';
   bucket: string;
   storagePath: string;
@@ -33,7 +35,16 @@ export function coverSlideRefs(row: Pick<MediaAssetRow, 'origin_ref'>): StoredSl
       const bucket = typeof r.bucket === 'string' ? r.bucket : null;
       const storagePath = typeof r.storagePath === 'string' ? r.storagePath : null;
       if (slideIndex === null || !kind || !bucket || !storagePath) return [];
-      return [{ slideIndex, kind, bucket, storagePath }];
+      return [
+        {
+          slideIndex,
+          assetId: typeof r.assetId === 'string' ? r.assetId : null,
+          assetVersionId: typeof r.assetVersionId === 'string' ? r.assetVersionId : null,
+          kind,
+          bucket,
+          storagePath,
+        },
+      ];
     })
     .sort((a, b) => a.slideIndex - b.slideIndex);
 }
@@ -57,6 +68,8 @@ export function buildCarousel(
     slideCount: refs.length,
     slides: refs.map((slide) => ({
       slideIndex: slide.slideIndex,
+      ...(slide.assetId ? { assetId: slide.assetId } : {}),
+      ...(slide.assetVersionId ? { assetVersionId: slide.assetVersionId } : {}),
       kind: slide.kind,
       signedUrl: signedUrlByPath.get(slide.storagePath) ?? null,
     })),

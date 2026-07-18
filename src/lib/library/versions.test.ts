@@ -42,6 +42,7 @@ describe('uploadNewAssetVersion', () => {
           registerCalls.push(request);
           return { assetId: 'asset', versionId: 'version-2', versionNumber: 2, versions: [] };
         },
+        attachPreview: async () => 'awaiting_companion',
       },
     );
 

@@ -13,6 +13,7 @@
 // operating on a file the reviewer is not looking at.
 
 import type { CommentAnnotation, MediaAsset, MediaComment } from '@continuum/contracts';
+import { ChevronLeft, ChevronRight, Layers3 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { buildCommentThreads } from '@/lib/library/comments';
@@ -162,6 +163,7 @@ function AssetDetailDialog({
   // null means the head — the default, and the state a rollback or a fresh
   // upload should land the reviewer back on without any extra bookkeeping.
   const [olderVersionId, setOlderVersionId] = useState<string | null>(null);
+  const [carouselSlideIndex, setCarouselSlideIndex] = useState(0);
   const seekRef = useRef<((ms: number) => void) | null>(null);
 
   const registerSeek = useCallback((seek: (ms: number) => void) => {
@@ -185,10 +187,19 @@ function AssetDetailDialog({
   const headVersion = versions?.find((v) => v.isHead) ?? null;
   const headVersionNumber = headVersion?.versionNumber ?? null;
 
-  const stage = useMemo(
-    () => resolveStageMedia({ asset, viewedVersion, headVersion }),
-    [asset, viewedVersion, headVersion],
-  );
+  const stage = useMemo(() => {
+    const base = resolveStageMedia({ asset, viewedVersion, headVersion });
+    if (!viewingHead || !asset.carousel || asset.carousel.slides.length < 2) return base;
+    const slide = asset.carousel.slides[carouselSlideIndex] ?? asset.carousel.slides[0];
+    if (!slide?.signedUrl) return base;
+    return {
+      kind: slide.kind,
+      src: slide.signedUrl,
+      durationMs: null,
+      label: `${asset.title ?? asset.fileName} · slide ${carouselSlideIndex + 1}`,
+      key: `carousel-${asset.groupId ?? asset.id}-${slide.assetId ?? slide.slideIndex}`,
+    };
+  }, [asset, viewedVersion, headVersion, viewingHead, carouselSlideIndex]);
 
   const isVideo = stage.kind === 'video';
   // The playhead is published into a clock rather than into React state: only the
@@ -373,8 +384,47 @@ function AssetDetailDialog({
                 // mints the HEAD bytes — it cannot represent an older file.
                 <OlderFileStage version={viewedVersion} />
               ) : (
-                <FilePreviewStage brandId={brandId} asset={asset} />
+                <FilePreviewStage
+                  brandId={brandId}
+                  asset={asset}
+                  onPreviewChanged={onAssetChanged}
+                />
               )}
+
+              {viewingHead && asset.carousel && asset.carousel.slides.length > 1 ? (
+                <div className="absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
+                  <button
+                    type="button"
+                    aria-label="Previous carousel slide"
+                    className="flex size-7 items-center justify-center rounded-full hover:bg-muted"
+                    onClick={() =>
+                      setCarouselSlideIndex(
+                        (index) =>
+                          (index - 1 + asset.carousel!.slides.length) %
+                          asset.carousel!.slides.length,
+                      )
+                    }
+                  >
+                    <ChevronLeft className="size-4" />
+                  </button>
+                  <span className="flex min-w-16 items-center justify-center gap-1 text-xs tabular-nums text-muted-foreground">
+                    <Layers3 className="size-3.5" />
+                    {carouselSlideIndex + 1}/{asset.carousel.slides.length}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next carousel slide"
+                    className="flex size-7 items-center justify-center rounded-full hover:bg-muted"
+                    onClick={() =>
+                      setCarouselSlideIndex(
+                        (index) => (index + 1) % asset.carousel!.slides.length,
+                      )
+                    }
+                  >
+                    <ChevronRight className="size-4" />
+                  </button>
+                </div>
+              ) : null}
 
               {/* Docked to the creative, not to the dialog chrome: these reshape
                   the image in front of you, so they read as "things I can do to

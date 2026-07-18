@@ -7,19 +7,26 @@ function file(name: string, type: string): File {
 }
 
 describe('isAcceptedUploadFile', () => {
-  it('accepts images and videos by mime prefix', () => {
+  it('accepts the supported image and video registry', () => {
     expect(isAcceptedUploadFile(file('photo.png', 'image/png'))).toBe(true);
     expect(isAcceptedUploadFile(file('clip.mov', 'video/quicktime'))).toBe(true);
   });
 
-  it('accepts .aep by extension when the browser reports no useful mime', () => {
+  it('accepts the core design and After Effects set by extension', () => {
     expect(isAcceptedUploadFile(file('intro.aep', ''))).toBe(true);
     expect(isAcceptedUploadFile(file('Intro.AEP', 'application/octet-stream'))).toBe(true);
+    expect(isAcceptedUploadFile(file('layout.psd', 'image/vnd.adobe.photoshop'))).toBe(true);
+    expect(isAcceptedUploadFile(file('deck.pdf', 'application/pdf'))).toBe(true);
+    expect(isAcceptedUploadFile(file('logo.ai', 'application/pdf'))).toBe(true);
+    expect(isAcceptedUploadFile(file('mark.svg', 'image/svg+xml'))).toBe(true);
+    expect(isAcceptedUploadFile(file('scan.tiff', 'image/tiff'))).toBe(true);
+    expect(isAcceptedUploadFile(file('photo.heic', 'image/heic'))).toBe(true);
+    expect(isAcceptedUploadFile(file('collected-files.zip', 'application/zip'))).toBe(true);
   });
 
-  it('still silently rejects genuinely unsupported files', () => {
-    expect(isAcceptedUploadFile(file('doc.pdf', 'application/pdf'))).toBe(false);
-    expect(isAcceptedUploadFile(file('archive.zip', ''))).toBe(false);
+  it('rejects formats outside the explicit registry', () => {
+    expect(isAcceptedUploadFile(file('raw.cr3', 'image/x-canon-cr3'))).toBe(false);
+    expect(isAcceptedUploadFile(file('clip.mkv', 'video/x-matroska'))).toBe(false);
     expect(isAcceptedUploadFile(file('aep', ''))).toBe(false);
   });
 });

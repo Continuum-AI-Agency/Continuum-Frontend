@@ -139,7 +139,17 @@ describe('timelineDraftMapping', () => {
       pool: POOL,
       document: DOCUMENT,
     });
-    expect(fromDraftDocument(draft)).toEqual(DOCUMENT);
+    expect(fromDraftDocument(draft)).toEqual({
+      ...DOCUMENT,
+      captionCues: [
+        {
+          id: 'caption-1',
+          startSec: 0,
+          endSec: 0.4,
+          words: [{ text: 'hello', startSec: 0, endSec: 0.4 }],
+        },
+      ],
+    });
   });
 
   it('round-trips opaque effects byte-for-byte, including keys it does not know', () => {
@@ -232,6 +242,36 @@ describe('seedTimelineDocumentFromAsset', () => {
       asset({ title: null, durationMs: null, signedUrl: null }),
     );
     expect(seed.pool[0]).toEqual({ nodeId: SOURCE_ASSET_ID, kind: 'video', label: 'hero.mp4' });
+  });
+
+  it('starts an Opus clean clip with its editable caption draft', () => {
+    const seed = seedTimelineDocumentFromAsset(
+      asset({
+        originRef: {
+          captionWorkflow: 'clean-editable',
+          captionCues: [
+            {
+              id: 'caption-1',
+              startSec: 0,
+              endSec: 0.6,
+              words: [{ text: 'A better hook', startSec: 0, endSec: 0.6 }],
+            },
+          ],
+          captionStyle: { textColor: '#ffffff', highlightColor: '#ffd400' },
+        },
+      }),
+    );
+
+    expect(seed.document).toMatchObject({
+      captionsEnabled: true,
+      captionCues: [
+        {
+          id: 'caption-1',
+          words: [{ text: 'A better hook' }],
+        },
+      ],
+      captionStyle: { textColor: '#ffffff', highlightColor: '#ffd400' },
+    });
   });
 
   it('seeds a document the contract accepts once persisted', () => {

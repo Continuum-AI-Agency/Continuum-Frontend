@@ -23,6 +23,11 @@ import {
   parseTagsParam,
 } from '@/lib/media/filters';
 import { rowToSignedMediaAsset } from '@/lib/media/mapper';
+import {
+  buildAssetPreview,
+  loadAssetRenditions,
+  renditionSignablePaths,
+} from '@/lib/media/renditions';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from '@/lib/media/schema';
 import { assetSignablePaths, mintSignedUrls } from '@/lib/media/signed-urls';
 import { resolveSmartQueryFilter } from '@/lib/media/smart-collections';
@@ -218,13 +223,19 @@ export async function GET(request: Request) {
     nextOffset = rows.length === limit ? offset + limit : null;
   }
 
+  const renditions = await loadAssetRenditions(
+    supabase,
+    rows.flatMap((row) => (row.head_version_id ? [row.head_version_id] : [])),
+  );
   const signedUrlMap = await mintSignedUrls([
     ...assetSignablePaths(rows),
     ...carouselSignablePaths(rows),
+    ...renditionSignablePaths(renditions),
   ]);
 
   const items = rows.map((row) => {
-    const asset = rowToSignedMediaAsset(row, signedUrlMap);
+    const preview = buildAssetPreview(row, renditions, signedUrlMap);
+    const asset = rowToSignedMediaAsset(row, signedUrlMap, preview);
     const carousel = buildCarousel(row, signedUrlMap);
     return carousel ? { ...asset, carousel } : asset;
   });

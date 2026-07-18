@@ -5,19 +5,25 @@
 // through the same /api/library/sign route the grid uses.
 
 import type { MediaAsset } from '@continuum/contracts';
-import { Download, FileIcon, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { Download, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { uploadCompanionPreview } from '@/lib/library/assetPreview';
+import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
 type Props = {
   brandId: string;
   asset: MediaAsset;
+  onPreviewChanged?: () => void;
 };
 
-export function FilePreviewStage({ brandId, asset }: Props) {
+export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
   const [downloading, setDownloading] = useState(false);
+  const [uploadingPreview, setUploadingPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previewInputRef = useRef<HTMLInputElement>(null);
   const ext = fileExtension(asset.fileName);
   const isAfterEffects = ext === 'AEP';
 
@@ -43,6 +49,31 @@ export function FilePreviewStage({ brandId, asset }: Props) {
       setError('Could not mint a download link.');
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const uploadPreview = async (file: File | null) => {
+    if (!file) return;
+    setUploadingPreview(true);
+    setError(null);
+    try {
+      const client = createSupabaseBrowserClient();
+      const versionId =
+        asset.headVersionId ??
+        (await ensureAssetHeadVersion(client, { brandId, assetId: asset.id })).headVersionId;
+      await uploadCompanionPreview({
+        file,
+        brandId,
+        assetId: asset.id,
+        assetVersionId: versionId,
+        client,
+      });
+      onPreviewChanged?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not upload the companion preview.');
+    } finally {
+      setUploadingPreview(false);
+      if (previewInputRef.current) previewInputRef.current.value = '';
     }
   };
 
@@ -80,18 +111,43 @@ export function FilePreviewStage({ brandId, asset }: Props) {
           {asset.createdBy ? ` · Uploader ${asset.createdBy.slice(0, 8)}` : ''}
         </p>
         <p className="text-xs text-muted-foreground/60">
-          Source file — no preview. Download to open it in its native app.
+          {asset.preview?.state === 'awaiting_companion'
+            ? 'Add a PNG, JPEG, WebP, or MP4 companion to review this source in Continuum.'
+            : 'No preview is available yet. The original remains downloadable.'}
         </p>
       </div>
 
-      <Button type="button" size="sm" onClick={() => void download()} disabled={downloading}>
-        {downloading ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Download className="size-4" />
-        )}
-        Download
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => previewInputRef.current?.click()}
+          disabled={uploadingPreview}
+        >
+          {uploadingPreview ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ImagePlus className="size-4" />
+          )}
+          Add preview
+        </Button>
+        <Button type="button" size="sm" onClick={() => void download()} disabled={downloading}>
+          {downloading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Download className="size-4" />
+          )}
+          Download
+        </Button>
+      </div>
+      <input
+        ref={previewInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,video/mp4"
+        className="hidden"
+        onChange={(event) => void uploadPreview(event.target.files?.[0] ?? null)}
+      />
 
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

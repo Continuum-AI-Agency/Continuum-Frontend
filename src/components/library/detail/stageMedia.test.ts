@@ -52,6 +52,23 @@ describe('stageKindForMimeType', () => {
 });
 
 describe('resolveStageMedia', () => {
+  it('shows an exact-version companion preview for a source file', () => {
+    const source = {
+      ...HEAD_ASSET,
+      kind: 'file' as const,
+      mimeType: 'application/vnd.adobe.aftereffects.project',
+      preview: {
+        assetVersionId: '11111111-1111-4111-8111-111111111111',
+        renditionId: '22222222-2222-4222-8222-222222222222',
+        state: 'ready' as const,
+        kind: 'video' as const,
+        signedUrl: 'https://storage.test/aep-preview.mp4',
+      },
+    };
+    const stage = resolveStageMedia({ asset: source, viewedVersion: null });
+    expect(stage).toMatchObject({ kind: 'video', src: 'https://storage.test/aep-preview.mp4' });
+  });
+
   it('shows the head asset when no older version is picked', () => {
     const stage = resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null });
 

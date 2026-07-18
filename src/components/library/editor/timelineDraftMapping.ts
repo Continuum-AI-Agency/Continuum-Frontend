@@ -21,10 +21,11 @@ import type {
 } from '@continuum/contracts';
 import { TIMELINE_DRAFT_SCHEMA_VERSION } from '@continuum/contracts';
 import { v4 as uuidv4 } from 'uuid';
-import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { CaptionStyle, CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineDocument } from '@/StudioCanvas/nodes/timeline/adapter';
 import type { TimelineInputSource, TimelineItem, TimelineTrack } from '@/StudioCanvas/types';
 import type { ClipEffectSpec } from '@/StudioCanvas/utils/render/effectSpec';
+import { groupWordsIntoCues, type CaptionCue } from '@/StudioCanvas/utils/splice/captionCues';
 
 // A bin member in the Library. Nothing is added to the canonical pool shape — the
 // alias exists so this module's signatures read as "a Library media-bin source",
@@ -100,6 +101,48 @@ function poolKind(kind: string | null | undefined): 'video' | 'image' {
   return kind === 'image' ? 'image' : 'video';
 }
 
+function initialCaptionCues(asset: MediaAsset): CaptionCue[] | undefined {
+  const raw = asset.originRef?.captionCues;
+  if (!Array.isArray(raw)) return undefined;
+  const cues = raw.filter(
+    (cue): cue is Record<string, unknown> =>
+      Boolean(cue) && typeof cue === 'object' && !Array.isArray(cue),
+  );
+  const parsed = cues.map((cue) => {
+    const words = Array.isArray(cue.words)
+      ? cue.words.filter(
+          (word): word is Record<string, unknown> =>
+            Boolean(word) && typeof word === 'object' && !Array.isArray(word),
+        )
+      : [];
+    if (
+      typeof cue.id !== 'string' ||
+      typeof cue.startSec !== 'number' ||
+      typeof cue.endSec !== 'number' ||
+      words.length === 0 ||
+      words.some(
+        (word) =>
+          typeof word.text !== 'string' ||
+          typeof word.startSec !== 'number' ||
+          typeof word.endSec !== 'number',
+      )
+    ) {
+      return null;
+    }
+    return {
+      id: cue.id,
+      startSec: cue.startSec,
+      endSec: cue.endSec,
+      words: words.map((word) => ({
+        text: word.text as string,
+        startSec: word.startSec as number,
+        endSec: word.endSec as number,
+      })),
+    } satisfies CaptionCue;
+  });
+  return parsed.every((cue) => cue !== null) ? parsed : undefined;
+}
+
 export function poolSourceToDraft(source: LibraryPoolSource): TimelineDraftPoolSource {
   return compact({
     assetId: source.nodeId,
@@ -146,6 +189,10 @@ export function toDraftDocument(input: {
     exportPresetId: document.exportPresetId,
     markers: document.markers,
     captionsEnabled: document.captionsEnabled,
+    captionCues: document.captionCues?.map((cue) => ({
+      ...cue,
+      style: toOpaque<CaptionStyleOverride>(cue.style),
+    })),
     captionWords: document.captionWords,
     captionStyle: toOpaque<CaptionStyle>(document.captionStyle),
   }) satisfies TimelineDraftDocument;
@@ -158,6 +205,10 @@ export function fromDraftDocument(draft: TimelineDraftDocument): TimelineDocumen
     exportPresetId: draft.exportPresetId,
     markers: draft.markers,
     captionsEnabled: draft.captionsEnabled,
+    captionCues: draft.captionCues?.map((cue) => ({
+      ...cue,
+      style: fromOpaque<CaptionStyleOverride>(cue.style),
+    })) ?? (draft.captionWords?.length ? groupWordsIntoCues(draft.captionWords) : undefined),
     captionWords: draft.captionWords,
     captionStyle: fromOpaque<CaptionStyle>(draft.captionStyle),
   }) satisfies TimelineDocument;
@@ -183,5 +234,17 @@ export function seedTimelineDocumentFromAsset(asset: MediaAsset): {
     sourceNodeId: asset.id,
     kind: source.kind,
   };
-  return { document: { items: [item] }, pool: [source] };
+  const captionCues = initialCaptionCues(asset);
+  const captionStyle = fromOpaque<CaptionStyle>(
+    asset.originRef?.captionStyle as Record<string, unknown> | undefined,
+  );
+  return {
+    document: {
+      items: [item],
+      captionsEnabled: Boolean(captionCues?.length),
+      captionCues,
+      captionStyle,
+    },
+    pool: [source],
+  };
 }

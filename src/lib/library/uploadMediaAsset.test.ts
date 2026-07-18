@@ -24,6 +24,7 @@ const VALID_REGISTER = {
   ok: true,
   status: 'ready',
   assetId: 'asset-1',
+  versionId: '11111111-1111-4111-8111-111111111111',
   storagePath: 'b1/asset-1/photo.png',
   signedUrl: 'https://signed.example/photo.png',
 };
@@ -81,10 +82,12 @@ describe('uploadMediaAsset', () => {
     expect(calls).toEqual(['invoke:sign_upload', 'uploadToSignedUrl', 'invoke:register']);
     expect(result).toEqual({
       assetId: 'asset-1',
+      versionId: '11111111-1111-4111-8111-111111111111',
       storagePath: 'b1/asset-1/photo.png',
       signedUrl: 'https://signed.example/photo.png',
       // An image never enters the poster path.
       thumbnailPath: null,
+      previewState: 'ready',
     });
   });
 
@@ -171,7 +174,7 @@ describe('uploadMediaAsset', () => {
     const aep = new File(['project'], 'intro.aep', { type: '' });
     const resumableCalls: unknown[] = [];
 
-    await uploadMediaAsset(
+    const result = await uploadMediaAsset(
       { file: aep, brandId: 'b1' },
       {
         createClient: () => client,
@@ -188,7 +191,12 @@ describe('uploadMediaAsset', () => {
     expect(sign?.mimeType).toBe('application/octet-stream');
     expect(register?.mimeType).toBe('application/octet-stream');
     expect(sign?.fileName).toBe('intro.aep');
-    expect(calls).toEqual(['invoke:sign_upload', 'invoke:register']);
+    expect(calls).toEqual([
+      'invoke:sign_upload',
+      'invoke:register',
+      'invoke:mark_asset_preview_state',
+    ]);
+    expect(result.previewState).toBe('awaiting_companion');
     expect(resumableCalls).toEqual([
       expect.objectContaining({
         bucket: 'media-source',

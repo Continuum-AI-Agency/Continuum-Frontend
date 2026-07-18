@@ -3,11 +3,17 @@ import { mediaSearchRequestSchema } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
+import { buildCarousel, carouselSignablePaths } from '@/lib/media/carousel';
 import { embedSearchQuery } from '@/lib/media/embedQuery.server';
 import { toSearchRpcFilters } from '@/lib/media/filters';
-import { rowToMediaAsset } from '@/lib/media/mapper';
+import { rowToSignedMediaAsset } from '@/lib/media/mapper';
+import {
+  buildAssetPreview,
+  loadAssetRenditions,
+  renditionSignablePaths,
+} from '@/lib/media/renditions';
 import { type MatchAssetRow, MEDIA_ASSET_SELECT, type MediaAssetRow } from '@/lib/media/schema';
-import { mintSignedUrls } from '@/lib/media/signed-urls';
+import { assetSignablePaths, mintSignedUrls } from '@/lib/media/signed-urls';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -45,16 +51,25 @@ async function hydrateMatches(
 
   const rows = (assetRows ?? []) as unknown as MediaAssetRow[];
   const rowMap = new Map(rows.map((row) => [row.id, row]));
-  const signedUrlMap = await mintSignedUrls(
-    rows.map((row) => ({ path: row.storage_path, bucket: row.bucket })),
+  const renditions = await loadAssetRenditions(
+    supabase,
+    rows.flatMap((row) => (row.head_version_id ? [row.head_version_id] : [])),
   );
+  const signedUrlMap = await mintSignedUrls([
+    ...assetSignablePaths(rows),
+    ...carouselSignablePaths(rows),
+    ...renditionSignablePaths(renditions),
+  ]);
 
   return matches.flatMap((match) => {
     const row = rowMap.get(match.id);
     if (!row) return [];
+    const preview = buildAssetPreview(row, renditions, signedUrlMap);
+    const asset = rowToSignedMediaAsset(row, signedUrlMap, preview);
+    const carousel = buildCarousel(row, signedUrlMap);
     return [
       {
-        asset: rowToMediaAsset(row, signedUrlMap.get(row.storage_path) ?? null),
+        asset: carousel ? { ...asset, carousel } : asset,
         similarity: clamp01(match.similarity),
       },
     ];

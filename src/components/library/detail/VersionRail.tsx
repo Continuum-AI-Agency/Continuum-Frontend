@@ -11,6 +11,7 @@
 // and the comment partition need it too, so the rail no longer owns the fetch.
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
 import {
   Columns2,
   FileIcon,
@@ -376,7 +377,7 @@ export function VersionRail({
         <input
           ref={fileInputRef}
           type="file"
-          accept={asset.kind === 'file' ? '.aep,.AEP' : `${asset.kind}/*`}
+          accept={asset.kind === 'file' ? LIBRARY_ACCEPT_ATTRIBUTE : `${asset.kind}/*`}
           className="hidden"
           aria-hidden="true"
           tabIndex={-1}

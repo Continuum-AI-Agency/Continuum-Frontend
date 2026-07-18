@@ -1,15 +1,11 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { classifyLibraryFile } from '@continuum/contracts';
 
 import { type UploadResumeState, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 
 const MAX_CONCURRENCY = 3;
-const ACCEPTED_PREFIXES = ['image/', 'video/'];
-// Source-project formats (After Effects etc.) arrive with an empty or
-// application/octet-stream MIME, so the extension is the only reliable signal.
-const ACCEPTED_EXTENSIONS = ['.aep'];
-
 export type UploadItem = {
   id: string;
   name: string;
@@ -27,9 +23,7 @@ type UploadJob = {
 };
 
 export function isAcceptedUploadFile(file: File): boolean {
-  if (ACCEPTED_PREFIXES.some((p) => file.type.startsWith(p))) return true;
-  const name = file.name.trim().toLowerCase();
-  return ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext));
+  return classifyLibraryFile({ fileName: file.name, mimeType: file.type }).accepted;
 }
 
 // Multi-file upload with bounded concurrency. Each file is POSTed to the

@@ -14,6 +14,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
 import { getLibrarySortOrder, kindMatchOrFilter, paginateByMembership } from './filters';
 import { rowToSignedMediaAsset } from './mapper';
+import {
+  buildAssetPreview,
+  loadAssetRenditions,
+  renditionSignablePaths,
+} from './renditions';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';
@@ -140,13 +145,19 @@ export async function fetchMediaAssets(
     }
     rows = (data ?? []) as unknown as MediaAssetRow[];
   }
+  const renditions = await loadAssetRenditions(
+    client,
+    rows.flatMap((row) => (row.head_version_id ? [row.head_version_id] : [])),
+  );
   const signedUrlMap = await mintSignedUrls([
     ...assetSignablePaths(rows),
     ...carouselSignablePaths(rows),
+    ...renditionSignablePaths(renditions),
   ]);
 
   return rows.map((row) => {
-    const asset = rowToSignedMediaAsset(row, signedUrlMap);
+    const preview = buildAssetPreview(row, renditions, signedUrlMap);
+    const asset = rowToSignedMediaAsset(row, signedUrlMap, preview);
     const carousel = buildCarousel(row, signedUrlMap);
     return carousel ? { ...asset, carousel } : asset;
   });

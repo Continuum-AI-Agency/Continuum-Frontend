@@ -5,6 +5,7 @@
 // against the contracts schemas at the boundary.
 
 import {
+  classifyLibraryFile,
   listVersionsResponseSchema,
   type MediaAssetVersion,
   type RegisterVersionRequest,
@@ -24,6 +25,7 @@ import {
 } from './creativeOperations';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
 import { MAX_PROJECT_FILE_BYTES } from './uploadMediaAsset';
+import { attachAssetPreview } from './assetPreview';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -79,6 +81,7 @@ export interface UploadNewAssetVersionDeps {
   resumableUpload?: typeof resumableStorageUpload;
   supabaseUrl?: string;
   anonKey?: string;
+  attachPreview?: typeof attachAssetPreview;
 }
 
 export type VersionUploadResumeState = {
@@ -86,8 +89,9 @@ export type VersionUploadResumeState = {
   uploadUrl: string | null;
 };
 
-function isAfterEffectsProject(file: File): boolean {
-  return file.name.trim().toLocaleLowerCase().endsWith('.aep');
+function isProjectFile(file: File): boolean {
+  const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+  return format.accepted && format.originalKind === 'file';
 }
 
 async function uploadProjectVersion(params: {
@@ -135,8 +139,8 @@ export async function uploadNewAssetVersion(
 ): Promise<RegisterVersionResponse> {
   const { brandId, assetId, file, note } = params;
   const contentType = file.type || 'application/octet-stream';
-  const isProjectFile = isAfterEffectsProject(file);
-  if (isProjectFile && file.size > MAX_PROJECT_FILE_BYTES) {
+  const projectFile = isProjectFile(file);
+  if (projectFile && file.size > MAX_PROJECT_FILE_BYTES) {
     throw new Error('file_too_large: Project files must be 5 GB or smaller');
   }
 
@@ -151,7 +155,7 @@ export async function uploadNewAssetVersion(
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
 
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
-  if (isProjectFile) {
+  if (projectFile) {
     await uploadProjectVersion({
       supabase,
       ticket,
@@ -170,7 +174,7 @@ export async function uploadNewAssetVersion(
     params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
   }
 
-  return (deps.registerVersion ?? registerAssetVersion)({
+  const registered = await (deps.registerVersion ?? registerAssetVersion)({
     brandId,
     assetId,
     bucket: ticket.bucket,
@@ -180,7 +184,20 @@ export async function uploadNewAssetVersion(
     sizeBytes: file.size,
     note,
     integrityState:
-      isProjectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
+      projectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
     idempotencyKey: `version:${assetId}:${ticket.path}`,
   });
+  if (registered.versionId) {
+    await (deps.attachPreview ?? attachAssetPreview)({
+      file,
+      brandId,
+      assetId,
+      assetVersionId: registered.versionId,
+      client: supabase,
+    }).catch((error: unknown) => {
+      console.warn('[library/versions] preview step failed', error);
+      return 'failed' as const;
+    });
+  }
+  return registered;
 }

@@ -10,6 +10,8 @@
 // reason (e.g. on a node's hover badge). Deps are injected for testability.
 
 import {
+  type AssetPreviewState,
+  classifyLibraryFile,
   type LibraryUploadTicket,
   libraryUploadTicketSchema,
   registerMediaErrorSchema,
@@ -19,6 +21,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
 import { attachVideoPoster } from './videoPoster';
+import { attachAssetPreview } from './assetPreview';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -55,12 +58,15 @@ export interface UploadMediaAssetResult {
   signedUrl: string;
   /** Storage path of the generated poster; null for images and for videos whose poster failed. */
   thumbnailPath: string | null;
+  versionId: string;
+  previewState: AssetPreviewState;
 }
 
 export interface UploadMediaAssetDeps {
   createClient?: () => SupabaseBrowserClient;
   /** Injected for tests; decodes a frame in the browser and persists it. */
   attachPoster?: typeof attachVideoPoster;
+  attachPreview?: typeof attachAssetPreview;
   resumableUpload?: typeof resumableStorageUpload;
   supabaseUrl?: string;
   anonKey?: string;
@@ -127,8 +133,9 @@ async function uploadToTicket(
   if (error) throw new Error(`upload to storage failed: ${error.message}`);
 }
 
-function isProjectFile(mimeType: string): boolean {
-  return !mimeType.startsWith('image/') && !mimeType.startsWith('video/');
+function isProjectFile(file: File): boolean {
+  const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+  return format.accepted && format.originalKind === 'file';
 }
 
 async function uploadProjectFile(
@@ -165,7 +172,7 @@ export async function uploadMediaAsset(
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
   const { file, brandId } = params;
   const mimeType = resolveMimeType(file);
-  if (isProjectFile(mimeType) && file.size > MAX_PROJECT_FILE_BYTES) {
+  if (isProjectFile(file) && file.size > MAX_PROJECT_FILE_BYTES) {
     throw new Error('file_too_large: Project files must be 5 GB or smaller');
   }
 
@@ -173,7 +180,7 @@ export async function uploadMediaAsset(
     params.resume?.ticket ??
     (await signUpload(supabase, { brandId, fileName: file.name, mimeType }));
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
-  if (isProjectFile(mimeType)) {
+  if (isProjectFile(file)) {
     await uploadProjectFile(supabase, ticket, params, deps);
   } else {
     await uploadToTicket(supabase, ticket, file);
@@ -205,20 +212,33 @@ export async function uploadMediaAsset(
     // exists and the analysis pipeline is running. So a poster failure of any
     // kind — decode, encode, network, an unexpected throw from an injected dep —
     // must never surface as a failed upload.
-    const thumbnailPath = await (deps.attachPoster ?? attachVideoPoster)({
-      file,
-      mimeType,
-      brandId,
-      assetId: ok.data.assetId,
-    }).catch((error: unknown) => {
-      console.warn('[library/uploadMediaAsset] poster step failed', error);
-      return null;
+    let thumbnailPath: string | null = null;
+    const previewState = await (
+      deps.attachPoster
+        ? deps
+            .attachPoster({ file, mimeType, brandId, assetId: ok.data.assetId })
+            .then((path) => {
+              thumbnailPath = path;
+              return (path ? 'ready' : 'failed') as AssetPreviewState;
+            })
+        : (deps.attachPreview ?? attachAssetPreview)({
+            file,
+            brandId,
+            assetId: ok.data.assetId,
+            assetVersionId: ok.data.versionId,
+            client: supabase,
+          })
+    ).catch((error: unknown) => {
+      console.warn('[library/uploadMediaAsset] preview step failed', error);
+      return 'failed' as const;
     });
     return {
       assetId: ok.data.assetId,
+      versionId: ok.data.versionId,
       storagePath: ok.data.storagePath,
       signedUrl: ok.data.signedUrl,
       thumbnailPath,
+      previewState,
     };
   }
   const failed = registerMediaErrorSchema.safeParse(data);

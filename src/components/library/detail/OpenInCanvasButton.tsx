@@ -108,6 +108,11 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
 
   const busy = seeding !== null;
 
+  // Source-file bytes are never coerced to an image. A companion rendition is
+  // review media, not a replacement for the source identity; Canvas can expose
+  // this again when its handoff accepts an explicit rendition id.
+  if (asset.kind === 'file') return null;
+
   return (
     <div className="flex items-center gap-2">
       <DropdownMenu>

@@ -12,12 +12,19 @@ import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
 function CardPreview({ asset }: { asset: MediaAsset }) {
-  const previewUrl = asset.thumbnailUrl ?? asset.signedUrl ?? null;
+  const previewUrl =
+    (asset.preview?.state === 'ready' ? asset.preview.signedUrl : null) ??
+    asset.thumbnailUrl ??
+    asset.signedUrl ??
+    null;
   // A postered video is a still image on the board — no <video>, no video bytes.
-  if (asset.thumbnailUrl && asset.kind === 'video') {
+  if (
+    (asset.thumbnailUrl && asset.kind === 'video') ||
+    (asset.preview?.state === 'ready' && asset.preview.kind === 'image')
+  ) {
     return (
       <img
-        src={asset.thumbnailUrl}
+        src={previewUrl ?? undefined}
         alt={asset.title ?? asset.fileName}
         loading="lazy"
         className="h-full w-full object-cover"
@@ -34,7 +41,11 @@ function CardPreview({ asset }: { asset: MediaAsset }) {
       />
     );
   }
-  if (previewUrl && asset.kind === 'video') {
+  if (
+    previewUrl &&
+    (asset.kind === 'video' ||
+      (asset.preview?.state === 'ready' && asset.preview.kind === 'video'))
+  ) {
     return (
       // biome-ignore lint/a11y/useMediaCaption: silent board thumbnail of the user's own upload; no caption track exists
       <video src={previewUrl} muted preload="metadata" className="h-full w-full object-cover" />

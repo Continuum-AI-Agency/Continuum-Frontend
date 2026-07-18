@@ -86,7 +86,10 @@ function VideoThumbnail({
   priority: boolean;
   onMediaError: () => void;
 }) {
-  const posterUrl = asset.thumbnailUrl ?? null;
+  const posterUrl =
+    asset.preview?.state === 'ready' && asset.preview.kind === 'image'
+      ? asset.preview.signedUrl
+      : (asset.thumbnailUrl ?? null);
   const [hovered, setHovered] = useState(false);
   const hoveredRef = useRef(false);
   const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority && !posterUrl);
@@ -182,6 +185,31 @@ function Thumbnail({
   priority: boolean;
 }) {
   const [mediaError, setMediaError] = useState(false);
+  const preview = asset.preview?.state === 'ready' ? asset.preview : null;
+
+  if (asset.kind === 'file' && preview?.signedUrl) {
+    return preview.kind === 'video' ? (
+      // biome-ignore lint/a11y/useMediaCaption: silent visual companion for a source project.
+      <video
+        src={preview.signedUrl}
+        className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+        muted
+        playsInline
+        preload="metadata"
+        onError={() => setMediaError(true)}
+      />
+    ) : (
+      <Image
+        src={preview.signedUrl}
+        alt={asset.title ?? asset.fileName}
+        fill
+        sizes={IMAGE_SIZES}
+        priority={priority}
+        className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+        onError={() => setMediaError(true)}
+      />
+    );
+  }
 
   if (asset.kind === 'file') {
     const ext = fileExtension(asset.fileName);
@@ -206,6 +234,9 @@ function Thumbnail({
         {isAfterEffects ? (
           <span className="text-2xs text-muted-foreground/60">After Effects project</span>
         ) : null}
+        {asset.preview?.state === 'awaiting_companion' ? (
+          <span className="text-2xs text-muted-foreground/60">Add companion preview</span>
+        ) : null}
       </div>
     );
   }
@@ -227,7 +258,7 @@ function Thumbnail({
   return (
     <>
       <Image
-        src={asset.signedUrl}
+        src={preview?.signedUrl ?? asset.signedUrl}
         alt={asset.title ?? asset.fileName}
         fill
         sizes={IMAGE_SIZES}

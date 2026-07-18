@@ -12,6 +12,7 @@ import type {
   MediaCollection,
   MediaSearchResultItem,
 } from '@continuum/contracts';
+import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
 import { Columns3, Figma, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
@@ -572,7 +573,7 @@ export function LibraryViewer({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*,.aep"
+              accept={LIBRARY_ACCEPT_ATTRIBUTE}
               multiple
               className="hidden"
               onChange={(e) => {

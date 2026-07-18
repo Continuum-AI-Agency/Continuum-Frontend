@@ -40,6 +40,16 @@ export function resolveStageMedia(params: {
   const { asset, viewedVersion, headVersion } = params;
 
   if (viewedVersion === null) {
+    const headPreview = headVersion?.preview ?? asset.preview;
+    if (headPreview?.state === 'ready' && headPreview.signedUrl && headPreview.kind) {
+      return {
+        kind: headPreview.kind,
+        src: headPreview.signedUrl,
+        durationMs: headPreview.durationMs ?? null,
+        label: asset.title ?? headVersion?.fileName ?? asset.fileName,
+        key: `head-preview-${headPreview.renditionId ?? headPreview.assetVersionId}`,
+      };
+    }
     if (headVersion) {
       return {
         kind: stageKindForMimeType(headVersion.mimeType),
@@ -55,6 +65,20 @@ export function resolveStageMedia(params: {
       durationMs: asset.durationMs ?? null,
       label: asset.title ?? asset.fileName,
       key: `head-${asset.id}`,
+    };
+  }
+
+  if (
+    viewedVersion.preview?.state === 'ready' &&
+    viewedVersion.preview.signedUrl &&
+    viewedVersion.preview.kind
+  ) {
+    return {
+      kind: viewedVersion.preview.kind,
+      src: viewedVersion.preview.signedUrl,
+      durationMs: viewedVersion.preview.durationMs ?? null,
+      label: viewedVersion.fileName,
+      key: `preview-${viewedVersion.preview.renditionId ?? viewedVersion.id}`,
     };
   }
 

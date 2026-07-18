@@ -1,7 +1,7 @@
 // Single mapper from DB snake_case row to the camelCase MediaAsset contract shape.
 // Validated against mediaAssetSchema at the boundary so callers get a typed object.
 
-import type { DetectedObject, MediaAsset } from '@continuum/contracts';
+import type { AssetPreview, DetectedObject, MediaAsset } from '@continuum/contracts';
 import type { MediaAssetRow } from './schema';
 
 function parseDetectedObjects(raw: Record<string, unknown>[] | null): DetectedObject[] {
@@ -30,6 +30,10 @@ export function rowToMediaAsset(
   signedUrl?: string | null,
   thumbnailUrl?: string | null,
 ): MediaAsset {
+  const groupId =
+    typeof (row.origin_ref as { groupId?: unknown } | null)?.groupId === 'string'
+      ? ((row.origin_ref as { groupId: string }).groupId ?? null)
+      : null;
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -45,6 +49,7 @@ export function rowToMediaAsset(
     durationMs: row.duration_ms,
     source: row.source,
     originRef: row.origin_ref,
+    groupId,
     status: row.status,
     reviewStatus: row.review_status ?? 'none',
     headVersionId: row.head_version_id ?? null,
@@ -75,11 +80,13 @@ export function rowToMediaAsset(
 export function rowToSignedMediaAsset(
   row: MediaAssetRow,
   signedUrls: ReadonlyMap<string, string>,
+  preview?: AssetPreview | null,
 ): MediaAsset {
   const thumbnailPath = row.thumbnail_path ?? null;
-  return rowToMediaAsset(
+  const asset = rowToMediaAsset(
     row,
     signedUrls.get(row.storage_path) ?? null,
     thumbnailPath ? (signedUrls.get(thumbnailPath) ?? null) : null,
   );
+  return preview === undefined ? asset : { ...asset, preview };
 }

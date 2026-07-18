@@ -8,6 +8,11 @@ import type {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildCarousel, carouselSignablePaths } from './carousel';
 import { rowToSignedMediaAsset } from './mapper';
+import {
+  buildAssetPreview,
+  loadAssetRenditions,
+  renditionSignablePaths,
+} from './renditions';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { mediaSchema } from './supabase-media';
@@ -97,12 +102,18 @@ export async function fetchLibraryBrowsePage(
     const row = byId.get(id);
     return row ? [row] : [];
   });
+  const renditions = await loadAssetRenditions(
+    client,
+    ordered.flatMap((row) => (row.head_version_id ? [row.head_version_id] : [])),
+  );
   const signedUrlMap = await mintSignedUrls([
     ...assetSignablePaths(ordered),
     ...carouselSignablePaths(ordered),
+    ...renditionSignablePaths(renditions),
   ]);
   const items = ordered.map((row) => {
-    const asset = rowToSignedMediaAsset(row, signedUrlMap);
+    const preview = buildAssetPreview(row, renditions, signedUrlMap);
+    const asset = rowToSignedMediaAsset(row, signedUrlMap, preview);
     const carousel = buildCarousel(row, signedUrlMap);
     return carousel ? { ...asset, carousel } : asset;
   });
