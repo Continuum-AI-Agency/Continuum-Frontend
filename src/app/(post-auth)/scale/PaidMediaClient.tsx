@@ -100,6 +100,16 @@ const JainaChatSurface = dynamic(
   { ssr: false, loading: () => <JainaSkeleton /> },
 );
 
+// The win-rate explorer is a pop-out, not a tab: it needs full height, and the
+// dashboard keeps only the compact kill/scale/iterate calls.
+const WhatsWorkingExplorerSheet = dynamic(
+  () =>
+    import('@/components/paid-media/dashboard/whats-working/WhatsWorkingExplorerSheet').then(
+      (mod) => mod.WhatsWorkingExplorerSheet,
+    ),
+  { ssr: false },
+);
+
 const ReportJobsBell = dynamic(
   () =>
     import('@/components/paid-media/jaina/components/ReportJobsBell').then(
@@ -418,6 +428,9 @@ export default function PaidMediaClientPage({
             />
           </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            {platform === 'meta' && selectedAdAccount ? (
+              <WhatsWorkingExplorerSheet brandId={brandProfileId} />
+            ) : null}
             <ReportJobsBell brandProfileId={brandProfileId} />
             {activeTab === 'jaina' ? (
               <>
@@ -516,6 +529,7 @@ export default function PaidMediaClientPage({
               brandId={brandProfileId}
               adAccountId={selectedAdAccount}
               platform={platform}
+              onSelectAdAccount={setSelectedAdAccount}
             />
           ) : (
             renderBlockedState()

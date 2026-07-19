@@ -16,6 +16,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import type { BrandIntegrationAccountSummary } from '@/lib/integrations/brandProfile';
+import { bareAccountId } from '@/lib/paid-media/accountId';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { cn } from '@/lib/utils';
 import { PAID_SETUP_CONNECT_HREF } from './paid-setup-diagnostics';
@@ -28,8 +29,10 @@ export type AdAccount = {
 // The `act_` prefix is not canonical — Meta returns an account id in either form
 // and the two sources here (timeline vs. integration summary) don't agree. Compare
 // bare, mirroring the optimizer's edge gate (_shared/optimizer-edge.ts) so the
-// picker and the gate can never disagree about the same account.
-const bareAccountId = (value: string) => value.replace(/^act_/, '');
+// picker and the gate can never disagree about the same account. Re-exported for the
+// callers that already import it from here; the definition lives in lib so a data
+// hook never has to reach into a component module to normalize an id.
+export type { bareAccountId };
 
 type AdAccountSelectorProps = {
   brandId: string;

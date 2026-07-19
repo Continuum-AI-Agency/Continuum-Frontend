@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'bun:test';
+import type { AdSetSnapshot } from '@continuum/contracts';
+import { metaCurrencyOffset } from '@continuum/contracts';
+import { buildConvertBudgets } from '../../../../../../supabase/functions/optimizer-convert-cbo/compute.ts';
 import type { CampaignSection } from '../picker/campaignGroups';
-import { convertPreviewRows, convertPreviewTotals } from './convertPreview';
+import {
+  convertPreviewRows,
+  convertPreviewTotals,
+  projectAboBudgets,
+  projectPostConvertSnapshots,
+} from './convertPreview';
 
 const adset = (id: string, over: Partial<CampaignSection['adsets'][number]> = {}) => ({
   id,
@@ -68,5 +76,82 @@ describe('convertPreviewTotals', () => {
       newDailyTotal: 30.5,
       adsetCount: 2,
     });
+  });
+});
+
+// The projection mirrors the split policy that the DEPLOYED convert edge writes
+// (supabase/functions/optimizer-convert-cbo/compute.ts). Importing that module here is
+// deliberate and test-only: it makes drift between the two impossible to merge, which a
+// table of hand-written expectations could never guarantee. The FE cannot import it at
+// runtime (Deno-side `../_shared/*` specifiers do not survive the bundler) — that is the
+// whole reason the policy is mirrored rather than shared.
+describe('projectAboBudgets — parity with the real convert edge', () => {
+  const snap = (id: string, spend7: number, name?: string): AdSetSnapshot =>
+    ({
+      id,
+      ...(name ? { name } : {}),
+      status: 'active',
+      currentBudget: 0,
+      ageDays: 30,
+      windows: {
+        d3: { spend: 0, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 },
+        d7: { spend: spend7, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 },
+        d14: { spend: 0, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 },
+      },
+      daily: [],
+    }) as AdSetSnapshot;
+
+  const cases: Array<{ label: string; currency: string; minMinor: number; spends: number[] }> = [
+    { label: 'USD, typical spread', currency: 'USD', minMinor: 100, spends: [700, 350, 91.7] },
+    {
+      label: 'zero-spend falls to the account minimum',
+      currency: 'USD',
+      minMinor: 100,
+      spends: [0],
+    },
+    { label: 'MXN client account', currency: 'MXN', minMinor: 5000, spends: [6412.33, 0, 91] },
+    // JPY has offset 1, so a naive /100 would silently produce a 100x budget.
+    { label: 'JPY zero-decimal currency', currency: 'JPY', minMinor: 100, spends: [70000, 0] },
+    { label: 'rounding boundary', currency: 'USD', minMinor: 1, spends: [7.005, 7.004, 0.7] },
+  ];
+
+  for (const { label, currency, minMinor, spends } of cases) {
+    it(`matches buildConvertBudgets — ${label}`, () => {
+      const snapshots = spends.map((spend, i) => snap(`a${i}`, spend, `AdSet ${i}`));
+      const offset = metaCurrencyOffset(currency);
+
+      const projected = projectAboBudgets(snapshots, {
+        currency,
+        minDailyBudgetMinor: minMinor,
+      });
+      const authoritative = buildConvertBudgets(
+        snapshots.map((s) => ({ id: s.id, name: s.name, windows: s.windows })),
+        offset,
+        minMinor,
+      );
+
+      expect(projected.map((p) => p.daily_major)).toEqual(authoritative.map((a) => a.daily_major));
+      expect(projected.map((p) => p.adset_id)).toEqual(authoritative.map((a) => a.adset_id));
+      expect(projected.map((p) => p.adset_name)).toEqual(authoritative.map((a) => a.adset_name));
+    });
+  }
+
+  it('projects a post-convert fleet the engine can score: budgeted, active, unfrozen', () => {
+    const held = [snap('a0', 700), snap('a1', 0)].map((s) => ({
+      ...s,
+      freeze: true,
+      freezeReason: 'unsupported_budget' as const,
+    }));
+    const fleet = projectPostConvertSnapshots(held, {
+      currency: 'USD',
+      minDailyBudgetMinor: 100,
+    });
+    expect(fleet).toHaveLength(2);
+    expect(fleet.every((s) => s.freeze === undefined)).toBe(true);
+    expect(fleet.every((s) => s.freezeReason === undefined)).toBe(true);
+    expect(fleet.every((s) => s.status === 'active')).toBe(true);
+    expect(fleet.every((s) => s.currentBudget > 0)).toBe(true);
+    // 700 over 7d = 100/day; the zero-spend ad set lands on the 100-minor floor = 1.00.
+    expect(fleet.map((s) => s.currentBudget)).toEqual([100, 1]);
   });
 });

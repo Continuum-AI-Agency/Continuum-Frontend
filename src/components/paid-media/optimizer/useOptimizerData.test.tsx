@@ -29,28 +29,30 @@ afterEach(() => {
   rpc.mockClear();
 });
 
+const BRAND = '22222222-2222-4222-8222-222222222222';
+
+function portfolioRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Prospecting',
+    objective: 'lead',
+    level: 'adset',
+    mode: 'balanced',
+    apply_mode: 'recommend',
+    daily_total: 500,
+    period_budget: null,
+    status: 'active',
+    next_realloc_at: null,
+    ad_account_id: 'act_1',
+    adset_count: 2,
+    pending_recommendations: 0,
+    ...overrides,
+  };
+}
+
 describe('optimizer React Query reads', () => {
   it('uses the brand/account key and serves a fresh portfolio read from React Query', async () => {
-    rpc.mockResolvedValueOnce({
-      data: [
-        {
-          id: '11111111-1111-4111-8111-111111111111',
-          name: 'Prospecting',
-          objective: 'lead',
-          level: 'adset',
-          mode: 'balanced',
-          apply_mode: 'recommend',
-          daily_total: 500,
-          period_budget: null,
-          status: 'active',
-          next_realloc_at: null,
-          ad_account_id: 'act_1',
-          adset_count: 2,
-          pending_recommendations: 0,
-        },
-      ],
-      error: null,
-    });
+    rpc.mockResolvedValueOnce({ data: [portfolioRow()], error: null });
     const { result, rerender } = renderHook(
       () => useOptimizerPortfolios('22222222-2222-4222-8222-222222222222', 'act_1'),
       { wrapper: createWrapper() },
@@ -68,6 +70,90 @@ describe('optimizer React Query reads', () => {
 
     rerender();
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches a portfolio stored act_123 against a selection of 123', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [portfolioRow({ ad_account_id: 'act_123' })],
+      error: null,
+    });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, '123'), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.otherAccountIds).toEqual([]);
+  });
+
+  it('matches a portfolio stored 123 against a selection of act_123', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [portfolioRow({ ad_account_id: '123' })],
+      error: null,
+    });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, 'act_123'), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+  });
+
+  it('reports the brand total and the owning accounts when the filter empties the list', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [
+        portfolioRow({ ad_account_id: 'act_999' }),
+        portfolioRow({ id: '33333333-3333-4333-8333-333333333333', ad_account_id: 'act_999' }),
+      ],
+      error: null,
+    });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, 'act_1'), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+    expect(result.current.brandPortfolioCount).toBe(2);
+    expect(result.current.otherAccountIds).toEqual(['act_999']);
+  });
+
+  it('reports a genuinely empty brand with no other accounts to point at', async () => {
+    rpc.mockResolvedValueOnce({ data: [], error: null });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, 'act_1'), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+    expect(result.current.brandPortfolioCount).toBe(0);
+    expect(result.current.otherAccountIds).toEqual([]);
+  });
+
+  it('keeps the valid portfolios when one row drifts instead of collapsing the list', async () => {
+    rpc.mockResolvedValueOnce({
+      data: [portfolioRow(), { id: 'not-a-uuid' }],
+      error: null,
+    });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, 'act_1'), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.droppedRowCount).toBe(1);
+  });
+
+  it('surfaces a wholly undecodable list as an error, never as an empty account', async () => {
+    // The read retries once, so both attempts see the drifted body.
+    rpc.mockResolvedValueOnce({ data: [{ id: 'not-a-uuid' }], error: null });
+    rpc.mockResolvedValueOnce({ data: [{ id: 'not-a-uuid' }], error: null });
+    const { result } = renderHook(() => useOptimizerPortfolios(BRAND, 'act_1'), {
+      wrapper: createWrapper(),
+    });
+
+    // The read retries with a ~1s backoff, so the error state lands after the default wait.
+    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5_000 });
+    expect(result.current.data).toEqual([]);
   });
 
   it('keeps the read disabled until a brand exists', () => {

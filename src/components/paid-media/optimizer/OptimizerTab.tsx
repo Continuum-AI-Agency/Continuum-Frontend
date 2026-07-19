@@ -25,11 +25,17 @@ import { OptimizerActions } from './sections/OptimizerActions';
 import { OptimizerLogs } from './sections/OptimizerLogs';
 import { OptimizerOffline } from './sections/OptimizerOffline';
 import { OptimizerOnboarding } from './sections/OptimizerOnboarding';
+import {
+  OptimizerOtherAccountNotice,
+  resolveEmptyPortfolioState,
+  resolveHiddenAccounts,
+} from './sections/OptimizerOtherAccountNotice';
 import { OptimizerOverview } from './sections/OptimizerOverview';
 import { OptimizerPortfolios } from './sections/OptimizerPortfolios';
 import { PortfolioDetailWorkspace } from './sections/PortfolioDetailWorkspace';
 import {
   useAdAccountCurrency,
+  useOptimizerAdAccounts,
   useOptimizerPortfolios,
   useOptimizerRenewals,
 } from './useOptimizerData';
@@ -39,6 +45,9 @@ type OptimizerTabProps = {
   brandId: string;
   adAccountId: string;
   platform: PaidMediaPlatform;
+  /** Switch the page's selected ad account. Supplied so the "portfolios live on another
+   *  ad account" notice can move the user there in one click. */
+  onSelectAdAccount?: (adAccountId: string) => void;
 };
 
 function totalPending(portfolios: PortfolioListItem[]): number {
@@ -59,7 +68,12 @@ function OptimizerSkeleton() {
   );
 }
 
-export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabProps) {
+export function OptimizerTab({
+  brandId,
+  adAccountId,
+  platform,
+  onSelectAdAccount,
+}: OptimizerTabProps) {
   const {
     view,
     portfolioId,
@@ -74,6 +88,7 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
 
   const portfoliosQuery = useOptimizerPortfolios(brandId, adAccountId);
   const renewalsQuery = useOptimizerRenewals(brandId);
+  const accountsQuery = useOptimizerAdAccounts(brandId);
   const currency = useAdAccountCurrency(brandId, adAccountId);
 
   const portfolios = portfoliosQuery.data;
@@ -110,6 +125,27 @@ export function OptimizerTab({ brandId, adAccountId, platform }: OptimizerTabPro
   // detail workspace below uses. It used to be `overflow-y-auto` here AND `max-h-[60vh]
   // overflow-y-auto` inside the ad-set picker: two scrollbars competing over the same gesture.
   // Onboarding owns its own scroll region now, and this container owns none.
+  // An empty list is TWO different facts. When the brand owns portfolios that this ad
+  // account view filtered out, saying "set up the optimizer" hides real work — name the
+  // owning account instead and offer the switch.
+  if (
+    portfolios.length === 0 &&
+    resolveEmptyPortfolioState({
+      brandPortfolioCount: portfoliosQuery.brandPortfolioCount,
+      otherAccountIds: portfoliosQuery.otherAccountIds,
+    }) === 'other-account'
+  ) {
+    return (
+      <section className="grid h-full min-h-0 animate-in place-items-center overflow-y-auto rounded-lg border border-border/70 bg-background fade-in-0 duration-200 motion-reduce:animate-none">
+        <OptimizerOtherAccountNotice
+          hiddenCount={portfoliosQuery.brandPortfolioCount}
+          accounts={resolveHiddenAccounts(portfoliosQuery.otherAccountIds, accountsQuery.data)}
+          onSwitchAccount={onSelectAdAccount}
+        />
+      </section>
+    );
+  }
+
   if (portfolios.length === 0) {
     return (
       <section className="grid h-full min-h-0 animate-in overflow-hidden rounded-lg border border-border/70 bg-background fade-in-0 duration-200 motion-reduce:animate-none">

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { bareAccountId } from '@/lib/paid-media/accountId';
 import {
   fetchAssignedAdAccountIds,
   fetchTimelineAccounts,
@@ -39,7 +40,6 @@ export default async function PaidMediaPage() {
   // empty assigned set means "nothing assigned" OR the lookup was unavailable;
   // both degrade to today's behavior (first reachable account) rather than a
   // dead-ended page.
-  const bareAccountId = (value: string) => value.replace(/^act_/, '');
   const assignedSet = new Set(assignedAccountIds.map(bareAccountId));
   const firstAccountId =
     assignedSet.size > 0

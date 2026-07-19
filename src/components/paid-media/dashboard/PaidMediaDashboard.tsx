@@ -548,7 +548,9 @@ export function PaidMediaDashboard({
               toolbarSlot={dashboardToolbar}
             />
 
-            {platform === 'meta' ? <WhatsWorkingAdsCard brandId={brandId} /> : null}
+            {platform === 'meta' ? (
+              <WhatsWorkingAdsCard adAccountId={adAccountId} brandId={brandId} />
+            ) : null}
 
             <div className="min-h-0">
               {platform === 'linkedin' ? (

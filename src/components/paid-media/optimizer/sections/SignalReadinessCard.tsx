@@ -25,6 +25,7 @@ const VERDICT_TONE: Record<SignalVerdict, Tone> = {
   thin_history: 'warning',
   currency_mismatch: 'warning',
   no_signal: 'warning',
+  no_optimizable_budget: 'warning',
 };
 
 const VERDICT_LABEL: Record<SignalVerdict, string> = {
@@ -32,13 +33,16 @@ const VERDICT_LABEL: Record<SignalVerdict, string> = {
   thin_history: 'thin history',
   currency_mismatch: 'currency mismatch',
   no_signal: 'no signal',
+  no_optimizable_budget: 'nothing movable',
 };
 
 function verdictMessage(readiness: SignalReadiness, kpiLabel: string): string {
-  const { declaredMatching, declaredMismatched, daysOfHistory } = readiness;
+  const { declaredMatching, declaredMismatched, daysOfHistory, unmovable } = readiness;
   const total = declaredMatching + declaredMismatched + readiness.undeclared;
 
   switch (readiness.verdict) {
+    case 'no_optimizable_budget':
+      return `${unmovable} of ${total} ad sets have no daily budget of their own — their spend is set at the campaign level (Advantage Campaign Budget) or across a whole flight. The optimizer can score them but cannot move their budget. Convert a campaign to ad-set budgets to make them optimizable.`;
     case 'currency_mismatch':
       return `${declaredMismatched} of ${total} ad sets optimize for a different result than ${kpiLabel} — those are frozen (currency mismatch) and can't be scored on this objective. Match the objective to what they buy, or optimize them separately.`;
     case 'no_signal':
@@ -93,6 +97,14 @@ export function SignalReadinessCard({
           ·
         </span>
         <span>{trackedPct}% tracked</span>
+        {readiness.unmovable > 0 ? (
+          <>
+            <span aria-hidden="true" className="text-border">
+              ·
+            </span>
+            <span>{readiness.unmovable} not movable</span>
+          </>
+        ) : null}
       </div>
     </OptimizerPanel>
   );

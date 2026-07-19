@@ -55,6 +55,7 @@ import { BudgetHint, SetupAdvisor, TargetHint, useSetupAdvice } from '../advisor
 import { currencySymbol, deriveEfficiency, formatCpa, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildCboCampaignSections } from '../picker/campaignGroups';
+import { buildProjectedConversions } from '../preview/projectedConversion';
 import { applyModeExplainer, applyModePill } from '../reportModel';
 import {
   useOptimizerAccountSnapshots,
@@ -64,16 +65,28 @@ import {
 } from '../useOptimizerData';
 import { CboCampaigns } from './CboCampaigns';
 import { PortfolioPreview } from './PortfolioPreview';
+import { ProjectedConversions } from './ProjectedConversions';
 import { SignalReadinessCard } from './SignalReadinessCard';
 
 // Explains an empty suggestion list precisely (Phase C diagnostic reason), so the
 // onboarding never shows a bare "no suggestions yet". In campaign mode the
 // 'all_cbo' reason means "every campaign is ABO" (budget split at the ad-set level).
-function suggestEmptyMessage(reason: string | null, level: PortfolioLevel): string {
+//
+// `hasProjections` keeps the all-CBO case from dead-ending: when every ad set is held at the
+// campaign level there ARE no ad-set budgets to pick, so pointing at the picker is a wall.
+// With a projection available the copy hands off to it instead.
+function suggestEmptyMessage(
+  reason: string | null,
+  level: PortfolioLevel,
+  { hasProjections = false }: { hasProjections?: boolean } = {},
+): string {
   switch (reason) {
     case 'all_cbo':
-      return level === 'campaign'
-        ? "Every campaign here splits its budget at the ad-set level (ABO), so there's nothing to group at the campaign level. Optimize these as an ad-set portfolio instead."
+      if (level === 'campaign') {
+        return "Every campaign here splits its budget at the ad-set level (ABO), so there's nothing to group at the campaign level. Optimize these as an ad-set portfolio instead.";
+      }
+      return hasProjections
+        ? "Every active ad set here uses a campaign-level budget (CBO or lifetime), so there's nothing to group into a suggestion yet. Here's what each campaign would look like converted to ad-set budgets."
         : "Every active ad set here uses a campaign-level budget (CBO or lifetime), so there's nothing to group into a suggestion. Pick ad sets with their own daily budgets below.";
     case 'no_active':
       return 'No active ad sets found for this account yet. Once ad sets are live, suggestions will appear here.';
@@ -210,6 +223,14 @@ export function PortfolioSetup({
   // not-yet-optimizable with a one-click convert-to-ABO preview.
   const cboSections = React.useMemo(() => buildCboCampaignSections(snapshots), [snapshots]);
 
+  // What each CBO campaign WOULD look like converted to ad-set budgets. Pure and cheap —
+  // the engine preview behind each one is lazy (per card, on expand), so this costs nothing
+  // until an operator asks. It is what keeps an all-CBO account from dead-ending here.
+  const projectedConversions = React.useMemo(
+    () => buildProjectedConversions(cboSections, snapshots, { currency: resolvedCurrency }),
+    [cboSections, snapshots, resolvedCurrency],
+  );
+
   // Account-wide signal readiness, read against the KPI most ad sets declare. Tells
   // the operator up front whether the account can be scored at all (young, untracked,
   // or wrong-currency ad sets) — the same reasons a first cycle raises nothing.
@@ -339,7 +360,9 @@ export function PortfolioSetup({
         ) : suggestions.length === 0 ? (
           <div className="space-y-2 rounded-lg border border-border/70 border-dashed bg-muted/10 px-4 py-3">
             <p className="text-muted-foreground text-xs">
-              {suggestEmptyMessage(suggestReason, level)}
+              {suggestEmptyMessage(suggestReason, level, {
+                hasProjections: projectedConversions.length > 0,
+              })}
             </p>
             {suggestReason === 'not_permitted' ? (
               <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
@@ -366,6 +389,18 @@ export function PortfolioSetup({
               );
             })}
           </div>
+        )}
+
+        {/* Projected suggestions sit WITH the real ones: on an all-CBO account they are the
+            only suggestion available, and on a mixed account they are the next thing to
+            evaluate after the groupable ad sets. Acting on one is still the convert below. */}
+        {suggestRead.isLoading ? null : (
+          <ProjectedConversions
+            brandId={brandId}
+            accountId={adAccountId}
+            currency={resolvedCurrency}
+            projections={projectedConversions}
+          />
         )}
       </section>
 

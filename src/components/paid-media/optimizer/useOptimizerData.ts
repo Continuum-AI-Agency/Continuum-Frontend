@@ -60,6 +60,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
+import { bareAccountId } from '@/lib/paid-media/accountId';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { recommendationInsightKey } from './insightKey';
 
@@ -138,23 +139,113 @@ export const optimizerQueryKeys = {
 // unwired edge on a local stack, a hung request) so React Query can record an
 // error state and the surface can show an "optimizer offline" signal instead of
 // an infinite skeleton. A successful-but-EMPTY read still resolves to the empty
-// model (that's a legitimate "no data yet" state, not an outage), and malformed
-// rows degrade to empty via `.catch([])` rather than tripping the offline path.
+// model (that's a legitimate "no data yet" state, not an outage). Malformed rows
+// degrade to empty via `.catch([])` — EXCEPT for portfolios, where an empty list is
+// a load-bearing UI decision (onboarding), so drift is parsed per row and a wholly
+// undecodable list surfaces as an error rather than a silent "no portfolios".
+
+/** A portfolio list narrowed to the selected ad account, plus the evidence needed to
+ *  explain an empty result. `portfolios.length === 0` alone cannot distinguish "this
+ *  brand has none" from "they all live on another ad account" — the surface has to
+ *  render those two states differently, so the counts travel with the list. */
+export type PortfolioScope = {
+  /** Portfolios owned by the selected ad account (or all of them when none is selected). */
+  portfolios: PortfolioListItem[];
+  /** How many portfolios the brand has in total, before the account filter. */
+  brandPortfolioCount: number;
+  /** The ad accounts (verbatim, as stored) that own the portfolios the filter excluded. */
+  otherAccountIds: string[];
+  /** Rows the RPC returned that no longer match the contract and were skipped. */
+  droppedRowCount: number;
+};
+
+const EMPTY_PORTFOLIO_SCOPE: PortfolioScope = {
+  portfolios: [],
+  brandPortfolioCount: 0,
+  otherAccountIds: [],
+  droppedRowCount: 0,
+};
+
+/** Meta's ad account id is not canonical — the create RPC stores whatever the caller
+ *  sent (`act_123` or `123`) while the account picker normalizes to the bare form.
+ *  Compare bare on BOTH sides, or a real portfolio silently disappears from its own
+ *  account. A portfolio with no ad account belongs to every account view. */
+function ownsPortfolio(rowAccountId: string | null, selectedAccountId: string): boolean {
+  if (!rowAccountId) return true;
+  return bareAccountId(rowAccountId) === bareAccountId(selectedAccountId);
+}
+
+/** Parse portfolio rows ONE AT A TIME. An array-level `.catch([])` collapses the whole
+ *  list when a single row drifts, which the surface then renders as "no portfolios" —
+ *  real portfolios vanishing with no signal. Per-row parsing keeps the good rows; a
+ *  read where EVERY row drifted is schema drift, not an empty account, so it throws
+ *  and the offline/retry path renders instead of a lie. */
+function parsePortfolioRows(
+  rpcName: string,
+  data: unknown,
+): { rows: PortfolioListItem[]; dropped: number } {
+  const raw = Array.isArray(data) ? data : [];
+  const rows: PortfolioListItem[] = [];
+  let dropped = 0;
+
+  for (const row of raw) {
+    const parsed = PortfolioListItemSchema.safeParse(row);
+    if (parsed.success) {
+      rows.push(parsed.data);
+      continue;
+    }
+    dropped += 1;
+    console.error(`${rpcName} returned a row that does not match PortfolioListItemSchema`, {
+      issues: parsed.error.issues,
+    });
+  }
+
+  if (raw.length > 0 && rows.length === 0) {
+    throw new Error(`${rpcName} returned ${raw.length} row(s) that no longer match the contract`);
+  }
+  return { rows, dropped };
+}
+
+function scopeToAccount(
+  rows: PortfolioListItem[],
+  adAccountId: string | null,
+  dropped: number,
+): PortfolioScope {
+  if (!adAccountId) {
+    return {
+      portfolios: rows,
+      brandPortfolioCount: rows.length,
+      otherAccountIds: [],
+      droppedRowCount: dropped,
+    };
+  }
+  const portfolios = rows.filter((row) => ownsPortfolio(row.ad_account_id, adAccountId));
+  const otherAccountIds = Array.from(
+    new Set(
+      rows
+        .filter((row) => !ownsPortfolio(row.ad_account_id, adAccountId))
+        .map((row) => row.ad_account_id)
+        .filter((accountId): accountId is string => Boolean(accountId)),
+    ),
+  );
+  return {
+    portfolios,
+    brandPortfolioCount: rows.length,
+    otherAccountIds,
+    droppedRowCount: dropped,
+  };
+}
 
 async function fetchPortfolios(
   brandId: string,
   adAccountId: string | null,
-): Promise<PortfolioListItem[]> {
+): Promise<PortfolioScope> {
   const { data, error } = await getClient().rpc('optimizer_list_portfolios', {
     p_brand_id: brandId,
   });
   if (error) throw new Error('optimizer_list_portfolios unreachable');
-  const rows = z
-    .array(PortfolioListItemSchema)
-    .catch([])
-    .parse(data ?? []);
-  if (!adAccountId) return rows;
-  return rows.filter((row) => !row.ad_account_id || row.ad_account_id === adAccountId);
+  const { rows, dropped } = parsePortfolioRows('optimizer_list_portfolios', data ?? []);
+  return scopeToAccount(rows, adAccountId, dropped);
 }
 
 async function fetchAdAccounts(brandId: string): Promise<AdAccount[]> {
@@ -288,17 +379,13 @@ async function fetchEnrolledAdsets(portfolioId: string): Promise<PortfolioAdset[
 async function fetchArchivedPortfolios(
   brandId: string,
   adAccountId: string | null,
-): Promise<PortfolioListItem[]> {
+): Promise<PortfolioScope> {
   const { data, error } = await getClient().rpc('optimizer_list_archived_portfolios', {
     p_brand_id: brandId,
   });
   if (error) throw new Error('optimizer_list_archived_portfolios unreachable');
-  const rows = z
-    .array(PortfolioListItemSchema)
-    .catch([])
-    .parse(data ?? []);
-  if (!adAccountId) return rows;
-  return rows.filter((row) => !row.ad_account_id || row.ad_account_id === adAccountId);
+  const { rows, dropped } = parsePortfolioRows('optimizer_list_archived_portfolios', data ?? []);
+  return scopeToAccount(rows, adAccountId, dropped);
 }
 
 /** The ads inside one ad set (provenance only) — lazy-loaded when an ad-set node
@@ -646,7 +733,6 @@ async function restorePortfolio(input: { portfolio_id: string; name: string }): 
 
 // ── Read hooks (React Query) ─────────────────────────────────────────────────
 
-const EMPTY_PORTFOLIOS: PortfolioListItem[] = [];
 const EMPTY_ACCOUNTS: AdAccount[] = [];
 const EMPTY_CPA: CpaSeriesPoint[] = [];
 const EMPTY_ANGLES: AngleMatrixCell[] = [];
@@ -722,14 +808,26 @@ function useOptimizerRead<T>({
   return { ...query, data: query.data ?? empty };
 }
 
+/** The selected account's portfolios. `data` stays the PortfolioListItem[] every
+ *  consumer already renders; the scope counts ride alongside so the surface can tell
+ *  "this brand has no portfolios" (onboarding) apart from "they are all on another ad
+ *  account" (a notice naming that account). */
 export function useOptimizerPortfolios(brandId: string, adAccountId: string | null) {
-  return useOptimizerRead({
+  const query = useOptimizerRead({
     queryKey: optimizerQueryKeys.portfolios(brandId, adAccountId),
     queryFn: () => fetchPortfolios(brandId, adAccountId),
-    empty: EMPTY_PORTFOLIOS,
+    empty: EMPTY_PORTFOLIO_SCOPE,
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
   });
+
+  return {
+    ...query,
+    data: query.data.portfolios,
+    brandPortfolioCount: query.data.brandPortfolioCount,
+    otherAccountIds: query.data.otherAccountIds,
+    droppedRowCount: query.data.droppedRowCount,
+  };
 }
 
 export function useOptimizerAdAccounts(brandId: string) {
@@ -895,15 +993,23 @@ export function useOptimizerEnrolledAdsets(portfolioId: string | null) {
   });
 }
 
-/** Archived portfolios for the "Archived" view. */
+/** Archived portfolios for the "Archived" view — same account scoping as the active list. */
 export function useOptimizerArchivedPortfolios(brandId: string, adAccountId: string | null) {
-  return useOptimizerRead({
+  const query = useOptimizerRead({
     queryKey: optimizerQueryKeys.archivedPortfolios(brandId, adAccountId),
     queryFn: () => fetchArchivedPortfolios(brandId, adAccountId),
-    empty: EMPTY_PORTFOLIOS,
+    empty: EMPTY_PORTFOLIO_SCOPE,
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
   });
+
+  return {
+    ...query,
+    data: query.data.portfolios,
+    brandPortfolioCount: query.data.brandPortfolioCount,
+    otherAccountIds: query.data.otherAccountIds,
+    droppedRowCount: query.data.droppedRowCount,
+  };
 }
 
 /** The ads inside one ad set — lazy: pass adsetId=null to keep the read disabled
