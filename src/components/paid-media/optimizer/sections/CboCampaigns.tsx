@@ -27,6 +27,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '../format';
 import type { CampaignSection } from '../picker/campaignGroups';
+import { convertPreviewRows, convertPreviewTotals } from '../preview/convertPreview';
 import { useConvertCbo } from '../useOptimizerData';
 
 type CboCampaignsProps = {
@@ -146,6 +147,7 @@ function CboCampaignRow({
             preview={preview}
             budgets={budgets}
             currency={previewCurrency}
+            section={section}
           />
 
           <p className="text-2xs text-muted-foreground">
@@ -170,12 +172,14 @@ function ConvertPreviewBody({
   preview,
   budgets,
   currency,
+  section,
 }: {
   isPending: boolean;
   isError: boolean;
   preview: ReturnType<typeof useConvertCbo>['data'];
   budgets: { adset_id: string; adset_name?: string | null; daily_major: number }[];
   currency: string | null;
+  section: CampaignSection;
 }) {
   if (isPending) {
     return (
@@ -202,20 +206,38 @@ function ConvertPreviewBody({
     return <p className="text-sm text-muted-foreground">No ad sets to convert in this campaign.</p>;
   }
 
+  const rows = convertPreviewRows(section, budgets);
+  const totals = convertPreviewTotals(section, rows);
+
   return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">
-        Each ad set&rsquo;s new daily budget
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Campaign budget today{' '}
+        <span className="font-medium text-foreground tabular-nums">
+          {formatCurrency(totals.campaignBudgetToday, currency)}
+        </span>{' '}
+        → {totals.adsetCount} ad-set budget{totals.adsetCount === 1 ? '' : 's'} totaling{' '}
+        <span className="font-medium text-foreground tabular-nums">
+          {formatCurrency(totals.newDailyTotal, currency)}/d
+        </span>
       </p>
       <ul className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/70">
-        {budgets.map((budget) => (
-          <li
-            key={budget.adset_id}
-            className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-          >
-            <span className="min-w-0 truncate">{budget.adset_name?.trim() || budget.adset_id}</span>
-            <span className="shrink-0 font-medium tabular-nums">
-              {formatCurrency(budget.daily_major, currency)}/d
+        {rows.map((row) => (
+          <li key={row.adsetId} className="flex items-center justify-between gap-3 px-3 py-2">
+            <span className="min-w-0">
+              <span className="block truncate text-sm">{row.name}</span>
+              <span className="block text-2xs text-muted-foreground tabular-nums">
+                {row.spend14 == null
+                  ? 'no trailing-14d read'
+                  : `${formatCurrency(row.spend14, currency)} spend · ${
+                      row.cpa == null
+                        ? 'no tracked results'
+                        : `${formatCurrency(row.cpa, currency)} CPA`
+                    } · 14d`}
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-medium tabular-nums">
+              {formatCurrency(row.newDailyBudget, currency)}/d
             </span>
           </li>
         ))}

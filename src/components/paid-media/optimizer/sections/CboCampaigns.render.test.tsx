@@ -104,6 +104,8 @@ describe('CboCampaigns', () => {
     expect(getByText('$42/d')).toBeTruthy();
     expect(getByText('Lookalike')).toBeTruthy();
     expect(getByText('$15/d')).toBeTruthy();
+    // The changeover headline: campaign-held budget today vs the sum of new budgets.
+    expect(getByText('$57/d')).toBeTruthy();
     const apply = getByRole('button', { name: 'Apply' }) as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
   });
