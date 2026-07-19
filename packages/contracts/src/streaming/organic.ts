@@ -44,6 +44,10 @@ const jobEventDataSchema = z
     // plan item title / draft topic.
     title: z.string().optional(),
     planItemId: z.string().optional(),
+    // AI SDK tool-call id of the agent tool that dispatched this job (e.g.
+    // generatePosts), so the FE chat can attach the frame's card inline under
+    // that tool call instead of rendering it in a separate track.
+    toolCallId: z.string().nullable().optional(),
     // Canonical job status + media-enrichment stage so the FE derives one label via
     // resolveOrganicGenerationDisplay rather than inferring it from the frame type.
     status: organicGenerationStatusEnum.optional(),
@@ -211,6 +215,9 @@ export const organicGenerationSummarySchema = z
     scheduledAt: z.string().nullable().optional(),
     planId: z.string().nullable().optional(),
     planItemId: z.string().nullable().optional(),
+    // AI SDK tool-call id of the dispatching agent tool — lets an open chat converge
+    // durable rows onto the inline card under that tool call (see the job-frame twin above).
+    toolCallId: z.string().nullable().optional(),
     enqueuedAt: z.string().nullable().optional(),
     completedAt: z.string().nullable().optional(),
     error: z.object({ code: z.string().optional(), message: z.string() }).nullable().optional(),

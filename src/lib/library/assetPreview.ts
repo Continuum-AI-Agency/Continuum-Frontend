@@ -3,8 +3,8 @@
 import {
   type AssetPreviewState,
   classifyLibraryFile,
-  signAssetRenditionResponseSchema,
   type SignAssetRenditionOperation,
+  signAssetRenditionResponseSchema,
 } from '@continuum/contracts';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -124,11 +124,15 @@ export async function rasterizeBrowserImage(file: Blob): Promise<{
       const scale = Math.min(1, PREVIEW_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
       const width = Math.max(1, Math.round(bitmap.width * scale));
       const height = Math.max(1, Math.round(bitmap.height * scale));
+      // Per-branch getContext so TS keeps the concrete 2d context type — the union
+      // HTMLCanvasElement.getContext(string) overload widens to RenderingContext,
+      // which includes bitmap-renderer contexts without drawImage.
       const canvas =
         typeof OffscreenCanvas === 'function'
           ? new OffscreenCanvas(width, height)
           : Object.assign(document.createElement('canvas'), { width, height });
-      const context = canvas.getContext('2d');
+      const context =
+        canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : canvas.getContext('2d');
       if (!context) return null;
       context.drawImage(bitmap, 0, 0, width, height);
       const blob = await canvasBlob(canvas);
