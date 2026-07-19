@@ -151,6 +151,10 @@ export const optimizerQueryKeys = {
 export type PortfolioScope = {
   /** Portfolios owned by the selected ad account (or all of them when none is selected). */
   portfolios: PortfolioListItem[];
+  /** EVERY portfolio the brand owns, before the account filter. The RPC is brand-scoped, so
+   *  this list is already in hand — the cross-account browser renders it with no second read.
+   *  Cross-BRAND portfolios are not here and never will be: that boundary is server-side. */
+  brandPortfolios: PortfolioListItem[];
   /** How many portfolios the brand has in total, before the account filter. */
   brandPortfolioCount: number;
   /** The ad accounts (verbatim, as stored) that own the portfolios the filter excluded. */
@@ -161,6 +165,7 @@ export type PortfolioScope = {
 
 const EMPTY_PORTFOLIO_SCOPE: PortfolioScope = {
   portfolios: [],
+  brandPortfolios: [],
   brandPortfolioCount: 0,
   otherAccountIds: [],
   droppedRowCount: 0,
@@ -214,6 +219,7 @@ function scopeToAccount(
   if (!adAccountId) {
     return {
       portfolios: rows,
+      brandPortfolios: rows,
       brandPortfolioCount: rows.length,
       otherAccountIds: [],
       droppedRowCount: dropped,
@@ -230,6 +236,7 @@ function scopeToAccount(
   );
   return {
     portfolios,
+    brandPortfolios: rows,
     brandPortfolioCount: rows.length,
     otherAccountIds,
     droppedRowCount: dropped,
@@ -824,6 +831,7 @@ export function useOptimizerPortfolios(brandId: string, adAccountId: string | nu
   return {
     ...query,
     data: query.data.portfolios,
+    brandPortfolios: query.data.brandPortfolios,
     brandPortfolioCount: query.data.brandPortfolioCount,
     otherAccountIds: query.data.otherAccountIds,
     droppedRowCount: query.data.droppedRowCount,
@@ -1006,6 +1014,7 @@ export function useOptimizerArchivedPortfolios(brandId: string, adAccountId: str
   return {
     ...query,
     data: query.data.portfolios,
+    brandPortfolios: query.data.brandPortfolios,
     brandPortfolioCount: query.data.brandPortfolioCount,
     otherAccountIds: query.data.otherAccountIds,
     droppedRowCount: query.data.droppedRowCount,

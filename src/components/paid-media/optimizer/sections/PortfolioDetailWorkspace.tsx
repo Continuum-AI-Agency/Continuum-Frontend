@@ -8,6 +8,11 @@
 // drill-in that charts each creative (with hover cards) plus its ROAS
 // profitability. Every panel degrades to its own empty state, so a portfolio with
 // thin data still reads as one coherent instrument rather than blank space.
+//
+// Each ad-set row also expands in place to its own ads and their kill/scale/
+// iterate verdicts, so the creative call sits next to the budget move being made
+// on that ad set. The expansion is one ad set at a time — the ad-level read is
+// lazy and a portfolio can hold dozens of ad sets.
 
 import {
   type CycleItemRow,
@@ -16,7 +21,8 @@ import {
   type PortfolioLevel,
   type PortfolioListItem,
 } from '@continuum/contracts';
-import { ArrowLeftIcon, RefreshCwIcon } from 'lucide-react';
+import { ArrowLeftIcon, ChevronRightIcon, RefreshCwIcon } from 'lucide-react';
+import { useState } from 'react';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,6 +54,7 @@ import {
   useOptimizerPerformance,
 } from '../useOptimizerData';
 import type { OptimizerAdMetric } from '../useOptimizerUrlState';
+import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { HeldChangesPanel } from './HeldChangesPanel';
@@ -86,6 +93,9 @@ export function PortfolioDetailWorkspace({
   // conversion-funnel sum (keyed by the enrolled entity id) resolves. The cycle
   // charts are entity-agnostic (keyed by entity id) and need no level.
   const level = (portfolio.level as PortfolioLevel) ?? 'adset';
+  // One expanded ad set at a time: the creative rows behind it carry their own
+  // ad-level read, and a portfolio can hold dozens of ad sets.
+  const [expandedAdsetId, setExpandedAdsetId] = useState<string | null>(null);
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const cpaSeriesQuery = useOptimizerCpaSeries(portfolio.id);
   const angleMatrixQuery = useOptimizerAngleMatrix(portfolio.id);
@@ -331,7 +341,7 @@ export function PortfolioDetailWorkspace({
           bodyClassName="space-y-2.5"
           meta={
             <span className="text-3xs text-muted-foreground">
-              click an ad set to drill in · 95% CI
+              click an ad set to drill in · expand for its creative verdicts · 95% CI
             </span>
           }
           title={`${metric.costLabel} per ad set`}
@@ -339,32 +349,57 @@ export function PortfolioDetailWorkspace({
           {items.length === 0 ? (
             <p className="text-muted-foreground text-xs">No scored ad sets in the latest cycle.</p>
           ) : (
-            items.map((item) => (
-              <AdsetActionMenu
-                key={item.adset_id}
-                label={adsetNameById.get(item.adset_id) || item.adset_id}
-                onHold={() => undefined}
-              >
-                <button
-                  className={cn(
-                    'w-full rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40',
-                    selectedAdsetId === item.adset_id && 'bg-muted/60 ring-1 ring-ring',
-                  )}
-                  onClick={() =>
-                    onSelectAdset(selectedAdsetId === item.adset_id ? null : item.adset_id)
-                  }
-                  type="button"
-                >
-                  <CpaConfidenceBar
-                    currency={currency}
-                    denominatorMultiplier={metric.denominatorMultiplier}
-                    item={item}
-                    maxCpa={maxCiCpa}
-                    name={adsetNameById.get(item.adset_id) || undefined}
-                  />
-                </button>
-              </AdsetActionMenu>
-            ))
+            items.map((item) => {
+              const adsetName = adsetNameById.get(item.adset_id) || item.adset_id;
+              const isExpanded = expandedAdsetId === item.adset_id;
+              return (
+                <div className="space-y-1" key={item.adset_id}>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      aria-expanded={isExpanded}
+                      aria-label={`Creative verdicts for ${adsetName}`}
+                      className="size-6 shrink-0"
+                      onClick={() => setExpandedAdsetId(isExpanded ? null : item.adset_id)}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <ChevronRightIcon
+                        className={cn('size-3.5 transition-transform', isExpanded && 'rotate-90')}
+                      />
+                    </Button>
+                    <AdsetActionMenu label={adsetName} onHold={() => undefined}>
+                      <button
+                        className={cn(
+                          'min-w-0 flex-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40',
+                          selectedAdsetId === item.adset_id && 'bg-muted/60 ring-1 ring-ring',
+                        )}
+                        onClick={() =>
+                          onSelectAdset(selectedAdsetId === item.adset_id ? null : item.adset_id)
+                        }
+                        type="button"
+                      >
+                        <CpaConfidenceBar
+                          currency={currency}
+                          denominatorMultiplier={metric.denominatorMultiplier}
+                          item={item}
+                          maxCpa={maxCiCpa}
+                          name={adsetNameById.get(item.adset_id) || undefined}
+                        />
+                      </button>
+                    </AdsetActionMenu>
+                  </div>
+                  {isExpanded ? (
+                    <AdsetCreativeVerdicts
+                      accountId={adAccountId}
+                      adsetId={item.adset_id}
+                      brandId={brandId}
+                      currency={currency}
+                    />
+                  ) : null}
+                </div>
+              );
+            })
           )}
         </OptimizerPanel>
 

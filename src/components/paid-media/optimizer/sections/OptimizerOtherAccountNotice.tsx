@@ -3,71 +3,32 @@
 // Shown when the selected ad account has no portfolios but the brand DOES have them on
 // another ad account. That state used to fall into "Set up the Optimizer" onboarding,
 // which told the user their work did not exist. It exists — it is one account switch
-// away — so this names the owning account(s) and offers the switch.
+// away — so this names the owning account(s), offers the switch, and (when more than the
+// single-switch shortcut is useful) hands off to the cross-account browser.
 //
-// Cross-BRAND portfolios stay invisible on purpose: optimizer_list_portfolios is
-// brand-scoped server-side, and this surface never reads across that boundary.
+// The account-resolution logic lives in ./portfolioAccounts so it stays testable without
+// rendering; this file is presentation only.
 
-import type { AdAccount } from '@continuum/contracts';
-import { ArrowRightLeftIcon, FolderSearchIcon } from 'lucide-react';
+import { ArrowRightLeftIcon, FolderSearchIcon, LibraryIcon } from 'lucide-react';
 
-import { bareAccountId } from '@/lib/paid-media/accountId';
 import { Button } from '@/components/ui/button';
-
-/** One ad account that owns portfolios hidden by the current selection. `accountId` is the
- *  id to switch TO — the picker's canonical id when the account is known, otherwise the
- *  value stored on the portfolio. `known` is false when no assigned ad account matches,
- *  in which case switching is not offered (the picker could not honor it). */
-export type HiddenPortfolioAccount = {
-  accountId: string;
-  label: string;
-  known: boolean;
-};
-
-/** Which empty state the optimizer should render. `other-account` is the case this module
- *  exists for; `onboarding` means the brand genuinely has no portfolios. */
-export type EmptyPortfolioState = 'onboarding' | 'other-account';
-
-export function resolveEmptyPortfolioState(scope: {
-  brandPortfolioCount: number;
-  otherAccountIds: string[];
-}): EmptyPortfolioState {
-  return scope.brandPortfolioCount > 0 && scope.otherAccountIds.length > 0
-    ? 'other-account'
-    : 'onboarding';
-}
-
-/** Resolve the stored ad-account ids onto the brand's assigned accounts so the notice can
- *  name them the way the picker does. Ids are compared bare — a portfolio stored `act_123`
- *  is the account the picker lists as `123`. */
-export function resolveHiddenAccounts(
-  otherAccountIds: string[],
-  accounts: AdAccount[],
-): HiddenPortfolioAccount[] {
-  return otherAccountIds.map((storedId) => {
-    const match = accounts.find(
-      (account) => bareAccountId(account.account_id) === bareAccountId(storedId),
-    );
-    if (!match) return { accountId: storedId, label: storedId, known: false };
-    return {
-      accountId: match.account_id,
-      label: match.name ?? match.account_id,
-      known: true,
-    };
-  });
-}
+import type { HiddenPortfolioAccount } from './portfolioAccounts';
 
 type OptimizerOtherAccountNoticeProps = {
   /** How many portfolios the brand has that this account view is hiding. */
   hiddenCount: number;
   accounts: HiddenPortfolioAccount[];
   onSwitchAccount?: (accountId: string) => void;
+  /** Open the cross-account browser. This is the only path into it when the selected
+   *  account has no portfolios, because the tabbed view never renders in that state. */
+  onBrowseAll?: () => void;
 };
 
 export function OptimizerOtherAccountNotice({
   hiddenCount,
   accounts,
   onSwitchAccount,
+  onBrowseAll,
 }: OptimizerOtherAccountNoticeProps) {
   const portfolioLabel = hiddenCount === 1 ? '1 portfolio' : `${hiddenCount} portfolios`;
 
@@ -107,6 +68,13 @@ export function OptimizerOtherAccountNotice({
           </li>
         ))}
       </ul>
+
+      {onBrowseAll ? (
+        <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={onBrowseAll}>
+          <LibraryIcon className="size-3.5" aria-hidden="true" />
+          Browse all {hiddenCount} portfolios
+        </Button>
+      ) : null}
     </div>
   );
 }

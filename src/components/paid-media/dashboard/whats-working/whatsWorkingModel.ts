@@ -52,6 +52,14 @@ export const humanize = (value: string): string => value.replace(/_/g, ' ');
 export const percent = (value: number | null): string =>
   value === null ? '—' : `${Math.round(value * 100)}%`;
 
+// KNOWN WRONG for non-USD accounts, and deliberately left that way for now. The
+// creative report carries no money currency (its `currency` field is the KPI kind:
+// purchases | leads | clicks), and the honest fix is to stamp the ad account's
+// currency into the report at assembly time — it is generated server-side from that
+// account and already knows it. Resolving it client-side instead would mean pulling
+// the optimizer's account hook into this directory, and a sibling spec mock.modules
+// that module process-wide. A wrong symbol on an MXN account misreads by ~20x, so
+// this is a real defect, not cosmetic.
 export const money = (value: number | null): string =>
   value === null ? '—' : `$${value.toFixed(2)}`;
 

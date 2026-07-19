@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
 
-import { resolveEmptyPortfolioState, resolveHiddenAccounts } from './OptimizerOtherAccountNotice';
+import { resolveEmptyPortfolioState, resolveHiddenAccounts } from './portfolioAccounts';
 
 const account = (overrides: Partial<AdAccount> = {}): AdAccount => ({
   platform: 'meta',
