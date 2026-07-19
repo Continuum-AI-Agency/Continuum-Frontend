@@ -11,8 +11,16 @@
 // set, zero writes. The dialog's "Apply" action is disabled until a sandbox bench
 // validates the real write on a Meta test campaign (un-gated in a follow-up PR).
 
-import { Loader2Icon, MegaphoneIcon, SplitIcon, TriangleAlertIcon } from 'lucide-react';
+import type { AdSetSnapshot, CycleItemRow } from '@continuum/contracts';
+import {
+  ChevronDownIcon,
+  Loader2Icon,
+  MegaphoneIcon,
+  SplitIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import type * as React from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   AlertDialog,
@@ -25,16 +33,27 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { formatCurrency } from '../format';
 import type { CampaignSection } from '../picker/campaignGroups';
-import { convertPreviewRows, convertPreviewTotals } from '../preview/convertPreview';
-import { useConvertCbo } from '../useOptimizerData';
+import {
+  type ConvertBudget,
+  convertPreviewRows,
+  convertPreviewTotals,
+  resolvePreviewObjective,
+  synthesizePostConvertSnapshots,
+} from '../preview/convertPreview';
+import { useConvertCbo, useCyclePreview } from '../useOptimizerData';
 
 type CboCampaignsProps = {
   brandId: string;
   accountId: string;
   currency: string | null;
   sections: CampaignSection[];
+  // Raw account snapshots (engine input) the parent already reads via
+  // useOptimizerAccountSnapshots — filtered per campaign to synthesize the
+  // post-convert ad sets the "Preview as converted" expander scores.
+  snapshots: AdSetSnapshot[];
 };
 
 // A soft failure from the convert edge → an actionable, non-technical message.
@@ -54,7 +73,13 @@ function softFailMessage(
   }
 }
 
-export function CboCampaigns({ brandId, accountId, currency, sections }: CboCampaignsProps) {
+export function CboCampaigns({
+  brandId,
+  accountId,
+  currency,
+  sections,
+  snapshots,
+}: CboCampaignsProps) {
   if (sections.length === 0) return null;
 
   return (
@@ -77,6 +102,7 @@ export function CboCampaigns({ brandId, accountId, currency, sections }: CboCamp
             accountId={accountId}
             currency={currency}
             section={section}
+            snapshots={snapshots}
           />
         ))}
       </div>
@@ -89,11 +115,13 @@ function CboCampaignRow({
   accountId,
   currency,
   section,
+  snapshots,
 }: {
   brandId: string;
   accountId: string;
   currency: string | null;
   section: CampaignSection;
+  snapshots: AdSetSnapshot[];
 }) {
   const convert = useConvertCbo(brandId);
   const adsetLabel = `${section.totalCount} ad set${section.totalCount === 1 ? '' : 's'}`;
@@ -106,6 +134,13 @@ function CboCampaignRow({
   const preview = convert.data;
   const previewCurrency = preview?.currency ?? currency;
   const budgets = preview?.ok ? preview.adset_budgets : [];
+
+  // The held CBO ad sets of THIS campaign, from the raw account snapshots — the input to
+  // synthesizing their post-convert (ABO) state for the "Preview as converted" expander.
+  const campaignSnapshots = useMemo(
+    () => snapshots.filter((snapshot) => snapshot.campaignId === section.campaignId),
+    [snapshots, section.campaignId],
+  );
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
@@ -150,6 +185,16 @@ function CboCampaignRow({
             section={section}
           />
 
+          {preview?.ok && budgets.length > 0 ? (
+            <ConvertedPreview
+              brandId={brandId}
+              accountId={accountId}
+              campaignSnapshots={campaignSnapshots}
+              budgets={budgets}
+              currency={previewCurrency}
+            />
+          ) : null}
+
           <p className="text-2xs text-muted-foreground">
             Applying is disabled while the real write is validated on a Meta test campaign.
           </p>
@@ -162,6 +207,145 @@ function CboCampaignRow({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// The "as-if-converted" full preview: run the ACTUAL optimizer engine over the synthesized
+// post-convert ad sets (held CBO ad sets given their dryRun ABO budgets) and render what it
+// WOULD reallocate — the same ReallocationFlow a real scored cycle shows. Lazy: the engine
+// preview only runs once the operator opens the expander. Read-only end to end.
+function ConvertedPreview({
+  brandId,
+  accountId,
+  campaignSnapshots,
+  budgets,
+  currency,
+}: {
+  brandId: string;
+  accountId: string;
+  campaignSnapshots: AdSetSnapshot[];
+  budgets: ConvertBudget[];
+  currency: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const cyclePreview = useCyclePreview();
+  const ranRef = useRef(false);
+
+  const postConvert = useMemo(
+    () => synthesizePostConvertSnapshots(campaignSnapshots, budgets),
+    [campaignSnapshots, budgets],
+  );
+
+  const handleToggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (!next || ranRef.current || postConvert.length === 0) return;
+    ranRef.current = true;
+    const objective = resolvePreviewObjective(postConvert);
+    const total = postConvert.reduce((sum, snapshot) => sum + snapshot.currentBudget, 0);
+    cyclePreview.mutate({
+      brandId,
+      accountId,
+      snapshots: postConvert,
+      objective,
+      mode: 'balanced',
+      total,
+    });
+  };
+
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/10">
+      <button
+        type="button"
+        onClick={handleToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ChevronDownIcon
+          className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
+        Preview as converted
+        <span className="font-normal text-muted-foreground">— what the optimizer would do</span>
+      </button>
+      {open ? (
+        <div className="border-t border-border/60 p-3">
+          <ConvertedPreviewBody
+            hasSnapshots={postConvert.length > 0}
+            outcome={cyclePreview.data}
+            isPending={cyclePreview.isPending}
+            currency={currency}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ConvertedPreviewBody({
+  hasSnapshots,
+  outcome,
+  isPending,
+  currency,
+}: {
+  hasSnapshots: boolean;
+  outcome: ReturnType<typeof useCyclePreview>['data'];
+  isPending: boolean;
+  currency: string | null;
+}) {
+  if (!hasSnapshots) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No converted ad sets to preview — this campaign&rsquo;s ad sets aren&rsquo;t in the current
+        metrics read.
+      </p>
+    );
+  }
+  if (isPending || outcome == null) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+        Running the optimizer over the converted ad sets…
+      </p>
+    );
+  }
+  // The service (or its edge) isn't deployed yet — degrade quietly, never an error wall.
+  if (outcome.status === 'unavailable') {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Preview isn&rsquo;t available yet — the optimizer preview service isn&rsquo;t live for this
+        account.
+      </p>
+    );
+  }
+  if (outcome.status === 'error') {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Couldn&rsquo;t run the preview just now. Try reopening in a moment.
+      </p>
+    );
+  }
+
+  const { preview } = outcome;
+  const flowItems: CycleItemRow[] = preview.items.map((item) => ({
+    adset_id: item.adset_id,
+    current_budget: item.current_budget,
+    final_budget: item.final_budget,
+    change_abs: item.change_abs,
+    change_pct: item.change_pct,
+    diagnostics: item.diagnostics ?? null,
+  }));
+  const recCount = preview.recommendations.length;
+
+  return (
+    <div className="space-y-2">
+      <ReallocationFlow items={flowItems} currency={currency} />
+      <p className="text-2xs text-muted-foreground">
+        {recCount === 0
+          ? 'No action recommendations raised on the converted ad sets.'
+          : `${recCount} action recommendation${recCount === 1 ? '' : 's'} raised on the converted ad sets.`}
+      </p>
     </div>
   );
 }

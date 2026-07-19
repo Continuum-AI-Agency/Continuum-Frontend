@@ -63,7 +63,9 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { DataFreshnessChip } from '../charts/DataFreshnessChip';
 import { formatCpa, formatCurrency } from '../format';
+import { useOptimizerAccountSnapshots } from '../useOptimizerData';
 import { AdsetAdList } from './AdsetAdList';
 import {
   type AdsetPickItem,
@@ -353,6 +355,14 @@ export function CampaignAdsetPicker({
   const [seeded, setSeeded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Re-reads the SAME account/level query the parent already fetched (React Query dedupes
+  // by key), so the chip surfaces its read time + rate-limited refresh with no extra fetch.
+  const { fetchedAt, refresh, canRefresh, isRefreshing } = useOptimizerAccountSnapshots(
+    brandId,
+    accountId,
+    mode,
+  );
+
   const sections = useMemo(
     () => buildCampaignSections(snapshots, mode, objective),
     [snapshots, mode, objective],
@@ -485,8 +495,21 @@ export function CampaignAdsetPicker({
   const metric = objective ? getOptimizationMetricDefinition(objective) : null;
   const virtualRows = virtualizer.getVirtualItems();
 
+  const showFreshness = !isLoading && !isError && (Boolean(fetchedAt) || snapshots.length > 0);
+
   return (
     <div className="flex min-h-0 flex-col gap-2">
+      {showFreshness ? (
+        <div className="flex items-center justify-end">
+          <DataFreshnessChip
+            fetchedAt={fetchedAt}
+            onRefresh={refresh}
+            canRefresh={canRefresh}
+            isRefreshing={isRefreshing}
+          />
+        </div>
+      ) : null}
+
       {!isCampaignMode ? (
         <PickerToolbar
           sections={sections}

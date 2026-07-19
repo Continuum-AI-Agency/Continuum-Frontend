@@ -12,6 +12,7 @@
 import {
   type CycleItemRow,
   getOptimizationMetricDefinition,
+  type OptimizationObjective,
   type PortfolioLevel,
   type PortfolioListItem,
 } from '@continuum/contracts';
@@ -52,6 +53,7 @@ import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { HeldChangesPanel } from './HeldChangesPanel';
 import { OptimizerPanel } from './OptimizerPanel';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
+import { SignalReadinessCard } from './SignalReadinessCard';
 
 type PortfolioDetailWorkspaceProps = {
   portfolio: PortfolioListItem;
@@ -94,6 +96,11 @@ export function PortfolioDetailWorkspace({
   const report = parseReport(performanceQuery.data);
   const items = report?.latest_items ?? [];
   const latestRun = report?.latest_run ?? null;
+  // A scored cycle that raised nothing is a legitimate outcome, not a blank page.
+  // When a run landed but produced zero recommendations, explain why off the same
+  // account snapshots the engine scores (frozen kpi_mismatch, too-young account,
+  // no tracked events) rather than leaving the surface unexplained.
+  const noRecommendations = Boolean(latestRun) && (report?.recommendations.length ?? 0) === 0;
   // A freshly-enrolled portfolio has no cycle yet. The create path kicked off a run
   // and the scheduler backstops it (next_realloc_at=now), so poll the performance
   // read until the first result lands rather than leaving the user on empty panels.
@@ -219,6 +226,13 @@ export function PortfolioDetailWorkspace({
             },
           ]}
         />
+
+        {noRecommendations ? (
+          <SignalReadinessCard
+            objective={portfolio.objective as OptimizationObjective}
+            snapshots={snapshotsQuery.data}
+          />
+        ) : null}
 
         <OptimizerPanel
           meta={

@@ -3,6 +3,8 @@
 // per-ad-set budgets (what each would receive after conversion). Pure and read-only —
 // the same backend-owned-execution posture as preview/whatIf.ts.
 
+import type { AdSetSnapshot, OptimizationObjective } from '@continuum/contracts';
+import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import type { CampaignSection } from '../picker/campaignGroups';
 
 export type ConvertBudget = {
@@ -56,4 +58,64 @@ export function convertPreviewTotals(
     newDailyTotal: rows.reduce((sum, row) => sum + row.newDailyBudget, 0),
     adsetCount: rows.length,
   };
+}
+
+// The objective ladder the convert preview scores against — the same declarable
+// currencies onboarding offers (the engine-internal `clicks` fallback is never a
+// user objective). Order is stable so ties resolve deterministically.
+const PREVIEW_OBJECTIVES: OptimizationObjective[] = [
+  'purchase',
+  'app_install',
+  'signup',
+  'lead',
+  'conversations',
+  'traffic',
+  'link_clicks',
+  'thruplays',
+  'post_engagement',
+  'awareness',
+];
+
+/** The objective to preview the post-convert cycle under: the KPI the plurality of the
+ *  campaign's ad sets already DECLARE (Meta optimization_goal → kpiField), reversed to an
+ *  objective through the shared metric map. There is no portfolio yet, so the campaign's
+ *  own dominant currency is the honest lens — scoring a messaging campaign on a guessed
+ *  `purchase` default would freeze every ad set kpi_mismatch. Falls back to `purchase`. */
+export function resolvePreviewObjective(snapshots: AdSetSnapshot[]): OptimizationObjective {
+  const counts = new Map<string, number>();
+  for (const snapshot of snapshots) {
+    if (snapshot.kpiField) counts.set(snapshot.kpiField, (counts.get(snapshot.kpiField) ?? 0) + 1);
+  }
+  let best: OptimizationObjective = 'purchase';
+  let bestCount = 0;
+  for (const objective of PREVIEW_OBJECTIVES) {
+    const kpiField = getOptimizationMetricDefinition(objective).kpiField;
+    const count = counts.get(kpiField) ?? 0;
+    if (count > bestCount) {
+      best = objective;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/** Synthesize the post-convert ad-set fleet the "Preview as converted" expander feeds the
+ *  engine: each held CBO ad set given its dryRun ABO budget as its new ad-set daily budget,
+ *  freeze cleared and status active — exactly the state the ingest would read AFTER the
+ *  convert lands. One snapshot per convert budget (a budget for an ad set the snapshot read
+ *  missed is skipped: without its window metrics the engine has nothing to score). Nothing
+ *  here writes anything; it is the input to the read-only /cycle/preview run. */
+export function synthesizePostConvertSnapshots(
+  heldSnapshots: AdSetSnapshot[],
+  budgets: ConvertBudget[],
+): AdSetSnapshot[] {
+  const snapshotById = new Map(heldSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+  const postConvert: AdSetSnapshot[] = [];
+  for (const budget of budgets) {
+    const held = snapshotById.get(budget.adset_id);
+    if (!held) continue;
+    const { freeze: _freeze, freezeReason: _freezeReason, ...rest } = held;
+    postConvert.push({ ...rest, status: 'active', currentBudget: budget.daily_major });
+  }
+  return postConvert;
 }

@@ -64,6 +64,7 @@ import {
 } from '../useOptimizerData';
 import { CboCampaigns } from './CboCampaigns';
 import { PortfolioPreview } from './PortfolioPreview';
+import { SignalReadinessCard } from './SignalReadinessCard';
 
 // Explains an empty suggestion list precisely (Phase C diagnostic reason), so the
 // onboarding never shows a bare "no suggestions yet". In campaign mode the
@@ -150,6 +151,30 @@ const CONVERSION_OBJECTIVES = new Set<OptimizationObjective>([
   'conversations',
 ]);
 
+// The single objective to read account-wide signal readiness against, before any
+// portfolio exists: the KPI the plurality of ad sets already declare. Onboarding
+// has no portfolio objective yet, so the account's own dominant currency is the
+// honest lens — an account where most ad sets buy conversations should have its
+// readiness scored on conversations, not a guessed purchase default.
+function dominantAccountObjective(snapshots: AdSetSnapshot[]): OptimizationObjective {
+  const counts = new Map<string, number>();
+  for (const snapshot of snapshots) {
+    if (!snapshot.kpiField) continue;
+    counts.set(snapshot.kpiField, (counts.get(snapshot.kpiField) ?? 0) + 1);
+  }
+  let best: OptimizationObjective = 'purchase';
+  let bestCount = 0;
+  for (const objective of OBJECTIVES) {
+    const kpiField = getOptimizationMetricDefinition(objective).kpiField;
+    const count = counts.get(kpiField) ?? 0;
+    if (count > bestCount) {
+      best = objective;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 export function PortfolioSetup({
   brandId,
   adAccountId,
@@ -184,6 +209,11 @@ export function PortfolioSetup({
   // CBO campaigns (their ad sets held `unsupported_budget`) — surfaced as
   // not-yet-optimizable with a one-click convert-to-ABO preview.
   const cboSections = React.useMemo(() => buildCboCampaignSections(snapshots), [snapshots]);
+
+  // Account-wide signal readiness, read against the KPI most ad sets declare. Tells
+  // the operator up front whether the account can be scored at all (young, untracked,
+  // or wrong-currency ad sets) — the same reasons a first cycle raises nothing.
+  const accountObjective = React.useMemo(() => dominantAccountObjective(snapshots), [snapshots]);
 
   const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
   const [createdKeys, setCreatedKeys] = React.useState<Set<string>>(new Set());
@@ -283,6 +313,8 @@ export function PortfolioSetup({
         />
       ) : null}
 
+      <SignalReadinessCard objective={accountObjective} snapshots={snapshots} />
+
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <SparklesIcon className="size-4 text-primary" />
@@ -342,6 +374,7 @@ export function PortfolioSetup({
         accountId={adAccountId}
         currency={resolvedCurrency}
         sections={cboSections}
+        snapshots={snapshots}
       />
 
       <section className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/10 px-4 py-3">

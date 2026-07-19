@@ -3,6 +3,8 @@ import {
   ApplyModeSchema,
   CreatePortfolioRequestSchema,
   CycleItemRowSchema,
+  CyclePreviewRequestSchema,
+  CyclePreviewResponseSchema,
   CycleRunReportSchema,
   EnrollRequestSchema,
   getOptimizationMetricDefinition,
@@ -16,6 +18,15 @@ import {
 } from './service';
 
 const UUID = '11111111-1111-4111-8111-111111111111';
+
+const ZERO_WINDOW = { spend: 0, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
+const SNAPSHOT = {
+  id: 'as1',
+  status: 'active' as const,
+  currentBudget: 42,
+  ageDays: 30,
+  windows: { d3: ZERO_WINDOW, d7: ZERO_WINDOW, d14: ZERO_WINDOW },
+};
 
 describe('ApplyModeSchema', () => {
   test('accepts the three autonomy tiers (observe < recommend < autopilot)', () => {
@@ -213,6 +224,70 @@ describe('RunCycleResponseSchema mirrors the service wire shape', () => {
 
   test('tolerates a NEW service field so a deployed FE cannot be broken by one', () => {
     expect(RunCycleResponseSchema.parse({ ...ran, someFutureField: 'x' }).runId).toBe(ran.runId);
+  });
+});
+
+describe('CyclePreviewRequestSchema — stateless engine-preview inputs', () => {
+  test('validates snapshots + objective + total, defaulting mode to balanced', () => {
+    const parsed = CyclePreviewRequestSchema.parse({
+      snapshots: [SNAPSHOT],
+      objective: 'purchase',
+      total: 42,
+    });
+    expect(parsed.mode).toBe('balanced');
+    expect(parsed.snapshots).toHaveLength(1);
+  });
+
+  test('rejects an empty snapshot fleet', () => {
+    expect(() =>
+      CyclePreviewRequestSchema.parse({ snapshots: [], objective: 'purchase', total: 0 }),
+    ).toThrow();
+  });
+
+  test('rejects a malformed snapshot (strict at the boundary)', () => {
+    expect(() =>
+      CyclePreviewRequestSchema.parse({
+        snapshots: [{ id: 'as1', status: 'active' }],
+        objective: 'purchase',
+        total: 42,
+      }),
+    ).toThrow();
+  });
+});
+
+describe('CyclePreviewResponseSchema — engine reallocation mapped to FE rows', () => {
+  test('parses items, recommendations, confidence, and pacing', () => {
+    const parsed = CyclePreviewResponseSchema.parse({
+      items: [
+        {
+          adset_id: 'as1',
+          current_budget: 42,
+          final_budget: 50,
+          change_abs: 8,
+          change_pct: 0.19,
+          diagnostics: { score3d: 1.2, freezeReason: 'kpi_mismatch' },
+        },
+      ],
+      recommendations: [{ kind: 'pause', adSetId: 'as1' }],
+      confidence: { score: 0.7, band: 'high' },
+      pacing: { dailyTotal: 92, idealCumulative: 0, pacingRatio: 1, status: 'on_track', note: '' },
+    });
+    expect(parsed.items[0].final_budget).toBe(50);
+    expect(parsed.items[0].diagnostics?.freezeReason).toBe('kpi_mismatch');
+    expect(parsed.recommendations).toHaveLength(1);
+    expect(parsed.confidence?.band).toBe('high');
+    expect(parsed.pacing?.dailyTotal).toBe(92);
+  });
+
+  test('allows a null confidence/pacing (a degenerate cycle)', () => {
+    const parsed = CyclePreviewResponseSchema.parse({
+      items: [],
+      recommendations: [],
+      confidence: null,
+      pacing: null,
+    });
+    expect(parsed.confidence).toBeNull();
+    expect(parsed.pacing).toBeNull();
   });
 });
 

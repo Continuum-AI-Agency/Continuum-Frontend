@@ -10,7 +10,11 @@
 
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
-import { FreezeReasonSchema, OptimizationObjectiveSchema } from './engine-contracts';
+import {
+  AdSetSnapshotSchema,
+  FreezeReasonSchema,
+  OptimizationObjectiveSchema,
+} from './engine-contracts';
 
 /** Why an ad set was HELD (budget left unchanged on purpose) this cycle — mirrors
  *  the engine FreezeReason. Surfaced so the FE renders a labeled "Held" state
@@ -624,6 +628,68 @@ export const ConvertCboResponseSchema = z.object({
 });
 export type ConvertCboResponse = z.infer<typeof ConvertCboResponseSchema>;
 
+// ── As-if-converted full preview (POST /cycle/preview) ───────────────────────
+// The read-only "what would the optimizer DO after this CBO→ABO convert" preview.
+// The FE synthesizes the post-convert ad-set snapshots (the held CBO ad sets given
+// their dryRun ABO budgets, freeze cleared, status active) and asks the service to
+// run the ACTUAL engine (runCycle) over them — with NO persist, NO applier, NO run
+// row. The service maps the engine reallocation into the same row shape the
+// performance report narrows, so the FE renders the identical ReallocationFlow it
+// shows for a real scored cycle. Nothing here touches Meta or the DB.
+
+/** POST /cycle/preview request — a stateless engine run over caller-supplied
+ *  snapshots. `total` is the post-convert daily pool (sum of the ABO budgets);
+ *  `mode` defaults to 'balanced'. Strict at the boundary: the snapshots are
+ *  validated with the engine's own AdSetSnapshotSchema before the engine sees them. */
+export const CyclePreviewRequestSchema = z.object({
+  snapshots: z.array(AdSetSnapshotSchema).min(1),
+  objective: OptimizationObjectiveSchema,
+  mode: OptimizationModeSchema.default('balanced'),
+  total: z.number().nonnegative(),
+});
+export type CyclePreviewRequest = z.infer<typeof CyclePreviewRequestSchema>;
+
+/** One reallocation row of a cycle preview — the SAME field shape the FE's
+ *  CycleItemRow narrows (adset_id + current/final/change + diagnostics), so
+ *  ReallocationFlow renders it with no adapter. `diagnostics.freezeReason` is what
+ *  keeps a HELD ad set out of the flow instead of drawn as a $0 move. */
+export const CyclePreviewItemSchema = z
+  .object({
+    adset_id: z.string(),
+    current_budget: z.number(),
+    final_budget: z.number(),
+    change_abs: z.number(),
+    change_pct: z.number(),
+    composite_score: z.number().optional(),
+    diagnostics: CycleItemDiagnosticsSchema.nullable().optional(),
+  })
+  .loose();
+export type CyclePreviewItem = z.infer<typeof CyclePreviewItemSchema>;
+
+/** Cycle pacing carried on the preview (engine PacingResult). Loose — the FE reads
+ *  only the daily total today, and the field set may grow service-side. */
+export const CyclePreviewPacingSchema = z
+  .object({
+    dailyTotal: z.number(),
+    idealCumulative: z.number(),
+    pacingRatio: z.number(),
+    status: z.string(),
+    note: z.string(),
+  })
+  .loose();
+export type CyclePreviewPacing = z.infer<typeof CyclePreviewPacingSchema>;
+
+/** POST /cycle/preview response — the engine's reallocation mapped to FE rows, plus
+ *  the recommendations it raised (FE renders a count), the cycle confidence, and the
+ *  pacing. `recommendations` stays loose: an engine-authored struct the FE only tallies. */
+export const CyclePreviewResponseSchema = z.object({
+  items: z.array(CyclePreviewItemSchema),
+  recommendations: z.array(z.record(z.string(), z.unknown())),
+  confidence: RunConfidenceSchema.nullable(),
+  pacing: CyclePreviewPacingSchema.nullable(),
+});
+export type CyclePreviewResponse = z.infer<typeof CyclePreviewResponseSchema>;
+
 /** Request to apply a scored run's proposed ad-set budgets on Meta (optimizer-apply-run
  *  edge → service /apply). The manual "Apply proposed budgets" action for a portfolio in
  *  recommend mode — the human approval is the autonomy gate (no apply_mode flip needed).
@@ -726,6 +792,47 @@ export const ApplyRunResponseSchema = z.object({
   error: z.string().optional(),
 });
 export type ApplyRunResponse = z.infer<typeof ApplyRunResponseSchema>;
+
+/** Request to revert ONE prior ad-set budget write back to its pre-write value
+ *  (optimizer-apply-revert edge → service /apply/revert). The "Revert" action on an
+ *  apply_executed money row. The service reloads the immutable apply_audits row named by
+ *  `audit_id`, refuses anything but scope 'adset_budget', and pushes a single-item apply
+ *  back to the audit's `prior_minor` through the SAME ledger-guarded, audited write seam —
+ *  so the revert's own audit row records target←prior naturally. `portfolio_id` is
+ *  cross-checked against the audit's portfolio (the edge proves the caller can access it),
+ *  so a caller can never revert a write under a portfolio they cannot reach. Observe-mode
+ *  portfolios hard-refuse (`reason: 'observe_mode'`). `dryRun` (default true) returns the
+ *  single would-write with ZERO writes. */
+export const ApplyRevertRequestSchema = z.object({
+  audit_id: z.string().uuid(),
+  portfolio_id: z.string().uuid(),
+  brandId: z.string().uuid().optional(),
+  accountId: z.string().optional(),
+  dryRun: z.boolean().optional(),
+  /** The human who authorized this revert — recorded as the actor on the new immutable
+   *  apply_audits row (authorized_kind='human'). Stamped by the edge from the caller's JWT. */
+  authorized_by: z.string().uuid().optional(),
+});
+export type ApplyRevertRequest = z.infer<typeof ApplyRevertRequestSchema>;
+
+/** optimizer-apply-revert response — the same envelope family as ApplyRunResponse. A
+ *  dry-run returns `would` (the single current←prior move, 0 writes); a real revert returns
+ *  the ledger-guarded outcome counters + per-item `results`. `auditId` echoes the reverted
+ *  audit id. `reason` is a soft failure: audit_not_found / unsupported_scope / scope_mismatch
+ *  / no_prior / observe_mode / campaign_unsupported / account_unreadable. */
+export const ApplyRevertResponseSchema = z.object({
+  ok: z.boolean(),
+  dryRun: z.boolean().optional(),
+  auditId: z.string().optional(),
+  would: z.array(ApplyWouldWriteSchema).default([]),
+  applied: z.number().int().nonnegative().optional(),
+  failed: z.number().int().nonnegative().optional(),
+  deduped: z.number().int().nonnegative().optional(),
+  results: z.array(ApplyResultItemSchema).default([]),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ApplyRevertResponse = z.infer<typeof ApplyRevertResponseSchema>;
 
 /** Ingest data-quality signal from paid-media-metrics (tracking gaps / empty account). */
 export const IngestDiagnosticsSchema = z.object({

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
+import type { AdSetSnapshot } from '@continuum/contracts';
 import type { CampaignSection } from '../picker/campaignGroups';
 
 // Render the dialog inline (children always mount) so the preview body can be
@@ -32,8 +33,14 @@ type ConvertState = {
 let convertState: ConvertState = { data: null, isPending: false, isError: false };
 const mutateSpy = mock((_input: unknown) => {});
 
+// The as-if-converted preview hook — controlled per test. `mutate` records the engine
+// inputs the dialog synthesized; `data` drives the rendered preview body.
+let cyclePreviewState: { data: unknown; isPending: boolean } = { data: null, isPending: false };
+const cycleMutateSpy = mock((_input: unknown) => {});
+
 mock.module('../useOptimizerData', () => ({
   useConvertCbo: () => ({ ...convertState, mutate: mutateSpy }),
+  useCyclePreview: () => ({ ...cyclePreviewState, mutate: cycleMutateSpy }),
 }));
 
 const { CboCampaigns } = await import('./CboCampaigns');
@@ -49,20 +56,55 @@ function section(overrides: Partial<CampaignSection> & { campaignId: string }): 
     totalEvents14: 0,
     totalAds: 0,
     cpa: null,
+    mismatchCount: 0,
     ...overrides,
   };
 }
 
+const ZERO = { spend: 0, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
+
+function snap(id: string, campaignId: string, kpiField: string): AdSetSnapshot {
+  return {
+    id,
+    campaignId,
+    kpiField,
+    status: 'frozen',
+    freeze: true,
+    freezeReason: 'unsupported_budget',
+    currentBudget: 0,
+    ageDays: 30,
+    windows: {
+      d3: { ...ZERO },
+      d7: { ...ZERO, spend: 210 },
+      d14: { ...ZERO, spend: 420, purchases: 6 },
+    },
+  } as unknown as AdSetSnapshot;
+}
+
+// A ready dryRun convert preview with two per-ad-set budgets, so the "Preview as
+// converted" expander is offered.
+const OK_CONVERT = {
+  ok: true,
+  dryRun: true,
+  currency: 'USD',
+  adset_budgets: [
+    { adset_id: 'as1', adset_name: 'Broad', daily_budget: 4200, daily_major: 42 },
+    { adset_id: 'as2', adset_name: 'Lookalike', daily_budget: 1500, daily_major: 15 },
+  ],
+};
+
 beforeEach(() => {
   convertState = { data: null, isPending: false, isError: false };
+  cyclePreviewState = { data: null, isPending: false };
   mutateSpy.mockClear();
+  cycleMutateSpy.mockClear();
 });
 afterEach(cleanup);
 
 describe('CboCampaigns', () => {
   it('renders nothing when there are no CBO campaigns', () => {
     const { container } = render(
-      <CboCampaigns brandId="b1" accountId="act_1" currency="USD" sections={[]} />,
+      <CboCampaigns brandId="b1" accountId="act_1" currency="USD" sections={[]} snapshots={[]} />,
     );
     expect(container.textContent).toBe('');
   });
@@ -74,6 +116,7 @@ describe('CboCampaigns', () => {
         accountId="act_1"
         currency="USD"
         sections={[section({ campaignId: 'c1', campaignName: 'Summer CBO', totalCount: 3 })]}
+        snapshots={[]}
       />,
     );
     expect(getByText('Summer CBO')).toBeTruthy();
@@ -98,6 +141,7 @@ describe('CboCampaigns', () => {
         accountId="act_1"
         currency="USD"
         sections={[section({ campaignId: 'c1' })]}
+        snapshots={[]}
       />,
     );
     expect(getByText('Broad')).toBeTruthy();
@@ -117,6 +161,7 @@ describe('CboCampaigns', () => {
         accountId="act_1"
         currency="USD"
         sections={[section({ campaignId: 'c9' })]}
+        snapshots={[]}
       />,
     );
     fireEvent.click(getByRole('button', { name: /Convert to ad-set budgets/ }));
@@ -137,6 +182,7 @@ describe('CboCampaigns', () => {
         accountId="act_1"
         currency="USD"
         sections={[section({ campaignId: 'c1' })]}
+        snapshots={[]}
       />,
     );
     expect(getByText('Reconnect Meta to preview the conversion.')).toBeTruthy();
@@ -150,6 +196,7 @@ describe('CboCampaigns', () => {
         accountId="act_1"
         currency="USD"
         sections={[section({ campaignId: 'c1' })]}
+        snapshots={[]}
       />,
     );
     expect(
@@ -167,8 +214,123 @@ describe('CboCampaigns', () => {
         accountId="act_1"
         currency="USD"
         sections={[section({ campaignId: 'c1' })]}
+        snapshots={[]}
       />,
     );
     expect(getByText('Computing per-ad-set budgets…')).toBeTruthy();
+  });
+
+  it('offers the "Preview as converted" expander only after the dryRun budgets load', () => {
+    const { queryByRole, rerender, getByRole } = render(
+      <CboCampaigns
+        brandId="b1"
+        accountId="act_1"
+        currency="USD"
+        sections={[section({ campaignId: 'c1' })]}
+        snapshots={[snap('as1', 'c1', 'purchases')]}
+      />,
+    );
+    expect(queryByRole('button', { name: /Preview as converted/ })).toBeNull();
+
+    convertState.data = OK_CONVERT;
+    rerender(
+      <CboCampaigns
+        brandId="b1"
+        accountId="act_1"
+        currency="USD"
+        sections={[section({ campaignId: 'c1' })]}
+        snapshots={[snap('as1', 'c1', 'purchases')]}
+      />,
+    );
+    expect(getByRole('button', { name: /Preview as converted/ })).toBeTruthy();
+  });
+
+  it('runs the engine preview over the synthesized post-convert ad sets on open', () => {
+    convertState.data = OK_CONVERT;
+    const { getByRole } = render(
+      <CboCampaigns
+        brandId="b1"
+        accountId="act_1"
+        currency="USD"
+        sections={[section({ campaignId: 'c1' })]}
+        snapshots={[snap('as1', 'c1', 'purchases'), snap('as2', 'c1', 'purchases')]}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Preview as converted/ }));
+    expect(cycleMutateSpy).toHaveBeenCalledTimes(1);
+    const input = cycleMutateSpy.mock.calls[0][0] as {
+      brandId: string;
+      accountId: string;
+      objective: string;
+      mode: string;
+      total: number;
+      snapshots: AdSetSnapshot[];
+    };
+    expect(input.brandId).toBe('b1');
+    expect(input.accountId).toBe('act_1');
+    expect(input.mode).toBe('balanced');
+    // Dominant declared kpiField (purchases) reverses to the purchase objective.
+    expect(input.objective).toBe('purchase');
+    // Two budgets → two synthesized snapshots, active + budgeted to their ABO daily_major.
+    expect(input.snapshots).toHaveLength(2);
+    expect(input.snapshots.every((s) => s.status === 'active' && !s.freeze)).toBe(true);
+    expect(input.total).toBeCloseTo(57, 5);
+  });
+
+  it('renders the reallocation flow and a recommendation count when the preview is ready', () => {
+    convertState.data = OK_CONVERT;
+    cyclePreviewState.data = {
+      status: 'ready',
+      preview: {
+        items: [
+          {
+            adset_id: 'as1',
+            current_budget: 42,
+            final_budget: 50,
+            change_abs: 8,
+            change_pct: 0.19,
+          },
+          {
+            adset_id: 'as2',
+            current_budget: 15,
+            final_budget: 7,
+            change_abs: -8,
+            change_pct: -0.53,
+          },
+        ],
+        recommendations: [{ kind: 'pause' }, { kind: 'creative_refresh' }],
+        confidence: { score: 0.7, band: 'high' },
+        pacing: { dailyTotal: 57 },
+      },
+    };
+    const { getByRole, getByText } = render(
+      <CboCampaigns
+        brandId="b1"
+        accountId="act_1"
+        currency="USD"
+        sections={[section({ campaignId: 'c1' })]}
+        snapshots={[snap('as1', 'c1', 'purchases'), snap('as2', 'c1', 'purchases')]}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Preview as converted/ }));
+    expect(getByText('$8 moved across 2 ad sets')).toBeTruthy();
+    expect(getByText('2 action recommendations raised on the converted ad sets.')).toBeTruthy();
+  });
+
+  it('degrades quietly (no error wall) when the preview service is not deployed', () => {
+    convertState.data = OK_CONVERT;
+    cyclePreviewState.data = { status: 'unavailable' };
+    const { getByRole, getByText } = render(
+      <CboCampaigns
+        brandId="b1"
+        accountId="act_1"
+        currency="USD"
+        sections={[section({ campaignId: 'c1' })]}
+        snapshots={[snap('as1', 'c1', 'purchases')]}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /Preview as converted/ }));
+    // Curly apostrophes (&rsquo;) in the copy — match on the apostrophe-free fragment.
+    expect(getByText(/the optimizer preview service/)).toBeTruthy();
   });
 });

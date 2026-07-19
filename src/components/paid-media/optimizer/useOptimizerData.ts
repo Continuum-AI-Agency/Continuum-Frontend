@@ -17,6 +17,9 @@ import {
   AdsetAdsResponseSchema,
   type AngleMatrixCell,
   AngleMatrixCellSchema,
+  type ApplyRevertRequest,
+  type ApplyRevertResponse,
+  ApplyRevertResponseSchema,
   type ApplyRunRequest,
   type ApplyRunResponse,
   ApplyRunResponseSchema,
@@ -26,6 +29,9 @@ import {
   type CpaSeriesPoint,
   CpaSeriesPointSchema,
   type CreatePortfolioRequest,
+  type CyclePreviewRequest,
+  type CyclePreviewResponse,
+  CyclePreviewResponseSchema,
   type CycleRunReport,
   CycleRunReportSchema,
   type CycleSkipReason,
@@ -52,7 +58,7 @@ import {
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { recommendationInsightKey } from './insightKey';
@@ -237,17 +243,29 @@ async function fetchSuggestions(
  *  snapshot's id is the campaign id and campaignId is self-referential). The edge
  *  accepts a user JWT (web app), so this runs client-side with no service key.
  *  Feeds the client-side "what-if" dry-run (runs the pure engine in the browser). */
+/** The snapshot fleet plus `fetchedAt` — the ISO instant the edge read from Meta
+ *  (baked into the reporting_cache payload, so a cache HIT still reports the ORIGINAL
+ *  read time). Wire shape stays loose: `fetchedAt` is narrowed to a string-or-null on
+ *  read; an older cache row written before the envelope carried it resolves to null,
+ *  which the freshness chip renders as "cached · age unknown" rather than a fake age. */
+type AccountSnapshotsResult = { snapshots: AdSetSnapshot[]; fetchedAt: string | null };
+
 async function fetchAccountSnapshots(
   brandId: string,
   accountId: string,
   scope: 'adset_snapshots' | 'campaign_snapshots' = 'adset_snapshots',
-): Promise<AdSetSnapshot[]> {
+  forceRefresh = false,
+): Promise<AccountSnapshotsResult> {
   const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
-    body: { platform: 'meta', scope, brandId, accountId },
+    body: { platform: 'meta', scope, brandId, accountId, forceRefresh },
   });
   if (error) throw new Error(`paid-media-metrics ${scope} unreachable`);
   const snapshots = (data as { snapshots?: unknown })?.snapshots ?? [];
-  return z.array(AdSetSnapshotSchema).catch([]).parse(snapshots);
+  const rawFetchedAt = (data as { fetchedAt?: unknown })?.fetchedAt;
+  return {
+    snapshots: z.array(AdSetSnapshotSchema).catch([]).parse(snapshots),
+    fetchedAt: typeof rawFetchedAt === 'string' && rawFetchedAt.length > 0 ? rawFetchedAt : null,
+  };
 }
 
 /** The active ad sets currently enrolled in a portfolio (id + name) — reads the
@@ -440,6 +458,43 @@ async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboRespons
   return parsed.success ? parsed.data : null;
 }
 
+/** The FE input to a cycle preview — the service-shaped engine inputs plus the brand +
+ *  account the edge scopes the request to. */
+export type CyclePreviewInput = CyclePreviewRequest & { brandId: string; accountId: string };
+
+/** The three honest outcomes of an as-if-converted preview. `unavailable` is the one that
+ *  matters: the optimizer-cycle-preview edge (or the service behind it) is not deployed yet
+ *  (404/501), which the dialog renders as a quiet "not available yet" line rather than an
+ *  error wall — the feature ships ahead of the service and must degrade gracefully. */
+export type CyclePreviewOutcome =
+  | { status: 'ready'; preview: CyclePreviewResponse }
+  | { status: 'unavailable' }
+  | { status: 'error' };
+
+/** Run the read-only "as-if-converted" full preview via the optimizer-cycle-preview edge.
+ *  NEVER throws: a not-yet-deployed edge (404/501) is a described `unavailable` outcome, not
+ *  an exception, because the dialog renders that difference. Reads only — zero writes. */
+async function fetchCyclePreview(input: CyclePreviewInput): Promise<CyclePreviewOutcome> {
+  const { data, error } = await getClient().functions.invoke('optimizer-cycle-preview', {
+    body: {
+      brandId: input.brandId,
+      accountId: input.accountId,
+      snapshots: input.snapshots,
+      objective: input.objective,
+      mode: input.mode,
+      total: input.total,
+    },
+  });
+  if (error) {
+    const status = (error as { context?: { status?: number } } | null)?.context?.status;
+    if (status === 404 || status === 501) return { status: 'unavailable' };
+    return { status: 'error' };
+  }
+  const parsed = CyclePreviewResponseSchema.safeParse(data);
+  if (!parsed.success) return { status: 'error' };
+  return { status: 'ready', preview: parsed.data };
+}
+
 /** Apply (or preview) a scored run's proposed ad-set budgets on Meta via the
  *  optimizer-apply-run edge. `dryRun:true` (default) returns the would-write set with
  *  ZERO writes; `dryRun:false` performs the real Meta write (recommend-mode human apply).
@@ -457,6 +512,25 @@ async function applyRunBudgets(request: ApplyRunRequest): Promise<ApplyRunRespon
   });
   if (error) throw new Error('optimizer-apply-run unreachable');
   const parsed = ApplyRunResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Revert one prior ad-set budget write to its pre-write value via the
+ *  optimizer-apply-revert edge. `dryRun:true` (default) returns the single would-write with
+ *  ZERO writes; `dryRun:false` performs the real Meta write back to the recorded prior.
+ *  Observe portfolios hard-refuse on the service (`reason: observe_mode`). */
+async function revertApplyBudget(request: ApplyRevertRequest): Promise<ApplyRevertResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-revert', {
+    body: {
+      audit_id: request.audit_id,
+      portfolio_id: request.portfolio_id,
+      ...(request.brandId ? { brandId: request.brandId } : {}),
+      ...(request.accountId ? { accountId: request.accountId } : {}),
+      dryRun: request.dryRun ?? true,
+    },
+  });
+  if (error) throw new Error('optimizer-apply-revert unreachable');
+  const parsed = ApplyRevertResponseSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
 }
 
@@ -588,6 +662,9 @@ const FIVE_MINUTES = 5 * 60 * 1_000;
 const TEN_MINUTES = 10 * 60 * 1_000;
 const THIRTY_MINUTES = 30 * 60 * 1_000;
 const READ_TIMEOUT_MS = 8_000;
+// Meta throttles on repeated snapshot reads, so a manual refresh is gated behind a
+// client-side cooldown. In-memory only (per hook instance) — a page reload clears it.
+const SNAPSHOTS_REFRESH_COOLDOWN_MS = 120_000;
 
 /** Supabase can hold a socket open without resolving when a locally-unwired Edge
  * function is selected. Bound the read so a panel reaches its retry state instead
@@ -740,20 +817,70 @@ export function useOptimizerSuggestions(
 
 /** The account's snapshots (engine input) — powers the client-side "what-if"
  *  preview. `level` selects ad sets (default) or campaigns; campaign mode reads
- *  the campaign_snapshots scope. Cached like every other read (30-min TTL). */
+ *  the campaign_snapshots scope. Cached like every other read (30-min TTL).
+ *
+ *  `data` stays the AdSetSnapshot[] every existing consumer reads. Added on top:
+ *  `fetchedAt` (the edge's real Meta read time, for the freshness chip) and a
+ *  cooldown-gated `refresh()` that forces a fresh (uncached) edge read. Multiple
+ *  observers of the same account/level share one React Query entry, so the picker's
+ *  chip and the parent panel read the same cache with no extra network fetch. */
 export function useOptimizerAccountSnapshots(
   brandId: string,
   adAccountId: string | null,
   level: PortfolioLevel = 'adset',
 ) {
   const scope = level === 'campaign' ? 'campaign_snapshots' : 'adset_snapshots';
-  return useOptimizerRead({
-    queryKey: optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
-    queryFn: () => fetchAccountSnapshots(brandId, adAccountId as string, scope),
-    empty: EMPTY_SNAPSHOTS,
-    enabled: Boolean(brandId && adAccountId),
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(
+    () => optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
+    [brandId, adAccountId, level],
+  );
+  const enabled = Boolean(brandId && adAccountId);
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () =>
+      withReadTimeout(fetchAccountSnapshots(brandId, adAccountId as string, scope, false)),
+    enabled,
     staleTime: TEN_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: 1,
   });
+
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  // Re-render exactly once when the cooldown lapses so the refresh control re-enables
+  // without the user having to interact. In-memory; nothing persists across reloads.
+  const [, forceCooldownTick] = useState(0);
+  useEffect(() => {
+    const remaining = cooldownUntil - Date.now();
+    if (remaining <= 0) return;
+    const timer = globalThis.setTimeout(() => forceCooldownTick((n) => n + 1), remaining + 50);
+    return () => globalThis.clearTimeout(timer);
+  }, [cooldownUntil]);
+
+  const inCooldown = Date.now() < cooldownUntil;
+  const canRefresh = enabled && !inCooldown && !query.isFetching;
+
+  const refresh = useCallback(() => {
+    if (!brandId || !adAccountId || Date.now() < cooldownUntil) return;
+    setCooldownUntil(Date.now() + SNAPSHOTS_REFRESH_COOLDOWN_MS);
+    // fetchQuery on the shared key forces a fresh (forceRefresh:true) edge read and
+    // writes the result into the same cache both observers render from.
+    void queryClient.fetchQuery({
+      queryKey,
+      queryFn: () => withReadTimeout(fetchAccountSnapshots(brandId, adAccountId, scope, true)),
+      staleTime: 0,
+    });
+  }, [brandId, adAccountId, scope, cooldownUntil, queryClient, queryKey]);
+
+  return {
+    ...query,
+    data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
+    fetchedAt: query.data?.fetchedAt ?? null,
+    refresh,
+    canRefresh,
+    isRefreshing: query.isFetching,
+  };
 }
 
 /** The ad sets enrolled in a portfolio — powers the manage panel's pre-selection
@@ -1031,6 +1158,15 @@ export function useConvertCbo(_brandId: string) {
   });
 }
 
+/** The read-only "as-if-converted" full preview — run the ACTUAL optimizer engine over
+ *  the synthesized post-convert ad sets and see what it WOULD reallocate. Instantiated per
+ *  CBO campaign row, lazily on expander open. Writes nothing (no invalidation): it is a
+ *  pure preview and never throws — the outcome carries `unavailable` when the service is
+ *  not yet deployed so the dialog degrades quietly. */
+export function useCyclePreview() {
+  return useMutation({ mutationFn: fetchCyclePreview });
+}
+
 /** Preview or apply a portfolio's proposed reallocation. Instantiated per dialog so
  *  each keeps its own pending/preview/error state. dryRun:true = preview; dryRun:false
  *  writes budgets on Meta and invalidates the performance report. */
@@ -1038,6 +1174,24 @@ export function useApplyRun() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: applyRunBudgets,
+    onSuccess: (data, request) => {
+      if (data?.ok && data.dryRun !== true) {
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.performance(request.portfolio_id),
+        });
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+      }
+    },
+  });
+}
+
+/** Revert one prior ad-set budget write to its recorded pre-write value. Instantiated per
+ *  money log row so each keeps its own pending/preview/error state. dryRun:true = preview;
+ *  dryRun:false writes the prior budget on Meta and invalidates the performance report. */
+export function useRevertApply() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: revertApplyBudget,
     onSuccess: (data, request) => {
       if (data?.ok && data.dryRun !== true) {
         void queryClient.invalidateQueries({
