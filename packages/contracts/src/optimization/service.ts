@@ -8,12 +8,9 @@
 // Backend builds them from unknown DB jsonb and the Frontend narrows on read
 // (see the "contracts wire DTOs stay loose" rule).
 
-import {
-  FreezeReasonSchema,
-  OptimizationObjectiveSchema,
-} from './engine-contracts';
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
+import { FreezeReasonSchema, OptimizationObjectiveSchema } from './engine-contracts';
 
 /** Why an ad set was HELD (budget left unchanged on purpose) this cycle — mirrors
  *  the engine FreezeReason. Surfaced so the FE renders a labeled "Held" state
@@ -572,7 +569,10 @@ export const PortfolioSuggestionSchema = z.object({
   level: PortfolioLevelSchema.default('adset'),
   mode: OptimizationModeSchema,
   daily_total: z.number().nonnegative(),
-  cpa_target: z.number().positive().optional(),
+  /** Wire DTO stays loose: the deployed suggest edge rounds a sub-1 CPA baseline to 0
+   *  (guard-before-round), so 0 arrives on low-CPA accounts and means "no usable
+   *  baseline". Consumers treat 0 as absent (suggestionToPortfolioConfig drops falsy). */
+  cpa_target: z.number().nonnegative().optional(),
   adset_ids: z.array(z.string()),
   summary: z.object({
     adsets: z.number().int().nonnegative(),
