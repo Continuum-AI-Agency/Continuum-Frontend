@@ -405,7 +405,7 @@ function AppSidebarInner() {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-[var(--color-border)] bg-[var(--sidebar)] backdrop-blur-xl"
+      className="border-r border-[var(--color-border)] bg-[var(--sidebar)] [view-transition-name:app-sidebar]"
     >
       <LayoutGroup>
         <SidebarHeader className="flex items-center justify-between gap-1 overflow-hidden px-3">

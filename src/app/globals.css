@@ -630,6 +630,15 @@ body {
   animation-name: floatBottom;
 }
 
+/* The persistent app sidebar sits outside the routed-content <ViewTransition>,
+   so route-change snapshots in the top layer would otherwise paint over the
+   fixed rail until a hover-driven repaint. Naming it in AppSidebar captures it
+   as its own group; this keeps that group above the page snapshot and static. */
+::view-transition-group(app-sidebar) {
+  z-index: 1000;
+  animation: none;
+}
+
 @keyframes floatTop {
   0% {
     transform: translateY(-6px);
