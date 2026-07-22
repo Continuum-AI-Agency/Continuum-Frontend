@@ -46,6 +46,7 @@ export const FLAG_LABEL: Record<CreativeWinRateFlag, string> = {
   spend_concentrated: 'spend concentrated',
   warm_audience_skew: 'warm-audience skew',
   confounded: 'confounded',
+  thumbnail_derived: 'thumbnail-derived',
 };
 
 export const humanize = (value: string): string => value.replace(/_/g, ' ');
