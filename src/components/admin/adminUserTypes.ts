@@ -19,6 +19,14 @@ export type AdminBrandOption = {
   brand_name: string;
   tier: number;
   active: boolean;
+  ownerEmail: string | null;
+};
+
+export type AdminWorkflowTransferResult = {
+  workflowId: string;
+  status: 'moved' | 'failed';
+  newId?: string;
+  error?: string;
 };
 
 export type AdminWorkflowLibraryRow = {
@@ -28,7 +36,7 @@ export type AdminWorkflowLibraryRow = {
   description: string | null;
   content?: unknown;
   tags: string[];
-  visibility: "brand" | "global";
+  visibility: 'brand' | 'global';
   source_scope: string | null;
   source_workflow_id: string | null;
   source_brand_profile_id: string | null;
@@ -51,7 +59,7 @@ export type AdminAuditLogEntry = {
   after: unknown;
   metadata: Record<string, unknown>;
   request_id: string | null;
-  status: "success" | "failed";
+  status: 'success' | 'failed';
   created_at: string;
 };
 

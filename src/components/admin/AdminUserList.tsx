@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ArrowRightLeft,
   Building2,
   CheckCircle2,
   Copy,
@@ -16,14 +17,18 @@ import {
   ShieldAlert,
   Trash2,
   UserCog,
+  XCircle,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Fragment, useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
 import {
   buildAdminPaginationRange,
   buildAdminUserListPaginationParams,
   buildAdminUserListSearchParams,
+  canBulkTransfer,
+  describeWorkflowNames,
+  formatBrandDisambiguationLabel,
   groupPermissionsByUserId,
   membershipLabel,
 } from '@/components/admin/adminUserListUtils';
@@ -33,12 +38,15 @@ import type {
   AdminPagination,
   AdminUser,
   AdminWorkflowLibraryRow,
+  AdminWorkflowTransferResult,
   PermissionRow,
 } from '@/components/admin/adminUserTypes';
+import { BrandTransferCombobox } from '@/components/admin/BrandTransferCombobox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -97,6 +105,25 @@ type AdminWorkflowResponse = {
   workflow?: AdminWorkflowLibraryRow;
 };
 
+type AdminWorkflowMoveResponse = {
+  results?: AdminWorkflowTransferResult[];
+};
+
+type BulkTransferOutcome = {
+  workflowId: string;
+  workflowName: string;
+  status: 'success' | 'failed';
+  message?: string;
+};
+
+const GLOBAL_LIBRARY_BRAND_OPTION: AdminBrandOption = {
+  id: 'global',
+  brand_name: 'Global workflow library',
+  tier: 0,
+  active: true,
+  ownerEmail: null,
+};
+
 type AdminAuditResponse = {
   entries?: AdminAuditLogEntry[];
 };
@@ -153,7 +180,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [targetBrandId, setTargetBrandId] = useState('');
   const [workflowQuery, setWorkflowQuery] = useState('');
   const [workflows, setWorkflows] = useState<AdminWorkflowLibraryRow[]>([]);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const [focusedWorkflowId, setFocusedWorkflowId] = useState<string | null>(null);
+  const [checkedWorkflowIds, setCheckedWorkflowIds] = useState<Set<string>>(new Set());
+  const [transferResults, setTransferResults] = useState<BulkTransferOutcome[] | null>(null);
   const [isWorkflowLoading, setIsWorkflowLoading] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AdminAuditLogEntry[]>([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
@@ -179,7 +208,25 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0] ?? null;
   const selectedMemberships = selectedUser ? (permissionsByUserId.get(selectedUser.id) ?? []) : [];
-  const selectedWorkflow = workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? null;
+  const focusedWorkflow = workflows.find((workflow) => workflow.id === focusedWorkflowId) ?? null;
+  const checkedWorkflows = useMemo(
+    () => workflows.filter((workflow) => checkedWorkflowIds.has(workflow.id)),
+    [workflows, checkedWorkflowIds],
+  );
+  const bulkEligibility = useMemo(() => canBulkTransfer(checkedWorkflows), [checkedWorkflows]);
+  const checkedWorkflowNamesLabel = useMemo(
+    () => describeWorkflowNames(checkedWorkflows.map((workflow) => workflow.name)),
+    [checkedWorkflows],
+  );
+  const allCheckedAreBrandScoped =
+    checkedWorkflows.length > 0 &&
+    checkedWorkflows.every((workflow) => workflow.visibility === 'brand');
+  const allCheckedAreGlobalScoped =
+    checkedWorkflows.length > 0 &&
+    checkedWorkflows.every((workflow) => workflow.visibility === 'global');
+  const brandFilterOptions = useMemo(() => [GLOBAL_LIBRARY_BRAND_OPTION, ...brands], [brands]);
+  const allVisibleWorkflowsChecked =
+    workflows.length > 0 && workflows.every((workflow) => checkedWorkflowIds.has(workflow.id));
 
   const safePage =
     pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
@@ -402,11 +449,15 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         },
       );
       if (error) throw new Error(error.message);
-      setWorkflows(data?.workflows ?? []);
-      setSelectedWorkflowId((current) => {
-        if (current && data?.workflows?.some((workflow) => workflow.id === current)) return current;
-        return data?.workflows?.[0]?.id ?? null;
-      });
+      const nextWorkflows = data?.workflows ?? [];
+      setWorkflows(nextWorkflows);
+      const nextIds = new Set(nextWorkflows.map((workflow) => workflow.id));
+      setFocusedWorkflowId((current) =>
+        current && nextIds.has(current) ? current : (nextWorkflows[0]?.id ?? null),
+      );
+      setCheckedWorkflowIds(
+        (current) => new Set(Array.from(current).filter((id) => nextIds.has(id))),
+      );
     } catch (error) {
       show({
         title: 'Unable to load workflows',
@@ -456,39 +507,176 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleWorkflowAction(
-    action: 'migrate_global_to_brand' | 'duplicate_to_brand' | 'promote_to_global',
-  ) {
-    if (!selectedWorkflow) return;
-    if (action !== 'promote_to_global' && !targetBrandId) {
-      show({ title: 'Choose a destination brand', variant: 'warning' });
-      return;
-    }
+  function clearCheckedWorkflows() {
+    setCheckedWorkflowIds(new Set());
+    setTransferResults(null);
+  }
 
-    const actionId = `workflow:${action}:${selectedWorkflow.id}`;
-    setActionPending(actionId, true);
+  function toggleWorkflowChecked(workflowId: string) {
+    setCheckedWorkflowIds((current) => {
+      const next = new Set(current);
+      if (next.has(workflowId)) {
+        next.delete(workflowId);
+      } else {
+        next.add(workflowId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllVisibleWorkflowsChecked() {
+    setCheckedWorkflowIds((current) => {
+      if (workflows.length > 0 && workflows.every((workflow) => current.has(workflow.id))) {
+        return new Set();
+      }
+      return new Set(workflows.map((workflow) => workflow.id));
+    });
+  }
+
+  async function runBulkTransfer(args: {
+    actionId: string;
+    successVerb: string;
+    run: () => Promise<BulkTransferOutcome[]>;
+  }) {
+    setActionPending(args.actionId, true);
+    setTransferResults(null);
     try {
-      const { error } = await supabase.functions.invoke('admin-workflow-library', {
-        method: 'POST',
-        body: {
-          action,
-          workflowId: selectedWorkflow.id,
-          ...(action !== 'promote_to_global' ? { targetBrandProfileId: targetBrandId } : {}),
-        },
+      const outcomes = await args.run();
+      setTransferResults(outcomes);
+      const failed = outcomes.filter((outcome) => outcome.status === 'failed');
+      show({
+        title:
+          failed.length === 0
+            ? `${outcomes.length} workflow${outcomes.length === 1 ? '' : 's'} ${args.successVerb}`
+            : `${outcomes.length - failed.length}/${outcomes.length} ${args.successVerb}`,
+        description:
+          failed.length === 0 ? undefined : `${failed.length} failed — see details below.`,
+        variant: failed.length === 0 ? 'success' : 'warning',
       });
-      if (error) throw new Error(error.message);
-      show({ title: 'Workflow action complete', variant: 'success' });
+      const succeededIds = new Set(
+        outcomes
+          .filter((outcome) => outcome.status === 'success')
+          .map((outcome) => outcome.workflowId),
+      );
+      setCheckedWorkflowIds(
+        (current) => new Set(Array.from(current).filter((id) => !succeededIds.has(id))),
+      );
       await loadWorkflows();
       await loadAuditEntries();
     } catch (error) {
       show({
-        title: 'Workflow action failed',
-        description: error instanceof Error ? error.message : 'Unable to update workflow library.',
+        title: 'Bulk action failed',
+        description: error instanceof Error ? error.message : 'Unable to complete the bulk action.',
         variant: 'error',
       });
     } finally {
-      setActionPending(actionId, false);
+      setActionPending(args.actionId, false);
     }
+  }
+
+  async function runSingleItemBulk(args: {
+    actionId: string;
+    successVerb: string;
+    ids: string[];
+    buildBody: (workflowId: string) => Record<string, unknown>;
+  }) {
+    const nameById = new Map(workflows.map((workflow) => [workflow.id, workflow.name]));
+    await runBulkTransfer({
+      actionId: args.actionId,
+      successVerb: args.successVerb,
+      run: async () => {
+        return Promise.all(
+          args.ids.map(async (workflowId) => {
+            const { error } = await supabase.functions.invoke('admin-workflow-library', {
+              method: 'POST',
+              body: args.buildBody(workflowId),
+            });
+            return {
+              workflowId,
+              workflowName: nameById.get(workflowId) ?? workflowId,
+              status: error ? ('failed' as const) : ('success' as const),
+              message: error?.message,
+            };
+          }),
+        );
+      },
+    });
+  }
+
+  async function handleBulkMove() {
+    if (!targetBrandId) {
+      show({ title: 'Choose a destination brand', variant: 'warning' });
+      return;
+    }
+    const ids = Array.from(checkedWorkflowIds);
+    const nameById = new Map(workflows.map((workflow) => [workflow.id, workflow.name]));
+    await runBulkTransfer({
+      actionId: 'workflow-bulk:move',
+      successVerb: 'moved',
+      run: async () => {
+        const { data, error } = await supabase.functions.invoke<AdminWorkflowMoveResponse>(
+          'admin-workflow-library',
+          {
+            method: 'POST',
+            body: {
+              action: 'move_to_brand',
+              workflowIds: ids,
+              targetBrandProfileId: targetBrandId,
+            },
+          },
+        );
+        if (error) throw new Error(error.message);
+        return (data?.results ?? []).map((result) => ({
+          workflowId: result.workflowId,
+          workflowName: nameById.get(result.workflowId) ?? result.workflowId,
+          status: result.status === 'moved' ? ('success' as const) : ('failed' as const),
+          message: result.error,
+        }));
+      },
+    });
+  }
+
+  async function handleBulkCopy() {
+    if (!targetBrandId) {
+      show({ title: 'Choose a destination brand', variant: 'warning' });
+      return;
+    }
+    await runSingleItemBulk({
+      actionId: 'workflow-bulk:copy',
+      successVerb: 'copied',
+      ids: Array.from(checkedWorkflowIds),
+      buildBody: (workflowId) => ({
+        action: 'duplicate_to_brand',
+        workflowId,
+        targetBrandProfileId: targetBrandId,
+      }),
+    });
+  }
+
+  async function handleBulkPromote() {
+    await runSingleItemBulk({
+      actionId: 'workflow-bulk:promote',
+      successVerb: 'promoted to the global library',
+      ids: Array.from(checkedWorkflowIds),
+      buildBody: (workflowId) => ({ action: 'promote_to_global', workflowId }),
+    });
+  }
+
+  async function handleBulkAssignToBrand() {
+    if (!targetBrandId) {
+      show({ title: 'Choose a destination brand', variant: 'warning' });
+      return;
+    }
+    await runSingleItemBulk({
+      actionId: 'workflow-bulk:assign',
+      successVerb: 'assigned to the brand canvas',
+      ids: Array.from(checkedWorkflowIds),
+      buildBody: (workflowId) => ({
+        action: 'migrate_global_to_brand',
+        workflowId,
+        targetBrandProfileId: targetBrandId,
+      }),
+    });
   }
 
   async function handleFirstValueReportSmoke(send: boolean) {
@@ -960,259 +1148,324 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
       </TabsContent>
 
       <TabsContent value="workflows" className="space-y-4">
-        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_380px]">
-          <Card className="border-subtle bg-surface shadow-sm">
-            <CardContent className="space-y-4 p-4">
-              <div>
-                <h2 className="text-base font-semibold text-primary">Source</h2>
-                <p className="text-xs text-muted-foreground">
-                  Global workflow library or brand canvas workflows.
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-primary">Workflow Library</h2>
+                <p className="truncate text-xs text-muted-foreground">
+                  Viewing{' '}
+                  {formatBrandDisambiguationLabel(
+                    brandFilterOptions.find((brand) => brand.id === sourceBrandId) ??
+                      GLOBAL_LIBRARY_BRAND_OPTION,
+                  )}
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="workflow-brand-search">Brand search</Label>
-                <Input
-                  id="workflow-brand-search"
-                  placeholder="Search brands"
-                  value={brandQuery}
-                  onChange={(event) => setBrandQuery(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Source</Label>
-                <Select value={sourceBrandId} onValueChange={setSourceBrandId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="global">Global workflow library</SelectItem>
-                    {brands.map((brand) => (
-                      <SelectItem key={brand.id} value={brand.id}>
-                        {brand.brand_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Destination brand</Label>
-                <Select value={targetBrandId || undefined} onValueChange={setTargetBrandId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose destination" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {brands.map((brand) => (
-                      <SelectItem key={brand.id} value={brand.id}>
-                        {brand.brand_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void loadWorkflows()}
-                className="w-full"
-              >
-                <RefreshCw className="size-4" />
-                Refresh workflows
-              </Button>
-            </CardContent>
-          </Card>
-
-          <div className="rounded-lg border border-subtle bg-surface">
-            <div className="flex items-center justify-between gap-3 border-b border-subtle p-3">
-              <div>
-                <h2 className="text-base font-semibold text-primary">Workflow Assignments</h2>
-                <p className="text-xs text-muted-foreground">
-                  Assign global workflows to brands, duplicate canvas workflows, and promote brand
-                  workflows globally.
-                </p>
-              </div>
-              <div className="relative w-[280px]">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search workflows"
-                  value={workflowQuery}
-                  onChange={(event) => setWorkflowQuery(event.target.value)}
-                  className="pl-9"
-                />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative w-full sm:w-[220px]">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search workflows"
+                    value={workflowQuery}
+                    onChange={(event) => setWorkflowQuery(event.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <div className="w-full sm:w-[280px]">
+                  <BrandTransferCombobox
+                    id="workflow-source-filter"
+                    brands={brandFilterOptions}
+                    value={sourceBrandId}
+                    onChange={setSourceBrandId}
+                    placeholder="Filter by brand"
+                  />
+                </div>
+                <Button variant="outline" size="sm" onClick={() => void loadWorkflows()}>
+                  <RefreshCw className="size-4" />
+                  Refresh
+                </Button>
               </div>
             </div>
-            <div className="max-h-[620px] overflow-auto">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-surface">
-                  <TableRow>
-                    <TableHead>Workflow</TableHead>
-                    <TableHead>Scope</TableHead>
-                    <TableHead>Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isWorkflowLoading ? (
+
+            <div className="rounded-lg border border-subtle bg-surface">
+              <div className="max-h-[560px] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-surface">
                     <TableRow>
-                      <TableCell
-                        colSpan={3}
-                        className="py-8 text-center text-sm text-muted-foreground"
-                      >
-                        Loading workflows...
-                      </TableCell>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={allVisibleWorkflowsChecked}
+                          onCheckedChange={() => toggleAllVisibleWorkflowsChecked()}
+                          disabled={workflows.length === 0}
+                          aria-label="Select all visible workflows"
+                        />
+                      </TableHead>
+                      <TableHead>Workflow</TableHead>
+                      <TableHead>Scope</TableHead>
+                      <TableHead>Updated</TableHead>
                     </TableRow>
-                  ) : workflows.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={3}
-                        className="py-8 text-center text-sm text-muted-foreground"
-                      >
-                        No workflows found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    workflows.map((workflow) => (
-                      <TableRow
-                        key={workflow.id}
-                        data-state={workflow.id === selectedWorkflowId ? 'selected' : undefined}
-                        className="cursor-pointer"
-                        onClick={() => setSelectedWorkflowId(workflow.id)}
-                      >
-                        <TableCell>
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-primary">
-                              {workflow.name}
-                            </div>
-                            <p className="line-clamp-1 text-xs text-muted-foreground">
-                              {workflow.description ?? 'No description'}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {workflow.visibility === 'global' ? (
-                            <Badge variant="secondary" className="gap-1">
-                              <Globe2 className="size-3" />
-                              Global
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1">
-                              <Building2 className="size-3" />
-                              Brand
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(workflow.updated_at)}
+                  </TableHeader>
+                  <TableBody>
+                    {isWorkflowLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="py-8 text-center text-sm text-muted-foreground"
+                        >
+                          Loading workflows...
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ) : workflows.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="py-8 text-center text-sm text-muted-foreground"
+                        >
+                          No workflows found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      workflows.map((workflow) => (
+                        <TableRow
+                          key={workflow.id}
+                          data-state={workflow.id === focusedWorkflowId ? 'selected' : undefined}
+                          className="cursor-pointer"
+                          onClick={() => setFocusedWorkflowId(workflow.id)}
+                        >
+                          <TableCell onClick={(event) => event.stopPropagation()}>
+                            <Checkbox
+                              checked={checkedWorkflowIds.has(workflow.id)}
+                              onCheckedChange={() => toggleWorkflowChecked(workflow.id)}
+                              aria-label={`Select ${workflow.name}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-primary">
+                                {workflow.name}
+                              </div>
+                              <p className="line-clamp-1 text-xs text-muted-foreground">
+                                {workflow.description ?? 'No description'}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {workflow.visibility === 'global' ? (
+                              <Badge variant="secondary" className="gap-1">
+                                <Globe2 className="size-3" />
+                                Global
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="gap-1">
+                                <Building2 className="size-3" />
+                                Brand
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(workflow.updated_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
 
-          <aside className="rounded-lg border border-subtle bg-surface p-4">
-            {selectedWorkflow ? (
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {selectedWorkflow.visibility === 'global' ? (
-                      <Globe2 className="size-4 text-brand-primary" />
-                    ) : (
-                      <Library className="size-4 text-brand-primary" />
-                    )}
-                    <h3 className="min-w-0 truncate text-base font-semibold text-primary">
-                      {selectedWorkflow.name}
-                    </h3>
+          <aside className="space-y-4">
+            <div className="rounded-lg border border-subtle bg-surface p-4">
+              {focusedWorkflow ? (
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {focusedWorkflow.visibility === 'global' ? (
+                        <Globe2 className="size-4 text-brand-primary" />
+                      ) : (
+                        <Library className="size-4 text-brand-primary" />
+                      )}
+                      <h3 className="min-w-0 truncate text-base font-semibold text-primary">
+                        {focusedWorkflow.name}
+                      </h3>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {focusedWorkflow.description ?? 'No description'}
+                    </p>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {selectedWorkflow.description ?? 'No description'}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-md border border-subtle bg-default/40 p-2">
+                      <span className="block text-muted-foreground">Scope</span>
+                      <strong className="text-primary">{focusedWorkflow.visibility}</strong>
+                    </div>
+                    <div className="rounded-md border border-subtle bg-default/40 p-2">
+                      <span className="block text-muted-foreground">Nodes</span>
+                      <strong className="text-primary">
+                        {Array.isArray(
+                          (focusedWorkflow.content as { nodes?: unknown[] } | undefined)?.nodes,
+                        )
+                          ? (focusedWorkflow.content as { nodes?: unknown[] }).nodes?.length
+                          : 0}
+                      </strong>
+                    </div>
+                  </div>
+                  <Alert className="border-subtle">
+                    <Copy className="size-4" />
+                    <AlertTitle>Duplicate policy</AlertTitle>
+                    <AlertDescription>
+                      Copy and assign actions save conflicting names as renamed copies. Move
+                      re-creates the workflow under the destination brand and removes the original.
+                    </AlertDescription>
+                  </Alert>
+                  <p className="text-xs text-muted-foreground">
+                    Check this workflow (and any others) in the table to transfer it — the transfer
+                    bar appears at the bottom once at least one is selected.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-md border border-subtle bg-default/40 p-2">
-                    <span className="block text-muted-foreground">Scope</span>
-                    <strong className="text-primary">{selectedWorkflow.visibility}</strong>
-                  </div>
-                  <div className="rounded-md border border-subtle bg-default/40 p-2">
-                    <span className="block text-muted-foreground">Nodes</span>
-                    <strong className="text-primary">
-                      {Array.isArray(
-                        (selectedWorkflow.content as { nodes?: unknown[] } | undefined)?.nodes,
-                      )
-                        ? (selectedWorkflow.content as { nodes?: unknown[] }).nodes?.length
-                        : 0}
-                    </strong>
-                  </div>
-                </div>
-                <Alert className="border-subtle">
-                  <Copy className="size-4" />
-                  <AlertTitle>Duplicate policy</AlertTitle>
-                  <AlertDescription>
-                    Conflicting names are saved as renamed copies.
-                  </AlertDescription>
-                </Alert>
-                <div className="space-y-2">
-                  {selectedWorkflow.visibility === 'global' ? (
-                    <Button
-                      className="w-full"
-                      disabled={
-                        !targetBrandId ||
-                        Boolean(
-                          pendingActions[`workflow:migrate_global_to_brand:${selectedWorkflow.id}`],
-                        )
-                      }
-                      onClick={() => void handleWorkflowAction('migrate_global_to_brand')}
-                    >
-                      {pendingActions[`workflow:migrate_global_to_brand:${selectedWorkflow.id}`] ? (
-                        <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <p className="text-sm text-muted-foreground">Select a workflow to preview it.</p>
+              )}
+            </div>
+
+            {transferResults && transferResults.length > 0 ? (
+              <div className="rounded-lg border border-subtle bg-surface p-4">
+                <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Last transfer
+                </h4>
+                <ul className="mt-2 space-y-2">
+                  {transferResults.map((result) => (
+                    <li key={result.workflowId} className="flex items-start gap-2 text-xs">
+                      {result.status === 'success' ? (
+                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
                       ) : (
-                        <Building2 className="size-4" />
+                        <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                       )}
-                      Assign to brand canvas
-                    </Button>
-                  ) : (
-                    <Fragment>
-                      <Button
-                        className="w-full"
-                        disabled={
-                          !targetBrandId ||
-                          Boolean(
-                            pendingActions[`workflow:duplicate_to_brand:${selectedWorkflow.id}`],
-                          )
-                        }
-                        onClick={() => void handleWorkflowAction('duplicate_to_brand')}
-                      >
-                        {pendingActions[`workflow:duplicate_to_brand:${selectedWorkflow.id}`] ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Copy className="size-4" />
-                        )}
-                        Duplicate canvas workflow
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        disabled={Boolean(
-                          pendingActions[`workflow:promote_to_global:${selectedWorkflow.id}`],
-                        )}
-                        onClick={() => void handleWorkflowAction('promote_to_global')}
-                      >
-                        {pendingActions[`workflow:promote_to_global:${selectedWorkflow.id}`] ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Globe2 className="size-4" />
-                        )}
-                        Promote to global library
-                      </Button>
-                    </Fragment>
-                  )}
-                </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-primary">{result.workflowName}</p>
+                        {result.message ? (
+                          <p className="text-muted-foreground">{result.message}</p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Select a workflow to manage it.</p>
-            )}
+            ) : null}
           </aside>
         </div>
+
+        {checkedWorkflowIds.size > 0 ? (
+          <div className="sticky bottom-2 z-20 rounded-lg border border-subtle bg-surface p-3 shadow-lg">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="text-sm text-primary">
+                <strong>{checkedWorkflowIds.size}</strong>{' '}
+                {checkedWorkflowIds.size === 1 ? 'workflow' : 'workflows'} selected
+                {!bulkEligibility.allowed ? (
+                  <span className="ml-2 text-xs text-destructive">{bulkEligibility.reason}</span>
+                ) : null}
+              </div>
+              <div className="flex flex-1 flex-wrap items-center gap-2 lg:justify-end">
+                {bulkEligibility.allowed ? (
+                  <div className="w-full sm:w-[300px]">
+                    <BrandTransferCombobox
+                      id="workflow-target-brand"
+                      brands={brands}
+                      value={targetBrandId}
+                      onChange={setTargetBrandId}
+                      placeholder="Choose destination brand"
+                    />
+                  </div>
+                ) : null}
+
+                {bulkEligibility.allowed && allCheckedAreBrandScoped ? (
+                  <>
+                    <AdminActionConfirmation
+                      trigger={
+                        <Button
+                          disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:move'])}
+                        >
+                          {pendingActions['workflow-bulk:move'] ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <ArrowRightLeft className="size-4" />
+                          )}
+                          Move to brand
+                        </Button>
+                      }
+                      title={`Move ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
+                      description={`${checkedWorkflowNamesLabel} will be removed from the current brand and re-created under the destination brand. This is logged.`}
+                      confirmLabel="Move to brand"
+                      onConfirm={() => void handleBulkMove()}
+                    />
+                    <AdminActionConfirmation
+                      trigger={
+                        <Button
+                          variant="outline"
+                          disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:copy'])}
+                        >
+                          {pendingActions['workflow-bulk:copy'] ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Copy className="size-4" />
+                          )}
+                          Copy to brand
+                        </Button>
+                      }
+                      title={`Copy ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
+                      description={`${checkedWorkflowNamesLabel} will be duplicated under the destination brand. Originals are unaffected.`}
+                      confirmLabel="Copy to brand"
+                      onConfirm={() => void handleBulkCopy()}
+                    />
+                    <AdminActionConfirmation
+                      trigger={
+                        <Button
+                          variant="outline"
+                          disabled={Boolean(pendingActions['workflow-bulk:promote'])}
+                        >
+                          {pendingActions['workflow-bulk:promote'] ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Globe2 className="size-4" />
+                          )}
+                          Promote to global
+                        </Button>
+                      }
+                      title={`Promote ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
+                      description={`${checkedWorkflowNamesLabel} will be added to the global workflow library.`}
+                      confirmLabel="Promote to global"
+                      onConfirm={() => void handleBulkPromote()}
+                    />
+                  </>
+                ) : null}
+
+                {bulkEligibility.allowed && allCheckedAreGlobalScoped ? (
+                  <AdminActionConfirmation
+                    trigger={
+                      <Button
+                        disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:assign'])}
+                      >
+                        {pendingActions['workflow-bulk:assign'] ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Building2 className="size-4" />
+                        )}
+                        Assign to brand canvas
+                      </Button>
+                    }
+                    title={`Assign ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
+                    description={`${checkedWorkflowNamesLabel} will be copied into the destination brand's canvas workflows.`}
+                    confirmLabel="Assign to brand canvas"
+                    onConfirm={() => void handleBulkAssignToBrand()}
+                  />
+                ) : null}
+
+                <Button variant="ghost" size="sm" onClick={clearCheckedWorkflows}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </TabsContent>
 
       <TabsContent value="audit" className="space-y-3">

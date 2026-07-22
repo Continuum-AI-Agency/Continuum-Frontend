@@ -1,7 +1,46 @@
-import type { PermissionRow } from "@/components/admin/adminUserTypes";
+import type {
+  AdminBrandOption,
+  AdminWorkflowLibraryRow,
+  PermissionRow,
+} from '@/components/admin/adminUserTypes';
 
 export function membershipLabel(count: number) {
-  return `${count} ${count === 1 ? "membership" : "memberships"}`;
+  return `${count} ${count === 1 ? 'membership' : 'memberships'}`;
+}
+
+export function formatBrandDisambiguationLabel(brand: AdminBrandOption): string {
+  const idSuffix = brand.id.slice(-8);
+  return brand.ownerEmail
+    ? `${brand.brand_name} — ${brand.ownerEmail} — …${idSuffix}`
+    : `${brand.brand_name} — …${idSuffix}`;
+}
+
+export function describeWorkflowNames(names: string[], maxNames = 5): string {
+  if (names.length <= maxNames) return names.join(', ');
+  const shown = names.slice(0, maxNames).join(', ');
+  return `${shown}, and ${names.length - maxNames} more`;
+}
+
+export type BulkTransferEligibility = {
+  allowed: boolean;
+  reason?: string;
+};
+
+export function canBulkTransfer(workflows: AdminWorkflowLibraryRow[]): BulkTransferEligibility {
+  if (workflows.length === 0) {
+    return { allowed: false, reason: 'Select at least one workflow.' };
+  }
+
+  const visibilities = new Set(workflows.map((workflow) => workflow.visibility));
+  if (visibilities.size > 1) {
+    return {
+      allowed: false,
+      reason:
+        'Select workflows of a single scope (all brand or all global) to transfer them together.',
+    };
+  }
+
+  return { allowed: true };
 }
 
 export function groupPermissionsByUserId(permissions: PermissionRow[]) {
@@ -19,7 +58,7 @@ export function groupPermissionsByUserId(permissions: PermissionRow[]) {
   return byUserId;
 }
 
-export type PaginationItem = number | "ellipsis";
+export type PaginationItem = number | 'ellipsis';
 
 type PaginationRangeInput = {
   currentPage: number;
@@ -44,7 +83,7 @@ export function buildAdminPaginationRange({
   const items: PaginationItem[] = [1];
 
   if (leftSibling > 2) {
-    items.push("ellipsis");
+    items.push('ellipsis');
   }
 
   for (let page = leftSibling; page <= rightSibling; page += 1) {
@@ -52,7 +91,7 @@ export function buildAdminPaginationRange({
   }
 
   if (rightSibling < totalPages - 1) {
-    items.push("ellipsis");
+    items.push('ellipsis');
   }
 
   items.push(totalPages);
@@ -63,29 +102,29 @@ export function buildAdminPaginationRange({
 export function buildAdminUserListPaginationParams(
   currentParams: string,
   nextPage: number,
-  pageSize: number
+  pageSize: number,
 ) {
   const params = new URLSearchParams(currentParams);
-  params.set("page", String(nextPage));
-  params.set("pageSize", String(pageSize));
+  params.set('page', String(nextPage));
+  params.set('pageSize', String(pageSize));
   return params.toString();
 }
 
 export function buildAdminUserListSearchParams(
   currentParams: string,
   query: string,
-  pageSize: number
+  pageSize: number,
 ) {
   const params = new URLSearchParams(currentParams);
   const trimmedQuery = query.trim();
 
   if (trimmedQuery) {
-    params.set("query", trimmedQuery);
+    params.set('query', trimmedQuery);
   } else {
-    params.delete("query");
+    params.delete('query');
   }
 
-  params.set("page", "1");
-  params.set("pageSize", String(pageSize));
+  params.set('page', '1');
+  params.set('pageSize', String(pageSize));
   return params.toString();
 }
