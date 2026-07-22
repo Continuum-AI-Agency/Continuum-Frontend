@@ -85,7 +85,7 @@ export type PanelAction =
   | { type: 'JOB_CANCEL_START'; jobId: string }
   | { type: 'JOB_CANCEL_SUCCESS'; jobId: string }
   | { type: 'JOB_CANCEL_FAILURE'; jobId: string }
-  | { type: 'DRAFT_BLUEPRINT'; draftId: string; previews: string[] }
+  | { type: 'DRAFT_BLUEPRINT'; draftId: string; previewRevision: string; previews: string[] }
   | { type: 'PIPELINE_STAGE'; event: ParsedPipelineStage }
   | { type: 'PIPELINE_CARD'; card: Partial<PipelineCardState> & { jobId: string } }
   | { type: 'PLAN_STATUS'; event: ParsedPlanStatus }
@@ -141,6 +141,8 @@ function applyPipelineStage(
     preview: prev?.preview,
     quality: prev?.quality,
     draftId: prev?.draftId,
+    toolCallId: prev?.toolCallId,
+    checkpoint: prev?.checkpoint,
     error: prev?.error,
   };
 }
@@ -210,11 +212,26 @@ function checkpointFromDurableState(
     case 'text_only':
       return { textReady: true };
     case 'storyboard_ready':
-      return { textReady: true, blueprintReady: true };
+      return {
+        textReady: true,
+        blueprintReady: true,
+        mediaStatus: 'pending',
+        awaitingMediaChoice: true,
+      };
     case 'realizing':
-      return { textReady: true, blueprintReady: true, mediaStatus: 'generating' };
+      return {
+        textReady: true,
+        blueprintReady: true,
+        mediaStatus: 'generating',
+        awaitingMediaChoice: false,
+      };
     case 'realized':
-      return { textReady: true, blueprintReady: true, mediaStatus: 'ready' };
+      return {
+        textReady: true,
+        blueprintReady: true,
+        mediaStatus: 'ready',
+        awaitingMediaChoice: false,
+      };
     default:
       return status === 'completed' ? { textReady: true } : undefined;
   }
@@ -578,7 +595,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     }
 
     case 'DRAFT_BLUEPRINT': {
-      const { draftId, previews } = action;
+      const { draftId, previewRevision, previews } = action;
       if (!draftId || previews.length === 0) return state;
       // The blueprint job's own jobId differs from the post-generation card, so
       // match by draftId: stamp the storyboard onto that card's preview images and
@@ -596,7 +613,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
               images: previews,
               format: card.preview?.format ?? null,
             },
-            checkpoint: { ...card.checkpoint, blueprintReady: true },
+            checkpoint: {
+              ...card.checkpoint,
+              blueprintReady: true,
+              mediaStatus: 'pending',
+              awaitingMediaChoice: true,
+              previewRevision,
+            },
           };
         } else {
           pipeline[jobId] = card;

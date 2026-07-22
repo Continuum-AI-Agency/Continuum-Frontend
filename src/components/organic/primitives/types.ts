@@ -80,6 +80,8 @@ export type OrganicCalendarDraft = {
     mediaStatus?: 'pending' | 'generating' | 'ready' | 'user_supplied' | 'skipped' | null;
     textReady?: boolean | null;
     blueprintReady?: boolean | null;
+    /** Exact persisted storyboard revision required for final-media approval. */
+    previewRevision?: string | null;
     audioConcept?: {
       audioMode?: string | null;
       trackSuggestion?: string | null;

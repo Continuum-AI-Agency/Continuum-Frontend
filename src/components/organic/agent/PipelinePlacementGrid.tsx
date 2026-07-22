@@ -7,7 +7,7 @@ type PipelineMediaActions = {
   /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
-  onGenerateMedia?: (draftId: string, format: string) => void;
+  onGenerateMedia?: (draftId: string, format: string, previewRevision: string) => void;
 };
 
 export function PipelinePlacementGrid({
@@ -17,7 +17,7 @@ export function PipelinePlacementGrid({
 }: { cards: PipelineCardState[] } & PipelineMediaActions) {
   if (cards.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div className="grid grid-cols-1 justify-start gap-2 min-[520px]:grid-cols-[repeat(auto-fill,minmax(220px,260px))]">
       {cards.map((card) => (
         <PipelineCard
           key={card.jobId}

@@ -45,7 +45,7 @@ const STATUS: Record<
   { label: string; tone: 'running' | 'done' | 'failed' | 'neutral' }
 > = {
   running: { label: 'Enriching', tone: 'running' },
-  completed: { label: 'Fully fleshed out', tone: 'done' },
+  completed: { label: 'Ready', tone: 'done' },
   failed: { label: 'Failed', tone: 'failed' },
   cancelled: { label: 'Cancelled', tone: 'neutral' },
 };
@@ -76,7 +76,7 @@ function PreviewImages({ images, format }: { images: string[]; format?: string |
         <CarouselContent>
           {media.map((item) => (
             <CarouselItem key={item.id}>
-              <div className={cn('aspect-[4/5] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
+              <div className={cn('h-[220px] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
                 <ChatMediaThumb media={item} className="rounded-none" />
               </div>
             </CarouselItem>
@@ -89,7 +89,7 @@ function PreviewImages({ images, format }: { images: string[]; format?: string |
   }
 
   return (
-    <div className={cn('aspect-[4/5] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
+    <div className={cn('h-[220px] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>
       <ChatMediaThumb media={media[0]} className="rounded-none" />
     </div>
   );
@@ -248,7 +248,7 @@ type PipelineCardProps = {
   /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
-  onGenerateMedia?: (draftId: string, format: string) => void;
+  onGenerateMedia?: (draftId: string, format: string, previewRevision: string) => void;
 };
 
 export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineCardProps) {
@@ -301,9 +301,23 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
       !mediaSettled,
   );
   const showGenerateMedia = Boolean(
-    onGenerateMedia && draftId && card.checkpoint?.blueprintReady && !mediaSettled,
+    onGenerateMedia &&
+      draftId &&
+      card.checkpoint?.previewRevision &&
+      card.checkpoint?.blueprintReady &&
+      !mediaSettled,
   );
   const [mediaActionSent, setMediaActionSent] = useState(false);
+  const outcomeLabel =
+    card.status !== 'completed'
+      ? status.label
+      : mediaStatus === 'ready' || mediaStatus === 'user_supplied'
+        ? 'Fully fleshed out'
+        : card.checkpoint?.blueprintReady
+          ? 'Preview ready'
+          : card.checkpoint?.textReady
+            ? 'Copy ready'
+            : status.label;
 
   const reconciledRef = useRef(false);
   useEffect(() => {
@@ -322,7 +336,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
           <MetaRow items={[card.preview?.format ?? undefined]} />
         </div>
         <StatusLabel tone={status.tone}>
-          {liveLabel ?? status.label}
+          {liveLabel ?? outcomeLabel}
           {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
       </div>
@@ -380,7 +394,13 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
               disabled={mediaActionSent}
               onClick={() => {
                 setMediaActionSent(true);
-                onGenerateMedia?.(draftId, card.preview?.format ?? '');
+                if (card.checkpoint?.previewRevision) {
+                  onGenerateMedia?.(
+                    draftId,
+                    card.preview?.format ?? '',
+                    card.checkpoint.previewRevision,
+                  );
+                }
               }}
               className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
             >

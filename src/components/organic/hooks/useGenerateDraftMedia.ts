@@ -25,6 +25,7 @@ export type MediaGenerationDraftTarget = {
   feId: string;
   backendDraftId: string;
   format: string;
+  previewRevision: string;
 };
 
 export type DraftExpandTarget = {
@@ -58,6 +59,8 @@ const REEL_STAGE_LABELS: Record<string, string> = {
 const REEL_ERROR_MESSAGES: Record<string, string> = {
   reel_scenes_missing_enrich_first:
     'This reel has no storyboard yet — run Enrich first to sketch its scenes.',
+  preview_approval_required: 'Preview this draft before generating its final media.',
+  preview_changed: 'This preview changed. Review the latest version, then generate again.',
 };
 
 export function friendlyReelError(error: string): string {
@@ -278,7 +281,13 @@ async function realizeReels(
   const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/reels/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },
-    body: JSON.stringify({ brandId, draftIds: targets.map((t) => t.backendDraftId) }),
+    body: JSON.stringify({
+      brandId,
+      approvals: targets.map(({ backendDraftId, previewRevision }) => ({
+        draftId: backendDraftId,
+        previewRevision,
+      })),
+    }),
     signal: controller.signal,
   });
 
@@ -466,7 +475,13 @@ async function realizeImages(
   const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/media/realize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },
-    body: JSON.stringify({ brandId, draftIds: targets.map((t) => t.backendDraftId) }),
+    body: JSON.stringify({
+      brandId,
+      approvals: targets.map(({ backendDraftId, previewRevision }) => ({
+        draftId: backendDraftId,
+        previewRevision,
+      })),
+    }),
     signal: controller.signal,
   });
 
@@ -565,19 +580,20 @@ async function realizeImages(
       }
       case 'realize_failed': {
         const feId = feIdByBackendId.get(frame.draftId);
+        const message = friendlyReelError(frame.error);
         failed++;
         if (feId) {
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
-            generationError: frame.error,
+            generationError: message,
             mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: 'pending' },
           }));
           upsertGeneration({
             jobId: realizeJobId(feId),
             draftId: feId,
             status: 'failed',
-            error: frame.error,
+            error: message,
           });
         }
         break;

@@ -20,7 +20,9 @@ export function PostContentCardGrid({ posts, label }: Props) {
       />
       <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1.5 -mx-1 px-1 [&::-webkit-scrollbar]:hidden">
         {posts.map((post) => (
-          <PostContentCard key={post.postId} post={post} />
+          <div key={post.contentKey} data-content-key={post.contentKey} data-post-id={post.postId}>
+            <PostContentCard post={post} />
+          </div>
         ))}
       </div>
     </AgentReceipt>

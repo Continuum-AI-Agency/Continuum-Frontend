@@ -17,7 +17,7 @@ type Props = {
   onRejectAction: () => void;
   onViewDraftAction: (draftId: string, target: 'calendar' | 'list') => void;
   onEnrichDraftAction?: (draftId: string) => void;
-  onGenerateMediaAction?: (draftId: string, format: string) => void;
+  onGenerateMediaAction?: (draftId: string, format: string, previewRevision: string) => void;
 };
 
 // Stable per-card identity so a re-click (a per-card button or the footer)

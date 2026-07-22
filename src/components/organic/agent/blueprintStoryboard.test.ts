@@ -11,6 +11,7 @@ describe('draft.blueprint_ready parsing', () => {
         jobId: 'expand-B',
         brandId: 'brand-1',
         draftId: 'draft-1',
+        previewRevision: 'revision-1',
         previews: [
           { role: 'primary', signedUrl: 'https://signed/a.png', format: 'post' },
           { role: 'slide_2', signedUrl: 'data:image/png;base64,AAAA' },
@@ -20,6 +21,7 @@ describe('draft.blueprint_ready parsing', () => {
     expect(parsed.kind).toBe('draftBlueprint');
     if (parsed.kind === 'draftBlueprint') {
       expect(parsed.draftId).toBe('draft-1');
+      expect(parsed.previewRevision).toBe('revision-1');
       expect(parsed.previews).toEqual(['https://signed/a.png']);
     }
   });
@@ -41,6 +43,7 @@ describe('DRAFT_BLUEPRINT reducer', () => {
     const next = panelReducer(state, {
       type: 'DRAFT_BLUEPRINT',
       draftId: 'draft-1',
+      previewRevision: 'revision-1',
       previews: ['https://signed/a.png', 'https://signed/b.png'],
     });
 
@@ -49,6 +52,8 @@ describe('DRAFT_BLUEPRINT reducer', () => {
       'https://signed/b.png',
     ]);
     expect(next.pipeline['A'].checkpoint?.blueprintReady).toBe(true);
+    expect(next.pipeline['A'].checkpoint?.awaitingMediaChoice).toBe(true);
+    expect(next.pipeline['A'].checkpoint?.previewRevision).toBe('revision-1');
     expect(next.jobs['A'].previewImages).toEqual(['https://signed/a.png', 'https://signed/b.png']);
   });
 
@@ -60,6 +65,7 @@ describe('DRAFT_BLUEPRINT reducer', () => {
     const next = panelReducer(state, {
       type: 'DRAFT_BLUEPRINT',
       draftId: 'draft-1',
+      previewRevision: 'revision-1',
       previews: ['https://signed/a.png'],
     });
     expect(next).toBe(state);

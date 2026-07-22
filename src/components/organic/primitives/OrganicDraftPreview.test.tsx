@@ -258,12 +258,12 @@ describe('OrganicDraftPreview — media state', () => {
     expect(screen.getByRole('button', { name: 'Use your own creative' })).toBeTruthy();
   });
 
-  it('surfaces the Generate media and Enrich stage actions in the empty media slot for a pending text-only draft', () => {
+  it('surfaces the Generate media and Enrich stage actions after a text preview revision is ready', () => {
     render(
       <OrganicDraftPreview
         draft={baseDraft({
           backendDraftId: 'be-1',
-          mediaSuggestion: { mediaStatus: 'pending' },
+          mediaSuggestion: { mediaStatus: 'pending', previewRevision: 'revision-1' },
         })}
         brandProfileId="brand-1"
       />,

@@ -102,6 +102,21 @@ describe('parseOrganicStreamEvent — checkpoint frames', () => {
     }
   });
 
+  it('does not turn omitted pipeline identities into explicit clearing values', () => {
+    const parsed = parseOrganicStreamEvent({
+      type: 'ui.pipeline_card',
+      data: { jobId: 'job-sparse', status: 'running' },
+    });
+
+    expect(parsed.kind).toBe('pipelineCard');
+    if (parsed.kind === 'pipelineCard') {
+      expect('brandId' in parsed.card).toBe(false);
+      expect('planId' in parsed.card).toBe(false);
+      expect('planItemId' in parsed.card).toBe(false);
+      expect('draftId' in parsed.card).toBe(false);
+    }
+  });
+
   it('parses draft.text_ready as a jobUpdate', () => {
     const parsed = parseOrganicStreamEvent({
       type: 'draft.text_ready',

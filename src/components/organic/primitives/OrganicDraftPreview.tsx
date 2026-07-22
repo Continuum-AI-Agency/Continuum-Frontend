@@ -1042,11 +1042,24 @@ export function OrganicDraftPreview({
 
   const handleGenerateMedia = React.useCallback(() => {
     // Requires a persisted backend draft; the realize stream keys updates off feId.
-    if (!brandProfileId || !draft.backendDraftId) return;
+    const previewRevision = draft.mediaSuggestion?.previewRevision;
+    if (!brandProfileId || !draft.backendDraftId || !previewRevision) return;
     void generateDraftMedia(brandProfileId, [
-      { feId: draft.id, backendDraftId: draft.backendDraftId, format: draft.format },
+      {
+        feId: draft.id,
+        backendDraftId: draft.backendDraftId,
+        format: draft.format,
+        previewRevision,
+      },
     ]);
-  }, [brandProfileId, draft.id, draft.backendDraftId, draft.format, generateDraftMedia]);
+  }, [
+    brandProfileId,
+    draft.id,
+    draft.backendDraftId,
+    draft.format,
+    draft.mediaSuggestion?.previewRevision,
+    generateDraftMedia,
+  ]);
 
   // Stage-2 "Enrich (sketch first)": queue a durable blueprint sketch instead of
   // jumping straight to final pixels. Text-stage secondary action only.
@@ -1064,7 +1077,12 @@ export function OrganicDraftPreview({
   const mediaIsUserSupplied = draft.mediaSuggestion?.mediaStatus === 'user_supplied';
   // Generation requires a persisted backend draft id (autosave assigns one within
   // ~500ms); manual drafts never headless-generate.
-  const canGenerate = mediaIsPending && !mediaIsUserSupplied && !isManual && !!draft.backendDraftId;
+  const canGenerate =
+    mediaIsPending &&
+    !mediaIsUserSupplied &&
+    !isManual &&
+    !!draft.backendDraftId &&
+    !!draft.mediaSuggestion?.previewRevision;
   // Enrich is the text-stage sibling of Generate: once a storyboard exists the
   // BlueprintStoryboard + realize flow is the approval surface instead.
   const canEnrich = canGenerate && resolveDraftMediaStage(draft) === 'text_only';

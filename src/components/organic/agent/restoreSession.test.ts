@@ -236,6 +236,7 @@ describe('restoreSessionFromMessages', () => {
               jobId: 'blueprint_job',
               brandId: 'b1',
               draftId: 'd1',
+              previewRevision: 'revision-1',
               previews: [{ role: 'scene_1', signedUrl: 'https://cdn/scene_1.png' }],
             },
           },
@@ -246,5 +247,6 @@ describe('restoreSessionFromMessages', () => {
     expect(pipelineCards).toHaveLength(1);
     expect(pipelineCards[0]!.preview?.images).toEqual(['https://cdn/scene_1.png']);
     expect(pipelineCards[0]!.checkpoint?.blueprintReady).toBe(true);
+    expect(pipelineCards[0]!.checkpoint?.previewRevision).toBe('revision-1');
   });
 });

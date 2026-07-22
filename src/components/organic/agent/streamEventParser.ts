@@ -1,4 +1,3 @@
-import type { UiFetchedPost } from '@continuum/contracts';
 import {
   aeoSnapshotCardSchema,
   type BulkContentPlan,
@@ -6,12 +5,14 @@ import {
   type MediaSearchResultsFrame,
   mediaSearchResultsFrameSchema,
   type OrganicStreamFrame,
+  organicFetchedPostContentKey,
   organicPlanStatusDataSchema,
   organicPostCardDataSchema,
   organicStreamFrameSchema,
   organicTrendChartDataSchema,
   POST_FETCHING_TOOL_NAMES,
   proposedPlanSchema,
+  type UiFetchedPost,
 } from '@continuum/contracts';
 import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
@@ -91,7 +92,7 @@ export type ParsedOrganicStreamEvent =
   | { kind: 'uiCard'; card: UiCard }
   | { kind: 'postCard'; card: UiPostCard }
   | { kind: 'jobUpdate'; job: Partial<AgentJobState> & { jobId: string } }
-  | { kind: 'draftBlueprint'; draftId: string; previews: string[] }
+  | { kind: 'draftBlueprint'; draftId: string; previewRevision: string; previews: string[] }
   | { kind: 'runStarted'; runId: string; jobId: string }
   | { kind: 'pipelineStage'; event: ParsedPipelineStage }
   | { kind: 'pipelineCard'; card: Partial<PipelineCardState> & { jobId: string } }
@@ -292,15 +293,16 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
 // only re-signable URLs reach the chat thumbnails.
 function parseDraftBlueprint(
   event: Record<string, unknown>,
-): { draftId: string; previews: string[] } | null {
+): { draftId: string; previewRevision: string; previews: string[] } | null {
   const payload = getEventPayload(event);
   const draftId = readNonEmptyString(payload.draftId);
-  if (!draftId) return null;
+  const previewRevision = readNonEmptyString(payload.previewRevision);
+  if (!draftId || !previewRevision) return null;
   const rawPreviews = Array.isArray(payload.previews) ? payload.previews : [];
   const previews = rawPreviews
     .map((p) => (isRecord(p) ? readNonEmptyString(p.signedUrl) : undefined))
     .filter((url): url is string => Boolean(url) && !url!.startsWith('data:'));
-  return { draftId, previews };
+  return { draftId, previewRevision, previews };
 }
 
 // The Backend builds a typed PostCardData (cards/postCard.ts) against the shared
@@ -413,6 +415,7 @@ function parseCheckpoint(raw: unknown): CheckpointState | undefined {
       raw.blueprintReady === true ? true : raw.blueprintReady === false ? false : undefined,
     mediaStatus,
     awaitingMediaChoice: raw.awaitingMediaChoice === true ? true : undefined,
+    previewRevision: readNonEmptyString(raw.previewRevision) ?? undefined,
   };
 }
 
@@ -460,19 +463,27 @@ function parsePipelineCard(
   // Conditionally spread so a card frame without toolCallId never clobbers the
   // value merged from an earlier frame (PIPELINE_CARD does `{ ...base, ...card }`).
   const toolCallId = readNonEmptyString(payload.toolCallId);
+  const brandId = readNonEmptyString(payload.brandId);
+  const hasPlanId = Object.hasOwn(payload, 'planId');
+  const hasPlanItemId = Object.hasOwn(payload, 'planItemId');
+  const hasDraftId = Object.hasOwn(payload, 'draftId');
 
   return {
     jobId,
     ...(toolCallId ? { toolCallId } : {}),
-    brandId: readNonEmptyString(payload.brandId) ?? undefined,
-    planId: typeof payload.planId === 'string' ? payload.planId : null,
-    planItemId: typeof payload.planItemId === 'string' ? payload.planItemId : null,
+    ...(brandId ? { brandId } : {}),
+    ...(hasPlanId ? { planId: typeof payload.planId === 'string' ? payload.planId : null } : {}),
+    ...(hasPlanItemId
+      ? { planItemId: typeof payload.planItemId === 'string' ? payload.planItemId : null }
+      : {}),
     platform: readNonEmptyString(payload.platform) ?? undefined,
     status,
     currentStage: isPipelineStage(payload.currentStage) ? payload.currentStage : undefined,
     preview,
     quality: parsePipelineQuality(payload.quality),
-    draftId: typeof payload.draftId === 'string' ? payload.draftId : null,
+    ...(hasDraftId
+      ? { draftId: typeof payload.draftId === 'string' ? payload.draftId : null }
+      : {}),
     error: isRecord(payload.error)
       ? {
           code: readNonEmptyString(payload.error.code) ?? undefined,
@@ -534,6 +545,11 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
         if (!draftId) return [];
         return [
           {
+            contentKey: organicFetchedPostContentKey(
+              'draft',
+              readNonEmptyString(item.platform),
+              draftId,
+            ),
             postId: draftId,
             source: 'draft' as const,
             platform: readNonEmptyString(item.platform),
@@ -565,6 +581,11 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
           : null;
         return [
           {
+            contentKey: organicFetchedPostContentKey(
+              platform,
+              typeof payload.platform === 'string' ? payload.platform : null,
+              postId,
+            ),
             postId,
             source: platform,
             platform: typeof payload.platform === 'string' ? payload.platform : null,
@@ -593,6 +614,7 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
         const commentsCount = typeof item.commentsCount === 'number' ? item.commentsCount : null;
         return [
           {
+            contentKey: organicFetchedPostContentKey('instagram', 'instagram', mediaId),
             postId: mediaId,
             source: 'instagram' as const,
             platform: 'instagram',
@@ -624,6 +646,11 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
           : null;
         return [
           {
+            contentKey: organicFetchedPostContentKey(
+              platform,
+              typeof item.platform === 'string' ? item.platform : null,
+              postId,
+            ),
             postId,
             source: platform,
             platform: typeof item.platform === 'string' ? item.platform : null,
@@ -664,6 +691,7 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
           readNonEmptyString(creative?.thumbnailUrl as unknown);
         return [
           {
+            contentKey: organicFetchedPostContentKey('instagram', 'instagram', postId),
             postId,
             source: 'instagram' as const,
             platform: 'instagram',

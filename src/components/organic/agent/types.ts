@@ -165,6 +165,7 @@ export type CheckpointState = {
   blueprintReady?: boolean;
   mediaStatus?: 'pending' | 'generating' | 'ready' | 'user_supplied' | 'skipped';
   awaitingMediaChoice?: boolean;
+  previewRevision?: string;
 };
 
 export type PipelineCardState = {

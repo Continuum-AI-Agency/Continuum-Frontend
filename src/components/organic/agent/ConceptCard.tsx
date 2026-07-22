@@ -90,7 +90,7 @@ type Props = {
   /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
-  onGenerateMedia?: (draftId: string, format: string) => void;
+  onGenerateMedia?: (draftId: string, format: string, previewRevision: string) => void;
 };
 
 export function ConceptCard({
@@ -119,6 +119,7 @@ export function ConceptCard({
   const hasTextDraft = Boolean(draftId && (pipeline?.checkpoint?.textReady || isDone));
   const mediaStatus = pipeline?.checkpoint?.mediaStatus;
   const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
+  const previewRevision = pipeline?.checkpoint?.previewRevision;
   // Approve-through media actions: Enrich while only text exists, Generate media
   // once the blueprint landed. Neither shows once media is final/user-supplied
   // or already rendering.
@@ -131,7 +132,9 @@ export function ConceptCard({
       !hasPreviewReady &&
       !mediaSettled,
   );
-  const showGenerateMedia = Boolean(onGenerateMedia && draftId && hasPreviewReady && !mediaSettled);
+  const showGenerateMedia = Boolean(
+    onGenerateMedia && draftId && previewRevision && hasPreviewReady && !mediaSettled,
+  );
   const [mediaActionSent, setMediaActionSent] = useState(false);
 
   // Clear the latch when a job fails so the retry button can dispatch again; a
@@ -289,7 +292,9 @@ export function ConceptCard({
                   disabled={mediaActionSent}
                   onClick={() => {
                     setMediaActionSent(true);
-                    onGenerateMedia?.(draftId, concept.format ?? '');
+                    if (previewRevision) {
+                      onGenerateMedia?.(draftId, concept.format ?? '', previewRevision);
+                    }
                   }}
                   className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
                 >

@@ -123,6 +123,9 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft['mediaSugg
     mediaStatus: (readString(obj.mediaStatus) ?? undefined) as NonNullable<
       OrganicCalendarDraft['mediaSuggestion']
     >['mediaStatus'],
+    textReady: typeof obj.textReady === 'boolean' ? obj.textReady : null,
+    blueprintReady: typeof obj.blueprintReady === 'boolean' ? obj.blueprintReady : null,
+    previewRevision: readString(obj.previewRevision) ?? null,
     alt: readString(obj.alt) ?? null,
     hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
     reel: restoreReel(obj.reel) ?? null,

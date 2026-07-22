@@ -101,7 +101,12 @@ export function applyOrganicFrame(
       }
       break;
     case 'draftBlueprint':
-      dispatch({ type: 'DRAFT_BLUEPRINT', draftId: parsed.draftId, previews: parsed.previews });
+      dispatch({
+        type: 'DRAFT_BLUEPRINT',
+        draftId: parsed.draftId,
+        previewRevision: parsed.previewRevision,
+        previews: parsed.previews,
+      });
       break;
     case 'pipelineStage':
       dispatch({ type: 'PIPELINE_STAGE', event: parsed.event });

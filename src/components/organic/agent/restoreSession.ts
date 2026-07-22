@@ -28,7 +28,7 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
   const planStatuses: ParsedPlanStatus[] = [];
   // Storyboard frames arrive from the (separate) blueprint job, usually after the
   // live stream closed, so on reload they're merged into the restored card by draftId.
-  const blueprintsByDraftId = new Map<string, string[]>();
+  const blueprintsByDraftId = new Map<string, { previews: string[]; previewRevision: string }>();
 
   const messages = msgs.map((m) => {
     const uiCards: UiCard[] = [];
@@ -45,7 +45,12 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
           pipelineCards.push(parsed.card);
           break;
         case 'draftBlueprint':
-          if (parsed.previews.length > 0) blueprintsByDraftId.set(parsed.draftId, parsed.previews);
+          if (parsed.previews.length > 0) {
+            blueprintsByDraftId.set(parsed.draftId, {
+              previews: parsed.previews,
+              previewRevision: parsed.previewRevision,
+            });
+          }
           break;
         case 'bulkRun':
           bulkRuns.push({
@@ -104,15 +109,21 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
   // session shows the 512px preview that the blueprint job produced.
   if (blueprintsByDraftId.size > 0) {
     for (const card of pipelineCards) {
-      const previews = card.draftId ? blueprintsByDraftId.get(card.draftId) : undefined;
-      if (previews && previews.length > 0) {
+      const blueprint = card.draftId ? blueprintsByDraftId.get(card.draftId) : undefined;
+      if (blueprint && blueprint.previews.length > 0) {
         card.preview = {
           caption: card.preview?.caption ?? null,
-          imageUrl: card.preview?.imageUrl ?? previews[0] ?? null,
-          images: previews,
+          imageUrl: card.preview?.imageUrl ?? blueprint.previews[0] ?? null,
+          images: blueprint.previews,
           format: card.preview?.format ?? null,
         };
-        card.checkpoint = { ...card.checkpoint, blueprintReady: true };
+        card.checkpoint = {
+          ...card.checkpoint,
+          blueprintReady: true,
+          mediaStatus: 'pending',
+          awaitingMediaChoice: true,
+          previewRevision: blueprint.previewRevision,
+        };
       }
     }
   }

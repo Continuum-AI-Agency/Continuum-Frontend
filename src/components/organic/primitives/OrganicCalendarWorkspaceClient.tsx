@@ -840,9 +840,15 @@ function OrganicCalendarWorkspaceInner({
   const handleRealizeDraft = React.useCallback(
     (draftId: string) => {
       const draft = drafts.find((d) => d.id === draftId);
-      if (!brandProfileId || !draft?.backendDraftId) return;
+      const previewRevision = draft?.mediaSuggestion?.previewRevision;
+      if (!brandProfileId || !draft?.backendDraftId || !previewRevision) return;
       void generateDraftMedia(brandProfileId, [
-        { feId: draft.id, backendDraftId: draft.backendDraftId, format: draft.format ?? '' },
+        {
+          feId: draft.id,
+          backendDraftId: draft.backendDraftId,
+          format: draft.format ?? '',
+          previewRevision,
+        },
       ]);
     },
     [brandProfileId, drafts, generateDraftMedia],
@@ -865,7 +871,12 @@ function OrganicCalendarWorkspaceInner({
           Boolean(d.backendDraftId)
         );
       })
-      .map((d) => ({ id: d.id, backendDraftId: d.backendDraftId as string }));
+      .filter((d) => Boolean(d.mediaSuggestion?.previewRevision))
+      .map((d) => ({
+        id: d.id,
+        backendDraftId: d.backendDraftId as string,
+        previewRevision: d.mediaSuggestion?.previewRevision as string,
+      }));
   }, [drafts, selectedIds]);
 
   const handleGenerateReels = React.useCallback(() => {
@@ -887,14 +898,24 @@ function OrganicCalendarWorkspaceInner({
     }
     void generateDraftMedia(
       brandProfileId,
-      capped.map((t) => ({ feId: t.id, backendDraftId: t.backendDraftId, format: 'reel' })),
+      capped.map((t) => ({
+        feId: t.id,
+        backendDraftId: t.backendDraftId,
+        format: 'reel',
+        previewRevision: t.previewRevision,
+      })),
     );
   }, [brandProfileId, reelTargets, generateDraftMedia]);
 
   const mediaGenerationTargets = React.useMemo(() => {
     const selected = new Set(selectedIds);
     return drafts
-      .filter((d) => selected.has(d.id) && Boolean(d.backendDraftId))
+      .filter(
+        (d) =>
+          selected.has(d.id) &&
+          Boolean(d.backendDraftId) &&
+          Boolean(d.mediaSuggestion?.previewRevision),
+      )
       .filter((d) => {
         // Only include drafts pending media generation (not already ready or user-supplied).
         const ms = d.mediaSuggestion?.mediaStatus;
@@ -904,6 +925,7 @@ function OrganicCalendarWorkspaceInner({
         feId: d.id,
         backendDraftId: d.backendDraftId as string,
         format: d.format ?? '',
+        previewRevision: d.mediaSuggestion?.previewRevision as string,
       }));
   }, [drafts, selectedIds]);
 

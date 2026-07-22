@@ -369,9 +369,14 @@ export function OrganicAgentPanel({
     [brandId, expandDrafts, resolveCalendarFeId],
   );
   const handleGenerateMediaFromChat = useCallback(
-    (draftId: string, format: string) => {
+    (draftId: string, format: string, previewRevision: string) => {
       void generateDraftMedia(brandId, [
-        { feId: resolveCalendarFeId(draftId), backendDraftId: draftId, format: format || 'post' },
+        {
+          feId: resolveCalendarFeId(draftId),
+          backendDraftId: draftId,
+          format: format || 'post',
+          previewRevision,
+        },
       ]);
     },
     [brandId, generateDraftMedia, resolveCalendarFeId],

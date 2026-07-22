@@ -30,6 +30,24 @@ function card(
 describe('PipelineCard media actions', () => {
   afterEach(() => cleanup());
 
+  it('labels a completed blueprint as awaiting choice instead of fully fleshed out', () => {
+    render(
+      <PipelineCard
+        card={card({
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'pending',
+          awaitingMediaChoice: true,
+        })}
+        onGenerateMedia={mock(() => {})}
+      />,
+    );
+
+    expect(screen.getByText('Preview ready')).toBeTruthy();
+    expect(screen.getByText('Awaiting your choice')).toBeTruthy();
+    expect(screen.getAllByText('Fully fleshed out')).toHaveLength(1);
+  });
+
   it('shows Enrich for a text-ready card and dispatches with the draft id', () => {
     const onEnrichDraft = mock(() => {});
     render(<PipelineCard card={card({ textReady: true })} onEnrichDraft={onEnrichDraft} />);
@@ -49,7 +67,7 @@ describe('PipelineCard media actions', () => {
     render(
       <PipelineCard
         card={card(
-          { textReady: true, blueprintReady: true },
+          { textReady: true, blueprintReady: true, previewRevision: 'revision-1' },
           { preview: { caption: null, imageUrl: null, format: 'carousel' } },
         )}
         onEnrichDraft={onEnrichDraft}
@@ -60,7 +78,7 @@ describe('PipelineCard media actions', () => {
     expect(screen.queryByRole('button', { name: /Enrich/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Generate media/ }));
 
-    expect(onGenerateMedia).toHaveBeenCalledWith('draft-1', 'carousel');
+    expect(onGenerateMedia).toHaveBeenCalledWith('draft-1', 'carousel', 'revision-1');
   });
 
   it('hides both actions once media is settled', () => {

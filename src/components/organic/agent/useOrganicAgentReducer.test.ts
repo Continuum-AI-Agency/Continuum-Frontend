@@ -668,6 +668,7 @@ describe('PIPELINE_CARD', () => {
     state = panelReducer(state, {
       type: 'DRAFT_BLUEPRINT',
       draftId: 'draft-c',
+      previewRevision: 'revision-c',
       previews: ['https://cdn.example/c.png'],
     });
 
@@ -678,6 +679,50 @@ describe('PIPELINE_CARD', () => {
     expect(state.pipeline['job-c'].draftId).toBe('draft-c');
     expect(state.pipeline['job-c'].preview?.images).toEqual(['https://cdn.example/c.png']);
     expect(state.pipeline['job-c'].checkpoint?.blueprintReady).toBe(true);
+  });
+
+  it('preserves checkpoint and turn identity when a later stage frame arrives', () => {
+    const withCard = panelReducer(initialPanelState(), {
+      type: 'PIPELINE_CARD',
+      card: {
+        jobId: 'job-a',
+        brandId: 'brand-1',
+        planId: 'plan-1',
+        planItemId: 'item-a',
+        toolCallId: 'tool-1',
+        status: 'completed',
+        draftId: 'draft-a',
+        checkpoint: {
+          textReady: true,
+          blueprintReady: true,
+          awaitingMediaChoice: true,
+          mediaStatus: 'pending',
+        },
+      },
+    });
+
+    const afterStage = panelReducer(withCard, {
+      type: 'PIPELINE_STAGE',
+      event: {
+        jobId: 'job-a',
+        brandId: 'brand-1',
+        planId: 'plan-1',
+        planItemId: 'item-a',
+        stage: 'merge',
+        status: 'done',
+      },
+    });
+
+    expect(afterStage.pipeline['job-a']).toMatchObject({
+      draftId: 'draft-a',
+      toolCallId: 'tool-1',
+      checkpoint: {
+        textReady: true,
+        blueprintReady: true,
+        awaitingMediaChoice: true,
+        mediaStatus: 'pending',
+      },
+    });
   });
 });
 

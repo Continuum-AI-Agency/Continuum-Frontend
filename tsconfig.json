@@ -28,7 +28,7 @@
         "./src/*"
       ],
       "@continuum/contracts": [
-        "./packages/contracts/src/index.ts"
+        "../packages/contracts/src/index.ts"
       ]
     },
     "types": [
