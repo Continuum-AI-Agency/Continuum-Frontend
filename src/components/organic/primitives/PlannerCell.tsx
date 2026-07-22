@@ -123,6 +123,7 @@ export const PlannerCell = React.memo(function PlannerCell({
     // biome-ignore lint/a11y/useKeyWithClickEvents: pointer-only shortcut; the cell's "+" button is the keyboard path
     <div
       ref={setNodeRef}
+      data-planner-cell={droppableId}
       onClick={() => setFocusedDayId(dayId)}
       className={cn(
         'group relative align-top',

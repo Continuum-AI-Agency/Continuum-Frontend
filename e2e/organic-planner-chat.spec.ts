@@ -1,4 +1,4 @@
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { type BrowserContext, expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
@@ -24,6 +24,8 @@ import { mintSessionWithPassword } from './support/auth';
 //   Product-review polish: the Plan → Generate → Review → Schedule workflow, planning insight,
 //         grouped primary action, status legend, metadata-first resizable preview, and guarded
 //         draft deletion all render against the real persisted planner rows.
+//   Draft scheduling: dragging a real persisted draft to another day moves it in the rendered
+//         matrix and PATCHes the real row to the chosen day while preserving its time of day.
 //
 // Un-exercised hop, stated explicitly: no live agent turn is streamed. The transcript renders
 // PERSISTED turns through the same components a live stream feeds, which is the surface both
@@ -59,6 +61,17 @@ function admin(): SupabaseClient {
 function dayIdOffsetFromToday(offsetDays: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
+  return localDayId(date);
+}
+
+function currentWeekDayId(dayIndexFromMonday: number): string {
+  const date = new Date();
+  const daysSinceMonday = date.getDay() === 0 ? 6 : date.getDay() - 1;
+  date.setDate(date.getDate() - daysSinceMonday + dayIndexFromMonday);
+  return localDayId(date);
+}
+
+function localDayId(date: Date): string {
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
   const day = `${date.getDate()}`.padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
@@ -99,7 +112,7 @@ const SEEDED_DRAFTS = [
 
 function draftRows() {
   return SEEDED_DRAFTS.map((seed, index) => {
-    const dayId = dayIdOffsetFromToday(index);
+    const dayId = currentWeekDayId(index);
     const clientKey = `${BENCH_CLIENT_KEY_PREFIX}${seed.status}`;
 
     return {
@@ -311,6 +324,19 @@ async function openPlanner(page: Page) {
   await expect(week).toHaveAttribute('aria-pressed', 'true');
 }
 
+async function dragWithPointer(page: Page, source: Locator, target: Locator): Promise<void> {
+  const sourceBox = await source.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!sourceBox || !targetBox) throw new Error('Drag source or target has no bounding box');
+
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+    steps: 20,
+  });
+  await page.mouse.up();
+}
+
 test.describe('organic planner + agent chat', () => {
   test.describe.configure({ mode: 'serial', timeout: 180_000 });
 
@@ -432,6 +458,37 @@ test.describe('organic planner + agent chat', () => {
     await page.getByRole('menuitem').filter({ hasText: 'AI one-shot post' }).click();
     await expect(page.getByRole('dialog', { name: 'Create with AI' })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
+
+    // Dragging a persisted draft to another day exercises the real dnd-kit pointer gesture,
+    // optimistic matrix move, authenticated Backend PATCH, and database write. The target cell
+    // is on the same platform row, so this changes the day without changing the channel.
+    const todayIndexFromMonday = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+    const targetDayId = currentWeekDayId(todayIndexFromMonday === 0 ? 1 : todayIndexFromMonday);
+    const draggedDraft = page
+      .locator('button[aria-pressed]')
+      .filter({ hasText: 'BENCH Draft —' })
+      .first();
+    const targetCell = page.locator(
+      `[data-planner-cell="planner-cell::${targetDayId}::instagram"]`,
+    );
+    await expect(draggedDraft).toBeVisible();
+    await expect(targetCell).toBeVisible();
+    await dragWithPointer(page, draggedDraft, targetCell);
+
+    await expect(targetCell.getByText('BENCH Draft —', { exact: false })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const { data, error } = await admin()
+          .schema('organic')
+          .from('organic_calendar_drafts')
+          .select('scheduled_date')
+          .eq('brand_id', brandId)
+          .eq('client_key', `${BENCH_CLIENT_KEY_PREFIX}draft`)
+          .single();
+        if (error) throw error;
+        return data?.scheduled_date ? localDayId(new Date(data.scheduled_date)) : null;
+      })
+      .toBe(targetDayId);
 
     await page.screenshot({
       path: `${SCREENSHOT_DIR}/planner-week-statuses.png`,

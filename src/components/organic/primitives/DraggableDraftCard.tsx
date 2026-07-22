@@ -47,6 +47,7 @@ function DraggableDraftCardComponent({
   return (
     <motion.div
       ref={setNodeRef}
+      className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
       layout={!reduceMotion}
       layoutId={reduceMotion ? undefined : draft.id}
       initial={reduceMotion ? false : { opacity: 0, y: 10 }}
