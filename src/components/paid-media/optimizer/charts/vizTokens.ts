@@ -15,7 +15,7 @@ export const STATUS_COLOR: Record<string, string> = {
   starved: 'var(--destructive)',
 };
 
-/** Optimization objective → categorical color (matches BudgetByObjective usage). */
+/** Optimization objective → categorical color (matches the budget-mix objective dimension). */
 export const OBJECTIVE_COLOR: Record<string, string> = {
   purchase: 'var(--chart-1)',
   lead: 'var(--chart-2)',

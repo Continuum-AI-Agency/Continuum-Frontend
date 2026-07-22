@@ -3,6 +3,8 @@ import type { CpaSeriesPoint, CycleItemRow, PortfolioListItem } from '@continuum
 import { freezeLabel, parseReport } from '../reportModel';
 import {
   budgetByObjective,
+  budgetByPortfolio,
+  budgetMix,
   buildCpaTrendPoints,
   cpaTrendSummary,
   splitReallocation,
@@ -105,6 +107,60 @@ describe('budgetByObjective', () => {
       { name: 'Purchase', daily: 5000 },
       { name: 'Lead', daily: 1500 },
     ]);
+  });
+});
+
+describe('budgetByPortfolio', () => {
+  it('lists funded portfolios by name descending, dropping zero/null-budget ones', () => {
+    const portfolios = [
+      { name: 'Alpha', daily_total: 2100 },
+      { name: 'Beta', daily_total: 2200 },
+      { name: 'Draft', daily_total: null },
+      { name: 'Zero', daily_total: 0 },
+    ] as PortfolioListItem[];
+    expect(budgetByPortfolio(portfolios)).toEqual([
+      { name: 'Beta', daily: 2200 },
+      { name: 'Alpha', daily: 2100 },
+    ]);
+  });
+});
+
+describe('budgetMix', () => {
+  it('splits by objective when 2+ objectives carry budget', () => {
+    const portfolios = [
+      { name: 'A', objective: 'purchase', daily_total: 300 },
+      { name: 'B', objective: 'lead', daily_total: 120 },
+    ] as PortfolioListItem[];
+    expect(budgetMix(portfolios)).toEqual({
+      dimension: 'objective',
+      slices: [
+        { name: 'Purchase', daily: 300 },
+        { name: 'Lead', daily: 120 },
+      ],
+    });
+  });
+
+  it('falls back to per-portfolio when every portfolio shares one objective', () => {
+    const portfolios = [
+      { name: 'Daniel — resto', objective: 'conversations', daily_total: 2100 },
+      { name: 'Daniel — todas', objective: 'conversations', daily_total: 2200 },
+    ] as PortfolioListItem[];
+    expect(budgetMix(portfolios)).toEqual({
+      dimension: 'portfolio',
+      slices: [
+        { name: 'Daniel — todas', daily: 2200 },
+        { name: 'Daniel — resto', daily: 2100 },
+      ],
+    });
+  });
+
+  it('ignores unfunded objectives when deciding the dimension', () => {
+    const portfolios = [
+      { name: 'A', objective: 'purchase', daily_total: 300 },
+      { name: 'B', objective: 'lead', daily_total: 0 },
+    ] as PortfolioListItem[];
+    // Only one objective actually carries budget → per-portfolio fallback.
+    expect(budgetMix(portfolios).dimension).toBe('portfolio');
   });
 });
 

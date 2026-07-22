@@ -14,7 +14,8 @@ import { useState } from 'react';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { BudgetByObjectiveChart } from '../charts/BudgetByObjectiveChart';
+import { BudgetMixChart } from '../charts/BudgetMixChart';
+import { budgetMix } from '../charts/chartData';
 import { formatCurrency } from '../format';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
@@ -68,6 +69,8 @@ export function OptimizerOverview({
   ).length;
 
   const sorted = sortPortfolios(portfolios, sortKey, sortDir);
+  const mix = budgetMix(portfolios);
+  const mixTitle = mix.dimension === 'objective' ? 'Budget by objective' : 'Budget by portfolio';
 
   return (
     <div className="space-y-3">
@@ -165,11 +168,11 @@ export function OptimizerOverview({
         </section>
 
         <OptimizerPanel
-          title="Budget by objective"
+          title={mixTitle}
           className="self-start"
           bodyClassName="max-h-72 overflow-y-auto"
         >
-          <BudgetByObjectiveChart portfolios={portfolios} currency={currency} />
+          <BudgetMixChart mix={mix} currency={currency} />
         </OptimizerPanel>
       </div>
     </div>

@@ -6,8 +6,8 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 // TooltipProvider ancestor. Neither is what these tests are about (the header actions,
 // the sort control, and the clickable glance cards), so both are stubbed to keep the
 // render focused on OptimizerOverview's own behavior.
-mock.module('../charts/BudgetByObjectiveChart', () => ({
-  BudgetByObjectiveChart: () => <div data-testid="budget-chart" />,
+mock.module('../charts/BudgetMixChart', () => ({
+  BudgetMixChart: () => <div data-testid="budget-chart" />,
 }));
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 

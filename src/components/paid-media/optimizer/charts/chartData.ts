@@ -74,11 +74,13 @@ export function splitReallocation(items: CycleItemRow[]): Reallocation {
   return { gaining, losing, maxAbs, totalMoved };
 }
 
-export type ObjectiveBudget = { name: string; daily: number };
+export type BudgetSlice = { name: string; daily: number };
+// Retained alias — the objective breakdown is one of the two mix dimensions.
+export type ObjectiveBudget = BudgetSlice;
 
 /** Group daily budget by objective — a pure sum of the authoritative
  *  optimizer_list_portfolios fields (same source as the Daily budget KPI). */
-export function budgetByObjective(portfolios: PortfolioListItem[]): ObjectiveBudget[] {
+export function budgetByObjective(portfolios: PortfolioListItem[]): BudgetSlice[] {
   const totals = new Map<string, number>();
   for (const portfolio of portfolios) {
     totals.set(
@@ -89,4 +91,29 @@ export function budgetByObjective(portfolios: PortfolioListItem[]): ObjectiveBud
   return [...totals.entries()]
     .map(([objective, daily]) => ({ name: humanize(objective), daily: Math.round(daily) }))
     .sort((a, b) => b.daily - a.daily);
+}
+
+/** Group daily budget by portfolio name — the graceful fallback when every
+ *  portfolio shares one objective, so the mix panel is never a single giant bar
+ *  that merely restates the Daily budget KPI. Only funded portfolios appear;
+ *  descending. */
+export function budgetByPortfolio(portfolios: PortfolioListItem[]): BudgetSlice[] {
+  return portfolios
+    .filter((portfolio) => (portfolio.daily_total ?? 0) > 0)
+    .map((portfolio) => ({ name: portfolio.name, daily: Math.round(portfolio.daily_total ?? 0) }))
+    .sort((a, b) => b.daily - a.daily);
+}
+
+export type BudgetMix = { dimension: 'objective' | 'portfolio'; slices: BudgetSlice[] };
+
+/** Choose the mix dimension: split by objective only when 2+ objectives carry
+ *  budget (a genuine mix), otherwise fall back to a per-portfolio breakdown so a
+ *  single-objective book reads as its constituent portfolios rather than one
+ *  redundant bar. */
+export function budgetMix(portfolios: PortfolioListItem[]): BudgetMix {
+  const fundedObjectives = budgetByObjective(portfolios).filter((slice) => slice.daily > 0);
+  if (fundedObjectives.length >= 2) {
+    return { dimension: 'objective', slices: fundedObjectives };
+  }
+  return { dimension: 'portfolio', slices: budgetByPortfolio(portfolios) };
 }
