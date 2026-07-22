@@ -1,4 +1,9 @@
-export function openCenteredPopup(url: string, title: string, width = 480, height = 640): Window | null {
+export function openCenteredPopup(
+  url: string,
+  title: string,
+  width = 480,
+  height = 640,
+): Window | null {
   const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
   const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
 
@@ -16,7 +21,7 @@ export function openCenteredPopup(url: string, title: string, width = 480, heigh
     `height=${height}`,
     `top=${top}`,
     `left=${left}`,
-  ].join(",");
+  ].join(',');
 
   const win = window.open(url, title, features);
   if (win && win.focus) win.focus();
@@ -31,25 +36,25 @@ type PopupMessageOptions<T> = {
 
 export function waitForPopupMessage<T = unknown>(
   expectedType: string,
-  options?: PopupMessageOptions<T>
+  options?: PopupMessageOptions<T>,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timeoutMs = options?.timeoutMs ?? 120000;
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error("Popup timed out"));
+      reject(new Error('Popup timed out'));
     }, timeoutMs);
 
     const onAbort = () => {
       cleanup();
-      reject(new Error("Popup wait aborted"));
+      reject(new Error('Popup wait aborted'));
     };
     if (options?.signal) {
       if (options.signal.aborted) {
         clearTimeout(timer);
-        return reject(new Error("Popup wait aborted"));
+        return reject(new Error('Popup wait aborted'));
       }
-      options.signal.addEventListener("abort", onAbort, { once: true });
+      options.signal.addEventListener('abort', onAbort, { once: true });
     }
 
     function onMessage(event: MessageEvent) {
@@ -70,13 +75,13 @@ export function waitForPopupMessage<T = unknown>(
 
     function cleanup() {
       clearTimeout(timer);
-      window.removeEventListener("message", onMessage);
+      window.removeEventListener('message', onMessage);
       if (options?.signal) {
-        options.signal.removeEventListener("abort", onAbort);
+        options.signal.removeEventListener('abort', onAbort);
       }
     }
 
-    window.addEventListener("message", onMessage);
+    window.addEventListener('message', onMessage);
   });
 }
 
@@ -84,15 +89,15 @@ export function waitForPopupMessage<T = unknown>(
 // broadcast completion on this channel. BroadcastChannel delivery does not
 // depend on `window.opener`, so it survives Google's own
 // `Cross-Origin-Opener-Policy: same-origin` header severing the opener link.
-export const OAUTH_BROADCAST_CHANNEL_NAME = "continuum-oauth";
+export const OAUTH_BROADCAST_CHANNEL_NAME = 'continuum-oauth';
 
 function supportsBroadcastChannel(): boolean {
-  return typeof BroadcastChannel !== "undefined";
+  return typeof BroadcastChannel !== 'undefined';
 }
 
 export function waitForBroadcastMessage<T = unknown>(
   expectedType: string,
-  options?: PopupMessageOptions<T>
+  options?: PopupMessageOptions<T>,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     if (!supportsBroadcastChannel()) {
@@ -101,11 +106,9 @@ export function waitForBroadcastMessage<T = unknown>(
       // of prematurely resolving/rejecting on behalf of a channel that can't
       // deliver anything.
       if (options?.signal) {
-        options.signal.addEventListener(
-          "abort",
-          () => reject(new Error("Popup wait aborted")),
-          { once: true }
-        );
+        options.signal.addEventListener('abort', () => reject(new Error('Popup wait aborted')), {
+          once: true,
+        });
       }
       return;
     }
@@ -114,20 +117,20 @@ export function waitForBroadcastMessage<T = unknown>(
     const timeoutMs = options?.timeoutMs ?? 120000;
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error("Popup timed out"));
+      reject(new Error('Popup timed out'));
     }, timeoutMs);
 
     const onAbort = () => {
       cleanup();
-      reject(new Error("Popup wait aborted"));
+      reject(new Error('Popup wait aborted'));
     };
     if (options?.signal) {
       if (options.signal.aborted) {
         clearTimeout(timer);
         channel.close();
-        return reject(new Error("Popup wait aborted"));
+        return reject(new Error('Popup wait aborted'));
       }
-      options.signal.addEventListener("abort", onAbort, { once: true });
+      options.signal.addEventListener('abort', onAbort, { once: true });
     }
 
     function onMessage(event: MessageEvent) {
@@ -143,14 +146,14 @@ export function waitForBroadcastMessage<T = unknown>(
 
     function cleanup() {
       clearTimeout(timer);
-      channel.removeEventListener("message", onMessage);
+      channel.removeEventListener('message', onMessage);
       channel.close();
       if (options?.signal) {
-        options.signal.removeEventListener("abort", onAbort);
+        options.signal.removeEventListener('abort', onAbort);
       }
     }
 
-    channel.addEventListener("message", onMessage);
+    channel.addEventListener('message', onMessage);
   });
 }
 
@@ -189,28 +192,38 @@ type WaitForOAuthCompletionOptions<T> = {
 // ever arrived — otherwise we'd misreport a completed OAuth flow as
 // cancelled, which is exactly the bug this function fixes.
 export async function waitForOAuthCompletion<T extends OAuthCompletionMessage>(
-  options: WaitForOAuthCompletionOptions<T>
+  options: WaitForOAuthCompletionOptions<T>,
 ): Promise<T> {
-  const { popup, predicate, signal, timeoutMs, closedGraceMs = 800, closedPollIntervalMs } = options;
+  const {
+    popup,
+    predicate,
+    signal,
+    timeoutMs,
+    closedGraceMs = 800,
+    closedPollIntervalMs,
+  } = options;
   let completionReceived = false;
 
   const successPromise = Promise.race([
-    waitForPopupMessage<T>("oauth:success", { predicate, signal, timeoutMs }),
-    waitForBroadcastMessage<T>("oauth:success", { predicate, signal, timeoutMs }),
+    waitForPopupMessage<T>('oauth:success', { predicate, signal, timeoutMs }),
+    waitForBroadcastMessage<T>('oauth:success', { predicate, signal, timeoutMs }),
   ]).then((payload) => {
     completionReceived = true;
     return payload;
   });
 
   const errorPromise = Promise.race([
-    waitForPopupMessage<T>("oauth:error", { predicate, signal, timeoutMs }),
-    waitForBroadcastMessage<T>("oauth:error", { predicate, signal, timeoutMs }),
+    waitForPopupMessage<T>('oauth:error', { predicate, signal, timeoutMs }),
+    waitForBroadcastMessage<T>('oauth:error', { predicate, signal, timeoutMs }),
   ]).then((payload) => {
     completionReceived = true;
-    throw new Error(payload.message ?? "Connection cancelled.");
+    throw new Error(payload.message ?? 'Connection cancelled.');
   });
 
-  const cancelledPromise = waitForPopupClosed(popup, { signal, intervalMs: closedPollIntervalMs }).then(async () => {
+  const cancelledPromise = waitForPopupClosed(popup, {
+    signal,
+    intervalMs: closedPollIntervalMs,
+  }).then(async () => {
     await delay(closedGraceMs);
     if (completionReceived) {
       // A completion signal already arrived (or is about to win the race via
@@ -218,7 +231,7 @@ export async function waitForOAuthCompletion<T extends OAuthCompletionMessage>(
       // branch so Promise.race resolves from that signal instead.
       return new Promise<T>(() => {});
     }
-    throw new Error("Connection cancelled.");
+    throw new Error('Connection cancelled.');
   });
 
   return Promise.race([successPromise, errorPromise, cancelledPromise]);
@@ -226,7 +239,7 @@ export async function waitForOAuthCompletion<T extends OAuthCompletionMessage>(
 
 export function waitForPopupClosed(
   popup: Window | null,
-  options?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal }
+  options?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal },
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const intervalMs = options?.intervalMs ?? 500;
@@ -246,28 +259,28 @@ export function waitForPopupClosed(
           } catch {
             // ignore — popup may already be closed by the user or browser
           }
-          reject(new Error("Popup timed out"));
+          reject(new Error('Popup timed out'));
         }, timeoutMs)
       : null;
 
     const onAbort = () => {
       cleanup();
-      reject(new Error("Popup close wait aborted"));
+      reject(new Error('Popup close wait aborted'));
     };
     if (options?.signal) {
       if (options.signal.aborted) {
         clearInterval(check);
         if (timer) clearTimeout(timer);
-        return reject(new Error("Popup close wait aborted"));
+        return reject(new Error('Popup close wait aborted'));
       }
-      options.signal.addEventListener("abort", onAbort, { once: true });
+      options.signal.addEventListener('abort', onAbort, { once: true });
     }
 
     function cleanup() {
       clearInterval(check);
       if (timer) clearTimeout(timer);
       if (options?.signal) {
-        options.signal.removeEventListener("abort", onAbort);
+        options.signal.removeEventListener('abort', onAbort);
       }
     }
   });

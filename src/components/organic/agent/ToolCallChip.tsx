@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   Tool,
@@ -6,9 +6,9 @@ import {
   ToolHeader,
   ToolInput,
   ToolOutput,
-} from "@/components/ai-elements/tool";
-import type { ToolCallEvent } from "./types";
-import { formatOrganicToolName } from "./organicToolLabels";
+} from '@/components/ai-elements/tool';
+import { formatOrganicToolName } from './organicToolLabels';
+import type { ToolCallEvent } from './types';
 
 type ToolCallChipProps = {
   toolCall: ToolCallEvent;
@@ -17,7 +17,7 @@ type ToolCallChipProps = {
 export function ToolCallChip({ toolCall }: ToolCallChipProps) {
   const hasResult = toolCall.result !== undefined;
   const failed = toolCall.ok === false;
-  const state = failed ? "error" : hasResult ? "output-available" : "running";
+  const state = failed ? 'error' : hasResult ? 'output-available' : 'running';
 
   return (
     <Tool type={toolCall.toolName} state={state}>

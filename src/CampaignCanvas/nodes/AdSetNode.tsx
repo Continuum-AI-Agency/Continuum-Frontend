@@ -1,56 +1,106 @@
-"use client";
+'use client';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Copy,
+  Layers,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
 import React, { memo, useCallback } from 'react';
-import { type CampaignNodeProps, type AdSetData } from '../types';
-import { 
-  Node, 
-  NodeHeader, 
-  NodeTitle, 
+import {
+  Node,
   NodeContent,
-  NodeDescription 
+  NodeDescription,
+  NodeHeader,
+  NodeTitle,
 } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { CheckCircle2, AlertCircle, XCircle, Layers, Trash2, Copy, Plus, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useCampaignStore } from '../stores/useCampaignStore';
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuShortcut,
-  ContextMenuSeparator,
   ContextMenuGroup,
+  ContextMenuItem,
   ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-  ContextMenuCheckboxItem,
-} from "@/components/ui/context-menu";
-import { EditableLabel } from '../components/EditableLabel';
-import { EditableAmount } from '../components/EditableAmount';
-import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
-
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { EditableAmount } from '../components/EditableAmount';
+import { EditableLabel } from '../components/EditableLabel';
+import { useCampaignStore } from '../stores/useCampaignStore';
+import type { AdSetData, CampaignNodeProps } from '../types';
 
 const OPTIMIZATION_GOALS = [
-  { value: 'CONVERSIONS', label: 'Conversions', description: 'Conversions optimization focuses on users likely to complete conversion events.' },
-  { value: 'LANDING_PAGE_VIEWS', label: 'Landing Page Views', description: 'Landing Page Views optimization prioritizes users likely to fully load your page.' },
-  { value: 'LINK_CLICKS', label: 'Link Clicks', description: 'Link Clicks optimization targets users likely to click your ad link.' },
-  { value: 'IMPRESSIONS', label: 'Impressions', description: 'Impressions optimization prioritizes showing the ad as often as possible.' },
-  { value: 'REACH', label: 'Reach', description: 'Reach optimization prioritizes unique people seeing the ad.' },
+  {
+    value: 'CONVERSIONS',
+    label: 'Conversions',
+    description: 'Conversions optimization focuses on users likely to complete conversion events.',
+  },
+  {
+    value: 'LANDING_PAGE_VIEWS',
+    label: 'Landing Page Views',
+    description:
+      'Landing Page Views optimization prioritizes users likely to fully load your page.',
+  },
+  {
+    value: 'LINK_CLICKS',
+    label: 'Link Clicks',
+    description: 'Link Clicks optimization targets users likely to click your ad link.',
+  },
+  {
+    value: 'IMPRESSIONS',
+    label: 'Impressions',
+    description: 'Impressions optimization prioritizes showing the ad as often as possible.',
+  },
+  {
+    value: 'REACH',
+    label: 'Reach',
+    description: 'Reach optimization prioritizes unique people seeing the ad.',
+  },
 ];
 
 const BILLING_EVENTS = [
-  { value: 'IMPRESSIONS', label: 'Impressions', description: 'Impressions billing charges based on ad views.' },
-  { value: 'LINK_CLICKS', label: 'Link Clicks', description: 'Link Clicks billing charges when users click your ad link.' },
+  {
+    value: 'IMPRESSIONS',
+    label: 'Impressions',
+    description: 'Impressions billing charges based on ad views.',
+  },
+  {
+    value: 'LINK_CLICKS',
+    label: 'Link Clicks',
+    description: 'Link Clicks billing charges when users click your ad link.',
+  },
 ];
 
 const BID_STRATEGIES = [
-  { value: 'LOWEST_COST_WITHOUT_CAP', label: 'Highest Volume', description: 'Highest Volume seeks the most results for your budget without a strict cost target.' },
-  { value: 'COST_CAP', label: 'Cost Cap', description: 'Cost Cap aims to keep average result cost around your target cap.' },
-  { value: 'BID_CAP', label: 'Bid Cap', description: 'Bid Cap sets a hard maximum bid your ad can place in auctions.' },
+  {
+    value: 'LOWEST_COST_WITHOUT_CAP',
+    label: 'Highest Volume',
+    description:
+      'Highest Volume seeks the most results for your budget without a strict cost target.',
+  },
+  {
+    value: 'COST_CAP',
+    label: 'Cost Cap',
+    description: 'Cost Cap aims to keep average result cost around your target cap.',
+  },
+  {
+    value: 'BID_CAP',
+    label: 'Bid Cap',
+    description: 'Bid Cap sets a hard maximum bid your ad can place in auctions.',
+  },
 ];
 
 const BUDGET_TYPES: Array<{ value: NonNullable<AdSetData['budgetType']>; label: string }> = [
@@ -64,21 +114,33 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
-  const handleLabelSave = useCallback((newLabel: string) => {
-    updateNodeData(id, { label: newLabel });
-  }, [id, updateNodeData]);
+  const handleLabelSave = useCallback(
+    (newLabel: string) => {
+      updateNodeData(id, { label: newLabel });
+    },
+    [id, updateNodeData],
+  );
 
-  const handleGoalChange = useCallback((optimizationGoal: string) => {
-    updateNodeData(id, { optimizationGoal });
-  }, [id, updateNodeData]);
+  const handleGoalChange = useCallback(
+    (optimizationGoal: string) => {
+      updateNodeData(id, { optimizationGoal });
+    },
+    [id, updateNodeData],
+  );
 
-  const handleBillingChange = useCallback((billingEvent: string) => {
-    updateNodeData(id, { billingEvent });
-  }, [id, updateNodeData]);
+  const handleBillingChange = useCallback(
+    (billingEvent: string) => {
+      updateNodeData(id, { billingEvent });
+    },
+    [id, updateNodeData],
+  );
 
-  const handleBidChange = useCallback((bidStrategy: string) => {
-    updateNodeData(id, { bidStrategy });
-  }, [id, updateNodeData]);
+  const handleBidChange = useCallback(
+    (bidStrategy: string) => {
+      updateNodeData(id, { bidStrategy });
+    },
+    [id, updateNodeData],
+  );
 
   const handleAddAd = useCallback(() => {
     addConnectedNode(id, 'ad');
@@ -88,30 +150,41 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
     addConnectedNode(id, 'audience');
   }, [id, addConnectedNode]);
 
-  const handleBudgetAmountSave = useCallback((budgetAmount: number) => {
-    updateNodeData(id, { budgetAmount: Math.max(0, budgetAmount) });
-  }, [id, updateNodeData]);
+  const handleBudgetAmountSave = useCallback(
+    (budgetAmount: number) => {
+      updateNodeData(id, { budgetAmount: Math.max(0, budgetAmount) });
+    },
+    [id, updateNodeData],
+  );
 
-  const handleBudgetTypeChange = useCallback((budgetType: NonNullable<AdSetData['budgetType']>) => {
-    updateNodeData(id, { budgetType });
-  }, [id, updateNodeData]);
+  const handleBudgetTypeChange = useCallback(
+    (budgetType: NonNullable<AdSetData['budgetType']>) => {
+      updateNodeData(id, { budgetType });
+    },
+    [id, updateNodeData],
+  );
 
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <Node 
+        <Node
           handles={{ target: true, source: true }}
           selected={selected}
           className={cn(
-            "hover:shadow-md transition-shadow cursor-pointer",
-            data.validationStatus === 'error' && "border-destructive"
+            'hover:shadow-md transition-shadow cursor-pointer',
+            data.validationStatus === 'error' && 'border-destructive',
           )}
         >
           <Toolbar isVisible={selected}>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDuplicate}>
               <Copy className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={handleDelete}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive"
+              onClick={handleDelete}
+            >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </Toolbar>
@@ -127,9 +200,15 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                 </NodeTitle>
               </div>
               <div className="flex items-center gap-1">
-                {data.validationStatus === 'valid' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                {data.validationStatus === 'warning' && <AlertCircle className="h-4 w-4 text-yellow-500" />}
-                {data.validationStatus === 'error' && <XCircle className="h-4 w-4 text-destructive" />}
+                {data.validationStatus === 'valid' && (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                )}
+                {data.validationStatus === 'warning' && (
+                  <AlertCircle className="h-4 w-4 text-yellow-500" />
+                )}
+                {data.validationStatus === 'error' && (
+                  <XCircle className="h-4 w-4 text-destructive" />
+                )}
               </div>
             </div>
           </NodeHeader>
@@ -141,15 +220,20 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             <Separator className="my-1.5 opacity-50" />
             <div className="flex flex-col gap-1">
               <NodeDescription className="text-2xs font-bold text-muted-foreground uppercase tracking-wider">
-                {OPTIMIZATION_GOALS.find(g => g.value === data.optimizationGoal)?.label || 'CONVERSIONS'}
+                {OPTIMIZATION_GOALS.find((g) => g.value === data.optimizationGoal)?.label ||
+                  'CONVERSIONS'}
               </NodeDescription>
               <div className="flex flex-wrap items-center gap-1 mt-1">
                 <Badge variant="secondary" className="text-3xs px-1 py-0 opacity-80 h-4">
                   {data.billingEvent || 'IMPRESSIONS'}
                 </Badge>
                 {data.bidStrategy && (
-                  <Badge variant="outline" className="text-3xs px-1 py-0 opacity-80 h-4 border-primary/20">
-                    {BID_STRATEGIES.find(s => s.value === data.bidStrategy)?.label || 'Highest Vol'}
+                  <Badge
+                    variant="outline"
+                    className="text-3xs px-1 py-0 opacity-80 h-4 border-primary/20"
+                  >
+                    {BID_STRATEGIES.find((s) => s.value === data.bidStrategy)?.label ||
+                      'Highest Vol'}
                   </Badge>
                 )}
               </div>
@@ -179,10 +263,10 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                           handleBudgetTypeChange(type.value);
                         }}
                         className={cn(
-                          "flex-1 rounded-sm px-1.5 py-1 text-3xs font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
+                          'flex-1 rounded-sm px-1.5 py-1 text-3xs font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40',
                           isActive
-                            ? "bg-primary/15 text-foreground"
-                            : "text-muted-foreground hover:bg-primary/10"
+                            ? 'bg-primary/15 text-foreground'
+                            : 'text-muted-foreground hover:bg-primary/10',
                         )}
                       >
                         {type.label}
@@ -209,22 +293,28 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             <ContextMenuItemInfo description="Audience defines who this ad set is allowed to reach." />
           </ContextMenuItem>
         </ContextMenuGroup>
-        
+
         <ContextMenuSeparator />
         <ContextMenuLabel>Configurations</ContextMenuLabel>
-        
+
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
               <Layers className="mr-2 h-4 w-4" />
               Optimization Goal
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Optimization goal is the result type the system tries to maximize." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Optimization goal is the result type the system tries to maximize."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {OPTIMIZATION_GOALS.map((goal) => (
                 <ContextMenuCheckboxItem
                   key={goal.value}
-                  checked={data.optimizationGoal === goal.value || (!data.optimizationGoal && goal.value === 'CONVERSIONS')}
+                  checked={
+                    data.optimizationGoal === goal.value ||
+                    (!data.optimizationGoal && goal.value === 'CONVERSIONS')
+                  }
                   onClick={() => handleGoalChange(goal.value)}
                 >
                   {goal.label}
@@ -238,13 +328,19 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             <ContextMenuSubTrigger>
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Billing Event
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Billing event determines which user action triggers spend measurement." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Billing event determines which user action triggers spend measurement."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {BILLING_EVENTS.map((event) => (
                 <ContextMenuCheckboxItem
                   key={event.value}
-                  checked={data.billingEvent === event.value || (!data.billingEvent && event.value === 'IMPRESSIONS')}
+                  checked={
+                    data.billingEvent === event.value ||
+                    (!data.billingEvent && event.value === 'IMPRESSIONS')
+                  }
                   onClick={() => handleBillingChange(event.value)}
                 >
                   {event.label}
@@ -258,13 +354,19 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             <ContextMenuSubTrigger>
               <ShieldCheck className="mr-2 h-4 w-4" />
               Bid Strategy
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Bid strategy controls how aggressively the system bids in auctions." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Bid strategy controls how aggressively the system bids in auctions."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {BID_STRATEGIES.map((strategy) => (
                 <ContextMenuCheckboxItem
                   key={strategy.value}
-                  checked={data.bidStrategy === strategy.value || (!data.bidStrategy && strategy.value === 'LOWEST_COST_WITHOUT_CAP')}
+                  checked={
+                    data.bidStrategy === strategy.value ||
+                    (!data.bidStrategy && strategy.value === 'LOWEST_COST_WITHOUT_CAP')
+                  }
                   onClick={() => handleBidChange(strategy.value)}
                 >
                   {strategy.label}
@@ -273,25 +375,30 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
-
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
-        
+
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-            <ContextMenuItemInfo className="ml-2" description="A duplicate copies this ad set configuration for quick variant testing." />
+            <ContextMenuItemInfo
+              className="ml-2"
+              description="A duplicate copies this ad set configuration for quick variant testing."
+            />
           </ContextMenuItem>
         </ContextMenuGroup>
-        
+
         <ContextMenuSeparator />
-        
+
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
-          <ContextMenuItemInfo className="ml-2" description="Delete removes this ad set object from the current graph." />
+          <ContextMenuItemInfo
+            className="ml-2"
+            description="Delete removes this ad set object from the current graph."
+          />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

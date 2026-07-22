@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { cn } from "@/lib/utils";
-import { useDashboardPrefsStore, type PaidEntityScope } from "@/stores/dashboardPrefs";
+import { cn } from '@/lib/utils';
+import { type PaidEntityScope, useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 
 const OPTIONS: ReadonlyArray<{ value: PaidEntityScope; label: string }> = [
-  { value: "top_campaigns", label: "Campaigns" },
-  { value: "top_adsets", label: "Ad sets" },
+  { value: 'top_campaigns', label: 'Campaigns' },
+  { value: 'top_adsets', label: 'Ad sets' },
 ];
 
 // Switches the single top-ads table between campaigns and ad sets. The choice is
@@ -31,8 +31,10 @@ export function PaidScopeToggle() {
             aria-selected={active}
             onClick={() => setPaidScope(option.value)}
             className={cn(
-              "h-7 rounded px-2.5 text-xs font-medium transition-colors",
-              active ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground",
+              'h-7 rounded px-2.5 text-xs font-medium transition-colors',
+              active
+                ? 'bg-muted/60 text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             {option.label}

@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
-import * as storeRegistry from "@/lib/storage/storeRegistry";
-import type { BrandSwitchEvent } from "@/lib/storage/storeRegistry";
+import { useEffect, useRef } from 'react';
+import type { BrandSwitchEvent } from '@/lib/storage/storeRegistry';
+import * as storeRegistry from '@/lib/storage/storeRegistry';
 
-export type { BrandSwitchEvent, BrandSwitchReason } from "@/lib/storage/storeRegistry";
+export type { BrandSwitchEvent, BrandSwitchReason } from '@/lib/storage/storeRegistry';
 
 export function onBrandChange(handler: (event: BrandSwitchEvent) => void): () => void {
   return storeRegistry.subscribe(handler);
@@ -22,7 +22,7 @@ export function registerBrandScopedStore(opts: {
   reset: () => void;
   purge?: () => void;
 }): () => void {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return () => {};
   }
   return storeRegistry.register({
@@ -31,7 +31,7 @@ export function registerBrandScopedStore(opts: {
       try {
         opts.reset();
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
+        if (process.env.NODE_ENV !== 'production') {
           console.error(`[brand-switch] reset failed for "${opts.name}"`, error);
         }
       }
@@ -41,7 +41,7 @@ export function registerBrandScopedStore(opts: {
           try {
             opts.purge!();
           } catch (error) {
-            if (process.env.NODE_ENV !== "production") {
+            if (process.env.NODE_ENV !== 'production') {
               console.error(`[brand-switch] purge failed for "${opts.name}"`, error);
             }
           }

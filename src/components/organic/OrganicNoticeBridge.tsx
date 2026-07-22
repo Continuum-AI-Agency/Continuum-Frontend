@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useToast } from "@/components/ui/ToastProvider";
-import { getItem, setItem } from "@/lib/storage/brandScopedStorage";
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { useToast } from '@/components/ui/ToastProvider';
+import { getItem, setItem } from '@/lib/storage/brandScopedStorage';
 
-const WARMING_UP_BASE_KEY = "organic.notice.warmingUpDismissed";
+const WARMING_UP_BASE_KEY = 'organic.notice.warmingUpDismissed';
 
 type Props = {
   brandId: string;
@@ -20,13 +20,13 @@ export function OrganicNoticeBridge({ brandId, insightsError, showNoTrendsMessag
   useEffect(() => {
     if (!insightsError) return;
     show({
-      title: "Trend intelligence unavailable",
+      title: 'Trend intelligence unavailable',
       description: insightsError,
-      variant: "error",
+      variant: 'error',
       durationMs: Infinity,
       dedupeKey: `organic-insights-error:${brandId}`,
       action: {
-        label: "Retry",
+        label: 'Retry',
         onClick: () => router.refresh(),
       },
     });
@@ -36,14 +36,13 @@ export function OrganicNoticeBridge({ brandId, insightsError, showNoTrendsMessag
     if (insightsError) return;
     if (!showNoTrendsMessage) return;
     if (!brandId) return;
-    const dismissed = getItem(WARMING_UP_BASE_KEY, brandId) === "1";
+    const dismissed = getItem(WARMING_UP_BASE_KEY, brandId) === '1';
     if (dismissed) return;
-    setItem(WARMING_UP_BASE_KEY, brandId, "1");
+    setItem(WARMING_UP_BASE_KEY, brandId, '1');
     show({
-      title: "Trend coverage warming up",
-      description:
-        "You can publish normally now and add trend-driven posts as signals arrive.",
-      variant: "warning",
+      title: 'Trend coverage warming up',
+      description: 'You can publish normally now and add trend-driven posts as signals arrive.',
+      variant: 'warning',
       durationMs: 6000,
       dedupeKey: `organic-no-trends:${brandId}`,
     });

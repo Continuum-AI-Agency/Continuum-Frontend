@@ -1,7 +1,7 @@
-"use server";
+'use server';
 
-import { updateTag } from "next/cache";
-import { tags } from "@/lib/cache/tags";
+import { updateTag } from 'next/cache';
+import { tags } from '@/lib/cache/tags';
 
 // Invalidates the cached brand-insights (trends/briefing) entry so a freshly
 // warmed brand surfaces in the current session after the warm completes,

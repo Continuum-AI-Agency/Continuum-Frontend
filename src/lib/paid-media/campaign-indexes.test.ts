@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 
-import { buildCampaignIndexAggregate } from "./campaign-indexes";
+import { buildCampaignIndexAggregate } from './campaign-indexes';
 
-describe("buildCampaignIndexAggregate", () => {
-  it("totalizes spend and averages other metrics across campaigns", () => {
+describe('buildCampaignIndexAggregate', () => {
+  it('totalizes spend and averages other metrics across campaigns', () => {
     const aggregate = buildCampaignIndexAggregate([
       {
-        id: "c1",
+        id: 'c1',
         metrics: {
           spend: 100,
           roas: 1.2,
@@ -23,7 +23,7 @@ describe("buildCampaignIndexAggregate", () => {
         },
       },
       {
-        id: "c2",
+        id: 'c2',
         metrics: {
           spend: 200,
           roas: 0.8,
@@ -62,20 +62,20 @@ describe("buildCampaignIndexAggregate", () => {
     expect(aggregate.comparison.cpa.percentageChange).toBe(0);
   });
 
-  it("totalizes spend in trends and averages other metrics by matching date", () => {
+  it('totalizes spend in trends and averages other metrics by matching date', () => {
     const aggregate = buildCampaignIndexAggregate([
       {
-        id: "c1",
+        id: 'c1',
         trends: [
-          { date: "2026-02-20T00:00:00.000Z", spend: 100, roas: 1, ctr_pct: 2, cpa: 9 },
-          { date: "2026-02-21T00:00:00.000Z", spend: 80, roas: 2, ctr_pct: 3, cpa: 7 },
+          { date: '2026-02-20T00:00:00.000Z', spend: 100, roas: 1, ctr_pct: 2, cpa: 9 },
+          { date: '2026-02-21T00:00:00.000Z', spend: 80, roas: 2, ctr_pct: 3, cpa: 7 },
         ],
       },
       {
-        id: "c2",
+        id: 'c2',
         trends: [
-          { date: "2026-02-20T00:00:00.000Z", spend: 200, roas: 3, ctr_pct: 4, cpa: 11 },
-          { date: "2026-02-22T00:00:00.000Z", spend: 60, roas: 5, ctr_pct: 6, cpa: 6 },
+          { date: '2026-02-20T00:00:00.000Z', spend: 200, roas: 3, ctr_pct: 4, cpa: 11 },
+          { date: '2026-02-22T00:00:00.000Z', spend: 60, roas: 5, ctr_pct: 6, cpa: 6 },
         ],
       },
     ]);

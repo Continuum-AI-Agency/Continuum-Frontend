@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // Paid setup diagnostics panel (IMP-010 / BUG-003 / BUG-004). Turns a blocked
 // paid surface ("No ad account selected") into an actionable checklist:
@@ -7,27 +7,27 @@
 // the brand integration state + FreshnessMeta and renders. Reused by the Scale
 // dashboard blocked state and the Jaina Setup Concierge (FEAT-004).
 
-import Link from "next/link";
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   CircleDashedIcon,
   PlugZapIcon,
   RefreshCwIcon,
-} from "lucide-react";
-import type { ComponentType } from "react";
+} from 'lucide-react';
+import Link from 'next/link';
+import type { ComponentType } from 'react';
 
-import { Button } from "@/components/ui/button";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
-import type { FreshnessMeta } from "@/lib/freshness/freshnessMeta";
-import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
-import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/button';
+import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import type { FreshnessMeta } from '@/lib/freshness/freshnessMeta';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { cn } from '@/lib/utils';
 import {
   countPlatformAccounts,
   derivePaidSetupSteps,
   type PaidSetupStep,
   type PaidSetupStepStatus,
-} from "./paid-setup-diagnostics";
+} from './paid-setup-diagnostics';
 
 type PaidSetupDiagnosticsProps = {
   brandId: string;
@@ -48,28 +48,22 @@ const STATUS_ICON: Record<PaidSetupStepStatus, ComponentType<{ className?: strin
 };
 
 const STATUS_ICON_CLASS: Record<PaidSetupStepStatus, string> = {
-  done: "text-emerald-500",
-  action_required: "text-primary",
-  attention: "text-amber-500",
-  pending: "text-muted-foreground",
+  done: 'text-emerald-500',
+  action_required: 'text-primary',
+  attention: 'text-amber-500',
+  pending: 'text-muted-foreground',
 };
 
 const PLATFORM_SWITCH_OPTIONS: { value: PaidMediaPlatform; label: string }[] = [
-  { value: "meta", label: "Meta Ads" },
-  { value: "google-ads", label: "Google Ads" },
-  { value: "linkedin", label: "LinkedIn Ads" },
+  { value: 'meta', label: 'Meta Ads' },
+  { value: 'google-ads', label: 'Google Ads' },
+  { value: 'linkedin', label: 'LinkedIn Ads' },
 ];
 
-function StepCta({
-  step,
-  onRetry,
-}: {
-  step: PaidSetupStep;
-  onRetry: () => void;
-}) {
+function StepCta({ step, onRetry }: { step: PaidSetupStep; onRetry: () => void }) {
   if (!step.cta) return null;
 
-  if (step.cta.kind === "retry") {
+  if (step.cta.kind === 'retry') {
     return (
       <Button type="button" size="sm" variant="outline" className="h-8" onClick={onRetry}>
         <RefreshCwIcon aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
@@ -113,16 +107,14 @@ export function PaidSetupDiagnostics({
     <section
       aria-label="Paid setup diagnostics"
       className={cn(
-        "mx-auto w-full max-w-xl rounded-xl border border-border/70 bg-card/60 p-[var(--card-pad)]",
+        'mx-auto w-full max-w-xl rounded-xl border border-border/70 bg-card/60 p-[var(--card-pad)]',
         className,
       )}
     >
       {heading ? (
         <div className="mb-4 space-y-1">
           <h3 className="text-base font-semibold tracking-tight text-foreground">{heading}</h3>
-          {description ? (
-            <p className="text-sm text-muted-foreground">{description}</p>
-          ) : null}
+          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
         </div>
       ) : null}
 
@@ -131,7 +123,10 @@ export function PaidSetupDiagnostics({
           const Icon = STATUS_ICON[step.status];
           return (
             <li key={step.id} className="flex items-start gap-3">
-              <Icon aria-hidden="true" className={cn("mt-0.5 h-4 w-4 shrink-0", STATUS_ICON_CLASS[step.status])} />
+              <Icon
+                aria-hidden="true"
+                className={cn('mt-0.5 h-4 w-4 shrink-0', STATUS_ICON_CLASS[step.status])}
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{step.label}</p>
                 <p className="text-xs text-muted-foreground">{step.description}</p>
@@ -152,7 +147,7 @@ export function PaidSetupDiagnostics({
               key={option.value}
               type="button"
               size="sm"
-              variant={platform === option.value ? "secondary" : "ghost"}
+              variant={platform === option.value ? 'secondary' : 'ghost'}
               className="h-7 px-2 text-xs"
               aria-pressed={platform === option.value}
               onClick={() => onPlatformChange(option.value)}

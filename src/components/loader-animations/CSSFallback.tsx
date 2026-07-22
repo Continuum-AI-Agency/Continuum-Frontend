@@ -1,24 +1,25 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { cn } from "@/lib/utils";
-import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
+import { AnimatePresence, motion } from 'motion/react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import { DEFAULT_LOADING_PHRASES } from '@/lib/ui/loadingPhrases';
+import { cn } from '@/lib/utils';
 
 interface CSSFallbackProps {
   phrases?: string[];
   cycleDuration?: number;
-  theme?: "light" | "dark";
+  theme?: 'light' | 'dark';
 }
 
 // CSS-only wave animation using login.module.css classes
 const CSSFallback: React.FC<CSSFallbackProps> = ({
   phrases = DEFAULT_LOADING_PHRASES,
   cycleDuration = 2500,
-  theme = "dark"
+  theme = 'dark',
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const transitionDuration = Math.min(0.6, Math.max(0.25, cycleDuration / 1000 * 0.6));
+  const transitionDuration = Math.min(0.6, Math.max(0.25, (cycleDuration / 1000) * 0.6));
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -32,18 +33,18 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
     enter: {
       opacity: 0,
       y: 30,
-      scale: 0.9
+      scale: 0.9,
     },
     center: {
       opacity: 1,
       y: 0,
-      scale: 1
+      scale: 1,
     },
     exit: {
       opacity: 0,
       y: -30,
-      scale: 0.9
-    }
+      scale: 0.9,
+    },
   };
 
   return (
@@ -52,9 +53,10 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
       <div
         className="absolute inset-0"
         style={{
-          background: "linear-gradient(315deg, #4f46e5 0%, #6d5dfc 18%, #a855f7 32%, #f472b6 46%, #6d5dfc 58%, #0ea5e9 70%, #7dd3fc 82%, #6d5dfc 100%)",
-          backgroundSize: "400% 400%",
-          animation: "loginGradient 18s ease infinite"
+          background:
+            'linear-gradient(315deg, #4f46e5 0%, #6d5dfc 18%, #a855f7 32%, #f472b6 46%, #6d5dfc 58%, #0ea5e9 70%, #7dd3fc 82%, #6d5dfc 100%)',
+          backgroundSize: '400% 400%',
+          animation: 'loginGradient 18s ease infinite',
         }}
       />
 
@@ -62,30 +64,33 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
       <div
         className="absolute bottom-0 left-0 w-full h-36 opacity-80"
         style={{
-          background: "linear-gradient(90deg, rgba(255, 255, 255, 0.28), rgba(79, 70, 229, 0.24), rgba(168, 85, 247, 0.20), rgba(14, 165, 233, 0.18), rgba(125, 211, 252, 0.16))",
-          borderRadius: "1000% 1000% 0 0",
-          animation: "loginWave 16s -3s linear infinite",
-          transform: "translate3d(0, 0, 0)"
+          background:
+            'linear-gradient(90deg, rgba(255, 255, 255, 0.28), rgba(79, 70, 229, 0.24), rgba(168, 85, 247, 0.20), rgba(14, 165, 233, 0.18), rgba(125, 211, 252, 0.16))',
+          borderRadius: '1000% 1000% 0 0',
+          animation: 'loginWave 16s -3s linear infinite',
+          transform: 'translate3d(0, 0, 0)',
         }}
       />
       <div
         className="absolute bottom-0 left-0 w-full h-36 opacity-65"
         style={{
-          background: "linear-gradient(90deg, rgba(255, 255, 255, 0.28), rgba(79, 70, 229, 0.24), rgba(168, 85, 247, 0.20), rgba(14, 165, 233, 0.18), rgba(125, 211, 252, 0.16))",
-          borderRadius: "1000% 1000% 0 0",
-          animation: "loginWave 22s linear reverse infinite",
-          transform: "translate3d(0, 0, 0)",
-          bottom: "-2.8rem"
+          background:
+            'linear-gradient(90deg, rgba(255, 255, 255, 0.28), rgba(79, 70, 229, 0.24), rgba(168, 85, 247, 0.20), rgba(14, 165, 233, 0.18), rgba(125, 211, 252, 0.16))',
+          borderRadius: '1000% 1000% 0 0',
+          animation: 'loginWave 22s linear reverse infinite',
+          transform: 'translate3d(0, 0, 0)',
+          bottom: '-2.8rem',
         }}
       />
       <div
         className="absolute bottom-0 left-0 w-full h-36 opacity-50"
         style={{
-          background: "linear-gradient(90deg, rgba(255, 255, 255, 0.28), rgba(79, 70, 229, 0.24), rgba(168, 85, 247, 0.20), rgba(14, 165, 233, 0.18), rgba(125, 211, 252, 0.16))",
-          borderRadius: "1000% 1000% 0 0",
-          animation: "loginWave 26s -1s linear infinite",
-          transform: "translate3d(0, 0, 0)",
-          bottom: "-5.4rem"
+          background:
+            'linear-gradient(90deg, rgba(255, 255, 255, 0.28), rgba(79, 70, 229, 0.24), rgba(168, 85, 247, 0.20), rgba(14, 165, 233, 0.18), rgba(125, 211, 252, 0.16))',
+          borderRadius: '1000% 1000% 0 0',
+          animation: 'loginWave 26s -1s linear infinite',
+          transform: 'translate3d(0, 0, 0)',
+          bottom: '-5.4rem',
         }}
       />
 
@@ -98,12 +103,12 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: transitionDuration, ease: "easeInOut" }}
+            transition={{ duration: transitionDuration, ease: 'easeInOut' }}
             className={cn(
-              "text-5xl md:text-7xl font-bold text-center tracking-tight drop-shadow-2xl",
-              theme === "dark"
-                ? "text-white drop-shadow-[0_0_30px_rgba(139,92,246,0.5)]"
-                : "text-primary drop-shadow-lg"
+              'text-5xl md:text-7xl font-bold text-center tracking-tight drop-shadow-2xl',
+              theme === 'dark'
+                ? 'text-white drop-shadow-[0_0_30px_rgba(139,92,246,0.5)]'
+                : 'text-primary drop-shadow-lg',
             )}
           >
             {phrases[currentIndex]}

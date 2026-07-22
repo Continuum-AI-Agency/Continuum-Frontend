@@ -1,16 +1,19 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { lastTwoMetricValuesUntil, parseInsightsSeries } from "../../supabase/functions/fetch-organic-analytics/lib/shared";
+import {
+  lastTwoMetricValuesUntil,
+  parseInsightsSeries,
+} from '../../supabase/functions/fetch-organic-analytics/lib/shared';
 
-test("parseInsightsSeries sums breakdown values when point payload is breakdown-shaped", () => {
+test('parseInsightsSeries sums breakdown values when point payload is breakdown-shaped', () => {
   const payload = {
     data: [
       {
-        name: "follower_count",
+        name: 'follower_count',
         values: [
           {
-            end_time: "2026-02-24T07:00:00+0000",
+            end_time: '2026-02-24T07:00:00+0000',
             value: {
               breakdowns: [
                 {
@@ -20,7 +23,7 @@ test("parseInsightsSeries sums breakdown values when point payload is breakdown-
             },
           },
           {
-            end_time: "2026-02-25T07:00:00+0000",
+            end_time: '2026-02-25T07:00:00+0000',
             value: {
               breakdowns: [
                 {
@@ -34,19 +37,19 @@ test("parseInsightsSeries sums breakdown values when point payload is breakdown-
     ],
   } as unknown as Record<string, unknown>;
 
-  const series = parseInsightsSeries(payload, "follower_count");
+  const series = parseInsightsSeries(payload, 'follower_count');
   assert.deepEqual(series, [
-    { date: "2026-02-24", value: 5 },
-    { date: "2026-02-25", value: 5 },
+    { date: '2026-02-24', value: 5 },
+    { date: '2026-02-25', value: 5 },
   ]);
 });
 
-test("lastTwoMetricValuesUntil supports breakdown-shaped metric values", () => {
+test('lastTwoMetricValuesUntil supports breakdown-shaped metric values', () => {
   const metric = {
-    name: "profile_views",
+    name: 'profile_views',
     values: [
       {
-        end_time: "2026-02-23T07:00:00+0000",
+        end_time: '2026-02-23T07:00:00+0000',
         value: {
           breakdowns: [
             {
@@ -56,7 +59,7 @@ test("lastTwoMetricValuesUntil supports breakdown-shaped metric values", () => {
         },
       },
       {
-        end_time: "2026-02-24T07:00:00+0000",
+        end_time: '2026-02-24T07:00:00+0000',
         value: {
           breakdowns: [
             {
@@ -68,6 +71,6 @@ test("lastTwoMetricValuesUntil supports breakdown-shaped metric values", () => {
     ],
   } as unknown as Record<string, unknown>;
 
-  const pair = lastTwoMetricValuesUntil(metric, "2026-02-24");
+  const pair = lastTwoMetricValuesUntil(metric, '2026-02-24');
   assert.deepEqual(pair, { current: 7, previous: 5 });
 });

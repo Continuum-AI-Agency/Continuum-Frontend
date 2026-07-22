@@ -98,3 +98,35 @@ describe('SignalReadinessCard', () => {
     expect(container.textContent).toContain('Scoring on conversations');
   });
 });
+
+// The "nothing movable" verdict prescribes converting a campaign to ad-set
+// budgets. That section can sit several screens below, so the diagnosis shipped
+// as advice with no way to act on it. The card now takes the affordance.
+describe('SignalReadinessCard — reaching the prescribed remedy', () => {
+  const unmovable = [
+    snap({ id: 'a', kpiField: 'purchases', days: 20, d14: { purchases: 5 } }),
+    snap({ id: 'b', kpiField: 'purchases', days: 20, d14: { purchases: 5 } }),
+  ].map((snapshot) => ({ ...snapshot, currentBudget: 0, freezeReason: 'unsupported_budget' }));
+
+  it('renders the caller-supplied affordance beside the verdict', () => {
+    const { getByRole, getByText } = render(
+      <SignalReadinessCard
+        action={<button type="button">Show 2 CBO campaigns</button>}
+        objective="purchase"
+        snapshots={unmovable as AdSetSnapshot[]}
+      />,
+    );
+
+    expect(getByText('nothing movable')).toBeTruthy();
+    expect(getByRole('button', { name: 'Show 2 CBO campaigns' })).toBeTruthy();
+  });
+
+  it('still states the diagnosis when no affordance is supplied', () => {
+    const { container, queryByRole } = render(
+      <SignalReadinessCard objective="purchase" snapshots={unmovable as AdSetSnapshot[]} />,
+    );
+
+    expect(container.textContent).toContain('no daily budget of their own');
+    expect(queryByRole('button')).toBeNull();
+  });
+});

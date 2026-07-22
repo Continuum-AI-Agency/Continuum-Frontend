@@ -6,12 +6,12 @@
 // the chip stays in "collecting" until a paid page resolves.
 
 import {
-  deriveCompetitorHealthChip,
   type Competitor,
   type CompetitorHealthChip,
   type CompetitorHealthInput,
   type CompetitorHealthState,
-} from "@continuum/contracts"
+  deriveCompetitorHealthChip,
+} from '@continuum/contracts';
 
 export function toCompetitorHealthInput(
   competitor: Competitor,
@@ -24,27 +24,27 @@ export function toCompetitorHealthInput(
     adsFound: adsFound ?? null,
     lastSyncedAt: competitor.metaPageResolvedAt ?? null,
     lastSyncError: competitor.metaPageResolutionError ?? null,
-  }
+  };
 }
 
 export function competitorHealthChip(
   competitor: Competitor,
   adsFound?: number | null,
 ): CompetitorHealthChip {
-  return deriveCompetitorHealthChip(toCompetitorHealthInput(competitor, adsFound))
+  return deriveCompetitorHealthChip(toCompetitorHealthInput(competitor, adsFound));
 }
 
 // Remediation copy — what the user does next to move a competitor toward healthy.
 const HEALTH_GUIDANCE: Record<CompetitorHealthState, string> = {
-  healthy: "Configured and collecting. Posts and ads are flowing in.",
-  collecting: "Set up and gathering data. Results appear here as they sync.",
+  healthy: 'Configured and collecting. Posts and ads are flowing in.',
+  collecting: 'Set up and gathering data. Results appear here as they sync.',
   needs_handle: "Add this competitor's Instagram handle to pull their organic posts.",
-  no_posts_found: "Resolved, but no posts or ads found yet — the account may be inactive.",
+  no_posts_found: 'Resolved, but no posts or ads found yet — the account may be inactive.',
   page_unresolved: "We couldn't match a Meta ad-library page. Resolve its paid page to track ads.",
-  needs_review: "Several page matches were found. Review and confirm the right one.",
+  needs_review: 'Several page matches were found. Review and confirm the right one.',
   sync_error: "The last sync failed. Retry, or re-check this competitor's details.",
-}
+};
 
 export function competitorHealthGuidance(state: CompetitorHealthState): string {
-  return HEALTH_GUIDANCE[state]
+  return HEALTH_GUIDANCE[state];
 }

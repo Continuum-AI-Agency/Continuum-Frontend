@@ -6,7 +6,7 @@ export type OrganicChatSession = {
   title: string | null;
   week_start: string | null;
   timezone: string;
-  last_message_role: "user" | "assistant" | null;
+  last_message_role: 'user' | 'assistant' | null;
   last_message_preview: string | null;
   last_message_at: string | null;
   created_at: string;
@@ -18,18 +18,18 @@ export type OrganicChatMessage = {
   session_id: string;
   brand_id: string;
   user_id: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   created_at: string;
 };
 
 export type OrganicContentPlanStatus =
-  | "proposed"
-  | "approved"
-  | "generating"
-  | "completed"
-  | "failed"
-  | "cancelled";
+  | 'proposed'
+  | 'approved'
+  | 'generating'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export type OrganicContentPlanPlacement = {
   platform: string;

@@ -198,7 +198,6 @@ test.describe('chat shell — Organic agent', () => {
   // Playwright's 30s default.
   test.describe.configure({ mode: 'serial', timeout: 150_000 });
 
-
   let context: BrowserContext;
   let page: Page;
 
@@ -312,8 +311,6 @@ test.describe('chat shell — Organic agent', () => {
       .eq('session_id', SESSION_ID);
   });
 
-
-
   test('resumes at the NEWEST page of history, not the oldest', async () => {
     await openAgentPanel(page);
 
@@ -400,9 +397,9 @@ test.describe('chat shell — Organic agent', () => {
 
   test('a persisted video attachment renders as a video, not an <img> of an MP4', async () => {
     await openAgentPanel(page);
-    await expect(
-      page.getByText(`BENCH-USER-${SEEDED_TURNS - 1}`, { exact: true }),
-    ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(`BENCH-USER-${SEEDED_TURNS - 1}`, { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
 
     // The regression: every media renderer in both chat transcripts was an <img>, so a video
     // attachment (and a video ad, and a reel) rendered its MP4 URL into an image tag.

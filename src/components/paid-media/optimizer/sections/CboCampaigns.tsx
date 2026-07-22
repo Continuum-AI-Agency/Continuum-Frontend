@@ -20,7 +20,7 @@ import {
   TriangleAlertIcon,
 } from 'lucide-react';
 import type * as React from 'react';
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import {
   AlertDialog,
@@ -124,6 +124,7 @@ function CboCampaignRow({
   snapshots: AdSetSnapshot[];
 }) {
   const convert = useConvertCbo(brandId);
+  const applyNoteId = useId();
   const adsetLabel = `${section.totalCount} ad set${section.totalCount === 1 ? '' : 's'}`;
 
   // Fire a fresh dryRun preview each time the dialog opens (snapshots may change).
@@ -170,9 +171,9 @@ function CboCampaignRow({
               Convert &ldquo;{section.campaignName}&rdquo; to ad-set budgets
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Preview — applying is validated on a Meta test campaign first. Converting removes the
-              campaign&rsquo;s Advantage Campaign Budget and gives each ad set its own daily budget
-              so the optimizer can manage them.
+              Converting removes the campaign&rsquo;s Advantage Campaign Budget and gives each ad
+              set its own daily budget, so the optimizer can manage them. Below is what those
+              budgets would be.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -195,13 +196,29 @@ function CboCampaignRow({
             />
           ) : null}
 
-          <p className="text-2xs text-muted-foreground">
-            Applying is disabled while the real write is validated on a Meta test campaign.
+          {/* ONE statement of why Apply is off, and it names the move the user can
+              make today. This used to be said twice — once here and once in the
+              dialog description — while neither offered an alternative, so the
+              flow diagnosed the problem, simulated the fix, and then refused.
+              Bound to the button by aria-describedby rather than a `title`: a
+              native tooltip on a disabled button is unreliable and unreachable by
+              keyboard. */}
+          <p className="text-2xs text-muted-foreground" id={applyNoteId}>
+            One-click convert is still being validated against a Meta test campaign, so Apply is
+            off. You can make this change yourself in Meta Ads Manager now — remove the campaign
+            budget, set a daily budget per ad set, and the optimizer picks them up on its next
+            cycle.
           </p>
 
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button type="button" disabled aria-disabled="true" className="gap-1.5">
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            <Button
+              aria-describedby={applyNoteId}
+              aria-disabled="true"
+              className="gap-1.5"
+              disabled
+              type="button"
+            >
               Apply
             </Button>
           </AlertDialogFooter>

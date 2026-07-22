@@ -77,8 +77,9 @@ export function AngleMatrix({ cells, currency, objective }: AngleMatrixProps) {
       </div>
       {allUntagged ? (
         <p className="text-2xs text-muted-foreground">
-          Angle tagging pending — the columns split by creative angle once the v2 tagging worker
-          runs.
+          These ads haven&rsquo;t been analyzed for creative angle yet. The labeler processes this
+          account automatically — the columns split by angle on their own once it has, no action
+          needed.
         </p>
       ) : null}
     </div>

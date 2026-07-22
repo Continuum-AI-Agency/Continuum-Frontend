@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-import { openSpeechRealtimeSession } from "./speechRealtime";
+import { openSpeechRealtimeSession } from './speechRealtime';
 
 const getBrowserAccessTokenMock = mock<() => Promise<string | null>>();
 
-mock.module("@/lib/auth/getBrowserAccessToken", () => ({
+mock.module('@/lib/auth/getBrowserAccessToken', () => ({
   getBrowserAccessToken: getBrowserAccessTokenMock,
 }));
 
@@ -28,7 +28,7 @@ class FakeWebSocket {
     FakeWebSocket.instances.push(this);
     queueMicrotask(() => {
       this.readyState = FakeWebSocket.OPEN;
-      this.emit("open", new Event("open"));
+      this.emit('open', new Event('open'));
     });
   }
 
@@ -48,7 +48,7 @@ class FakeWebSocket {
 
   close() {
     this.readyState = FakeWebSocket.CLOSED;
-    this.emit("close", new Event("close"));
+    this.emit('close', new Event('close'));
   }
 
   emit(type: string, event: unknown) {
@@ -60,7 +60,7 @@ class FakeWebSocket {
   }
 }
 
-describe("openSpeechRealtimeSession", () => {
+describe('openSpeechRealtimeSession', () => {
   const originalSocket = globalThis.WebSocket;
   const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -68,7 +68,7 @@ describe("openSpeechRealtimeSession", () => {
     mock.restore();
     getBrowserAccessTokenMock.mockReset();
     FakeWebSocket.instances = [];
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     globalThis.WebSocket = FakeWebSocket as any;
   });
@@ -78,16 +78,16 @@ describe("openSpeechRealtimeSession", () => {
     globalThis.WebSocket = originalSocket;
   });
 
-  it("opens websocket, streams audio chunks, and handles transcript events", async () => {
-    getBrowserAccessTokenMock.mockResolvedValue("jwt-token");
+  it('opens websocket, streams audio chunks, and handles transcript events', async () => {
+    getBrowserAccessTokenMock.mockResolvedValue('jwt-token');
 
     const deltas: Array<{ delta: string; transcript?: string }> = [];
     const doneEvents: string[] = [];
     const errors: string[] = [];
 
     const session = await openSpeechRealtimeSession({
-      languageCode: "en-US",
-      model: "chirp_3",
+      languageCode: 'en-US',
+      model: 'chirp_3',
       onDelta: (delta, transcript) => deltas.push({ delta, transcript }),
       onDone: (transcript) => doneEvents.push(transcript),
       onError: (message) => errors.push(message),
@@ -96,63 +96,61 @@ describe("openSpeechRealtimeSession", () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
     const socket = FakeWebSocket.instances[0];
     expect(socket.url).toContain(
-      "wss://example.supabase.co/functions/v1/jaina-speech-realtime?token=jwt-token"
+      'wss://example.supabase.co/functions/v1/jaina-speech-realtime?token=jwt-token',
     );
     expect(JSON.parse(socket.sent[0])).toEqual({
-      type: "session.configure",
+      type: 'session.configure',
       data: {
-        languageCode: "en-US",
-        model: "chirp_3",
+        languageCode: 'en-US',
+        model: 'chirp_3',
       },
     });
 
-    await session.sendAudioChunk(new Blob(["chunk-1"]));
-    await session.sendAudioChunk(new Blob(["chunk-2"]));
+    await session.sendAudioChunk(new Blob(['chunk-1']));
+    await session.sendAudioChunk(new Blob(['chunk-2']));
 
     expect(socket.sent).toHaveLength(3);
     expect(JSON.parse(socket.sent[1])).toMatchObject({
-      type: "audio.chunk",
+      type: 'audio.chunk',
       data: { sequence: 1 },
     });
     expect(JSON.parse(socket.sent[2])).toMatchObject({
-      type: "audio.chunk",
+      type: 'audio.chunk',
       data: { sequence: 2 },
     });
 
-    socket.emit("message", {
+    socket.emit('message', {
       data: JSON.stringify({
-        type: "transcript.delta",
-        data: { delta: "", transcript: "hello world" },
+        type: 'transcript.delta',
+        data: { delta: '', transcript: 'hello world' },
       }),
     });
-    socket.emit("message", {
+    socket.emit('message', {
       data: JSON.stringify({
-        type: "transcript.done",
-        data: { transcript: "hello world final" },
+        type: 'transcript.done',
+        data: { transcript: 'hello world final' },
       }),
     });
-    socket.emit("message", {
+    socket.emit('message', {
       data: JSON.stringify({
-        type: "error",
-        data: { message: "service unavailable" },
+        type: 'error',
+        data: { message: 'service unavailable' },
       }),
     });
 
-    expect(deltas).toEqual([{ delta: "", transcript: "hello world" }]);
-    expect(doneEvents).toEqual(["hello world final"]);
-    expect(errors).toEqual(["service unavailable"]);
+    expect(deltas).toEqual([{ delta: '', transcript: 'hello world' }]);
+    expect(doneEvents).toEqual(['hello world final']);
+    expect(errors).toEqual(['service unavailable']);
 
     session.stop();
-    expect(JSON.parse(socket.sent[3])).toEqual({ type: "session.stop" });
+    expect(JSON.parse(socket.sent[3])).toEqual({ type: 'session.stop' });
 
     session.close();
     expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
   });
 
-  it("throws when browser access token is unavailable", async () => {
+  it('throws when browser access token is unavailable', async () => {
     getBrowserAccessTokenMock.mockResolvedValue(null);
-    await expect(openSpeechRealtimeSession({})).rejects.toThrow(
-      "Missing browser access token."
-    );
+    await expect(openSpeechRealtimeSession({})).rejects.toThrow('Missing browser access token.');
   });
 });

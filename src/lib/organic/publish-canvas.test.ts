@@ -101,7 +101,8 @@ describe('publishCanvasRequestSchema', () => {
 
   it('rejects unknown keys (strict) and missing storage coords', () => {
     expect(
-      publishCanvasRequestSchema.safeParse({ brandId: 'b', bucket: 'm', storagePath: 'p', wat: 1 }).success,
+      publishCanvasRequestSchema.safeParse({ brandId: 'b', bucket: 'm', storagePath: 'p', wat: 1 })
+        .success,
     ).toBe(false);
     expect(publishCanvasRequestSchema.safeParse({ brandId: 'b', bucket: 'm' }).success).toBe(false);
   });

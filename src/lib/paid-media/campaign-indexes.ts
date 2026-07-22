@@ -1,6 +1,9 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "@/components/paid-media/dashboard/PerformanceDetails";
+import type {
+  PaidMetricsComparison,
+  PaidMetricsTrendPoint,
+} from '@/components/paid-media/dashboard/PerformanceDetails';
 
 type CampaignMetrics = {
   spend: number;
@@ -19,7 +22,7 @@ type CampaignLike = {
   trends?: PaidMetricsTrendPoint[];
 };
 
-const COMPARISON_KEYS = ["spend", "roas", "ctr", "cpc", "cpa", "impressions", "clicks"] as const;
+const COMPARISON_KEYS = ['spend', 'roas', 'ctr', 'cpc', 'cpa', 'impressions', 'clicks'] as const;
 
 export const campaignIndexCreateSchema = z.object({
   brandId: z.string().min(1),
@@ -34,7 +37,7 @@ export const campaignIndexUpdateSchema = z
     campaignIds: z.array(z.string().min(1)).min(1).optional(),
   })
   .refine((value) => value.name !== undefined || value.campaignIds !== undefined, {
-    message: "At least one field must be provided.",
+    message: 'At least one field must be provided.',
   });
 
 export type CampaignIndexRecord = {
@@ -63,7 +66,7 @@ function sum(values: number[]): number {
 }
 
 function numeric(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return value;
 }
 
@@ -183,7 +186,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
   COMPARISON_KEYS.forEach((key) => {
     const entry = comparisonByKey.get(key);
     if (!entry) return;
-    if (key === "spend") {
+    if (key === 'spend') {
       const totalCurrent = sum(entry.current);
       const totalPrevious = sum(entry.previous);
       const percentageChange =

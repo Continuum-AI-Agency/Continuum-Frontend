@@ -1,4 +1,4 @@
-import type { OnboardingConnectionState } from "@/lib/onboarding/state";
+import type { OnboardingConnectionState } from '@/lib/onboarding/state';
 
 export type OrganicMetricAccountOption = {
   integrationAccountId: string;
@@ -33,7 +33,7 @@ type OrganicMetricAccountsByPlatform = {
 };
 
 function dedupeByIntegrationAccountId(
-  accounts: OrganicMetricAccountOption[]
+  accounts: OrganicMetricAccountOption[],
 ): OrganicMetricAccountOption[] {
   const seen = new Set<string>();
   return accounts.filter((account) => {
@@ -47,7 +47,7 @@ function dedupeByIntegrationAccountId(
 
 export function toMetricAccountOptions(
   connection: OnboardingConnectionState,
-  fallbackLabel: string
+  fallbackLabel: string,
 ): OrganicMetricAccountOption[] {
   const options = (connection.accounts ?? [])
     .map((account) => {
@@ -56,7 +56,7 @@ export function toMetricAccountOptions(
         integrationAccountId: account.id,
         name: account.name || fallbackLabel,
         externalAccountId:
-          typeof metadata?.externalAccountId === "string" ? metadata.externalAccountId : null,
+          typeof metadata?.externalAccountId === 'string' ? metadata.externalAccountId : null,
       };
     })
     .filter((account) => account.integrationAccountId.length > 0);
@@ -75,7 +75,7 @@ export function toMetricAccountOptions(
 
 function fromIntegrationSummary(
   platform: IntegrationSummaryPlatform | undefined,
-  fallbackLabel: string
+  fallbackLabel: string,
 ): OrganicMetricAccountOption[] {
   return dedupeByIntegrationAccountId(
     (platform?.accounts ?? [])
@@ -84,7 +84,7 @@ function fromIntegrationSummary(
         name: account.name || fallbackLabel,
         externalAccountId: account.externalAccountId ?? null,
       }))
-      .filter((account) => account.integrationAccountId.length > 0)
+      .filter((account) => account.integrationAccountId.length > 0),
   );
 }
 
@@ -97,35 +97,35 @@ export function deriveMetricAccountsByPlatform(params: {
   };
 }): OrganicMetricAccountsByPlatform {
   const summaryInstagram = params.integrationSummary
-    ? fromIntegrationSummary(params.integrationSummary.instagram, "Instagram account")
+    ? fromIntegrationSummary(params.integrationSummary.instagram, 'Instagram account')
     : [];
   const summaryFacebook = params.integrationSummary
-    ? fromIntegrationSummary(params.integrationSummary.facebook, "Facebook Page")
+    ? fromIntegrationSummary(params.integrationSummary.facebook, 'Facebook Page')
     : [];
   const summaryTikTok = params.integrationSummary
-    ? fromIntegrationSummary(params.integrationSummary.tiktok, "TikTok account")
+    ? fromIntegrationSummary(params.integrationSummary.tiktok, 'TikTok account')
     : [];
   const summaryYouTube = params.integrationSummary
-    ? fromIntegrationSummary(params.integrationSummary.youtube, "YouTube channel")
+    ? fromIntegrationSummary(params.integrationSummary.youtube, 'YouTube channel')
     : [];
   const summaryLinkedIn = params.integrationSummary
-    ? fromIntegrationSummary(params.integrationSummary.linkedin, "LinkedIn organization")
+    ? fromIntegrationSummary(params.integrationSummary.linkedin, 'LinkedIn organization')
     : [];
 
   return {
     instagram:
       summaryInstagram.length > 0
         ? summaryInstagram
-        : toMetricAccountOptions(params.onboardingConnections.instagram, "Instagram account"),
+        : toMetricAccountOptions(params.onboardingConnections.instagram, 'Instagram account'),
     facebook:
       summaryFacebook.length > 0
         ? summaryFacebook
-        : toMetricAccountOptions(params.onboardingConnections.facebook, "Facebook Page"),
+        : toMetricAccountOptions(params.onboardingConnections.facebook, 'Facebook Page'),
     tiktok:
       summaryTikTok.length > 0
         ? summaryTikTok
         : params.onboardingConnections.tiktok
-          ? toMetricAccountOptions(params.onboardingConnections.tiktok, "TikTok account")
+          ? toMetricAccountOptions(params.onboardingConnections.tiktok, 'TikTok account')
           : [],
     // YouTube is connected via Google OAuth (no onboarding-connection lane), so it
     // is sourced from the integration summary only.

@@ -5,7 +5,7 @@ import type { BrandBookPieceKind, ImageSize } from '@continuum/contracts';
 
 export type SupportedModel =
   | 'nano-banana'
-  | 'gemini-3-pro-image-preview'
+  | 'gemini-3-pro-image'
   | 'veo-3-1'
   | 'veo-3-1-fast'
   | 'veo-3-1-lite'
@@ -23,7 +23,7 @@ export type SupportedBackendModel =
 
 export const modelMediumMap: Record<SupportedModel, 'image' | 'video'> = {
   'nano-banana': 'image',
-  'gemini-3-pro-image-preview': 'image',
+  'gemini-3-pro-image': 'image',
   'veo-3-1': 'video',
   'veo-3-1-fast': 'video',
   'veo-3-1-lite': 'video',
@@ -143,7 +143,12 @@ export type BackendChatImageRequestPayload = {
   }[];
   first_frame?: { data?: string; image_url?: string; mime_type: string; filename?: string };
   last_frame?: { data?: string; image_url?: string; mime_type: string; filename?: string };
-  reference_video?: { data: string; mime_type: string; filename?: string };
+  reference_video?: {
+    data?: string;
+    video_url?: string;
+    mime_type: string;
+    filename?: string;
+  };
   image_references?: { data?: string; image_url?: string; mime_type: string; filename?: string }[];
   negative_prompt?: string;
   // Creative-direction skill ids; the Backend folds their directives into the prompt.

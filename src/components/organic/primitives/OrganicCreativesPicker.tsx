@@ -1,26 +1,25 @@
 /* eslint-disable @next/next/no-img-element */
-"use client"
+'use client';
 
-import * as React from "react"
-import { Play, Search, ImageOff } from "lucide-react"
-import type { MediaAsset } from "@continuum/contracts"
-import { creativeRefFromAsset, shapeUserSuppliedMedia } from "@continuum/contracts"
+import type { MediaAsset } from '@continuum/contracts';
+import { creativeRefFromAsset, shapeUserSuppliedMedia } from '@continuum/contracts';
+import { ImageOff, Play, Search } from 'lucide-react';
+import * as React from 'react';
+import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
+import { Button } from '@/components/ui/button';
+import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
+import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import { cn } from '@/lib/utils';
+import type { OrganicCalendarDraft } from './types';
 
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { LibraryFilterBar } from "@/components/library/LibraryFilterBar"
-import { useStudioLibraryBrowser } from "@/lib/creative-assets/useStudioLibraryBrowser"
-import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl"
-import type { OrganicCalendarDraft } from "./types"
-
-type PublishingAsset = NonNullable<OrganicCalendarDraft["publishingAssets"]>[number]
+type PublishingAsset = NonNullable<OrganicCalendarDraft['publishingAssets']>[number];
 
 type OrganicCreativesPickerProps = {
-  brandProfileId: string
-  draftId: string
-  attached: PublishingAsset[]
-  onAttach: (assets: PublishingAsset[]) => void
-}
+  brandProfileId: string;
+  draftId: string;
+  attached: PublishingAsset[];
+  onAttach: (assets: PublishingAsset[]) => void;
+};
 
 function SkeletonGrid() {
   return (
@@ -29,7 +28,7 @@ function SkeletonGrid() {
         <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted/40" />
       ))}
     </div>
-  )
+  );
 }
 
 function AssetTile({
@@ -37,15 +36,15 @@ function AssetTile({
   order,
   onToggle,
 }: {
-  asset: MediaAsset
+  asset: MediaAsset;
   // 1-based selection position, or 0 when not selected. Drives the carousel
   // slide order shown on the badge.
-  order: number
-  onToggle: () => void
+  order: number;
+  onToggle: () => void;
 }) {
-  const url = sanitizeCreativeAssetUrl(asset.signedUrl)
-  const isVideo = asset.kind === "video"
-  const isSelected = order > 0
+  const url = sanitizeCreativeAssetUrl(asset.signedUrl);
+  const isVideo = asset.kind === 'video';
+  const isSelected = order > 0;
 
   return (
     <button
@@ -54,16 +53,27 @@ function AssetTile({
       aria-pressed={isSelected}
       onClick={onToggle}
       className={cn(
-        "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all duration-150",
+        'group relative aspect-square cursor-pointer overflow-hidden rounded-lg border transition-all duration-150',
         isSelected
-          ? "border-primary ring-2 ring-primary ring-offset-1"
-          : "border-border/50 hover:border-border",
+          ? 'border-primary ring-2 ring-primary ring-offset-1'
+          : 'border-border/50 hover:border-border',
       )}
     >
       {url && !isVideo ? (
-        <img src={url} alt={asset.title ?? asset.fileName} loading="lazy" className="h-full w-full object-cover" />
+        <img
+          src={url}
+          alt={asset.title ?? asset.fileName}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
       ) : url && isVideo ? (
-        <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
+        <video
+          src={`${url}#t=0.01`}
+          preload="metadata"
+          muted
+          playsInline
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
           <ImageOff className="size-5" />
@@ -78,10 +88,10 @@ function AssetTile({
 
       <div
         className={cn(
-          "absolute inset-0 flex items-center justify-center transition-opacity duration-150",
+          'absolute inset-0 flex items-center justify-center transition-opacity duration-150',
           isSelected
-            ? "bg-primary/30 opacity-100"
-            : "bg-black/0 opacity-0 group-hover:bg-black/20 group-hover:opacity-100",
+            ? 'bg-primary/30 opacity-100'
+            : 'bg-black/0 opacity-0 group-hover:bg-black/20 group-hover:opacity-100',
         )}
       >
         {isSelected && (
@@ -91,7 +101,7 @@ function AssetTile({
         )}
       </div>
     </button>
-  )
+  );
 }
 
 // Browse the unified media library (uploads + AI + Canvas, image and video,
@@ -106,46 +116,42 @@ export function OrganicCreativesPicker({
   attached,
 }: OrganicCreativesPickerProps) {
   const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
-    useStudioLibraryBrowser(brandProfileId)
+    useStudioLibraryBrowser(brandProfileId);
 
   const [selectedIds, setSelectedIds] = React.useState<string[]>(() =>
     (attached ?? []).map((a) => a.assetId).filter((id): id is string => !!id),
-  )
+  );
 
-  const sentinelRef = React.useRef<HTMLDivElement | null>(null)
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
-    const node = sentinelRef.current
-    if (!node || !hasMore) return
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) loadMore()
+        if (entries.some((e) => e.isIntersecting)) loadMore();
       },
-      { rootMargin: "200px" },
-    )
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [hasMore, loadMore, assets.length])
+      { rootMargin: '200px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, assets.length]);
 
   const toggleAsset = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    )
-  }
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const handleAttach = () => {
-    const byId = new Map(assets.map((a) => [a.id, a]))
-    const selected = selectedIds
-      .map((id) => byId.get(id))
-      .filter((a): a is MediaAsset => !!a)
+    const byId = new Map(assets.map((a) => [a.id, a]));
+    const selected = selectedIds.map((id) => byId.get(id)).filter((a): a is MediaAsset => !!a);
 
-    if (selected.length === 0) return
+    if (selected.length === 0) return;
 
     // Route through shapeUserSuppliedMedia so the result is always
     // publishable: both publishingAssets and mediaSuggestion are populated.
-    const refs = selected.map(creativeRefFromAsset)
-    const { publishingAssets } = shapeUserSuppliedMedia(refs)
-    onAttach(publishingAssets as PublishingAsset[])
-  }
+    const refs = selected.map(creativeRefFromAsset);
+    const { publishingAssets } = shapeUserSuppliedMedia(refs);
+    onAttach(publishingAssets as PublishingAsset[]);
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -173,11 +179,13 @@ export function OrganicCreativesPicker({
           <div className="flex min-h-[6rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-4">
             <p className="text-center text-xs text-muted-foreground/60">
               {query.trim() ? (
-                "No matching creatives."
+                'No matching creatives.'
               ) : (
                 <>
-                  No creatives in your library yet.{" "}
-                  <span className="text-muted-foreground">Generate in AI Studio or upload, then attach here.</span>
+                  No creatives in your library yet.{' '}
+                  <span className="text-muted-foreground">
+                    Generate in AI Studio or upload, then attach here.
+                  </span>
                 </>
               )}
             </p>
@@ -207,5 +215,5 @@ export function OrganicCreativesPicker({
         </div>
       )}
     </div>
-  )
+  );
 }

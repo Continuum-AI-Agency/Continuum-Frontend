@@ -15,7 +15,7 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 
 export async function compositeImages(
   baseDataUrl: string,
-  overlayDataUrl: string
+  overlayDataUrl: string,
 ): Promise<CompositeResult> {
   const [baseImg, overlayImg] = await Promise.all([
     loadImage(baseDataUrl),

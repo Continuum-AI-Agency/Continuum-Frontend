@@ -91,8 +91,6 @@ describe('OrganicAwarenessReportView', () => {
         ]}
       />,
     );
-    expect(
-      screen.getByText(/Hard cut into a question that keeps people watching/i),
-    ).toBeDefined();
+    expect(screen.getByText(/Hard cut into a question that keeps people watching/i)).toBeDefined();
   });
 });

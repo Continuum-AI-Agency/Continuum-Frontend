@@ -1,4 +1,4 @@
-import type { FrontendCheckpointReport } from "@/lib/jaina/schemas";
+import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
 
 type ReportTable = {
   headers: string[];
@@ -7,44 +7,33 @@ type ReportTable = {
 
 type GraphRecord = Record<string, unknown>;
 
-const TIMELINE_LABEL_HINTS = [
-  "date",
-  "time",
-  "day",
-  "week",
-  "month",
-  "quarter",
-  "year",
-  "hour",
-];
+const TIMELINE_LABEL_HINTS = ['date', 'time', 'day', 'week', 'month', 'quarter', 'year', 'hour'];
 
 function asRecord(value: unknown): GraphRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value)
+  return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as GraphRecord)
     : null;
 }
 
 function asRecordArray(value: unknown): GraphRecord[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => asRecord(item))
-    .filter((item): item is GraphRecord => Boolean(item));
+  return value.map((item) => asRecord(item)).filter((item): item is GraphRecord => Boolean(item));
 }
 
 function toDisplayString(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
-  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  if (typeof value === 'string') return value;
   return String(value);
 }
 
 function isTimelineLikeValue(value: unknown): boolean {
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     // Likely unix timestamp in seconds or milliseconds.
     return value > 1000000000;
   }
 
-  if (typeof value !== "string") return false;
+  if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (!trimmed) return false;
 
@@ -71,7 +60,7 @@ function collectReportGraphs(report: FrontendCheckpointReport): GraphRecord[] {
       ? section.graphs
           .map((graph) => asRecord(graph))
           .filter((graph): graph is GraphRecord => Boolean(graph))
-      : []
+      : [],
   );
   return [...topLevelGraphs, ...sectionGraphs];
 }
@@ -87,7 +76,7 @@ function resolveGraphXHeader(graph: GraphRecord): string {
   if (explicit) return explicit;
   const labels = Array.isArray(graph.labels) ? graph.labels : [];
   const hasTimelineLabel = labels.some((label) => isTimelineLikeValue(label));
-  return hasTimelineLabel ? "Date" : "Label";
+  return hasTimelineLabel ? 'Date' : 'Label';
 }
 
 function extractGraphLabels(graph: GraphRecord): string[] {
@@ -120,7 +109,7 @@ export function hasTimelineCharts(report: FrontendCheckpointReport): boolean {
 
   return graphs.some((graph) => {
     const type = resolveGraphType(graph);
-    if (type === "line" || type === "area") {
+    if (type === 'line' || type === 'area') {
       return true;
     }
 
@@ -139,7 +128,7 @@ function buildSnapshotMetricsTable(report: FrontendCheckpointReport): ReportTabl
     return null;
   }
 
-  const headers = ["Metric", "Value", "Change", "Direction", "Context"];
+  const headers = ['Metric', 'Value', 'Change', 'Direction', 'Context'];
   const rows = report.performance_snapshot.map((item) => {
     const metric = (item ?? {}) as Record<string, unknown>;
     return [
@@ -166,7 +155,7 @@ function buildGraphDataTables(report: FrontendCheckpointReport): ReportTable[] {
   const tables: ReportTable[] = [];
 
   for (const graph of graphs) {
-    const title = toDisplayString(graph.title) || "Snapshot";
+    const title = toDisplayString(graph.title) || 'Snapshot';
     const xHeader = resolveGraphXHeader(graph);
 
     const labels = extractGraphLabels(graph);
@@ -194,7 +183,7 @@ function buildGraphDataTables(report: FrontendCheckpointReport): ReportTable[] {
     const indexedColumns = indexedDatasets.length > 0 ? indexedDatasets : indexedSeries;
     if (labels.length > 0 && indexedColumns.length > 0) {
       tables.push({
-        headers: ["Chart", xHeader, ...indexedColumns.map((entry) => entry.name)],
+        headers: ['Chart', xHeader, ...indexedColumns.map((entry) => entry.name)],
         rows: labels.map((label, labelIndex) => [
           title,
           label,
@@ -207,7 +196,7 @@ function buildGraphDataTables(report: FrontendCheckpointReport): ReportTable[] {
     const dataPoints = asRecordArray(graph.data);
     if (dataPoints.length > 0) {
       tables.push({
-        headers: ["Chart", xHeader, "Value"],
+        headers: ['Chart', xHeader, 'Value'],
         rows: dataPoints.map((point) => [
           title,
           toDisplayString(point.label ?? point.x ?? point.name),
@@ -217,9 +206,7 @@ function buildGraphDataTables(report: FrontendCheckpointReport): ReportTable[] {
       continue;
     }
 
-    const series = asRecordArray(graph.series).filter((entry) =>
-      Array.isArray(entry.data)
-    );
+    const series = asRecordArray(graph.series).filter((entry) => Array.isArray(entry.data));
     if (series.length > 0) {
       const xValues = new Set<string>();
       series.forEach((seriesEntry) => {
@@ -230,18 +217,16 @@ function buildGraphDataTables(report: FrontendCheckpointReport): ReportTable[] {
       });
 
       const sortedXValues = Array.from(xValues);
-      const seriesNames = series.map((seriesEntry) =>
-        toDisplayString(seriesEntry.name) || "Series"
+      const seriesNames = series.map(
+        (seriesEntry) => toDisplayString(seriesEntry.name) || 'Series',
       );
 
       tables.push({
-        headers: ["Chart", xHeader, ...seriesNames],
+        headers: ['Chart', xHeader, ...seriesNames],
         rows: sortedXValues.map((xValue) => {
           const values = series.map((seriesEntry) => {
             const points = asRecordArray(seriesEntry.data);
-            const point = points.find(
-              (candidate) => toDisplayString(candidate.x) === xValue
-            );
+            const point = points.find((candidate) => toDisplayString(candidate.x) === xValue);
             return toDisplayString(point?.y ?? point?.value ?? point?.x);
           });
           return [title, xValue, ...values];

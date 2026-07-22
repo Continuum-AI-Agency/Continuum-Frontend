@@ -1,10 +1,10 @@
-import { weeklyGridSchema, type WeeklyGrid } from "./types";
+import { type WeeklyGrid, weeklyGridSchema } from './types';
 
-const GRID_CONTAINER_KEYS = ["grid", "weekly_grid", "weeklyGrid"] as const;
-const ENVELOPE_KEYS = ["data", "result", "payload", "response", "body"] as const;
+const GRID_CONTAINER_KEYS = ['grid', 'weekly_grid', 'weeklyGrid'] as const;
+const ENVELOPE_KEYS = ['data', 'result', 'payload', 'response', 'body'] as const;
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function collectGridCandidates(payload: unknown): unknown[] {

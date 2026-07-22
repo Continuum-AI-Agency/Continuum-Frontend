@@ -1,25 +1,25 @@
-"use client"
+'use client';
 
-import { LightningBoltIcon, Pencil1Icon } from "@radix-ui/react-icons"
-import { Loader2, Send } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Progress } from "@/components/ui/progress"
-import type { OrganicCalendarDraft } from "./types"
-import { DraftCardMedia, resolveFormatAspectClass } from "./DraftCardMedia"
-import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
-import { useProgressAnimation } from "@/components/organic/hooks/useProgressAnimation"
+import { LightningBoltIcon, Pencil1Icon } from '@radix-ui/react-icons';
+import { Loader2, Send } from 'lucide-react';
+import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
+import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
+import { DraftCardMedia, resolveFormatAspectClass } from './DraftCardMedia';
+import type { OrganicCalendarDraft } from './types';
 
 function resolveHashtags(draft: OrganicCalendarDraft): string[] {
-  const ht = draft.hashtags
+  const ht = draft.hashtags;
   if (ht) {
     const combined = [
       ...(ht.high ?? []).slice(0, 3),
       ...(ht.medium ?? []).slice(0, 2),
       ...(ht.low ?? []).slice(0, 1),
-    ]
-    if (combined.length > 0) return combined
+    ];
+    if (combined.length > 0) return combined;
   }
-  return draft.tags?.slice(0, 6) ?? []
+  return draft.tags?.slice(0, 6) ?? [];
 }
 
 export function DraftHoverCardContent({
@@ -27,28 +27,28 @@ export function DraftHoverCardContent({
   onEdit,
   onRegenerate,
 }: {
-  draft: OrganicCalendarDraft
-  onEdit?: (id: string) => void
-  onRegenerate?: (id: string) => void
+  draft: OrganicCalendarDraft;
+  onEdit?: (id: string) => void;
+  onRegenerate?: (id: string) => void;
 }) {
-  const { publish, isPublishing } = usePublishDraft()
-  const displayProgress = useProgressAnimation(draft.progress, draft.generationStage)
+  const { publish, isPublishing } = usePublishDraft();
+  const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const canPublish =
-    draft.platforms.includes("instagram") &&
-    draft.status !== "published" &&
-    draft.status !== "streaming"
+    draft.platforms.includes('instagram') &&
+    draft.status !== 'published' &&
+    draft.status !== 'streaming';
 
-  const hashtags = resolveHashtags(draft)
-  const visibleHashtags = hashtags.slice(0, 6)
-  const extraCount = hashtags.length - visibleHashtags.length
+  const hashtags = resolveHashtags(draft);
+  const visibleHashtags = hashtags.slice(0, 6);
+  const extraCount = hashtags.length - visibleHashtags.length;
 
-  const aspectClass = resolveFormatAspectClass(draft.format)
-  const isStory = (draft.format ?? "").toLowerCase() === "story"
+  const aspectClass = resolveFormatAspectClass(draft.format);
+  const isStory = (draft.format ?? '').toLowerCase() === 'story';
 
   return (
     <div className="w-[272px] overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/20">
       {/* Media thumbnail */}
-      <div className={cn("overflow-hidden", isStory && "max-h-[220px]")}>
+      <div className={cn('overflow-hidden', isStory && 'max-h-[220px]')}>
         <DraftCardMedia
           draft={draft}
           aspectClass={aspectClass}
@@ -59,7 +59,7 @@ export function DraftHoverCardContent({
 
       {/* Caption */}
       <div className="px-3 pt-2.5 pb-1.5">
-        <p className="line-clamp-5 text-xs leading-relaxed text-foreground">
+        <p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-foreground">
           {draft.captionPreview}
         </p>
       </div>
@@ -72,7 +72,7 @@ export function DraftHoverCardContent({
               key={tag}
               className="rounded-full bg-muted/60 px-2 py-0.5 text-2xs text-muted-foreground"
             >
-              {tag.startsWith("#") ? tag : `#${tag}`}
+              {tag.startsWith('#') ? tag : `#${tag}`}
             </span>
           ))}
           {extraCount > 0 && (
@@ -84,7 +84,7 @@ export function DraftHoverCardContent({
       )}
 
       {/* Generation progress */}
-      {typeof displayProgress === "number" && (
+      {typeof displayProgress === 'number' && (
         <div className="space-y-1 px-3 pb-2">
           <div className="flex justify-between text-3xs font-bold text-muted-foreground">
             <span className="animate-pulse text-amber-500">GENERATING</span>
@@ -100,8 +100,8 @@ export function DraftHoverCardContent({
           <button
             type="button"
             onClick={(e) => {
-              e.stopPropagation()
-              onEdit(draft.id)
+              e.stopPropagation();
+              onEdit(draft.id);
             }}
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
@@ -109,12 +109,12 @@ export function DraftHoverCardContent({
             Edit
           </button>
         )}
-        {onRegenerate && draft.status !== "streaming" && (
+        {onRegenerate && draft.status !== 'streaming' && (
           <button
             type="button"
             onClick={(e) => {
-              e.stopPropagation()
-              onRegenerate(draft.id)
+              e.stopPropagation();
+              onRegenerate(draft.id);
             }}
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
@@ -127,12 +127,12 @@ export function DraftHoverCardContent({
             type="button"
             disabled={isPublishing}
             onClick={(e) => {
-              e.stopPropagation()
-              publish(draft)
+              e.stopPropagation();
+              publish(draft);
             }}
             className={cn(
-              "ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
-              "bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
+              'ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+              'bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50',
             )}
           >
             {isPublishing ? (
@@ -140,10 +140,10 @@ export function DraftHoverCardContent({
             ) : (
               <Send className="h-3 w-3" />
             )}
-            {isPublishing ? "Publishing…" : "Publish"}
+            {isPublishing ? 'Publishing…' : 'Publish'}
           </button>
         )}
       </div>
     </div>
-  )
+  );
 }

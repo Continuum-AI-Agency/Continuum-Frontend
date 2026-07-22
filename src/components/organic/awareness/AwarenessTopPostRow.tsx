@@ -83,8 +83,7 @@ export function AwarenessTopPostRow({
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-xs font-medium">{kind}</span>
             <span className="truncate text-2xs text-muted-foreground">
-              {snippet ??
-                (enriched.views !== null ? `${nf.format(enriched.views)} views` : '—')}
+              {snippet ?? (enriched.views !== null ? `${nf.format(enriched.views)} views` : '—')}
             </span>
           </span>
           <span className="ml-auto flex shrink-0 items-center gap-1.5">

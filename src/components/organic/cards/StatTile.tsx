@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // One metric tile: label + icon + value (+ optional delta, tooltip). Shared by
 // the gallery HoverCard quick-look and the post snapshot side panel so numbers
@@ -9,18 +9,18 @@
 // itself along the app-wide grading gradient (see hook-rate-color.ts) rather
 // than a separate tier chip.
 
-import type { MetricComparison } from "@/lib/schemas/organicMetrics";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import { formatCompactNumber, formatRate } from "../organic-format";
-import { formatWatchTime } from "../organic-metrics-utils";
-import { DeltaBadge } from "./DeltaBadge";
-import { METRIC_ICONS } from "./metricIcons";
-import type { MetricFormat, MetricIconKey } from "./cardMetricSet";
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { MetricComparison } from '@/lib/schemas/organicMetrics';
+import { cn } from '@/lib/utils';
+import { formatCompactNumber, formatRate } from '../organic-format';
+import { formatWatchTime } from '../organic-metrics-utils';
+import type { MetricFormat, MetricIconKey } from './cardMetricSet';
+import { DeltaBadge } from './DeltaBadge';
+import { METRIC_ICONS } from './metricIcons';
 
 function formatMetric(value: number | undefined, format: MetricFormat): string {
-  if (format === "watchtime") return formatWatchTime(value);
-  if (format === "percent") return formatRate(value);
+  if (format === 'watchtime') return formatWatchTime(value);
+  if (format === 'percent') return formatRate(value);
   return formatCompactNumber(value);
 }
 
@@ -31,7 +31,7 @@ export type StatTileProps = {
   iconKey?: MetricIconKey;
   comparison?: MetricComparison | null;
   valueColor?: string;
-  emphasis?: "primary" | "secondary";
+  emphasis?: 'primary' | 'secondary';
   tooltip?: string;
   className?: string;
   // No period comparison exists for this metric (currently just Reach) — show
@@ -46,7 +46,7 @@ export function StatTile({
   iconKey,
   comparison,
   valueColor,
-  emphasis = "primary",
+  emphasis = 'primary',
   tooltip,
   className,
   lifetimeOnly = false,
@@ -56,11 +56,11 @@ export function StatTile({
   const pct = comparison?.percentageChange;
 
   const body =
-    emphasis === "primary" ? (
+    emphasis === 'primary' ? (
       <div
         className={cn(
-          "flex flex-col gap-1 rounded-lg border border-subtle bg-surface/70 px-2.5 py-2",
-          className
+          'flex flex-col gap-1 rounded-lg border border-subtle bg-surface/70 px-2.5 py-2',
+          className,
         )}
       >
         <div className="flex items-center gap-1 text-muted-foreground">
@@ -88,7 +88,12 @@ export function StatTile({
       // can't all fit on one line (e.g. a long label paired with a big number
       // and a large swing) — the value+badge group wraps to its own line as a
       // unit rather than truncating a number, which would misrepresent it.
-      <div className={cn("flex flex-wrap items-center justify-between gap-x-1.5 gap-y-0.5 rounded-md px-1 py-1", className)}>
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-between gap-x-1.5 gap-y-0.5 rounded-md px-1 py-1',
+          className,
+        )}
+      >
         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
           {Icon ? <Icon className="size-3 shrink-0" aria-hidden /> : null}
           <span>{label}</span>
@@ -120,7 +125,7 @@ export function StatTile({
         <p className="text-xs leading-snug">{tooltip}</p>
         {pct !== undefined && !Number.isNaN(pct) ? (
           <p className="mt-1 text-xs leading-snug text-muted-foreground">
-            {`${pct >= 0 ? "+" : "-"}${Math.abs(pct).toFixed(1)}% vs prior 7d`}
+            {`${pct >= 0 ? '+' : '-'}${Math.abs(pct).toFixed(1)}% vs prior 7d`}
           </p>
         ) : null}
       </TooltipContent>

@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
 export default function AIStudioError({
   error,
@@ -10,7 +10,7 @@ export default function AIStudioError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[ai-studio] route error:", error);
+    console.error('[ai-studio] route error:', error);
   }, [error]);
 
   return (

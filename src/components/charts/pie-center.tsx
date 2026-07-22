@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 import {
   chartCenterContainerClassName,
   chartCenterLabelClassName,
   chartCenterValueClassName,
-} from "./chart-center-typography";
+} from './chart-center-typography';
 import {
   ChartStatFlow,
   type ChartStatFlowFormat,
   defaultChartStatFlowFormat,
-} from "./chart-stat-flow";
-import { usePieHover, usePieStable } from "./pie-context";
+} from './chart-stat-flow';
+import { usePieHover, usePieStable } from './pie-context';
 
 export interface PieCenterProps {
   /** Label shown below the value. Default: "Total" when not hovering */
@@ -49,10 +49,10 @@ export interface PieCenterProps {
  * on top of the SVG slices.
  */
 export function PieCenter({
-  defaultLabel = "Total",
+  defaultLabel = 'Total',
   formatOptions = defaultChartStatFlowFormat,
   children,
-  className = "",
+  className = '',
   valueClassName = chartCenterValueClassName,
   labelClassName = chartCenterLabelClassName,
   prefix,
@@ -62,8 +62,7 @@ export function PieCenter({
   const { hoveredIndex } = usePieHover();
 
   const effectiveHoveredIndex = geometryScrubbing ? null : hoveredIndex;
-  const hoveredData =
-    effectiveHoveredIndex === null ? null : data[effectiveHoveredIndex];
+  const hoveredData = effectiveHoveredIndex === null ? null : data[effectiveHoveredIndex];
   const displayValue = hoveredData ? hoveredData.value : totalValue;
   const displayLabel = hoveredData ? hoveredData.label : defaultLabel;
 
@@ -80,11 +79,7 @@ export function PieCenter({
   if (children && hoveredData) {
     return (
       <div
-        className={cn(
-          chartCenterContainerClassName,
-          "flex items-center justify-center",
-          className
-        )}
+        className={cn(chartCenterContainerClassName, 'flex items-center justify-center', className)}
         style={{ width: centerSize, height: centerSize }}
       >
         {children({
@@ -103,8 +98,8 @@ export function PieCenter({
     <div
       className={cn(
         chartCenterContainerClassName,
-        "flex flex-col items-center justify-center text-center",
-        className
+        'flex flex-col items-center justify-center text-center',
+        className,
       )}
       style={{ width: centerSize, height: centerSize }}
     >
@@ -121,6 +116,6 @@ export function PieCenter({
   );
 }
 
-PieCenter.displayName = "PieCenter";
+PieCenter.displayName = 'PieCenter';
 
 export default PieCenter;

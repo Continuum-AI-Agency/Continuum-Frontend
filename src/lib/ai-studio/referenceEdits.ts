@@ -1,5 +1,5 @@
-import type { RefImage } from "@/lib/types/chatImage";
-import type { ImageMarkupSaveResult } from "@/components/ai-studio/markup/ImageMarkupDialog";
+import type { ImageMarkupSaveResult } from '@/components/ai-studio/markup/ImageMarkupDialog';
+import type { RefImage } from '@/lib/types/chatImage';
 
 type LegacyMarkupResult = {
   base64: string;
@@ -9,7 +9,7 @@ type LegacyMarkupResult = {
 type MarkupResult = ImageMarkupSaveResult | LegacyMarkupResult;
 
 function isNewMarkupResult(result: MarkupResult): result is ImageMarkupSaveResult {
-  return "composited" in result && "markupLayer" in result;
+  return 'composited' in result && 'markupLayer' in result;
 }
 
 export function applyMarkupToRef(ref: RefImage, result: MarkupResult): RefImage {

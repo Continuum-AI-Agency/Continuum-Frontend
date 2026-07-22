@@ -220,7 +220,9 @@ describe('runSingleSourceSpliceInWorker', () => {
   ];
 
   it('rejects synchronously when no ranges are supplied', async () => {
-    await expect(runSingleSourceSpliceInWorker({ blob: sourceBlob, ranges: [] })).rejects.toThrow(/at least one range/i);
+    await expect(runSingleSourceSpliceInWorker({ blob: sourceBlob, ranges: [] })).rejects.toThrow(
+      /at least one range/i,
+    );
   });
 
   it('posts a start_single_source message with the blob, ranges, quality cap, and bitrates', async () => {

@@ -1,11 +1,10 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
-
-import { useCalendarStore } from "@/lib/organic/store";
-import type { OrganicCalendarDraft } from "@/components/organic/primitives/types";
-import { useRunEventStream, type ParsedRunEvent } from "@/hooks/useRunEventStream";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { type ParsedRunEvent, useRunEventStream } from '@/hooks/useRunEventStream';
+import { useCalendarStore } from '@/lib/organic/store';
 
 export function useCalendarRunStream() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -30,7 +29,7 @@ export function useCalendarRunStream() {
       updateDraft: s.updateDraft,
       upsertGeneration: s.upsertGeneration,
       requestCalendarRefetch: s.requestCalendarRefetch,
-    }))
+    })),
   );
 
   const handleEvent = useCallback(
@@ -38,47 +37,52 @@ export function useCalendarRunStream() {
       const d = event.data;
 
       switch (event.type) {
-        case "progress": {
-          const total = typeof d.total === "number" ? d.total : progressRef.current.total;
+        case 'progress': {
+          const total = typeof d.total === 'number' ? d.total : progressRef.current.total;
           progressRef.current.total = total;
           setGridProgress({
-            percent: typeof d.percent === "number" ? d.percent : 0,
-            stage: typeof d.stage === "string" ? d.stage : undefined,
-            message: typeof d.message === "string" ? d.message : undefined,
+            percent: typeof d.percent === 'number' ? d.percent : 0,
+            stage: typeof d.stage === 'string' ? d.stage : undefined,
+            message: typeof d.message === 'string' ? d.message : undefined,
             completed: progressRef.current.completed,
             total,
           });
           break;
         }
 
-        case "slot_started": {
+        case 'slot_started': {
           const placementId = d.placement_id as string | undefined;
           const dayId = (d.day_id ?? d.dayId) as string | undefined;
-          const platform = (d.platform as string | undefined) ?? "instagram";
+          const platform = (d.platform as string | undefined) ?? 'instagram';
           if (placementId && dayId) {
             addDraft(dayId, buildPlaceholderDraft(placementId, dayId, platform, d));
           } else if (placementId) {
-            updateDraft(placementId, (dr) => ({ ...dr, status: "streaming" }));
+            updateDraft(placementId, (dr) => ({ ...dr, status: 'streaming' }));
           }
           if (placementId) {
-            upsertGeneration({ jobId: placementId, planItemId: placementId, platform, status: "running" });
+            upsertGeneration({
+              jobId: placementId,
+              planItemId: placementId,
+              platform,
+              status: 'running',
+            });
           }
           break;
         }
 
-        case "slot_stage": {
+        case 'slot_stage': {
           const placementId = d.placement_id as string | undefined;
           if (placementId) {
             upsertGeneration({
               jobId: placementId,
-              status: "running",
+              status: 'running',
               stage: strOf(d.stage) ?? null,
             });
           }
           break;
         }
 
-        case "slot_text_ready": {
+        case 'slot_text_ready': {
           // Phase-1 checkpoint: drop a planned post on the calendar immediately so
           // the user sees fast feedback before the gated media realization runs.
           const entry = buildTextReadyEntry(d);
@@ -88,7 +92,7 @@ export function useCalendarRunStream() {
               jobId: entry.placementId,
               planItemId: entry.placementId,
               platform: entry.draft.platforms[0],
-              status: "running",
+              status: 'running',
               draftId: entry.placementId,
             });
             requestCalendarRefetch();
@@ -96,13 +100,13 @@ export function useCalendarRunStream() {
           break;
         }
 
-        case "slot_completed": {
+        case 'slot_completed': {
           progressRef.current.completed += 1;
           const { completed, total } = progressRef.current;
           const placementId = d.placement_id as string | undefined;
           if (placementId) {
-            updateDraft(placementId, (dr) => ({ ...dr, status: "draft" }));
-            upsertGeneration({ jobId: placementId, status: "completed", draftId: placementId });
+            updateDraft(placementId, (dr) => ({ ...dr, status: 'draft' }));
+            upsertGeneration({ jobId: placementId, status: 'completed', draftId: placementId });
           }
           setGridProgress({
             percent: Math.round((completed / Math.max(total, 1)) * 100),
@@ -113,38 +117,41 @@ export function useCalendarRunStream() {
           break;
         }
 
-        case "slot_failed": {
+        case 'slot_failed': {
           const placementId = d.placement_id as string | undefined;
           if (placementId) {
             updateDraft(placementId, (dr) => ({
               ...dr,
-              status: "failed",
-              generationError: (d.error as string | undefined) ?? "Generation failed",
+              status: 'failed',
+              generationError: (d.error as string | undefined) ?? 'Generation failed',
             }));
             upsertGeneration({
               jobId: placementId,
-              status: "failed",
-              error: (d.error as string | undefined) ?? "Generation failed",
+              status: 'failed',
+              error: (d.error as string | undefined) ?? 'Generation failed',
             });
           }
           break;
         }
 
-        case "placement": {
+        case 'placement': {
           const placementId = d.placement_id as string | undefined;
           const dayId = d.day_id as string | undefined;
           if (!placementId) break;
-          upsertGeneration({ jobId: placementId, status: "completed", draftId: placementId });
+          upsertGeneration({ jobId: placementId, status: 'completed', draftId: placementId });
           const patch = buildPlacementPatch(d);
           if (dayId) {
             addDraft(dayId, {
               id: placementId,
-              timeLabel: strOf(d.time) ?? "",
+              timeLabel: strOf(d.time) ?? '',
               dateLabel: dayId,
-              platforms: [((d.platform as string | undefined) ?? "instagram") as OrganicCalendarDraft["platforms"][number]],
+              platforms: [
+                ((d.platform as string | undefined) ??
+                  'instagram') as OrganicCalendarDraft['platforms'][number],
+              ],
               tags: [],
               mediaCount: 1,
-              objective: "Draft",
+              objective: 'Draft',
               ...patch,
             });
           } else {
@@ -154,19 +161,22 @@ export function useCalendarRunStream() {
           break;
         }
 
-        case "slot_asset_ready": {
+        case 'slot_asset_ready': {
           const placementId = (d.placement_id ?? d.placementId) as string | undefined;
           const imageUrl = (d.image_url ?? d.imageUrl) as string | undefined;
           const images = d.images as string[] | undefined;
           if (placementId) {
-            upsertGeneration({ jobId: placementId, previewUrl: images?.[0] ?? imageUrl ?? undefined });
+            upsertGeneration({
+              jobId: placementId,
+              previewUrl: images?.[0] ?? imageUrl ?? undefined,
+            });
           }
           break;
         }
 
-        case "error": {
-          setGridStatus("error");
-          setGridError((d.message as string | undefined) ?? "Generation failed");
+        case 'error': {
+          setGridStatus('error');
+          setGridError((d.message as string | undefined) ?? 'Generation failed');
           break;
         }
       }
@@ -179,21 +189,21 @@ export function useCalendarRunStream() {
       updateDraft,
       upsertGeneration,
       requestCalendarRefetch,
-    ]
+    ],
   );
 
   const { status: streamStatus } = useRunEventStream(activeRunId, handleEvent);
 
   useEffect(() => {
-    if (streamStatus === "completed") {
-      setGridStatus("complete");
+    if (streamStatus === 'completed') {
+      setGridStatus('complete');
       setGridJobId(null);
       // Terminal frame landed — reconcile the calendar against the persisted
       // drafts so the final populated content replaces the planned placeholders.
       requestCalendarRefetch();
-    } else if (streamStatus === "failed" || streamStatus === "timed_out") {
-      setGridStatus("error");
-      setGridError("Generation run did not complete");
+    } else if (streamStatus === 'failed' || streamStatus === 'timed_out') {
+      setGridStatus('error');
+      setGridError('Generation run did not complete');
     }
   }, [streamStatus, setGridStatus, setGridJobId, setGridError, requestCalendarRefetch]);
 
@@ -202,20 +212,20 @@ export function useCalendarRunStream() {
       progressRef.current = { completed: 0, total: 0 };
       setActiveRunId(runId);
       setGridJobId(runId);
-      setGridStatus("running");
+      setGridStatus('running');
     },
-    [setGridJobId, setGridStatus]
+    [setGridJobId, setGridStatus],
   );
 
   return { attachRun };
 }
 
 function strOf(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** Derive a YYYY-MM-DD day id from an ISO timestamp. */
@@ -257,23 +267,22 @@ export function buildTextReadyEntry(d: Record<string, unknown>): TextReadyEntry 
     dayIdFromIso(strOf(schedule?.scheduledAt) ?? strOf(d.scheduled_at) ?? strOf(d.scheduledAt));
   if (!dayId) return null;
 
-  const platform =
-    strOf(platformObj?.name) ?? strOf(d.platform) ?? "instagram";
-  const timeLabel = strOf(schedule?.timeOfDay) ?? strOf(d.time) ?? "";
-  const caption = strOf(copy?.caption) ?? strOf(d.caption_preview ?? d.captionPreview) ?? "";
-  const title = strOf(content?.titleTopic) ?? strOf(d.title) ?? "";
-  const format = strOf(content?.format) ?? strOf(d.format) ?? "Post";
-  const objective = strOf(content?.objective) ?? "Draft";
+  const platform = strOf(platformObj?.name) ?? strOf(d.platform) ?? 'instagram';
+  const timeLabel = strOf(schedule?.timeOfDay) ?? strOf(d.time) ?? '';
+  const caption = strOf(copy?.caption) ?? strOf(d.caption_preview ?? d.captionPreview) ?? '';
+  const title = strOf(content?.titleTopic) ?? strOf(d.title) ?? '';
+  const format = strOf(content?.format) ?? strOf(d.format) ?? 'Post';
+  const objective = strOf(content?.objective) ?? 'Draft';
   const creativeIdea = strOf(creative?.creativeIdea) ?? strOf(d.creative_idea ?? d.creativeIdea);
 
   const draft: OrganicCalendarDraft = {
     id: placementId,
     title,
-    summary: "",
+    summary: '',
     timeLabel,
     dateLabel: dayId,
-    status: "draft",
-    platforms: [platform as OrganicCalendarDraft["platforms"][number]],
+    status: 'draft',
+    platforms: [platform as OrganicCalendarDraft['platforms'][number]],
     format,
     objective,
     captionPreview: caption,
@@ -283,7 +292,7 @@ export function buildTextReadyEntry(d: Record<string, unknown>): TextReadyEntry 
     // the card reads as a text-only draft immediately (no fake media chip, no
     // flicker when the refetch reconciles) rather than relying on a stale count.
     mediaCount: 0,
-    mediaSuggestion: { mediaStatus: "pending" },
+    mediaSuggestion: { mediaStatus: 'pending' },
   };
 
   return { placementId, dayId, draft };
@@ -293,35 +302,36 @@ function buildPlaceholderDraft(
   placementId: string,
   dayId: string,
   platform: string,
-  d: Record<string, unknown>
+  d: Record<string, unknown>,
 ): OrganicCalendarDraft {
   return {
     id: placementId,
-    title: "",
-    summary: "",
-    timeLabel: strOf(d.time) ?? "",
+    title: '',
+    summary: '',
+    timeLabel: strOf(d.time) ?? '',
     dateLabel: dayId,
-    status: "streaming",
-    platforms: [platform as OrganicCalendarDraft["platforms"][number]],
-    format: strOf(d.format) ?? "Post",
-    objective: "Draft",
-    captionPreview: "",
+    status: 'streaming',
+    platforms: [platform as OrganicCalendarDraft['platforms'][number]],
+    format: strOf(d.format) ?? 'Post',
+    objective: 'Draft',
+    captionPreview: '',
     tags: [],
     mediaCount: 1,
   };
 }
 
 function buildPlacementPatch(
-  d: Record<string, unknown>
-): Partial<OrganicCalendarDraft> & Pick<OrganicCalendarDraft, "status" | "title" | "summary" | "captionPreview" | "format"> {
+  d: Record<string, unknown>,
+): Partial<OrganicCalendarDraft> &
+  Pick<OrganicCalendarDraft, 'status' | 'title' | 'summary' | 'captionPreview' | 'format'> {
   return {
-    status: "draft",
-    title: strOf(d.title) ?? "",
-    summary: strOf(d.summary) ?? "",
-    captionPreview: strOf(d.caption_preview ?? d.captionPreview) ?? "",
+    status: 'draft',
+    title: strOf(d.title) ?? '',
+    summary: strOf(d.summary) ?? '',
+    captionPreview: strOf(d.caption_preview ?? d.captionPreview) ?? '',
     creativeIdea: strOf(d.creative_idea ?? d.creativeIdea),
     creativeDirectionPrompt: strOf(d.creative_direction_prompt ?? d.creativeDirectionPrompt),
     thumbnailPrompt: strOf(d.thumbnail_prompt ?? d.thumbnailPrompt),
-    format: strOf(d.format) ?? "Post",
+    format: strOf(d.format) ?? 'Post',
   };
 }

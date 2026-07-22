@@ -1,49 +1,46 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-import { getApiUrl } from "@/lib/api/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getApiUrl } from '@/lib/api/config';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const SSE_HEADERS = {
-  "Content-Type": "text/event-stream",
-  Connection: "keep-alive",
-  "Cache-Control": "no-cache, no-transform",
-  "X-Accel-Buffering": "no",
+  'Content-Type': 'text/event-stream',
+  Connection: 'keep-alive',
+  'Cache-Control': 'no-cache, no-transform',
+  'X-Accel-Buffering': 'no',
 };
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const jobId = searchParams.get("job_id");
+  const jobId = searchParams.get('job_id');
 
   if (!jobId) {
-    return NextResponse.json(
-      { error: "Missing job_id query parameter" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Missing job_id query parameter' }, { status: 400 });
   }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const backendUrl = new URL(getApiUrl("/api/organic/generate-grid/events"));
-  backendUrl.searchParams.set("job_id", jobId);
+  const backendUrl = new URL(getApiUrl('/api/organic/generate-grid/events'));
+  backendUrl.searchParams.set('job_id', jobId);
 
   const upstreamResponse = await fetch(backendUrl, {
-    method: "GET",
+    method: 'GET',
     headers: {
-      Accept: "text/event-stream",
+      Accept: 'text/event-stream',
       Authorization: `Bearer ${data.session.access_token}`,
     },
   });
 
   if (!upstreamResponse.ok || !upstreamResponse.body) {
-    let detail = "";
+    let detail = '';
     try {
       detail = await upstreamResponse.text();
     } catch {
@@ -51,10 +48,10 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json(
       {
-        error: "Failed to open content generation stream",
+        error: 'Failed to open content generation stream',
         detail: detail || null,
       },
-      { status: upstreamResponse.status || 502 }
+      { status: upstreamResponse.status || 502 },
     );
   }
 
@@ -65,7 +62,7 @@ export async function GET(request: NextRequest) {
     start(controller) {
       const cleanup = () => {
         if (abortHandler) {
-          request.signal.removeEventListener("abort", abortHandler);
+          request.signal.removeEventListener('abort', abortHandler);
           abortHandler = null;
         }
       };
@@ -96,13 +93,13 @@ export async function GET(request: NextRequest) {
           });
       };
 
-      request.signal.addEventListener("abort", abortHandler);
+      request.signal.addEventListener('abort', abortHandler);
 
       forward();
     },
     cancel() {
       if (abortHandler) {
-        request.signal.removeEventListener("abort", abortHandler);
+        request.signal.removeEventListener('abort', abortHandler);
         abortHandler = null;
       }
       void reader.cancel();

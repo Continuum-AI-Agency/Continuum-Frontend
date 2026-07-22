@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
-import type { RotationEvent } from "./types";
+import type { RotationEvent } from './types';
 
 type CreativeRotationListProps = {
   rotations: RotationEvent[];
@@ -14,12 +14,12 @@ type CreativeRotationListProps = {
 function formatOccurredAt(iso: string): string {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return iso;
-  return new Date(ms).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+  return new Date(ms).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -39,21 +39,21 @@ function ThumbTile({ url, label }: { url: string | null; label: string }) {
 }
 
 function RotationRow({ event, isFocused }: { event: RotationEvent; isFocused: boolean }) {
-  const reason = event.decisionNote ?? event.error ?? "No reason recorded.";
+  const reason = event.decisionNote ?? event.error ?? 'No reason recorded.';
   const product = event.replacement ?? event.outgoing;
 
   return (
     <div
       data-rotation-id={event.id}
-      data-focused={isFocused ? "true" : undefined}
+      data-focused={isFocused ? 'true' : undefined}
       className={cn(
-        "rounded-lg border border-border/70 bg-background p-3 transition-colors",
-        isFocused && "border-primary/60 ring-1 ring-primary/40"
+        'rounded-lg border border-border/70 bg-background p-3 transition-colors',
+        isFocused && 'border-primary/60 ring-1 ring-primary/40',
       )}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {event.actionType.replace(/_/g, " ").toLowerCase()}
+          {event.actionType.replace(/_/g, ' ').toLowerCase()}
         </span>
         <span className="text-xs text-muted-foreground">{formatOccurredAt(event.occurredAt)}</span>
       </div>
@@ -69,7 +69,7 @@ function RotationRow({ event, isFocused }: { event: RotationEvent; isFocused: bo
         {product ? (
           <div className="min-w-0 flex-1 rounded border border-border/60 bg-muted/30 p-2">
             <div className="text-2xs uppercase tracking-wide text-muted-foreground">
-              {event.replacement ? "Replacement product" : "Outgoing product"}
+              {event.replacement ? 'Replacement product' : 'Outgoing product'}
             </div>
             <div className="mt-0.5 truncate text-sm font-medium">{product.name}</div>
             <div className="truncate text-xs text-muted-foreground">{product.brand}</div>
@@ -96,8 +96,8 @@ export function CreativeRotationList({
       <div
         ref={scrollRef}
         className={cn(
-          "rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 text-center text-sm text-muted-foreground",
-          className
+          'rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 text-center text-sm text-muted-foreground',
+          className,
         )}
       >
         No DCO rotations recorded for this ad in the selected window.
@@ -106,7 +106,7 @@ export function CreativeRotationList({
   }
 
   return (
-    <div ref={scrollRef} className={cn("flex flex-col gap-2", className)}>
+    <div ref={scrollRef} className={cn('flex flex-col gap-2', className)}>
       {rotations.map((event) => (
         <RotationRow key={event.id} event={event} isFocused={focusedId === event.id} />
       ))}

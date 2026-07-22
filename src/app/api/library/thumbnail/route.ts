@@ -16,9 +16,18 @@ export const runtime = 'nodejs';
 // megabyte is not a poster, so it is refused rather than stored.
 const MAX_POSTER_BYTES = 1_500_000;
 
+// A coerced-optional positive integer: the multipart values arrive as strings and
+// are absent when the header could not be read, so blanks stay undefined rather
+// than failing the whole request over best-effort metadata.
+const optionalDimension = z.coerce.number().int().positive().optional().catch(undefined);
+const optionalDuration = z.coerce.number().int().nonnegative().optional().catch(undefined);
+
 const fieldsSchema = z.object({
   brandId: z.string().uuid(),
   assetId: z.string().uuid(),
+  sourceWidth: optionalDimension,
+  sourceHeight: optionalDimension,
+  durationMs: optionalDuration,
 });
 
 // POST /api/library/thumbnail — stores the browser-generated poster for a video
@@ -47,11 +56,14 @@ export async function POST(request: Request) {
   const parsed = fieldsSchema.safeParse({
     brandId: form.get('brandId'),
     assetId: form.get('assetId'),
+    sourceWidth: form.get('sourceWidth') ?? undefined,
+    sourceHeight: form.get('sourceHeight') ?? undefined,
+    durationMs: form.get('durationMs') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, assetId } = parsed.data;
+  const { brandId, assetId, sourceWidth, sourceHeight, durationMs } = parsed.data;
 
   const poster = form.get('poster');
   if (!(poster instanceof Blob)) {
@@ -72,7 +84,7 @@ export async function POST(request: Request) {
 
   const { data: asset, error: assetError } = await mediaSchema(admin)
     .from('assets')
-    .select('id, bucket, kind, thumbnail_path')
+    .select('id, bucket, kind, thumbnail_path, width, height, duration_ms')
     .eq('id', assetId)
     .eq('brand_id', brandId)
     .is('deleted_at', null)
@@ -89,11 +101,36 @@ export async function POST(request: Request) {
     bucket: string;
     kind: string;
     thumbnail_path: string | null;
+    width: number | null;
+    height: number | null;
+    duration_ms: number | null;
   };
   if (head.kind !== 'video') {
     return NextResponse.json({ error: 'Only video assets carry a poster' }, { status: 409 });
   }
+
+  // Backfill source metadata onto columns that are still null. Kept separate from
+  // the poster write so it lands even on the early-return path below (a re-upload
+  // of an asset that already has a poster but was ingested before metadata was
+  // captured) — the whole reason duration_desc was a no-op.
+  const metadataPatch: Record<string, number> = {};
+  // `== null` matches both a real null column and a stub that omits the field.
+  if (head.width == null && sourceWidth !== undefined) metadataPatch.width = sourceWidth;
+  if (head.height == null && sourceHeight !== undefined) metadataPatch.height = sourceHeight;
+  if (head.duration_ms == null && durationMs !== undefined) metadataPatch.duration_ms = durationMs;
+
   if (head.thumbnail_path) {
+    if (Object.keys(metadataPatch).length > 0) {
+      const { error: patchError } = await mediaSchema(admin)
+        .from('assets')
+        .update(metadataPatch)
+        .eq('id', assetId)
+        .eq('brand_id', brandId);
+      if (patchError) {
+        console.error('[library/thumbnail] metadata backfill failed', patchError);
+        return NextResponse.json({ error: 'Query failed' }, { status: 500 });
+      }
+    }
     return NextResponse.json({ assetId, bucket: head.bucket, thumbnailPath: head.thumbnail_path });
   }
 
@@ -116,7 +153,7 @@ export async function POST(request: Request) {
 
   const { error: updateError } = await mediaSchema(admin)
     .from('assets')
-    .update({ thumbnail_path: thumbnailPath })
+    .update({ thumbnail_path: thumbnailPath, ...metadataPatch })
     .eq('id', assetId)
     .eq('brand_id', brandId);
   if (updateError) {

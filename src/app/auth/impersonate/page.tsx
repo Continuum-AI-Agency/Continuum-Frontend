@@ -1,63 +1,65 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function ImpersonatePage() {
   const router = useRouter();
-  const [status, setStatus] = useState("Initializing authentication...");
+  const [status, setStatus] = useState('Initializing authentication...');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const supabase = createSupabaseBrowserClient();
 
   const addLog = (msg: string) => {
     console.log(`[Impersonate] ${msg}`);
-    setDebugLogs(prev => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${msg}`]);
+    setDebugLogs((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${msg}`]);
   };
 
   useEffect(() => {
     let mounted = true;
-    
+
     const timeout = setTimeout(() => {
-      if (mounted && !errorMsg && status !== "Redirecting to dashboard...") {
-        addLog("Authentication timed out after 10 seconds.");
-        setErrorMsg("Authentication timed out. The link may have expired or there is a connectivity issue.");
+      if (mounted && !errorMsg && status !== 'Redirecting to dashboard...') {
+        addLog('Authentication timed out after 10 seconds.');
+        setErrorMsg(
+          'Authentication timed out. The link may have expired or there is a connectivity issue.',
+        );
       }
     }, 10000);
 
     const handleAuth = async () => {
       try {
-        addLog("Starting auth check...");
-        
+        addLog('Starting auth check...');
+
         const params = new URLSearchParams(window.location.search);
-        
-        const errorCode = params.get("error");
-        const errorDescription = params.get("error_description");
+
+        const errorCode = params.get('error');
+        const errorDescription = params.get('error_description');
         if (errorCode) {
           addLog(`Error detected in URL: ${errorCode} - ${errorDescription}`);
           throw new Error(errorDescription || errorCode);
         }
 
-        const code = params.get("code");
+        const code = params.get('code');
         if (code) {
-          addLog("Authorization code found. Redirecting to callback handler...");
-          if (mounted) setStatus("Exchanging authorization code...");
+          addLog('Authorization code found. Redirecting to callback handler...');
+          if (mounted) setStatus('Exchanging authorization code...');
           router.replace(`/auth/callback?code=${code}&next=/dashboard&impersonate=true`);
           return;
         }
 
-        if (window.location.hash && window.location.hash.includes("access_token")) {
-          addLog("Hash with access_token found. Attempting manual session update...");
-          if (mounted) setStatus("Manually verifying credentials...");
-          
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          addLog('Hash with access_token found. Attempting manual session update...');
+          if (mounted) setStatus('Manually verifying credentials...');
+
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const accessToken = hashParams.get("access_token");
-          const refreshToken = hashParams.get("refresh_token");
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
 
           if (accessToken && refreshToken) {
-            addLog("Calling setSession manually...");
+            addLog('Calling setSession manually...');
             const { data, error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
@@ -69,53 +71,55 @@ export default function ImpersonatePage() {
             }
 
             if (data.session) {
-              addLog("Session set successfully. Redirecting...");
-              if (mounted) setStatus("Redirecting to dashboard...");
-              router.replace("/dashboard");
+              addLog('Session set successfully. Redirecting...');
+              if (mounted) setStatus('Redirecting to dashboard...');
+              router.replace('/dashboard');
               return;
             }
           }
         }
 
-        addLog("Checking current session...");
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        addLog('Checking current session...');
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
         if (error) {
           addLog(`Session error: ${error.message}`);
           throw error;
         }
 
         if (session) {
-           addLog(`Session found for user: ${session.user.id}. Redirecting...`);
-           if (mounted) setStatus("Redirecting to dashboard...");
-           router.replace("/dashboard");
-           return;
+          addLog(`Session found for user: ${session.user.id}. Redirecting...`);
+          if (mounted) setStatus('Redirecting to dashboard...');
+          router.replace('/dashboard');
+          return;
         } else {
-           addLog("No active session found yet.");
-           if (!window.location.hash && !params.get("code")) {
-             addLog("No auth markers found in URL.");
-             if (mounted) setStatus("Waiting for authentication...");
-           }
+          addLog('No active session found yet.');
+          if (!window.location.hash && !params.get('code')) {
+            addLog('No auth markers found in URL.');
+            if (mounted) setStatus('Waiting for authentication...');
+          }
         }
-
       } catch (err: any) {
         addLog(`Caught error: ${err.message}`);
-        if (mounted) setErrorMsg(err.message || "Authentication failed");
+        if (mounted) setErrorMsg(err.message || 'Authentication failed');
       }
     };
 
     handleAuth();
 
-    addLog("Registering auth state change listener...");
+    addLog('Registering auth state change listener...');
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       addLog(`Auth event triggered: ${event}`);
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session) {
           addLog(`User signed in: ${session.user.id}`);
-          if (mounted) setStatus("Redirecting to dashboard...");
-          router.replace("/dashboard");
+          if (mounted) setStatus('Redirecting to dashboard...');
+          router.replace('/dashboard');
         }
       }
     });
@@ -136,15 +140,19 @@ export default function ImpersonatePage() {
           </div>
           <h1 className="text-xl font-bold text-gray-900">Authentication Failed</h1>
           <p className="text-sm text-gray-600">{errorMsg}</p>
-          
+
           <div className="w-full mt-4 p-3 bg-gray-50 rounded-lg text-left overflow-hidden">
-            <p className="text-2xs font-mono text-gray-400 uppercase tracking-wider mb-2">Debug Logs</p>
+            <p className="text-2xs font-mono text-gray-400 uppercase tracking-wider mb-2">
+              Debug Logs
+            </p>
             {debugLogs.map((log, i) => (
-              <p key={i} className="text-2xs font-mono text-gray-500 truncate">{log}</p>
+              <p key={i} className="text-2xs font-mono text-gray-500 truncate">
+                {log}
+              </p>
             ))}
           </div>
 
-          <button 
+          <button
             onClick={() => router.push('/login')}
             className="mt-6 w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors shadow-lg"
           >
@@ -166,10 +174,12 @@ export default function ImpersonatePage() {
           <h1 className="text-lg font-bold text-gray-900">Finalizing Impersonation</h1>
           <p className="text-sm text-gray-500 font-medium">{status}</p>
         </div>
-        
+
         <div className="w-full mt-4 p-3 bg-gray-50 rounded-lg text-left overflow-hidden opacity-50">
           {debugLogs.slice(-3).map((log, i) => (
-            <p key={i} className="text-2xs font-mono text-gray-400 truncate">{log}</p>
+            <p key={i} className="text-2xs font-mono text-gray-400 truncate">
+              {log}
+            </p>
           ))}
         </div>
       </div>

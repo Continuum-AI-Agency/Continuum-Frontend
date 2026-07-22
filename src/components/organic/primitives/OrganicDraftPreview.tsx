@@ -12,10 +12,13 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon } from '@radix-ui/react-icons';
 import {
+  Check,
   Hash,
   Library,
   Loader2,
   Maximize2,
+  Pencil,
+  PencilRuler,
   Replace,
   Send,
   Sparkles,
@@ -30,7 +33,9 @@ import {
 } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
+import { Iphone } from '@/components/ui/iphone';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { flattenHashtags } from '@/lib/organic/hashtags';
@@ -39,9 +44,8 @@ import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
-import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
-import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
 import { resolveDraftHook } from '@/lib/virality/draftHook';
+import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { BlueprintStoryboard, resolveStoryboardFrames } from './BlueprintStoryboard';
 import { CarouselSlideStrip } from './CarouselSlideStrip';
@@ -58,9 +62,14 @@ import { type LightboxItem, MediaLightbox } from './MediaLightbox';
 import { MediaSelectPopover } from './MediaSelectPopover';
 import { PostCommandMenu } from './PostCommandMenu';
 import { PostMetaChips } from './PostMetaChips';
-import { PreviewMediaDropZone } from './PreviewMediaDropZone';
+import { type DropZoneFallbackAction, PreviewMediaDropZone } from './PreviewMediaDropZone';
 import { resolvePreviewAspectRatio, resolvePreviewMaxWidth } from './social-preview-utils';
 import type { OrganicCalendarDraft } from './types';
+
+// Scale the phone mockup as a readable post preview rather than a thumbnail. CSS zoom
+// keeps the bezel, media, and type in proportion while preserving the preview's
+// existing scroll behavior in the panel.
+const PHONE_PREVIEW_SCALE = 0.72;
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft;
@@ -76,6 +85,9 @@ type SocialPreviewProps = {
   platform: string;
   // The media zone, pre-wired with its MediaSelectPopover by the parent.
   mediaNode: React.ReactNode;
+  // View↔edit mode. When false the platform frame reads as a locked "final look":
+  // caption is a static readout and the hover edit affordances are suppressed.
+  isEditing: boolean;
   // Hover-revealed edit affordances — open the existing inline editors.
   onEditCreativeDirection?: () => void;
   onEditHashtags?: () => void;
@@ -192,6 +204,9 @@ function InteractiveCarouselMediaArea({
   onGenerate,
   canGenerate,
   isGenerating,
+  onEnrich,
+  canEnrich,
+  isEnriching,
   onEnlargeFrame,
   onEnlargeSlide,
 }: {
@@ -213,6 +228,9 @@ function InteractiveCarouselMediaArea({
   onGenerate: () => void;
   canGenerate: boolean;
   isGenerating: boolean;
+  onEnrich?: () => void;
+  canEnrich?: boolean;
+  isEnriching?: boolean;
   onEnlargeFrame: (index: number) => void;
   onEnlargeSlide: (index: number) => void;
 }) {
@@ -257,11 +275,39 @@ function InteractiveCarouselMediaArea({
 
   const activeSlide = slides[activeSlideIndex] ?? slides[0];
 
+  // The empty slot offers the agent path first: headless realize, plus the
+  // text-stage blueprint sketch when the draft has no storyboard yet. Library
+  // and upload halves stay below as the manual alternatives.
+  const fallbackActions: DropZoneFallbackAction[] = [];
+  if (canGenerate) {
+    fallbackActions.push({
+      key: 'generate',
+      label: 'Generate media',
+      busyLabel: 'Generating media…',
+      title: 'Let the agent realize final media for this draft',
+      icon: <Wand2 className="h-4 w-4" />,
+      busy: isGenerating,
+      onSelect: onGenerate,
+    });
+  }
+  if (canEnrich && onEnrich) {
+    fallbackActions.push({
+      key: 'enrich',
+      label: 'Enrich (sketch first)',
+      busyLabel: 'Sketching blueprint…',
+      title: 'Sketch a low-cost blueprint first, then approve it into final media',
+      icon: <PencilRuler className="h-4 w-4" />,
+      busy: isEnriching,
+      onSelect: onEnrich,
+    });
+  }
+
   return (
     <div>
       <PreviewMediaDropZone
         isActive={false}
         state={dropState}
+        fallbackActions={fallbackActions}
         slotId={slotId}
         onNativeDrop={onNativeDrop}
         onActivate={onActivate}
@@ -375,6 +421,115 @@ function InteractiveCarouselMediaArea({
           onEnlarge={onEnlargeSlide}
           className="border-b border-border/60 px-2"
         />
+      )}
+    </div>
+  );
+}
+
+// The locked "final look" media view. No dropzone, no generate/enrich CTAs, no
+// replace/add controls — just the resolved creative as it will post, with view-
+// only slide navigation and enlarge. Editing affordances live behind the pencil.
+function ReadOnlyCarouselMediaArea({
+  draft,
+  alt,
+  aspectRatio,
+  borderClass = 'border-b border-border/70',
+  activeSlideIndex,
+  onSelectSlide,
+  onEnlargeSlide,
+}: {
+  draft: OrganicCalendarDraft;
+  alt: string;
+  aspectRatio: number;
+  borderClass?: string;
+  activeSlideIndex: number;
+  onSelectSlide: (i: number) => void;
+  onEnlargeSlide: (index: number) => void;
+}) {
+  const slides = resolveCarouselSlides(draft);
+  const total = slides.length;
+  const activeSlide = slides[activeSlideIndex] ?? slides[0];
+
+  if (total === 0 || !activeSlide) {
+    return (
+      <div
+        className={cn(
+          'flex w-full items-center justify-center bg-muted/30 text-center',
+          borderClass,
+        )}
+        style={{ aspectRatio: `${aspectRatio}` }}
+      >
+        <p className="px-4 text-xs text-muted-foreground/70">No media</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn('relative w-full overflow-hidden bg-muted/20', borderClass)}
+      style={{ aspectRatio: `${aspectRatio}` }}
+    >
+      <Image
+        src={activeSlide.storageUrl}
+        alt={`${alt} — slide ${(activeSlide.slideIndex ?? 0) + 1}`}
+        fill
+        unoptimized
+        sizes="(max-width: 768px) 100vw, 560px"
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+
+      <button
+        type="button"
+        onClick={() => onEnlargeSlide(activeSlideIndex)}
+        className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Enlarge creative"
+      >
+        <Maximize2 className="h-3.5 w-3.5" />
+      </button>
+
+      {total > 1 && (
+        <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white tabular-nums">
+          {(activeSlide.slideIndex ?? 0) + 1}/{total}
+        </div>
+      )}
+
+      {activeSlideIndex > 0 && (
+        <button
+          type="button"
+          onClick={() => onSelectSlide(activeSlideIndex - 1)}
+          className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          aria-label="Previous slide"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </button>
+      )}
+
+      {activeSlideIndex < total - 1 && (
+        <button
+          type="button"
+          onClick={() => onSelectSlide(activeSlideIndex + 1)}
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          aria-label="Next slide"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </button>
+      )}
+
+      {total > 1 && (
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onSelectSlide(i)}
+              className={cn(
+                'h-1.5 rounded-full transition-all',
+                i === activeSlideIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
+              )}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -783,6 +938,23 @@ export function OrganicDraftPreview({
   const replaceTargetRef = React.useRef<number | null>(null);
   const [creativeOpen, setCreativeOpen] = React.useState(false);
   const [hashtagsOpen, setHashtagsOpen] = React.useState(false);
+  // View↔edit mode. Default: a locked, read-only "final look" preview. The pencil
+  // toggle mounts the editable affordances (caption textarea, hashtag/creative
+  // editors, media dropzone). Every save/change handler below stays wired — it is
+  // simply unreachable until the user opts into editing.
+  const [isEditing, setIsEditing] = React.useState(false);
+  const toggleEditing = React.useCallback(() => {
+    setIsEditing((prev) => {
+      const next = !prev;
+      // Leaving edit mode collapses the on-demand editor panels so the read-only
+      // frame reads as a clean final look.
+      if (!next) {
+        setCreativeOpen(false);
+        setHashtagsOpen(false);
+      }
+      return next;
+    });
+  }, []);
   // Enlarge-and-act lightbox target: a blueprint concept frame or a realized slide.
   const [lightbox, setLightbox] = React.useState<{
     kind: 'blueprint' | 'slide';
@@ -912,7 +1084,7 @@ export function OrganicDraftPreview({
 
   // The media zone, pre-wired with its contextual MediaSelectPopover. Clicking
   // the empty/CTA area (or a carousel "+") opens the library Popover anchored here.
-  const mediaNode =
+  const interactiveMediaNode =
     !isHyperframeFormat && brandProfileId ? (
       <MediaSelectPopover
         brandProfileId={brandProfileId}
@@ -954,12 +1126,30 @@ export function OrganicDraftPreview({
             onGenerate={handleGenerateMedia}
             canGenerate={canGenerate}
             isGenerating={isGenerating}
+            onEnrich={handleEnrichMedia}
+            canEnrich={canEnrich}
+            isEnriching={isExpanding}
             onEnlargeFrame={(index) => setLightbox({ kind: 'blueprint', index })}
             onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
           />
         }
       />
     ) : null;
+
+  // Read-only "final look" media: the resolved creative with view-only navigation,
+  // no dropzone or generate/replace controls. Shown unless the pencil is active.
+  const readOnlyMediaNode = !isHyperframeFormat ? (
+    <ReadOnlyCarouselMediaArea
+      draft={draftForPreview}
+      alt={resolveDraftMediaAltText(draftForPreview)}
+      aspectRatio={mediaAspectRatio}
+      activeSlideIndex={activeSlideIndex}
+      onSelectSlide={setActiveSlideIndex}
+      onEnlargeSlide={(index) => setLightbox({ kind: 'slide', index })}
+    />
+  ) : null;
+
+  const mediaNode = isEditing ? interactiveMediaNode : readOnlyMediaNode;
 
   // Enlarge-and-act lightbox contents, derived from the current target so the
   // dialog stays a dumb, reusable shell. Blueprint frames offer generate / use-
@@ -1059,20 +1249,48 @@ export function OrganicDraftPreview({
       />
     ) : null;
 
-  const commandMenu = (
-    <PostCommandMenu
-      onEditCreativeDirection={() => setCreativeOpen(true)}
-      onEditHashtags={() => setHashtagsOpen(true)}
-      onApproveSchedule={onApprove ? () => onApprove(draft.id) : undefined}
-      canSchedule={canMarkScheduled}
-      isScheduled={draft.status === 'scheduled'}
-      onMoveBackToDraft={() => patchDraft({ status: 'draft' })}
-      onPublish={canPublish ? () => publish(draft) : undefined}
-      canPublish={canPublish}
-      isPublishing={isPublishing}
-      onOpenInStudio={openInStudio ? () => openInStudio(draft.id) : undefined}
-      onDelete={handleDelete}
-    />
+  const editToggle = (
+    <button
+      type="button"
+      onClick={toggleEditing}
+      aria-pressed={isEditing}
+      aria-label={isEditing ? 'Done editing post' : 'Edit post'}
+      title={isEditing ? 'Done editing' : 'Edit post'}
+      className={cn(
+        'flex items-center gap-1 rounded-md border px-2 py-1 text-2xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+        isEditing
+          ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15'
+          : 'border-border/60 bg-background/90 text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+      {isEditing ? 'Done' : 'Edit'}
+    </button>
+  );
+
+  const headerActions = (
+    <div className="flex items-center gap-1">
+      {editToggle}
+      <PostCommandMenu
+        onEditCreativeDirection={() => {
+          setIsEditing(true);
+          setCreativeOpen(true);
+        }}
+        onEditHashtags={() => {
+          setIsEditing(true);
+          setHashtagsOpen(true);
+        }}
+        onApproveSchedule={onApprove ? () => onApprove(draft.id) : undefined}
+        canSchedule={canMarkScheduled}
+        isScheduled={draft.status === 'scheduled'}
+        onMoveBackToDraft={() => patchDraft({ status: 'draft' })}
+        onPublish={canPublish ? () => publish(draft) : undefined}
+        canPublish={canPublish}
+        isPublishing={isPublishing}
+        onOpenInStudio={openInStudio ? () => openInStudio(draft.id) : undefined}
+        onDelete={handleDelete}
+      />
+    </div>
   );
 
   return (
@@ -1090,7 +1308,7 @@ export function OrganicDraftPreview({
           }}
           onFormatChange={(value) => patchDraft({ format: value })}
           onTimeChange={(value) => patchDraft({ timeLabel: value })}
-          actions={commandMenu}
+          actions={headerActions}
         />
 
         {/* Two lifecycle axes: publish status (stepper) + media enrichment stage.
@@ -1193,42 +1411,25 @@ export function OrganicDraftPreview({
                     value={draft.captionPreview}
                     onChange={handleCaptionChange}
                     platform={selectedPlatform}
+                    editable={isEditing}
                   />
                 </div>
               </div>
             ) : selectedPlatform === 'instagram' ? (
-              <div className="overflow-hidden rounded-[2.5rem] border-[5px] border-foreground/10 shadow-2xl">
-                <div className="relative flex items-center justify-center bg-background px-4 pt-3 pb-2">
-                  <span className="absolute left-5 text-3xs font-bold tabular-nums text-foreground/70">
-                    9:41
-                  </span>
-                  <div className="h-5 w-[88px] rounded-full bg-foreground/90" />
-                  <div className="absolute right-5 flex items-center gap-1 text-foreground/70">
-                    {/* biome-ignore lint/a11y/noSvgWithoutTitle: decorative status-bar chrome */}
-                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
-                      <path d="M1.5 8.5C5.082 4.918 9.795 3 12 3s6.918 1.918 10.5 5.5L21 11c-2.9-3.15-5.68-4.5-9-4.5S5.9 7.85 3 11L1.5 8.5z" />
-                      <path d="M4.5 11.5C7.2 8.8 9.7 7.5 12 7.5s4.8 1.3 7.5 4L18 13c-1.9-2.15-3.7-3-6-3s-4.1.85-6 3L4.5 11.5z" />
-                      <circle cx="12" cy="17" r="2" />
-                    </svg>
-                    {/* biome-ignore lint/a11y/noSvgWithoutTitle: decorative status-bar chrome */}
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
-                      <rect x="1" y="6" width="18" height="12" rx="2" fillOpacity="0.3" />
-                      <rect x="1" y="6" width="13" height="12" rx="2" />
-                      <path d="M21 10v4a2 2 0 0 0 0-4z" />
-                    </svg>
-                  </div>
-                </div>
-                <InstagramMobilePreview
-                  draft={draftForPreview}
-                  onCaptionChange={handleCaptionChange}
-                  brandName={brandName}
-                  platform="instagram"
-                  mediaNode={mediaNode}
-                  onEditCreativeDirection={() => setCreativeOpen(true)}
-                  onEditHashtags={() => setHashtagsOpen(true)}
-                />
-                <div className="flex justify-center bg-background py-2">
-                  <div className="h-1 w-24 rounded-full bg-foreground/20" />
+              <div className="flex justify-center">
+                <div className="w-[433px] max-w-full" style={{ zoom: PHONE_PREVIEW_SCALE }}>
+                  <Iphone>
+                    <InstagramMobilePreview
+                      draft={draftForPreview}
+                      onCaptionChange={handleCaptionChange}
+                      brandName={brandName}
+                      platform="instagram"
+                      mediaNode={mediaNode}
+                      isEditing={isEditing}
+                      onEditCreativeDirection={() => setCreativeOpen(true)}
+                      onEditHashtags={() => setHashtagsOpen(true)}
+                    />
+                  </Iphone>
                 </div>
               </div>
             ) : selectedPlatform === 'facebook' ? (
@@ -1238,6 +1439,7 @@ export function OrganicDraftPreview({
                 brandName={brandName}
                 platform="facebook"
                 mediaNode={mediaNode}
+                isEditing={isEditing}
                 onEditCreativeDirection={() => setCreativeOpen(true)}
                 onEditHashtags={() => setHashtagsOpen(true)}
               />
@@ -1248,6 +1450,7 @@ export function OrganicDraftPreview({
                 brandName={brandName}
                 platform="linkedin"
                 mediaNode={mediaNode}
+                isEditing={isEditing}
                 onEditCreativeDirection={() => setCreativeOpen(true)}
                 onEditHashtags={() => setHashtagsOpen(true)}
               />
@@ -1348,6 +1551,7 @@ function InstagramMobilePreview({
   brandName,
   platform,
   mediaNode,
+  isEditing,
   onEditCreativeDirection,
   onEditHashtags,
 }: SocialPreviewProps) {
@@ -1356,10 +1560,12 @@ function InstagramMobilePreview({
 
   return (
     <div className="group/preview relative w-full overflow-hidden bg-card text-foreground">
-      <PreviewHoverActions
-        onEditCreativeDirection={onEditCreativeDirection}
-        onEditHashtags={onEditHashtags}
-      />
+      {isEditing && (
+        <PreviewHoverActions
+          onEditCreativeDirection={onEditCreativeDirection}
+          onEditHashtags={onEditHashtags}
+        />
+      )}
       <div className="flex items-center p-3 border-b border-border/70">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary/70 via-accent/70 to-secondary/70 p-[2px] flex items-center justify-center text-2xs font-bold text-foreground">
@@ -1431,6 +1637,7 @@ function InstagramMobilePreview({
           value={draft.captionPreview}
           onChange={onCaptionChange}
           platform={platform}
+          editable={isEditing}
           ariaLabel="Instagram caption"
           placeholder="Write your caption…"
           className="text-xs leading-relaxed"
@@ -1448,6 +1655,7 @@ function FacebookFeedPreview({
   brandName,
   platform,
   mediaNode,
+  isEditing,
   onEditCreativeDirection,
   onEditHashtags,
 }: SocialPreviewProps) {
@@ -1455,10 +1663,12 @@ function FacebookFeedPreview({
 
   return (
     <div className="group/preview relative w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
-      <PreviewHoverActions
-        onEditCreativeDirection={onEditCreativeDirection}
-        onEditHashtags={onEditHashtags}
-      />
+      {isEditing && (
+        <PreviewHoverActions
+          onEditCreativeDirection={onEditCreativeDirection}
+          onEditHashtags={onEditHashtags}
+        />
+      )}
       <div className="p-3 flex items-center border-b border-border/70">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/30 bg-primary/15 font-bold text-primary">
@@ -1476,6 +1686,7 @@ function FacebookFeedPreview({
           value={draft.captionPreview}
           onChange={onCaptionChange}
           platform={platform}
+          editable={isEditing}
           ariaLabel="Facebook post copy"
           placeholder="Write your post copy…"
         />
@@ -1540,6 +1751,7 @@ function LinkedInDesktopPreview({
   brandName,
   platform,
   mediaNode,
+  isEditing,
   onEditCreativeDirection,
   onEditHashtags,
 }: SocialPreviewProps) {
@@ -1547,10 +1759,12 @@ function LinkedInDesktopPreview({
 
   return (
     <div className="group/preview relative w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
-      <PreviewHoverActions
-        onEditCreativeDirection={onEditCreativeDirection}
-        onEditHashtags={onEditHashtags}
-      />
+      {isEditing && (
+        <PreviewHoverActions
+          onEditCreativeDirection={onEditCreativeDirection}
+          onEditHashtags={onEditHashtags}
+        />
+      )}
       <div className="p-3 flex items-center justify-between border-b border-border/70">
         <div className="flex items-center gap-2">
           <div className="flex h-11 w-11 items-center justify-center rounded border border-primary/30 bg-primary/15 text-lg font-bold text-primary">
@@ -1568,6 +1782,7 @@ function LinkedInDesktopPreview({
           value={draft.captionPreview}
           onChange={onCaptionChange}
           platform={platform}
+          editable={isEditing}
           ariaLabel="LinkedIn post copy"
           placeholder="Write your post copy…"
         />

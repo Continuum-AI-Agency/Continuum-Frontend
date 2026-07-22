@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import React from "react";
-import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { act, cleanup, render } from '@testing-library/react';
+import React from 'react';
 
-import DashboardLoader from "@/components/dashboard/DashboardLoader";
-import { DASHBOARD_LOADER_TOTAL_DURATION_MS } from "@/lib/ui/dashboardLoaderTiming";
+import DashboardLoader from '@/components/dashboard/DashboardLoader';
+import { DASHBOARD_LOADER_TOTAL_DURATION_MS } from '@/lib/ui/dashboardLoaderTiming';
 
 type TimeoutEntry = {
   id: number;
@@ -40,13 +40,13 @@ afterEach(() => {
   cleanup();
 });
 
-test("DashboardLoader renders nothing without onboarding flag", () => {
+test('DashboardLoader renders nothing without onboarding flag', () => {
   const { container } = render(<DashboardLoader />);
   expect(container.firstChild).toBeNull();
 });
 
-test("DashboardLoader fades then unmounts when onboarding flag is set", async () => {
-  sessionStorage.setItem("from_onboarding", "true");
+test('DashboardLoader fades then unmounts when onboarding flag is set', async () => {
+  sessionStorage.setItem('from_onboarding', 'true');
 
   let renderResult: ReturnType<typeof render> | undefined;
   await act(async () => {
@@ -54,26 +54,26 @@ test("DashboardLoader fades then unmounts when onboarding flag is set", async ()
   });
 
   if (!renderResult) {
-    throw new Error("Render failed");
+    throw new Error('Render failed');
   }
 
-  expect(sessionStorage.getItem("from_onboarding")).toBeNull();
+  expect(sessionStorage.getItem('from_onboarding')).toBeNull();
   expect(timeouts).toHaveLength(2);
   expect(timeouts[0]?.delay).toBe(DASHBOARD_LOADER_TOTAL_DURATION_MS);
   expect(timeouts[1]?.delay).toBe(DASHBOARD_LOADER_TOTAL_DURATION_MS + 800);
 
   const { container } = renderResult;
-  expect(container.querySelector("div.fixed.inset-0.z-50")).toBeTruthy();
+  expect(container.querySelector('div.fixed.inset-0.z-50')).toBeTruthy();
 
   await act(async () => {
     timeouts[0]?.callback();
   });
 
-  expect(container.querySelector("div.fixed.inset-0.z-50")).toBeTruthy();
+  expect(container.querySelector('div.fixed.inset-0.z-50')).toBeTruthy();
 
   await act(async () => {
     timeouts[1]?.callback();
   });
 
-  expect(container.querySelector("div.fixed.inset-0.z-50")).toBeNull();
+  expect(container.querySelector('div.fixed.inset-0.z-50')).toBeNull();
 });

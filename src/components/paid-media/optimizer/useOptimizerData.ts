@@ -17,6 +17,9 @@ import {
   AdsetAdsResponseSchema,
   type AngleMatrixCell,
   AngleMatrixCellSchema,
+  type ApplyAdsetStatusRequest,
+  type ApplyAdsetStatusResponse,
+  ApplyAdsetStatusResponseSchema,
   type ApplyRevertRequest,
   type ApplyRevertResponse,
   ApplyRevertResponseSchema,
@@ -48,8 +51,10 @@ import {
   type PortfolioLevel,
   type PortfolioListItem,
   PortfolioListItemSchema,
+  type RecommendationStatus,
   type RenewalTask,
   RenewalTaskSchema,
+  type RequestApplyItemsRequest,
   type RunCycleResponse,
   RunCycleResponseSchema,
   type SetRecommendationStatusRequest,
@@ -715,6 +720,60 @@ async function requestApplyItem(input: { run_id: string; adset_id: string }): Pr
   if (error) throw new Error('Could not approve this budget change.');
 }
 
+/** Approve MANY proposed budget changes in ONE round-trip (the Action Log's multi-select
+ *  "Approve selected"). Flips every named cycle item to approved_pending; the drain
+ *  (optimizer-apply-approved) then writes them as a single batch. Returns how many rows
+ *  the RPC actually flipped. */
+async function requestApplyItemsBatch(
+  input: RequestApplyItemsRequest,
+): Promise<{ approved: number }> {
+  const { data, error } = await getClient().rpc('optimizer_request_apply_items', {
+    p_run_id: input.run_id,
+    p_adset_ids: input.adset_ids,
+  });
+  if (error) throw new Error('Could not approve these budget changes.');
+  const parsed = z.number().int().nonnegative().safeParse(data);
+  return { approved: parsed.success ? parsed.data : 0 };
+}
+
+/** Set the status of MANY recommendations at once (the Action Log's multi-select approve
+ *  of pause / fatigue recs). Approving a pause rec is what a later "Pause N ad sets" drain
+ *  reads back via optimizer_get_approved_pause_recs. Returns the number of rows updated. */
+async function setRecommendationStatuses(input: {
+  rec_ids: string[];
+  status: RecommendationStatus;
+}): Promise<{ updated: number }> {
+  const { data, error } = await getClient().rpc('optimizer_set_recommendation_statuses', {
+    p_rec_ids: input.rec_ids,
+    p_status: input.status,
+  });
+  if (error) throw new Error('Could not update these recommendations.');
+  const parsed = z.number().int().nonnegative().safeParse(data);
+  return { updated: parsed.success ? parsed.data : 0 };
+}
+
+/** Drain APPROVED ad-set pause recommendations into real Meta pauses via
+ *  optimizer-apply-adset-status → service /apply/adset-status. `dryRun:true` (default)
+ *  returns the would-pause set with ZERO writes; `dryRun:false` performs the real,
+ *  ledger-guarded, audited pause. Pause is HUMAN-ONLY in every tier and observe portfolios
+ *  hard-refuse on the service (`reason: observe_mode`). Returns null on a malformed body. */
+async function applyAdsetStatusDrain(
+  request: ApplyAdsetStatusRequest,
+): Promise<ApplyAdsetStatusResponse | null> {
+  const { data, error } = await getClient().functions.invoke('optimizer-apply-adset-status', {
+    body: {
+      portfolio_id: request.portfolio_id,
+      ...(request.brandId ? { brandId: request.brandId } : {}),
+      ...(request.accountId ? { accountId: request.accountId } : {}),
+      dryRun: request.dryRun ?? true,
+      ...(request.authorized_by ? { authorized_by: request.authorized_by } : {}),
+    },
+  });
+  if (error) throw new Error('optimizer-apply-adset-status unreachable');
+  const parsed = ApplyAdsetStatusResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
 async function archivePortfolio(portfolioId: string): Promise<void> {
   const { error } = await getClient().rpc('optimizer_archive_portfolio', {
     p_portfolio_id: portfolioId,
@@ -1173,6 +1232,63 @@ export function usePrefetchOptimizerOverview(brandId: string, adAccountId: strin
   }, [adAccountId, brandId, queryClient]);
 }
 
+/** Warm a portfolio's detail-workspace reads before it opens — fired from a card's
+ *  hover/focus so the workspace paints from cache instead of running its read fan-out
+ *  on click. Uses the SAME query keys + staleTimes the detail hooks use, so the
+ *  prefetch and the real read share one cache entry (no duplicate fetch). */
+export function usePrefetchPortfolioDetail(brandId: string) {
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    (portfolioId: string) => {
+      if (!brandId || !portfolioId) return;
+      void queryClient.prefetchQuery({
+        queryKey: optimizerQueryKeys.performance(portfolioId),
+        queryFn: () => withReadTimeout(fetchPerformance(portfolioId)),
+        staleTime: FIVE_MINUTES,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: optimizerQueryKeys.cpaSeries(portfolioId),
+        queryFn: () => withReadTimeout(fetchCpaSeries(portfolioId)),
+        staleTime: FIVE_MINUTES,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: optimizerQueryKeys.angleMatrix(portfolioId),
+        queryFn: () => withReadTimeout(fetchAngleMatrix(portfolioId)),
+        staleTime: FIVE_MINUTES,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
+        queryFn: () => withReadTimeout(fetchEnrolledAdsets(portfolioId)),
+        staleTime: TEN_MINUTES,
+      });
+    },
+    [brandId, queryClient],
+  );
+}
+
+/** Warm the performance read for every portfolio that has pending recommendations, so
+ *  the Actions queue lands from cache instead of firing one optimizer-status invoke per
+ *  portfolio on tab entry. Fired from the Actions tab trigger's hover/focus. */
+export function useWarmActionsQueue(brandId: string) {
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    (portfolios: PortfolioListItem[]) => {
+      if (!brandId) return;
+      for (const portfolio of portfolios) {
+        if (portfolio.pending_recommendations <= 0) continue;
+        void queryClient.prefetchQuery({
+          queryKey: optimizerQueryKeys.performance(portfolio.id),
+          queryFn: () => withReadTimeout(fetchPerformance(portfolio.id)),
+          staleTime: FIVE_MINUTES,
+        });
+      }
+    },
+    [brandId, queryClient],
+  );
+}
+
 // ── Mutations ───────────────────────────────────────────────────────────────
 
 export function useOptimizerMutations(brandId: string, adAccountId: string | null) {
@@ -1240,6 +1356,18 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     onSuccess: invalidateOptimizer,
   });
 
+  // The Action Log's multi-select budget approve (one round-trip for N ad sets).
+  const requestApplyItems = useMutation({
+    mutationFn: requestApplyItemsBatch,
+    onSuccess: invalidateOptimizer,
+  });
+
+  // The Action Log's multi-select rec approve (pause / fatigue recs in one round-trip).
+  const setStatuses = useMutation({
+    mutationFn: setRecommendationStatuses,
+    onSuccess: invalidateOptimizer,
+  });
+
   return {
     create,
     enroll,
@@ -1249,9 +1377,11 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
     restore,
     run,
     setStatus,
+    setStatuses,
     renewal,
     setPaused,
     requestApply,
+    requestApplyItems,
   };
 }
 
@@ -1323,6 +1453,25 @@ export function useApplyApproved() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: applyApprovedBudgets,
+    onSuccess: (data, request) => {
+      if (data?.ok && data.dryRun !== true) {
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.performance(request.portfolio_id),
+        });
+        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+      }
+    },
+  });
+}
+
+/** Drain approved ad-set pause recommendations into real Meta pauses. Mirrors
+ *  useApplyApproved: dryRun:true previews (0 writes), dryRun:false performs the audited
+ *  pause and invalidates the portfolio's performance + the whole optimizer tree so the
+ *  paused ad sets and their recs re-read. */
+export function useApplyAdsetStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: applyAdsetStatusDrain,
     onSuccess: (data, request) => {
       if (data?.ok && data.dryRun !== true) {
         void queryClient.invalidateQueries({

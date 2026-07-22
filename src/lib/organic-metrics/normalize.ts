@@ -1,15 +1,15 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
+  type InstagramOrganicMetricsResponse,
+  insightsResponseSchema,
   instagramOrganicMetricsResponseSchema,
-  organicDateRangePresetSchema,
-  organicRangeSchema,
-  metricComparisonSchema,
   instagramOrganicMetricsSchema,
   interactionBreakdownsSchema,
-  insightsResponseSchema,
-  type InstagramOrganicMetricsResponse,
-} from "@/lib/schemas/organicMetrics";
+  metricComparisonSchema,
+  organicDateRangePresetSchema,
+  organicRangeSchema,
+} from '@/lib/schemas/organicMetrics';
 
 const backendMetricComparisonPctSchema = z.object({
   current: z.number(),
@@ -18,7 +18,7 @@ const backendMetricComparisonPctSchema = z.object({
 });
 
 const backendPctChangeInstagramOrganicMetricsResponseSchema = z.object({
-  platform: z.literal("instagram"),
+  platform: z.literal('instagram'),
   accountId: z.string(),
   range: organicRangeSchema,
   metrics: z.object({
@@ -65,7 +65,7 @@ const snakeInstagramOrganicMetricsSchema = z.object({
 });
 
 const snakeInstagramOrganicMetricsResponseSchema = z.object({
-  platform: z.literal("instagram"),
+  platform: z.literal('instagram'),
   account_id: z.string(),
   range: z.object({
     preset: organicDateRangePresetSchema,
@@ -140,7 +140,7 @@ const looseComparisonValueSchema = z
 
 const looseInstagramOrganicMetricsResponseSchema = z
   .object({
-    platform: z.literal("instagram"),
+    platform: z.literal('instagram'),
     accountId: z.string().optional(),
     account_id: z.string().optional(),
     integrationAccountId: z.string().optional(),
@@ -190,7 +190,7 @@ function resolveAccountId(payload: {
     undefined;
 
   if (!accountId) {
-    throw new Error("Instagram organic metrics response is missing an account id.");
+    throw new Error('Instagram organic metrics response is missing an account id.');
   }
 
   return accountId;
@@ -239,7 +239,7 @@ function normalizeRange(range: unknown) {
     });
   }
 
-  throw new Error("Instagram organic metrics response is missing the range window.");
+  throw new Error('Instagram organic metrics response is missing the range window.');
 }
 
 function normalizeMetrics(metrics: unknown) {
@@ -281,7 +281,7 @@ function normalizeComparison(comparison: unknown) {
         previous: value.previous,
         percentageChange: value.percentageChange ?? value.percentage_change ?? value.pctChange,
       }),
-    ])
+    ]),
   );
 }
 
@@ -296,7 +296,9 @@ function normalizeInsights(insights: unknown) {
   return insights.map((insight) => insightsResponseSchema.parse(insight));
 }
 
-export function normalizeInstagramOrganicMetricsResponse(payload: unknown): InstagramOrganicMetricsResponse {
+export function normalizeInstagramOrganicMetricsResponse(
+  payload: unknown,
+): InstagramOrganicMetricsResponse {
   const alreadyCanonical = instagramOrganicMetricsResponseSchema.safeParse(payload);
   if (alreadyCanonical.success) return alreadyCanonical.data;
 
@@ -311,9 +313,9 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
               previous: value.previous,
               percentageChange: value.pctChange,
             }),
-          ])
+          ]),
         )
-      : backendPct.data.comparison ?? undefined;
+      : (backendPct.data.comparison ?? undefined);
 
     return instagramOrganicMetricsResponseSchema.parse({
       ...backendPct.data,
@@ -333,9 +335,9 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
               previous: value.previous,
               percentageChange: value.percentage_change,
             }),
-          ])
+          ]),
         )
-      : snakeParsed.data.comparison ?? undefined;
+      : (snakeParsed.data.comparison ?? undefined);
 
     return instagramOrganicMetricsResponseSchema.parse({
       platform: snakeParsed.data.platform,
@@ -366,8 +368,10 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
       trends: snakeParsed.data.trends,
       boostedEvents: snakeParsed.data.boostedEvents ?? snakeParsed.data.boosted_events,
       audienceBreakdown: snakeParsed.data.audienceBreakdown ?? snakeParsed.data.audience_breakdown,
-      audienceDemographics: snakeParsed.data.audienceDemographics ?? snakeParsed.data.audience_demographics,
-      contentTypePerformance: snakeParsed.data.contentTypePerformance ?? snakeParsed.data.content_type_performance,
+      audienceDemographics:
+        snakeParsed.data.audienceDemographics ?? snakeParsed.data.audience_demographics,
+      contentTypePerformance:
+        snakeParsed.data.contentTypePerformance ?? snakeParsed.data.content_type_performance,
       recentComments: snakeParsed.data.recentComments ?? snakeParsed.data.recent_comments,
     });
   }
@@ -378,14 +382,17 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
     const range = normalizeRange(looseParsed.data.range);
     const metrics = normalizeMetrics(looseParsed.data.metrics);
     const comparison = normalizeComparison(looseParsed.data.comparison);
-    const interactionBreakdowns = normalizeInteractionBreakdowns(looseParsed.data.interactionBreakdowns);
+    const interactionBreakdowns = normalizeInteractionBreakdowns(
+      looseParsed.data.interactionBreakdowns,
+    );
     const insights = normalizeInsights(looseParsed.data.insights);
 
     return instagramOrganicMetricsResponseSchema.parse({
-      platform: "instagram",
+      platform: 'instagram',
       accountId: accountId,
       brandId: looseParsed.data.brandId ?? looseParsed.data.brand_id,
-      integrationAccountId: looseParsed.data.integrationAccountId ?? looseParsed.data.integration_account_id,
+      integrationAccountId:
+        looseParsed.data.integrationAccountId ?? looseParsed.data.integration_account_id,
       externalAccountId: looseParsed.data.externalAccountId ?? looseParsed.data.external_account_id,
       fetchedAt: looseParsed.data.fetchedAt ?? looseParsed.data.fetched_at,
       range: range,
@@ -398,8 +405,10 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
       trends: looseParsed.data.trends,
       boostedEvents: looseParsed.data.boostedEvents ?? looseParsed.data.boosted_events,
       audienceBreakdown: looseParsed.data.audienceBreakdown ?? looseParsed.data.audience_breakdown,
-      audienceDemographics: looseParsed.data.audienceDemographics ?? looseParsed.data.audience_demographics,
-      contentTypePerformance: looseParsed.data.contentTypePerformance ?? looseParsed.data.content_type_performance,
+      audienceDemographics:
+        looseParsed.data.audienceDemographics ?? looseParsed.data.audience_demographics,
+      contentTypePerformance:
+        looseParsed.data.contentTypePerformance ?? looseParsed.data.content_type_performance,
       recentComments: looseParsed.data.recentComments ?? looseParsed.data.recent_comments,
     });
   }

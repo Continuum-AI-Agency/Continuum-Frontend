@@ -1,28 +1,37 @@
-"use client";
+'use client';
 
-import { X } from "lucide-react";
-import type { Competitor } from "@continuum/contracts";
+import type { Competitor } from '@continuum/contracts';
+import { X } from 'lucide-react';
 import {
   useAdCounts,
   useCompetitors,
   useDeleteCompetitor,
   useResolvePaidPage,
-} from "@/lib/api/competitorSpy";
-import { compactCount, initials, tileStyle } from "./brandVisuals";
-import { CompetitorHealthBadge } from "./CompetitorHealthBadge";
+} from '@/lib/api/competitorSpy';
+import { compactCount, initials, tileStyle } from './brandVisuals';
+import { CompetitorHealthBadge } from './CompetitorHealthBadge';
 
 function paidBadge(c: Competitor): { label: string; className: string } {
   switch (c.paidStatus) {
-    case "ready":
-      return { label: "Paid ready", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
-    case "resolving":
-      return { label: "Paid resolving", className: "border-border bg-muted text-muted-foreground" };
-    case "needs_review":
-      return { label: "Paid needs review", className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300" };
-    case "error":
-      return { label: "Paid error", className: "border-destructive/30 bg-destructive/10 text-destructive" };
+    case 'ready':
+      return {
+        label: 'Paid ready',
+        className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+      };
+    case 'resolving':
+      return { label: 'Paid resolving', className: 'border-border bg-muted text-muted-foreground' };
+    case 'needs_review':
+      return {
+        label: 'Paid needs review',
+        className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+      };
+    case 'error':
+      return {
+        label: 'Paid error',
+        className: 'border-destructive/30 bg-destructive/10 text-destructive',
+      };
     default:
-      return { label: "Organic only", className: "border-border bg-muted text-muted-foreground" };
+      return { label: 'Organic only', className: 'border-border bg-muted text-muted-foreground' };
   }
 }
 
@@ -59,9 +68,12 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
       {tracked.map((c) => {
         const paid = paidBadge(c);
         const followers = compactCount(c.instagramFollowersCount);
-        const organicReady = c.organicStatus === "ready";
+        const organicReady = c.organicStatus === 'ready';
         return (
-          <li key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+          <li
+            key={c.id}
+            className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+          >
             <span
               className="flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold"
               style={tileStyle(c.name)}
@@ -71,7 +83,9 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{c.name}</div>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                {c.instagramUsername ? <span className="font-mono">@{c.instagramUsername}</span> : null}
+                {c.instagramUsername ? (
+                  <span className="font-mono">@{c.instagramUsername}</span>
+                ) : null}
                 {followers ? <span className="tabular-nums">{followers} followers</span> : null}
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -79,16 +93,18 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                 <span
                   className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${
                     organicReady
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-border bg-muted text-muted-foreground"
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'border-border bg-muted text-muted-foreground'
                   }`}
                 >
-                  {organicReady ? "Organic ready" : "Needs Instagram"}
+                  {organicReady ? 'Organic ready' : 'Needs Instagram'}
                 </span>
-                <span className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${paid.className}`}>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${paid.className}`}
+                >
                   {paid.label}
                 </span>
-                {c.source === "auto" ? (
+                {c.source === 'auto' ? (
                   <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
                     auto
                   </span>

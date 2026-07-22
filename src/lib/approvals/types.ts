@@ -1,15 +1,15 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const ACTION_STATUSES = ["PENDING", "EXECUTED", "FAILED", "REJECTED", "EXPIRED"] as const;
+export const ACTION_STATUSES = ['PENDING', 'EXECUTED', 'FAILED', 'REJECTED', 'EXPIRED'] as const;
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 
-export const SCOPE_TYPES = ["ACCOUNT", "CAMPAIGN", "ADSET", "AD", "GLOBAL"] as const;
+export const SCOPE_TYPES = ['ACCOUNT', 'CAMPAIGN', 'ADSET', 'AD', 'GLOBAL'] as const;
 export type ScopeType = (typeof SCOPE_TYPES)[number];
 
 const looseObject = z.record(z.string(), z.unknown());
 
 const actionPayloadSchema = z.preprocess((value) => {
-  if (typeof value !== "string") return value;
+  if (typeof value !== 'string') return value;
   try {
     return JSON.parse(value);
   } catch {
@@ -17,27 +17,29 @@ const actionPayloadSchema = z.preprocess((value) => {
   }
 }, looseObject.default({}));
 
-export const ruleActionSchema = z.object({
-  id: z.string(),
-  status: z.string(),
-  action_type: z.string(),
-  scope_type: z.string().nullable().optional(),
-  scope_id: z.string().nullable().optional(),
-  action_payload: actionPayloadSchema,
-  rule_name: z.string().nullable().optional(),
-  evaluation_facts: z.record(z.string(), z.unknown()).nullable().optional(),
-  rule_id: z.string().nullable().optional(),
-  evaluation_id: z.string().nullable().optional(),
-  flow_run_id: z.string().nullable().optional(),
-  decision_note: z.string().nullable().optional(),
-  actor_id: z.string().nullable().optional(),
-  decided_at: z.string().nullable().optional(),
-  executed_at: z.string().nullable().optional(),
-  result: looseObject.nullable().optional(),
-  error: z.string().nullable().optional(),
-  is_dry_run: z.boolean().optional(),
-  created_at: z.string(),
-}).loose();
+export const ruleActionSchema = z
+  .object({
+    id: z.string(),
+    status: z.string(),
+    action_type: z.string(),
+    scope_type: z.string().nullable().optional(),
+    scope_id: z.string().nullable().optional(),
+    action_payload: actionPayloadSchema,
+    rule_name: z.string().nullable().optional(),
+    evaluation_facts: z.record(z.string(), z.unknown()).nullable().optional(),
+    rule_id: z.string().nullable().optional(),
+    evaluation_id: z.string().nullable().optional(),
+    flow_run_id: z.string().nullable().optional(),
+    decision_note: z.string().nullable().optional(),
+    actor_id: z.string().nullable().optional(),
+    decided_at: z.string().nullable().optional(),
+    executed_at: z.string().nullable().optional(),
+    result: looseObject.nullable().optional(),
+    error: z.string().nullable().optional(),
+    is_dry_run: z.boolean().optional(),
+    created_at: z.string(),
+  })
+  .loose();
 
 export type RuleAction = z.infer<typeof ruleActionSchema>;
 

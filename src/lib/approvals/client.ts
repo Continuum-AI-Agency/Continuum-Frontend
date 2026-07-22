@@ -1,30 +1,30 @@
-"use client";
+'use client';
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
-  approveResponseSchema,
-  dryRunResponseSchema,
-  getResponseSchema,
-  listResponseSchema,
-  rejectResponseSchema,
   type ActionStatus,
   type ApproveResponse,
+  approveResponseSchema,
   type DryRunResponse,
+  dryRunResponseSchema,
   type GetResponse,
+  getResponseSchema,
   type ListResponse,
+  listResponseSchema,
   type RejectResponse,
-} from "./types";
+  rejectResponseSchema,
+} from './types';
 
 type InvokeArgs = Record<string, unknown> & { action: string };
 
 async function invoke<T>(args: InvokeArgs): Promise<T> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.functions.invoke<T>("rule-actions", { body: args });
+  const { data, error } = await supabase.functions.invoke<T>('rule-actions', { body: args });
   if (error) {
-    throw new Error(error.message ?? "rule-actions edge function failed");
+    throw new Error(error.message ?? 'rule-actions edge function failed');
   }
   if (!data) {
-    throw new Error("rule-actions edge function returned no data");
+    throw new Error('rule-actions edge function returned no data');
   }
   return data;
 }
@@ -36,7 +36,7 @@ export async function listActions(args: {
   offset?: number;
 }): Promise<ListResponse> {
   const raw = await invoke<unknown>({
-    action: "list",
+    action: 'list',
     brandId: args.brandId,
     status: args.status,
     limit: args.limit,
@@ -50,7 +50,7 @@ export async function getAction(args: {
   ruleActionId: string;
 }): Promise<GetResponse> {
   const raw = await invoke<unknown>({
-    action: "get",
+    action: 'get',
     brandId: args.brandId,
     ruleActionId: args.ruleActionId,
   });
@@ -63,7 +63,7 @@ export async function approveAction(args: {
   note?: string;
 }): Promise<ApproveResponse> {
   const raw = await invoke<unknown>({
-    action: "approve",
+    action: 'approve',
     brandId: args.brandId,
     ruleActionId: args.ruleActionId,
     note: args.note,
@@ -77,7 +77,7 @@ export async function rejectAction(args: {
   reason: string;
 }): Promise<RejectResponse> {
   const raw = await invoke<unknown>({
-    action: "reject",
+    action: 'reject',
     brandId: args.brandId,
     ruleActionId: args.ruleActionId,
     reason: args.reason,
@@ -86,6 +86,6 @@ export async function rejectAction(args: {
 }
 
 export async function getDryRunMode(): Promise<DryRunResponse> {
-  const raw = await invoke<unknown>({ action: "dryRun" });
+  const raw = await invoke<unknown>({ action: 'dryRun' });
   return dryRunResponseSchema.parse(raw);
 }

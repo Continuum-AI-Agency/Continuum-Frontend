@@ -41,7 +41,12 @@ export type FunnelWindow = {
 export type FunnelStageOut = {
   label: string;
   value: number;
+  /** The absolute count for the stage, always shown (the "how many made it here"). */
   displayValue: string;
+  /** Step conversion rate vs the previous stage (0–1). Null on the top stage — it
+   *  has no prior to rate against. The count AND this rate are both surfaced so a
+   *  stage reads "1,200 · 24%" instead of forcing a choice between them. */
+  stepPct: number | null;
   /** Per-stage heat fill (undefined on the top stage — it has no prior to rate). */
   color?: string;
 };
@@ -80,14 +85,20 @@ export function buildConversionFunnel(
 
   return steps.map((step, index) => {
     if (index === 0) {
-      return { label: step.label, value: values[index], displayValue: intFmt(values[index]) };
+      return {
+        label: step.label,
+        value: values[index],
+        displayValue: intFmt(values[index]),
+        stepPct: null,
+      };
     }
     const prev = values[index - 1];
     const rate = prev > 0 ? values[index] / prev : 0;
     return {
       label: step.label,
       value: values[index],
-      displayValue: `${Math.round(rate * 100)}%`,
+      displayValue: intFmt(values[index]),
+      stepPct: rate,
       color: stepHeatFill(rate),
     };
   });
@@ -207,6 +218,9 @@ export type PacingInput = {
   periodBudget?: number | null;
   dayIndex?: number | null;
   periodDays?: number | null;
+  /** Fallback basis when periodBudget is unset: daily_total × periodDays. Keeps the
+   *  pacing view from ever blanking on "no period budget set". */
+  dailyTotal?: number | null;
 };
 
 export type PacingSnapshot = {
@@ -215,14 +229,32 @@ export type PacingSnapshot = {
   ratio: number | null;
   status: 'on_track' | 'underpacing' | 'overpacing' | 'unknown';
   projectedEndSpend: number | null;
+  /** The period budget actually used — a real one when set, else the daily-total
+   *  estimate. Null only when neither a period budget nor a daily budget is known. */
+  periodBudget: number | null;
+  /** True when periodBudget was ESTIMATED from the daily budget (no real period
+   *  budget on the portfolio) — the gauge marks it "est." rather than pretending. */
+  estimated: boolean;
 };
+
+/** Default period length when a portfolio has no explicit period budget: a
+ *  calendar month. Used only to ESTIMATE a budget so pacing always renders. */
+export const DEFAULT_PACING_PERIOD_DAYS = 30;
 
 export function pacingSnapshot(input: PacingInput): PacingSnapshot {
   const spent = numeric(input.actualSpendToDate);
   const ideal = numeric(input.idealCumulative);
-  const budget = numeric(input.periodBudget);
+  const realBudget = numeric(input.periodBudget);
+  const dailyTotal = numeric(input.dailyTotal);
   const dayIndex = numeric(input.dayIndex);
   const periodDays = numeric(input.periodDays);
+
+  // Prefer a real period budget; otherwise estimate one from the daily budget so
+  // the pacing surface never has to say "period budget not set, can't show".
+  const estimateDays = periodDays ?? DEFAULT_PACING_PERIOD_DAYS;
+  const estimatedBudget = dailyTotal != null && dailyTotal > 0 ? dailyTotal * estimateDays : null;
+  const budget = realBudget != null && realBudget > 0 ? realBudget : estimatedBudget;
+  const estimated = !(realBudget != null && realBudget > 0) && budget != null;
 
   const ratio =
     numeric(input.pacingRatio) ??
@@ -240,12 +272,14 @@ export function pacingSnapshot(input: PacingInput): PacingSnapshot {
       ? Math.max(0, Math.min(100, (spent / budget) * 100))
       : null;
 
+  // The projection needs a REAL elapsed-day index; an estimated budget alone does
+  // not license inventing a burn rate, so this stays null without dayIndex/periodDays.
   const projectedEndSpend =
     spent != null && dayIndex != null && dayIndex > 0 && periodDays != null
       ? Math.round((spent / dayIndex) * periodDays)
       : null;
 
-  return { pctSpent, ratio, status, projectedEndSpend };
+  return { pctSpent, ratio, status, projectedEndSpend, periodBudget: budget, estimated };
 }
 
 function numeric(value: number | null | undefined): number | null {
@@ -263,9 +297,6 @@ export type CpaHeroPoint = {
   date: Date;
   cpa: number;
   spend: number;
-  /** Spend is normalized onto the cost scale only for the shared-axis bar layer.
-   * Tooltips always expose the unscaled spend value. */
-  spendIndex: number;
   conv: number;
   ts: string;
   actions: string[];
@@ -276,7 +307,7 @@ export function buildCpaHeroPoints(
   actionsByTs: Record<string, string[]> = {},
   denominatorMultiplier = 1,
 ): CpaHeroPoint[] {
-  const actual = series
+  return series
     .map((point) => ({
       ts: point.cycle_ts,
       spend: point.spend_d7,
@@ -296,13 +327,6 @@ export function buildCpaHeroPoints(
       ts: point.ts,
       actions: actionsByTs[point.ts] ?? [],
     }));
-
-  const maxSpend = Math.max(...actual.map((point) => point.spend), 1);
-  const maxCost = Math.max(...actual.map((point) => point.cpa), 1);
-  return actual.map((point) => ({
-    ...point,
-    spendIndex: (point.spend / maxSpend) * maxCost,
-  }));
 }
 
 /** Optimizer actions per cycle from a parsed report, keyed by the run's cycle_ts,
@@ -331,8 +355,9 @@ export function buildCycleActionMap(report: ParsedCycleRunReport | null): Record
 // TradingView-style: plot ONE metric for several creatives on one chart, each
 // creative its own line keyed by ad_id. mergeAdDailyByMetric pivots the per-ad
 // daily series into wide rows the AreaChart consumes (one row per date, one column
-// per ad). Null cost-per-event days (cpa/roas) read as 0 so a gap doesn't fake a
-// value; spend/ctr are always present.
+// per ad). A day with no cost-per-event (cpa/roas) stays NULL and the series breaks
+// there: zero would render a creative that converted nothing at the cheapest point
+// on the axis, which is the opposite of the truth. spend/ctr are always present.
 
 export type AdMetric = 'spend' | 'cpa' | 'roas' | 'ctr';
 
@@ -347,7 +372,7 @@ export function mergeAdDailyByMetric(
     for (const point of trend.series) {
       const row = byDate.get(point.date) ?? { date: new Date(point.date) };
       const raw = point[metric];
-      row[trend.ad_id] = typeof raw === 'number' ? raw : 0;
+      row[trend.ad_id] = typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
       byDate.set(point.date, row);
     }
   }

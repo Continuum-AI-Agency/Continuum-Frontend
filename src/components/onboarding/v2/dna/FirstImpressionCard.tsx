@@ -1,6 +1,6 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { CardSurface } from "./CardSurface";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
+import { CardSurface } from './CardSurface';
 
 type Props = {
   buckets: AgentPreviewBuckets | null;
@@ -8,7 +8,7 @@ type Props = {
 
 export function FirstImpressionCard({ buckets }: Props) {
   const firstImpression = buckets?.firstImpression ?? null;
-  const status = buckets?.sectionStatus.first_impression ?? "indeterminate";
+  const status = buckets?.sectionStatus.first_impression ?? 'indeterminate';
 
   return (
     <CardSurface

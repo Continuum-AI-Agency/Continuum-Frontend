@@ -222,6 +222,7 @@ export function PortfolioSetup({
   // CBO campaigns (their ad sets held `unsupported_budget`) — surfaced as
   // not-yet-optimizable with a one-click convert-to-ABO preview.
   const cboSections = React.useMemo(() => buildCboCampaignSections(snapshots), [snapshots]);
+  const cboSectionRef = React.useRef<HTMLDivElement>(null);
 
   // What each CBO campaign WOULD look like converted to ad-set budgets. Pure and cheap —
   // the engine preview behind each one is lazy (per card, on expand), so this costs nothing
@@ -238,6 +239,11 @@ export function PortfolioSetup({
 
   const { create, enroll, run } = useOptimizerMutations(brandId, adAccountId);
   const [createdKeys, setCreatedKeys] = React.useState<Set<string>>(new Set());
+  const [enrollFailedKeys, setEnrollFailedKeys] = React.useState<Set<string>>(new Set());
+  // The suggestion currently being created AND enrolled. create.isPending alone
+  // only covers the first of the two mutations, so the button re-enabled between
+  // them and a second click would create a duplicate portfolio.
+  const [pendingKey, setPendingKey] = React.useState<string | null>(null);
 
   const createFromSuggestion = (
     suggestion: PortfolioSuggestion,
@@ -246,9 +252,11 @@ export function PortfolioSetup({
     // Base config from the SHARED builder (@continuum/contracts) so onboarding and the
     // Jaina/MCP agents produce the identical portfolio config; the FE then pins `level`
     // (optimizer is ad-set-level here) and applies the optional objective/mode override.
-    // Soak-first: suggestion creates start in observe (metric ingest + score, no Meta
-    // writes). Operators promote to recommend/autopilot from Manage when ready.
-    const suggestedConfig = suggestionToPortfolioConfig(suggestion, { apply_mode: 'observe' });
+    // Suggestion creates start in RECOMMEND: the optimizer scores nightly and proposes moves,
+    // and nothing is written until a human approves it in the Action Log. Recommend never
+    // auto-writes, so this is safe — and it means a fresh portfolio has actionable work
+    // waiting instead of silently observing.
+    const suggestedConfig = suggestionToPortfolioConfig(suggestion, { apply_mode: 'recommend' });
     // A target belongs to the objective that produced it. If an operator changes
     // that objective before creating, start without a target rather than silently
     // carrying (for example) a purchase CPA into an awareness CPM portfolio.
@@ -258,9 +266,10 @@ export function PortfolioSetup({
       ...configWithoutTarget,
       ...(!objectiveChanged && suggestedTarget != null ? { cpa_target: suggestedTarget } : {}),
       level,
-      apply_mode: 'observe' as const,
+      apply_mode: 'recommend' as const,
       ...(override ? { objective: override.objective, mode: override.mode } : {}),
     };
+    setPendingKey(suggestion.name);
     create.mutate(
       {
         brand_id: brandId,
@@ -268,22 +277,38 @@ export function PortfolioSetup({
         config,
       },
       {
+        onError: () => setPendingKey(null),
         onSuccess: ({ portfolio_id }) => {
-          setCreatedKeys((prev) => new Set(prev).add(suggestion.name));
-          if (suggestion.adset_ids.length > 0) {
-            // Score the first cycle only AFTER enrollment lands (a cycle on 0 ad
-            // sets is a no-op); navigate to the detail workspace either way — the
-            // scheduler already has next_realloc_at=now() as the backstop.
-            enroll.mutate(suggestionToEnrollRequest(portfolio_id, suggestion), {
-              onSuccess: () => {
-                run.mutate(portfolio_id);
-                onCreated?.(portfolio_id);
-              },
-              onError: () => onCreated?.(portfolio_id),
-            });
-          } else {
+          if (suggestion.adset_ids.length === 0) {
+            setPendingKey(null);
+            setCreatedKeys((prev) => new Set(prev).add(suggestion.name));
             onCreated?.(portfolio_id);
+            return;
           }
+
+          // Score the first cycle only AFTER enrollment lands (a cycle on 0 ad
+          // sets is a no-op).
+          enroll.mutate(suggestionToEnrollRequest(portfolio_id, suggestion), {
+            onSuccess: () => {
+              setPendingKey(null);
+              setCreatedKeys((prev) => new Set(prev).add(suggestion.name));
+              setEnrollFailedKeys((prev) => {
+                const next = new Set(prev);
+                next.delete(suggestion.name);
+                return next;
+              });
+              run.mutate(portfolio_id);
+              onCreated?.(portfolio_id);
+            },
+            // Deliberately does NOT navigate. Opening a portfolio with nothing
+            // enrolled lands the user on "Scoring your first cycle…" that
+            // resolves to "nothing to score" — the failure reads as a broken
+            // optimizer instead of a retryable enroll. Stay put and say so.
+            onError: () => {
+              setPendingKey(null);
+              setEnrollFailedKeys((prev) => new Set(prev).add(suggestion.name));
+            },
+          });
         },
       },
     );
@@ -334,7 +359,29 @@ export function PortfolioSetup({
         />
       ) : null}
 
-      <SignalReadinessCard objective={accountObjective} snapshots={snapshots} />
+      {/* The "nothing movable" verdict tells the reader to convert a campaign to
+          ad-set budgets. That section is rendered below, often past several
+          screens of suggestions, so the verdict shipped as advice with no way to
+          act on it. */}
+      <SignalReadinessCard
+        action={
+          cboSections.length > 0 ? (
+            <Button
+              className="h-6 px-2 text-xs"
+              onClick={() =>
+                cboSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              size="xs"
+              type="button"
+              variant="ghost"
+            >
+              Show {cboSections.length} CBO {cboSections.length === 1 ? 'campaign' : 'campaigns'}
+            </Button>
+          ) : null
+        }
+        objective={accountObjective}
+        snapshots={snapshots}
+      />
 
       <section className="space-y-2">
         <div className="flex items-center gap-2">
@@ -383,7 +430,8 @@ export function PortfolioSetup({
                   snapshots={groupSnapshots}
                   currency={resolvedCurrency}
                   created={createdKeys.has(suggestion.name)}
-                  busy={create.isPending && create.variables?.config.name === suggestion.name}
+                  enrollFailed={enrollFailedKeys.has(suggestion.name)}
+                  busy={pendingKey === suggestion.name}
                   onCreate={(override) => createFromSuggestion(suggestion, override)}
                 />
               );
@@ -404,13 +452,15 @@ export function PortfolioSetup({
         )}
       </section>
 
-      <CboCampaigns
-        brandId={brandId}
-        accountId={adAccountId}
-        currency={resolvedCurrency}
-        sections={cboSections}
-        snapshots={snapshots}
-      />
+      <div ref={cboSectionRef}>
+        <CboCampaigns
+          brandId={brandId}
+          accountId={adAccountId}
+          currency={resolvedCurrency}
+          sections={cboSections}
+          snapshots={snapshots}
+        />
+      </div>
 
       <section className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/10 px-4 py-3">
         <div className="min-w-0">
@@ -505,6 +555,7 @@ function SuggestionRow({
   currency,
   created,
   busy,
+  enrollFailed,
   onCreate,
 }: {
   suggestion: PortfolioSuggestion;
@@ -512,6 +563,11 @@ function SuggestionRow({
   currency: string | null;
   created: boolean;
   busy: boolean;
+  /** The portfolio was created but its ad sets did not enroll. Surfaced HERE
+   *  rather than by navigating to the new portfolio: an empty portfolio opens on
+   *  a spinner and then reports "nothing to score", which reads as a broken
+   *  optimizer instead of a failed enroll the user can simply retry. */
+  enrollFailed: boolean;
   onCreate: (override: { objective: OptimizationObjective; mode: OptimizationModeDto }) => void;
 }) {
   const [previewOpen, setPreviewOpen] = React.useState(false);
@@ -545,6 +601,12 @@ function SuggestionRow({
             {suggestion.summary.adsets} ad sets · {formatCurrency(suggestion.daily_total, currency)}
             /d
             {cpa != null ? ` · ${metric.costLabel} ${formatCpa(cpa, currency)}` : ''}
+          </p>
+          {/* Suggestion creates start in recommend (see createFromSuggestion): the optimizer
+              proposes moves and nothing is written until you approve it in the Action Log. */}
+          <p className="mt-1 text-2xs text-muted-foreground">
+            Starts in Recommend — scores every night and proposes moves; nothing changes until you
+            approve it.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -596,6 +658,12 @@ function SuggestionRow({
           )}
         </div>
       </div>
+      {enrollFailed ? (
+        <p className="px-4 pb-2 text-2xs text-warning" role="status">
+          Portfolio created, but its ad sets didn&rsquo;t enroll. Press Create again to retry —
+          nothing has been changed on Meta.
+        </p>
+      ) : null}
       {noConversions ? (
         <p className="px-4 pb-2 text-2xs text-warning">
           No conversions tracked in the last 14 days — a conversion objective will score as Low
@@ -630,9 +698,10 @@ export function PortfolioCreateForm({
   const [name, setName] = React.useState('');
   const [objective, setObjective] = React.useState<OptimizationObjective>('purchase');
   const [mode, setMode] = React.useState<OptimizationModeDto>('balanced');
-  // Create-time autonomy: observe (soak metrics) or recommend (human apply). Autopilot
-  // requires guardrails and is armed only from Manage after create.
-  const [applyMode, setApplyMode] = React.useState<ApplyMode>('observe');
+  // Create-time autonomy: recommend (propose moves, human approves) is the default, or observe
+  // (score only, no proposals). Autopilot requires guardrails and is armed only from Manage
+  // after create. Recommend never auto-writes, so a new portfolio surfaces work to approve.
+  const [applyMode, setApplyMode] = React.useState<ApplyMode>('recommend');
   const [dailyTotal, setDailyTotal] = React.useState('');
   const [cpaTarget, setCpaTarget] = React.useState('');
   const [selectedAdsetIds, setSelectedAdsetIds] = React.useState<string[]>([]);
@@ -703,7 +772,7 @@ export function PortfolioCreateForm({
                 setDailyTotal('');
                 setCpaTarget('');
                 setSelectedAdsetIds([]);
-                setApplyMode('observe');
+                setApplyMode('recommend');
                 onCreated?.(portfolio_id);
               },
             },

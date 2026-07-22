@@ -2,7 +2,11 @@
 // The user JWT is forwarded by the Supabase client; no Vercel admin write is
 // involved in share creation, listing, or revocation.
 
-import type { CreateShareLinkRequest, RevokeShareLinkRequest, ShareLink } from '@continuum/contracts';
+import type {
+  CreateShareLinkRequest,
+  RevokeShareLinkRequest,
+  ShareLink,
+} from '@continuum/contracts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   createShareLinkOperation,

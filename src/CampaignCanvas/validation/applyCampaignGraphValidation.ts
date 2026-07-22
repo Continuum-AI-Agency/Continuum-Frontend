@@ -4,7 +4,7 @@ import { applySingleParentRelationshipValidation } from './hierarchyRelationship
 
 export function applyCampaignGraphValidation(
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): CampaignCanvasNode[] {
   const nodesWithSingleParentValidation = applySingleParentRelationshipValidation(nodes, edges);
   return applyAdCreativeRelationshipValidation(nodesWithSingleParentValidation, edges);

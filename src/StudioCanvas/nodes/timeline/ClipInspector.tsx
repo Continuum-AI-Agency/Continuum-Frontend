@@ -20,8 +20,25 @@ import {
 import type { ClipTransition, ClipTransitionType } from '../../utils/render/transitions';
 import type { ClipAudioPatch } from './useTimelineEditorModel';
 
-const FILTER_PRESET_ORDER: FilterPreset[] = ['none', 'bw', 'vintage', 'vivid', 'cool', 'warm', 'noir', 'dream'];
-const BLEND_MODES: BlendMode[] = ['normal', 'multiply', 'screen', 'overlay', 'lighten', 'darken', 'difference'];
+const FILTER_PRESET_ORDER: FilterPreset[] = [
+  'none',
+  'bw',
+  'vintage',
+  'vivid',
+  'cool',
+  'warm',
+  'noir',
+  'dream',
+];
+const BLEND_MODES: BlendMode[] = [
+  'normal',
+  'multiply',
+  'screen',
+  'overlay',
+  'lighten',
+  'darken',
+  'difference',
+];
 
 const TRANSITION_OPTIONS: { type: ClipTransitionType; label: string }[] = [
   { type: 'cut', label: 'None' },
@@ -129,7 +146,7 @@ export function ClipInspector({
   const adjustments = effects.adjustments ?? {};
   const transform = effects.transform ?? {};
   const trimStart = Math.max(0, item.trimStartSec ?? 0);
-  const trimEnd = item.trimEndSec ?? (sourceDurationSec ?? trimStart + durationSec);
+  const trimEnd = item.trimEndSec ?? sourceDurationSec ?? trimStart + durationSec;
   const kenBurnsOn = Boolean(effects.kenBurns);
   const textOverlays = effects.text ?? [];
 
@@ -165,7 +182,10 @@ export function ClipInspector({
       <div className="text-2xs text-muted-foreground">
         Duration <span className="tabular-nums text-foreground">{durationSec.toFixed(2)}s</span>
         {isVideo && sourceDurationSec ? (
-          <> · source <span className="tabular-nums">{sourceDurationSec.toFixed(2)}s</span></>
+          <>
+            {' '}
+            · source <span className="tabular-nums">{sourceDurationSec.toFixed(2)}s</span>
+          </>
         ) : null}
       </div>
 
@@ -366,7 +386,9 @@ export function ClipInspector({
           <Switch
             id="clip-kenburns"
             checked={kenBurnsOn}
-            onCheckedChange={(checked) => onSetEffects({ kenBurns: checked ? KEN_BURNS_DEFAULT : undefined })}
+            onCheckedChange={(checked) =>
+              onSetEffects({ kenBurns: checked ? KEN_BURNS_DEFAULT : undefined })
+            }
           />
         </div>
         <div className="grid grid-cols-2 gap-2">

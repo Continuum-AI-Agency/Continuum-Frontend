@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { MoreHorizontal, Ban, FileJson, SkipForward, Copy } from "lucide-react";
-import { toast } from "sonner";
+import { Ban, Copy, FileJson, MoreHorizontal, SkipForward } from 'lucide-react';
+import * as React from 'react';
+import { toast } from 'sonner';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,8 +12,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { RuleAction } from "@/lib/approvals/types";
+} from '@/components/ui/dropdown-menu';
+import type { RuleAction } from '@/lib/approvals/types';
 
 type Props = {
   action: RuleAction;
@@ -26,7 +26,7 @@ export function ComposerOverflowMenu({ action, onReject, onSkip, onViewPayload }
   const handleCopy = React.useCallback(async () => {
     try {
       await navigator.clipboard.writeText(action.id);
-      toast.success("Action id copied");
+      toast.success('Action id copied');
     } catch {
       toast.error("Couldn't copy");
     }

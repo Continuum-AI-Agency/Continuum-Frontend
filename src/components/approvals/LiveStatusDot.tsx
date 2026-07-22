@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import * as React from 'react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Props = {
   isDryRun: boolean;
@@ -10,10 +10,10 @@ type Props = {
 
 function LiveStatusDotImpl({ isDryRun, isFetching }: Props) {
   // emerald-500 / amber-500 in oklch, matched to the rest of the paid-media surface.
-  const color = isDryRun ? "oklch(76% 0.17 80)" : "oklch(70% 0.17 162)";
+  const color = isDryRun ? 'oklch(76% 0.17 80)' : 'oklch(70% 0.17 162)';
   const label = isDryRun
-    ? "Simulation mode — approvals will not hit Meta."
-    : "Live — approvals execute against Meta on approve.";
+    ? 'Simulation mode — approvals will not hit Meta.'
+    : 'Live — approvals execute against Meta on approve.';
 
   return (
     <TooltipProvider delayDuration={150}>

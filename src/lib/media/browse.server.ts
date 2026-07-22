@@ -8,11 +8,7 @@ import type {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildCarousel, carouselSignablePaths } from './carousel';
 import { rowToSignedMediaAsset } from './mapper';
-import {
-  buildAssetPreview,
-  loadAssetRenditions,
-  renditionSignablePaths,
-} from './renditions';
+import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from './renditions';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { mediaSchema } from './supabase-media';

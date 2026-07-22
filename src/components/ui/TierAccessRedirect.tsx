@@ -1,15 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/components/ui/ToastProvider';
 
-import { useToast } from "@/components/ui/ToastProvider";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-
-const DEFAULT_REDIRECT = "/dashboard";
-const DEFAULT_TITLE = "Access Restricted";
+const DEFAULT_REDIRECT = '/dashboard';
+const DEFAULT_TITLE = 'Access Restricted';
 
 type TierAccessRedirectProps = {
   description: string;
@@ -32,7 +31,7 @@ export function TierAccessRedirect({
     show({
       title,
       description,
-      variant: "warning",
+      variant: 'warning',
       durationMs: 6000,
     });
     router.replace(redirectTo);

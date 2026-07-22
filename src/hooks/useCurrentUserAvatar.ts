@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useCallback } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
-import { proxyAvatarUrlIfNeeded } from "@/lib/auth/avatar-url";
+import type { User } from '@supabase/supabase-js';
+import { useCallback, useEffect, useState } from 'react';
+import { proxyAvatarUrlIfNeeded } from '@/lib/auth/avatar-url';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type UseCurrentUserAvatarResult = {
   user: User | null;
@@ -14,14 +14,17 @@ type UseCurrentUserAvatarResult = {
 };
 
 function getInitials(user?: User | null): string {
-  const name = (user?.user_metadata as { full_name?: string } | undefined)?.full_name || user?.email || "";
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "?";
+  const name =
+    (user?.user_metadata as { full_name?: string } | undefined)?.full_name || user?.email || '';
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || '?'
+  );
 }
 
 export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
@@ -38,15 +41,17 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
       }
 
       const rawMeta =
-        "raw_user_meta_data" in u
+        'raw_user_meta_data' in u
           ? (u as { raw_user_meta_data?: { picture?: string } }).raw_user_meta_data
           : undefined;
 
-      const picture = rawMeta?.picture || (u.user_metadata as { picture?: string } | undefined)?.picture;
+      const picture =
+        rawMeta?.picture || (u.user_metadata as { picture?: string } | undefined)?.picture;
 
-      const avatarUrlFromMetadata = typeof picture === "string" && picture.length > 0
-        ? picture
-        : (u.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
+      const avatarUrlFromMetadata =
+        typeof picture === 'string' && picture.length > 0
+          ? picture
+          : (u.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
 
       if (avatarUrlFromMetadata && /^https?:\/\//i.test(avatarUrlFromMetadata)) {
         setAvatarUrl(proxyAvatarUrlIfNeeded(avatarUrlFromMetadata, window.location.origin));
@@ -54,14 +59,14 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
       }
 
       if (avatarUrlFromMetadata) {
-        const { data } = supabase.storage.from("avatars").getPublicUrl(avatarUrlFromMetadata);
+        const { data } = supabase.storage.from('avatars').getPublicUrl(avatarUrlFromMetadata);
         setAvatarUrl(data?.publicUrl ?? null);
         return;
       }
 
       setAvatarUrl(null);
     },
-    [supabase]
+    [supabase],
   );
 
   const refresh = useCallback(async () => {

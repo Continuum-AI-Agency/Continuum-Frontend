@@ -27,6 +27,17 @@ export const composerHistoryMessageSchema = z
 export type ComposerHistoryMessage = z.infer<typeof composerHistoryMessageSchema>;
 
 export const COMPOSER_HISTORY_MAX_MESSAGES = 12;
+export const CANVAS_COMPOSER_MAX_REFERENCES = 20;
+
+export const canvasComposerReferenceSchema = z
+  .object({
+    type: z.enum(['skill', 'media_asset']),
+    id: z.string().min(1),
+    label: z.string().min(1).max(160),
+  })
+  .strict();
+
+export type CanvasComposerReference = z.infer<typeof canvasComposerReferenceSchema>;
 
 export const canvasComposeRequestSchema = z
   .object({
@@ -35,9 +46,57 @@ export const canvasComposeRequestSchema = z
     prompt: z.string().min(1).max(4000),
     /** Nodes the user had selected — the composer treats them as the subject of the ask. */
     selectedNodeIds: z.array(z.string()).max(50).optional(),
+    /** Exact skill/media selections from the canvas context grabber. */
+    references: z
+      .array(canvasComposerReferenceSchema)
+      .max(CANVAS_COMPOSER_MAX_REFERENCES)
+      .optional(),
     /** Prior exchanges, most recent last. Absent = the default, memory-less turn. */
     history: z.array(composerHistoryMessageSchema).max(COMPOSER_HISTORY_MAX_MESSAGES).optional(),
   })
   .strict();
 
 export type CanvasComposeRequest = z.infer<typeof canvasComposeRequestSchema>;
+
+const canvasComposerModelCallSchema = z.object({
+  agent: z.string().nullable(),
+  model: z.string(),
+  call_id: z.string(),
+  step_number: z.number().int().nonnegative(),
+  finish_reason: z.string().nullable(),
+  response_time_ms: z.number().nonnegative().nullable(),
+  step_time_ms: z.number().nonnegative().nullable(),
+  time_to_first_output_ms: z.number().nonnegative().nullable(),
+  max_inter_chunk_ms: z.number().nonnegative().nullable(),
+  input_tokens: z.number().nonnegative().nullable(),
+  output_tokens: z.number().nonnegative().nullable(),
+  reasoning_tokens: z.number().nonnegative().nullable(),
+  cached_input_tokens: z.number().nonnegative().nullable(),
+  ts: z.number().int().nonnegative(),
+});
+
+const canvasComposerStallEventSchema = z.object({
+  runner: z.string(),
+  agent: z.string().nullable(),
+  ts: z.number().int().nonnegative(),
+});
+
+export const canvasComposerForensicsSchema = z.object({
+  run_id: z.string().min(1),
+  owner_id: z.string().min(1),
+  brand_id: z.string().min(1),
+  room_id: z.string().min(1),
+  step_count: z.number().int().nonnegative(),
+  tool_calls: z.record(z.string(), z.number().int().nonnegative()),
+  mutation_count: z.number().int().nonnegative(),
+  model_calls: z.array(canvasComposerModelCallSchema),
+  stall_events: z.array(canvasComposerStallEventSchema),
+  usage_totals: z.object({
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+    reasoning_tokens: z.number().int().nonnegative(),
+    cached_input_tokens: z.number().int().nonnegative(),
+  }),
+});
+
+export type CanvasComposerForensics = z.infer<typeof canvasComposerForensicsSchema>;

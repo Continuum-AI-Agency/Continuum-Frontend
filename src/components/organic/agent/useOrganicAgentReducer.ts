@@ -39,10 +39,7 @@ export type PanelState = {
   isHydrated: boolean;
   jobs: Record<string, AgentJobState>;
   pipeline: Record<string, PipelineCardState>;
-  pendingJobCancellations: Record<
-    string,
-    { job: AgentJobState; pipeline?: PipelineCardState }
-  >;
+  pendingJobCancellations: Record<string, { job: AgentJobState; pipeline?: PipelineCardState }>;
   planItemStatus: Record<string, PlanItemStatus>;
   pendingToolApprovals: ToolApproval[];
   bulkRuns: Record<string, BulkRunRef>;
@@ -495,7 +492,6 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         },
         pendingJobCancellations,
       };
-
     }
 
     case 'JOB_CANCEL_START': {

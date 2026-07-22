@@ -1,24 +1,24 @@
-import type { StudioNode } from "../types";
-import { buildDataUrl, parseDataUrl } from "./dataUrl";
 import {
   IMAGE_REFERENCE_MAX_BYTES,
-  VIDEO_REFERENCE_MAX_BYTES,
   inferMimeTypeFromPath,
   type ParsedReferenceDropPayload,
   resolveReferenceMimeType,
-} from "@/lib/ai-studio/referenceDrop";
-import { resolveDroppedBase64 } from "@/lib/ai-studio/referenceDropClient";
-import { resignCanvasNodes } from "./resignCanvasNodes";
+  VIDEO_REFERENCE_MAX_BYTES,
+} from '@/lib/ai-studio/referenceDrop';
+import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
+import type { StudioNode } from '../types';
+import { buildDataUrl, parseDataUrl } from './dataUrl';
+import { resignCanvasNodes } from './resignCanvasNodes';
 
 type Base64Resolver = (
   parsed: ParsedReferenceDropPayload,
-  maxBytes: number
+  maxBytes: number,
 ) => Promise<{ base64: string; sourceName?: string; byteLength?: number }>;
 
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 
 function normalizeString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -29,37 +29,37 @@ function normalizeHttpUrl(value: unknown): string | undefined {
 }
 
 export function hasHydratableMediaReference(node: StudioNode): boolean {
-  if (node.type !== "image" && node.type !== "video") return false;
+  if (node.type !== 'image' && node.type !== 'video') return false;
   const data = node.data as Record<string, unknown>;
   const currentValue = normalizeString(data[node.type]);
   if (currentValue && parseDataUrl(currentValue)) return false;
   return Boolean(
     normalizeString(data.sourcePath) ||
       normalizeHttpUrl(data.sourceUrl) ||
-      normalizeHttpUrl(currentValue)
+      normalizeHttpUrl(currentValue),
   );
 }
 
 function buildRemotePayload(
   sourcePath: string | undefined,
-  sourceUrl: string | undefined
+  sourceUrl: string | undefined,
 ): ParsedReferenceDropPayload | null {
   if (!sourcePath && !sourceUrl) return null;
   return {
-    kind: "remote",
+    kind: 'remote',
     path: sourcePath,
     publicUrl: sourceUrl,
-    mimeType: inferMimeTypeFromPath(sourceUrl ?? sourcePath ?? "") ?? undefined,
+    mimeType: inferMimeTypeFromPath(sourceUrl ?? sourcePath ?? '') ?? undefined,
   };
 }
 
 async function rehydrateMediaNode(
   node: StudioNode,
   options: {
-    key: "image" | "video";
+    key: 'image' | 'video';
     maxBytes: number;
     resolver: Base64Resolver;
-  }
+  },
 ): Promise<StudioNode> {
   const data = node.data as Record<string, unknown>;
   const currentValue = normalizeString(data[options.key]);
@@ -88,13 +88,13 @@ async function rehydrateMediaNode(
       sourceUrl,
     };
 
-    if (!normalizeString(data.fileName) && sourceName && sourceName !== "data-url") {
+    if (!normalizeString(data.fileName) && sourceName && sourceName !== 'data-url') {
       nextData.fileName = sourceName;
     }
 
     return {
       ...node,
-      data: nextData as StudioNode["data"],
+      data: nextData as StudioNode['data'],
     };
   } catch {
     return node;
@@ -103,26 +103,26 @@ async function rehydrateMediaNode(
 
 export async function rehydrateWorkflowMediaNodes(
   nodes: StudioNode[],
-  resolver: Base64Resolver = resolveDroppedBase64
+  resolver: Base64Resolver = resolveDroppedBase64,
 ): Promise<StudioNode[]> {
   const rehydrated = await Promise.all(
     nodes.map(async (node) => {
-      if (node.type === "image") {
+      if (node.type === 'image') {
         return rehydrateMediaNode(node, {
-          key: "image",
+          key: 'image',
           maxBytes: IMAGE_REFERENCE_MAX_BYTES,
           resolver,
         });
       }
-      if (node.type === "video") {
+      if (node.type === 'video') {
         return rehydrateMediaNode(node, {
-          key: "video",
+          key: 'video',
           maxBytes: VIDEO_REFERENCE_MAX_BYTES,
           resolver,
         });
       }
       return node;
-    })
+    }),
   );
 
   // Re-sign durable storage paths on generator nodes (nanoGen, video gen types).

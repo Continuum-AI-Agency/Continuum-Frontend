@@ -1,30 +1,29 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { z } from "zod";
-
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getApiUrl } from "@/lib/api/config";
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { getApiUrl } from '@/lib/api/config';
 import {
+  type CalendarGenerationRequest,
   calendarGenerationRequestSchema,
   toBackendCalendarGenerationRequest,
-  type CalendarGenerationRequest,
-} from "@/lib/organic/calendar-generation";
+} from '@/lib/organic/calendar-generation';
 import {
+  type GenerationRequestPayload,
   generationRequestSchema,
   gridJobResponseSchema,
-  type GenerationRequestPayload,
-} from "@/lib/organic/types";
+} from '@/lib/organic/types';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const clientRequestSchema = generationRequestSchema;
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const NDJSON_HEADERS = {
-  "Content-Type": "application/x-ndjson",
-  "Cache-Control": "no-cache, no-transform",
-  Connection: "keep-alive",
-  "X-Accel-Buffering": "no",
+  'Content-Type': 'application/x-ndjson',
+  'Cache-Control': 'no-cache, no-transform',
+  Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
 };
 
 function toBackendPayload(payload: GenerationRequestPayload) {
@@ -51,7 +50,7 @@ function toFlattenedCalendarBackendPayload(payload: CalendarGenerationRequest) {
 async function streamCalendarGeneration(
   request: NextRequest,
   token: string,
-  payload: CalendarGenerationRequest
+  payload: CalendarGenerationRequest,
 ) {
   let normalizedPayload;
   try {
@@ -59,25 +58,25 @@ async function streamCalendarGeneration(
   } catch (error) {
     return NextResponse.json(
       {
-        error: "Invalid calendar generation payload",
+        error: 'Invalid calendar generation payload',
         detail: error instanceof z.ZodError ? error.flatten() : String(error),
       },
-      { status: 422 }
+      { status: 422 },
     );
   }
 
-  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
-  const backendUrl = getApiUrl("/api/organic/generate-calendar");
+  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  const backendUrl = getApiUrl('/api/organic/generate-calendar');
   const upstreamResponse = await fetch(backendUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/x-ndjson",
+      'Content-Type': 'application/json',
+      Accept: 'application/x-ndjson',
       Authorization: `Bearer ${token}`,
       apikey: anonKey,
-      "x-supabase-auth": token,
-      "x-auth-token": token,
-      "X-Brand-Profile-Id": payload.brandProfileId,
+      'x-supabase-auth': token,
+      'x-auth-token': token,
+      'X-Brand-Profile-Id': payload.brandProfileId,
     },
     body: JSON.stringify(normalizedPayload),
   });
@@ -94,8 +93,8 @@ async function streamCalendarGeneration(
       }
     }
     return NextResponse.json(
-      { error: "Failed to start calendar generation", detail },
-      { status: upstreamResponse.status || 502 }
+      { error: 'Failed to start calendar generation', detail },
+      { status: upstreamResponse.status || 502 },
     );
   }
 
@@ -106,7 +105,7 @@ async function streamCalendarGeneration(
     start(controller) {
       const cleanup = () => {
         if (abortHandler) {
-          request.signal.removeEventListener("abort", abortHandler);
+          request.signal.removeEventListener('abort', abortHandler);
           abortHandler = null;
         }
       };
@@ -137,12 +136,12 @@ async function streamCalendarGeneration(
           });
       };
 
-      request.signal.addEventListener("abort", abortHandler);
+      request.signal.addEventListener('abort', abortHandler);
       forward();
     },
     cancel() {
       if (abortHandler) {
-        request.signal.removeEventListener("abort", abortHandler);
+        request.signal.removeEventListener('abort', abortHandler);
         abortHandler = null;
       }
       void reader.cancel();
@@ -152,15 +151,12 @@ async function streamCalendarGeneration(
   return new NextResponse(stream, { headers: NDJSON_HEADERS });
 }
 
-async function queueLegacyGridGeneration(
-  payload: GenerationRequestPayload,
-  token: string
-) {
-  const backendUrl = getApiUrl("/api/organic/generate-grid");
+async function queueLegacyGridGeneration(payload: GenerationRequestPayload, token: string) {
+  const backendUrl = getApiUrl('/api/organic/generate-grid');
   const response = await fetch(backendUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(toBackendPayload(payload)),
@@ -174,8 +170,8 @@ async function queueLegacyGridGeneration(
       detail = await response.text();
     }
     return NextResponse.json(
-      { error: "Failed to queue content generation", detail },
-      { status: response.status }
+      { error: 'Failed to queue content generation', detail },
+      { status: response.status },
     );
   }
 
@@ -183,20 +179,17 @@ async function queueLegacyGridGeneration(
   try {
     responsePayload = await response.json();
   } catch {
-    return NextResponse.json(
-      { error: "Backend returned a non-JSON response" },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: 'Backend returned a non-JSON response' }, { status: 502 });
   }
 
   const jobParse = gridJobResponseSchema.safeParse(responsePayload);
   if (!jobParse.success) {
     return NextResponse.json(
       {
-        error: "Unexpected job payload from generation service",
+        error: 'Unexpected job payload from generation service',
         detail: jobParse.error.flatten(),
       },
-      { status: 502 }
+      { status: 502 },
     );
   }
 
@@ -206,7 +199,7 @@ async function queueLegacyGridGeneration(
       channel: jobParse.data.channel,
       status: jobParse.data.status,
     },
-    { status: 202 }
+    { status: 202 },
   );
 }
 
@@ -215,10 +208,7 @@ export async function POST(request: NextRequest) {
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON payload" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
   const calendarParsed = calendarGenerationRequestSchema.safeParse(json);
@@ -226,23 +216,20 @@ export async function POST(request: NextRequest) {
   if (!calendarParsed.success && !legacyParsed.success) {
     return NextResponse.json(
       {
-        error: "Invalid request payload",
+        error: 'Invalid request payload',
         detail: {
           calendar: calendarParsed.error.flatten(),
           legacyGrid: legacyParsed.error.flatten(),
         },
       },
-      { status: 422 }
+      { status: 422 },
     );
   }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const token = data.session.access_token.trim();
@@ -250,10 +237,7 @@ export async function POST(request: NextRequest) {
     return streamCalendarGeneration(request, token, calendarParsed.data);
   }
   if (!legacyParsed.success) {
-    return NextResponse.json(
-      { error: "Invalid legacy generation payload" },
-      { status: 422 }
-    );
+    return NextResponse.json({ error: 'Invalid legacy generation payload' }, { status: 422 });
   }
   return queueLegacyGridGeneration(legacyParsed.data, token);
 }

@@ -6,9 +6,9 @@
 // signatures, so no adapter is needed.
 
 export {
-  isValidConnection,
   getAllowedSourceHandles,
   getAllowedTargetHandles,
   getTargetHandleConnectionLimit,
   isClipSlotHandle,
-} from "@continuum/contracts";
+  isValidConnection,
+} from '@continuum/contracts';

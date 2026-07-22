@@ -1,12 +1,12 @@
 'use client';
 
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import * as React from 'react';
 import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
 import { ChatMessage } from '@/components/chat/ChatMessage';
-import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
+import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
@@ -29,9 +29,7 @@ import { JainaReportV2 } from './JainaReportV2';
 import { MessageActionBar } from './MessageActionBar';
 import { ObjectivesQueue } from './ObjectivesQueue';
 import { type PlanFeedbackPayload, PlanSection } from './PlanSection';
-import { SparkleSpinner } from './SparkleSpinner';
-import { LatestJainaThought, ThinkingWindow } from './ThinkingWindow';
-import { deriveLiveStatusLabel } from './thinkingUtils';
+import { ThinkingWindow } from './ThinkingWindow';
 import { WorkerInsightsPanel } from './WorkerInsightsPanel';
 
 function makeCreativeArtifact(details: Record<string, unknown>): CreativeArtifact | null {
@@ -158,16 +156,6 @@ export function JainaMessageItem({
     );
   }, [isStructuredJsonContent, message.content, report, reportV2, shouldRenderInlineReport]);
 
-  const liveStatusLabel = React.useMemo(
-    () => (isStreaming ? (deriveLiveStatusLabel(reasoning ?? []) ?? 'Working') : null),
-    [isStreaming, reasoning],
-  );
-
-  const showLiveStatus =
-    isStreaming &&
-    message.role === 'assistant' &&
-    (state.status === 'starting' || state.status === 'streaming');
-
   const showStaticFallback =
     !isStreaming &&
     message.role === 'assistant' &&
@@ -234,19 +222,6 @@ export function JainaMessageItem({
               </div>
             ) : null}
 
-            {showLiveStatus ? (
-              <motion.div
-                key={liveStatusLabel}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="flex items-center gap-2 text-sm text-muted-foreground"
-              >
-                <SparkleSpinner isActive className="text-foreground/60" />
-                <span className="font-medium">{liveStatusLabel}</span>
-              </motion.div>
-            ) : null}
-
             {showStaticFallback ? (
               <span className="text-sm text-muted-foreground">Response complete.</span>
             ) : null}
@@ -281,16 +256,6 @@ export function JainaMessageItem({
               toolResults={toolResults ?? []}
               isStreaming={isStreaming}
             />
-
-            <AnimatePresence mode="wait">
-              {isStreaming ? (
-                <LatestJainaThought
-                  key="latest-jaina-thought"
-                  reasoning={reasoning ?? []}
-                  isStreaming={isStreaming}
-                />
-              ) : null}
-            </AnimatePresence>
 
             {plan ? (
               <motion.div

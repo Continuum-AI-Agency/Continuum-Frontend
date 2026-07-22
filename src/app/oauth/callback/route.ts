@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { resolveRequestOrigin } from "@/lib/server/origin";
-import { OAUTH_BROADCAST_CHANNEL_NAME } from "@/lib/popup";
+import { NextResponse } from 'next/server';
+import { OAUTH_BROADCAST_CHANNEL_NAME } from '@/lib/popup';
+import { resolveRequestOrigin } from '@/lib/server/origin';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 type PopupPayload =
   | {
-      type: "oauth:success";
+      type: 'oauth:success';
       provider: string | null;
       context: string;
       accountId: string | null;
     }
   | {
-      type: "oauth:error";
+      type: 'oauth:error';
       provider: string | null;
       context: string;
       message: string;
@@ -22,7 +22,7 @@ function renderPopupResult(
   fallbackRedirect: string,
   status = 200,
   postMessageOrigin?: string,
-  isPopup?: boolean
+  isPopup?: boolean,
 ): NextResponse {
   const safePayload = JSON.stringify(payload);
   const targetOrigin = postMessageOrigin ?? new URL(fallbackRedirect).origin;
@@ -31,8 +31,8 @@ function renderPopupResult(
   <head><meta charset="utf-8" /><title>OAuth</title></head>
   <body style="font-family: sans-serif; display: grid; min-height: 100vh; place-items: center;">
     <div>
-      <p>${payload.type === "oauth:success" ? "Authentication complete." : "Authentication failed."}</p>
-      ${isPopup ? "<p>You can close this window.</p>" : "<p>Redirecting...</p>"}
+      <p>${payload.type === 'oauth:success' ? 'Authentication complete.' : 'Authentication failed.'}</p>
+      ${isPopup ? '<p>You can close this window.</p>' : '<p>Redirecting...</p>'}
     </div>
     <script>
       (function () {
@@ -76,25 +76,25 @@ function renderPopupResult(
   return new NextResponse(html, {
     status,
     headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
   });
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const provider = url.searchParams.get("provider");
-  const context = url.searchParams.get("context") ?? "onboarding";
-  const code = url.searchParams.get("code");
-  const isPopup = url.searchParams.get("popup") === "true";
-  const errorDescription = url.searchParams.get("error_description");
-  const targetOrigin = resolveRequestOrigin(request, url, url.searchParams.get("origin"));
+  const provider = url.searchParams.get('provider');
+  const context = url.searchParams.get('context') ?? 'onboarding';
+  const code = url.searchParams.get('code');
+  const isPopup = url.searchParams.get('popup') === 'true';
+  const errorDescription = url.searchParams.get('error_description');
+  const targetOrigin = resolveRequestOrigin(request, url, url.searchParams.get('origin'));
 
   if (errorDescription) {
     return renderPopupResult(
       {
-        type: "oauth:error",
+        type: 'oauth:error',
         provider,
         context,
         message: errorDescription,
@@ -102,22 +102,22 @@ export async function GET(request: Request) {
       `${targetOrigin}/login?error=auth_callback_failed`,
       400,
       targetOrigin,
-      isPopup
+      isPopup,
     );
   }
 
   if (!code) {
     return renderPopupResult(
       {
-        type: "oauth:error",
+        type: 'oauth:error',
         provider,
         context,
-        message: "Missing authorization code.",
+        message: 'Missing authorization code.',
       },
       `${targetOrigin}/login?error=auth_callback_failed`,
       400,
       targetOrigin,
-      isPopup
+      isPopup,
     );
   }
 
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
   if (error) {
     return renderPopupResult(
       {
-        type: "oauth:error",
+        type: 'oauth:error',
         provider,
         context,
         message: error.message,
@@ -135,13 +135,13 @@ export async function GET(request: Request) {
       `${targetOrigin}/login?error=auth_callback_failed`,
       400,
       targetOrigin,
-      isPopup
+      isPopup,
     );
   }
 
   return renderPopupResult(
     {
-      type: "oauth:success",
+      type: 'oauth:success',
       provider,
       context,
       accountId: null,
@@ -149,6 +149,6 @@ export async function GET(request: Request) {
     `${targetOrigin}/dashboard`,
     200,
     targetOrigin,
-    isPopup
+    isPopup,
   );
 }

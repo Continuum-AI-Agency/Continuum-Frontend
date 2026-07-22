@@ -1,10 +1,10 @@
-import { expect, test } from "bun:test";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { useQueryClient } from "@tanstack/react-query";
+import { expect, test } from 'bun:test';
+import { useQueryClient } from '@tanstack/react-query';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import OnboardingLayout from "@/app/onboarding/layout";
-import { useToast } from "@/components/ui/ToastProvider";
+import OnboardingLayout from '@/app/onboarding/layout';
+import { useToast } from '@/components/ui/ToastProvider';
 
 function ToastConsumer() {
   useToast();
@@ -16,34 +16,32 @@ function QueryClientConsumer() {
   return <div>consumer</div>;
 }
 
-test("useToast throws when rendered outside any provider", () => {
+test('useToast throws when rendered outside any provider', () => {
   expect(() => renderToStaticMarkup(<ToastConsumer />)).toThrow(
-    "useToast must be used within ToastProvider"
+    'useToast must be used within ToastProvider',
   );
 });
 
-test("OnboardingLayout supplies ToastProvider so useToast does not throw", () => {
+test('OnboardingLayout supplies ToastProvider so useToast does not throw', () => {
   const html = renderToStaticMarkup(
     <OnboardingLayout>
       <ToastConsumer />
-    </OnboardingLayout>
+    </OnboardingLayout>,
   );
 
-  expect(html).toContain("consumer");
+  expect(html).toContain('consumer');
 });
 
-test("useQueryClient throws when rendered outside any provider", () => {
-  expect(() => renderToStaticMarkup(<QueryClientConsumer />)).toThrow(
-    "No QueryClient set"
-  );
+test('useQueryClient throws when rendered outside any provider', () => {
+  expect(() => renderToStaticMarkup(<QueryClientConsumer />)).toThrow('No QueryClient set');
 });
 
-test("OnboardingLayout supplies ReactQueryProvider so useQueryClient does not throw", () => {
+test('OnboardingLayout supplies ReactQueryProvider so useQueryClient does not throw', () => {
   const html = renderToStaticMarkup(
     <OnboardingLayout>
       <QueryClientConsumer />
-    </OnboardingLayout>
+    </OnboardingLayout>,
   );
 
-  expect(html).toContain("consumer");
+  expect(html).toContain('consumer');
 });

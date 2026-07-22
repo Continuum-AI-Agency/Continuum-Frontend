@@ -19,34 +19,38 @@ export function buildOAuthCallbackUrl(
   origin: string,
   provider: string,
   context: string,
-  options?: OAuthUrlOptions
+  options?: OAuthUrlOptions,
 ): string {
-  const trimmedOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+  const trimmedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
   const callbackUrl = new URL(`${trimmedOrigin}/callback`);
-  callbackUrl.searchParams.set("provider", provider);
-  callbackUrl.searchParams.set("context", context);
-  callbackUrl.searchParams.set("origin", trimmedOrigin);
+  callbackUrl.searchParams.set('provider', provider);
+  callbackUrl.searchParams.set('context', context);
+  callbackUrl.searchParams.set('origin', trimmedOrigin);
   if (options?.popup) {
-    callbackUrl.searchParams.set("popup", "true");
+    callbackUrl.searchParams.set('popup', 'true');
   }
   return callbackUrl.toString();
 }
 
-export function buildOAuthStartUrl(provider: string, context: string, options?: OAuthUrlOptions): string {
+export function buildOAuthStartUrl(
+  provider: string,
+  context: string,
+  options?: OAuthUrlOptions,
+): string {
   const params = new URLSearchParams({ provider, context });
   const runtimeOrigin =
-    typeof window !== "undefined" && typeof window.location?.origin === "string"
+    typeof window !== 'undefined' && typeof window.location?.origin === 'string'
       ? window.location.origin
       : null;
   const fallbackOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL);
   const selectedOrigin = runtimeOrigin ?? fallbackOrigin;
 
   if (selectedOrigin) {
-    params.set("origin", selectedOrigin);
+    params.set('origin', selectedOrigin);
   }
 
   if (options?.popup) {
-    params.set("popup", "true");
+    params.set('popup', 'true');
   }
 
   return `/oauth/start?${params.toString()}`;

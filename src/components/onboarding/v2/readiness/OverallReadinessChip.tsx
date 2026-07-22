@@ -1,9 +1,8 @@
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { ScoreBadge } from "./ScoreBadge";
-import { ScorePip } from "./ScorePip";
-import { bandFor } from "./ScoreBadge";
-import { DIMENSION_LABELS } from "./utils";
-import type { ReadinessAnalysis, ReadinessDimension } from "@/lib/onboarding/agentClient";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
+import { bandFor, ScoreBadge } from './ScoreBadge';
+import { ScorePip } from './ScorePip';
+import { DIMENSION_LABELS } from './utils';
 
 type Props = {
   readiness: ReadinessAnalysis | null;
@@ -18,7 +17,7 @@ export function OverallReadinessChip({ readiness, loading }: Props) {
 
   const score = readiness.overall_score;
   const band = bandFor(score);
-  const pipColor = band === "strong" ? "#0daea2" : band === "watch" ? "#f59e0b" : "#e11d48";
+  const pipColor = band === 'strong' ? '#0daea2' : band === 'watch' ? '#f59e0b' : '#e11d48';
 
   return (
     <HoverCard openDelay={200} closeDelay={150}>

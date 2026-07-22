@@ -1,22 +1,22 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const aiStudioProviderSchema = z.enum([
-  "nano-banana",
-  "gemini-3-pro-image-preview",
-  "veo-3-1",
-  "veo-3-1-fast",
-  "veo-3-1-lite",
-  "kling-omni",
-  "sora-2",
+  'nano-banana',
+  'gemini-3-pro-image',
+  'veo-3-1',
+  'veo-3-1-fast',
+  'veo-3-1-lite',
+  'kling-omni',
+  'sora-2',
 ]);
 
-export const aiStudioMediumSchema = z.enum(["image", "video"]);
+export const aiStudioMediumSchema = z.enum(['image', 'video']);
 
 export const aiStudioAspectRatioSchema = z
   .string()
-  .regex(/^\d{1,2}:\d{1,2}$/, "Aspect ratio must be formatted as W:H");
+  .regex(/^\d{1,2}:\d{1,2}$/, 'Aspect ratio must be formatted as W:H');
 
-export const aiStudioVideoResolutionSchema = z.enum(["720p", "1080p"]);
+export const aiStudioVideoResolutionSchema = z.enum(['720p', '1080p']);
 
 const VEO_3_1_LITE_PROMPT_TOKEN_LIMIT = 1024;
 
@@ -29,41 +29,44 @@ function estimatePromptTokens(prompt: string): number {
 }
 
 // Supported aspect ratios per provider/medium. Keep in sync with upstream model docs.
-export const providerAspectRatioOptions: Record<AiStudioProvider, Partial<Record<AiStudioMedium, readonly string[]>>> = {
-  "nano-banana": {
-    image: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const,
+export const providerAspectRatioOptions: Record<
+  AiStudioProvider,
+  Partial<Record<AiStudioMedium, readonly string[]>>
+> = {
+  'nano-banana': {
+    image: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const,
   },
-  "gemini-3-pro-image-preview": {
-    image: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const,
+  'gemini-3-pro-image': {
+    image: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const,
   },
-  "veo-3-1": {
-    video: ["16:9", "9:16"] as const,
+  'veo-3-1': {
+    video: ['16:9', '9:16'] as const,
   },
-  "veo-3-1-fast": {
-    video: ["16:9", "9:16"] as const,
+  'veo-3-1-fast': {
+    video: ['16:9', '9:16'] as const,
   },
-  "veo-3-1-lite": {
-    video: ["16:9", "9:16"] as const,
+  'veo-3-1-lite': {
+    video: ['16:9', '9:16'] as const,
   },
-  "kling-omni": {
-    video: ["16:9", "9:16"] as const,
+  'kling-omni': {
+    video: ['16:9', '9:16'] as const,
   },
-  "sora-2": {
-    video: ["16:9", "9:16", "1:1"] as const,
+  'sora-2': {
+    video: ['16:9', '9:16', '1:1'] as const,
   },
 };
 
 export const aiStudioJobStatusSchema = z.enum([
-  "queued",
-  "processing",
-  "completed",
-  "failed",
-  "cancelled",
+  'queued',
+  'processing',
+  'completed',
+  'failed',
+  'cancelled',
 ]);
 
 export const aiStudioTemplateSchema = z.object({
-  id: z.string().min(1, "Template id is required"),
-  name: z.string().min(1, "Template name is required"),
+  id: z.string().min(1, 'Template id is required'),
+  name: z.string().min(1, 'Template name is required'),
   description: z.string().optional(),
   provider: aiStudioProviderSchema,
   medium: aiStudioMediumSchema,
@@ -75,12 +78,12 @@ export const aiStudioTemplateSchema = z.object({
 });
 
 const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
-  message: "Invalid ISO timestamp",
+  message: 'Invalid ISO timestamp',
 });
 
 export const aiStudioArtifactSchema = z.object({
-  id: z.string().min(1, "Artifact id is required"),
-  uri: z.string().min(1, "Artifact uri is required"),
+  id: z.string().min(1, 'Artifact id is required'),
+  uri: z.string().min(1, 'Artifact uri is required'),
   previewUri: z.string().min(1).optional(),
   mimeType: z.string().optional(),
   medium: aiStudioMediumSchema,
@@ -93,15 +96,15 @@ export const aiStudioArtifactSchema = z.object({
 export const aiStudioJobFailureSchema = z
   .object({
     code: z.string().optional(),
-    message: z.string().min(1, "Failure message is required"),
+    message: z.string().min(1, 'Failure message is required'),
     retryable: z.boolean().optional(),
     details: z.record(z.string(), z.unknown()).optional(),
   })
   .optional();
 
 export const aiStudioJobSchema = z.object({
-  id: z.string().min(1, "Job id is required"),
-  brandProfileId: z.string().min(1, "brandProfileId is required"),
+  id: z.string().min(1, 'Job id is required'),
+  brandProfileId: z.string().min(1, 'brandProfileId is required'),
   provider: aiStudioProviderSchema,
   medium: aiStudioMediumSchema,
   templateId: z.string().optional(),
@@ -125,62 +128,67 @@ export const aiStudioTemplatesResponseSchema = z.object({
   templates: z.array(aiStudioTemplateSchema),
 });
 
-export const aiStudioGenerationRequestSchema = z.object({
-  brandProfileId: z.string().min(1, "brandProfileId is required"),
-  provider: aiStudioProviderSchema,
-  medium: aiStudioMediumSchema,
-  prompt: z.string().min(1, "Prompt is required"),
-  negativePrompt: z.string().optional(),
-  templateId: z.string().optional(),
-  aspectRatio: aiStudioAspectRatioSchema.optional(),
-  resolution: z.string().optional(),
-  durationSeconds: z.number().int().positive().max(120).optional(),
-  guidanceScale: z.number().min(0).max(20).optional(),
-  seed: z.number().int().nonnegative().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-}).superRefine((value, ctx) => {
-  const providerOptions = providerAspectRatioOptions[value.provider]?.[value.medium];
-  if (value.aspectRatio && providerOptions && !providerOptions.includes(value.aspectRatio)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["aspectRatio"],
-      message: `Aspect ratio ${value.aspectRatio} is not supported for ${value.provider} ${value.medium}. Supported: ${providerOptions.join(", ")}`,
-    });
-  }
+export const aiStudioGenerationRequestSchema = z
+  .object({
+    brandProfileId: z.string().min(1, 'brandProfileId is required'),
+    provider: aiStudioProviderSchema,
+    medium: aiStudioMediumSchema,
+    prompt: z.string().min(1, 'Prompt is required'),
+    negativePrompt: z.string().optional(),
+    templateId: z.string().optional(),
+    aspectRatio: aiStudioAspectRatioSchema.optional(),
+    resolution: z.string().optional(),
+    durationSeconds: z.number().int().positive().max(120).optional(),
+    guidanceScale: z.number().min(0).max(20).optional(),
+    seed: z.number().int().nonnegative().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const providerOptions = providerAspectRatioOptions[value.provider]?.[value.medium];
+    if (value.aspectRatio && providerOptions && !providerOptions.includes(value.aspectRatio)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['aspectRatio'],
+        message: `Aspect ratio ${value.aspectRatio} is not supported for ${value.provider} ${value.medium}. Supported: ${providerOptions.join(', ')}`,
+      });
+    }
 
-  if (value.provider !== "veo-3-1-lite") return;
+    if (value.provider !== 'veo-3-1-lite') return;
 
-  const estimatedTokens = estimatePromptTokens(value.prompt);
-  if (estimatedTokens > VEO_3_1_LITE_PROMPT_TOKEN_LIMIT) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["prompt"],
-      message: `Veo 3.1 Lite prompts must be ${VEO_3_1_LITE_PROMPT_TOKEN_LIMIT} tokens or fewer.`,
-    });
-  }
+    const estimatedTokens = estimatePromptTokens(value.prompt);
+    if (estimatedTokens > VEO_3_1_LITE_PROMPT_TOKEN_LIMIT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['prompt'],
+        message: `Veo 3.1 Lite prompts must be ${VEO_3_1_LITE_PROMPT_TOKEN_LIMIT} tokens or fewer.`,
+      });
+    }
 
-  if (value.resolution && !aiStudioVideoResolutionSchema.options.includes(value.resolution as "720p" | "1080p")) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["resolution"],
-      message: "Veo 3.1 Lite only supports 720p and 1080p.",
-    });
-  }
-});
+    if (
+      value.resolution &&
+      !aiStudioVideoResolutionSchema.options.includes(value.resolution as '720p' | '1080p')
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['resolution'],
+        message: 'Veo 3.1 Lite only supports 720p and 1080p.',
+      });
+    }
+  });
 
 export const aiStudioGenerationResponseSchema = z.object({
   job: aiStudioJobSchema,
 });
 
 const workflowBaseSchema = z.object({
-  id: z.string().min(1, "Workflow id is required"),
-  brandProfileId: z.string().min(1, "brandProfileId is required"),
-  name: z.string().min(1, "Workflow name is required"),
+  id: z.string().min(1, 'Workflow id is required'),
+  brandProfileId: z.string().min(1, 'brandProfileId is required'),
+  name: z.string().min(1, 'Workflow name is required'),
   description: z.string().optional(),
   nodes: z.array(z.unknown()).optional().default([]),
   edges: z.array(z.unknown()).optional().default([]),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  source: z.enum(["brand", "global"]).optional(),
+  source: z.enum(['brand', 'global']).optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema.optional(),
 });
@@ -188,9 +196,9 @@ const workflowBaseSchema = z.object({
 export const aiStudioWorkflowSchema = workflowBaseSchema;
 
 export const aiStudioWorkflowRowSchema = z.object({
-  id: z.string().min(1, "Workflow id is required"),
-  brand_profile_id: z.string().min(1, "brand_profile_id is required"),
-  name: z.string().min(1, "Workflow name is required"),
+  id: z.string().min(1, 'Workflow id is required'),
+  brand_profile_id: z.string().min(1, 'brand_profile_id is required'),
+  name: z.string().min(1, 'Workflow name is required'),
   description: z.string().nullish(),
   nodes: z.array(z.unknown()).nullish(),
   edges: z.array(z.unknown()).nullish(),
@@ -228,7 +236,7 @@ export function mapAiStudioWorkflowRow(row: AiStudioWorkflowRow): AiStudioWorkfl
     nodes: row.nodes ?? [],
     edges: row.edges ?? [],
     metadata: row.metadata ?? undefined,
-    source: row.metadata?.workflow_library ? "global" : "brand",
+    source: row.metadata?.workflow_library ? 'global' : 'brand',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? undefined,
   };

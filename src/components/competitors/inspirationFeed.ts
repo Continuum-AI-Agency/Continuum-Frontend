@@ -5,12 +5,12 @@
 // against the right kind. Timestamps are epoch ms (0 when unknown) so missing
 // dates sort to the end without special-casing.
 
-import type { CompetitorOrganicPost, TimelineEntry } from "@continuum/contracts";
-import { organicPostToView, type CompetitorPostView } from "./competitorPostView";
+import type { CompetitorOrganicPost, TimelineEntry } from '@continuum/contracts';
+import { type CompetitorPostView, organicPostToView } from './competitorPostView';
 
 export type InspirationFeedItem =
-  | { source: "organic"; ts: number; key: string; view: CompetitorPostView }
-  | { source: "paid"; ts: number; key: string; entry: TimelineEntry };
+  | { source: 'organic'; ts: number; key: string; view: CompetitorPostView }
+  | { source: 'paid'; ts: number; key: string; entry: TimelineEntry };
 
 function toTime(iso: string | null | undefined): number {
   if (!iso) return 0;
@@ -21,7 +21,7 @@ function toTime(iso: string | null | undefined): number {
 function organicItem(post: CompetitorOrganicPost): InspirationFeedItem {
   const view = organicPostToView(post);
   return {
-    source: "organic",
+    source: 'organic',
     ts: toTime(view.post.timestamp),
     key: `organic:${view.instagramUsername}:${view.post.id}`,
     view,
@@ -30,7 +30,7 @@ function organicItem(post: CompetitorOrganicPost): InspirationFeedItem {
 
 function paidItem(entry: TimelineEntry): InspirationFeedItem {
   return {
-    source: "paid",
+    source: 'paid',
     ts: toTime(entry.firstSeenAt),
     key: `paid:${entry.snapshotId}`,
     entry,

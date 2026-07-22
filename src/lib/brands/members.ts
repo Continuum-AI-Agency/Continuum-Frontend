@@ -1,13 +1,18 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { brandInviteSchema, brandMemberSchema, type BrandMember, type BrandInvite } from "@/lib/onboarding/state";
+import {
+  type BrandInvite,
+  type BrandMember,
+  brandInviteSchema,
+  brandMemberSchema,
+} from '@/lib/onboarding/state';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function fetchBrandMembers(brandId: string): Promise<BrandMember[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .select("user_id, role, email, created_at, acknowledged_at")
-    .eq("brand_profile_id", brandId) as any;
+  const { data, error } = (await supabase
+    .schema('brand_profiles')
+    .from('permissions')
+    .select('user_id, role, email, created_at, acknowledged_at')
+    .eq('brand_profile_id', brandId)) as any;
 
   if (error) {
     console.error(`[members] Failed to fetch members for brand ${brandId}`, error);
@@ -23,7 +28,7 @@ export async function fetchBrandMembers(brandId: string): Promise<BrandMember[]>
     const acknowledged = row.acknowledged_at as string | null;
     const isRecentlyAccepted =
       acknowledged === null &&
-      typeof createdAt === "string" &&
+      typeof createdAt === 'string' &&
       now - new Date(createdAt).getTime() < RECENTLY_ACCEPTED_WINDOW_MS;
 
     const parsed = brandMemberSchema.safeParse({
@@ -48,28 +53,28 @@ export async function acknowledgeOwnMembership(brandId: string, userId: string):
   if (!brandId || !userId) return;
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
-    .schema("brand_profiles")
-    .from("permissions")
+    .schema('brand_profiles')
+    .from('permissions')
     .update({ acknowledged_at: new Date().toISOString() } as never)
-    .eq("brand_profile_id", brandId)
-    .eq("user_id", userId)
-    .is("acknowledged_at", null);
+    .eq('brand_profile_id', brandId)
+    .eq('user_id', userId)
+    .is('acknowledged_at', null);
 
   if (error) {
-    console.warn("[members] Failed to acknowledge membership", error);
+    console.warn('[members] Failed to acknowledge membership', error);
   }
 }
 
 export async function fetchBrandInvites(brandId: string): Promise<BrandInvite[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("invites")
-    .select("id, email, role, created_at, expires_at")
-    .eq("brand_profile_id", brandId)
-    .is("accepted_at", null)
-    .is("revoked_at", null)
-    .gt("expires_at", new Date().toISOString()) as any;
+  const { data, error } = (await supabase
+    .schema('brand_profiles')
+    .from('invites')
+    .select('id, email, role, created_at, expires_at')
+    .eq('brand_profile_id', brandId)
+    .is('accepted_at', null)
+    .is('revoked_at', null)
+    .gt('expires_at', new Date().toISOString())) as any;
 
   if (error) {
     console.error(`[members] Failed to fetch invites for brand ${brandId}`, error);
@@ -82,7 +87,7 @@ export async function fetchBrandInvites(brandId: string): Promise<BrandInvite[]>
       id: row.id,
       email: row.email,
       role: row.role,
-      token: "",
+      token: '',
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     });

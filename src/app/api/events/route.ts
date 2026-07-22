@@ -1,29 +1,25 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { z } from "zod";
-
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import {
-  emitContinuumEvent,
-  subscribeToContinuumEvents,
-} from "@/lib/server/events";
-import {
+  type ContinuumEvent,
   continuumEventNameSchema,
   getContinuumEventSchema,
-  type ContinuumEvent,
-} from "@/lib/events/schema";
+} from '@/lib/events/schema';
+import { emitContinuumEvent, subscribeToContinuumEvents } from '@/lib/server/events';
 
 const SSE_HEADERS = {
-  "Content-Type": "text/event-stream",
-  Connection: "keep-alive",
-  "Cache-Control": "no-cache, no-transform",
-  "X-Accel-Buffering": "no",
+  'Content-Type': 'text/event-stream',
+  Connection: 'keep-alive',
+  'Cache-Control': 'no-cache, no-transform',
+  'X-Accel-Buffering': 'no',
 };
 
 const encoder = new TextEncoder();
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 const ingestEnvelopeSchema = z
   .object({
@@ -46,27 +42,27 @@ function serializeEvent(event: ContinuumEvent) {
     `data: ${payload}`,
   ].filter(Boolean);
 
-  return `${fields.join("\n")}\n\n`;
+  return `${fields.join('\n')}\n\n`;
 }
 
 function createHandshake() {
   return encoder.encode(
     [
-      "retry: 10000",
-      "event: continuum.connected",
+      'retry: 10000',
+      'event: continuum.connected',
       `data: ${JSON.stringify({ timestamp: new Date().toISOString() })}`,
-      "",
-    ].join("\n")
+      '',
+    ].join('\n'),
   );
 }
 
 function createKeepAlive() {
   return encoder.encode(
     [
-      "event: continuum.keepalive",
+      'event: continuum.keepalive',
       `data: ${JSON.stringify({ timestamp: new Date().toISOString() })}`,
-      "",
-    ].join("\n")
+      '',
+    ].join('\n'),
   );
 }
 
@@ -81,7 +77,7 @@ export function GET(request: NextRequest) {
         controller.close();
       };
 
-      request.signal.addEventListener("abort", handleAbort, { once: true });
+      request.signal.addEventListener('abort', handleAbort, { once: true });
 
       controller.enqueue(createHandshake());
 
@@ -98,7 +94,7 @@ export function GET(request: NextRequest) {
         cleanedUp = true;
         clearInterval(heartbeat);
         unsubscribe();
-        request.signal.removeEventListener("abort", handleAbort);
+        request.signal.removeEventListener('abort', handleAbort);
       };
     },
     cancel() {
@@ -113,20 +109,20 @@ function validateIngestToken(request: NextRequest) {
   const configuredToken = process.env.CONTINUUM_EVENT_INGEST_TOKEN;
   if (!configuredToken) return true;
 
-  const providedToken = request.headers.get("x-continuum-event-key");
+  const providedToken = request.headers.get('x-continuum-event-key');
   return providedToken === configuredToken;
 }
 
 export async function POST(request: NextRequest) {
   if (!validateIngestToken(request)) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return new NextResponse('Unauthorized', { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
   const parseResult = ingestEnvelopeSchema.safeParse(body);
@@ -134,10 +130,10 @@ export async function POST(request: NextRequest) {
   if (!parseResult.success) {
     return NextResponse.json(
       {
-        error: "Invalid event envelope",
+        error: 'Invalid event envelope',
         issues: parseResult.error.flatten(),
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

@@ -477,6 +477,7 @@ describe('createNodeData defaults', () => {
 
   it('seeds an empty string node and an aspect-ratioed image node', () => {
     expect(createNodeData('string').data.value).toBe('');
+    expect(createNodeData('string').data.promptMode).toBe('enrich');
     expect(createNodeData('image').data.aspectRatio).toBe('1:1');
   });
 

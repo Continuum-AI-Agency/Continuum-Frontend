@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import type { AgentJobState } from './types';
 import { applyOrganicFrame } from './applyOrganicFrame';
+import type { AgentJobState } from './types';
 import { initialPanelState, panelReducer } from './useOrganicAgentReducer';
 
 describe('useOrganicAgentReducer', () => {

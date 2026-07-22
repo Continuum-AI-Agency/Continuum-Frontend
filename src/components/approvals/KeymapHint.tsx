@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
-import { HelpCircle } from "lucide-react";
+import { HelpCircle } from 'lucide-react';
 
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const KEYMAP: Array<{ keys: string[]; label: string }> = [
-  { keys: ["J", "→"], label: "Next action" },
-  { keys: ["K", "←"], label: "Previous action" },
-  { keys: ["A", "⏎"], label: "Approve focused" },
-  { keys: ["R"], label: "Reject…" },
-  { keys: ["P"], label: "View raw payload" },
-  { keys: ["S"], label: "Skip without deciding" },
-  { keys: ["T"], label: "Toggle queue view" },
+  { keys: ['J', '→'], label: 'Next action' },
+  { keys: ['K', '←'], label: 'Previous action' },
+  { keys: ['A', '⏎'], label: 'Approve focused' },
+  { keys: ['R'], label: 'Reject…' },
+  { keys: ['P'], label: 'View raw payload' },
+  { keys: ['S'], label: 'Skip without deciding' },
+  { keys: ['T'], label: 'Toggle queue view' },
 ];
 
 export function KeymapHint() {

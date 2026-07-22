@@ -1,26 +1,21 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Wand2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Wand2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
 
-type DraftResultCardProps = { 
-  voice: string; 
-  audience: string; 
+type DraftResultCardProps = {
+  voice: string;
+  audience: string;
   isDrafting: boolean;
   onSave: (voice: string, audience: string) => void;
 };
 
-export function DraftResultCard({ 
-  voice, 
-  audience, 
-  isDrafting,
-  onSave 
-}: DraftResultCardProps) {
+export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftResultCardProps) {
   const [localVoice, setLocalVoice] = useState(voice);
   const [localAudience, setLocalAudience] = useState(audience);
 
@@ -43,11 +38,21 @@ export function DraftResultCard({
               AI Analysis
             </CardTitle>
             <CardDescription>
-              {isDrafting ? "Analyzing website and extracting insights..." : "Review and refine your brand identity."}
+              {isDrafting
+                ? 'Analyzing website and extracting insights...'
+                : 'Review and refine your brand identity.'}
             </CardDescription>
           </div>
-          {isDrafting && <Badge variant="secondary" className="animate-pulse">Analyzing...</Badge>}
-          {!isDrafting && hasContent && <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50"><CheckCircle2 className="w-3 h-3 mr-1"/> Ready</Badge>}
+          {isDrafting && (
+            <Badge variant="secondary" className="animate-pulse">
+              Analyzing...
+            </Badge>
+          )}
+          {!isDrafting && hasContent && (
+            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+              <CheckCircle2 className="w-3 h-3 mr-1" /> Ready
+            </Badge>
+          )}
         </div>
         {isDrafting && <Progress value={voice.length > 0 ? 60 : 10} className="h-1 mt-2" />}
       </CardHeader>
@@ -57,22 +62,28 @@ export function DraftResultCard({
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               Brand Voice
             </label>
-            <Textarea 
-              value={localVoice} 
-              onChange={(e) => { setLocalVoice(e.target.value); onSave(e.target.value, localAudience); }}
+            <Textarea
+              value={localVoice}
+              onChange={(e) => {
+                setLocalVoice(e.target.value);
+                onSave(e.target.value, localAudience);
+              }}
               className="min-h-[250px] resize-none focus-visible:ring-1"
               placeholder="Brand voice will appear here..."
               readOnly={isDrafting}
             />
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               Target Audience
             </label>
-            <Textarea 
-              value={localAudience} 
-              onChange={(e) => { setLocalAudience(e.target.value); onSave(localVoice, e.target.value); }}
+            <Textarea
+              value={localAudience}
+              onChange={(e) => {
+                setLocalAudience(e.target.value);
+                onSave(localVoice, e.target.value);
+              }}
               className="min-h-[250px] resize-none focus-visible:ring-1"
               placeholder="Target audience segments will appear here..."
               readOnly={isDrafting}

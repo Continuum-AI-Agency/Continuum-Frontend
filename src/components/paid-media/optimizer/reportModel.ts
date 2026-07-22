@@ -66,6 +66,16 @@ export function freezeLabel(
         label: 'Held · lifetime budget',
         hint: 'This campaign has a whole-flight lifetime budget, not a daily one. The optimizer paces and scores in daily terms, so it will not resize a flight it cannot reason about.',
       };
+    case 'no_own_budget':
+      return {
+        label: 'Held · no budget of its own',
+        hint: 'This ad set has no ad-set budget for the optimizer to move — boosted posts and promoted posts usually look like this. It is left alone rather than handed a share of the pool it never had. Give it an ad-set daily budget in Meta if you want the optimizer to manage it.',
+      };
+    case 'no_declared_objective':
+      return {
+        label: 'Held · no declared goal',
+        hint: 'This ad set does not tell Meta what result it is buying, and it has produced none of the results this portfolio measures. Scoring it would rank it on events it never claimed to buy, so it is held instead. Set an optimization goal on the ad set in Meta.',
+      };
     case 'kpi_mismatch':
       return {
         label: 'Held · different goal',
@@ -98,8 +108,9 @@ export function partitionHeldItems<T extends { apply_status?: string | null }>(
 export function recommendationLabel(kind: string): { label: string; glyph: string } {
   switch (kind) {
     case 'pause':
-      // Advisory only — the optimizer never pauses an ad set on Meta (see recommendationActionCopy).
-      return { label: 'Review · pause manually', glyph: '◫' };
+      // The app pauses the ad set on Meta through the audited adset-status drain, so the
+      // label names the write the operator is authorizing — not a manual chore.
+      return { label: 'Pause ad set', glyph: '⏸' };
     case 'creative_refresh':
       return { label: 'Refresh creative', glyph: '🎨' };
     case 'audience_expand':
@@ -145,34 +156,45 @@ export function isExecutable(kind: string): boolean {
   return !NOT_YET_EXECUTABLE_KINDS.has(kind);
 }
 
-/** The action copy for a recommendation row. A `pause` is ADVISORY: approving it records
- *  the decision but never pauses the ad set on Meta, so the primary button must not read
- *  "Approve" (which implies execution). Fatigue kinds (creative_refresh / audience_expand)
- *  DO open a tracked renewal task, so "Approve" is honest there. */
+/** Which write path a recommendation kind drains into once approved. Budget moves do NOT
+ *  come from recommendations (they are cycle_items), so this covers rec kinds only:
+ *    - 'pause'                         → the audited ad-set status drain (real Meta pause)
+ *    - 'creative_refresh' / expand …   → a tracked renewal task (no auto Meta write)
+ *    - the three ad-level kinds        → hidden (found, but no drain surfaced yet)
+ *  Unknown kinds route to the renewal path — the conservative default that never writes. */
+export function actionRoute(kind: string): 'budget' | 'pause' | 'fatigue' | 'hidden' {
+  if (NOT_YET_EXECUTABLE_KINDS.has(kind)) return 'hidden';
+  if (kind === 'pause') return 'pause';
+  return 'fatigue';
+}
+
+/** The action copy for a recommendation row. A `pause` now EXECUTES: approving it drains
+ *  into the audited ad-set status writer that pauses the ad set on Meta, so the primary
+ *  button names that write. Fatigue kinds (creative_refresh / audience_expand) open a
+ *  tracked renewal task, so "Approve" is honest there. */
 export function recommendationActionCopy(kind: string): {
   approveLabel: string;
   advisory: string | null;
 } {
   if (kind === 'pause') {
-    return {
-      approveLabel: 'Acknowledge',
-      advisory:
-        'Advisory — the optimizer never pauses ad sets. Pause it in Meta yourself; this only records your decision.',
-    };
+    return { approveLabel: 'Pause ad set', advisory: null };
   }
-  // Generated and stored, not yet actionable. The button says so rather than pretending.
+  // Generated and stored, not yet actionable. The button says so rather than
+  // pretending. One phrasing for this state across the surface — "not built yet",
+  // matching notImplementedMessage below. "Not wired up" is our word for our
+  // backlog, and it read as a configuration fault the user was expected to fix.
   if (kind === 'pause_ad') {
     return {
       approveLabel: 'Pause ad',
       advisory:
-        'Not wired up yet — the optimizer can find this ad but cannot pause it for you. Pause it in Meta yourself for now.',
+        'Not built yet — the optimizer can find this ad but cannot pause it for you. Pause it in Meta and it stops draining the ad set.',
     };
   }
   if (kind === 'variate_creative' || kind === 'seed_experiment') {
     return {
       approveLabel: 'Open in Studio',
       advisory:
-        'Not wired up yet — the brief below is real, but it does not open Studio for you yet. Take it there yourself for now.',
+        'Not built yet — the brief below is real, but you take it into AI Studio yourself for now.',
     };
   }
   return { approveLabel: 'Approve', advisory: null };
@@ -236,15 +258,18 @@ export function severityBadgeVariant(
 /** One-line legend making the observe↔recommend↔autopilot boundary explicit at the
  *  point a user reads a proposed reallocation. */
 export function applyModeExplainer(applyMode: string | null | undefined): string {
+  // Written for a media buyer, not for us. "Soak tier" and "human-in-the-loop"
+  // are our words for our rollout; what the reader needs is whether their money
+  // can move, and what they do about it.
   const mode = (applyMode ?? '').toLowerCase();
   if (mode === 'observe') {
-    return 'Observe — soak tier. Ingest metrics and score every cycle; no Meta budget writes.';
+    return 'Observe — the optimizer scores every night but never changes a budget. Switch to Recommend to start approving its moves.';
   }
   if (mode === 'autopilot') {
-    return 'Autopilot — budgets are applied automatically within guardrails. Use Stop to halt writes without leaving this mode.';
+    return 'Autopilot — budgets change automatically, within your guardrails. Stop halts every write without leaving this mode.';
   }
   if (mode === 'recommend') {
-    return 'Recommend — proposals only until a human applies. Promote from Observe when ready for human-in-the-loop.';
+    return 'Recommend — the optimizer proposes moves and nothing changes until you approve them.';
   }
   return 'Unknown apply mode.';
 }

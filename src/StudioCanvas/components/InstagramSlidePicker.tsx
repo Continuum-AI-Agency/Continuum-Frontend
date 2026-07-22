@@ -1,9 +1,8 @@
-"use client";
+'use client';
 
-import { ArrowLeft } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import type { InstagramMediaItem, InstagramPost } from "@continuum/contracts";
+import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface InstagramSlidePickerProps {
   post: InstagramPost;
@@ -30,10 +29,10 @@ const SlideTile = ({
     aria-pressed={isSelected}
     onClick={() => onToggle(index)}
     className={`relative aspect-square overflow-hidden rounded-md border transition ${
-      isSelected ? "ring-2 ring-primary" : "opacity-50"
+      isSelected ? 'ring-2 ring-primary' : 'opacity-50'
     }`}
   >
-    {item.kind === "video" ? (
+    {item.kind === 'video' ? (
       <video src={item.url} className="h-full w-full object-cover" muted />
     ) : (
       // eslint-disable-next-line @next/next/no-img-element
@@ -42,7 +41,13 @@ const SlideTile = ({
   </button>
 );
 
-export function InstagramSlidePicker({ post, selected, onToggle, onBack, onAdd }: InstagramSlidePickerProps) {
+export function InstagramSlidePicker({
+  post,
+  selected,
+  onToggle,
+  onBack,
+  onAdd,
+}: InstagramSlidePickerProps) {
   const selectedCount = post.items.filter((_, index) => selected.has(index)).length;
 
   return (
@@ -69,7 +74,7 @@ export function InstagramSlidePicker({ post, selected, onToggle, onBack, onAdd }
       )}
 
       <Button type="button" onClick={onAdd} disabled={selectedCount === 0}>
-        Add {selectedCount || ""} to canvas
+        Add {selectedCount || ''} to canvas
       </Button>
     </div>
   );

@@ -1,8 +1,9 @@
 'use client';
 
 import { Repeat2 } from 'lucide-react';
+import type React from 'react';
 import type { JSX } from 'react';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { demoLinkedInPost } from './demo/social';
 
 /** Reaction type for LinkedIn posts */
@@ -71,7 +72,7 @@ function formatContent(content: string): React.ReactNode[] {
       parts.push(
         <span key={match.index} className="font-semibold" style={{ color: '#0a66c2' }}>
           {hashtag}
-        </span>
+        </span>,
       );
     } else if (url) {
       // Style link
@@ -85,7 +86,7 @@ function formatContent(content: string): React.ReactNode[] {
           style={{ color: '#0a66c2' }}
         >
           {url}
-        </a>
+        </a>,
       );
     }
 

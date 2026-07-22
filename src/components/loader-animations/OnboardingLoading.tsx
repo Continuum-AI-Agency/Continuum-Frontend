@@ -1,18 +1,20 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
-import { motion } from "motion/react";
-import PhraseOverlay from "./PhraseOverlay";
+import { motion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import PhraseOverlay from './PhraseOverlay';
 
-const SaturnRingsScene = dynamic(() => import("./SaturnRingsScene"), {
+const SaturnRingsScene = dynamic(() => import('./SaturnRingsScene'), {
   ssr: false,
 });
-import CSSFallback from "./CSSFallback";
-import { useTheme } from "@/components/theme-provider";
-import { cn } from "@/lib/utils";
-import { LOGIN_GLOW_GRADIENT } from "@/lib/ui/backgrounds";
-import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
+
+import { useTheme } from '@/components/theme-provider';
+import { LOGIN_GLOW_GRADIENT } from '@/lib/ui/backgrounds';
+import { DEFAULT_LOADING_PHRASES } from '@/lib/ui/loadingPhrases';
+import { cn } from '@/lib/utils';
+import CSSFallback from './CSSFallback';
 
 export interface OnboardingLoadingProps {
   /** Phrases to cycle through */
@@ -32,7 +34,7 @@ export interface OnboardingLoadingProps {
   /** Show floating particles */
   showParticles?: boolean;
   /** Size variant */
-  size?: "sm" | "md" | "lg" | "full";
+  size?: 'sm' | 'md' | 'lg' | 'full';
   /** Full-screen overlay */
   overlay?: boolean;
   /** Enable fast 600ms phrase cycling */
@@ -50,7 +52,7 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
   autoFadeIn = true,
   autoFadeOut = true,
   showParticles = true,
-  size = "full",
+  size = 'full',
   overlay = true,
   fastMode = false,
   className,
@@ -109,11 +111,14 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
   const shouldUse3D = use3D && webGLSupported === true;
 
   const containerClasses = overlay
-    ? "fixed inset-0 z-50 bg-default overflow-hidden"
-    : size === "full" ? "absolute inset-0"
-    : size === "lg" ? "w-full h-96"
-    : size === "md" ? "w-full h-64"
-    : "w-full h-48";
+    ? 'fixed inset-0 z-50 bg-default overflow-hidden'
+    : size === 'full'
+      ? 'absolute inset-0'
+      : size === 'lg'
+        ? 'w-full h-96'
+        : size === 'md'
+          ? 'w-full h-64'
+          : 'w-full h-48';
 
   const backdropStyle = overlay ? { backgroundImage: LOGIN_GLOW_GRADIENT } : undefined;
 
@@ -123,7 +128,7 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
       style={backdropStyle}
       initial={{ opacity: 0 }}
       animate={{ opacity: internalVisible ? 1 : 0 }}
-      transition={{ duration: 0.8, ease: "easeInOut" }}
+      transition={{ duration: 0.8, ease: 'easeInOut' }}
       onAnimationComplete={(definition) => {
         if (definition === 'exit' && !internalVisible) {
           // Fade out complete
@@ -131,11 +136,7 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
       }}
     >
       {shouldUse3D ? (
-        <SaturnRingsScene
-          theme={appearance}
-          showParticles={showParticles}
-          size={size}
-        />
+        <SaturnRingsScene theme={appearance} showParticles={showParticles} size={size} />
       ) : (
         <CSSFallback phrases={phrases} cycleDuration={cycleDuration} />
       )}

@@ -1,22 +1,22 @@
-"use client";
+'use client';
 
-import React from "react";
-import { DashboardHeader } from "./dashboard-header";
-import { AppSidebar } from "./navigation/AppSidebar";
-import { ActiveBrandProvider } from "./providers/ActiveBrandProvider";
-import { StrategicAnalysisRealtimeListener } from "./strategic-analyses/StrategicAnalysisRealtimeListener";
-import { StrategicAnalysisStatusPill } from "./strategic-analyses/StrategicAnalysisStatusPill";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { CommandPaletteProvider } from "./navigation/CommandPaletteProvider";
-import { BrandWelcomeBanner } from "./welcome/BrandWelcomeBanner";
-import dynamic from "next/dynamic";
+import dynamic from 'next/dynamic';
+import type React from 'react';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { DashboardHeader } from './dashboard-header';
+import { AppSidebar } from './navigation/AppSidebar';
+import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
+import { ActiveBrandProvider } from './providers/ActiveBrandProvider';
+import { StrategicAnalysisRealtimeListener } from './strategic-analyses/StrategicAnalysisRealtimeListener';
+import { StrategicAnalysisStatusPill } from './strategic-analyses/StrategicAnalysisStatusPill';
+import { BrandWelcomeBanner } from './welcome/BrandWelcomeBanner';
 
 const CommandPalette = dynamic(
-  () => import("./navigation/CommandPalette").then((m) => ({ default: m.CommandPalette })),
+  () => import('./navigation/CommandPalette').then((m) => ({ default: m.CommandPalette })),
   { ssr: false },
 );
 
-import type { AuthIdentity } from "@/lib/auth/identity";
+import type { AuthIdentity } from '@/lib/auth/identity';
 
 export type BrandSummary = {
   id: string;
@@ -53,7 +53,12 @@ export default function DashboardLayoutShell({
   permissions,
 }: DashboardLayoutShellProps) {
   return (
-    <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries} user={user} permissions={permissions}>
+    <ActiveBrandProvider
+      activeBrandId={activeBrandId}
+      brandSummaries={brandSummaries}
+      user={user}
+      permissions={permissions}
+    >
       <CommandPaletteProvider>
         <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
         <StrategicAnalysisStatusPill brandId={activeBrandId} />

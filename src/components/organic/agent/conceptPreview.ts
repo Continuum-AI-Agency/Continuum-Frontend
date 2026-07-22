@@ -7,10 +7,10 @@ export type ConceptPreviewLike =
   | undefined;
 
 const isRenderableUrl = (value: string): boolean =>
-  value.startsWith("data:") ||
-  value.startsWith("https://") ||
-  value.startsWith("http://") ||
-  value.startsWith("blob:");
+  value.startsWith('data:') ||
+  value.startsWith('https://') ||
+  value.startsWith('http://') ||
+  value.startsWith('blob:');
 
 /**
  * Resolve a renderable <img> src from a pipeline-card preview. The backend may
@@ -23,7 +23,7 @@ export function resolveConceptPreviewUrl(preview: ConceptPreviewLike): string | 
   const raw =
     preview.imageUrl ??
     (Array.isArray(preview.images) && preview.images.length > 0 ? preview.images[0] : null);
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== 'string') return null;
   const value = raw.trim();
   if (value.length === 0) return null;
   if (isRenderableUrl(value)) return value;

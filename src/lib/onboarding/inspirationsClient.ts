@@ -2,27 +2,23 @@
 // JSON-only, so these use raw fetch (same base URL + Bearer attach) and decode
 // the line-delimited frames through the shared @continuum/contracts schemas.
 
-import { getApiBaseUrl } from "@/lib/api/config";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import {
-  parseFrame,
-  onboardingInspirationsStreamFrameSchema,
-  onboardingGenerationStreamFrameSchema,
-  type OnboardingInspirationsStreamFrame,
   type OnboardingGenerationStreamFrame,
-} from "@continuum/contracts";
-import type { ZodType } from "zod";
+  type OnboardingInspirationsStreamFrame,
+  onboardingGenerationStreamFrameSchema,
+  onboardingInspirationsStreamFrameSchema,
+  parseFrame,
+} from '@continuum/contracts';
+import type { ZodType } from 'zod';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 
-const postStream = async (
-  path: string,
-  body: unknown,
-  signal?: AbortSignal,
-): Promise<Response> => {
+const postStream = async (path: string, body: unknown, signal?: AbortSignal): Promise<Response> => {
   const token = await getBrowserAccessToken();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
@@ -41,7 +37,7 @@ const readFrames = async <TFrame>(
 ): Promise<void> => {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
 
   const flushLine = (line: string): void => {
     const trimmed = line.trim();
@@ -55,7 +51,7 @@ const readFrames = async <TFrame>(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     let newlineIndex: number;
-    while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+    while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
       flushLine(buffer.slice(0, newlineIndex));
       buffer = buffer.slice(newlineIndex + 1);
     }
@@ -74,9 +70,9 @@ export const persistOnboardingBrandKit = async (params: {
 }): Promise<void> => {
   const token = await getBrowserAccessToken();
   const response = await fetch(`${getApiBaseUrl()}/api/onboarding/brand-kit`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(params),
@@ -92,7 +88,7 @@ export const streamInspirations = async (params: {
   onFrame: (frame: OnboardingInspirationsStreamFrame) => void;
 }): Promise<void> => {
   const response = await postStream(
-    "/api/onboarding/inspirations",
+    '/api/onboarding/inspirations',
     { brandId: params.brandId },
     params.signal,
   );
@@ -108,8 +104,8 @@ const getSupabaseFunctionsConfig = (): { url: string; anonKey: string } => {
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) throw new Error("supabase_functions_not_configured");
-  return { url: url.replace(/\/+$/, ""), anonKey };
+  if (!url || !anonKey) throw new Error('supabase_functions_not_configured');
+  return { url: url.replace(/\/+$/, ''), anonKey };
 };
 
 export const streamGeneration = async (params: {
@@ -122,9 +118,9 @@ export const streamGeneration = async (params: {
   const token = await getBrowserAccessToken();
   const { url, anonKey } = getSupabaseFunctionsConfig();
   const response = await fetch(`${url}/functions/v1/onboarding-inspirations-generate`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       apikey: anonKey,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },

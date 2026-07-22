@@ -1,4 +1,4 @@
-import LinkPlatformClient from "./LinkPlatformClient";
+import LinkPlatformClient from './LinkPlatformClient';
 
 type LinkPlatformPageProps = {
   params: Promise<{ platform: string }>;

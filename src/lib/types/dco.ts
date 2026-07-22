@@ -1,28 +1,22 @@
-export type ActionStatus =
-  | "APPROVED"
-  | "FAILED"
-  | "PENDING"
-  | "SUCCESS"
-  | "EXECUTED"
-  | "REJECTED";
+export type ActionStatus = 'APPROVED' | 'FAILED' | 'PENDING' | 'SUCCESS' | 'EXECUTED' | 'REJECTED';
 
-export type ActionType = 
-  | "PAUSE_CAMPAIGN"
-  | "PAUSE_AD"
-  | "ALERT_ACCOUNT"
-  | "NOOP"
-  | "PAUSE_ENTITY"
-  | "SWITCH_CREATIVE"
-  | "CREATIVE_SWITCH_EXTERNAL"
-  | "UPDATE_COPY"
-  | "ADJUST_BUDGET"
-  | "SCALE_BUDGET"
-  | "SCALE_CAMPAIGN"
-  | "SCALE_AD"
-  | "CREATE_VARIANT"
-  | "ARCHIVE_ENTITY";
+export type ActionType =
+  | 'PAUSE_CAMPAIGN'
+  | 'PAUSE_AD'
+  | 'ALERT_ACCOUNT'
+  | 'NOOP'
+  | 'PAUSE_ENTITY'
+  | 'SWITCH_CREATIVE'
+  | 'CREATIVE_SWITCH_EXTERNAL'
+  | 'UPDATE_COPY'
+  | 'ADJUST_BUDGET'
+  | 'SCALE_BUDGET'
+  | 'SCALE_CAMPAIGN'
+  | 'SCALE_AD'
+  | 'CREATE_VARIANT'
+  | 'ARCHIVE_ENTITY';
 
-export type ScopeType = "GLOBAL" | "ACCOUNT" | "CAMPAIGN" | "ADSET" | "AD";
+export type ScopeType = 'GLOBAL' | 'ACCOUNT' | 'CAMPAIGN' | 'ADSET' | 'AD';
 
 export interface ProductSwapProduct {
   name: string;
@@ -105,8 +99,8 @@ export interface AdAccountsResponse {
 }
 
 export interface ActionLogSort {
-  sortBy: "occurred_at" | "campaign_id";
-  sortOrder: "asc" | "desc";
+  sortBy: 'occurred_at' | 'campaign_id';
+  sortOrder: 'asc' | 'desc';
 }
 
 export interface CampaignOption {

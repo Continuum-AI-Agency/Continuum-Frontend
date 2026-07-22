@@ -132,9 +132,10 @@ export async function cutAndPersistSection(
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
   const splice = deps.splice ?? runSingleSourceSpliceInWorker;
 
-  const captionCues = captionsEnabled && section.words.length > 0
-    ? buildCaptionCues(section.words, section.keepRanges)
-    : undefined;
+  const captionCues =
+    captionsEnabled && section.words.length > 0
+      ? buildCaptionCues(section.words, section.keepRanges)
+      : undefined;
   onStage?.('Cutting…');
   const spliced = await splice({
     blob: sourceBlob,

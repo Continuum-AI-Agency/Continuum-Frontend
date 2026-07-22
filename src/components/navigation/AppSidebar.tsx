@@ -5,7 +5,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/r
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ComponentProps } from 'react';
-import { type ElementType, Suspense, useState } from 'react';
+import { type ElementType, Suspense, useEffect, useState } from 'react';
 import { CurrentUserAvatar } from '@/components/current-user-avatar';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -115,7 +115,7 @@ function AppSidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isMobile, state } = useSidebar();
+  const { isMobile, state, collapseHover } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
@@ -128,6 +128,17 @@ function AppSidebarInner() {
     readString(user?.email?.split('@')[0]) ??
     'User';
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
+
+  // BUG-198 guard: force-collapse the ephemeral hover-expand once navigation
+  // commits. The hover-expand's own `mouseleave` collapse can be swallowed by
+  // the same-document <ViewTransition> when a nav link is clicked mid-hover,
+  // which would otherwise leave the fixed-overlay sidebar stuck open over the
+  // page. Keying on the committed route (pathname + query) guarantees a reset
+  // on every navigation while leaving an intentionally pinned sidebar open.
+  const routeKey = `${pathname}?${searchParams.toString()}`;
+  useEffect(() => {
+    collapseHover();
+  }, [routeKey, collapseHover]);
 
   function renderNavItem(item: AppNavigationItem) {
     if (item.disabled) {

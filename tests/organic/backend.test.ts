@@ -1,16 +1,16 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { normalizeInstagramOrganicMetricsResponse } from "../../src/lib/organic-metrics/normalize";
+import { normalizeInstagramOrganicMetricsResponse } from '../../src/lib/organic-metrics/normalize';
 
-test("normalizes edge instagram organic metrics response to frontend shape", () => {
+test('normalizes edge instagram organic metrics response to frontend shape', () => {
   const payload = {
-    platform: "instagram",
-    account_id: "ig-1",
+    platform: 'instagram',
+    account_id: 'ig-1',
     range: {
-      preset: "last_7d",
-      since: "2025-12-05",
-      until: "2025-12-12",
+      preset: 'last_7d',
+      since: '2025-12-05',
+      until: '2025-12-12',
     },
     metrics: {
       reach: 10,
@@ -42,10 +42,10 @@ test("normalizes edge instagram organic metrics response to frontend shape", () 
   } as const;
 
   const normalized = normalizeInstagramOrganicMetricsResponse(payload);
-  assert.equal(normalized.platform, "instagram");
-  assert.equal(normalized.accountId, "ig-1");
-  assert.equal(normalized.range.preset, "last_7d");
-  assert.equal(normalized.range.since, "2025-12-05");
+  assert.equal(normalized.platform, 'instagram');
+  assert.equal(normalized.accountId, 'ig-1');
+  assert.equal(normalized.range.preset, 'last_7d');
+  assert.equal(normalized.range.since, '2025-12-05');
   assert.equal(normalized.metrics.accountsEngaged, 3);
   assert.equal(normalized.metrics.profileVisitsYesterday, 2);
   assert.equal(normalized.metrics.likes, 15);
@@ -54,17 +54,17 @@ test("normalizes edge instagram organic metrics response to frontend shape", () 
   assert.equal(normalized.comparison?.reach?.percentageChange, 25);
 });
 
-test("normalizes reporting api organic metrics response with pctChange", () => {
+test('normalizes reporting api organic metrics response with pctChange', () => {
   const payload = {
-    platform: "instagram",
-    brandId: "brand-1",
-    integrationAccountId: "integration-1",
-    externalAccountId: "ig-2",
-    fetchedAt: "2025-12-12T00:00:00.000Z",
+    platform: 'instagram',
+    brandId: 'brand-1',
+    integrationAccountId: 'integration-1',
+    externalAccountId: 'ig-2',
+    fetchedAt: '2025-12-12T00:00:00.000Z',
     range: {
-      preset: "last_7d",
-      since: "2025-12-05",
-      until: "2025-12-12",
+      preset: 'last_7d',
+      since: '2025-12-05',
+      until: '2025-12-12',
     },
     metrics: {
       reach: 100,
@@ -91,7 +91,7 @@ test("normalizes reporting api organic metrics response with pctChange", () => {
   } as const;
 
   const normalized = normalizeInstagramOrganicMetricsResponse(payload);
-  assert.equal(normalized.accountId, "ig-2");
+  assert.equal(normalized.accountId, 'ig-2');
   assert.equal(normalized.metrics.reelsViews, 50);
   assert.equal(normalized.metrics.likes, 150);
   assert.equal(normalized.metrics.totalInteractions, 330);
@@ -99,14 +99,14 @@ test("normalizes reporting api organic metrics response with pctChange", () => {
   assert.equal(normalized.comparison?.newFollowers?.percentageChange, 100);
 });
 
-test("keeps extended organic analytics payload fields", () => {
+test('keeps extended organic analytics payload fields', () => {
   const payload = {
-    platform: "instagram",
-    accountId: "ig-3",
+    platform: 'instagram',
+    accountId: 'ig-3',
     range: {
-      preset: "last_7d",
-      since: "2026-02-01",
-      until: "2026-02-08",
+      preset: 'last_7d',
+      since: '2026-02-01',
+      until: '2026-02-08',
     },
     metrics: {
       reach: 120,
@@ -127,44 +127,56 @@ test("keeps extended organic analytics payload fields", () => {
       totalInteractions: 96,
     },
     trends: [
-      { date: "2026-02-01", reach: 20, views: 32, boosted: false },
-      { date: "2026-02-02", reach: 24, views: 35, boosted: true, boostedAt: "2026-02-02T10:00:00.000Z" },
+      { date: '2026-02-01', reach: 20, views: 32, boosted: false },
+      {
+        date: '2026-02-02',
+        reach: 24,
+        views: 35,
+        boosted: true,
+        boostedAt: '2026-02-02T10:00:00.000Z',
+      },
     ],
     boostedEvents: [
-      { id: "boost-1", date: "2026-02-02", postId: "post-1", label: "Boost started", boostedAt: "2026-02-02T10:00:00.000Z" },
+      {
+        id: 'boost-1',
+        date: '2026-02-02',
+        postId: 'post-1',
+        label: 'Boost started',
+        boostedAt: '2026-02-02T10:00:00.000Z',
+      },
     ],
     audienceBreakdown: {
       followers: 43,
       nonFollowers: 77,
     },
     contentTypePerformance: [
-      { contentType: "REEL", reach: 40, views: 80, engagement: 22, comments: 5, posts: 2 },
+      { contentType: 'REEL', reach: 40, views: 80, engagement: 22, comments: 5, posts: 2 },
     ],
     posts: [
       {
-        id: "post-1",
-        caption: "hello",
-        timestamp: "2026-02-02T10:00:00.000Z",
-        mediaType: "CAROUSEL_ALBUM",
-        mediaUrl: "https://example.com/cover.jpg",
+        id: 'post-1',
+        caption: 'hello',
+        timestamp: '2026-02-02T10:00:00.000Z',
+        mediaType: 'CAROUSEL_ALBUM',
+        mediaUrl: 'https://example.com/cover.jpg',
         isBoosted: true,
-        boostedAt: "2026-02-02T10:00:00.000Z",
-        carouselMedia: [{ id: "m-1", mediaType: "IMAGE", mediaUrl: "https://example.com/1.jpg" }],
-        comments: [{ id: "c-1", username: "ana", text: "Great", likeCount: 3 }],
+        boostedAt: '2026-02-02T10:00:00.000Z',
+        carouselMedia: [{ id: 'm-1', mediaType: 'IMAGE', mediaUrl: 'https://example.com/1.jpg' }],
+        comments: [{ id: 'c-1', username: 'ana', text: 'Great', likeCount: 3 }],
         breakdown24h: [{ hour: 1, views: 10, reach: 9, engagement: 2 }],
-        breakdown7d: [{ date: "2026-02-02", views: 10, reach: 9, engagement: 2 }],
-        breakdown30d: [{ date: "2026-02-02", views: 10, reach: 9, engagement: 2 }],
+        breakdown7d: [{ date: '2026-02-02', views: 10, reach: 9, engagement: 2 }],
+        breakdown30d: [{ date: '2026-02-02', views: 10, reach: 9, engagement: 2 }],
       },
     ],
-    recentComments: [{ id: "c-1", username: "ana", text: "Great", likeCount: 3 }],
+    recentComments: [{ id: 'c-1', username: 'ana', text: 'Great', likeCount: 3 }],
   } as const;
 
   const normalized = normalizeInstagramOrganicMetricsResponse(payload);
   assert.equal(normalized.metrics.profileVisits24h, 15);
   assert.equal(normalized.trends?.length, 2);
-  assert.equal(normalized.boostedEvents?.[0]?.postId, "post-1");
+  assert.equal(normalized.boostedEvents?.[0]?.postId, 'post-1');
   assert.equal(normalized.audienceBreakdown?.followers, 43);
   assert.equal(normalized.posts?.[0]?.breakdown24h?.[0]?.views, 10);
   assert.equal(normalized.posts?.[0]?.breakdown30d?.[0]?.views, 10);
-  assert.equal(normalized.recentComments?.[0]?.id, "c-1");
+  assert.equal(normalized.recentComments?.[0]?.id, 'c-1');
 });

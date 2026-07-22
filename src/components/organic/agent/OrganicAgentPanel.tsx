@@ -1,8 +1,9 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
-import { RefreshCw } from 'lucide-react';
+import { ArrowRight, RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import { AutomatePromptAction } from '@/components/automations/AutomatePromptAction';
@@ -11,6 +12,7 @@ import type { Attachment } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
+import { useCollapsibleConversations } from '@/components/chat/collapsibleConversations';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
@@ -57,7 +59,6 @@ import type {
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
-import { cancelOrganicJobOptimistically } from '@/lib/organic/agent-cancellation';
 import {
   fetchOrganicSessionMessagePage,
   type OrganicSessionMessage,
@@ -81,7 +82,6 @@ import { ConceptPlan } from './ConceptPlan';
 import { buildCanvasReference, getCanvasPreview } from './canvasMentions';
 import { resolveConceptPreviewUrl } from './conceptPreview';
 import { deriveOrganicAnchors, milestonesForMessage } from './deriveOrganicAnchors';
-import { JobGrid } from './JobGrid';
 import { MediaLibrarySearchResults } from './MediaLibrarySearchResults';
 import { MessageActions } from './MessageActions';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
@@ -89,7 +89,7 @@ import { OrganicThinkingPanel } from './OrganicThinkingPanel';
 import { ToolCallPipelineCards } from './PipelinePlacementGrid';
 import { PostContentCardGrid } from './PostContentCardGrid';
 import { PromptPickerButton } from './PromptPickerButton';
-import { presentAgentMessage } from './presentAgentMessage';
+import { buildPlannerDraftDeepLink, presentAgentMessage } from './presentAgentMessage';
 import { restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
 import { SkillProposalCard } from './SkillProposalCard';
@@ -307,6 +307,7 @@ export function OrganicAgentPanel({
 }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { show } = useToast();
+  const router = useRouter();
   const { attachRun } = useCalendarRunStream();
   const requestCalendarRefetch = useCalendarStore((s) => s.requestCalendarRefetch);
   const handleCalendarDraftSignal = useCallback(() => {
@@ -388,6 +389,8 @@ export function OrganicAgentPanel({
   // A picked prompt is TEXT, not a reference — it goes into the editor for the user to
   // edit, where a picked skill goes onto the wire as a resolvable chip.
   const [queuedPromptText, setQueuedPromptText] = useState<string | null>(null);
+  const { isCollapsed: isSidebarCollapsed, toggle: toggleSidebarCollapsed } =
+    useCollapsibleConversations('organic:conversations-collapsed');
   // Dashboard pin queue (What's Working / KPI strip / packs) drains into the same
   // channel SkillPicker and Media "Use" already use.
   const mentionQueueLength = useAgentMentionQueueStore((s) => s.queue.length);
@@ -800,31 +803,11 @@ export function OrganicAgentPanel({
     ],
   );
 
-  const handleRetry = useCallback(
-    (jobId: string) => {
-      handleSubmit(`Please retry the failed post for job ${jobId}`);
+  const handleViewDraft = useCallback(
+    (draftId: string) => {
+      router.push(buildPlannerDraftDeepLink(draftId));
     },
-    [handleSubmit],
-  );
-
-  const handleCancel = useCallback(
-    async (jobId: string) => {
-      const job = state.jobs[jobId];
-      if (!job) return;
-      await cancelOrganicJobOptimistically({
-        job,
-        remove: (id) => dispatch({ type: 'JOB_CANCEL_START', jobId: id }),
-        restore: (removedJob) => dispatch({ type: 'JOB_CANCEL_FAILURE', jobId: removedJob.jobId }),
-        confirm: (id) => dispatch({ type: 'JOB_CANCEL_SUCCESS', jobId: id }),
-        notifyFailure: (message) =>
-          show({
-            title: 'Could not cancel generation',
-            description: message,
-            variant: 'error',
-          }),
-      });
-    },
-    [show, state.jobs],
+    [router],
   );
 
   const handleStop = useCallback(async () => {
@@ -837,7 +820,6 @@ export function OrganicAgentPanel({
     });
   }, [cancel, show]);
 
-  const jobs = Object.values(state.jobs);
   const hasSession = Boolean(state.sessionId || activeSessionId);
   const inputDisabled = isStreaming || !hasSession;
   const composerHint = describeComposerBlock({ isStreaming, hasSession });
@@ -1442,6 +1424,8 @@ export function OrganicAgentPanel({
         isLoading={isLoadingSessions}
         isInteractionDisabled={isStreaming}
         brandId={brandId}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapsed={toggleSidebarCollapsed}
         onNewSession={handleNewSession}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
@@ -1449,12 +1433,6 @@ export function OrganicAgentPanel({
       <AutomationSheets agent="organic" brandId={brandId} />
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-        {jobs.length > 0 && (
-          <div className="max-h-52 shrink-0 overflow-y-auto">
-            <JobGrid jobs={jobs} onRetryAction={handleRetry} onCancelAction={handleCancel} />
-          </div>
-        )}
-
         <ChatTranscript
           anchors={anchors}
           isStreaming={isStreaming}
@@ -1704,6 +1682,14 @@ export function OrganicAgentPanel({
                           </AnimatePresence>
                         </div>
                       )}
+                      {msg.role === 'assistant' && !msg.error ? (
+                        <MessageDraftLinks
+                          message={msg}
+                          pipelineCardsByToolCallId={pipelineCardsByToolCallId}
+                          jobs={state.jobs}
+                          onViewDraft={handleViewDraft}
+                        />
+                      ) : null}
                       {msg.role === 'assistant' && msg.error ? (
                         <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                           <span className="min-w-0 text-sm text-destructive">{msg.error}</span>
@@ -1757,6 +1743,9 @@ export function OrganicAgentPanel({
         </ChatTranscript>
 
         <div className="relative shrink-0">
+          <AnimatePresence>
+            {isStreaming ? <AgentWorkingIndicator variant="pinned" /> : null}
+          </AnimatePresence>
           {state.mediaResolution && state.mediaResolution.failed.length > 0 ? (
             <div
               role="status"
@@ -1852,6 +1841,68 @@ export function OrganicAgentPanel({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+// The planner draft(s) an assistant turn produced, resolved from the same
+// tool-call linkage the transcript already uses to render pipeline cards inline:
+// message tool call -> pipeline card / durable job -> draftId. Purely derived, so
+// it works for live turns and restored sessions alike without any new plumbing.
+function draftIdsForMessage(
+  message: ConversationMessage,
+  pipelineCardsByToolCallId: ReadonlyMap<string, PipelineCardState[]>,
+  jobs: Readonly<Record<string, AgentJobState>>,
+): string[] {
+  if (message.role !== 'assistant') return [];
+  const toolCallIds = new Set((message.toolCalls ?? []).map((call) => call.toolCallId));
+  if (toolCallIds.size === 0) return [];
+
+  const draftIds = new Set<string>();
+  for (const toolCallId of toolCallIds) {
+    for (const card of pipelineCardsByToolCallId.get(toolCallId) ?? []) {
+      if (card.draftId) draftIds.add(card.draftId);
+    }
+  }
+  for (const job of Object.values(jobs)) {
+    if (job.toolCallId && toolCallIds.has(job.toolCallId) && job.draftId) {
+      draftIds.add(job.draftId);
+    }
+  }
+  return Array.from(draftIds);
+}
+
+// Persistent "View post" CTA(s) on an assistant turn that produced a draft, so the
+// ready post is always one obvious click away from the chat — the old text-based
+// linkifier never fired because the backend does not emit a "Draft ID:" line.
+function MessageDraftLinks({
+  message,
+  pipelineCardsByToolCallId,
+  jobs,
+  onViewDraft,
+}: {
+  message: ConversationMessage;
+  pipelineCardsByToolCallId: ReadonlyMap<string, PipelineCardState[]>;
+  jobs: Readonly<Record<string, AgentJobState>>;
+  onViewDraft: (draftId: string) => void;
+}) {
+  const draftIds = draftIdsForMessage(message, pipelineCardsByToolCallId, jobs);
+  if (draftIds.length === 0) return null;
+  const multiple = draftIds.length > 1;
+
+  return (
+    <div className="flex flex-wrap gap-2 pt-0.5">
+      {draftIds.map((draftId, index) => (
+        <button
+          key={draftId}
+          type="button"
+          onClick={() => onViewDraft(draftId)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/40 bg-brand-primary/5 px-3 py-1 text-xs font-medium text-brand-primary transition-colors hover:bg-brand-primary/10"
+        >
+          {multiple ? `View post ${index + 1}` : 'View post'}
+          <ArrowRight className="size-3" />
+        </button>
+      ))}
     </div>
   );
 }

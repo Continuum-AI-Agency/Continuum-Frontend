@@ -1,6 +1,52 @@
 import { describe, expect, it } from 'bun:test';
 
-import { cpaHeatFill, pct } from './chartScale';
+import { ciUpperBound, cpaHeatFill, maxCiUpperBound, pct } from './chartScale';
+
+const item = (ci: { cpa?: number | null; hi?: number | null } | null) => ({
+  diagnostics: ci === null ? null : { ci },
+});
+
+describe('ciUpperBound', () => {
+  it('prefers the interval upper bound over the point estimate', () => {
+    expect(ciUpperBound(item({ cpa: 40, hi: 120 }))).toBe(120);
+  });
+
+  it('falls back to the point estimate when no upper bound was computed', () => {
+    expect(ciUpperBound(item({ cpa: 40 }))).toBe(40);
+  });
+
+  it('returns null when the item carries no interval at all', () => {
+    expect(ciUpperBound(item(null))).toBeNull();
+    expect(ciUpperBound({})).toBeNull();
+  });
+});
+
+describe('maxCiUpperBound', () => {
+  // The regression this exists to prevent: scaling a row of CI bars by the
+  // largest POINT ESTIMATE clips every whisker that runs past it, because pct()
+  // clamps at 100. The widest interval — the ad set you must not fund — would
+  // then render as the narrowest-looking one on screen.
+  it('scales by the widest upper bound, not the largest point estimate', () => {
+    const items = [item({ cpa: 40, hi: 60 }), item({ cpa: 50, hi: 300 })];
+    expect(maxCiUpperBound(items)).toBe(300);
+
+    const noisiest = items[1];
+    const hi = ciUpperBound(noisiest) as number;
+    expect(pct(hi, maxCiUpperBound(items))).toBe(100);
+    // Under the old point-estimate denominator (50) this whisker clamped to 100
+    // as well, making a 300 interval and a 60 interval indistinguishable.
+    expect(pct(60, maxCiUpperBound(items))).toBeLessThan(100);
+  });
+
+  it('applies the objective denominator multiplier', () => {
+    expect(maxCiUpperBound([item({ cpa: 2, hi: 5 })], 1000)).toBe(5000);
+  });
+
+  it('never returns 0, so callers can divide by it', () => {
+    expect(maxCiUpperBound([])).toBe(1);
+    expect(maxCiUpperBound([item({ cpa: 0, hi: 0 })])).toBe(1);
+  });
+});
 
 describe('pct', () => {
   it('returns 0 when max is non-positive', () => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { FreezeReasonSchema } from '@continuum/contracts';
 
 import {
+  actionRoute,
   applyModePill,
   confidenceBand,
   freezeLabel,
@@ -12,16 +14,16 @@ import {
   recommendationLabel,
 } from './reportModel';
 
-describe('pause is advisory, never an implied execution', () => {
-  it('labels a pause recommendation as manual-review, not "Pause"', () => {
-    // The optimizer never pauses an ad set on Meta, so the label must not imply it does.
-    expect(recommendationLabel('pause').label).toBe('Review · pause manually');
+describe('pause is an executable ad-set write, not an advisory', () => {
+  it('labels a pause recommendation as the write it authorizes', () => {
+    // The app pauses the ad set on Meta through the audited drain, so the label names it.
+    expect(recommendationLabel('pause').label).toBe('Pause ad set');
   });
 
-  it('gives a pause row an "Acknowledge" action + advisory copy (not "Approve")', () => {
+  it('gives a pause row a "Pause ad set" action with no advisory', () => {
     const copy = recommendationActionCopy('pause');
-    expect(copy.approveLabel).toBe('Acknowledge');
-    expect(copy.advisory).toContain('never pauses');
+    expect(copy.approveLabel).toBe('Pause ad set');
+    expect(copy.advisory).toBeNull();
   });
 
   it('keeps "Approve" (no advisory) for fatigue kinds that DO open a renewal task', () => {
@@ -29,6 +31,24 @@ describe('pause is advisory, never an implied execution', () => {
       const copy = recommendationActionCopy(kind);
       expect(copy.approveLabel).toBe('Approve');
       expect(copy.advisory).toBeNull();
+    }
+  });
+});
+
+describe('actionRoute — which drain a rec kind executes through', () => {
+  it('routes a pause to the audited ad-set status drain', () => {
+    expect(actionRoute('pause')).toBe('pause');
+  });
+
+  it('routes fatigue kinds (and unknown kinds) to the renewal-task path', () => {
+    expect(actionRoute('creative_refresh')).toBe('fatigue');
+    expect(actionRoute('audience_expand')).toBe('fatigue');
+    expect(actionRoute('some_future_kind')).toBe('fatigue');
+  });
+
+  it('hides the three ad-level kinds — found, but no drain surfaced yet', () => {
+    for (const kind of ['pause_ad', 'variate_creative', 'seed_experiment']) {
+      expect(actionRoute(kind)).toBe('hidden');
     }
   });
 });
@@ -42,9 +62,27 @@ describe('freezeLabel', () => {
     expect(freezeLabel('no_conversions')?.label).toBe('Held · no conversion signal');
     expect(freezeLabel('missing_window')?.label).toBe('Held · incomplete data');
     expect(freezeLabel('unsupported_budget')?.label).toBe('Held · CBO/lifetime');
+    expect(freezeLabel('no_own_budget')?.label).toBe('Held · no budget of its own');
+    expect(freezeLabel('no_declared_objective')?.label).toBe('Held · no declared goal');
+  });
+  it('distinguishes no_own_budget from the campaign-level unsupported_budget', () => {
+    // Both are zero-budget ad sets, and the operator's next action differs: one needs an
+    // ad-set budget created, the other has a budget already — on the campaign.
+    expect(freezeLabel('no_own_budget')?.hint).not.toBe(freezeLabel('unsupported_budget')?.hint);
+    expect(freezeLabel('no_own_budget')?.hint).toContain('boosted');
   });
   it('falls back to a generic Held for an unknown loose reason', () => {
     expect(freezeLabel('some_future_reason')?.label).toBe('Held');
+  });
+  it('has a real label for EVERY reason in the contracts union — none degrade to bare "Held"', () => {
+    // The drift fence. A reason added to the contracts enum without a case here renders as an
+    // unexplained "Held", which tells an operator nothing about why their budget did not move.
+    for (const reason of FreezeReasonSchema.options) {
+      const rendered = freezeLabel(reason);
+      expect(rendered).not.toBeNull();
+      expect(rendered?.label).not.toBe('Held');
+      expect(rendered?.hint.length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -134,7 +172,7 @@ describe('confidenceBand', () => {
 
 describe('recommendationLabel', () => {
   it('maps known kinds', () => {
-    expect(recommendationLabel('pause').label).toBe('Review · pause manually');
+    expect(recommendationLabel('pause').label).toBe('Pause ad set');
     expect(recommendationLabel('creative_refresh').label).toBe('Refresh creative');
     expect(recommendationLabel('audience_expand').label).toBe('Expand audience');
   });
@@ -205,17 +243,24 @@ describe('creative-level recommendations — shown, but honestly not actionable 
   it('keeps the kinds that DO work executable — this guard must not over-reach', () => {
     expect(isExecutable('creative_refresh')).toBe(true);
     expect(isExecutable('audience_expand')).toBe(true);
-    expect(isExecutable('pause')).toBe(true); // advisory, but the status write is real
+    expect(isExecutable('pause')).toBe(true); // the ad-set pause is a real, audited Meta write
   });
 
   it('says out loud that it cannot act, instead of implying it did', () => {
     for (const kind of ['pause_ad', 'variate_creative', 'seed_experiment']) {
       const { advisory } = recommendationActionCopy(kind);
-      expect(advisory).toContain('Not wired up yet');
-      expect(notImplementedMessage(kind)).toMatch(/not built yet/);
+      // ONE phrasing for this state. The row advisory and the click-time toast are
+      // read seconds apart by the same person; "not wired up" in one and "not built
+      // yet" in the other read as two different problems. "Wired up" also described
+      // our backlog in words that sound like a setting the user failed to switch on.
+      expect(advisory).toContain('Not built yet');
+      expect(advisory).not.toMatch(/wired up/i);
+      expect(notImplementedMessage(kind)).toMatch(/not built yet/i);
+      expect(notImplementedMessage(kind)).not.toMatch(/wired up/i);
     }
     // And it still tells the operator what they CAN do about it right now.
     expect(notImplementedMessage('pause_ad')).toContain('pause it in Meta');
     expect(notImplementedMessage('variate_creative')).toContain('AI Studio');
+    expect(recommendationActionCopy('pause_ad').advisory).toContain('Pause it in Meta');
   });
 });

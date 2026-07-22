@@ -1,13 +1,13 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { resolveHeadersOrigin, resolveRequestOrigin } from "../../src/lib/server/origin";
+import { resolveHeadersOrigin, resolveRequestOrigin } from '../../src/lib/server/origin';
 
 function withEnv<T>(patch: Record<string, string | undefined>, fn: () => T): T {
   const previous: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(patch)) {
     previous[key] = process.env[key];
-    if (typeof value === "undefined") {
+    if (typeof value === 'undefined') {
       delete process.env[key];
     } else {
       process.env[key] = value;
@@ -18,7 +18,7 @@ function withEnv<T>(patch: Record<string, string | undefined>, fn: () => T): T {
     return fn();
   } finally {
     for (const [key, value] of Object.entries(previous)) {
-      if (typeof value === "undefined") {
+      if (typeof value === 'undefined') {
         delete process.env[key];
       } else {
         process.env[key] = value;
@@ -27,153 +27,153 @@ function withEnv<T>(patch: Record<string, string | undefined>, fn: () => T): T {
   }
 }
 
-test("resolveHeadersOrigin prefers localhost origin in development", () => {
+test('resolveHeadersOrigin prefers localhost origin in development', () => {
   withEnv(
     {
-      NODE_ENV: "development",
-      NEXT_PUBLIC_SITE_URL: "https://app.continuum.example",
+      NODE_ENV: 'development',
+      NEXT_PUBLIC_SITE_URL: 'https://app.continuum.example',
       SITE_URL: undefined,
       OAUTH_ALLOWED_ORIGINS: undefined,
       NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
     },
     () => {
       const headerStore = new Headers({
-        host: "localhost:3000",
-        origin: "http://localhost:3000",
+        host: 'localhost:3000',
+        origin: 'http://localhost:3000',
       });
 
-      const origin = resolveHeadersOrigin(headerStore, "https://app.continuum.example");
-      assert.equal(origin, "http://localhost:3000");
-    }
+      const origin = resolveHeadersOrigin(headerStore, 'https://app.continuum.example');
+      assert.equal(origin, 'http://localhost:3000');
+    },
   );
 });
 
-test("resolveHeadersOrigin falls back to env origin in production for unlisted origins", () => {
+test('resolveHeadersOrigin falls back to env origin in production for unlisted origins', () => {
   withEnv(
     {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_SITE_URL: "https://app.continuum.example",
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://app.continuum.example',
       SITE_URL: undefined,
       OAUTH_ALLOWED_ORIGINS: undefined,
       NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
     },
     () => {
       const headerStore = new Headers({
-        host: "evil.example",
-        origin: "https://evil.example",
+        host: 'evil.example',
+        origin: 'https://evil.example',
       });
 
-      const origin = resolveHeadersOrigin(headerStore, "https://app.continuum.example");
-      assert.equal(origin, "https://app.continuum.example");
-    }
+      const origin = resolveHeadersOrigin(headerStore, 'https://app.continuum.example');
+      assert.equal(origin, 'https://app.continuum.example');
+    },
   );
 });
 
-test("resolveHeadersOrigin accepts explicitly allowed origins in production", () => {
+test('resolveHeadersOrigin accepts explicitly allowed origins in production', () => {
   withEnv(
     {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_SITE_URL: "https://app.continuum.example",
-      NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: "https://staging.continuum.example",
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://app.continuum.example',
+      NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: 'https://staging.continuum.example',
     },
     () => {
       const headerStore = new Headers({
-        host: "staging.continuum.example",
-        origin: "https://staging.continuum.example",
+        host: 'staging.continuum.example',
+        origin: 'https://staging.continuum.example',
       });
 
-      const origin = resolveHeadersOrigin(headerStore, "https://app.continuum.example");
-      assert.equal(origin, "https://staging.continuum.example");
-    }
+      const origin = resolveHeadersOrigin(headerStore, 'https://app.continuum.example');
+      assert.equal(origin, 'https://staging.continuum.example');
+    },
   );
 });
 
-test("resolveHeadersOrigin uses beta host from the same app domain in production", () => {
+test('resolveHeadersOrigin uses beta host from the same app domain in production', () => {
   withEnv(
     {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://app.trycontinuum.ai',
       SITE_URL: undefined,
       OAUTH_ALLOWED_ORIGINS: undefined,
       NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
     },
     () => {
       const headerStore = new Headers({
-        host: "app.beta.trycontinuum.ai",
-        origin: "https://app.beta.trycontinuum.ai",
-        "x-forwarded-proto": "https",
+        host: 'app.beta.trycontinuum.ai',
+        origin: 'https://app.beta.trycontinuum.ai',
+        'x-forwarded-proto': 'https',
       });
 
-      const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
-      assert.equal(origin, "https://app.beta.trycontinuum.ai");
-    }
+      const origin = resolveHeadersOrigin(headerStore, 'https://app.trycontinuum.ai');
+      assert.equal(origin, 'https://app.beta.trycontinuum.ai');
+    },
   );
 });
 
-test("resolveHeadersOrigin uses beta host when server action origin header is absent", () => {
+test('resolveHeadersOrigin uses beta host when server action origin header is absent', () => {
   withEnv(
     {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://app.trycontinuum.ai',
       SITE_URL: undefined,
       OAUTH_ALLOWED_ORIGINS: undefined,
       NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
     },
     () => {
       const headerStore = new Headers({
-        host: "app.beta.trycontinuum.ai",
-        referer: "https://app.beta.trycontinuum.ai/login",
-        "x-forwarded-proto": "https",
+        host: 'app.beta.trycontinuum.ai',
+        referer: 'https://app.beta.trycontinuum.ai/login',
+        'x-forwarded-proto': 'https',
       });
 
-      const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
-      assert.equal(origin, "https://app.beta.trycontinuum.ai");
-    }
+      const origin = resolveHeadersOrigin(headerStore, 'https://app.trycontinuum.ai');
+      assert.equal(origin, 'https://app.beta.trycontinuum.ai');
+    },
   );
 });
 
-test("resolveHeadersOrigin uses beta origin when hosted request host is production", () => {
+test('resolveHeadersOrigin uses beta origin when hosted request host is production', () => {
   withEnv(
     {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://app.trycontinuum.ai',
       SITE_URL: undefined,
       OAUTH_ALLOWED_ORIGINS: undefined,
       NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
     },
     () => {
       const headerStore = new Headers({
-        host: "app.trycontinuum.ai",
-        origin: "https://app.beta.trycontinuum.ai",
-        "x-forwarded-proto": "https",
+        host: 'app.trycontinuum.ai',
+        origin: 'https://app.beta.trycontinuum.ai',
+        'x-forwarded-proto': 'https',
       });
 
-      const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
-      assert.equal(origin, "https://app.beta.trycontinuum.ai");
-    }
+      const origin = resolveHeadersOrigin(headerStore, 'https://app.trycontinuum.ai');
+      assert.equal(origin, 'https://app.beta.trycontinuum.ai');
+    },
   );
 });
 
-test("resolveRequestOrigin accepts beta override when request URL resolves as production", () => {
+test('resolveRequestOrigin accepts beta override when request URL resolves as production', () => {
   withEnv(
     {
-      NODE_ENV: "production",
-      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://app.trycontinuum.ai',
       SITE_URL: undefined,
       OAUTH_ALLOWED_ORIGINS: undefined,
       NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
     },
     () => {
-      const request = new Request("https://app.trycontinuum.ai/oauth/start", {
+      const request = new Request('https://app.trycontinuum.ai/oauth/start', {
         headers: {
-          host: "app.trycontinuum.ai",
-          "x-forwarded-proto": "https",
+          host: 'app.trycontinuum.ai',
+          'x-forwarded-proto': 'https',
         },
       });
       const url = new URL(request.url);
 
-      const origin = resolveRequestOrigin(request, url, "https://app.beta.trycontinuum.ai");
-      assert.equal(origin, "https://app.beta.trycontinuum.ai");
-    }
+      const origin = resolveRequestOrigin(request, url, 'https://app.beta.trycontinuum.ai');
+      assert.equal(origin, 'https://app.beta.trycontinuum.ai');
+    },
   );
 });

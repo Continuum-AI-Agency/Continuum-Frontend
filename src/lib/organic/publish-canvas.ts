@@ -5,15 +5,15 @@
 // signing, Supabase writes) live in the route; everything here is pure so it is
 // unit-testable and shared by the node hook + the route.
 
-import { z } from "zod";
-import { formatDayId, startOfWeek } from "@/components/organic/primitives/calendar-utils";
+import { z } from 'zod';
+import { formatDayId, startOfWeek } from '@/components/organic/primitives/calendar-utils';
 
 // Drafts with no assigned publishing account use this sentinel, matching the FE
 // autosave stub path (calendar-draft-persistence).
-export const PUBLISH_UNASSIGNED_PLATFORM_ACCOUNT_ID = "unassigned";
-export const DEFAULT_PUBLISH_PLATFORM = "instagram";
+export const PUBLISH_UNASSIGNED_PLATFORM_ACCOUNT_ID = 'unassigned';
+export const DEFAULT_PUBLISH_PLATFORM = 'instagram';
 
-export const publishCanvasStatusSchema = z.enum(["draft", "approved", "scheduled"]);
+export const publishCanvasStatusSchema = z.enum(['draft', 'approved', 'scheduled']);
 export type PublishCanvasStatus = z.infer<typeof publishCanvasStatusSchema>;
 
 export const publishCanvasRequestSchema = z
@@ -64,7 +64,7 @@ function localNoon(reference: Date): Date {
 // organic_calendar_drafts.scheduled_date is a full timestamptz, and a date-only
 // write that later gets a time appended triggers Postgres 22007.
 export function normalizePublishScheduledAt(input: string | undefined, now: Date): string {
-  const raw = typeof input === "string" ? input.trim() : "";
+  const raw = typeof input === 'string' ? input.trim() : '';
   if (!raw) return localNoon(now).toISOString();
   if (DATE_ONLY.test(raw)) return new Date(`${raw}T12:00:00`).toISOString();
   const parsed = new Date(raw);
@@ -113,7 +113,7 @@ export function buildPublishDraftRow(input: PublishDraftRowInput): Record<string
       weekStart: computeWeekStartId(input.scheduledAtIso),
       dayId,
       platform: input.platform,
-      origin: "ai-studio-canvas",
+      origin: 'ai-studio-canvas',
       ...(input.caption ? { caption: input.caption } : {}),
     },
     updated_at: input.nowIso,

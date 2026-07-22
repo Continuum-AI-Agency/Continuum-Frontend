@@ -1,10 +1,10 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { CardSurface } from "./CardSurface";
-import { ReadinessRadarChart } from "../readiness/ReadinessRadarChart";
-import { ScoreBadge } from "../readiness/ScoreBadge";
-import { FindingsStack } from "../readiness/FindingsStack";
-import type { ReadinessAnalysis } from "@/lib/onboarding/agentClient";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import { Skeleton } from '@/components/ui/skeleton';
+import type { ReadinessAnalysis } from '@/lib/onboarding/agentClient';
+import { FindingsStack } from '../readiness/FindingsStack';
+import { ReadinessRadarChart } from '../readiness/ReadinessRadarChart';
+import { ScoreBadge } from '../readiness/ScoreBadge';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
+import { CardSurface } from './CardSurface';
 
 type Props = {
   buckets: AgentPreviewBuckets | null;
@@ -12,7 +12,7 @@ type Props = {
 };
 
 export function ReadinessCard({ buckets, readiness }: Props) {
-  const status = buckets?.sectionStatus.readiness ?? (readiness ? "done" : "indeterminate");
+  const status = buckets?.sectionStatus.readiness ?? (readiness ? 'done' : 'indeterminate');
   const isEmpty = readiness === null;
 
   return (

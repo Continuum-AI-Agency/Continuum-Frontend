@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { onBrandChange } from "@/lib/brands/brand-switch";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { onBrandChange } from '@/lib/brands/brand-switch';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -29,7 +29,7 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || (!session && event === "TOKEN_REFRESHED")) {
+      if (event === 'SIGNED_OUT' || (!session && event === 'TOKEN_REFRESHED')) {
         queryClient.clear();
       }
     });
@@ -51,4 +51,3 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
-

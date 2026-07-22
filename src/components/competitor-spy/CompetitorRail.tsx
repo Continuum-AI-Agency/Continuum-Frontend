@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import type { Competitor, CompetitorHealthTone } from "@continuum/contracts";
-import { cn } from "@/lib/utils";
-import { compactCount, initials, tileStyle } from "./brandVisuals";
-import { competitorHealthChip } from "./competitorHealth";
+import type { Competitor, CompetitorHealthTone } from '@continuum/contracts';
+import { cn } from '@/lib/utils';
+import { compactCount, initials, tileStyle } from './brandVisuals';
+import { competitorHealthChip } from './competitorHealth';
 
 // Left-rail ticker for competitor selection (replaces the filter dropdown).
 // Vertical on md+, a horizontal scroll strip on mobile. Flat, hairline-bordered,
@@ -11,9 +11,9 @@ import { competitorHealthChip } from "./competitorHealth";
 
 function rowClass(active: boolean): string {
   return cn(
-    "flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
-    "min-w-44 md:min-w-0 md:w-full",
-    active ? "bg-muted" : "hover:bg-muted/60",
+    'flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
+    'min-w-44 md:min-w-0 md:w-full',
+    active ? 'bg-muted' : 'hover:bg-muted/60',
   );
 }
 
@@ -21,8 +21,8 @@ function Tile({ children, style }: { children: string; style?: React.CSSProperti
   return (
     <span
       className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-medium",
-        !style && "bg-muted text-muted-foreground",
+        'flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-medium',
+        !style && 'bg-muted text-muted-foreground',
       )}
       style={style}
       aria-hidden
@@ -33,11 +33,11 @@ function Tile({ children, style }: { children: string; style?: React.CSSProperti
 }
 
 const TONE_DOT: Record<CompetitorHealthTone, string> = {
-  positive: "bg-emerald-500",
-  info: "bg-sky-500",
-  warning: "bg-amber-500",
-  danger: "bg-destructive",
-  neutral: "bg-muted-foreground",
+  positive: 'bg-emerald-500',
+  info: 'bg-sky-500',
+  warning: 'bg-amber-500',
+  danger: 'bg-destructive',
+  neutral: 'bg-muted-foreground',
 };
 
 // Non-interactive health signal for the rail row (which is itself a button, so it
@@ -48,7 +48,7 @@ function HealthDot({ competitor, adsFound }: { competitor: Competitor; adsFound?
   return (
     <span
       role="img"
-      className={cn("size-2 shrink-0 rounded-full", TONE_DOT[chip.tone])}
+      className={cn('size-2 shrink-0 rounded-full', TONE_DOT[chip.tone])}
       title={chip.label}
       aria-label={`Health: ${chip.label}`}
     />
@@ -60,7 +60,7 @@ export function CompetitorRail({
   selectedId,
   onSelect,
   onAdd,
-  metricLabel = "followers",
+  metricLabel = 'followers',
   showHealth = false,
   adCounts,
   className,
@@ -75,7 +75,7 @@ export function CompetitorRail({
   className?: string;
 }) {
   return (
-    <aside className={cn("flex flex-col gap-1", className)}>
+    <aside className={cn('flex flex-col gap-1', className)}>
       <div className="mb-1 hidden items-baseline justify-between px-2.5 md:flex">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Competitors
@@ -92,7 +92,7 @@ export function CompetitorRail({
           aria-current={selectedId === undefined}
           className={rowClass(selectedId === undefined)}
         >
-          <Tile>{"∗"}</Tile>
+          <Tile>{'∗'}</Tile>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm text-foreground">All competitors</span>
             <span className="block truncate font-mono text-xs text-muted-foreground">
@@ -105,7 +105,7 @@ export function CompetitorRail({
           const active = competitor.id === selectedId;
           const handle = competitor.instagramUsername ? `@${competitor.instagramUsername}` : null;
           const metric = compactCount(competitor.instagramFollowersCount);
-          const needsReview = competitor.paidStatus === "needs_review";
+          const needsReview = competitor.paidStatus === 'needs_review';
           return (
             <button
               key={competitor.id}
@@ -117,22 +117,24 @@ export function CompetitorRail({
               <Tile style={tileStyle(competitor.name)}>{initials(competitor.name)}</Tile>
               <span className="min-w-0 flex-1">
                 <span
-                  className={cn(
-                    "block truncate text-sm text-foreground",
-                    active && "font-medium",
-                  )}
+                  className={cn('block truncate text-sm text-foreground', active && 'font-medium')}
                 >
                   {competitor.name}
                 </span>
                 <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {needsReview ? "needs review" : (handle ?? competitor.slug)}
+                  {needsReview ? 'needs review' : (handle ?? competitor.slug)}
                 </span>
               </span>
               {showHealth || metric ? (
                 <span className="flex shrink-0 items-center gap-1.5">
-                  {showHealth ? <HealthDot competitor={competitor} adsFound={adCounts?.[competitor.id]} /> : null}
+                  {showHealth ? (
+                    <HealthDot competitor={competitor} adsFound={adCounts?.[competitor.id]} />
+                  ) : null}
                   {metric ? (
-                    <span className="font-mono text-xs tabular-nums text-muted-foreground" title={metricLabel}>
+                    <span
+                      className="font-mono text-xs tabular-nums text-muted-foreground"
+                      title={metricLabel}
+                    >
                       {metric}
                     </span>
                   ) : null}

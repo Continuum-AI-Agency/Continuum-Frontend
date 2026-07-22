@@ -1,7 +1,7 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { ORGANIC_PLATFORM_KEYS, type OrganicPlatformKey } from "./platforms";
-import { promptFormValueSchema } from "./prompts";
+import { ORGANIC_PLATFORM_KEYS, type OrganicPlatformKey } from './platforms';
+import { promptFormValueSchema } from './prompts';
 
 const primitiveText = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -10,7 +10,7 @@ const textFieldSchema = primitiveText
   .optional()
   .transform((value) => {
     if (value === null || value === undefined) {
-      return "";
+      return '';
     }
     return String(value);
   });
@@ -18,14 +18,17 @@ const textFieldSchema = primitiveText
 const optionalNumberSchema = z
   .union([z.number(), z.string()])
   .optional()
-  .refine((value) => {
-    if (value === undefined) return true;
-    if (typeof value === "number") return Number.isFinite(value);
-    return value.trim().length > 0 && Number.isFinite(Number(value));
-  }, { message: "Expected numeric value" })
+  .refine(
+    (value) => {
+      if (value === undefined) return true;
+      if (typeof value === 'number') return Number.isFinite(value);
+      return value.trim().length > 0 && Number.isFinite(Number(value));
+    },
+    { message: 'Expected numeric value' },
+  )
   .transform((value) => {
     if (value === undefined) return undefined;
-    if (typeof value === "number") return value;
+    if (typeof value === 'number') return value;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
   });
@@ -87,10 +90,7 @@ const hashtagsSchema = z
     low_competition: (hashtags.low_competition ?? []).map((item) => item),
   }));
 
-const technicalScriptSchema = z
-  .record(z.string(), z.unknown())
-  .optional()
-  .default({});
+const technicalScriptSchema = z.record(z.string(), z.unknown()).optional().default({});
 
 export const detailedPostTemplateSchema = z.object({
   day_platform: textFieldSchema,
@@ -105,7 +105,10 @@ export const detailedPostTemplateSchema = z.object({
   caption_copy: textFieldSchema,
   hashtags: hashtagsSchema,
   media_url: textFieldSchema.optional().transform((value) => (value ? value : undefined)),
-  media_urls: z.array(textFieldSchema).optional().transform((arr) => (arr ? arr.filter((item) => item.length > 0) : undefined)),
+  media_urls: z
+    .array(textFieldSchema)
+    .optional()
+    .transform((arr) => (arr ? arr.filter((item) => item.length > 0) : undefined)),
   num_slides: optionalNumberSchema,
 });
 
@@ -113,13 +116,10 @@ export type DetailedPostTemplate = z.infer<typeof detailedPostTemplateSchema>;
 
 export const generationRequestSchema = z.object({
   platformAccountIds: z
-    .record(z.enum(ORGANIC_PLATFORM_KEYS), z.string().min(1, "Account id is required"))
-    .refine(
-      (records) => Object.keys(records).length > 0,
-      "Select at least one platform"
-    ),
-  language: z.string().min(1, "Language is required"),
-  userPrompt: z.string().min(1, "A user prompt is required"),
+    .record(z.enum(ORGANIC_PLATFORM_KEYS), z.string().min(1, 'Account id is required'))
+    .refine((records) => Object.keys(records).length > 0, 'Select at least one platform'),
+  language: z.string().min(1, 'Language is required'),
+  userPrompt: z.string().min(1, 'A user prompt is required'),
   generationPrompt: z.string().optional(),
   selectedTrendIds: z.array(z.string()).max(5).default([]),
   prompt: promptFormValueSchema,
@@ -131,10 +131,7 @@ export type PromptPayload = z.infer<typeof promptFormValueSchema>;
 export const dailyDetailsRequestSchema = z.object({
   platformAccountIds: z
     .record(z.enum(ORGANIC_PLATFORM_KEYS), z.string().min(1))
-    .refine(
-      (records) => Object.keys(records).length > 0,
-      "Select at least one platform"
-    ),
+    .refine((records) => Object.keys(records).length > 0, 'Select at least one platform'),
   weeklyGrid: weeklyGridSchema,
   language: z.string().min(1),
   selectedTrendIds: z.array(z.string()).max(5).default([]),

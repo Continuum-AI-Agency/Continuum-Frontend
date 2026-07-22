@@ -1,28 +1,28 @@
-"use client";
+'use client';
 
-import { useCallback, useState } from "react";
-import { DOCUMENT_CATEGORY_DEFAULT, type DocumentCategory } from "@continuum/contracts";
-import type { OnboardingDocument, OnboardingState } from "@/lib/onboarding/state";
-import { createBrandId } from "@/lib/onboarding/state";
-import { removeDocumentAction, updateDocumentCategoryAction } from "@/app/onboarding/actions";
+import { DOCUMENT_CATEGORY_DEFAULT, type DocumentCategory } from '@continuum/contracts';
+import { useCallback, useState } from 'react';
 import {
   createInlineDocumentUrlAction,
   createSignedDocumentUrlAction,
-} from "@/app/(post-auth)/settings/actions";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { sanitizeStorageFileName } from "@/lib/storage/sanitize";
+} from '@/app/(post-auth)/settings/actions';
+import { removeDocumentAction, updateDocumentCategoryAction } from '@/app/onboarding/actions';
 import {
+  isAcceptedDocumentMime,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_MB,
-  isAcceptedDocumentMime,
-} from "@/lib/documents/uploadLimits";
+} from '@/lib/documents/uploadLimits';
+import type { OnboardingDocument, OnboardingState } from '@/lib/onboarding/state';
+import { createBrandId } from '@/lib/onboarding/state';
+import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const STORAGE_BUCKET = "brand-docs";
+const STORAGE_BUCKET = 'brand-docs';
 
 export type UploadEntry = {
   key: string;
   file: File;
-  status: "uploading" | "error";
+  status: 'uploading' | 'error';
   error?: string;
   category: DocumentCategory;
 };
@@ -41,7 +41,10 @@ export type DocumentMutationsHandle = {
   ) => Promise<{ succeeded: number; failed: number }>;
   retryUpload: (key: string, onApplied?: (state: OnboardingState) => void) => Promise<boolean>;
   discardUpload: (key: string) => void;
-  removeDocument: (documentId: string, onApplied?: (state: OnboardingState) => void) => Promise<void>;
+  removeDocument: (
+    documentId: string,
+    onApplied?: (state: OnboardingState) => void,
+  ) => Promise<void>;
   updateCategory: (
     documentId: string,
     category: DocumentCategory,
@@ -57,12 +60,14 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
   const uploadOne = useCallback(
     async (entry: UploadEntry, onApplied?: (state: OnboardingState) => void): Promise<boolean> => {
       setUploads((prev) =>
-        prev.map((p) => (p.key === entry.key ? { ...p, status: "uploading", error: undefined } : p)),
+        prev.map((p) =>
+          p.key === entry.key ? { ...p, status: 'uploading', error: undefined } : p,
+        ),
       );
 
       const fail = (message: string): false => {
         setUploads((prev) =>
-          prev.map((p) => (p.key === entry.key ? { ...p, status: "error", error: message } : p)),
+          prev.map((p) => (p.key === entry.key ? { ...p, status: 'error', error: message } : p)),
         );
         return false;
       };
@@ -72,7 +77,7 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
         return fail(`File exceeds ${MAX_DOCUMENT_MB} MB limit`);
       }
       if (!isAcceptedDocumentMime(file.type)) {
-        return fail(`Unsupported file type: ${file.type || "unknown"}`);
+        return fail(`Unsupported file type: ${file.type || 'unknown'}`);
       }
 
       const supabase = createSupabaseBrowserClient();
@@ -91,9 +96,9 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
       }
 
       try {
-        const response = await fetch("/api/onboarding/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const response = await fetch('/api/onboarding/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             brandId,
             documentId,
@@ -102,12 +107,12 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
             displayName: file.name,
             mimeType: file.type,
             size: file.size,
-            source: "upload",
+            source: 'upload',
             category: entry.category,
           }),
         });
         if (!response.ok) {
-          const text = await response.text().catch(() => "");
+          const text = await response.text().catch(() => '');
           throw new Error(text || `Upload failed (${response.status})`);
         }
         const data = (await response.json()) as UploadResponse;
@@ -127,13 +132,13 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     [brandId],
   );
 
-  const uploadFiles = useCallback<DocumentMutationsHandle["uploadFiles"]>(
+  const uploadFiles = useCallback<DocumentMutationsHandle['uploadFiles']>(
     async (files, onApplied, category = DOCUMENT_CATEGORY_DEFAULT) => {
       if (files.length === 0) return { succeeded: 0, failed: 0 };
       const fresh: UploadEntry[] = files.map((file, idx) => ({
         key: `${Date.now()}-${idx}-${file.name}`,
         file,
-        status: "uploading",
+        status: 'uploading',
         category,
       }));
       setUploads((prev) => [...prev, ...fresh]);
@@ -149,7 +154,7 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     [uploadOne],
   );
 
-  const retryUpload = useCallback<DocumentMutationsHandle["retryUpload"]>(
+  const retryUpload = useCallback<DocumentMutationsHandle['retryUpload']>(
     async (key, onApplied) => {
       const entry = uploads.find((u) => u.key === key);
       if (!entry) return false;
@@ -158,11 +163,11 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     [uploadOne, uploads],
   );
 
-  const discardUpload = useCallback<DocumentMutationsHandle["discardUpload"]>((key) => {
+  const discardUpload = useCallback<DocumentMutationsHandle['discardUpload']>((key) => {
     setUploads((prev) => prev.filter((u) => u.key !== key));
   }, []);
 
-  const removeDocument = useCallback<DocumentMutationsHandle["removeDocument"]>(
+  const removeDocument = useCallback<DocumentMutationsHandle['removeDocument']>(
     async (documentId, onApplied) => {
       const nextState = await removeDocumentAction(brandId, documentId);
       onApplied?.(nextState);
@@ -170,7 +175,7 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     [brandId],
   );
 
-  const updateCategory = useCallback<DocumentMutationsHandle["updateCategory"]>(
+  const updateCategory = useCallback<DocumentMutationsHandle['updateCategory']>(
     async (documentId, category, onApplied) => {
       const nextState = await updateDocumentCategoryAction(brandId, documentId, category);
       onApplied?.(nextState);
@@ -178,12 +183,12 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     [brandId],
   );
 
-  const openSignedUrl = useCallback<DocumentMutationsHandle["openSignedUrl"]>(
+  const openSignedUrl = useCallback<DocumentMutationsHandle['openSignedUrl']>(
     async (storagePath) => createSignedDocumentUrlAction(storagePath),
     [],
   );
 
-  const openInlineUrl = useCallback<DocumentMutationsHandle["openInlineUrl"]>(
+  const openInlineUrl = useCallback<DocumentMutationsHandle['openInlineUrl']>(
     async (storagePath) => createInlineDocumentUrlAction(storagePath),
     [],
   );

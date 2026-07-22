@@ -1,9 +1,5 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
 import {
   ArrowRight,
   CaretRight,
@@ -13,14 +9,18 @@ import {
   MagnifyingGlass,
   PlugsConnected,
   ShieldCheck,
-} from "@phosphor-icons/react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ApiError } from "@/lib/api/errors";
-import { getApiBaseUrl } from "@/lib/api/config";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { cn } from "@/lib/utils";
+} from '@phosphor-icons/react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { ApiError } from '@/lib/api/errors';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { cn } from '@/lib/utils';
 
 type LinkPlatformClientProps = {
   platform: string;
@@ -46,33 +46,33 @@ type LinkBrand = {
 };
 
 type LinkState =
-  | { kind: "loading" }
-  | { kind: "invalid"; message: string }
-  | { kind: "auth"; platformLabel: string }
-  | { kind: "empty"; platformLabel: string }
-  | { kind: "ready"; platformLabel: string; expiresAt: number | null; brands: LinkBrand[] }
-  | { kind: "done"; linked: number }
-  | { kind: "error"; message: string };
+  | { kind: 'loading' }
+  | { kind: 'invalid'; message: string }
+  | { kind: 'auth'; platformLabel: string }
+  | { kind: 'empty'; platformLabel: string }
+  | { kind: 'ready'; platformLabel: string; expiresAt: number | null; brands: LinkBrand[] }
+  | { kind: 'done'; linked: number }
+  | { kind: 'error'; message: string };
 
 function formatPlatform(value: string): string {
   const normalized = value.trim().toLowerCase();
-  if (normalized === "msteams" || normalized === "teams") return "Teams";
+  if (normalized === 'msteams' || normalized === 'teams') return 'Teams';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 function isLinkBrand(value: unknown): value is LinkBrand {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const brand = value as Record<string, unknown>;
-  return typeof brand.brandId === "string" && typeof brand.role === "string";
+  return typeof brand.brandId === 'string' && typeof brand.role === 'string';
 }
 
 function normalizeSearchText(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function brandSearchText(brand: LinkBrand): string {
   return normalizeSearchText(
-    [brand.displayName, brand.role, brand.adAccountId, brand.brandId].filter(Boolean).join(" ")
+    [brand.displayName, brand.role, brand.adAccountId, brand.brandId].filter(Boolean).join(' '),
   );
 }
 
@@ -90,7 +90,7 @@ function fuzzyIncludes(haystack: string, needle: string): boolean {
 }
 
 function filterBrands(brands: LinkBrand[], query: string): LinkBrand[] {
-  const terms = normalizeSearchText(query).split(" ").filter(Boolean);
+  const terms = normalizeSearchText(query).split(' ').filter(Boolean);
   if (terms.length === 0) return brands;
 
   return brands.filter((brand) => {
@@ -105,8 +105,8 @@ function brandInitials(brand: LinkBrand): string {
   const initials = words
     .slice(0, 2)
     .map((word) => word.charAt(0))
-    .join("");
-  return (initials || "C").toUpperCase();
+    .join('');
+  return (initials || 'C').toUpperCase();
 }
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -118,32 +118,32 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
   const router = useRouter();
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const normalizedPlatform = platform.toLowerCase();
-  const [state, setState] = useState<LinkState>({ kind: "loading" });
+  const [state, setState] = useState<LinkState>({ kind: 'loading' });
   const [selectedBrandIds, setSelectedBrandIds] = useState<Set<string>>(new Set());
-  const [brandSearchQuery, setBrandSearchQuery] = useState("");
+  const [brandSearchQuery, setBrandSearchQuery] = useState('');
   const [isPending, startTransition] = useTransition();
 
   const nextPath = useMemo(() => {
     const params = new URLSearchParams();
-    if (token) params.set("token", token);
-    return `/link/${encodeURIComponent(normalizedPlatform)}${params.size ? `?${params.toString()}` : ""}`;
+    if (token) params.set('token', token);
+    return `/link/${encodeURIComponent(normalizedPlatform)}${params.size ? `?${params.toString()}` : ''}`;
   }, [normalizedPlatform, token]);
 
   const loadLink = useCallback(async () => {
     if (!token) {
-      setState({ kind: "invalid", message: "This link is missing its authorization token." });
+      setState({ kind: 'invalid', message: 'This link is missing its authorization token.' });
       return;
     }
 
-    setState({ kind: "loading" });
+    setState({ kind: 'loading' });
 
     try {
       const validationResponse = await fetch(
         `${apiBaseUrl}/api/chat/link/validate?token=${encodeURIComponent(token)}`,
-        { cache: "no-store" }
+        { cache: 'no-store' },
       );
       if (!validationResponse.ok) {
-        setState({ kind: "invalid", message: "This link is invalid or has expired." });
+        setState({ kind: 'invalid', message: 'This link is invalid or has expired.' });
         return;
       }
 
@@ -154,55 +154,55 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
       }>(validationResponse);
 
       if (!validation.ok || !validation.platform) {
-        setState({ kind: "invalid", message: "This link is invalid or has expired." });
+        setState({ kind: 'invalid', message: 'This link is invalid or has expired.' });
         return;
       }
 
       if (validation.platform.toLowerCase() !== normalizedPlatform) {
-        setState({ kind: "invalid", message: "This link does not match the selected platform." });
+        setState({ kind: 'invalid', message: 'This link does not match the selected platform.' });
         return;
       }
 
       const platformLabel = formatPlatform(validation.platform);
       const accessToken = await getBrowserAccessToken();
       if (!accessToken) {
-        setState({ kind: "auth", platformLabel });
+        setState({ kind: 'auth', platformLabel });
         return;
       }
 
       const brandsResponse = await fetch(`${apiBaseUrl}/api/chat/link/brands`, {
-        cache: "no-store",
+        cache: 'no-store',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (brandsResponse.status === 401) {
-        setState({ kind: "auth", platformLabel });
+        setState({ kind: 'auth', platformLabel });
         return;
       }
       if (!brandsResponse.ok) {
-        throw new ApiError("Unable to load your brands.", brandsResponse.status);
+        throw new ApiError('Unable to load your brands.', brandsResponse.status);
       }
 
       const brandsPayload = await parseJson<{ brands?: unknown[] }>(brandsResponse);
       const brands = (brandsPayload.brands ?? []).filter(isLinkBrand);
 
       if (brands.length === 0) {
-        setState({ kind: "empty", platformLabel });
+        setState({ kind: 'empty', platformLabel });
         return;
       }
 
-      setBrandSearchQuery("");
+      setBrandSearchQuery('');
       setSelectedBrandIds(new Set(brands.length === 1 ? [brands[0]!.brandId] : []));
       setState({
-        kind: "ready",
+        kind: 'ready',
         platformLabel,
-        expiresAt: typeof validation.expiresAt === "number" ? validation.expiresAt : null,
+        expiresAt: typeof validation.expiresAt === 'number' ? validation.expiresAt : null,
         brands,
       });
     } catch (error) {
       setState({
-        kind: "error",
-        message: error instanceof Error ? error.message : "Unable to load this link.",
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Unable to load this link.',
       });
     }
   }, [apiBaseUrl, normalizedPlatform, token]);
@@ -216,20 +216,20 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
   };
 
   const handleConfirm = () => {
-    if (state.kind !== "ready" || !token || selectedBrandIds.size === 0) return;
+    if (state.kind !== 'ready' || !token || selectedBrandIds.size === 0) return;
 
     startTransition(async () => {
       try {
         const accessToken = await getBrowserAccessToken();
         if (!accessToken) {
-          setState({ kind: "auth", platformLabel: state.platformLabel });
+          setState({ kind: 'auth', platformLabel: state.platformLabel });
           return;
         }
 
         const response = await fetch(`${apiBaseUrl}/api/chat/link/confirm`, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
@@ -239,28 +239,31 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
         });
 
         if (!response.ok) {
-          throw new ApiError("Unable to link this platform account.", response.status);
+          throw new ApiError('Unable to link this platform account.', response.status);
         }
 
         const payload = await parseJson<{ linked?: number }>(response);
-        setState({ kind: "done", linked: payload.linked ?? selectedBrandIds.size });
+        setState({ kind: 'done', linked: payload.linked ?? selectedBrandIds.size });
       } catch (error) {
         setState({
-          kind: "error",
-          message: error instanceof Error ? error.message : "Unable to link this platform account.",
+          kind: 'error',
+          message: error instanceof Error ? error.message : 'Unable to link this platform account.',
         });
       }
     });
   };
 
   const expiresText =
-    state.kind === "ready" && state.expiresAt
-      ? new Date(state.expiresAt * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    state.kind === 'ready' && state.expiresAt
+      ? new Date(state.expiresAt * 1000).toLocaleTimeString([], {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
       : null;
   const selectedCount = selectedBrandIds.size;
   const visibleBrands = useMemo(
-    () => (state.kind === "ready" ? filterBrands(state.brands, brandSearchQuery) : []),
-    [brandSearchQuery, state]
+    () => (state.kind === 'ready' ? filterBrands(state.brands, brandSearchQuery) : []),
+    [brandSearchQuery, state],
   );
 
   return (
@@ -270,7 +273,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
         className="pointer-events-none absolute inset-0 opacity-70"
         style={{
           background:
-            "radial-gradient(circle at 18% 14%, oklch(52% 0.22 275 / 0.18), transparent 28rem), radial-gradient(circle at 82% 76%, oklch(65% 0.13 180 / 0.14), transparent 24rem), linear-gradient(135deg, oklch(14% 0.01 265), oklch(11% 0.012 265))",
+            'radial-gradient(circle at 18% 14%, oklch(52% 0.22 275 / 0.18), transparent 28rem), radial-gradient(circle at 82% 76%, oklch(65% 0.13 180 / 0.14), transparent 24rem), linear-gradient(135deg, oklch(14% 0.01 265), oklch(11% 0.012 265))',
         }}
       />
       <div
@@ -290,7 +293,9 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
               className="h-10 w-auto drop-shadow-[0_10px_24px_oklch(0%_0_0_/_0.32)]"
             />
             <div className="mt-10 max-w-[28rem]">
-              <p className="text-xs font-medium tracking-[0.02em] text-[oklch(75%_0.015_265)]">External chat access</p>
+              <p className="text-xs font-medium tracking-[0.02em] text-[oklch(75%_0.015_265)]">
+                External chat access
+              </p>
               <h1 className="mt-2 text-[2rem] font-semibold leading-[1.1] tracking-[-0.01em] text-[oklch(98%_0.005_265)] sm:text-[2.5rem]">
                 Link your brand
               </h1>
@@ -304,12 +309,16 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
             <AccessFact
               icon={<ShieldCheck size={18} weight="regular" />}
               label="Access scope"
-              value={state.kind === "ready" ? `${state.brands.length} eligible brand${state.brands.length === 1 ? "" : "s"}` : "Verified after sign in"}
+              value={
+                state.kind === 'ready'
+                  ? `${state.brands.length} eligible brand${state.brands.length === 1 ? '' : 's'}`
+                  : 'Verified after sign in'
+              }
             />
             <AccessFact
               icon={<Clock size={18} weight="regular" />}
               label="Link window"
-              value={expiresText ? `Expires at ${expiresText}` : "Time limited"}
+              value={expiresText ? `Expires at ${expiresText}` : 'Time limited'}
             />
           </div>
         </aside>
@@ -319,9 +328,9 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
             <div className="min-w-0">
               <p className="text-sm font-medium text-[oklch(98%_0.005_265)]">Choose brand access</p>
               <p className="mt-1 text-xs leading-5 text-[oklch(75%_0.015_265)]">
-                {state.kind === "ready"
+                {state.kind === 'ready'
                   ? `${selectedCount} selected for ${state.platformLabel}`
-                  : "Connect a chat workspace to Continuum"}
+                  : 'Connect a chat workspace to Continuum'}
               </p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[oklch(65%_0.13_180_/_0.26)] bg-[oklch(65%_0.13_180_/_0.1)] text-[oklch(72%_0.13_180)]">
@@ -330,17 +339,23 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
-            {state.kind === "loading" ? (
-              <StatusRow icon={<CircleNotch className="h-4 w-4 animate-spin" />} text="Checking this link..." />
+            {state.kind === 'loading' ? (
+              <StatusRow
+                icon={<CircleNotch className="h-4 w-4 animate-spin" />}
+                text="Checking this link..."
+              />
             ) : null}
 
-            {state.kind === "invalid" || state.kind === "error" ? (
+            {state.kind === 'invalid' || state.kind === 'error' ? (
               <StatusRow tone="error" text={state.message} />
             ) : null}
 
-            {state.kind === "auth" ? (
+            {state.kind === 'auth' ? (
               <div className="space-y-5">
-                <StatusRow icon={<ShieldCheck className="h-4 w-4" />} text={`Sign in before linking ${state.platformLabel}.`} />
+                <StatusRow
+                  icon={<ShieldCheck className="h-4 w-4" />}
+                  text={`Sign in before linking ${state.platformLabel}.`}
+                />
                 <Button
                   type="button"
                   size="lg"
@@ -348,22 +363,29 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                   onClick={handleSignIn}
                   className="h-12 w-full cursor-pointer rounded-lg bg-[oklch(65%_0.13_180)] text-[oklch(14%_0.01_265)] shadow-[0_1px_3px_oklch(0%_0_0_/_0.4),inset_0_1px_0_oklch(100%_0_0_/_0.22)] transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[oklch(75%_0.13_180)] active:translate-y-px disabled:cursor-not-allowed"
                 >
-                  {isPending ? <CircleNotch className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                  {isPending ? (
+                    <CircleNotch className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" />
+                  )}
                   Continue to sign in
                 </Button>
               </div>
             ) : null}
 
-            {state.kind === "empty" ? (
+            {state.kind === 'empty' ? (
               <StatusRow
                 text={`You are signed in, but your Continuum account does not have an eligible brand for ${state.platformLabel}.`}
               />
             ) : null}
 
-            {state.kind === "ready" ? (
+            {state.kind === 'ready' ? (
               <div className="space-y-3">
                 <div className="grid gap-2">
-                  <label htmlFor="brand-search" className="text-xs font-medium text-[oklch(75%_0.015_265)]">
+                  <label
+                    htmlFor="brand-search"
+                    className="text-xs font-medium text-[oklch(75%_0.015_265)]"
+                  >
                     Search brands
                   </label>
                   <div className="relative">
@@ -391,10 +413,10 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                       <div
                         key={brand.brandId}
                         className={cn(
-                          "overflow-hidden rounded-xl border transition-[background-color,border-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                          'overflow-hidden rounded-xl border transition-[background-color,border-color] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]',
                           checked
-                            ? "border-[oklch(65%_0.13_180_/_0.55)] bg-[oklch(65%_0.13_180_/_0.12)]"
-                            : "border-[oklch(98%_0.005_265_/_0.1)] bg-[oklch(98%_0.005_265_/_0.035)] hover:border-[oklch(98%_0.005_265_/_0.18)] hover:bg-[oklch(98%_0.005_265_/_0.06)]"
+                            ? 'border-[oklch(65%_0.13_180_/_0.55)] bg-[oklch(65%_0.13_180_/_0.12)]'
+                            : 'border-[oklch(98%_0.005_265_/_0.1)] bg-[oklch(98%_0.005_265_/_0.035)] hover:border-[oklch(98%_0.005_265_/_0.18)] hover:bg-[oklch(98%_0.005_265_/_0.06)]',
                         )}
                       >
                         <label className="group flex min-h-16 cursor-pointer items-center gap-3 p-4 transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:translate-y-px">
@@ -417,7 +439,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                             </span>
                             <span className="mt-1 block truncate text-xs leading-5 text-[oklch(75%_0.015_265)]">
                               {brand.role}
-                              {brand.adAccountId ? ` - ${brand.adAccountId}` : ""}
+                              {brand.adAccountId ? ` - ${brand.adAccountId}` : ''}
                             </span>
                           </span>
                           {checked ? (
@@ -440,11 +462,11 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
               </div>
             ) : null}
 
-            {state.kind === "done" ? (
+            {state.kind === 'done' ? (
               <div className="space-y-4">
                 <StatusRow
                   icon={<CheckCircle className="h-4 w-4" weight="fill" />}
-                  text={`Linked ${state.linked} brand${state.linked === 1 ? "" : "s"}. You can return to Slack and run your command again.`}
+                  text={`Linked ${state.linked} brand${state.linked === 1 ? '' : 's'}. You can return to Slack and run your command again.`}
                 />
                 <Button
                   type="button"
@@ -459,7 +481,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
             ) : null}
           </div>
 
-          {state.kind === "ready" ? (
+          {state.kind === 'ready' ? (
             <div className="border-t border-[oklch(98%_0.005_265_/_0.08)] bg-[oklch(18%_0.014_265_/_0.96)] p-5 sm:p-6">
               <Button
                 type="button"
@@ -468,11 +490,17 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                 onClick={handleConfirm}
                 className="h-12 w-full cursor-pointer rounded-lg bg-[oklch(65%_0.13_180)] text-[oklch(14%_0.01_265)] shadow-[0_1px_3px_oklch(0%_0_0_/_0.4),inset_0_1px_0_oklch(100%_0_0_/_0.22)] transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[oklch(75%_0.13_180)] active:translate-y-px disabled:cursor-not-allowed"
               >
-                {isPending ? <CircleNotch className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" weight="fill" />}
+                {isPending ? (
+                  <CircleNotch className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-4 w-4" weight="fill" />
+                )}
                 Link selected brands
               </Button>
               <p className="mt-3 text-center text-xs leading-5 text-[oklch(75%_0.015_265)]">
-                {expiresText ? `This ${state.platformLabel} link expires at ${expiresText}.` : `This ${state.platformLabel} link is time limited.`}
+                {expiresText
+                  ? `This ${state.platformLabel} link expires at ${expiresText}.`
+                  : `This ${state.platformLabel} link is time limited.`}
               </p>
             </div>
           ) : null}
@@ -495,7 +523,7 @@ function BrandAccountsDisclosure({ accounts }: { accounts: LinkAccount[] }) {
     <Collapsible>
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center justify-between gap-2 border-t border-[oklch(98%_0.005_265_/_0.08)] px-4 py-2.5 text-xs font-medium text-[oklch(78%_0.018_265)] outline-none transition-colors duration-150 hover:text-[oklch(98%_0.005_265)] focus-visible:text-[oklch(98%_0.005_265)]">
         <span>
-          {accounts.length} connected account{accounts.length === 1 ? "" : "s"}
+          {accounts.length} connected account{accounts.length === 1 ? '' : 's'}
         </span>
         <CaretRight
           aria-hidden="true"
@@ -515,10 +543,12 @@ function BrandAccountsDisclosure({ accounts }: { accounts: LinkAccount[] }) {
                 {account.platform}
               </span>
               <span className="min-w-0 flex-1 truncate text-xs text-[oklch(92%_0.01_265)]">
-                {account.handle ?? account.displayName ?? "-"}
+                {account.handle ?? account.displayName ?? '-'}
               </span>
               {account.accountType ? (
-                <span className="shrink-0 text-[0.65rem] text-[oklch(70%_0.015_265)]">{account.accountType}</span>
+                <span className="shrink-0 text-[0.65rem] text-[oklch(70%_0.015_265)]">
+                  {account.accountType}
+                </span>
               ) : null}
             </li>
           ))}
@@ -564,7 +594,9 @@ function AccessFact({ icon, label, value }: { icon: ReactNode; label: string; va
       </span>
       <span className="min-w-0">
         <span className="block text-xs text-[oklch(75%_0.015_265)]">{label}</span>
-        <span className="mt-0.5 block truncate text-sm font-medium text-[oklch(98%_0.005_265)]">{value}</span>
+        <span className="mt-0.5 block truncate text-sm font-medium text-[oklch(98%_0.005_265)]">
+          {value}
+        </span>
       </span>
     </div>
   );
@@ -573,18 +605,18 @@ function AccessFact({ icon, label, value }: { icon: ReactNode; label: string; va
 function StatusRow({
   icon,
   text,
-  tone = "default",
+  tone = 'default',
 }: {
   icon?: ReactNode;
   text: string;
-  tone?: "default" | "error";
+  tone?: 'default' | 'error';
 }) {
   return (
     <div
       className={`flex items-center gap-3 rounded-xl border p-4 text-sm leading-6 ${
-        tone === "error"
-          ? "border-[oklch(55%_0.2_25_/_0.35)] bg-[oklch(55%_0.2_25_/_0.1)] text-[oklch(82%_0.1_25)]"
-          : "border-[oklch(98%_0.005_265_/_0.1)] bg-[oklch(98%_0.005_265_/_0.035)] text-[oklch(82%_0.015_265)]"
+        tone === 'error'
+          ? 'border-[oklch(55%_0.2_25_/_0.35)] bg-[oklch(55%_0.2_25_/_0.1)] text-[oklch(82%_0.1_25)]'
+          : 'border-[oklch(98%_0.005_265_/_0.1)] bg-[oklch(98%_0.005_265_/_0.035)] text-[oklch(82%_0.015_265)]'
       }`}
     >
       {icon ? <span className="text-[oklch(65%_0.13_180)]">{icon}</span> : null}

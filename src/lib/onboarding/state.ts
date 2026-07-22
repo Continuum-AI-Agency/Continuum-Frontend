@@ -1,29 +1,26 @@
-import { z } from "zod";
-import { documentCategorySchema } from "@continuum/contracts";
-import {
-  compressToEncodedURIComponent,
-  decompressFromEncodedURIComponent,
-} from "lz-string";
-import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
+import { documentCategorySchema } from '@continuum/contracts';
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
+import { z } from 'zod';
+import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
 import {
   auditsSchema,
   previewWorkflowResultSchema,
   readinessAnalysisSchema,
   understandingSchema,
-} from "@/lib/onboarding/agentClient";
+} from '@/lib/onboarding/agentClient';
 
 export const BRAND_VOICE_TAGS = [
-  "Playful",
-  "Professional",
-  "Bold",
-  "Empathetic",
-  "Technical",
-  "Minimalist",
-  "Story-driven",
-  "Experimental",
+  'Playful',
+  'Professional',
+  'Bold',
+  'Empathetic',
+  'Technical',
+  'Minimalist',
+  'Story-driven',
+  'Experimental',
 ] as const;
 
-export const BRAND_ROLES = ["owner", "admin", "operator", "viewer"] as const;
+export const BRAND_ROLES = ['owner', 'admin', 'operator', 'viewer'] as const;
 
 const brandVoiceTagSchema = z.enum(BRAND_VOICE_TAGS);
 export const brandRoleSchema = z.enum(BRAND_ROLES);
@@ -31,7 +28,7 @@ export const brandRoleSchema = z.enum(BRAND_ROLES);
 const isoDateString = z.string().transform((value, ctx) => {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid datetime" });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid datetime' });
     return z.NEVER;
   }
   return new Date(timestamp).toISOString();
@@ -40,7 +37,7 @@ const isoDateString = z.string().transform((value, ctx) => {
 const platformAccountSchema = z.object({
   id: z.string(),
   name: z.string(),
-  status: z.enum(["active", "pending", "error"]),
+  status: z.enum(['active', 'pending', 'error']),
   selected: z.boolean().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
 });
@@ -65,7 +62,7 @@ const connectionShape = PLATFORM_KEYS.reduce(
     shape[key] = connectionEntrySchema;
     return shape;
   },
-  {} as Record<PlatformKey, typeof connectionEntrySchema>
+  {} as Record<PlatformKey, typeof connectionEntrySchema>,
 );
 
 const connectionPatchShape = PLATFORM_KEYS.reduce(
@@ -73,7 +70,7 @@ const connectionPatchShape = PLATFORM_KEYS.reduce(
     shape[key] = connectionPatchSchema;
     return shape;
   },
-  {} as Record<PlatformKey, typeof connectionPatchSchema>
+  {} as Record<PlatformKey, typeof connectionPatchSchema>,
 );
 
 const typographySchema = z.object({
@@ -90,7 +87,10 @@ export const brandSchema = z.object({
   timezone: z.string(),
   website: z.union([z.string().min(1), z.null()]).default(null),
   logoPath: z.union([z.string(), z.null()]).default(null),
-  colors: z.array(z.string().regex(/^#[0-9A-Fa-f]{6}$/)).max(8).default([]),
+  colors: z
+    .array(z.string().regex(/^#[0-9A-Fa-f]{6}$/))
+    .max(8)
+    .default([]),
   typography: typographySchema.default({ primary: null, secondary: null }),
   values: z.array(z.string()).max(8).default([]),
   tagline: z.union([z.string(), z.null()]).default(null),
@@ -101,46 +101,46 @@ export const brandSchema = z.object({
 });
 
 const documentSourceSchema = z.enum([
-  "upload",
-  "canva",
-  "figma",
-  "google-drive",
-  "sharepoint",
-  "notion",
-  "website",
+  'upload',
+  'canva',
+  'figma',
+  'google-drive',
+  'sharepoint',
+  'notion',
+  'website',
 ]);
 
 const documentKindSchema = z.enum([
-  "pdf",
-  "docx",
-  "pptx",
-  "xlsx",
-  "image",
-  "text",
-  "markdown",
-  "csv",
-  "json",
-  "html",
-  "unknown",
+  'pdf',
+  'docx',
+  'pptx',
+  'xlsx',
+  'image',
+  'text',
+  'markdown',
+  'csv',
+  'json',
+  'html',
+  'unknown',
 ]);
 
 const documentProgressStepSchema = z.enum([
-  "uploading",
-  "extracting",
-  "chunking",
-  "embedding",
-  "ready",
-  "error",
+  'uploading',
+  'extracting',
+  'chunking',
+  'embedding',
+  'ready',
+  'error',
 ]);
 
 const documentErrorCodeSchema = z.enum([
-  "UNSUPPORTED_FORMAT",
-  "STORAGE_FETCH_FAILED",
-  "EXTRACT_FAILED",
-  "EMPTY_TEXT",
-  "EMBED_BATCH_FAILED",
-  "CHUNK_INSERT_FAILED",
-  "INTERNAL_ERROR",
+  'UNSUPPORTED_FORMAT',
+  'STORAGE_FETCH_FAILED',
+  'EXTRACT_FAILED',
+  'EMPTY_TEXT',
+  'EMBED_BATCH_FAILED',
+  'CHUNK_INSERT_FAILED',
+  'INTERNAL_ERROR',
 ]);
 
 const onboardingDocumentSchema = z.object({
@@ -148,7 +148,7 @@ const onboardingDocumentSchema = z.object({
   name: z.string(),
   source: documentSourceSchema,
   createdAt: isoDateString,
-  status: z.enum(["processing", "ready", "error"]).default("ready"),
+  status: z.enum(['processing', 'ready', 'error']).default('ready'),
   size: z.number().nonnegative().optional(),
   mimeType: z.string().optional(),
   externalUrl: z.string().min(1).optional(),
@@ -166,7 +166,7 @@ const onboardingDocumentSchema = z.object({
 });
 
 export type DocumentKind = z.infer<typeof documentKindSchema>;
-export type { DocumentCategory } from "@continuum/contracts";
+export type { DocumentCategory } from '@continuum/contracts';
 export type DocumentProgressStep = z.infer<typeof documentProgressStepSchema>;
 export type DocumentErrorCode = z.infer<typeof documentErrorCodeSchema>;
 
@@ -254,23 +254,26 @@ function makeDefaultConnectionState(): OnboardingConnectionState {
 }
 
 function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState> {
-  return PLATFORM_KEYS.reduce((acc, key) => {
-    acc[key] = makeDefaultConnectionState();
-    return acc;
-  }, {} as Record<PlatformKey, OnboardingConnectionState>);
+  return PLATFORM_KEYS.reduce(
+    (acc, key) => {
+      acc[key] = makeDefaultConnectionState();
+      return acc;
+    },
+    {} as Record<PlatformKey, OnboardingConnectionState>,
+  );
 }
 
 export function createDefaultOnboardingState(owner?: BrandMember): OnboardingState {
-  const ownerHandle = owner?.email?.split("@")[0];
+  const ownerHandle = owner?.email?.split('@')[0];
   return {
     step: 0,
     brand: {
-      name: ownerHandle ? `${ownerHandle}'s Brand` : owner ? "My Brand" : "",
-      industry: "",
+      name: ownerHandle ? `${ownerHandle}'s Brand` : owner ? 'My Brand' : '',
+      industry: '',
       brandVoice: null,
       brandVoiceTags: [],
       targetAudience: null,
-      timezone: "UTC",
+      timezone: 'UTC',
       website: null,
       logoPath: null,
       colors: [],
@@ -306,7 +309,7 @@ export function parseOnboardingMetadata(raw: unknown): OnboardingMetadata {
 
   let candidate: unknown = raw;
 
-  if (typeof raw === "string") {
+  if (typeof raw === 'string') {
     try {
       const decompressed = decompressFromEncodedURIComponent(raw);
       const payload = decompressed ?? raw;
@@ -326,7 +329,7 @@ export function parseOnboardingMetadata(raw: unknown): OnboardingMetadata {
 export function ensureBrandExists(
   metadata: OnboardingMetadata,
   brandId: string,
-  owner?: BrandMember
+  owner?: BrandMember,
 ): OnboardingMetadata {
   if (!metadata.brands[brandId]) {
     metadata.brands[brandId] = createDefaultOnboardingState(owner);
@@ -338,7 +341,10 @@ export function ensureBrandExists(
 }
 
 export function createBrandId(): string {
-  if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
+  if (
+    typeof globalThis.crypto !== 'undefined' &&
+    typeof globalThis.crypto.randomUUID === 'function'
+  ) {
     return globalThis.crypto.randomUUID();
   }
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -353,7 +359,7 @@ function clampStep(step: number): number {
 
 export function mergeOnboardingState(
   current: OnboardingState,
-  patch: OnboardingPatch
+  patch: OnboardingPatch,
 ): OnboardingState {
   const next: OnboardingState = {
     step: current.step,
@@ -375,25 +381,37 @@ export function mergeOnboardingState(
     next.brand = {
       name: patch.brand.name ?? next.brand.name,
       industry: patch.brand.industry ?? next.brand.industry,
-      brandVoice: patch.brand.brandVoice === undefined ? next.brand.brandVoice : patch.brand.brandVoice,
+      brandVoice:
+        patch.brand.brandVoice === undefined ? next.brand.brandVoice : patch.brand.brandVoice,
       brandVoiceTags: patch.brand.brandVoiceTags ?? next.brand.brandVoiceTags,
       targetAudience:
-        patch.brand.targetAudience === undefined ? next.brand.targetAudience : patch.brand.targetAudience,
+        patch.brand.targetAudience === undefined
+          ? next.brand.targetAudience
+          : patch.brand.targetAudience,
       timezone: patch.brand.timezone ?? next.brand.timezone,
       website:
-        patch.brand.website === undefined ? (next.brand.website ?? null) : (patch.brand.website ?? null),
+        patch.brand.website === undefined
+          ? (next.brand.website ?? null)
+          : (patch.brand.website ?? null),
       logoPath:
-        patch.brand.logoPath === undefined ? (next.brand.logoPath ?? null) : (patch.brand.logoPath ?? null),
+        patch.brand.logoPath === undefined
+          ? (next.brand.logoPath ?? null)
+          : (patch.brand.logoPath ?? null),
       colors: patch.brand.colors ?? next.brand.colors,
       typography: patch.brand.typography
-        ? { primary: patch.brand.typography.primary ?? null, secondary: patch.brand.typography.secondary ?? null }
+        ? {
+            primary: patch.brand.typography.primary ?? null,
+            secondary: patch.brand.typography.secondary ?? null,
+          }
         : next.brand.typography,
       values: patch.brand.values ?? next.brand.values,
       tagline: patch.brand.tagline === undefined ? next.brand.tagline : patch.brand.tagline,
       overview: patch.brand.overview === undefined ? next.brand.overview : patch.brand.overview,
       readiness: patch.brand.readiness === undefined ? next.brand.readiness : patch.brand.readiness,
       understanding:
-        patch.brand.understanding === undefined ? next.brand.understanding : patch.brand.understanding,
+        patch.brand.understanding === undefined
+          ? next.brand.understanding
+          : patch.brand.understanding,
       audits: patch.brand.audits === undefined ? next.brand.audits : patch.brand.audits,
     };
   }
@@ -417,14 +435,14 @@ export function mergeOnboardingState(
         connected: update.connected ?? existing.connected,
         accountId:
           update.accountId !== undefined
-            ? update.accountId ?? null
-            : existing.accountId ?? null,
+            ? (update.accountId ?? null)
+            : (existing.accountId ?? null),
         accounts: update.accounts ?? existing.accounts,
         integrationIds: update.integrationIds ?? existing.integrationIds ?? [],
         lastSyncedAt:
           update.lastSyncedAt !== undefined
-            ? update.lastSyncedAt ?? null
-            : existing.lastSyncedAt ?? null,
+            ? (update.lastSyncedAt ?? null)
+            : (existing.lastSyncedAt ?? null),
       };
     }
   }
@@ -456,9 +474,7 @@ export function isOnboardingComplete(state: OnboardingState): boolean {
   return Boolean(state.completedAt);
 }
 
-export function serializeOnboardingMetadata(
-  metadata: OnboardingMetadata
-): string {
+export function serializeOnboardingMetadata(metadata: OnboardingMetadata): string {
   const json = JSON.stringify(metadata);
   const compressed = compressToEncodedURIComponent(json);
   return compressed ?? json;

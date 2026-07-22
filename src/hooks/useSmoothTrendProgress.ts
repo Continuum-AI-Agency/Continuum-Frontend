@@ -1,11 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-
-import { TRENDS_STAGE_PROGRESS } from "@continuum/contracts";
+import { TRENDS_STAGE_PROGRESS } from '@continuum/contracts';
+import { useEffect, useRef, useState } from 'react';
 
 // Sorted, de-duped progress anchors the backend emits (1, 8, 34, ... 100).
-const PROGRESS_ANCHORS = Array.from(new Set(Object.values(TRENDS_STAGE_PROGRESS))).sort((a, b) => a - b);
+const PROGRESS_ANCHORS = Array.from(new Set(Object.values(TRENDS_STAGE_PROGRESS))).sort(
+  (a, b) => a - b,
+);
 
 // When the backend gives no remaining_ms (early frames), pace the creep across a
 // single stage gap over roughly this long so the bar keeps moving believably.
@@ -14,8 +15,8 @@ const STAGE_CREEP_MS = 4000;
 const NOMINAL_TOTAL_MS = 90000;
 
 function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**
@@ -45,7 +46,7 @@ export function nextDisplayPercent(params: {
   if (base >= ceiling) return Math.min(ceiling, 100);
 
   const speedPerMs =
-    typeof remainingMs === "number" && remainingMs > 0
+    typeof remainingMs === 'number' && remainingMs > 0
       ? (100 - base) / remainingMs
       : (ceiling - base) / STAGE_CREEP_MS;
 
@@ -93,7 +94,7 @@ export function useSmoothTrendProgress({
       lastTickRef.current = now;
 
       setDisplayPercent((current) =>
-        nextDisplayPercent({ current, target: targetPercent, ceiling, dtMs, remainingMs })
+        nextDisplayPercent({ current, target: targetPercent, ceiling, dtMs, remainingMs }),
       );
       frameRef.current = requestAnimationFrame(tick);
     };
@@ -107,7 +108,7 @@ export function useSmoothTrendProgress({
 
   const etaSeconds = (() => {
     if (isTerminal) return 0;
-    if (typeof remainingMs === "number" && remainingMs >= 0) {
+    if (typeof remainingMs === 'number' && remainingMs >= 0) {
       return Math.max(0, Math.round(remainingMs / 1000));
     }
     const fractionLeft = Math.max(0, 100 - displayPercent) / 100;

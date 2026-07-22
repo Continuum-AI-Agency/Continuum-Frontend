@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { cn } from "@/lib/utils";
-import { useApprovalsStore } from "@/lib/approvals/store";
-import type { RuleAction } from "@/lib/approvals/types";
-import { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } from "./formatters";
-import { getActionIcon } from "./actionIcons";
+import { useApprovalsStore } from '@/lib/approvals/store';
+import type { RuleAction } from '@/lib/approvals/types';
+import { cn } from '@/lib/utils';
+import { getActionIcon } from './actionIcons';
+import { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } from './formatters';
 
 type Props = {
   actions: RuleAction[];
@@ -35,12 +35,12 @@ export function QueueList({ actions, focusedId, onFocus }: Props) {
               type="button"
               onClick={() => onFocus(action.id)}
               className={cn(
-                "grid w-full grid-cols-[5rem_8rem_minmax(0,1fr)_minmax(0,1fr)_4rem] items-center gap-3 px-3 py-2 text-left text-sm transition-colors",
-                "hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                isFocused && "bg-accent/60",
-                optimistic && "opacity-40",
+                'grid w-full grid-cols-[5rem_8rem_minmax(0,1fr)_minmax(0,1fr)_4rem] items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
+                'hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                isFocused && 'bg-accent/60',
+                optimistic && 'opacity-40',
               )}
-              aria-current={isFocused ? "true" : undefined}
+              aria-current={isFocused ? 'true' : undefined}
             >
               <span className="font-data text-xs tabular-nums text-muted-foreground">
                 {formatRelativeTime(action.created_at)}
@@ -49,10 +49,12 @@ export function QueueList({ actions, focusedId, onFocus }: Props) {
                 <Icon className="h-3 w-3 shrink-0 text-muted-foreground" strokeWidth={1.5} />
                 <span className="truncate">{actionTypeLabel(action.action_type)}</span>
               </span>
-              <span className="truncate font-data text-xs text-foreground">{scopeLabel(action)}</span>
+              <span className="truncate font-data text-xs text-foreground">
+                {scopeLabel(action)}
+              </span>
               <span className="truncate text-xs text-muted-foreground">{whyText(action)}</span>
               <span className="text-right text-xs text-muted-foreground">
-                {optimistic ? optimistic : isFocused ? "Focused" : ""}
+                {optimistic ? optimistic : isFocused ? 'Focused' : ''}
               </span>
             </button>
           </li>

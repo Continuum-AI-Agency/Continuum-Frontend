@@ -5,10 +5,10 @@
 // consumer matches the run/session it cares about. The heavy result payload is
 // NOT broadcast (excluded from the Realtime publication) — fetch it via REST.
 
-import { useEffect, useMemo, useRef } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useEffect, useMemo, useRef } from 'react';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-export type JainaRunStatus = "pending" | "running" | "completed" | "failed";
+export type JainaRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export type JainaRunStatusRow = {
   runId: string;
@@ -18,10 +18,7 @@ export type JainaRunStatusRow = {
   errorMessage: string | null;
 };
 
-const TERMINAL_RUN_STATUSES: ReadonlySet<JainaRunStatus> = new Set([
-  "completed",
-  "failed",
-]);
+const TERMINAL_RUN_STATUSES: ReadonlySet<JainaRunStatus> = new Set(['completed', 'failed']);
 
 export function isTerminalRunStatus(status: JainaRunStatus): boolean {
   return TERMINAL_RUN_STATUSES.has(status);
@@ -43,28 +40,26 @@ export function useJainaRunStatusRealtime({
   useEffect(() => {
     if (!enabled) return;
 
-    const channel = supabase.channel("jaina:run-status", {
+    const channel = supabase.channel('jaina:run-status', {
       config: { broadcast: { self: false } },
     });
 
     channel
       .on(
-        "postgres_changes",
-        { event: "*", schema: "jaina", table: "jaina_conversation_runs" },
+        'postgres_changes',
+        { event: '*', schema: 'jaina', table: 'jaina_conversation_runs' },
         (payload) => {
           const row = (payload.new ?? null) as Record<string, unknown> | null;
           if (!row) return;
-          const runId = typeof row.run_id === "string" ? row.run_id : null;
-          const status =
-            typeof row.status === "string" ? (row.status as JainaRunStatus) : null;
+          const runId = typeof row.run_id === 'string' ? row.run_id : null;
+          const status = typeof row.status === 'string' ? (row.status as JainaRunStatus) : null;
           if (!runId || !status) return;
           callbackRef.current({
             runId,
-            sessionId: typeof row.session_id === "string" ? row.session_id : "",
+            sessionId: typeof row.session_id === 'string' ? row.session_id : '',
             status,
-            resultType: typeof row.result_type === "string" ? row.result_type : null,
-            errorMessage:
-              typeof row.error_message === "string" ? row.error_message : null,
+            resultType: typeof row.result_type === 'string' ? row.result_type : null,
+            errorMessage: typeof row.error_message === 'string' ? row.error_message : null,
           });
         },
       )

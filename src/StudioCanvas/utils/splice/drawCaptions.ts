@@ -1,9 +1,9 @@
-import type { CaptionCue, CaptionWord } from './captionCues';
 import {
+  type CaptionStyle,
   DEFAULT_CAPTION_STYLE,
   resolveCaptionStyle,
-  type CaptionStyle,
 } from '@/lib/clips/clipCaptionStyle';
+import type { CaptionCue, CaptionWord } from './captionCues';
 
 // Burns one word-synced caption line onto the output frame. Drawn in the splice
 // worker between the video frame and the encode, so it adds no extra decode/encode
@@ -63,7 +63,10 @@ export function drawActiveCaption(
   style: CaptionStyle = DEFAULT_CAPTION_STYLE,
 ): void {
   const resolvedStyle = resolveCaptionStyle(style, cue.style);
-  const fontPx = Math.max(MIN_FONT_PX, Math.round(targetHeight * (resolvedStyle.fontSizeFrac ?? 0.055)));
+  const fontPx = Math.max(
+    MIN_FONT_PX,
+    Math.round(targetHeight * (resolvedStyle.fontSizeFrac ?? 0.055)),
+  );
   const fontStack = resolvedStyle.fontFamily
     ? `"${resolvedStyle.fontFamily}", ${FALLBACK_FONT_STACK}`
     : FALLBACK_FONT_STACK;

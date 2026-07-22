@@ -32,16 +32,16 @@ export function ApplyModePill({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={stopped ? 'Apply mode: Autopilot (stopped)' : `Apply mode: ${meta.label}`}
-        >
+        {/* A span, not a button: the pill renders inside whole-card <button>s
+            (PortfolioRowCard / PortfolioCard), where a nested button is invalid HTML
+            and trips a React hydration warning. The pill's visible text is the
+            accessible content; the tooltip is hover-triggered supplementary detail. */}
+        <span className="inline-flex rounded-full">
           <Pill variant={variant} className={className ?? 'cursor-default'}>
             <PillIndicator variant={indicator} />
             {label}
           </Pill>
-        </button>
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-64 text-xs">{tip}</TooltipContent>
     </Tooltip>

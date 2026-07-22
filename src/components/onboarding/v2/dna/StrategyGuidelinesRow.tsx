@@ -3,16 +3,16 @@
 // onboarding output, with a per-section audit score chip. Read-only: the
 // structured object is the source of truth (persisted backend-side via the
 // composite); edits to these sections are out of scope here.
-import type { BrandGuidelines, BrandStrategy } from "@continuum/contracts";
-import { Badge } from "@/components/ui/badge";
-import { CardSurface } from "./CardSurface";
-import { HorizontalRow } from "./HorizontalRow";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import type { BrandGuidelines, BrandStrategy } from '@continuum/contracts';
+import { Badge } from '@/components/ui/badge';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
+import { CardSurface } from './CardSurface';
+import { HorizontalRow } from './HorizontalRow';
 
 function auditScore(audit: unknown): number | null {
-  if (audit && typeof audit === "object" && "score" in audit) {
+  if (audit && typeof audit === 'object' && 'score' in audit) {
     const score = (audit as { score?: unknown }).score;
-    return typeof score === "number" ? score : null;
+    return typeof score === 'number' ? score : null;
   }
   return null;
 }
@@ -30,7 +30,7 @@ function ChipList({ label, items }: { label: string; items?: string[] | null }) 
   if (!items || items.length === 0) return null;
   return (
     <p className="m-0 text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">{label}:</span> {items.join(", ")}
+      <span className="font-medium text-foreground">{label}:</span> {items.join(', ')}
     </p>
   );
 }

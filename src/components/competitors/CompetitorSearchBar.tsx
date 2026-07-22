@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { Search, X } from "lucide-react";
+import { Search, X } from 'lucide-react';
 
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 export function CompetitorSearchBar({
-  value = "",
+  value = '',
   onChange,
   onSubmit,
   onClear,
   active = false,
   comingSoon = false,
-  placeholder = "Search a competitor @handle…",
+  placeholder = 'Search a competitor @handle…',
   className,
 }: {
   value?: string;
@@ -31,7 +31,7 @@ export function CompetitorSearchBar({
         event.preventDefault();
         onSubmit?.();
       }}
-      className={cn("flex items-center gap-2", className)}
+      className={cn('flex items-center gap-2', className)}
     >
       <div className="relative flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

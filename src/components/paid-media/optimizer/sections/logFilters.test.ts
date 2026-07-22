@@ -35,6 +35,11 @@ describe('classifyEvent', () => {
     expect(classifyEvent('convert_executed')).toBe('money');
   });
 
+  it('routes adset_status_* writes (pause/unpause) into the money family', () => {
+    expect(classifyEvent('adset_status_executed')).toBe('money');
+    expect(classifyEvent('adset_status_deduped')).toBe('money');
+  });
+
   it('routes the audit event into the settings family', () => {
     expect(classifyEvent('setting_changed')).toBe('settings');
   });
@@ -116,6 +121,8 @@ describe('readMoneyMove', () => {
     expect(move).toEqual({
       prior: 500000,
       target: 450000,
+      priorStatus: null,
+      targetStatus: null,
       actorKind: 'autopilot',
       receipt: 'AbC123trace',
     });
@@ -123,10 +130,36 @@ describe('readMoneyMove', () => {
 
   it('tolerates a null prior (first write) and numeric-string values', () => {
     const move = readMoneyMove({ priorMinor: null, targetMinor: '45000' });
-    expect(move).toEqual({ prior: null, target: 45000, actorKind: null, receipt: null });
+    expect(move).toEqual({
+      prior: null,
+      target: 45000,
+      priorStatus: null,
+      targetStatus: null,
+      actorKind: null,
+      receipt: null,
+    });
   });
 
-  it('returns null when no budget/receipt fields are present', () => {
+  it('reads the status transition from an adset_status_executed row', () => {
+    const move = readMoneyMove({
+      portfolio: 'p',
+      adsetId: 'a',
+      priorStatus: 'ACTIVE',
+      targetStatus: 'PAUSED',
+      authorizedKind: 'human',
+      fbtraceId: 'PauseTrace1',
+    });
+    expect(move).toEqual({
+      prior: null,
+      target: null,
+      priorStatus: 'ACTIVE',
+      targetStatus: 'PAUSED',
+      actorKind: 'human',
+      receipt: 'PauseTrace1',
+    });
+  });
+
+  it('returns null when no budget/status/receipt fields are present', () => {
     expect(readMoneyMove({ portfolio: 'p', detail: 'nothing to render' })).toBeNull();
   });
 });

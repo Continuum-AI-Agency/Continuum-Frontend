@@ -48,7 +48,17 @@ function drawOverlapLayer(
     if (xform.scale !== 1) ctx.scale(xform.scale, xform.scale);
     ctx.translate(-cx, -cy);
   }
-  drawEffectFrame(ctx, frame.image, frame.width, frame.height, targetWidth, targetHeight, effects, clipT, xform.alpha);
+  drawEffectFrame(
+    ctx,
+    frame.image,
+    frame.width,
+    frame.height,
+    targetWidth,
+    targetHeight,
+    effects,
+    clipT,
+    xform.alpha,
+  );
   ctx.restore();
 }
 
@@ -65,10 +75,15 @@ export type CrossDissolveClip =
   | { kind: 'image'; bitmap: ImageBitmap; durationSec: number; effects?: ClipEffectSpec };
 
 type FrameProvider = {
-  frameAt: (sourceSec: number) => Promise<{ image: CanvasImageSource; width: number; height: number } | null>;
+  frameAt: (
+    sourceSec: number,
+  ) => Promise<{ image: CanvasImageSource; width: number; height: number } | null>;
 };
 
-async function makeFrameProvider(mb: MediabunnyModule, clip: CrossDissolveClip): Promise<FrameProvider> {
+async function makeFrameProvider(
+  mb: MediabunnyModule,
+  clip: CrossDissolveClip,
+): Promise<FrameProvider> {
   if (clip.kind === 'image') {
     const frame = { image: clip.bitmap, width: clip.bitmap.width, height: clip.bitmap.height };
     return { frameAt: async () => frame };
@@ -100,7 +115,10 @@ export async function appendOverlapTransition(params: {
   incoming: CrossDissolveClip;
   overlapOutputSec: number;
   outputStart: number;
-  compositeOverlays?: (ctx: OffscreenCanvasRenderingContext2D, outputTimestampSec: number) => Promise<void>;
+  compositeOverlays?: (
+    ctx: OffscreenCanvasRenderingContext2D,
+    outputTimestampSec: number,
+  ) => Promise<void>;
   signal?: AbortSignal;
   onFrameProgress?: (processedSec: number) => void;
 }): Promise<void> {
@@ -134,8 +152,10 @@ export async function appendOverlapTransition(params: {
     const t = overlap > 0 ? Math.min(1, u / overlap) : 1;
 
     // Source time within each clip: the outgoing clip's tail, the incoming's head.
-    const outSourceSec = outgoing.kind === 'video' ? outgoing.range.endSec - (overlap - u) * outgoing.speed : 0;
-    const inSourceSec = incoming.kind === 'video' ? incoming.range.startSec + u * incoming.speed : 0;
+    const outSourceSec =
+      outgoing.kind === 'video' ? outgoing.range.endSec - (overlap - u) * outgoing.speed : 0;
+    const inSourceSec =
+      incoming.kind === 'video' ? incoming.range.startSec + u * incoming.speed : 0;
     const outFrame = await outProvider.frameAt(outSourceSec);
     const inFrame = await inProvider.frameAt(inSourceSec);
 
@@ -149,8 +169,26 @@ export async function appendOverlapTransition(params: {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, targetWidth, targetHeight);
     const xform = overlapTransitionAt(type, t, targetWidth, targetHeight);
-    if (outFrame) drawOverlapLayer(ctx, outFrame, outgoing.effects, outT, xform.outgoing, targetWidth, targetHeight);
-    if (inFrame) drawOverlapLayer(ctx, inFrame, incoming.effects, inT, xform.incoming, targetWidth, targetHeight);
+    if (outFrame)
+      drawOverlapLayer(
+        ctx,
+        outFrame,
+        outgoing.effects,
+        outT,
+        xform.outgoing,
+        targetWidth,
+        targetHeight,
+      );
+    if (inFrame)
+      drawOverlapLayer(
+        ctx,
+        inFrame,
+        incoming.effects,
+        inT,
+        xform.incoming,
+        targetWidth,
+        targetHeight,
+      );
     if (compositeOverlays) await compositeOverlays(ctx, outputStart + u);
     await videoSource.add(outputStart + u, frameDuration);
     params.onFrameProgress?.(u);

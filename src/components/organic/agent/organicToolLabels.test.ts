@@ -1,15 +1,15 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 
-import { formatOrganicToolName } from "./organicToolLabels";
+import { formatOrganicToolName } from './organicToolLabels';
 
-describe("formatOrganicToolName", () => {
-  it("uses stable labels for dashboard pack and analytics tools", () => {
-    expect(formatOrganicToolName("summarizeOrganicDashboardData")).toBe("Dashboard data pack");
-    expect(formatOrganicToolName("getFacebookOrganicAnalytics")).toBe("Facebook analytics");
+describe('formatOrganicToolName', () => {
+  it('uses stable labels for dashboard pack and analytics tools', () => {
+    expect(formatOrganicToolName('summarizeOrganicDashboardData')).toBe('Dashboard data pack');
+    expect(formatOrganicToolName('getFacebookOrganicAnalytics')).toBe('Facebook analytics');
   });
 
-  it("falls back to readable labels for unknown tool names", () => {
-    expect(formatOrganicToolName("unknown_tool-name")).toBe("Unknown Tool Name");
-    expect(formatOrganicToolName("customOrganicTool")).toBe("Custom Organic Tool");
+  it('falls back to readable labels for unknown tool names', () => {
+    expect(formatOrganicToolName('unknown_tool-name')).toBe('Unknown Tool Name');
+    expect(formatOrganicToolName('customOrganicTool')).toBe('Custom Organic Tool');
   });
 });

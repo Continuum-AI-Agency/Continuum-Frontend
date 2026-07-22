@@ -1,15 +1,20 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { LightningBoltIcon, UpdateIcon } from "@radix-ui/react-icons";
-import { cn } from "@/lib/utils";
-import { GlassPanel } from "@/components/ui/GlassPanel";
-import { Button } from "@/components/ui/button";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
-import type { Trend } from "@/lib/organic/trends";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { TrendsDataTable } from "./TrendsDataTable";
-import type { OrganicTrendType } from "./primitives/types";
+import { LightningBoltIcon, UpdateIcon } from '@radix-ui/react-icons';
+import type * as React from 'react';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Button } from '@/components/ui/button';
+import { GlassPanel } from '@/components/ui/GlassPanel';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { Trend } from '@/lib/organic/trends';
+import { cn } from '@/lib/utils';
+import type { OrganicTrendType } from './primitives/types';
+import { TrendsDataTable } from './TrendsDataTable';
 
 type TrendSelectorProps = {
   trendTypes: OrganicTrendType[];
@@ -43,14 +48,14 @@ export function TrendSelector({
   isFetching = false,
   className,
 }: TrendSelectorProps) {
-  const hasLimit = typeof maxSelections === "number" && Number.isFinite(maxSelections);
+  const hasLimit = typeof maxSelections === 'number' && Number.isFinite(maxSelections);
   const hasTrends = trendTypes.some((type) => type.groups.some((group) => group.trends.length > 0));
 
-  const Wrapper: React.ElementType = withContainer ? GlassPanel : "div";
-  const wrapperClassName = cn(withContainer ? "p-5" : "", className);
+  const Wrapper: React.ElementType = withContainer ? GlassPanel : 'div';
+  const wrapperClassName = cn(withContainer ? 'p-5' : '', className);
 
   return (
-    <Wrapper className={cn("flex flex-col h-full", wrapperClassName)}>
+    <Wrapper className={cn('flex flex-col h-full', wrapperClassName)}>
       {showHeader ? (
         <div className="flex items-center justify-between gap-2 border-b border-subtle pb-4 mb-4">
           <div>
@@ -61,7 +66,7 @@ export function TrendSelector({
             {onFetch ? (
               <Button
                 type="button"
-                variant={hasTrends ? "ghost" : "default"}
+                variant={hasTrends ? 'ghost' : 'default'}
                 size="sm"
                 className="h-7 px-2 text-2xs"
                 onClick={onFetch}
@@ -74,20 +79,28 @@ export function TrendSelector({
                 ) : (
                   <LightningBoltIcon className="mr-1 h-3 w-3" />
                 )}
-                {isFetching ? "Generating…" : hasTrends ? "Refresh" : "Generate Trends"}
+                {isFetching ? 'Generating…' : hasTrends ? 'Refresh' : 'Generate Trends'}
               </Button>
             ) : null}
             <div className="text-xs text-secondary bg-surface px-2 py-1 rounded border border-subtle">
               {selectedTrendIds.length}
-              {hasLimit ? `/${maxSelections}` : ""} selected
+              {hasLimit ? `/${maxSelections}` : ''} selected
             </div>
           </div>
         </div>
       ) : null}
 
-      <Accordion type="multiple" defaultValue={trendTypes.map(t => t.id)} className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar">
+      <Accordion
+        type="multiple"
+        defaultValue={trendTypes.map((t) => t.id)}
+        className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar"
+      >
         {trendTypes.map((type) => (
-          <AccordionItem key={type.id} value={type.id} className="border border-subtle rounded-md overflow-hidden bg-surface/30 px-0">
+          <AccordionItem
+            key={type.id}
+            value={type.id}
+            className="border border-subtle rounded-md overflow-hidden bg-surface/30 px-0"
+          >
             <AccordionTrigger className="hover:no-underline px-4 py-3 bg-surface/50 text-sm font-semibold tracking-wide">
               <div className="flex items-center gap-2">
                 {type.label}
@@ -110,7 +123,7 @@ export function TrendSelector({
                       selectedTrendIds={selectedTrendIds}
                       onToggleTrend={onToggleTrend}
                       activePlatforms={activePlatforms}
-                      showMomentumFilter={type.id === "trends"}
+                      showMomentumFilter={type.id === 'trends'}
                       allowDrag={allowDrag}
                       allowSelect={allowSelect}
                       allowActions={allowActions}

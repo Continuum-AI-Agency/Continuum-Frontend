@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-const STORAGE_PREFIX = "continuum:organic-planner:ai-studio-context";
+const STORAGE_PREFIX = 'continuum:organic-planner:ai-studio-context';
 
 export const AI_STUDIO_CONTEXT_STORAGE_PREFIX = STORAGE_PREFIX;
 export const AI_STUDIO_LAST_DRAFT_STORAGE_KEY = `${STORAGE_PREFIX}:last-draft-id`;
@@ -11,19 +11,19 @@ export function brandStorageKeyAiStudioLastDraft(brandId: string): string {
   return `${AI_STUDIO_LAST_DRAFT_STORAGE_KEY}:b:${brandId}`;
 }
 
-export type OrganicPostType = "post" | "reel" | "carousel";
-export type OrganicPlatformForStudio = "instagram" | "linkedin";
+export type OrganicPostType = 'post' | 'reel' | 'carousel';
+export type OrganicPlatformForStudio = 'instagram' | 'linkedin';
 export type OrganicWorkflowConcept =
-  | "ig_post_single_image"
-  | "ig_reel_single_video"
-  | "ig_carousel_multi_image"
-  | "li_post_single_image";
+  | 'ig_post_single_image'
+  | 'ig_reel_single_video'
+  | 'ig_carousel_multi_image'
+  | 'li_post_single_image';
 
 const workflowConceptSchema = z.enum([
-  "ig_post_single_image",
-  "ig_reel_single_video",
-  "ig_carousel_multi_image",
-  "li_post_single_image",
+  'ig_post_single_image',
+  'ig_reel_single_video',
+  'ig_carousel_multi_image',
+  'li_post_single_image',
 ]);
 
 export const plannerHandoffMediaSuggestionSchema = z
@@ -40,18 +40,18 @@ export const plannerHandoffAssetHintSchema = z.object({
 });
 
 export const plannerAiStudioHandoffSchema = z.object({
-  schemaVersion: z.literal("planner_ai_handoff_v1"),
+  schemaVersion: z.literal('planner_ai_handoff_v1'),
   draftId: z.string().min(1),
   brandProfileId: z.string().min(1),
   weekStartId: z.string().min(1),
-  platform: z.enum(["instagram", "linkedin"]),
-  postType: z.enum(["post", "reel", "carousel"]),
+  platform: z.enum(['instagram', 'linkedin']),
+  postType: z.enum(['post', 'reel', 'carousel']),
   workflowConcept: workflowConceptSchema.optional(),
   format: z.string().min(1),
   authoritativeCount: z.number().int().positive().optional(),
-  title: z.string().default(""),
-  summary: z.string().default(""),
-  captionPreview: z.string().default(""),
+  title: z.string().default(''),
+  summary: z.string().default(''),
+  captionPreview: z.string().default(''),
   creativeDirectionPrompt: z.string().optional(),
   thumbnailPrompt: z.string().optional(),
   seedTrendId: z.string().optional(),
@@ -64,7 +64,7 @@ export type PlannerAiStudioHandoff = z.infer<typeof plannerAiStudioHandoffSchema
 
 const applyAssetInputSchema = z.object({
   role: z.string().min(1),
-  kind: z.enum(["image", "video"]),
+  kind: z.enum(['image', 'video']),
   slideIndex: z.number().int().nonnegative().optional(),
   sourceUrl: z.string().url().optional(),
   sourceDataUrl: z.string().optional(),
@@ -87,11 +87,11 @@ const applyContentPatchSchema = z
   .strict();
 
 export const plannerAiStudioApplyRequestSchema = z.object({
-  schemaVersion: z.literal("planner_ai_apply_v1"),
+  schemaVersion: z.literal('planner_ai_apply_v1'),
   draftId: z.string().min(1),
   brandProfileId: z.string().min(1),
-  postType: z.enum(["post", "reel", "carousel"]),
-  platform: z.enum(["instagram", "linkedin"]),
+  postType: z.enum(['post', 'reel', 'carousel']),
+  platform: z.enum(['instagram', 'linkedin']),
   overwrite: z.literal(true),
   contentPatch: applyContentPatchSchema,
   assets: z.array(applyAssetInputSchema).min(1),
@@ -107,7 +107,7 @@ export type PlannerAiStudioApplyRequest = z.infer<typeof plannerAiStudioApplyReq
 
 const persistedAssetSchema = z.object({
   role: z.string().min(1),
-  kind: z.enum(["image", "video"]),
+  kind: z.enum(['image', 'video']),
   slideIndex: z.number().int().nonnegative().optional(),
   storagePath: z.string().min(1),
   storageUrl: z.string().min(1),
@@ -118,11 +118,11 @@ const persistedAssetSchema = z.object({
 });
 
 export const plannerAiStudioApplyResponseSchema = z.object({
-  schemaVersion: z.literal("planner_ai_apply_v1"),
+  schemaVersion: z.literal('planner_ai_apply_v1'),
   draftId: z.string().min(1),
   brandProfileId: z.string().min(1),
-  postType: z.enum(["post", "reel", "carousel"]),
-  platform: z.enum(["instagram", "linkedin"]),
+  postType: z.enum(['post', 'reel', 'carousel']),
+  platform: z.enum(['instagram', 'linkedin']),
   overwrite: z.literal(true),
   contentPatch: applyContentPatchSchema,
   assets: z.array(persistedAssetSchema).min(1),
@@ -139,9 +139,7 @@ export type PlannerAiStudioRevision = {
   applied: PlannerAiStudioApplyResponse;
 };
 
-function dedupeHandoffCandidates(
-  candidates: PlannerAiStudioHandoff[]
-): PlannerAiStudioHandoff[] {
+function dedupeHandoffCandidates(candidates: PlannerAiStudioHandoff[]): PlannerAiStudioHandoff[] {
   const seen = new Set<string>();
   const deduped: PlannerAiStudioHandoff[] = [];
 
@@ -156,7 +154,7 @@ function dedupeHandoffCandidates(
 }
 
 export function buildAiStudioHandoffStorageCandidates(
-  handoff: PlannerAiStudioHandoff
+  handoff: PlannerAiStudioHandoff,
 ): PlannerAiStudioHandoff[] {
   const candidates: PlannerAiStudioHandoff[] = [handoff];
   const mediaSuggestion = handoff.mediaSuggestion;
@@ -170,7 +168,7 @@ export function buildAiStudioHandoffStorageCandidates(
     });
   }
 
-  if (mediaSuggestion && typeof mediaSuggestion.generationContext !== "undefined") {
+  if (mediaSuggestion && typeof mediaSuggestion.generationContext !== 'undefined') {
     const mediaWithoutContext = { ...mediaSuggestion };
     delete mediaWithoutContext.generationContext;
     candidates.push({
@@ -210,53 +208,53 @@ export function buildSessionHistoryStorageKey(draftId: string): string {
 }
 
 export function normalizeDraftPostType(format?: string): OrganicPostType {
-  const normalized = (format ?? "").toLowerCase();
-  if (normalized.includes("reel") || normalized.includes("video")) return "reel";
-  if (normalized.includes("carousel")) return "carousel";
-  return "post";
+  const normalized = (format ?? '').toLowerCase();
+  if (normalized.includes('reel') || normalized.includes('video')) return 'reel';
+  if (normalized.includes('carousel')) return 'carousel';
+  return 'post';
 }
 
 export type WorkflowConceptSpec = {
   concept: OrganicWorkflowConcept;
-  outputKind: "image" | "video";
-  outputMode: "single" | "ordered";
+  outputKind: 'image' | 'video';
+  outputMode: 'single' | 'ordered';
   maxReferenceImages: number;
   requiresExplicitPickOnMultiOutput: boolean;
-  defaultModel: "nano-banana-2" | "veo-3.1-fast";
+  defaultModel: 'nano-banana-2' | 'veo-3.1-fast';
 };
 
 export const WORKFLOW_CONCEPT_SPECS: Record<OrganicWorkflowConcept, WorkflowConceptSpec> = {
   ig_post_single_image: {
-    concept: "ig_post_single_image",
-    outputKind: "image",
-    outputMode: "single",
+    concept: 'ig_post_single_image',
+    outputKind: 'image',
+    outputMode: 'single',
     maxReferenceImages: 14,
     requiresExplicitPickOnMultiOutput: false,
-    defaultModel: "nano-banana-2",
+    defaultModel: 'nano-banana-2',
   },
   ig_reel_single_video: {
-    concept: "ig_reel_single_video",
-    outputKind: "video",
-    outputMode: "single",
+    concept: 'ig_reel_single_video',
+    outputKind: 'video',
+    outputMode: 'single',
     maxReferenceImages: 14,
     requiresExplicitPickOnMultiOutput: false,
-    defaultModel: "veo-3.1-fast",
+    defaultModel: 'veo-3.1-fast',
   },
   ig_carousel_multi_image: {
-    concept: "ig_carousel_multi_image",
-    outputKind: "image",
-    outputMode: "ordered",
+    concept: 'ig_carousel_multi_image',
+    outputKind: 'image',
+    outputMode: 'ordered',
     maxReferenceImages: 14,
     requiresExplicitPickOnMultiOutput: false,
-    defaultModel: "nano-banana-2",
+    defaultModel: 'nano-banana-2',
   },
   li_post_single_image: {
-    concept: "li_post_single_image",
-    outputKind: "image",
-    outputMode: "single",
+    concept: 'li_post_single_image',
+    outputKind: 'image',
+    outputMode: 'single',
     maxReferenceImages: 5,
     requiresExplicitPickOnMultiOutput: true,
-    defaultModel: "nano-banana-2",
+    defaultModel: 'nano-banana-2',
   },
 };
 
@@ -264,16 +262,16 @@ export function resolveWorkflowConcept(input: {
   platform: OrganicPlatformForStudio;
   postType: OrganicPostType;
 }): OrganicWorkflowConcept {
-  if (input.platform === "linkedin") {
-    return "li_post_single_image";
+  if (input.platform === 'linkedin') {
+    return 'li_post_single_image';
   }
-  if (input.postType === "reel") {
-    return "ig_reel_single_video";
+  if (input.postType === 'reel') {
+    return 'ig_reel_single_video';
   }
-  if (input.postType === "carousel") {
-    return "ig_carousel_multi_image";
+  if (input.postType === 'carousel') {
+    return 'ig_carousel_multi_image';
   }
-  return "ig_post_single_image";
+  return 'ig_post_single_image';
 }
 
 export function resolveWorkflowConceptSpec(input: {

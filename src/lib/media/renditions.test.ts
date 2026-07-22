@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { buildAssetPreview, type AssetRenditionRow } from './renditions';
+import { type AssetRenditionRow, buildAssetPreview } from './renditions';
 import type { MediaAssetRow } from './schema';
 
 const asset = (kind: 'image' | 'video' | 'file'): MediaAssetRow =>
@@ -63,17 +63,42 @@ describe('buildAssetPreview', () => {
 
   it('falls back to the exact head original for native images', () => {
     expect(
-      buildAssetPreview(
-        asset('image'),
-        [],
-        new Map([['source/original', 'https://original']]),
-      ),
+      buildAssetPreview(asset('image'), [], new Map([['source/original', 'https://original']])),
     ).toMatchObject({ state: 'ready', kind: 'image', signedUrl: 'https://original' });
   });
 
   it('preserves an awaiting-companion state for a design source', () => {
     expect(
-      buildAssetPreview(asset('file'), [{ ...rendition, state: 'awaiting_companion', storage_path: null, mime_type: null }], new Map()),
+      buildAssetPreview(
+        asset('file'),
+        [{ ...rendition, state: 'awaiting_companion', storage_path: null, mime_type: null }],
+        new Map(),
+      ),
     ).toMatchObject({ state: 'awaiting_companion', kind: null, signedUrl: null });
+  });
+
+  it('prefers a webp poster rendition (kind image) over the raw video head', () => {
+    const poster: AssetRenditionRow = {
+      ...rendition,
+      id: '66666666-6666-4666-8666-666666666666',
+      role: 'poster',
+      storage_path: 'preview/poster.webp',
+      mime_type: 'image/webp',
+    };
+    expect(
+      buildAssetPreview(
+        asset('video'),
+        [poster],
+        new Map([
+          ['preview/poster.webp', 'https://poster'],
+          ['source/original', 'https://raw-video'],
+        ]),
+      ),
+    ).toMatchObject({
+      state: 'ready',
+      kind: 'image',
+      role: 'poster',
+      signedUrl: 'https://poster',
+    });
   });
 });

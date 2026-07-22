@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react'
-import { type NodeProps, type Node as ReactFlowNode, NodeResizer } from '@xyflow/react'
-import { useStudioStore } from '../stores/useStudioStore'
-import { cn } from '@/lib/utils'
-import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node'
+import { type NodeProps, NodeResizer, type Node as ReactFlowNode } from '@xyflow/react';
+import { Copy, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,76 +13,77 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
-} from '@/components/ui/context-menu'
-import { Copy, Trash2 } from 'lucide-react'
-import { useDebouncedSave } from '../hooks/useDebouncedSave'
+} from '@/components/ui/context-menu';
+import { cn } from '@/lib/utils';
+import { useDebouncedSave } from '../hooks/useDebouncedSave';
+import { useStudioStore } from '../stores/useStudioStore';
 
 export interface NoteNodeData extends Record<string, unknown> {
-  content: string
-  label?: string
+  content: string;
+  label?: string;
 }
 
 // Note nodes are standalone canvas annotations — no handles, not wired into
 // the data-flow graph. Rich text is handled via contentEditable with execCommand
 // bold toggle (⌘B / Ctrl+B). Content persists in node.data.content as HTML.
 export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNodeData>>) {
-  const updateNodeData = useStudioStore((state) => state.updateNodeData)
-  const duplicateNode = useStudioStore((state) => state.duplicateNode)
-  const deleteNode = useStudioStore((state) => state.deleteNode)
-  const debouncedSave = useDebouncedSave()
-  const editorRef = useRef<HTMLDivElement>(null)
-  const isComposing = useRef(false)
+  const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
+  const debouncedSave = useDebouncedSave();
+  const editorRef = useRef<HTMLDivElement>(null);
+  const isComposing = useRef(false);
 
   // Seed the DOM with persisted HTML on mount only. We do NOT re-apply on every
   // render to avoid clobbering the user's cursor position mid-edit. The initial
   // value is captured via a ref so we can safely omit data.content from deps.
-  const initialContentRef = useRef((data.content as string) || '')
+  const initialContentRef = useRef((data.content as string) || '');
   useEffect(() => {
-    if (!editorRef.current) return
+    if (!editorRef.current) return;
     if (editorRef.current.innerHTML !== initialContentRef.current) {
-      editorRef.current.innerHTML = initialContentRef.current
+      editorRef.current.innerHTML = initialContentRef.current;
     }
-  }, [])
+  }, []);
 
   const handleInput = useCallback(() => {
-    if (!editorRef.current || isComposing.current) return
-    updateNodeData(id, { content: editorRef.current.innerHTML })
-    debouncedSave()
-  }, [id, updateNodeData, debouncedSave])
+    if (!editorRef.current || isComposing.current) return;
+    updateNodeData(id, { content: editorRef.current.innerHTML });
+    debouncedSave();
+  }, [id, updateNodeData, debouncedSave]);
 
   const handleCompositionStart = useCallback(() => {
-    isComposing.current = true
-  }, [])
+    isComposing.current = true;
+  }, []);
 
   const handleCompositionEnd = useCallback(() => {
-    isComposing.current = false
-    handleInput()
-  }, [handleInput])
+    isComposing.current = false;
+    handleInput();
+  }, [handleInput]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     // Prevent canvas shortcuts from firing while the user types
-    event.stopPropagation()
+    event.stopPropagation();
 
-    const isBold = (event.metaKey || event.ctrlKey) && event.key === 'b'
+    const isBold = (event.metaKey || event.ctrlKey) && event.key === 'b';
     if (isBold) {
-      event.preventDefault()
-      document.execCommand('bold')
+      event.preventDefault();
+      document.execCommand('bold');
     }
-  }, [])
+  }, []);
 
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     // Strip formatting — insert as plain text only
-    event.preventDefault()
-    const text = event.clipboardData.getData('text/plain')
-    document.execCommand('insertText', false, text)
-  }, [])
+    event.preventDefault();
+    const text = event.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+  }, []);
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'relative min-w-[200px] min-h-[120px] w-full h-full max-w-[500px] rounded-lg transition-shadow'
+            'relative min-w-[200px] min-h-[120px] w-full h-full max-w-[500px] rounded-lg transition-shadow',
           )}
         >
           <NodeResizer
@@ -99,7 +100,7 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
             className={cn(
               'border border-amber-300/60 bg-amber-50/90 dark:bg-amber-950/40 rounded-lg overflow-hidden',
               'transition-all duration-300 h-full w-full flex flex-col min-h-[inherit] shadow-sm hover:shadow-md',
-              selected && 'ring-2 ring-amber-400/60'
+              selected && 'ring-2 ring-amber-400/60',
             )}
           >
             <NodeContent className="flex-1 flex flex-col min-h-0 p-0 bg-transparent">
@@ -117,7 +118,7 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
                   'nodrag nopan flex-1 w-full min-h-[100px] p-3 text-sm text-foreground',
                   'outline-none resize-none bg-transparent overflow-y-auto whitespace-pre-wrap break-words',
                   '[&_b]:font-bold [&_strong]:font-bold empty:before:content-[attr(data-placeholder)]',
-                  'empty:before:text-muted-foreground/50 empty:before:pointer-events-none'
+                  'empty:before:text-muted-foreground/50 empty:before:pointer-events-none',
                 )}
                 data-placeholder="Write a note…"
               />
@@ -150,5 +151,5 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
-  )
+  );
 }

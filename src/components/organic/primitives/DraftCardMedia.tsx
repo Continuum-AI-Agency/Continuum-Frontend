@@ -1,22 +1,22 @@
-"use client"
+'use client';
 
-import Image from "next/image"
-import { PlayIcon } from "@radix-ui/react-icons"
-import { resolveOrganicImageUrl } from "@continuum/contracts"
-import { cn } from "@/lib/utils"
-import type { OrganicCalendarDraft } from "./types"
+import { resolveOrganicImageUrl } from '@continuum/contracts';
+import { PlayIcon } from '@radix-ui/react-icons';
+import Image from 'next/image';
+import { cn } from '@/lib/utils';
+import type { OrganicCalendarDraft } from './types';
 
 const PLATFORM_GRADIENTS: Record<string, [string, string]> = {
-  instagram: ["#E1306C", "#833AB4"],
-  linkedin: ["#0A66C2", "#004182"],
-  facebook: ["#1877F2", "#0550AE"],
-  tiktok: ["#69C9D0", "#010101"],
-  youtube: ["#FF0000", "#CC0000"],
-  twitter: ["#1DA1F2", "#0C7ABF"],
-}
+  instagram: ['#E1306C', '#833AB4'],
+  linkedin: ['#0A66C2', '#004182'],
+  facebook: ['#1877F2', '#0550AE'],
+  tiktok: ['#69C9D0', '#010101'],
+  youtube: ['#FF0000', '#CC0000'],
+  twitter: ['#1DA1F2', '#0C7ABF'],
+};
 
 function hasText(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 /**
@@ -25,81 +25,81 @@ function hasText(value: unknown): value is string {
  * and calendar all surface the same media (incl. base64-only 512px mockups).
  */
 export function resolveDraftMediaAssetUrl(draft: OrganicCalendarDraft): string | null {
-  const persistedImageAsset = draft.publishingAssets?.find((a) => a.kind === "image")
-  if (persistedImageAsset?.storageUrl) return persistedImageAsset.storageUrl
-  return resolveOrganicImageUrl(draft.mediaSuggestion)
+  const persistedImageAsset = draft.publishingAssets?.find((a) => a.kind === 'image');
+  if (persistedImageAsset?.storageUrl) return persistedImageAsset.storageUrl;
+  return resolveOrganicImageUrl(draft.mediaSuggestion);
 }
 
 export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {
-  return resolveDraftMediaAssetUrl(draft) !== null
+  return resolveDraftMediaAssetUrl(draft) !== null;
 }
 
 export function resolveFormatAspectClass(format: string): string {
-  const f = (format ?? "").toLowerCase()
-  if (f === "hyperframe") return "aspect-video"
-  if (f === "reel" || f === "video") return "aspect-[4/5]"
-  if (f === "story") return "aspect-[9/16]"
-  return "aspect-square"
+  const f = (format ?? '').toLowerCase();
+  if (f === 'hyperframe') return 'aspect-video';
+  if (f === 'reel' || f === 'video') return 'aspect-[4/5]';
+  if (f === 'story') return 'aspect-[9/16]';
+  return 'aspect-square';
 }
 
 export type DraftHyperframeCover = {
-  coverImageUrl?: string | null
-  coverBase64?: string | null
-  coverPath?: string | null
-  bucket?: string | null
-}
+  coverImageUrl?: string | null;
+  coverBase64?: string | null;
+  coverPath?: string | null;
+  bucket?: string | null;
+};
 
 export function isHyperframeDraft(draft: OrganicCalendarDraft): boolean {
-  return (draft.format ?? "").toLowerCase() === "hyperframe"
+  return (draft.format ?? '').toLowerCase() === 'hyperframe';
 }
 
 export function resolveDraftHyperframeCover(
-  draft: OrganicCalendarDraft
+  draft: OrganicCalendarDraft,
 ): DraftHyperframeCover | null {
-  const hf = draft.mediaSuggestion?.hyperframe
-  if (!hf) return null
+  const hf = draft.mediaSuggestion?.hyperframe;
+  if (!hf) return null;
   // A re-signable cover is one with a live signed URL or a durable storage path
   // (re-signed on load). Base64 covers are intentionally not considered — base64
   // must never render in the calendar UI.
-  const hasCover = hasText(hf.coverImageUrl) || hasText(hf.coverPath)
-  if (!hasCover) return null
+  const hasCover = hasText(hf.coverImageUrl) || hasText(hf.coverPath);
+  if (!hasCover) return null;
   return {
     coverImageUrl: hf.coverImageUrl ?? null,
     coverBase64: hf.coverBase64 ?? null,
     coverPath: hf.coverPath ?? null,
     bucket: hf.bucket ?? null,
-  }
+  };
 }
 
 function resolveHyperframeCoverUrl(cover: DraftHyperframeCover): string | null {
-  if (hasText(cover.coverImageUrl)) return cover.coverImageUrl.trim()
-  return null
+  if (hasText(cover.coverImageUrl)) return cover.coverImageUrl.trim();
+  return null;
 }
 
 export function DraftCardMedia({
   draft,
-  aspectClass = "aspect-square",
+  aspectClass = 'aspect-square',
   className,
-  sizes = "280px",
+  sizes = '280px',
 }: {
-  draft: OrganicCalendarDraft
-  aspectClass?: string
-  className?: string
-  sizes?: string
+  draft: OrganicCalendarDraft;
+  aspectClass?: string;
+  className?: string;
+  sizes?: string;
 }) {
-  const platform = draft.platforms[0] ?? "instagram"
-  const [gradientStart, gradientEnd] = PLATFORM_GRADIENTS[platform] ?? ["#5A48F9", "#7C6FFF"]
+  const platform = draft.platforms[0] ?? 'instagram';
+  const [gradientStart, gradientEnd] = PLATFORM_GRADIENTS[platform] ?? ['#5A48F9', '#7C6FFF'];
   const altText =
-    typeof draft.mediaSuggestion?.alt === "string" && draft.mediaSuggestion.alt.trim()
+    typeof draft.mediaSuggestion?.alt === 'string' && draft.mediaSuggestion.alt.trim()
       ? draft.mediaSuggestion.alt.trim()
-      : draft.title
+      : draft.title;
 
-  const hyperframeCover = isHyperframeDraft(draft) ? resolveDraftHyperframeCover(draft) : null
-  const hyperframeCoverUrl = hyperframeCover ? resolveHyperframeCoverUrl(hyperframeCover) : null
+  const hyperframeCover = isHyperframeDraft(draft) ? resolveDraftHyperframeCover(draft) : null;
+  const hyperframeCoverUrl = hyperframeCover ? resolveHyperframeCoverUrl(hyperframeCover) : null;
 
   if (hyperframeCoverUrl) {
     return (
-      <div className={cn("relative overflow-hidden", aspectClass, className)}>
+      <div className={cn('relative overflow-hidden', aspectClass, className)}>
         <Image
           src={hyperframeCoverUrl}
           alt={altText}
@@ -114,14 +114,14 @@ export function DraftCardMedia({
           </span>
         </div>
       </div>
-    )
+    );
   }
 
-  const reel = draft.mediaSuggestion?.reel
-  const reelUrl = reel?.generated && hasText(reel.signedUrl) ? reel.signedUrl.trim() : null
+  const reel = draft.mediaSuggestion?.reel;
+  const reelUrl = reel?.generated && hasText(reel.signedUrl) ? reel.signedUrl.trim() : null;
   if (reelUrl) {
     return (
-      <div className={cn("relative overflow-hidden", aspectClass, className)}>
+      <div className={cn('relative overflow-hidden', aspectClass, className)}>
         {/* Muted, paused preview — the first frame is the implicit poster. */}
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
@@ -138,13 +138,13 @@ export function DraftCardMedia({
           </span>
         </div>
       </div>
-    )
+    );
   }
 
-  const mediaUrl = resolveDraftMediaAssetUrl(draft)
+  const mediaUrl = resolveDraftMediaAssetUrl(draft);
 
   return (
-    <div className={cn("relative overflow-hidden", aspectClass, className)}>
+    <div className={cn('relative overflow-hidden', aspectClass, className)}>
       {mediaUrl ? (
         <Image
           src={mediaUrl}
@@ -165,5 +165,5 @@ export function DraftCardMedia({
         </div>
       )}
     </div>
-  )
+  );
 }

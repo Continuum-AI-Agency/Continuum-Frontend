@@ -1,52 +1,60 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
-import { Button } from "@/components/ui/button";
-import { OnboardingShell, type ShellPillId } from "./OnboardingShell";
-import { OnboardingBrandSwitcher } from "./OnboardingBrandSwitcher";
-import type { StepperState } from "./OnboardingStepper";
-import { UrlScreen } from "./screens/UrlScreen";
-import { BrandDnaScreen } from "./screens/BrandDnaScreen";
-import { IntegrationsScreen } from "./screens/IntegrationsScreen";
-import { DocumentsScreen } from "./screens/DocumentsScreen";
-import { InvitesScreen } from "./screens/InvitesScreen";
-import {
-  CompetitorInspirationsScreen,
-  type SelectedInspiration,
-} from "./screens/CompetitorInspirationsScreen";
-import { InspirationGenerationScreen } from "./screens/InspirationGenerationScreen";
-import { WelcomeScreen, hasSeenWelcome } from "./screens/WelcomeScreen";
-import { BackgroundJobsProvider, useBackgroundJobs } from "./state/BackgroundJobsProvider";
-import { runScrape, runTrendsPrewarm, runStrategicPrewarm, runCreativePrewarm } from "./state/jobRunners";
-import {
-  runAgentPreview,
-  emptyBuckets,
-  seedBucketsFromSnapshot,
-  type AgentPreviewBuckets,
-} from "./state/agentPreview";
-import {
-  computePreviewInputHash,
-  fetchPreviewLatest,
-  fetchPreviewSnapshot,
-  PreviewRateLimitedError,
-  PREVIEW_PROMPT_VERSION,
-} from "@/lib/onboarding/agentClient";
-import { JobPersistor } from "./state/JobPersistor";
-import { OnboardingProvider, useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
+import { AnimatePresence, motion } from 'motion/react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
   approveAndLaunchOnboardingAction,
   approveOnboardingAndStartAnalysisAction,
   completeOnboardingAction,
-} from "@/app/onboarding/actions";
-import { useToast } from "@/components/ui/ToastProvider";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { OnboardingState } from "@/lib/onboarding/state";
-import { resolveSafeBrandName } from "@/lib/onboarding/brandName";
-import { useBrandProfileRevealCache } from "@/lib/onboarding/revealCache";
-import { timing, trackOnboardingEvent } from "@/lib/onboarding/telemetry";
-import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
+} from '@/app/onboarding/actions';
+import {
+  OnboardingProvider,
+  useOnboarding,
+} from '@/components/onboarding/providers/OnboardingContext';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useBrandAssignedAccountIds } from '@/hooks/useBrandAssignedAccountIds';
+import {
+  computePreviewInputHash,
+  fetchPreviewLatest,
+  fetchPreviewSnapshot,
+  PREVIEW_PROMPT_VERSION,
+  PreviewRateLimitedError,
+} from '@/lib/onboarding/agentClient';
+import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
+import { useBrandProfileRevealCache } from '@/lib/onboarding/revealCache';
+import type { OnboardingState } from '@/lib/onboarding/state';
+import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { OnboardingBrandSwitcher } from './OnboardingBrandSwitcher';
+import { OnboardingShell, type ShellPillId } from './OnboardingShell';
+import type { StepperState } from './OnboardingStepper';
+import { BrandDnaScreen } from './screens/BrandDnaScreen';
+import {
+  CompetitorInspirationsScreen,
+  type SelectedInspiration,
+} from './screens/CompetitorInspirationsScreen';
+import { DocumentsScreen } from './screens/DocumentsScreen';
+import { InspirationGenerationScreen } from './screens/InspirationGenerationScreen';
+import { IntegrationsScreen } from './screens/IntegrationsScreen';
+import { InvitesScreen } from './screens/InvitesScreen';
+import { UrlScreen } from './screens/UrlScreen';
+import { hasSeenWelcome, WelcomeScreen } from './screens/WelcomeScreen';
+import {
+  type AgentPreviewBuckets,
+  emptyBuckets,
+  runAgentPreview,
+  seedBucketsFromSnapshot,
+} from './state/agentPreview';
+import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJobsProvider';
+import { JobPersistor } from './state/JobPersistor';
+import {
+  runCreativePrewarm,
+  runScrape,
+  runStrategicPrewarm,
+  runTrendsPrewarm,
+} from './state/jobRunners';
 
 type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -55,8 +63,7 @@ const TOTAL_STEPS = 5;
 // Post-Brand-DNA "Competitor Inspirations → brand-guided generations" finale.
 // On by default: only disabled when the flag is explicitly "false" (then Brand
 // DNA keeps the classic launch → dashboard flow).
-const INSPIRATIONS_ENABLED =
-  process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== "false";
+const INSPIRATIONS_ENABLED = process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== 'false';
 
 const swipeVariants = {
   enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
@@ -94,18 +101,21 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     }
   }, [initialState]);
   const directionRef = useRef<1 | -1>(1);
-  const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? "");
+  const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? '');
   const { start, patch, jobs, reset } = useBackgroundJobs();
   const { brandId, resetState, state, updateState } = useOnboarding();
 
-  const navigate = useCallback((next: ScreenIndex) => {
-    directionRef.current = next > screen ? 1 : -1;
-    setScreen(next);
-    if (next > persistedStepRef.current) {
-      persistedStepRef.current = next;
-      void updateState({ step: next });
-    }
-  }, [screen, updateState]);
+  const navigate = useCallback(
+    (next: ScreenIndex) => {
+      directionRef.current = next > screen ? 1 : -1;
+      setScreen(next);
+      if (next > persistedStepRef.current) {
+        persistedStepRef.current = next;
+        void updateState({ step: next });
+      }
+    },
+    [screen, updateState],
+  );
   const { assignedIds: assignedAccountIds } = useBrandAssignedAccountIds(brandId);
   const [launching, startLaunch] = useTransition();
   const [resetting, startReset] = useTransition();
@@ -117,7 +127,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const ensureLaunchKey = () => {
     if (!launchKeyRef.current) {
       launchKeyRef.current =
-        typeof globalThis.crypto?.randomUUID === "function"
+        typeof globalThis.crypto?.randomUUID === 'function'
           ? globalThis.crypto.randomUUID()
           : `${brandId}-${Date.now().toString(36)}`;
     }
@@ -137,12 +147,12 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       } catch (error) {
         show({
           title: "Couldn't reset",
-          description: error instanceof Error ? error.message : "Please try again.",
-          variant: "error",
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'error',
         });
         return;
       }
-      setDomain(defaultUrl ?? "");
+      setDomain(defaultUrl ?? '');
       directionRef.current = -1;
       setScreen(0);
     });
@@ -153,16 +163,19 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
 
     const legacySelectedCount = countSelectedAccounts(state);
     const integrationCount = Math.max(assignedAccountIds.length, legacySelectedCount);
-    if (integrationCount === 0 && typeof window !== "undefined") {
+    if (integrationCount === 0 && typeof window !== 'undefined') {
       const confirmed = window.confirm(
-        "Launch without any integration accounts attached?\n\nYou won't see paid-media or organic data on the dashboard until you connect at least one account in Settings."
+        "Launch without any integration accounts attached?\n\nYou won't see paid-media or organic data on the dashboard until you connect at least one account in Settings.",
       );
       if (!confirmed) {
-        trackOnboardingEvent("onboarding_launch_clicked", { integration_count: 0, confirmed: false });
+        trackOnboardingEvent('onboarding_launch_clicked', {
+          integration_count: 0,
+          confirmed: false,
+        });
         return;
       }
     }
-    trackOnboardingEvent("onboarding_launch_clicked", {
+    trackOnboardingEvent('onboarding_launch_clicked', {
       integration_count: integrationCount,
       confirmed: true,
     });
@@ -170,7 +183,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     launchInFlightRef.current = true;
     if (!launchKeyRef.current) {
       launchKeyRef.current =
-        typeof globalThis.crypto?.randomUUID === "function"
+        typeof globalThis.crypto?.randomUUID === 'function'
           ? globalThis.crypto.randomUUID()
           : `${brandId}-${Date.now().toString(36)}`;
     }
@@ -182,21 +195,21 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           idempotencyKey: launchKeyRef.current ?? undefined,
         });
         useBrandProfileRevealCache.getState().invalidateBrand(brandId);
-        trackOnboardingEvent("onboarding_launch_succeeded", {
+        trackOnboardingEvent('onboarding_launch_succeeded', {
           duration_ms: launchTimer.sinceStart(),
           integration_count: integrationCount,
         });
-        router.push("/dashboard");
+        router.push('/dashboard');
       } catch (error) {
         launchInFlightRef.current = false;
-        trackOnboardingEvent("onboarding_launch_failed", {
+        trackOnboardingEvent('onboarding_launch_failed', {
           duration_ms: launchTimer.sinceStart(),
-          message: error instanceof Error ? error.message : "Unknown error",
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
         show({
-          title: "Launch failed",
-          description: error instanceof Error ? error.message : "Please try again.",
-          variant: "error",
+          title: 'Launch failed',
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'error',
         });
       }
     });
@@ -212,23 +225,26 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   // to the brand-guided generation screen (which only needs the brand guidelines).
   const handleContinueToInspirations = () => {
     const integrationCount = Math.max(assignedAccountIds.length, countSelectedAccounts(state));
-    trackOnboardingEvent("onboarding_launch_clicked", { integration_count: integrationCount, confirmed: true });
+    trackOnboardingEvent('onboarding_launch_clicked', {
+      integration_count: integrationCount,
+      confirmed: true,
+    });
     const idempotencyKey = ensureLaunchKey();
     const skipInspirations = !hasConnectedInstagram(state);
     startLaunch(async () => {
       try {
         await approveOnboardingAndStartAnalysisAction(brandId, { idempotencyKey });
         if (skipInspirations) {
-          trackOnboardingEvent("onboarding_inspirations_skipped", {
-            reason: "no_connected_instagram",
+          trackOnboardingEvent('onboarding_inspirations_skipped', {
+            reason: 'no_connected_instagram',
           });
         }
         navigate(skipInspirations ? 6 : 5);
       } catch (error) {
         show({
           title: "Couldn't continue",
-          description: error instanceof Error ? error.message : "Please try again.",
-          variant: "error",
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'error',
         });
       }
     });
@@ -242,20 +258,20 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       try {
         await completeOnboardingAction(brandId);
         useBrandProfileRevealCache.getState().invalidateBrand(brandId);
-        trackOnboardingEvent("onboarding_launch_succeeded", {
+        trackOnboardingEvent('onboarding_launch_succeeded', {
           duration_ms: launchTimer.sinceStart(),
           integration_count: Math.max(assignedAccountIds.length, countSelectedAccounts(state)),
         });
-        router.push("/dashboard");
+        router.push('/dashboard');
       } catch (error) {
-        trackOnboardingEvent("onboarding_launch_failed", {
+        trackOnboardingEvent('onboarding_launch_failed', {
           duration_ms: launchTimer.sinceStart(),
-          message: error instanceof Error ? error.message : "Unknown error",
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
         show({
-          title: "Launch failed",
-          description: error instanceof Error ? error.message : "Please try again.",
-          variant: "error",
+          title: 'Launch failed',
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'error',
         });
       }
     });
@@ -267,9 +283,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     }
     setDomain(url);
     navigate(1); // Documents
-    patch("agentPreview", emptyBuckets());
+    patch('agentPreview', emptyBuckets());
 
-    const scrapePromise = start("scrape", (signal) => runScrape(url, signal));
+    const scrapePromise = start('scrape', (signal) => runScrape(url, signal));
 
     const supabase = createSupabaseBrowserClient();
     const { data } = await supabase.auth.getUser();
@@ -285,7 +301,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
 
     void (async () => {
       const previewTimer = timing();
-      trackOnboardingEvent("onboarding_agent_preview_started", { url });
+      trackOnboardingEvent('onboarding_agent_preview_started', { url });
 
       const inputHash = await computePreviewInputHash({
         payload: {
@@ -310,7 +326,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       }).catch(() => null);
 
       try {
-        const outcome = await start("agentPreview", (signal) =>
+        const outcome = await start('agentPreview', (signal) =>
           runAgentPreview(
             {
               brandId,
@@ -319,10 +335,10 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               websiteUrl: url,
               voiceTags: initialState.brand.brandVoiceTags ?? [],
               scrape: scrape ?? null,
-              onUpdate: (next) => patch("agentPreview", next),
+              onUpdate: (next) => patch('agentPreview', next),
             },
-            signal
-          )
+            signal,
+          ),
         );
         if (outcome) {
           useBrandProfileRevealCache.getState().write(brandId, url, {
@@ -331,7 +347,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             runId: outcome.runId,
             inputHash,
           });
-          trackOnboardingEvent("onboarding_agent_preview_completed", {
+          trackOnboardingEvent('onboarding_agent_preview_completed', {
             duration_ms: previewTimer.sinceStart(),
             has_voice: Boolean(outcome.buckets.voice),
             has_audience: Boolean(outcome.buckets.audience),
@@ -340,21 +356,21 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             has_understanding: Boolean(outcome.buckets.result?.understanding),
           });
         } else {
-          trackOnboardingEvent("onboarding_agent_preview_failed", {
+          trackOnboardingEvent('onboarding_agent_preview_failed', {
             duration_ms: previewTimer.sinceStart(),
           });
         }
       } catch (error) {
         if (error instanceof PreviewRateLimitedError) {
           show({
-            title: "Slow down a moment",
+            title: 'Slow down a moment',
             description: `We can analyze again in ${error.retryAfterSeconds}s.`,
-            variant: "error",
+            variant: 'error',
           });
         }
-        trackOnboardingEvent("onboarding_agent_preview_failed", {
+        trackOnboardingEvent('onboarding_agent_preview_failed', {
           duration_ms: previewTimer.sinceStart(),
-          message: error instanceof Error ? error.message : "Unknown error",
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     })();
@@ -368,28 +384,53 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const handleAgentRerun = useCallback(() => {
     if (!domain) return;
     useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
-    patch("agentPreview", emptyBuckets());
+    patch('agentPreview', emptyBuckets());
     void handleUrlSubmit(domain);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, domain]);
 
   const steps = useMemo(
     () => [
-      { id: "website" as const, label: "Your website", description: "Tell us where to start", state: stepState(screen, 0) },
-      { id: "documents" as const, label: "Documents", description: "Add brand assets", state: stepState(screen, 1) },
-      { id: "integrations" as const, label: "Connect channels", description: "Link your accounts", state: stepState(screen, 2) },
-      { id: "invites" as const, label: "Invite team", description: "Bring teammates in", state: stepState(screen, 3) },
-      { id: "dna" as const, label: "Brand DNA", description: "Review and launch", state: stepState(screen, 4) },
+      {
+        id: 'website' as const,
+        label: 'Your website',
+        description: 'Tell us where to start',
+        state: stepState(screen, 0),
+      },
+      {
+        id: 'documents' as const,
+        label: 'Documents',
+        description: 'Add brand assets',
+        state: stepState(screen, 1),
+      },
+      {
+        id: 'integrations' as const,
+        label: 'Connect channels',
+        description: 'Link your accounts',
+        state: stepState(screen, 2),
+      },
+      {
+        id: 'invites' as const,
+        label: 'Invite team',
+        description: 'Bring teammates in',
+        state: stepState(screen, 3),
+      },
+      {
+        id: 'dna' as const,
+        label: 'Brand DNA',
+        description: 'Review and launch',
+        state: stepState(screen, 4),
+      },
     ],
-    [screen]
+    [screen],
   );
 
   const onStepClick = (id: ShellPillId) => {
-    if (id === "website") navigate(0);
-    if (id === "documents" && screen >= 1) navigate(1);
-    if (id === "integrations" && screen >= 2) navigate(2);
-    if (id === "invites" && screen >= 3) navigate(3);
-    if (id === "dna" && screen >= 4) navigate(4);
+    if (id === 'website') navigate(0);
+    if (id === 'documents' && screen >= 1) navigate(1);
+    if (id === 'integrations' && screen >= 2) navigate(2);
+    if (id === 'invites' && screen >= 3) navigate(3);
+    if (id === 'dna' && screen >= 4) navigate(4);
   };
 
   const { hint, actions } = useBottomBar({
@@ -402,67 +443,72 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     launching,
   });
 
-  const agentRaw = jobs.agentPreview.data as AgentPreviewBuckets | { buckets: AgentPreviewBuckets } | null;
+  const agentRaw = jobs.agentPreview.data as
+    | AgentPreviewBuckets
+    | { buckets: AgentPreviewBuckets }
+    | null;
   const agentBuckets: AgentPreviewBuckets | null =
-    agentRaw && typeof agentRaw === "object" && "buckets" in agentRaw ? agentRaw.buckets : agentRaw;
-  const readinessLoading = jobs.agentPreview.status === "running";
+    agentRaw && typeof agentRaw === 'object' && 'buckets' in agentRaw ? agentRaw.buckets : agentRaw;
+  const readinessLoading = jobs.agentPreview.status === 'running';
 
   useEffect(() => {
-    trackOnboardingEvent("onboarding_step_viewed", { screen });
+    trackOnboardingEvent('onboarding_step_viewed', { screen });
   }, [screen]);
 
   useEffect(() => {
     if (screen !== 4) return;
-    if (jobs.agentPreview.status !== "idle") return;
+    if (jobs.agentPreview.status !== 'idle') return;
     if (!domain) return;
 
     let cancelled = false;
     void (async () => {
       const cached = useBrandProfileRevealCache.getState().read(brandId, domain);
       if (cached) {
-        trackOnboardingEvent("onboarding_reveal_cache_hit", {
+        trackOnboardingEvent('onboarding_reveal_cache_hit', {
           brand_id: brandId,
           cached_age_ms: Date.now() - cached.cachedAt,
         });
         if (cancelled) return;
         if (cached.scrape) {
-          void start("scrape", () => Promise.resolve(cached.scrape!));
+          void start('scrape', () => Promise.resolve(cached.scrape!));
         }
-        await start("agentPreview", () => Promise.resolve({ runId: cached.runId, buckets: cached.buckets }));
+        await start('agentPreview', () =>
+          Promise.resolve({ runId: cached.runId, buckets: cached.buckets }),
+        );
         return;
       }
-      trackOnboardingEvent("onboarding_reveal_cache_miss", { brand_id: brandId });
+      trackOnboardingEvent('onboarding_reveal_cache_miss', { brand_id: brandId });
 
       let latest: Awaited<ReturnType<typeof fetchPreviewLatest>> = null;
       try {
         latest = await fetchPreviewLatest(brandId);
       } catch (error) {
-        console.warn("[onboarding] fetchPreviewLatest failed", error);
+        console.warn('[onboarding] fetchPreviewLatest failed', error);
         return;
       }
       if (cancelled || !latest) return;
 
-      if (latest.status === "running") {
-        trackOnboardingEvent("onboarding_step_viewed", { screen: 4, resumed: true });
-        await start("agentPreview", (signal) =>
+      if (latest.status === 'running') {
+        trackOnboardingEvent('onboarding_step_viewed', { screen: 4, resumed: true });
+        await start('agentPreview', (signal) =>
           runAgentPreview(
             {
               brandId,
-              userId: state.members[0]?.id ?? "",
-              brandName: state.brand.name || "Untitled brand",
+              userId: state.members[0]?.id ?? '',
+              brandName: state.brand.name || 'Untitled brand',
               websiteUrl: domain,
               voiceTags: state.brand.brandVoiceTags ?? [],
               scrape: null,
               resumeRunId: latest!.run_id,
-              onUpdate: (next) => patch("agentPreview", next),
+              onUpdate: (next) => patch('agentPreview', next),
             },
-            signal
-          )
+            signal,
+          ),
         );
         return;
       }
 
-      if (latest.status === "completed" || latest.status === "partial") {
+      if (latest.status === 'completed' || latest.status === 'partial') {
         try {
           const snapshot = await fetchPreviewSnapshot(latest.run_id);
           if (cancelled || !snapshot?.result) return;
@@ -470,27 +516,27 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           // audit scores + readiness) on the persisted snapshot are surfaced —
           // a manual field copy here used to drop audits entirely.
           const buckets = seedBucketsFromSnapshot(snapshot.result);
-          await start("agentPreview", () => Promise.resolve({ runId: latest!.run_id, buckets }));
+          await start('agentPreview', () => Promise.resolve({ runId: latest!.run_id, buckets }));
         } catch (error) {
-          console.warn("[onboarding] fetchPreviewSnapshot failed", error);
+          console.warn('[onboarding] fetchPreviewSnapshot failed', error);
         }
         return;
       }
 
-      if (latest.status === "failed") {
+      if (latest.status === 'failed') {
         let errorMessage: string | undefined;
         try {
           const snapshot = await fetchPreviewSnapshot(latest.run_id);
           errorMessage = snapshot?.error?.message;
         } catch (error) {
-          console.warn("[onboarding] fetchPreviewSnapshot failed", error);
+          console.warn('[onboarding] fetchPreviewSnapshot failed', error);
         }
         if (cancelled) return;
-        trackOnboardingEvent("onboarding_agent_preview_failed", {
+        trackOnboardingEvent('onboarding_agent_preview_failed', {
           brand_id: brandId,
           run_id: latest.run_id,
           resumed: true,
-          message: errorMessage ?? "Preview run failed.",
+          message: errorMessage ?? 'Preview run failed.',
         });
       }
     })();
@@ -498,19 +544,29 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     return () => {
       cancelled = true;
     };
-  }, [screen, jobs.agentPreview.status, domain, brandId, start, patch, state.brand.brandVoiceTags, state.brand.name, state.members]);
+  }, [
+    screen,
+    jobs.agentPreview.status,
+    domain,
+    brandId,
+    start,
+    patch,
+    state.brand.brandVoiceTags,
+    state.brand.name,
+    state.members,
+  ]);
 
   useEffect(() => {
-    if (jobs.agentPreview.status !== "done") return;
+    if (jobs.agentPreview.status !== 'done') return;
     if (prewarmedRef.current) return;
     prewarmedRef.current = true;
-    router.prefetch("/dashboard");
+    router.prefetch('/dashboard');
     void (async () => {
       try {
-        await start("trendsPrewarm", () => runTrendsPrewarm(brandId));
+        await start('trendsPrewarm', () => runTrendsPrewarm(brandId));
       } catch (error) {
         // Best-effort prewarm: dashboard has its own fetcher fallback.
-        console.warn("[onboarding] trends prewarm failed", error);
+        console.warn('[onboarding] trends prewarm failed', error);
       }
     })();
     // Kick competitor strategic analysis in parallel with trends, the moment the
@@ -518,9 +574,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     // must never block the inspirations/generation finale.
     void (async () => {
       try {
-        await start("strategicPrewarm", () => runStrategicPrewarm(brandId));
+        await start('strategicPrewarm', () => runStrategicPrewarm(brandId));
       } catch (error) {
-        console.warn("[onboarding] strategic analysis prewarm failed", error);
+        console.warn('[onboarding] strategic analysis prewarm failed', error);
       }
     })();
     // Generate the first on-brand creatives now too — decoupled from the strategic
@@ -533,13 +589,13 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       };
       void (async () => {
         try {
-          await start("creativePrewarm", (signal) =>
+          await start('creativePrewarm', (signal) =>
             runCreativePrewarm(brandId, kit, signal, (images) =>
-              patch("creativePrewarm", { images }),
+              patch('creativePrewarm', { images }),
             ),
           );
         } catch (error) {
-          console.warn("[onboarding] creative prewarm failed", error);
+          console.warn('[onboarding] creative prewarm failed', error);
         }
       })();
     }
@@ -570,9 +626,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             <UrlScreen
               defaultUrl={domain || defaultUrl}
               onSubmit={handleUrlSubmit}
-              error={jobs.scrape.status === "error" ? jobs.scrape.error : null}
+              error={jobs.scrape.status === 'error' ? jobs.scrape.error : null}
               onRetry={handleScrapeRetry}
-              retrying={jobs.scrape.status === "running"}
+              retrying={jobs.scrape.status === 'running'}
             />
           ) : screen === 1 ? (
             <DocumentsScreen totalSteps={TOTAL_STEPS} />
@@ -606,9 +662,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           )}
         </motion.div>
       </AnimatePresence>
-      {welcomeVisible ? (
-        <WelcomeScreen onDismiss={() => setWelcomeVisible(false)} />
-      ) : null}
+      {welcomeVisible ? <WelcomeScreen onDismiss={() => setWelcomeVisible(false)} /> : null}
     </OnboardingShell>
   );
 }
@@ -652,9 +706,9 @@ function resumeScreenFor(state: OnboardingState): ScreenIndex {
 }
 
 function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2 | 3 | 4): StepperState {
-  if (pillIndex < screen) return "done";
-  if (pillIndex === screen) return "active";
-  return "pending";
+  if (pillIndex < screen) return 'done';
+  if (pillIndex === screen) return 'active';
+  return 'pending';
 }
 
 function useBottomBar({
@@ -675,10 +729,10 @@ function useBottomBar({
   launching: boolean;
 }) {
   const { jobs } = useBackgroundJobs();
-  const dnaReady = jobs.agentPreview.status === "done";
+  const dnaReady = jobs.agentPreview.status === 'done';
 
   if (screen === 0) {
-    return { hint: "", actions: null };
+    return { hint: '', actions: null };
   }
   if (screen === 1) {
     return {
@@ -700,7 +754,7 @@ function useBottomBar({
   }
   if (screen === 2) {
     return {
-      hint: "",
+      hint: '',
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => navigate(1)}>
@@ -718,7 +772,7 @@ function useBottomBar({
   }
   if (screen === 3) {
     return {
-      hint: "Add teammates — or invite them later from Settings.",
+      hint: 'Add teammates — or invite them later from Settings.',
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => navigate(2)}>
@@ -728,7 +782,7 @@ function useBottomBar({
             Skip for now
           </Button>
           <Button variant="default" size="sm" onClick={() => navigate(4)}>
-            {dnaReady ? "Reveal Brand DNA →" : "Continue →"}
+            {dnaReady ? 'Reveal Brand DNA →' : 'Continue →'}
           </Button>
         </>
       ),
@@ -737,23 +791,28 @@ function useBottomBar({
   if (screen === 4) {
     if (inspirationsEnabled) {
       return {
-        hint: "",
+        hint: '',
         actions: (
-          <Button variant="default" size="sm" onClick={onContinueToInspirations} disabled={launching}>
-            {launching ? "Preparing…" : "Continue →"}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onContinueToInspirations}
+            disabled={launching}
+          >
+            {launching ? 'Preparing…' : 'Continue →'}
           </Button>
         ),
       };
     }
     return {
-      hint: "",
+      hint: '',
       actions: (
         <Button variant="success" size="sm" onClick={onLaunch} disabled={launching}>
-          {launching ? "Launching…" : "Launch Continuum ✦"}
+          {launching ? 'Launching…' : 'Launch Continuum ✦'}
         </Button>
       ),
     };
   }
   // Screens 5 (inspirations) and 6 (generation) render their own footer CTAs.
-  return { hint: "", actions: null };
+  return { hint: '', actions: null };
 }

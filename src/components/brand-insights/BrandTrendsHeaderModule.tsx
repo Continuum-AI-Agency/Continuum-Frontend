@@ -136,7 +136,7 @@ export function BrandTrendsHeaderModule({
       <PopoverContent
         align="end"
         side="bottom"
-        className="max-h-[75vh] w-[min(44rem,92vw)] overflow-y-auto p-0"
+        className="max-h-[75vh] w-[min(44rem,92vw)] overflow-x-hidden overflow-y-auto p-0"
       >
         {weekError ? (
           <Alert variant="destructive" className="rounded-none border-0 border-b">

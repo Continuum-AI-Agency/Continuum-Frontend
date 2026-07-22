@@ -1,19 +1,21 @@
-import { Sparkles } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { bandFor, type ScoreBand } from "./ScoreBadge";
-import type { ReadinessFinding } from "@/lib/onboarding/agentClient";
+import { Sparkles } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ReadinessFinding } from '@/lib/onboarding/agentClient';
+import { bandFor, type ScoreBand } from './ScoreBadge';
 
 const TINT: Record<ScoreBand, string> = {
-  strong: "bg-[color-mix(in_srgb,#0daea2_4%,white)] border-[color-mix(in_srgb,#0daea2_18%,transparent)]",
-  watch: "bg-[color-mix(in_srgb,#f59e0b_5%,white)] border-[color-mix(in_srgb,#f59e0b_22%,transparent)]",
-  weak: "bg-[color-mix(in_srgb,#e11d48_4%,white)] border-[color-mix(in_srgb,#e11d48_22%,transparent)]",
+  strong:
+    'bg-[color-mix(in_srgb,#0daea2_4%,white)] border-[color-mix(in_srgb,#0daea2_18%,transparent)]',
+  watch:
+    'bg-[color-mix(in_srgb,#f59e0b_5%,white)] border-[color-mix(in_srgb,#f59e0b_22%,transparent)]',
+  weak: 'bg-[color-mix(in_srgb,#e11d48_4%,white)] border-[color-mix(in_srgb,#e11d48_22%,transparent)]',
 };
 
 const ICON_TONE: Record<ScoreBand, string> = {
-  strong: "text-[#0a8a80]",
-  watch: "text-[#b45309]",
-  weak: "text-[#be123c]",
+  strong: 'text-[#0a8a80]',
+  watch: 'text-[#b45309]',
+  weak: 'text-[#be123c]',
 };
 
 export function FindingCallout({ finding }: { finding: ReadinessFinding }) {
@@ -26,7 +28,9 @@ export function FindingCallout({ finding }: { finding: ReadinessFinding }) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Sparkles className={`mt-0.5 h-3.5 w-3.5 shrink-0 cursor-default ${ICON_TONE[band]}`} />
+                <Sparkles
+                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 cursor-default ${ICON_TONE[band]}`}
+                />
               </TooltipTrigger>
               <TooltipContent side="left">AI insight</TooltipContent>
             </Tooltip>

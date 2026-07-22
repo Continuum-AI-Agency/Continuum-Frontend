@@ -1,20 +1,20 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { ORGANIC_PLATFORM_KEYS } from "./platforms";
+import { ORGANIC_PLATFORM_KEYS } from './platforms';
 
 const platformKeySchema = z.enum(ORGANIC_PLATFORM_KEYS);
-const seedSourceSchema = z.enum(["trend", "question", "event", "manual"]);
+const seedSourceSchema = z.enum(['trend', 'question', 'event', 'manual']);
 const dayIdRegex = /^\d{4}-\d{2}-\d{2}$/;
 const timeLabelRegex = /^(0?[1-9]|1[0-2]):[0-5]\d\s?(AM|PM)$/i;
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const platformAccountIdsShape = Object.fromEntries(
-  ORGANIC_PLATFORM_KEYS.map((platform) => [platform, nonEmptyStringSchema.optional()])
+  ORGANIC_PLATFORM_KEYS.map((platform) => [platform, nonEmptyStringSchema.optional()]),
 ) as Record<(typeof ORGANIC_PLATFORM_KEYS)[number], z.ZodOptional<typeof nonEmptyStringSchema>>;
 
 function isValidDayId(value: string) {
   if (!dayIdRegex.test(value)) return false;
-  const [yearRaw, monthRaw, dayRaw] = value.split("-");
+  const [yearRaw, monthRaw, dayRaw] = value.split('-');
   const year = Number(yearRaw);
   const month = Number(monthRaw);
   const day = Number(dayRaw);
@@ -30,14 +30,14 @@ function isValidDayId(value: string) {
 }
 
 function isValidIsoDateTime(value: string) {
-  if (!value.includes("T")) return false;
+  if (!value.includes('T')) return false;
   const parsed = new Date(value);
   return !Number.isNaN(parsed.getTime());
 }
 
 function isValidTimeZone(value: string) {
   try {
-    Intl.DateTimeFormat("en-US", { timeZone: value });
+    Intl.DateTimeFormat('en-US', { timeZone: value });
     return true;
   } catch {
     return false;
@@ -45,19 +45,19 @@ function isValidTimeZone(value: string) {
 }
 
 const dayIdSchema = nonEmptyStringSchema.refine(isValidDayId, {
-  message: "Expected day id in YYYY-MM-DD format",
+  message: 'Expected day id in YYYY-MM-DD format',
 });
 
 const scheduledAtSchema = nonEmptyStringSchema.refine(isValidIsoDateTime, {
-  message: "Expected an ISO datetime value for scheduledAt",
+  message: 'Expected an ISO datetime value for scheduledAt',
 });
 
 const timeLabelSchema = nonEmptyStringSchema.regex(timeLabelRegex, {
-  message: "Expected time label like 9:00 AM",
+  message: 'Expected time label like 9:00 AM',
 });
 
 const timezoneSchema = nonEmptyStringSchema.refine(isValidTimeZone, {
-  message: "Expected a valid IANA timezone",
+  message: 'Expected a valid IANA timezone',
 });
 const platformAccountIdsSchema = z.object(platformAccountIdsShape).strict();
 
@@ -73,8 +73,8 @@ export const calendarPlacementScheduleRequestSchema = z
     if (scheduledDay !== value.dayId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["scheduledAt"],
-        message: "scheduledAt must be on the same day as dayId",
+        path: ['scheduledAt'],
+        message: 'scheduledAt must be on the same day as dayId',
       });
     }
   });
@@ -95,25 +95,25 @@ export const calendarPlacementSeedRequestSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (value.source === "trend" && !value.trendId) {
+    if (value.source === 'trend' && !value.trendId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["trendId"],
-        message: "trendId is required when source is trend",
+        path: ['trendId'],
+        message: 'trendId is required when source is trend',
       });
     }
-    if (value.source === "question" && !value.questionId) {
+    if (value.source === 'question' && !value.questionId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["questionId"],
-        message: "questionId is required when source is question",
+        path: ['questionId'],
+        message: 'questionId is required when source is question',
       });
     }
-    if (value.source === "event" && !value.eventId) {
+    if (value.source === 'event' && !value.eventId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["eventId"],
-        message: "eventId is required when source is event",
+        path: ['eventId'],
+        message: 'eventId is required when source is event',
       });
     }
   });
@@ -141,7 +141,7 @@ export type CalendarPlacementSeed = z.infer<typeof calendarPlacementSeedSchema>;
 
 export const calendarGenerationOptionsSchema = z
   .object({
-    schedulePreset: z.enum(["beta-launch"]).optional(),
+    schedulePreset: z.enum(['beta-launch']).optional(),
     includeNewsletter: z.boolean().optional(),
     newsletterDayId: dayIdSchema.optional(),
     guidancePrompt: nonEmptyStringSchema.optional(),
@@ -187,11 +187,11 @@ export const backendCalendarPlacementSeedSchema = z
     metadata: z.record(z.string(), z.unknown()).nullish(),
   })
   .superRefine((value, ctx) => {
-    if (value.seedSource === "trend" && !value.trendId) {
+    if (value.seedSource === 'trend' && !value.trendId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["trendId"],
-        message: "trendId is required when seedSource is trend",
+        path: ['trendId'],
+        message: 'trendId is required when seedSource is trend',
       });
     }
   })
@@ -211,8 +211,8 @@ export const backendCalendarGenerationRequestSchema = z
     if (placementPlatforms.size !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["placements"],
-        message: "Each request must include placements for exactly one platform.",
+        path: ['placements'],
+        message: 'Each request must include placements for exactly one platform.',
       });
       return;
     }
@@ -221,42 +221,44 @@ export const backendCalendarGenerationRequestSchema = z
     if (!batchPlatform) return;
 
     const accountKeys = Object.entries(value.platformAccountIds)
-      .filter(([, accountId]) => typeof accountId === "string" && accountId.trim().length > 0)
+      .filter(([, accountId]) => typeof accountId === 'string' && accountId.trim().length > 0)
       .map(([platform]) => platform);
 
     if (accountKeys.length !== 1 || accountKeys[0] !== batchPlatform) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["platformAccountIds"],
+        path: ['platformAccountIds'],
         message:
-          "platformAccountIds must contain exactly one non-empty key matching the placements platform.",
+          'platformAccountIds must contain exactly one non-empty key matching the placements platform.',
       });
     }
   })
   .strict();
 
-export type BackendCalendarGenerationRequest = z.infer<typeof backendCalendarGenerationRequestSchema>;
+export type BackendCalendarGenerationRequest = z.infer<
+  typeof backendCalendarGenerationRequestSchema
+>;
 
 function normalizeDesiredFormat(content?: z.infer<typeof calendarPlacementContentRequestSchema>) {
   const rawFormat = content?.desiredFormat ?? content?.format;
   if (!rawFormat) return null;
   let format = rawFormat.toLowerCase();
-  if (format.includes("newsletter")) {
-    format = "newsletter";
+  if (format.includes('newsletter')) {
+    format = 'newsletter';
   }
-  if (format === "static") {
-    format = "post";
+  if (format === 'static') {
+    format = 'post';
   }
   return format;
 }
 
 function cleanBackendOptions(
-  options?: z.infer<typeof calendarGenerationOptionsSchema>
+  options?: z.infer<typeof calendarGenerationOptionsSchema>,
 ): z.infer<typeof calendarGenerationOptionsSchema> | null {
   if (!options) return null;
   const clean: Record<string, unknown> = {};
   if (options.schedulePreset) clean.schedulePreset = options.schedulePreset;
-  if (typeof options.includeNewsletter === "boolean") {
+  if (typeof options.includeNewsletter === 'boolean') {
     clean.includeNewsletter = options.includeNewsletter;
   }
   if (options.newsletterDayId) clean.newsletterDayId = options.newsletterDayId;
@@ -274,7 +276,7 @@ function cleanBackendOptions(
 }
 
 export function toBackendCalendarGenerationRequest(
-  request: CalendarGenerationRequest
+  request: CalendarGenerationRequest,
 ): BackendCalendarGenerationRequest {
   const normalized = {
     brandProfileId: request.brandProfileId,
@@ -321,7 +323,7 @@ const placementPlatformSchema = z.object({
 const placementSeedSchema = z
   .object({
     trendId: z.string().optional().nullable(),
-    source: z.enum(["trend", "question", "event", "manual"]).optional().nullable(),
+    source: z.enum(['trend', 'question', 'event', 'manual']).optional().nullable(),
   })
   .optional();
 
@@ -387,7 +389,7 @@ const mediaSuggestionGenerationContextSchema = z
     trend: z
       .object({
         trendId: z.string().nullish(),
-        seedSource: z.enum(["trend", "question", "event", "manual"]).nullish(),
+        seedSource: z.enum(['trend', 'question', 'event', 'manual']).nullish(),
       })
       .passthrough()
       .nullish(),
@@ -451,7 +453,7 @@ const placementCreativeSchema = z
         z.object({
           role: z.string(),
           suggestion: z.string(),
-        })
+        }),
       )
       .optional(),
   })
@@ -467,7 +469,7 @@ const placementCopySchema = z
 const placementPublishingAssetSchema = z
   .object({
     role: z.string(),
-    kind: z.enum(["image", "video"]),
+    kind: z.enum(['image', 'video']),
     slideIndex: z.number().nullish(),
     assetId: z.string().nullish(),
     bucket: z.string().nullish(),
@@ -493,26 +495,26 @@ export const calendarPlacementSchema = z.object({
 export type CalendarPlacement = z.infer<typeof calendarPlacementSchema>;
 
 const progressEventSchema = z.object({
-  type: z.literal("progress"),
+  type: z.literal('progress'),
   completed: z.number().nonnegative(),
   total: z.number().nonnegative(),
-  stage: z.enum(["analyzing", "optimizing", "drafting", "matching", "finalizing"]).optional(),
+  stage: z.enum(['analyzing', 'optimizing', 'drafting', 'matching', 'finalizing']).optional(),
   message: z.string().optional(),
 });
 
 const placementEventSchema = z.object({
-  type: z.literal("placement"),
+  type: z.literal('placement'),
   placement: calendarPlacementSchema,
 });
 
 const slotStartedEventSchema = z.object({
-  type: z.literal("slot_started"),
+  type: z.literal('slot_started'),
   placementId: z.string().min(1),
   message: z.string().optional(),
 });
 
 const slotHeartbeatEventSchema = z.object({
-  type: z.literal("slot_heartbeat"),
+  type: z.literal('slot_heartbeat'),
   placementId: z.string().min(1),
   stage: z.string().optional(),
   progress: z.number().min(0).max(1),
@@ -520,19 +522,19 @@ const slotHeartbeatEventSchema = z.object({
 });
 
 const slotStageEventSchema = z.object({
-  type: z.literal("slot_stage"),
+  type: z.literal('slot_stage'),
   placementId: z.string().min(1),
   stage: z.string().min(1),
 });
 
 const slotCompletedEventSchema = z.object({
-  type: z.literal("slot_completed"),
+  type: z.literal('slot_completed'),
   placement: calendarPlacementSchema,
   persistedDraftId: z.string().uuid().optional(),
 });
 
 const slotFailedEventSchema = z.object({
-  type: z.literal("slot_failed"),
+  type: z.literal('slot_failed'),
   placementId: z.string().min(1),
   code: z.string().optional(),
   message: z.string().min(1),
@@ -541,14 +543,14 @@ const slotFailedEventSchema = z.object({
 });
 
 const errorEventSchema = z.object({
-  type: z.literal("error"),
+  type: z.literal('error'),
   code: z.string().optional(),
   message: z.string().min(1),
   placementId: z.string().optional(),
 });
 
 const completeEventSchema = z.object({
-  type: z.literal("complete"),
+  type: z.literal('complete'),
   summary: z
     .object({
       total: z.number().int().nonnegative(),
@@ -558,7 +560,7 @@ const completeEventSchema = z.object({
     .optional(),
 });
 
-export const calendarGenerationEventSchema = z.discriminatedUnion("type", [
+export const calendarGenerationEventSchema = z.discriminatedUnion('type', [
   progressEventSchema,
   slotStartedEventSchema,
   slotHeartbeatEventSchema,

@@ -1,6 +1,5 @@
-import { BarChart3 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { PlatformKey } from "@/components/onboarding/platforms";
+import { BarChart3 } from 'lucide-react';
+import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   amazon,
   google,
@@ -11,7 +10,8 @@ import {
   tiktok,
   x,
   youtube,
-} from "@/lib/brand-icons";
+} from '@/lib/brand-icons';
+import { cn } from '@/lib/utils';
 
 export type IconComponent = React.ComponentType<{ className?: string }>;
 
@@ -24,7 +24,10 @@ function makeSvgIcon(iconData: IconData): IconComponent {
   function SvgIcon({ className }: { className?: string }) {
     return (
       <span
-        className={cn("h-4 w-4 inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block", className)}
+        className={cn(
+          'h-4 w-4 inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block',
+          className,
+        )}
         title={iconData.title}
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted inline brand-icon SVG from local @/lib/brand-icons constants, never user input
         dangerouslySetInnerHTML={{ __html: iconData.svg }}
@@ -47,17 +50,17 @@ const AmazonIcon = makeSvgIcon(amazon);
 const XIcon = makeSvgIcon(x);
 
 export const PLATFORM_LABELS: Record<PlatformKey, string> = {
-  youtube: "YouTube",
-  instagram: "Instagram",
-  facebook: "Facebook",
-  tiktok: "TikTok",
-  x: "X",
-  linkedin: "LinkedIn",
-  googleAds: "Google Ads",
-  amazonAds: "Amazon Ads",
-  dv360: "DV360",
-  googleAnalytics: "Google Analytics",
-  threads: "Threads",
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  x: 'X',
+  linkedin: 'LinkedIn',
+  googleAds: 'Google Ads',
+  amazonAds: 'Amazon Ads',
+  dv360: 'DV360',
+  googleAnalytics: 'Google Analytics',
+  threads: 'Threads',
 };
 
 export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
@@ -74,22 +77,22 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   threads: ThreadsIcon,
 };
 
-export type ProviderGroup = "facebook" | "google" | "tiktok" | "linkedin" | "x";
+export type ProviderGroup = 'facebook' | 'google' | 'tiktok' | 'linkedin' | 'x';
 
 export const PROVIDER_GROUP_LABELS: Record<ProviderGroup, string> = {
-  facebook: "Meta",
-  google: "Google",
-  tiktok: "TikTok",
-  linkedin: "LinkedIn",
-  x: "X",
+  facebook: 'Meta',
+  google: 'Google',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  x: 'X',
 };
 
 export const PROVIDER_GROUP_DESCRIPTIONS: Record<ProviderGroup, string> = {
-  facebook: "Facebook & Instagram",
-  google: "Google Ads & YouTube",
-  tiktok: "TikTok Marketing",
-  linkedin: "LinkedIn Ads / Organic",
-  x: "X (Twitter)",
+  facebook: 'Facebook & Instagram',
+  google: 'Google Ads & YouTube',
+  tiktok: 'TikTok Marketing',
+  linkedin: 'LinkedIn Ads / Organic',
+  x: 'X (Twitter)',
 };
 
 export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
@@ -102,7 +105,7 @@ export const PROVIDER_GROUP_ICONS: Record<ProviderGroup, IconComponent> = {
 
 // Provider groups that are surfaced but not yet open to users. Rendered
 // greyed-out / disabled across connect surfaces. Re-enable by removing the key.
-export const COMING_SOON_PROVIDER_GROUPS: ReadonlySet<ProviderGroup> = new Set(["x"]);
+export const COMING_SOON_PROVIDER_GROUPS: ReadonlySet<ProviderGroup> = new Set(['x']);
 
 export const isProviderComingSoon = (group: string): boolean =>
   COMING_SOON_PROVIDER_GROUPS.has(group as ProviderGroup);

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { deriveOrganicMediaStage } from "@continuum/contracts";
+import { deriveOrganicMediaStage } from '@continuum/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
 import {
   buildPublishDraftRow,
@@ -9,15 +9,19 @@ import {
   normalizePublishScheduledAt,
   publishCanvasRequestSchema,
   publishCanvasResponseSchema,
-} from "@/lib/organic/publish-canvas";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { buildUserSuppliedContentJson } from "../ai-studio/apply/userSuppliedContentJson";
+} from '@/lib/organic/publish-canvas';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { buildUserSuppliedContentJson } from '../ai-studio/apply/userSuppliedContentJson';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-type OrganicDraftRow = { id: string; content_json: Record<string, unknown> | null; scheduled_date: string | null };
+type OrganicDraftRow = {
+  id: string;
+  content_json: Record<string, unknown> | null;
+  scheduled_date: string | null;
+};
 
 // The edited MP4 already lives durably in the media library, so the reel is built
 // from its storage coords (no re-upload). Shared by the link + create branches.
@@ -35,8 +39,8 @@ function buildReelContentJson(params: {
     bucket: params.bucket,
     assets: [
       {
-        role: "primary",
-        kind: "video",
+        role: 'primary',
+        kind: 'video',
         storagePath: params.storagePath,
         storageUrl: params.signedUrl,
         ...(params.mimeType ? { mimeType: params.mimeType } : {}),
@@ -58,7 +62,7 @@ export async function POST(request: Request) {
   const parsed = publishCanvasRequestSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid publish payload.", issues: parsed.error.flatten() },
+      { error: 'Invalid publish payload.', issues: parsed.error.flatten() },
       { status: 400 },
     );
   }
@@ -70,26 +74,26 @@ export async function POST(request: Request) {
     error: userError,
   } = await supabase.auth.getUser();
   if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
   const { data: hasAccess, error: accessError } = await supabase
-    .schema("brand_profiles")
-    .rpc("has_brand_access", { brand_id: payload.brandId });
+    .schema('brand_profiles')
+    .rpc('has_brand_access', { brand_id: payload.brandId });
   if (accessError || !hasAccess) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
   }
 
   try {
     const admin = createSupabaseAdminClient();
-    const organic = (admin as unknown as SupabaseClient).schema("organic");
+    const organic = (admin as unknown as SupabaseClient).schema('organic');
 
     // Re-sign the durable MP4 for immediate render; brand access was verified above.
     const { data: signed, error: signError } = await admin.storage
       .from(payload.bucket)
       .createSignedUrl(payload.storagePath, SIGNED_URL_TTL_SECONDS);
     if (signError || !signed?.signedUrl) {
-      throw new Error(`Failed to sign published video: ${signError?.message ?? "no url"}`);
+      throw new Error(`Failed to sign published video: ${signError?.message ?? 'no url'}`);
     }
     const signedUrl = signed.signedUrl;
     const nowIso = new Date().toISOString();
@@ -97,13 +101,13 @@ export async function POST(request: Request) {
     // LINK: attach to the existing draft the node is bound to.
     if (payload.draftId) {
       const { data: draftRow, error: draftError } = await organic
-        .from("organic_calendar_drafts")
-        .select("id, content_json, scheduled_date")
-        .eq("id", payload.draftId)
-        .eq("brand_id", payload.brandId)
+        .from('organic_calendar_drafts')
+        .select('id, content_json, scheduled_date')
+        .eq('id', payload.draftId)
+        .eq('brand_id', payload.brandId)
         .single();
       if (draftError || !draftRow) {
-        throw new Error(`Draft not found for publish: ${draftError?.message ?? "no row"}`);
+        throw new Error(`Draft not found for publish: ${draftError?.message ?? 'no row'}`);
       }
       const existing = draftRow as OrganicDraftRow;
 
@@ -118,14 +122,14 @@ export async function POST(request: Request) {
       });
 
       const { error: updateError } = await organic
-        .from("organic_calendar_drafts")
+        .from('organic_calendar_drafts')
         .update({
           content_json: contentJson,
           media_stage: deriveOrganicMediaStage(contentJson),
           updated_at: nowIso,
         })
-        .eq("id", payload.draftId)
-        .eq("brand_id", payload.brandId);
+        .eq('id', payload.draftId)
+        .eq('brand_id', payload.brandId);
       if (updateError) {
         throw new Error(`Failed to attach video to draft: ${updateError.message}`);
       }
@@ -146,7 +150,7 @@ export async function POST(request: Request) {
     const scheduledAtIso = normalizePublishScheduledAt(payload.scheduledAt, new Date());
     const platform = payload.platform?.trim() || DEFAULT_PUBLISH_PLATFORM;
     const clientKey = payload.clientKey?.trim() || crypto.randomUUID();
-    const status = payload.status ?? "draft";
+    const status = payload.status ?? 'draft';
 
     const contentJson = buildReelContentJson({
       existingContentJson: null,
@@ -172,12 +176,12 @@ export async function POST(request: Request) {
     });
 
     const { data: upserted, error: upsertError } = await organic
-      .from("organic_calendar_drafts")
-      .upsert(row, { onConflict: "brand_id,client_key" })
-      .select("id")
+      .from('organic_calendar_drafts')
+      .upsert(row, { onConflict: 'brand_id,client_key' })
+      .select('id')
       .single();
     if (upsertError || !upserted) {
-      throw new Error(`Failed to create draft: ${upsertError?.message ?? "no row"}`);
+      throw new Error(`Failed to create draft: ${upsertError?.message ?? 'no row'}`);
     }
 
     const response = publishCanvasResponseSchema.parse({
@@ -190,7 +194,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to publish to planner.";
+    const message = error instanceof Error ? error.message : 'Failed to publish to planner.';
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

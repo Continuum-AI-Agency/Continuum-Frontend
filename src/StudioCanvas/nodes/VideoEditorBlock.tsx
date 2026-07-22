@@ -1,15 +1,3 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Handle,
-  Position,
-  type NodeProps,
-  type Node as ReactFlowNode,
-  NodeResizer,
-  type HandleProps,
-  useEdges,
-  useNodeId,
-} from '@xyflow/react';
-import { v4 as uuidv4 } from 'uuid';
 import {
   CopyIcon,
   DownloadIcon,
@@ -18,16 +6,23 @@ import {
   TrashIcon,
   VideoIcon,
 } from '@radix-ui/react-icons';
-import { ArrowDown, ArrowUp, X as XIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  Handle,
+  type HandleProps,
+  type NodeProps,
+  NodeResizer,
+  Position,
+  type Node as ReactFlowNode,
+  useEdges,
+  useNodeId,
+} from '@xyflow/react';
+import { ArrowDown, ArrowUp, X as XIcon } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Toolbar } from '@/components/ai-elements/toolbar';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -37,17 +32,17 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Toolbar } from '@/components/ai-elements/toolbar';
-
+import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ClipSlot, VideoEditorNodeData } from '../types';
-import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
-import { executeWorkflow } from '../utils/executeWorkflow';
-import { useToast } from '@/components/ui/ToastProvider';
 import { downloadAsset } from '../utils/downloadAsset';
-import { useNodeSelection } from '../contexts/PresenceContext';
-import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
+import { executeWorkflow } from '../utils/executeWorkflow';
 import { checkSpliceSupport, type WebCodecsSupport } from '../utils/splice/webcodecsSupport';
 
 const MIN_SLOTS = 2;
@@ -88,10 +83,16 @@ function normalizeSlots(slots: ClipSlot[] | undefined): ClipSlot[] {
     }
     return padded.map((slot, index) => ({ ...slot, order: index }));
   }
-  return [...slots].sort((a, b) => a.order - b.order).map((slot, index) => ({ ...slot, order: index }));
+  return [...slots]
+    .sort((a, b) => a.order - b.order)
+    .map((slot, index) => ({ ...slot, order: index }));
 }
 
-export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode<VideoEditorNodeData>>) {
+export function VideoEditorBlock({
+  id,
+  data,
+  selected,
+}: NodeProps<ReactFlowNode<VideoEditorNodeData>>) {
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -186,9 +187,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
     (slotId: string, field: 'trimStartSec' | 'trimEndSec', value: string) => {
       const numeric = value.trim() === '' ? undefined : Number(value);
       if (numeric !== undefined && (Number.isNaN(numeric) || numeric < 0)) return;
-      writeSlots(
-        slots.map((slot) => (slot.id === slotId ? { ...slot, [field]: numeric } : slot)),
-      );
+      writeSlots(slots.map((slot) => (slot.id === slotId ? { ...slot, [field]: numeric } : slot)));
     },
     [slots, writeSlots],
   );
@@ -312,7 +311,9 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                         step={0.1}
                         placeholder="Start"
                         value={slot.trimStartSec ?? ''}
-                        onChange={(event) => handleTrimChange(slot.id, 'trimStartSec', event.target.value)}
+                        onChange={(event) =>
+                          handleTrimChange(slot.id, 'trimStartSec', event.target.value)
+                        }
                         className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                         aria-label={`Clip ${index + 1} trim start seconds`}
                       />
@@ -322,7 +323,9 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                         step={0.1}
                         placeholder="End"
                         value={slot.trimEndSec ?? ''}
-                        onChange={(event) => handleTrimChange(slot.id, 'trimEndSec', event.target.value)}
+                        onChange={(event) =>
+                          handleTrimChange(slot.id, 'trimEndSec', event.target.value)
+                        }
                         className="nodrag h-6 w-14 rounded border border-border/60 bg-background px-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                         aria-label={`Clip ${index + 1} trim end seconds`}
                       />
@@ -361,7 +364,9 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
 
                       <div
                         className="pointer-events-none absolute -left-5 top-1/2 -translate-y-1/2"
-                        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                        style={{
+                          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                        }}
                       >
                         <LimitedHandle
                           type="target"
@@ -386,7 +391,10 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                   Add clip slot
                 </Button>
 
-                <div className="relative overflow-hidden rounded-md border border-border/60 bg-black/85" style={{ aspectRatio: '16 / 9' }}>
+                <div
+                  className="relative overflow-hidden rounded-md border border-border/60 bg-black/85"
+                  style={{ aspectRatio: '16 / 9' }}
+                >
                   {isRunning ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted p-4">
                       <GenerationPulseLoader />
@@ -397,11 +405,7 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
                     </div>
                   ) : displayVideo ? (
                     <>
-                      <video
-                        src={displayVideo}
-                        controls
-                        className="h-full w-full object-contain"
-                      />
+                      <video src={displayVideo} controls className="h-full w-full object-contain" />
                       <Button
                         variant="secondary"
                         size="icon"
@@ -450,7 +454,10 @@ export function VideoEditorBlock({ id, data, selected }: NodeProps<ReactFlowNode
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Video Splicer</ContextMenuLabel>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={handleRun} disabled={isRunning || (support ? !support.ok : false)}>
+          <ContextMenuItem
+            onClick={handleRun}
+            disabled={isRunning || (support ? !support.ok : false)}
+          >
             <PlayIcon className="mr-2 h-4 w-4" />
             Run splice
             <ContextMenuShortcut>R</ContextMenuShortcut>

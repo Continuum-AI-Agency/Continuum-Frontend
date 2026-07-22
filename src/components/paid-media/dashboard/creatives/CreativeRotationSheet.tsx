@@ -1,20 +1,19 @@
-"use client";
+'use client';
 
-import * as React from "react";
-
+import * as React from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ActionLog } from "@/lib/types/dco";
+} from '@/components/ui/sheet';
+import type { ActionLog } from '@/lib/types/dco';
 
-import { CreativeRotationList } from "./CreativeRotationList";
-import { CreativeSheetSummary } from "./CreativeSheetSummary";
-import { summarizeCreativeRotations } from "./useCreativeRotations";
+import { CreativeRotationList } from './CreativeRotationList';
+import { CreativeSheetSummary } from './CreativeSheetSummary';
+import { summarizeCreativeRotations } from './useCreativeRotations';
 
 type CreativeRotationSheetAd = {
   id: string;
@@ -52,7 +51,7 @@ export function CreativeRotationSheet({
         logs,
         currentCreative: ad?.creative ?? null,
       }),
-    [ad?.id, ad?.creative, logs]
+    [ad?.id, ad?.creative, logs],
   );
 
   const reversed = React.useMemo(() => [...summary.rotations].reverse(), [summary.rotations]);
@@ -62,10 +61,8 @@ export function CreativeRotationSheet({
 
   React.useEffect(() => {
     if (!open || !focusedId) return;
-    const node = scrollRef.current?.querySelector<HTMLElement>(
-      `[data-rotation-id="${focusedId}"]`
-    );
-    if (node) node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const node = scrollRef.current?.querySelector<HTMLElement>(`[data-rotation-id="${focusedId}"]`);
+    if (node) node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [open, focusedId]);
 
   const adSummary = ad

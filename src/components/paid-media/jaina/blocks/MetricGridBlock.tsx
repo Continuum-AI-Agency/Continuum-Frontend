@@ -1,9 +1,9 @@
 'use client';
 
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
-import { EvidenceTooltip } from './EvidenceTooltip';
 import { formatValue, resolveMetricDisplayFormat } from '@/lib/jaina/formatValue';
 import type { MetricGridBlockV2, MetricItemV2 } from '@/lib/jaina/schemas';
+import { EvidenceTooltip } from './EvidenceTooltip';
 
 type MetricGridBlockProps = { block: MetricGridBlockV2; isStreaming: boolean };
 

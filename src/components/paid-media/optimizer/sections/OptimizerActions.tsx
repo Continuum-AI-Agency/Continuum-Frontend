@@ -1,15 +1,17 @@
 'use client';
 
-// Actions sub-view — the account-wide approvals queue. Pending engine
-// recommendations are grouped per portfolio (approve / reject), and approved
-// fatigue renewals surface as tracked tasks (mark done / dismiss). Mirrors the
-// Actions tab of the reference-ui-preview spec.
+// Actions sub-view — the account-wide approvals queue. Each portfolio with pending work
+// renders its own unified queue (budget moves + recommendations) that approves AND executes
+// through the real Meta write path; approved fatigue renewals surface as tracked tasks. The
+// standing "ad-level is preview" banner is gone: ad-level rows now carry a per-row danger
+// tooltip inside the queue, so the limit shows exactly where it applies.
 
 import type { PortfolioListItem, RenewalTask } from '@continuum/contracts';
 import { CheckCircle2Icon } from 'lucide-react';
 
 import { EmptyState } from '@/components/shared/state/EmptyState';
-import { AdLevelPreviewNotice } from './AdLevelPreviewNotice';
+import { Button } from '@/components/ui/button';
+import { nextCycleLabel, soonestNextCycle } from '../format';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
@@ -18,6 +20,7 @@ type OptimizerActionsProps = {
   adAccountId: string;
   portfolios: PortfolioListItem[];
   renewals: RenewalTask[];
+  onBrowsePortfolios: () => void;
 };
 
 export function OptimizerActions({
@@ -25,6 +28,7 @@ export function OptimizerActions({
   adAccountId,
   portfolios,
   renewals,
+  onBrowsePortfolios,
 }: OptimizerActionsProps) {
   const portfoliosWithPending = portfolios.filter(
     (portfolio) => portfolio.pending_recommendations > 0,
@@ -33,15 +37,28 @@ export function OptimizerActions({
   const hasWork = portfoliosWithPending.length > 0 || renewals.length > 0;
 
   if (!hasWork) {
-    // The notice STAYS on the empty state. "All caught up" is exactly where a reader is most
-    // likely to conclude the account is handled — and ad-level actions are the ones that are not.
+    // This state used to be a dead end: headline + description, no buttons, no schedule. A user
+    // with nothing to approve had no move except to leave the tab. The schedule is already on the
+    // portfolio row, and the portfolios view is one click away, so both belong here.
+    const nextCycle = nextCycleLabel(soonestNextCycle(portfolios));
+
     return (
       <div className="space-y-4">
-        <AdLevelPreviewNotice />
         <EmptyState
-          headline="You’re all caught up"
+          action={
+            <Button onClick={onBrowsePortfolios} size="sm" type="button">
+              See portfolios
+            </Button>
+          }
+          description={
+            portfolios.length === 0
+              ? 'No portfolios on this ad account yet. Create one and the optimizer starts scoring it nightly.'
+              : nextCycle
+                ? `Every ad set in your ${portfolios.length === 1 ? 'portfolio is' : 'portfolios are'} where the optimizer wants it. The next cycle scores ${nextCycle} — anything it wants to change lands here for approval.`
+                : `Every ad set in your ${portfolios.length === 1 ? 'portfolio is' : 'portfolios are'} where the optimizer wants it. Anything a future cycle wants to change lands here for approval.`
+          }
+          headline="Nothing needs your decision"
           media={<CheckCircle2Icon aria-hidden="true" />}
-          description="No pending recommendations or open renewal tasks. New actions appear here after the next optimization cycle."
         />
       </div>
     );
@@ -49,7 +66,6 @@ export function OptimizerActions({
 
   return (
     <div className="space-y-4">
-      <AdLevelPreviewNotice />
       {portfoliosWithPending.map((portfolio) => (
         <OptimizerActionsPortfolioGroup
           key={portfolio.id}

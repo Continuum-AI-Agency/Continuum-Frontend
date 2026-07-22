@@ -17,11 +17,8 @@ export default function PaidMediaShellSkeleton() {
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={`metric-${i}`}
-            className="h-20 animate-pulse rounded-lg bg-muted"
-          />
-        ))}
+            <div key={`metric-${i}`} className="h-20 animate-pulse rounded-lg bg-muted" />
+          ))}
         </div>
       </div>
     </div>

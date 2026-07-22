@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { Graticule } from "@visx/geo";
-import { memo } from "react";
-import { useChoroplethStable } from "./choropleth-context";
+import { Graticule } from '@visx/geo';
+import { memo } from 'react';
+import { useChoroplethStable } from './choropleth-context';
 
 export interface ChoroplethGraticuleProps {
   /** Stroke color for graticule lines. Default: rgba(255,255,255,0.1) */
@@ -14,7 +14,7 @@ export interface ChoroplethGraticuleProps {
 }
 
 export const ChoroplethGraticule = memo(function ChoroplethGraticule({
-  stroke = "rgba(255,255,255,0.1)",
+  stroke = 'rgba(255,255,255,0.1)',
   strokeWidth = 0.5,
   step,
 }: ChoroplethGraticuleProps) {
@@ -22,7 +22,7 @@ export const ChoroplethGraticule = memo(function ChoroplethGraticule({
 
   return (
     <Graticule
-      graticule={(g) => rawPathGenerator(g) || ""}
+      graticule={(g) => rawPathGenerator(g) || ''}
       step={step}
       stroke={stroke}
       strokeWidth={strokeWidth}
@@ -30,6 +30,6 @@ export const ChoroplethGraticule = memo(function ChoroplethGraticule({
   );
 });
 
-ChoroplethGraticule.displayName = "ChoroplethGraticule";
+ChoroplethGraticule.displayName = 'ChoroplethGraticule';
 
 export default ChoroplethGraticule;

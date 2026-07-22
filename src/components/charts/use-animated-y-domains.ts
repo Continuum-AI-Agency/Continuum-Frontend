@@ -1,28 +1,25 @@
-"use client";
+'use client';
 
-import { animate, useReducedMotion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import type { ChartPhase } from "./chart-phase";
-import { LINE_LOADING_PULSE_EASE } from "./line-loading-timing";
+import { animate, useReducedMotion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChartPhase } from './chart-phase';
+import { LINE_LOADING_PULSE_EASE } from './line-loading-timing';
 import {
   domainsEqual,
   isYDomainTweenPhase,
   resolveAnimatedYDestinationDomains,
   shouldTweenYDomain,
   type YDomain,
-} from "./y-domain-utils";
+} from './y-domain-utils';
 
 function lerpDomain(from: YDomain, to: YDomain, progress: number): YDomain {
-  return [
-    from[0] + (to[0] - from[0]) * progress,
-    from[1] + (to[1] - from[1]) * progress,
-  ];
+  return [from[0] + (to[0] - from[0]) * progress, from[1] + (to[1] - from[1]) * progress];
 }
 
 function snapDomains(
   domains: Record<string, YDomain>,
   setAnimatedByAxis: (domains: Record<string, YDomain>) => void,
-  animatedRef: { current: Record<string, YDomain> }
+  animatedRef: { current: Record<string, YDomain> },
 ) {
   if (domainsEqual(animatedRef.current, domains)) {
     return;
@@ -64,8 +61,7 @@ function tweenDomains({
 
   let needsTween = false;
   for (const axisId of axisIds) {
-    const from =
-      fromSnapshot[axisId] ?? destination[axisId] ?? ([0, 100] as YDomain);
+    const from = fromSnapshot[axisId] ?? destination[axisId] ?? ([0, 100] as YDomain);
     const to = destination[axisId] ?? from;
     if (shouldTweenYDomain(from, to)) {
       needsTween = true;
@@ -81,8 +77,7 @@ function tweenDomains({
 
   const fromByAxis: Record<string, YDomain> = {};
   for (const axisId of axisIds) {
-    fromByAxis[axisId] = fromSnapshot[axisId] ??
-      destination[axisId] ?? [0, 100];
+    fromByAxis[axisId] = fromSnapshot[axisId] ?? destination[axisId] ?? [0, 100];
   }
 
   const control = animate(0, 1, {
@@ -91,12 +86,9 @@ function tweenDomains({
     onUpdate: (progress) => {
       const next: Record<string, YDomain> = {};
       for (const axisId of axisIds) {
-        const from =
-          fromByAxis[axisId] ?? destination[axisId] ?? ([0, 100] as YDomain);
+        const from = fromByAxis[axisId] ?? destination[axisId] ?? ([0, 100] as YDomain);
         const to = destination[axisId] ?? from;
-        next[axisId] = shouldTweenYDomain(from, to)
-          ? lerpDomain(from, to, progress)
-          : to;
+        next[axisId] = shouldTweenYDomain(from, to) ? lerpDomain(from, to, progress) : to;
       }
       animatedRef.current = next;
       setAnimatedByAxis(next);
@@ -134,7 +126,7 @@ export function useAnimatedYDomains({
   const destinationByAxis = resolveAnimatedYDestinationDomains(
     chartPhase,
     skeletonByAxis,
-    targetByAxis
+    targetByAxis,
   );
   const destinationRef = useRef(destinationByAxis);
   destinationRef.current = destinationByAxis;
@@ -164,19 +156,19 @@ export function useAnimatedYDomains({
     };
 
     // Keep grid spacing frozen while the series exits the viewport.
-    if (chartPhase === "exiting") {
+    if (chartPhase === 'exiting') {
       snapDomains(skeletonRef.current, setAnimatedByAxis, animatedRef);
       return;
     }
-    if (chartPhase === "exitingReady") {
+    if (chartPhase === 'exitingReady') {
       snapDomains(targetRef.current, setAnimatedByAxis, animatedRef);
       return;
     }
-    if (chartPhase === "loading") {
+    if (chartPhase === 'loading') {
       snapDomains(skeletonRef.current, setAnimatedByAxis, animatedRef);
       return;
     }
-    if (chartPhase === "revealing" || chartPhase === "ready") {
+    if (chartPhase === 'revealing' || chartPhase === 'ready') {
       snapDomains(targetRef.current, setAnimatedByAxis, animatedRef);
       return;
     }
@@ -202,7 +194,7 @@ export function useAnimatedYDomains({
   const prevTargetSignatureRef = useRef(targetSignature);
 
   useEffect(() => {
-    const inLivePhase = chartPhase === "ready" || chartPhase === "revealing";
+    const inLivePhase = chartPhase === 'ready' || chartPhase === 'revealing';
 
     if (!inLivePhase) {
       prevTargetSignatureRef.current = targetSignature;
@@ -214,7 +206,7 @@ export function useAnimatedYDomains({
     }
     prevTargetSignatureRef.current = targetSignature;
 
-    if (tweenOnTargetChange && chartPhase === "ready") {
+    if (tweenOnTargetChange && chartPhase === 'ready') {
       const control = tweenDomains({
         destination: targetRef.current,
         durationMs,
@@ -229,14 +221,7 @@ export function useAnimatedYDomains({
     }
 
     snapDomains(targetRef.current, setAnimatedByAxis, animatedRef);
-  }, [
-    chartPhase,
-    durationMs,
-    enabled,
-    reducedMotion,
-    targetSignature,
-    tweenOnTargetChange,
-  ]);
+  }, [chartPhase, durationMs, enabled, reducedMotion, targetSignature, tweenOnTargetChange]);
 
   return animatedByAxis;
 }

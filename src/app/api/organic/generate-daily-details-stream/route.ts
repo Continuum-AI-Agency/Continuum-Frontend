@@ -1,43 +1,39 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { getApiUrl } from '@/lib/api/config';
+import { dailyDetailsRequestSchema } from '@/lib/organic/types';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getApiUrl } from "@/lib/api/config";
-import { dailyDetailsRequestSchema } from "@/lib/organic/types";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON payload" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
   const parsed = dailyDetailsRequestSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid request payload", issues: parsed.error.flatten() },
-      { status: 422 }
+      { error: 'Invalid request payload', issues: parsed.error.flatten() },
+      { status: 422 },
     );
   }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const upstreamResponse = await fetch(getApiUrl("/api/organic/generate-daily-details-stream"), {
-    method: "POST",
+  const upstreamResponse = await fetch(getApiUrl('/api/organic/generate-daily-details-stream'), {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/x-ndjson",
+      'Content-Type': 'application/json',
+      Accept: 'application/x-ndjson',
       Authorization: `Bearer ${data.session.access_token}`,
     },
     body: JSON.stringify({
@@ -60,8 +56,8 @@ export async function POST(request: NextRequest) {
       }
     }
     return NextResponse.json(
-      { error: "Failed to start details stream", detail },
-      { status: upstreamResponse.status || 502 }
+      { error: 'Failed to start details stream', detail },
+      { status: upstreamResponse.status || 502 },
     );
   }
 
@@ -72,7 +68,7 @@ export async function POST(request: NextRequest) {
     start(controller) {
       const cleanup = () => {
         if (abortHandler) {
-          request.signal.removeEventListener("abort", abortHandler);
+          request.signal.removeEventListener('abort', abortHandler);
           abortHandler = null;
         }
       };
@@ -103,12 +99,12 @@ export async function POST(request: NextRequest) {
           });
       };
 
-      request.signal.addEventListener("abort", abortHandler);
+      request.signal.addEventListener('abort', abortHandler);
       forward();
     },
     cancel() {
       if (abortHandler) {
-        request.signal.removeEventListener("abort", abortHandler);
+        request.signal.removeEventListener('abort', abortHandler);
         abortHandler = null;
       }
       void reader.cancel();
@@ -117,10 +113,10 @@ export async function POST(request: NextRequest) {
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": "application/x-ndjson",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }

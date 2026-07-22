@@ -5,8 +5,8 @@
 //
 // Dependencies are injected so the orchestration is testable without React Flow.
 
-import type { InlinedImage } from "@/lib/ai-studio/inlineRemoteImage";
-import type { ImageNodeData } from "../types";
+import type { InlinedImage } from '@/lib/ai-studio/inlineRemoteImage';
+import type { ImageNodeData } from '../types';
 
 interface ReferenceNodeInput {
   id: string;
@@ -24,17 +24,17 @@ export async function inlineReferenceImageNodes(
   { inline, updateNodeData }: InlineReferenceDeps,
 ): Promise<void> {
   const targets = nodes.filter(
-    (node) => node.type === "image" && typeof node.data.sourceUrl === "string",
+    (node) => node.type === 'image' && typeof node.data.sourceUrl === 'string',
   );
 
   await Promise.all(
     targets.map(async (node) => {
-      updateNodeData(node.id, { referenceStatus: "processing" });
+      updateNodeData(node.id, { referenceStatus: 'processing' });
       try {
         const { dataUrl } = await inline(node.data.sourceUrl as string);
-        updateNodeData(node.id, { image: dataUrl, referenceStatus: "ready" });
+        updateNodeData(node.id, { image: dataUrl, referenceStatus: 'ready' });
       } catch {
-        updateNodeData(node.id, { referenceStatus: "error" });
+        updateNodeData(node.id, { referenceStatus: 'error' });
       }
     }),
   );

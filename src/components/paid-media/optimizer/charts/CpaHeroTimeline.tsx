@@ -2,12 +2,17 @@
 
 // The Portfolio-detail HERO: an objective-cost-over-cycles timeline that carries
 // the whole story in one interaction. The cost line is engine-derived from
-// spend/results and the bar layer shows relative spend volume; a dashed
-// ProjectionLine continues the cost line toward the target (or
+// spend/results; a dashed ProjectionLine continues it toward the target (or
 // the recent trend) with a hollow terminal marker at the actual→projected hand-off;
 // pins on the axis mark cycles where the optimizer acted; and hovering any cycle
 // opens a rich card with that cycle's cost + spend + results AND the actions
 // taken — metrics and pinned events in one panel, the reference-screenshot pattern.
+//
+// There is deliberately NO spend bar layer. Spend and cost-per-result are different
+// units, and ComposedChart cannot separate them: tryAppendSeriesBar (composed-chart.tsx)
+// drops `yAxisId`, so a bar always lands on the default axis — the one this chart
+// labels with formatCpa. A bar drawn there has no readable height, so spend lives
+// in the tooltip, at its real value, instead.
 
 import { type CpaSeriesPoint, getOptimizationMetricDefinition } from '@continuum/contracts';
 import { ZapIcon } from 'lucide-react';
@@ -17,7 +22,6 @@ import { Grid } from '@/components/charts/grid';
 import { Line } from '@/components/charts/line';
 import { LineSeriesTerminalMarker } from '@/components/charts/line-series-terminal-marker';
 import { ProjectionLine } from '@/components/charts/projection-line';
-import { SeriesBar } from '@/components/charts/series-bar';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
 import { YAxis } from '@/components/charts/y-axis';
@@ -73,7 +77,7 @@ export function CpaHeroTimeline({
       {hasProjection && last != null && projectedEnd != null ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
-            Projected {metric.costLabel}{' '}
+            Projected {metric.costLabel} next cycle:{' '}
             <span className="font-data font-medium text-foreground tabular-nums">
               {formatCpa(last, currency)} → {formatCpa(projectedEnd, currency)}
             </span>
@@ -87,43 +91,52 @@ export function CpaHeroTimeline({
         </div>
       ) : null}
 
-      <ComposedChart
-        aspectRatio="5 / 2"
-        data={points}
-        margin={{ top: 16, right: 18, bottom: 26, left: 52 }}
-        xDataKey="date"
-      >
-        <Grid horizontal />
-        <SeriesBar dataKey="spendIndex" fill="var(--chart-1)" radius={3} />
-        <Line dataKey="cpa" stroke="var(--chart-2)" strokeWidth={2.5} />
-        {hasProjection ? (
-          <>
-            <ProjectionLine
-              curveKind="bezier"
-              data={projection}
-              showEndMarker
-              stroke="var(--chart-4)"
-              strokeDasharray="6,4"
-            />
-            <LineSeriesTerminalMarker dataKey="cpa" radius={5} stroke="var(--chart-2)" />
-          </>
-        ) : null}
-        <CycleActionPins points={points} />
-        <XAxis />
-        <YAxis formatValue={(value) => formatCpa(value, currency)} numTicks={4} />
-        <ChartTooltip
-          content={({ point }) => (
-            <HeroTooltip
-              costLabel={metric.costLabel}
-              currency={currency}
-              point={point as unknown as CpaHeroPoint}
-              resultLabel={metric.resultLabel}
-            />
-          )}
-          indicatorColor="var(--chart-2)"
-          matchCrosshair
-        />
-      </ComposedChart>
+      <div className="relative">
+        {/* The y-axis measures the objective cost — name it so the reader never has
+            to infer whether $28 is CPL or CPM. */}
+        <span
+          aria-hidden="true"
+          className="-translate-y-1/2 -rotate-90 pointer-events-none absolute top-1/2 left-0 origin-left whitespace-nowrap text-3xs text-muted-foreground uppercase tracking-wide"
+        >
+          {metric.costLabel}
+        </span>
+        <ComposedChart
+          aspectRatio="5 / 2"
+          data={points}
+          margin={{ top: 16, right: 18, bottom: 26, left: 56 }}
+          xDataKey="date"
+        >
+          <Grid horizontal />
+          <Line dataKey="cpa" stroke="var(--chart-2)" strokeWidth={2.5} />
+          {hasProjection ? (
+            <>
+              <ProjectionLine
+                curveKind="bezier"
+                data={projection}
+                showEndMarker
+                stroke="var(--chart-4)"
+                strokeDasharray="6,4"
+              />
+              <LineSeriesTerminalMarker dataKey="cpa" radius={5} stroke="var(--chart-2)" />
+            </>
+          ) : null}
+          <CycleActionPins points={points} />
+          <XAxis />
+          <YAxis formatValue={(value) => formatCpa(value, currency)} numTicks={4} />
+          <ChartTooltip
+            content={({ point }) => (
+              <HeroTooltip
+                costLabel={metric.costLabel}
+                currency={currency}
+                point={point as unknown as CpaHeroPoint}
+                resultLabel={metric.resultLabel}
+              />
+            )}
+            indicatorColor="var(--chart-2)"
+            matchCrosshair
+          />
+        </ComposedChart>
+      </div>
 
       <HeroLegend costLabel={metric.costLabel} hasProjection={hasProjection} />
     </div>
@@ -143,10 +156,12 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
         const x = xScale(point.date) ?? 0;
         return (
           <g key={point.ts} transform={`translate(${x}, 0)`}>
+            {/* Native hover: the SVG title lists the actions taken this cycle. */}
+            <title>{point.actions.join(' · ')}</title>
             <line
               stroke="var(--chart-4)"
               strokeDasharray="2,3"
-              strokeOpacity={0.3}
+              strokeOpacity={0.45}
               x1={0}
               x2={0}
               y1={0}
@@ -156,10 +171,26 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
               cx={0}
               cy={innerHeight}
               fill="var(--chart-marker-background)"
-              r={4}
+              r={5}
               stroke="var(--chart-4)"
-              strokeWidth={1.5}
+              strokeWidth={2.5}
             />
+            {point.actions.length > 1 ? (
+              <>
+                <circle cx={7} cy={innerHeight - 9} fill="var(--chart-4)" r={6.5} />
+                <text
+                  dominantBaseline="central"
+                  fill="var(--chart-marker-background)"
+                  fontSize={9}
+                  fontWeight={600}
+                  textAnchor="middle"
+                  x={7}
+                  y={innerHeight - 9}
+                >
+                  {point.actions.length}
+                </text>
+              </>
+            ) : null}
           </g>
         );
       })}
@@ -219,13 +250,6 @@ function HeroLegend({ hasProjection, costLabel }: { hasProjection: boolean; cost
       <span className="inline-flex items-center gap-1.5">
         <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-2)' }} />
         {costLabel} (actual)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className="h-2 w-3 rounded-sm"
-          style={{ background: 'color-mix(in srgb, var(--chart-1) 45%, transparent)' }}
-        />
-        Spend volume
       </span>
       {hasProjection ? (
         <span className="inline-flex items-center gap-1.5">

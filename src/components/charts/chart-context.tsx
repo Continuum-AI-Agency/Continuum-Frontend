@@ -1,18 +1,12 @@
-"use client";
+'use client';
 
-import type { scaleBand, scaleLinear, scaleTime } from "@visx/scale";
+import type { scaleBand, scaleLinear, scaleTime } from '@visx/scale';
 
-type ScaleLinear<Output, _Input = number> = ReturnType<
-  typeof scaleLinear<Output>
->;
-type ScaleTime<Output, _Input = Date | number> = ReturnType<
-  typeof scaleTime<Output>
->;
-type ScaleBand<Domain extends { toString(): string }> = ReturnType<
-  typeof scaleBand<Domain>
->;
+type ScaleLinear<Output, _Input = number> = ReturnType<typeof scaleLinear<Output>>;
+type ScaleTime<Output, _Input = Date | number> = ReturnType<typeof scaleTime<Output>>;
+type ScaleBand<Domain extends { toString(): string }> = ReturnType<typeof scaleBand<Domain>>;
 
-import type { Transition } from "motion/react";
+import type { Transition } from 'motion/react';
 import {
   createContext,
   type Dispatch,
@@ -21,43 +15,43 @@ import {
   type SetStateAction,
   useContext,
   useMemo,
-} from "react";
-import type { ChartPhase, ChartStatus } from "./chart-phase";
-import type { ReferenceAreaConfig } from "./reference-area-config";
-import type { ChartSelection } from "./use-chart-interaction";
-import { DEFAULT_Y_AXIS_ID } from "./y-axis-scales";
-import type { YDomain } from "./y-domain-utils";
+} from 'react';
+import type { ChartPhase, ChartStatus } from './chart-phase';
+import type { ReferenceAreaConfig } from './reference-area-config';
+import type { ChartSelection } from './use-chart-interaction';
+import { DEFAULT_Y_AXIS_ID } from './y-axis-scales';
+import type { YDomain } from './y-domain-utils';
 
 // CSS variable references for theming
 export const chartCssVars = {
-  background: "var(--chart-background)",
-  foreground: "var(--chart-foreground)",
-  foregroundMuted: "var(--chart-foreground-muted)",
-  label: "var(--chart-label)",
-  linePrimary: "var(--chart-line-primary)",
-  lineSecondary: "var(--chart-line-secondary)",
-  crosshair: "var(--chart-crosshair)",
-  grid: "var(--chart-grid)",
-  indicatorColor: "var(--chart-indicator-color)",
-  indicatorSecondaryColor: "var(--chart-indicator-secondary-color)",
-  markerBackground: "var(--chart-marker-background)",
-  markerBorder: "var(--chart-marker-border)",
-  markerForeground: "var(--chart-marker-foreground)",
-  badgeBackground: "var(--chart-marker-badge-background)",
-  badgeForeground: "var(--chart-marker-badge-foreground)",
-  segmentBackground: "var(--chart-segment-background)",
-  segmentLine: "var(--chart-segment-line)",
-  brushBorder: "var(--chart-brush-border)",
-  tooltipBackground: "var(--chart-tooltip-background)",
+  background: 'var(--chart-background)',
+  foreground: 'var(--chart-foreground)',
+  foregroundMuted: 'var(--chart-foreground-muted)',
+  label: 'var(--chart-label)',
+  linePrimary: 'var(--chart-line-primary)',
+  lineSecondary: 'var(--chart-line-secondary)',
+  crosshair: 'var(--chart-crosshair)',
+  grid: 'var(--chart-grid)',
+  indicatorColor: 'var(--chart-indicator-color)',
+  indicatorSecondaryColor: 'var(--chart-indicator-secondary-color)',
+  markerBackground: 'var(--chart-marker-background)',
+  markerBorder: 'var(--chart-marker-border)',
+  markerForeground: 'var(--chart-marker-foreground)',
+  badgeBackground: 'var(--chart-marker-badge-background)',
+  badgeForeground: 'var(--chart-marker-badge-foreground)',
+  segmentBackground: 'var(--chart-segment-background)',
+  segmentLine: 'var(--chart-segment-line)',
+  brushBorder: 'var(--chart-brush-border)',
+  tooltipBackground: 'var(--chart-tooltip-background)',
 };
 
 /** Default scatter series colors from the chart palette (`--chart-1` … `--chart-5`). */
 export const defaultScatterColors = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
 ] as const;
 
 export interface Margin {
@@ -192,7 +186,7 @@ export interface ChartContextValue extends ChartHoverContextValue {
   /** X accessor for bar charts (returns string instead of Date) */
   barXAccessor?: (d: Record<string, unknown>) => string;
   /** Bar chart orientation */
-  orientation?: "vertical" | "horizontal";
+  orientation?: 'vertical' | 'horizontal';
   /** Whether bars are stacked */
   stacked?: boolean;
   /** Stack offsets: Map of data index -> Map of dataKey -> cumulative offset */
@@ -222,10 +216,7 @@ export interface ChartContextValue extends ChartHoverContextValue {
  * (data, scales, dimensions, animation state, layout config). Consumers that
  * subscribe via `useChartStable()` skip re-renders on every mouse move.
  */
-export type ChartStableContextValue = Omit<
-  ChartContextValue,
-  keyof ChartHoverContextValue
->;
+export type ChartStableContextValue = Omit<ChartContextValue, keyof ChartHoverContextValue>;
 
 const ChartStableContext = createContext<ChartStableContextValue | null>(null);
 const ChartHoverContext = createContext<ChartHoverContextValue | null>(null);
@@ -333,7 +324,7 @@ export function ChartProvider({
       value.composedStacked,
       value.composedStackOffsets,
       value.composedStackGap,
-    ]
+    ],
   );
 
   const hover = useMemo<ChartHoverContextValue>(
@@ -356,14 +347,12 @@ export function ChartProvider({
       value.setHoveredBarIndex,
       value.hoveredCandleIndex,
       value.setHoveredCandleIndex,
-    ]
+    ],
   );
 
   return (
     <ChartStableContext.Provider value={stable}>
-      <ChartHoverContext.Provider value={hover}>
-        {children}
-      </ChartHoverContext.Provider>
+      <ChartHoverContext.Provider value={hover}>{children}</ChartHoverContext.Provider>
     </ChartStableContext.Provider>
   );
 }
@@ -377,20 +366,17 @@ export function useChartStable(): ChartStableContextValue {
   const context = useContext(ChartStableContext);
   if (!context) {
     throw new Error(
-      "useChartStable must be used within a ChartProvider. " +
-        "Make sure your component is wrapped in <LineChart>, <AreaChart>, <BarChart>, or <ComposedChart>."
+      'useChartStable must be used within a ChartProvider. ' +
+        'Make sure your component is wrapped in <LineChart>, <AreaChart>, <BarChart>, or <ComposedChart>.',
     );
   }
   return context;
 }
 
 /** Y-scale for a series axis (`yAxisId` on Line / Area / YAxis). */
-export function useYScale(
-  yAxisId?: string | number
-): ScaleLinear<number, number> {
+export function useYScale(yAxisId?: string | number): ScaleLinear<number, number> {
   const { yScales, yScale } = useChartStable();
-  const id =
-    yAxisId == null || yAxisId === "" ? DEFAULT_Y_AXIS_ID : String(yAxisId);
+  const id = yAxisId == null || yAxisId === '' ? DEFAULT_Y_AXIS_ID : String(yAxisId);
   return yScales[id] ?? yScale;
 }
 
@@ -403,8 +389,8 @@ export function useChartHover(): ChartHoverContextValue {
   const context = useContext(ChartHoverContext);
   if (!context) {
     throw new Error(
-      "useChartHover must be used within a ChartProvider. " +
-        "Make sure your component is wrapped in <LineChart>, <AreaChart>, <BarChart>, or <ComposedChart>."
+      'useChartHover must be used within a ChartProvider. ' +
+        'Make sure your component is wrapped in <LineChart>, <AreaChart>, <BarChart>, or <ComposedChart>.',
     );
   }
   return context;

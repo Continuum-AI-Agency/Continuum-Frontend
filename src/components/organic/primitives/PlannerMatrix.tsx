@@ -65,19 +65,22 @@ function DayHeader({
     <AddPostContextMenu dayId={dayId} onCreatePost={onCreatePost}>
       <div
         className={cn(
-          'sticky top-0 z-20 snap-start border-r border-b border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0',
-          isToday ? 'bg-primary/[0.05]' : 'bg-background/95',
+          // Day-of-week header row: a lighter muted band along the top so the
+          // horizontal "which day" axis reads distinctly from the heavier
+          // vertical platform rail on the left.
+          'sticky top-0 z-20 snap-start border-r border-b-2 border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0',
+          isToday ? 'bg-primary/[0.06]' : 'bg-muted/30',
         )}
       >
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
         {isToday ? (
-          <span className="mt-1 inline-flex size-6 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-xs font-semibold text-primary">
+          <span className="mt-1 inline-flex size-7 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-sm font-semibold text-primary">
             {dayNumber}
           </span>
         ) : (
-          <p className="mt-1 text-sm font-semibold text-foreground">{dayNumber}</p>
+          <p className="mt-1 text-base font-semibold text-foreground">{dayNumber}</p>
         )}
       </div>
     </AddPostContextMenu>
@@ -188,7 +191,7 @@ export function PlannerMatrix({
       </AnimatePresence>
       <div className="min-w-[58rem]">
         <div className="grid grid-cols-[6rem_repeat(7,minmax(7.5rem,1fr))]">
-          <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
+          <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r-2 border-b-2 border-border/50 bg-muted/50 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-foreground backdrop-blur">
             Platform
           </div>
 
@@ -207,7 +210,10 @@ export function PlannerMatrix({
             <React.Fragment key={platform.key}>
               <div
                 className={cn(
-                  'sticky left-0 z-10 flex flex-col items-center justify-center border-r border-b border-border/50 bg-background/95 px-1.5 backdrop-blur',
+                  // Platform rail: a heavier muted column with a bold right edge
+                  // so the vertical "which platform" axis is unmistakable next
+                  // to the day cells it labels.
+                  'sticky left-0 z-10 flex flex-col items-center justify-center border-r-2 border-b border-border/50 bg-muted/50 px-1.5 backdrop-blur',
                   platform.comingSoon ? 'gap-0.5 py-1.5' : 'gap-1 py-3',
                 )}
               >
@@ -223,8 +229,10 @@ export function PlannerMatrix({
                 </Avatar>
                 <span
                   className={cn(
-                    'font-semibold uppercase tracking-wide text-muted-foreground',
-                    platform.comingSoon ? 'text-3xs' : 'text-xs',
+                    'font-semibold uppercase tracking-wide',
+                    platform.comingSoon
+                      ? 'text-xs text-muted-foreground'
+                      : 'text-sm text-foreground',
                   )}
                 >
                   {platform.label}
@@ -232,12 +240,12 @@ export function PlannerMatrix({
                 {platform.comingSoon ? (
                   <Badge
                     variant="outline"
-                    className="h-4 border-muted-foreground/30 bg-muted px-1 text-3xs text-muted-foreground"
+                    className="h-4 border-muted-foreground/30 bg-muted px-1 text-xs text-muted-foreground"
                   >
                     soon
                   </Badge>
                 ) : !platform.canCreate ? (
-                  <Badge variant="muted" className="h-4 px-1 text-3xs">
+                  <Badge variant="muted" className="h-4 px-1 text-xs">
                     view
                   </Badge>
                 ) : null}

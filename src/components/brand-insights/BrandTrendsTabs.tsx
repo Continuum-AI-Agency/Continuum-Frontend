@@ -45,15 +45,18 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generat
 
   return (
     <Tabs defaultValue="trends" className="flex flex-col gap-1">
-      <TabsList className="grid h-7 w-full grid-cols-3 gap-0.5 p-0.5 sm:w-fit sm:grid-cols-3">
-        <TabsTrigger value="trends" className="h-6 px-2 text-xs">
-          Trends <Badge variant="secondary">{trends.length}</Badge>
+      <TabsList className="grid h-7 w-full grid-cols-3 gap-0.5 p-0.5">
+        <TabsTrigger value="trends" className="h-6 min-w-0 px-2 text-xs">
+          <span className="truncate">Trends</span>{' '}
+          <Badge variant="secondary">{trends.length}</Badge>
         </TabsTrigger>
-        <TabsTrigger value="events" className="h-6 px-2 text-xs">
-          Events <Badge variant="secondary">{events.length}</Badge>
+        <TabsTrigger value="events" className="h-6 min-w-0 px-2 text-xs">
+          <span className="truncate">Events</span>{' '}
+          <Badge variant="secondary">{events.length}</Badge>
         </TabsTrigger>
-        <TabsTrigger value="questions" className="h-6 px-2 text-xs">
-          Questions <Badge variant="secondary">{questionsCount}</Badge>
+        <TabsTrigger value="questions" className="h-6 min-w-0 px-2 text-xs">
+          <span className="truncate">Questions</span>{' '}
+          <Badge variant="secondary">{questionsCount}</Badge>
         </TabsTrigger>
       </TabsList>
 

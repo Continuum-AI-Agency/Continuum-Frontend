@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { Check, Plus, X } from "lucide-react";
-import type { RecommendedCompetitor } from "@continuum/contracts";
-import { initials, tileStyle } from "./brandVisuals";
+import type { RecommendedCompetitor } from '@continuum/contracts';
+import { Check, Plus, X } from 'lucide-react';
+import { initials, tileStyle } from './brandVisuals';
 
 export function RecommendedCompetitorCard({
   competitor,
@@ -28,7 +28,9 @@ export function RecommendedCompetitorCard({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{name}</div>
           {instagramHandle ? (
-            <div className="truncate font-mono text-xs text-muted-foreground">@{instagramHandle}</div>
+            <div className="truncate font-mono text-xs text-muted-foreground">
+              @{instagramHandle}
+            </div>
           ) : null}
         </div>
         <button
@@ -54,7 +56,7 @@ export function RecommendedCompetitorCard({
           disabled={isTracking}
           className="inline-flex items-center justify-center gap-1 self-start rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
-          <Plus className="size-3" /> {isTracking ? "Tracking…" : "Track"}
+          <Plus className="size-3" /> {isTracking ? 'Tracking…' : 'Track'}
         </button>
       )}
     </article>

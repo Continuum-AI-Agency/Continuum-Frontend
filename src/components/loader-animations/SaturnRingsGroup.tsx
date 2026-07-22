@@ -1,38 +1,38 @@
-"use client";
+'use client';
 
-import React from "react";
-import SaturnRing from "./SaturnRing";
+import type React from 'react';
+import SaturnRing from './SaturnRing';
 
 interface SaturnRingsGroupProps {
-  theme: "light" | "dark";
+  theme: 'light' | 'dark';
 }
 
 // Login page gradient colors
 const loginGradientColors = [
-  '#4f46e5',  // Indigo
-  '#6d5dfc',  // Purple
-  '#a855f7',  // Fuchsia
-  '#f472b6',  // Pink
-  '#6d5dfc',  // Purple (back)
-  '#22c55e',  // Green
-  '#7dd3fc',  // Cyan
-  '#6d5dfc'   // Purple (final)
+  '#4f46e5', // Indigo
+  '#6d5dfc', // Purple
+  '#a855f7', // Fuchsia
+  '#f472b6', // Pink
+  '#6d5dfc', // Purple (back)
+  '#22c55e', // Green
+  '#7dd3fc', // Cyan
+  '#6d5dfc', // Purple (final)
 ];
 
 // Dark theme colors
 const darkModeColors = [
-  '#2E2257',  // Deep purple
-  '#462559',  // Mid purple
-  '#8A4374',  // Magenta
-  '#5A48F9',  // Brand purple
-  '#8B5CF6',  // Accent
-  '#2563EB',  // Blue
-  '#53A88A',  // Teal
-  '#2E2257'   // Deep purple
+  '#2E2257', // Deep purple
+  '#462559', // Mid purple
+  '#8A4374', // Magenta
+  '#5A48F9', // Brand purple
+  '#8B5CF6', // Accent
+  '#2563EB', // Blue
+  '#53A88A', // Teal
+  '#2E2257', // Deep purple
 ];
 
 const SaturnRingsGroup: React.FC<SaturnRingsGroupProps> = ({ theme }) => {
-  const colors = theme === "light" ? loginGradientColors : darkModeColors;
+  const colors = theme === 'light' ? loginGradientColors : darkModeColors;
 
   return (
     <group>

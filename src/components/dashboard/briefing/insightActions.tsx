@@ -1,6 +1,5 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
 import {
   CalendarPlus,
   ExternalLink,
@@ -9,32 +8,33 @@ import {
   MoreHorizontal,
   Rocket,
   Sparkles,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
-} from "@/components/ui/context-menu";
+} from '@/components/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { AgentMentionSuggestion } from "@/lib/agent-references";
-import { enqueueAgentMentions } from "@/lib/agent/mention-queue-store";
+} from '@/components/ui/dropdown-menu';
+import { enqueueAgentMentions } from '@/lib/agent/mention-queue-store';
+import type { AgentMentionSuggestion } from '@/lib/agent-references';
 
 // The "North Star" verbs an insight row routes into. One source for the
 // right-click context menu and the trailing tap-friendly dropdown so they never
 // drift. Carrying the specific creative/campaign as a seed is a tracked
 // fast-follow; v1 navigates to each surface.
 export const NORTH_STAR_VERBS = [
-  { key: "inspire", label: "Open in Studio", icon: Sparkles, href: "/ai-studio" },
-  { key: "plan", label: "Plan a post", icon: CalendarPlus, href: "/organic?tab=planner" },
-  { key: "launch", label: "Launch a campaign", icon: Rocket, href: "/scale/campaign-canvas" },
-  { key: "jaina", label: "Ask Jaina", icon: MessageSquare, href: "/scale?tab=jaina" },
+  { key: 'inspire', label: 'Open in Studio', icon: Sparkles, href: '/ai-studio' },
+  { key: 'plan', label: 'Plan a post', icon: CalendarPlus, href: '/organic?tab=planner' },
+  { key: 'launch', label: 'Launch a campaign', icon: Rocket, href: '/scale/campaign-canvas' },
+  { key: 'jaina', label: 'Ask Jaina', icon: MessageSquare, href: '/scale?tab=jaina' },
 ] as const;
 
 type InsightActionExtras = {
@@ -60,7 +60,11 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
         </ContextMenuItem>
       ) : null}
       {NORTH_STAR_VERBS.map((verb) => (
-        <ContextMenuItem key={verb.key} className="gap-2 text-xs" onSelect={() => router.push(verb.href)}>
+        <ContextMenuItem
+          key={verb.key}
+          className="gap-2 text-xs"
+          onSelect={() => router.push(verb.href)}
+        >
           <verb.icon className="size-3.5" />
           {verb.label}
         </ContextMenuItem>
@@ -68,7 +72,10 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
       {permalink ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem className="gap-2 text-xs" onSelect={() => window.open(permalink, "_blank", "noopener")}>
+          <ContextMenuItem
+            className="gap-2 text-xs"
+            onSelect={() => window.open(permalink, '_blank', 'noopener')}
+          >
             <ExternalLink className="size-3.5" />
             Open original
           </ContextMenuItem>
@@ -107,7 +114,11 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
           </>
         ) : null}
         {NORTH_STAR_VERBS.map((verb) => (
-          <DropdownMenuItem key={verb.key} className="gap-2 text-xs" onSelect={() => router.push(verb.href)}>
+          <DropdownMenuItem
+            key={verb.key}
+            className="gap-2 text-xs"
+            onSelect={() => router.push(verb.href)}
+          >
             <verb.icon className="size-3.5" />
             {verb.label}
           </DropdownMenuItem>
@@ -115,7 +126,10 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
         {permalink ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 text-xs" onSelect={() => window.open(permalink, "_blank", "noopener")}>
+            <DropdownMenuItem
+              className="gap-2 text-xs"
+              onSelect={() => window.open(permalink, '_blank', 'noopener')}
+            >
               <ExternalLink className="size-3.5" />
               Open original
             </DropdownMenuItem>

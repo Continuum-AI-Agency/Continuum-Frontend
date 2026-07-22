@@ -1,14 +1,19 @@
-import { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
-import type { PlatformKey } from "@/components/onboarding/platforms";
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { isHigherPrivilegeRole } from "@/lib/integrations/metaRole";
+import type { PlatformKey } from '@/components/onboarding/platforms';
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import { isHigherPrivilegeRole } from '@/lib/integrations/metaRole';
+import type { SelectableAsset, SelectableAssetsResponse } from '@/lib/schemas/integrations';
 
 // #155: the same Meta ad account reached through two logins arrives as two rows
 // with the same `ad_account_id` but different `asset_pk`/`integration_account_id`.
 // When collapsing to one visible row, keep the higher-privilege login's row so
 // the account stays fully actionable rather than pinned to a read-only login.
-function pickHigherPrivilegeAsset(existing: SelectableAsset, incoming: SelectableAsset): SelectableAsset {
-  return isHigherPrivilegeRole(incoming.role ?? "unknown", existing.role ?? "unknown") ? incoming : existing;
+function pickHigherPrivilegeAsset(
+  existing: SelectableAsset,
+  incoming: SelectableAsset,
+): SelectableAsset {
+  return isHigherPrivilegeRole(incoming.role ?? 'unknown', existing.role ?? 'unknown')
+    ? incoming
+    : existing;
 }
 
 export type MetaSelectableAdAccountBundle = {
@@ -23,51 +28,51 @@ export type MetaSelectableAdAccountBundles = {
 };
 
 const FALLBACK_TYPE_BY_PLATFORM: Record<PlatformKey, string> = {
-  youtube: "youtube_channel",
-  instagram: "meta_instagram_account",
-  facebook: "meta_page",
-  tiktok: "tiktok_account",
-  x: "x_user",
-  linkedin: "linkedin_account",
-  googleAds: "google_ad_account",
-  amazonAds: "amazon_ad_account",
-  dv360: "dv360_advertiser",
-  googleAnalytics: "ga4_property",
-  threads: "meta_threads_account",
+  youtube: 'youtube_channel',
+  instagram: 'meta_instagram_account',
+  facebook: 'meta_page',
+  tiktok: 'tiktok_account',
+  x: 'x_user',
+  linkedin: 'linkedin_account',
+  googleAds: 'google_ad_account',
+  amazonAds: 'amazon_ad_account',
+  dv360: 'dv360_advertiser',
+  googleAnalytics: 'ga4_property',
+  threads: 'meta_threads_account',
 };
 
 const PROVIDER_BY_PLATFORM: Partial<Record<PlatformKey, string>> = {
-  youtube: "google",
-  instagram: "meta",
-  facebook: "meta",
-  googleAds: "google",
-  dv360: "google",
-  googleAnalytics: "google",
-  threads: "meta",
-  linkedin: "linkedin",
-  x: "x",
+  youtube: 'google',
+  instagram: 'meta',
+  facebook: 'meta',
+  googleAds: 'google',
+  dv360: 'google',
+  googleAnalytics: 'google',
+  threads: 'meta',
+  linkedin: 'linkedin',
+  x: 'x',
 };
 
 function inferProviderFromType(type: string): string | undefined {
   const normalized = type.toLowerCase();
   if (
-    normalized.includes("meta") ||
-    normalized.includes("facebook") ||
-    normalized.includes("instagram") ||
-    normalized.includes("threads")
+    normalized.includes('meta') ||
+    normalized.includes('facebook') ||
+    normalized.includes('instagram') ||
+    normalized.includes('threads')
   ) {
-    return "meta";
+    return 'meta';
   }
   if (
-    normalized.includes("google") ||
-    normalized.includes("youtube") ||
-    normalized.includes("dv360") ||
-    normalized.includes("ga4")
+    normalized.includes('google') ||
+    normalized.includes('youtube') ||
+    normalized.includes('dv360') ||
+    normalized.includes('ga4')
   ) {
-    return "google";
+    return 'google';
   }
-  if (normalized.includes("linkedin")) {
-    return "linkedin";
+  if (normalized.includes('linkedin')) {
+    return 'linkedin';
   }
   return undefined;
 }
@@ -80,7 +85,7 @@ function buildSelectableAssetFromBrandAccount(
     type: string | null;
     name: string;
     alias: string | null;
-  }
+  },
 ): SelectableAsset {
   return {
     asset_pk: account.integrationAccountId,
@@ -95,10 +100,12 @@ function buildSelectableAssetFromBrandAccount(
 
 export function mergeSelectableAssetsWithBrandSummary(
   response: SelectableAssetsResponse,
-  summary: BrandIntegrationSummary
+  summary: BrandIntegrationSummary,
 ): SelectableAssetsResponse {
   const knownIds = new Set(
-    getSelectableAssetsFlatList(response).map((asset) => asset.integration_account_id || asset.asset_pk)
+    getSelectableAssetsFlatList(response).map(
+      (asset) => asset.integration_account_id || asset.asset_pk,
+    ),
   );
 
   const missingByProvider = new Map<string, SelectableAsset[]>();
@@ -117,8 +124,7 @@ export function mergeSelectableAssetsWithBrandSummary(
       missingAssets.push(selectableAsset);
 
       const providerKey =
-        PROVIDER_BY_PLATFORM[platformKey] ??
-        inferProviderFromType(selectableAsset.type);
+        PROVIDER_BY_PLATFORM[platformKey] ?? inferProviderFromType(selectableAsset.type);
       if (!providerKey) {
         return;
       }
@@ -137,7 +143,11 @@ export function mergeSelectableAssetsWithBrandSummary(
   missingByProvider.forEach((providerAssets, providerKey) => {
     const provider = mergedProviders[providerKey] ?? {};
     const existingAssets = provider.assets ?? [];
-    const existingIds = new Set(existingAssets.map((asset: SelectableAsset) => asset.integration_account_id || asset.asset_pk));
+    const existingIds = new Set(
+      existingAssets.map(
+        (asset: SelectableAsset) => asset.integration_account_id || asset.asset_pk,
+      ),
+    );
     const nextAssets = [...existingAssets];
     providerAssets.forEach((asset) => {
       const id = asset.integration_account_id || asset.asset_pk;
@@ -167,12 +177,15 @@ function isAllowedSelectableAsset(asset: SelectableAsset, allowedAccountIds: Set
 
 function filterSelectableAssetArray(
   assets: SelectableAsset[] | undefined,
-  allowedAccountIds: Set<string>
+  allowedAccountIds: Set<string>,
 ): SelectableAsset[] {
   return (assets ?? []).filter((asset) => isAllowedSelectableAsset(asset, allowedAccountIds));
 }
 
-function filterMetaIntegrationBusinesses(integrations: any[], allowedAccountIds: Set<string>): any[] {
+function filterMetaIntegrationBusinesses(
+  integrations: any[],
+  allowedAccountIds: Set<string>,
+): any[] {
   return integrations
     .map((integration: any) => ({
       ...integration,
@@ -182,43 +195,56 @@ function filterMetaIntegrationBusinesses(integrations: any[], allowedAccountIds:
           ad_accounts: (business.ad_accounts ?? [])
             .map((adAccount: any) => ({
               ...adAccount,
-              ad_account: adAccount.ad_account && isAllowedSelectableAsset(adAccount.ad_account, allowedAccountIds)
-                ? adAccount.ad_account
-                : null,
+              ad_account:
+                adAccount.ad_account &&
+                isAllowedSelectableAsset(adAccount.ad_account, allowedAccountIds)
+                  ? adAccount.ad_account
+                  : null,
               pages: filterSelectableAssetArray(adAccount.pages, allowedAccountIds),
-              instagram_accounts: filterSelectableAssetArray(adAccount.instagram_accounts, allowedAccountIds),
-              threads_accounts: filterSelectableAssetArray(adAccount.threads_accounts, allowedAccountIds),
+              instagram_accounts: filterSelectableAssetArray(
+                adAccount.instagram_accounts,
+                allowedAccountIds,
+              ),
+              threads_accounts: filterSelectableAssetArray(
+                adAccount.threads_accounts,
+                allowedAccountIds,
+              ),
             }))
-            .filter((adAccount: any) =>
-              Boolean(adAccount.ad_account) ||
-              adAccount.pages.length > 0 ||
-              adAccount.instagram_accounts.length > 0 ||
-              adAccount.threads_accounts.length > 0
+            .filter(
+              (adAccount: any) =>
+                Boolean(adAccount.ad_account) ||
+                adAccount.pages.length > 0 ||
+                adAccount.instagram_accounts.length > 0 ||
+                adAccount.threads_accounts.length > 0,
             ),
-          pages_without_ad_account: filterSelectableAssetArray(business.pages_without_ad_account, allowedAccountIds),
+          pages_without_ad_account: filterSelectableAssetArray(
+            business.pages_without_ad_account,
+            allowedAccountIds,
+          ),
           instagram_accounts_without_ad_account: filterSelectableAssetArray(
             business.instagram_accounts_without_ad_account,
-            allowedAccountIds
+            allowedAccountIds,
           ),
           threads_accounts_without_ad_account: filterSelectableAssetArray(
             business.threads_accounts_without_ad_account,
-            allowedAccountIds
+            allowedAccountIds,
           ),
         }))
-        .filter((business: any) =>
-          business.ad_accounts.length > 0 ||
-          business.pages_without_ad_account.length > 0 ||
-          business.instagram_accounts_without_ad_account.length > 0 ||
-          business.threads_accounts_without_ad_account.length > 0
+        .filter(
+          (business: any) =>
+            business.ad_accounts.length > 0 ||
+            business.pages_without_ad_account.length > 0 ||
+            business.instagram_accounts_without_ad_account.length > 0 ||
+            business.threads_accounts_without_ad_account.length > 0,
         ),
     }))
     .filter((integration: any) => integration.businesses.length > 0);
 }
 
 function filterProviderHierarchy(
-  hierarchy: SelectableAssetsResponse["providers"][string]["hierarchy"],
-  allowedAccountIds: Set<string>
-): SelectableAssetsResponse["providers"][string]["hierarchy"] {
+  hierarchy: SelectableAssetsResponse['providers'][string]['hierarchy'],
+  allowedAccountIds: Set<string>,
+): SelectableAssetsResponse['providers'][string]['hierarchy'] {
   if (!hierarchy) return hierarchy;
 
   const metaIntegrations = hierarchy.meta?.integrations;
@@ -247,15 +273,22 @@ function filterProviderHierarchy(
         .map((integration: any) => ({
           ...integration,
           ad_accounts: filterSelectableAssetArray(integration.ad_accounts, allowedAccountIds),
-          youtube_channels: filterSelectableAssetArray(integration.youtube_channels, allowedAccountIds),
-          dv360_advertisers: filterSelectableAssetArray(integration.dv360_advertisers, allowedAccountIds),
+          youtube_channels: filterSelectableAssetArray(
+            integration.youtube_channels,
+            allowedAccountIds,
+          ),
+          dv360_advertisers: filterSelectableAssetArray(
+            integration.dv360_advertisers,
+            allowedAccountIds,
+          ),
           ga4_properties: filterSelectableAssetArray(integration.ga4_properties, allowedAccountIds),
         }))
-        .filter((integration: any) =>
-          integration.ad_accounts.length > 0 ||
-          integration.youtube_channels.length > 0 ||
-          integration.dv360_advertisers.length > 0 ||
-          integration.ga4_properties.length > 0
+        .filter(
+          (integration: any) =>
+            integration.ad_accounts.length > 0 ||
+            integration.youtube_channels.length > 0 ||
+            integration.dv360_advertisers.length > 0 ||
+            integration.ga4_properties.length > 0,
         ),
     };
   }
@@ -265,7 +298,7 @@ function filterProviderHierarchy(
 
 export function filterSelectableAssetsByAccountIds(
   response: SelectableAssetsResponse,
-  allowedAccountIds: Set<string>
+  allowedAccountIds: Set<string>,
 ): SelectableAssetsResponse {
   if (allowedAccountIds.size === 0) {
     return {
@@ -279,12 +312,13 @@ export function filterSelectableAssetsByAccountIds(
     (acc, [providerKey, provider]) => {
       const assets = filterSelectableAssetArray(provider.assets, allowedAccountIds);
       const hierarchy = filterProviderHierarchy(provider.hierarchy, allowedAccountIds);
-      const hasHierarchy = getSelectableAssetsFlatList({
-        synced_at: response.synced_at,
-        stale: response.stale,
-        assets: [],
-        providers: { [providerKey]: { ...provider, assets: [], hierarchy } },
-      }).length > 0;
+      const hasHierarchy =
+        getSelectableAssetsFlatList({
+          synced_at: response.synced_at,
+          stale: response.stale,
+          assets: [],
+          providers: { [providerKey]: { ...provider, assets: [], hierarchy } },
+        }).length > 0;
 
       if (assets.length > 0 || hasHierarchy) {
         acc[providerKey] = {
@@ -296,7 +330,7 @@ export function filterSelectableAssetsByAccountIds(
       }
       return acc;
     },
-    {} as SelectableAssetsResponse["providers"]
+    {} as SelectableAssetsResponse['providers'],
   );
 
   return {
@@ -306,19 +340,21 @@ export function filterSelectableAssetsByAccountIds(
   };
 }
 
-export function getSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
+export function getSelectableAssetLabel(
+  asset: Pick<SelectableAsset, 'name' | 'external_id'>,
+): string {
   return asset.name?.trim() || asset.external_id;
 }
 
 export function getSelectableAssetsFlatList(response: SelectableAssetsResponse): SelectableAsset[] {
   const assets: SelectableAsset[] = [...(response.assets ?? [])];
-  
+
   if (response.providers) {
     Object.values(response.providers).forEach((provider: any) => {
       if (provider.assets) {
         assets.push(...provider.assets);
       }
-      
+
       const processIntegration = (integration: any) => {
         // Handle Meta structure (with businesses)
         integration.businesses?.forEach((business: any) => {
@@ -329,8 +365,10 @@ export function getSelectableAssetsFlatList(response: SelectableAssetsResponse):
             if (adAccount.threads_accounts) assets.push(...adAccount.threads_accounts);
           });
           if (business.pages_without_ad_account) assets.push(...business.pages_without_ad_account);
-          if (business.instagram_accounts_without_ad_account) assets.push(...business.instagram_accounts_without_ad_account);
-          if (business.threads_accounts_without_ad_account) assets.push(...business.threads_accounts_without_ad_account);
+          if (business.instagram_accounts_without_ad_account)
+            assets.push(...business.instagram_accounts_without_ad_account);
+          if (business.threads_accounts_without_ad_account)
+            assets.push(...business.threads_accounts_without_ad_account);
         });
 
         // Handle Google structure (directly under integration)
@@ -349,7 +387,7 @@ export function getSelectableAssetsFlatList(response: SelectableAssetsResponse):
   }
 
   const seen = new Set<string>();
-  return assets.filter(asset => {
+  return assets.filter((asset) => {
     const id = asset.integration_account_id || asset.asset_pk;
     if (seen.has(id)) return false;
     seen.add(id);
@@ -357,18 +395,23 @@ export function getSelectableAssetsFlatList(response: SelectableAssetsResponse):
   });
 }
 
-export function getSelectableAssetsFlatListForProvider(response: SelectableAssetsResponse, provider: string): SelectableAsset[] {
+export function getSelectableAssetsFlatListForProvider(
+  response: SelectableAssetsResponse,
+  provider: string,
+): SelectableAsset[] {
   const providerData = response.providers?.[provider];
   if (!providerData) return [];
-  
+
   return getSelectableAssetsFlatList({
     ...response,
     assets: [],
-    providers: { [provider]: providerData }
+    providers: { [provider]: providerData },
   });
 }
 
-export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResponse): MetaSelectableAdAccountBundles | null {
+export function getMetaSelectableAdAccountBundles(
+  response: SelectableAssetsResponse,
+): MetaSelectableAdAccountBundles | null {
   const bundles: MetaSelectableAdAccountBundle[] = [];
   const others: SelectableAsset[] = [];
   const adAccountMap = new Map<string, MetaSelectableAdAccountBundle>();
@@ -387,9 +430,9 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
     seen.add(id);
     assets.push(asset);
   };
-  getSelectableAssetsFlatListForProvider(response, "meta").forEach(pushUnique);
+  getSelectableAssetsFlatListForProvider(response, 'meta').forEach(pushUnique);
   getSelectableAssetsFlatList(response).forEach((asset) => {
-    if (asset.type.startsWith("meta_")) pushUnique(asset);
+    if (asset.type.startsWith('meta_')) pushUnique(asset);
   });
 
   if (assets.length === 0) return null;
@@ -399,7 +442,7 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
   // (below) rather than external id, so this only guards the sub-assets.
   const seenChildExternalIds = new Set<string>();
 
-  assets.forEach(asset => {
+  assets.forEach((asset) => {
     if (asset.ad_account_id) {
       let bundle = adAccountMap.get(asset.ad_account_id);
       if (!bundle) {
@@ -407,10 +450,12 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
         adAccountMap.set(asset.ad_account_id, bundle);
         bundles.push(bundle);
       }
-      if (asset.type === "meta_ad_account") {
+      if (asset.type === 'meta_ad_account') {
         // Collapse duplicate ad-account rows (#155): keep the highest-privilege
         // login's row instead of letting the last one arbitrarily win.
-        bundle.ad_account = bundle.ad_account ? pickHigherPrivilegeAsset(bundle.ad_account, asset) : asset;
+        bundle.ad_account = bundle.ad_account
+          ? pickHigherPrivilegeAsset(bundle.ad_account, asset)
+          : asset;
       } else {
         const childKey = `${asset.type}:${asset.external_id}`;
         if (!seenChildExternalIds.has(childKey)) {
@@ -427,12 +472,12 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
     }
   });
 
-  bundles.forEach(bundle => {
+  bundles.forEach((bundle) => {
     bundle.assets.sort((a, b) => {
       const typeOrder: Record<string, number> = {
         meta_instagram_account: 1,
         meta_page: 2,
-        meta_threads_account: 3
+        meta_threads_account: 3,
       };
       const orderA = typeOrder[a.type] ?? 99;
       const orderB = typeOrder[b.type] ?? 99;
@@ -447,6 +492,8 @@ export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResp
       const labelB = b.ad_account ? getSelectableAssetLabel(b.ad_account) : b.ad_account_id;
       return labelA.localeCompare(labelB);
     }),
-    assets_without_ad_account: others.sort((a, b) => getSelectableAssetLabel(a).localeCompare(getSelectableAssetLabel(b)))
+    assets_without_ad_account: others.sort((a, b) =>
+      getSelectableAssetLabel(a).localeCompare(getSelectableAssetLabel(b)),
+    ),
   };
 }

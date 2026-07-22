@@ -5,7 +5,7 @@ import { useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { postExternalComment, type ExternalCommentActionState } from './actions';
+import { type ExternalCommentActionState, postExternalComment } from './actions';
 
 const INITIAL_STATE: ExternalCommentActionState = { error: null, posted: false };
 
@@ -48,7 +48,12 @@ export function ExternalCommentComposer({
           ) : null}
         </div>
       ) : null}
-      <Textarea name="body" placeholder="Leave a comment on this version…" required maxLength={5000} />
+      <Textarea
+        name="body"
+        placeholder="Leave a comment on this version…"
+        required
+        maxLength={5000}
+      />
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs" role="status">
           {state.error ? <span className="text-destructive">{state.error}</span> : null}

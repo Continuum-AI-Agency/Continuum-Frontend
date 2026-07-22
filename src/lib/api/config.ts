@@ -7,7 +7,7 @@
  * Falls back to http://localhost:4000 and trims any trailing slash.
  */
 export function getApiBaseUrl(): string {
-  const isBrowser = typeof window !== "undefined";
+  const isBrowser = typeof window !== 'undefined';
 
   const serverBase =
     process.env.API_URL ??
@@ -21,17 +21,20 @@ export function getApiBaseUrl(): string {
     process.env.API_URL ??
     process.env.API_BASE_URL;
 
-  const baseUrl = isBrowser ? clientBase ?? serverBase : serverBase ?? clientBase;
-  return (baseUrl && baseUrl.trim().length > 0 ? baseUrl : "http://localhost:4000").replace(/\/$/, "");
+  const baseUrl = isBrowser ? (clientBase ?? serverBase) : (serverBase ?? clientBase);
+  return (baseUrl && baseUrl.trim().length > 0 ? baseUrl : 'http://localhost:4000').replace(
+    /\/$/,
+    '',
+  );
 }
 
 function resolveBaseUrl(envKeys: Array<string | undefined>, fallback: string) {
   const candidate = envKeys.find((value) => value && value.trim().length > 0);
-  return (candidate ?? fallback).replace(/\/$/, "");
+  return (candidate ?? fallback).replace(/\/$/, '');
 }
 
 function getBrandInsightsBaseUrl(): string {
-  const isBrowser = typeof window !== "undefined";
+  const isBrowser = typeof window !== 'undefined';
 
   const serverBase = resolveBaseUrl(
     [
@@ -44,7 +47,7 @@ function getBrandInsightsBaseUrl(): string {
       process.env.NEXT_PUBLIC_BRAND_INSIGHTS_API_URL,
       process.env.NEXT_PUBLIC_BRAND_INSIGHTS_API_BASE_URL,
     ],
-    ""
+    '',
   );
 
   const clientBase = resolveBaseUrl(
@@ -58,7 +61,7 @@ function getBrandInsightsBaseUrl(): string {
       process.env.BRAND_INSIGHTS_API_URL,
       process.env.BRAND_INSIGHTS_API_BASE_URL,
     ],
-    ""
+    '',
   );
 
   const baseUrl = isBrowser ? clientBase || serverBase : serverBase || clientBase;
@@ -77,15 +80,15 @@ function getBrandInsightsBaseUrl(): string {
 export function getApiUrl(path?: string): string {
   const base = getApiBaseUrl();
   if (!path || path.trim().length === 0) return base;
-  const trimmedBase = base.replace(/\/$/, "");
-  const trimmedPath = path.replace(/^\//, "");
+  const trimmedBase = base.replace(/\/$/, '');
+  const trimmedPath = path.replace(/^\//, '');
   return `${trimmedBase}/${trimmedPath}`;
 }
 
 export function getBrandInsightsApiUrl(path?: string): string {
   const base = getBrandInsightsBaseUrl();
   if (!path || path.trim().length === 0) return base;
-  const trimmedBase = base.replace(/\/$/, "");
-  const trimmedPath = path.replace(/^\//, "");
+  const trimmedBase = base.replace(/\/$/, '');
+  const trimmedPath = path.replace(/^\//, '');
   return `${trimmedBase}/${trimmedPath}`;
 }

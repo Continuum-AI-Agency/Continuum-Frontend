@@ -14,27 +14,27 @@ import type {
   CreativeStrategyReport,
   OrganicComputedInsight,
   OrganicMetricPlatform,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
 import {
   creativeStrategyReportSchema,
   creativeStrategyStatusSchema,
   metricsForPlatform,
   ORGANIC_METRIC_CATALOG,
-} from "@continuum/contracts";
-import type { AgentMentionSuggestion } from "@/lib/agent-references";
+} from '@continuum/contracts';
+import type { AgentMentionSuggestion } from '@/lib/agent-references';
 
-export const KPI_GROUP = "KPIs";
-export const KPI_WHATS_WORKING_FOLDER_KEY = "folder:KPIs:WhatsWorking";
-export const KPI_INSIGHTS_FOLDER_KEY = "folder:KPIs:Insights";
+export const KPI_GROUP = 'KPIs';
+export const KPI_WHATS_WORKING_FOLDER_KEY = 'folder:KPIs:WhatsWorking';
+export const KPI_INSIGHTS_FOLDER_KEY = 'folder:KPIs:Insights';
 /** AI-Awareness "What Changed" narrative lines (not What's Working creatives). */
-export const KPI_WHAT_CHANGED_FOLDER_KEY = "folder:KPIs:Insights:WhatChanged";
+export const KPI_WHAT_CHANGED_FOLDER_KEY = 'folder:KPIs:Insights:WhatChanged';
 /** Dashboard computed insights (growth / content / engagement / audience). */
-export const KPI_COMPUTED_INSIGHTS_FOLDER_KEY = "folder:KPIs:Insights:Computed";
-export const KPI_METRICS_FOLDER_KEY = "folder:KPIs:Metrics";
-export const KPI_PACKS_FOLDER_KEY = "folder:KPIs:Packs";
+export const KPI_COMPUTED_INSIGHTS_FOLDER_KEY = 'folder:KPIs:Insights:Computed';
+export const KPI_METRICS_FOLDER_KEY = 'folder:KPIs:Metrics';
+export const KPI_PACKS_FOLDER_KEY = 'folder:KPIs:Packs';
 
 /** One-click bundles of metric optimization targets for common organic jobs. */
-export type OptimizationPackId = "grow_followers" | "improve_retention" | "boost_engagement";
+export type OptimizationPackId = 'grow_followers' | 'improve_retention' | 'boost_engagement';
 
 export type OptimizationPack = {
   id: OptimizationPackId;
@@ -46,36 +46,36 @@ export type OptimizationPack = {
 
 export const OPTIMIZATION_PACKS: readonly OptimizationPack[] = [
   {
-    id: "grow_followers",
-    key: "pack:grow_followers",
-    label: "Grow followers",
-    description: "Optimize for audience growth + discovery",
-    metricKeys: ["newFollowers", "subscribers", "nonFollowerReach", "reach", "profileVisits24h"],
+    id: 'grow_followers',
+    key: 'pack:grow_followers',
+    label: 'Grow followers',
+    description: 'Optimize for audience growth + discovery',
+    metricKeys: ['newFollowers', 'subscribers', 'nonFollowerReach', 'reach', 'profileVisits24h'],
   },
   {
-    id: "improve_retention",
-    key: "pack:improve_retention",
-    label: "Improve retention",
-    description: "Optimize for watch-through and hook hold",
-    metricKeys: ["avgRetentionRate", "hookRate", "avgSkipRate", "reelsViews", "views"],
+    id: 'improve_retention',
+    key: 'pack:improve_retention',
+    label: 'Improve retention',
+    description: 'Optimize for watch-through and hook hold',
+    metricKeys: ['avgRetentionRate', 'hookRate', 'avgSkipRate', 'reelsViews', 'views'],
   },
   {
-    id: "boost_engagement",
-    key: "pack:boost_engagement",
-    label: "Boost engagement",
-    description: "Optimize for interactions and saves-adjacent signals",
-    metricKeys: ["accountsEngaged", "totalInteractions", "likes", "comments", "shares"],
+    id: 'boost_engagement',
+    key: 'pack:boost_engagement',
+    label: 'Boost engagement',
+    description: 'Optimize for interactions and saves-adjacent signals',
+    metricKeys: ['accountsEngaged', 'totalInteractions', 'likes', 'comments', 'shares'],
   },
 ] as const;
 
 /** Group labels for metric catalog buckets (optimization targets). */
 const COMPARABLE_GROUP_LABEL: Record<string, string> = {
-  attention: "Attention",
-  engagement: "Engagement",
-  audience_growth: "Audience growth",
-  interactions: "Interactions",
-  retention: "Retention",
-  inventory: "Inventory",
+  attention: 'Attention',
+  engagement: 'Engagement',
+  audience_growth: 'Audience growth',
+  interactions: 'Interactions',
+  retention: 'Retention',
+  inventory: 'Inventory',
 };
 
 export type KpiMetricSnapshot = {
@@ -120,12 +120,12 @@ export function creativeInsightToMentionSuggestion(
     .slice(0, 3);
   const exemplarPermalinks = insight.exemplars
     .map((e) => e.permalinkUrl)
-    .filter((u): u is string => Boolean(u && u.startsWith("http")))
+    .filter((u): u is string => Boolean(u && u.startsWith('http')))
     .slice(0, 3);
   const exemplarRefIds = insight.exemplars.map((e) => e.refId).slice(0, 6);
   const exemplarThumbnails = insight.exemplars
     .map((e) => e.thumbnailRef)
-    .filter((u): u is string => Boolean(u && (u.startsWith("http") || u.startsWith("data:"))))
+    .filter((u): u is string => Boolean(u && (u.startsWith('http') || u.startsWith('data:'))))
     .slice(0, 6);
   const thumb = exemplarThumbnails[0] ?? null;
 
@@ -138,9 +138,9 @@ export function creativeInsightToMentionSuggestion(
       insight.label,
       insight.recommendation,
       insight.surface,
-      exemplarRefIds[0] ?? "",
-      String(reportMeta?.index ?? ""),
-    ].join("|"),
+      exemplarRefIds[0] ?? '',
+      String(reportMeta?.index ?? ''),
+    ].join('|'),
   );
   const uniqueId =
     reportMeta?.index != null
@@ -149,9 +149,9 @@ export function creativeInsightToMentionSuggestion(
 
   const reference: AgentMentionReference = {
     id: uniqueId,
-    type: "creative_insight",
+    type: 'creative_insight',
     label: insight.label,
-    source: "organic",
+    source: 'organic',
     metadata: {
       insightId: insight.id,
       instanceId: uniqueId,
@@ -172,15 +172,15 @@ export function creativeInsightToMentionSuggestion(
       exemplarThumbnails,
       windowDays: reportMeta?.windowDays ?? null,
       generatedAt: reportMeta?.generatedAt ?? null,
-      source: "whats_working",
+      source: 'whats_working',
     },
   };
 
   return {
     key: `creative_insight:${uniqueId}`,
     label: insight.label,
-    type: "creative_insight",
-    source: "organic",
+    type: 'creative_insight',
+    source: 'organic',
     group: KPI_GROUP,
     description: [
       insight.kind,
@@ -188,12 +188,10 @@ export function creativeInsightToMentionSuggestion(
       insight.performanceSummary ?? truncate(insight.recommendation, 80),
     ]
       .filter(Boolean)
-      .join(" · "),
+      .join(' · '),
     badge: insight.kind,
     reference,
-    preview: thumb
-      ? { url: thumb, kind: "image", label: insight.label }
-      : undefined,
+    preview: thumb ? { url: thumb, kind: 'image', label: insight.label } : undefined,
   };
 }
 
@@ -206,19 +204,19 @@ export function organicInsightToMentionSuggestion(
   // so re-grabs of the same text stay stable within a session.
   const fingerprint = [
     insight.category,
-    insight.metric ?? "",
+    insight.metric ?? '',
     insight.text.slice(0, 80),
-    insight.post_id ?? "",
-  ].join("|");
+    insight.post_id ?? '',
+  ].join('|');
   // Browser-safe stable id (no Node Buffer).
   const id = `oi:${simpleHash(fingerprint)}`;
   const label = truncate(insight.text, 72) ?? `${insight.category} insight`;
 
   const reference: AgentMentionReference = {
     id,
-    type: "organic_insight",
+    type: 'organic_insight',
     label,
-    source: "organic",
+    source: 'organic',
     metadata: {
       insightKey: id,
       category: insight.category,
@@ -241,8 +239,8 @@ export function organicInsightToMentionSuggestion(
   return {
     key: `organic_insight:${id}`,
     label,
-    type: "organic_insight",
-    source: "organic",
+    type: 'organic_insight',
+    source: 'organic',
     group: KPI_GROUP,
     description: [
       insight.category,
@@ -251,7 +249,7 @@ export function organicInsightToMentionSuggestion(
       insight.recommendation ? truncate(insight.recommendation, 60) : null,
     ]
       .filter(Boolean)
-      .join(" · "),
+      .join(' · '),
     badge: insight.severity,
     reference,
   };
@@ -260,31 +258,27 @@ export function organicInsightToMentionSuggestion(
 export function kpiMetricToMentionSuggestion(metric: KpiMetricSnapshot): AgentMentionSuggestion {
   const valueLabel =
     metric.value == null
-      ? "—"
-      : metric.unit === "percent" || metric.unit === "%"
+      ? '—'
+      : metric.unit === 'percent' || metric.unit === '%'
         ? `${metric.value.toFixed(1)}%`
         : metric.value.toLocaleString();
   const deltaLabel =
-    typeof metric.percentageChange === "number"
-      ? `${metric.percentageChange >= 0 ? "+" : ""}${metric.percentageChange.toFixed(1)}%`
+    typeof metric.percentageChange === 'number'
+      ? `${metric.percentageChange >= 0 ? '+' : ''}${metric.percentageChange.toFixed(1)}%`
       : null;
-  const label = `${metric.label}${deltaLabel ? ` (${deltaLabel})` : ""}`;
-  const id = [
-    metric.platform ?? "account",
-    metric.key,
-    metric.rangePreset ?? "target",
-  ].join(":");
+  const label = `${metric.label}${deltaLabel ? ` (${deltaLabel})` : ''}`;
+  const id = [metric.platform ?? 'account', metric.key, metric.rangePreset ?? 'target'].join(':');
 
   const reference: AgentMentionReference = {
     id,
-    type: "kpi",
+    type: 'kpi',
     label: metric.label,
-    source: "organic",
+    source: 'organic',
     metadata: {
       metricKey: metric.key,
       metricLabel: metric.label,
       // Selecting a metric from KPIs > Metrics means "optimize / prioritize this".
-      intent: "optimize_for",
+      intent: 'optimize_for',
       value: metric.value,
       previous: metric.previous ?? null,
       percentageChange: metric.percentageChange ?? null,
@@ -298,18 +292,18 @@ export function kpiMetricToMentionSuggestion(metric: KpiMetricSnapshot): AgentMe
   return {
     key: `kpi:${id}`,
     label,
-    type: "kpi",
-    source: "organic",
+    type: 'kpi',
+    source: 'organic',
     group: KPI_GROUP,
     description: [
-      "Optimize for this metric",
+      'Optimize for this metric',
       metric.platform,
       metric.rangePreset,
       metric.value != null ? valueLabel : null,
     ]
       .filter(Boolean)
-      .join(" · "),
-    badge: "target",
+      .join(' · '),
+    badge: 'target',
     reference,
   };
 }
@@ -337,9 +331,7 @@ export function metricCatalogToKpiSuggestions(input?: {
   liveValues?: LiveMetricValues | null;
 }): AgentMentionSuggestion[] {
   const platform = input?.platform ?? null;
-  const entries = platform
-    ? metricsForPlatform(platform)
-    : [...ORGANIC_METRIC_CATALOG];
+  const entries = platform ? metricsForPlatform(platform) : [...ORGANIC_METRIC_CATALOG];
 
   return entries.map((entry) => {
     const live = input?.liveValues?.[entry.id];
@@ -349,28 +341,28 @@ export function metricCatalogToKpiSuggestions(input?: {
       value: live?.value ?? null,
       previous: live?.previous ?? null,
       percentageChange: live?.percentageChange ?? null,
-      unit: entry.format === "percent" ? "percent" : "count",
+      unit: entry.format === 'percent' ? 'percent' : 'count',
       platform,
       rangePreset: input?.rangePreset ?? null,
     });
     const groupLabel = COMPARABLE_GROUP_LABEL[entry.comparableGroup] ?? entry.comparableGroup;
     const liveBits = [
       live?.value != null ? `now ${live.value.toLocaleString()}` : null,
-      typeof live?.percentageChange === "number"
-        ? `${live.percentageChange >= 0 ? "+" : ""}${live.percentageChange.toFixed(1)}%`
+      typeof live?.percentageChange === 'number'
+        ? `${live.percentageChange >= 0 ? '+' : ''}${live.percentageChange.toFixed(1)}%`
         : null,
     ].filter(Boolean);
     return {
       ...suggestion,
       description: [
-        "Optimize for this metric",
+        'Optimize for this metric',
         groupLabel,
         platform,
         ...liveBits,
-        entry.format === "percent" ? "rate" : "count",
+        entry.format === 'percent' ? 'rate' : 'count',
       ]
         .filter(Boolean)
-        .join(" · "),
+        .join(' · '),
       badge: groupLabel,
       reference: suggestion.reference
         ? {
@@ -380,7 +372,7 @@ export function metricCatalogToKpiSuggestions(input?: {
               comparableGroup: entry.comparableGroup,
               format: entry.format,
               summable: entry.summable,
-              intent: "optimize_for",
+              intent: 'optimize_for',
             },
           }
         : suggestion.reference,
@@ -403,7 +395,7 @@ export function optimizationPackToSuggestions(
   const wanted = new Set(pack.metricKeys);
   return all.filter((s) => {
     const key = s.reference?.metadata?.metricKey;
-    return typeof key === "string" && wanted.has(key);
+    return typeof key === 'string' && wanted.has(key);
   });
 }
 
@@ -411,21 +403,21 @@ export function optimizationPackFolderSuggestions(): AgentMentionSuggestion[] {
   return OPTIMIZATION_PACKS.map((pack) => ({
     key: pack.key,
     label: pack.label,
-    type: "kpi" as const,
-    source: "organic" as const,
+    type: 'kpi' as const,
+    source: 'organic' as const,
     group: KPI_GROUP,
     description: pack.description,
     // Selecting a pack inserts its metrics as chips (not a nested folder).
     // childrenLabel is intentionally omitted so PromptInput treats this as a leaf
     // only when we wire multi-insert; we use isFolder false + special key handling.
-    badge: "pack",
+    badge: 'pack',
     reference: {
       id: pack.id,
-      type: "kpi" as const,
+      type: 'kpi' as const,
       label: pack.label,
-      source: "organic" as const,
+      source: 'organic' as const,
       metadata: {
-        intent: "optimize_for",
+        intent: 'optimize_for',
         packId: pack.id,
         metricKeys: pack.metricKeys,
         isPack: true,
@@ -453,13 +445,13 @@ export type FetchCreativeInsightsInput = {
 export async function fetchCreativeInsightSuggestions(
   input: FetchCreativeInsightsInput,
 ): Promise<AgentMentionSuggestion[]> {
-  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("creative_strategy_reports" as never)
-    .select("status, report, refreshed_at")
-    .eq("brand_id" as never, input.brandId)
+    .schema('brand_profiles')
+    .from('creative_strategy_reports' as never)
+    .select('status, report, refreshed_at')
+    .eq('brand_id' as never, input.brandId)
     .maybeSingle();
 
   if (error || !data) return [];
@@ -470,7 +462,7 @@ export async function fetchCreativeInsightSuggestions(
     refreshed_at?: string | null;
   };
   const status = creativeStrategyStatusSchema.safeParse(row.status);
-  if (!status.success || status.data !== "ready") return [];
+  if (!status.success || status.data !== 'ready') return [];
 
   const parsed = creativeStrategyReportSchema.safeParse(row.report);
   if (!parsed.success) return [];
@@ -488,7 +480,7 @@ export async function fetchCreativeInsightSuggestions(
 export type FetchOrganicInsightSuggestionsInput = {
   brandId: string;
   integrationAccountId: string;
-  platform: "instagram" | "facebook" | "tiktok";
+  platform: 'instagram' | 'facebook' | 'tiktok';
   rangePreset?: string;
 };
 
@@ -506,10 +498,10 @@ type InsightsApiPayload = {
 async function fetchInsightsPayload(
   input: FetchOrganicInsightSuggestionsInput,
 ): Promise<InsightsApiPayload | null> {
-  const rangePreset = input.rangePreset ?? "last_7d";
-  const response = await fetch("/api/organic/insights", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const rangePreset = input.rangePreset ?? 'last_7d';
+  const response = await fetch('/api/organic/insights', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       brandId: input.brandId,
       integrationAccountId: input.integrationAccountId,
@@ -525,7 +517,7 @@ async function fetchInsightsPayload(
 export async function fetchOrganicInsightSuggestions(
   input: FetchOrganicInsightSuggestionsInput,
 ): Promise<AgentMentionSuggestion[]> {
-  const rangePreset = input.rangePreset ?? "last_7d";
+  const rangePreset = input.rangePreset ?? 'last_7d';
   const payload = await fetchInsightsPayload(input);
   if (!payload) return [];
   const insights = payload.insights ?? [];
@@ -559,14 +551,14 @@ export function whatChangedLineToMentionSuggestion(
   const id = `wc:${simpleHash(`${index}|${text.slice(0, 120)}`)}`;
   const reference: AgentMentionReference = {
     id,
-    type: "organic_insight",
+    type: 'organic_insight',
     label,
-    source: "organic",
+    source: 'organic',
     metadata: {
       insightKey: id,
-      category: "narrative",
-      severity: "neutral",
-      source: "what_changed",
+      category: 'narrative',
+      severity: 'neutral',
+      source: 'what_changed',
       text,
       platform: meta?.platform ?? null,
       rangePreset: meta?.rangePreset ?? null,
@@ -579,11 +571,11 @@ export function whatChangedLineToMentionSuggestion(
   return {
     key: `what_changed:${id}`,
     label,
-    type: "organic_insight",
-    source: "organic",
+    type: 'organic_insight',
+    source: 'organic',
     group: KPI_GROUP,
-    description: "What Changed · AI-Awareness",
-    badge: "changed",
+    description: 'What Changed · AI-Awareness',
+    badge: 'changed',
     reference,
   };
 }
@@ -591,16 +583,16 @@ export function whatChangedLineToMentionSuggestion(
 export async function fetchWhatChangedSuggestions(
   input: FetchOrganicInsightSuggestionsInput,
 ): Promise<AgentMentionSuggestion[]> {
-  const rangePreset = input.rangePreset ?? "last_7d";
+  const rangePreset = input.rangePreset ?? 'last_7d';
   const payload = await fetchInsightsPayload(input);
   if (!payload?.awareness?.blocks) return [];
   const narrative = payload.awareness.blocks.find(
-    (b) => b.category === "narrative" || /what\s*changed/i.test(b.title ?? ""),
+    (b) => b.category === 'narrative' || /what\s*changed/i.test(b.title ?? ''),
   );
   if (!narrative) return [];
   const lines = Array.isArray(narrative.data)
-    ? narrative.data.filter((l): l is string => typeof l === "string" && l.trim().length > 0)
-    : typeof narrative.data === "string" && narrative.data.trim()
+    ? narrative.data.filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
+    : typeof narrative.data === 'string' && narrative.data.trim()
       ? [narrative.data.trim()]
       : [];
   return lines.map((line, index) =>
@@ -619,20 +611,20 @@ export function insightFamilySuggestions(): AgentMentionSuggestion[] {
   return [
     {
       key: KPI_WHAT_CHANGED_FOLDER_KEY,
-      label: "What Changed",
-      type: "organic_insight",
-      source: "organic",
+      label: 'What Changed',
+      type: 'organic_insight',
+      source: 'organic',
       group: KPI_GROUP,
-      childrenLabel: "AI-Awareness period narrative",
+      childrenLabel: 'AI-Awareness period narrative',
       isFolder: true,
     },
     {
       key: KPI_COMPUTED_INSIGHTS_FOLDER_KEY,
-      label: "Insights",
-      type: "organic_insight",
-      source: "organic",
+      label: 'Insights',
+      type: 'organic_insight',
+      source: 'organic',
       group: KPI_GROUP,
-      childrenLabel: "Growth, content, engagement, audience",
+      childrenLabel: 'Growth, content, engagement, audience',
       isFolder: true,
     },
   ];
@@ -647,38 +639,38 @@ export function kpiSubfolderSuggestions(): AgentMentionSuggestion[] {
   return [
     {
       key: KPI_METRICS_FOLDER_KEY,
-      label: "Metrics",
-      type: "kpi",
-      source: "organic",
+      label: 'Metrics',
+      type: 'kpi',
+      source: 'organic',
       group: KPI_GROUP,
-      childrenLabel: "Optimize for reach, followers, engagement…",
+      childrenLabel: 'Optimize for reach, followers, engagement…',
       isFolder: true,
     },
     {
       key: KPI_PACKS_FOLDER_KEY,
-      label: "Packs",
-      type: "kpi",
-      source: "organic",
+      label: 'Packs',
+      type: 'kpi',
+      source: 'organic',
       group: KPI_GROUP,
-      childrenLabel: "One-click optimization bundles",
+      childrenLabel: 'One-click optimization bundles',
       isFolder: true,
     },
     {
       key: KPI_WHATS_WORKING_FOLDER_KEY,
       label: "What's Working",
-      type: "creative_insight",
-      source: "organic",
+      type: 'creative_insight',
+      source: 'organic',
       group: KPI_GROUP,
-      childrenLabel: "Shared-performance insights",
+      childrenLabel: 'Shared-performance insights',
       isFolder: true,
     },
     {
       key: KPI_INSIGHTS_FOLDER_KEY,
-      label: "Insights",
-      type: "organic_insight",
-      source: "organic",
+      label: 'Insights',
+      type: 'organic_insight',
+      source: 'organic',
       group: KPI_GROUP,
-      childrenLabel: "What Changed + dashboard insights",
+      childrenLabel: 'What Changed + dashboard insights',
       isFolder: true,
     },
   ];

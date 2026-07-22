@@ -1,14 +1,14 @@
-const SCOPE_DELIMITER = ":b:";
+const SCOPE_DELIMITER = ':b:';
 
 export function makeKey(base: string, brandId: string): string {
   if (!brandId) {
-    throw new Error("brandScopedStorage.makeKey: brandId is required");
+    throw new Error('brandScopedStorage.makeKey: brandId is required');
   }
   return `${base}${SCOPE_DELIMITER}${brandId}`;
 }
 
 function getStore(): Storage | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null;
   return window.localStorage;
 }
 

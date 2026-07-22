@@ -1,11 +1,11 @@
-import type { FrontendCheckpointReport } from "@/lib/jaina/schemas";
+import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
 
 export type PdfTable = {
   headers: string[];
   rows: string[][];
 };
 
-type JainaPdfDocument = InstanceType<typeof import("jspdf").jsPDF>;
+type JainaPdfDocument = InstanceType<typeof import('jspdf').jsPDF>;
 
 type DownloadJainaReportPdfOptions = {
   report: FrontendCheckpointReport;
@@ -16,54 +16,58 @@ type DownloadJainaReportPdfOptions = {
 
 export function createJainaReportFilename(now: Date = new Date()): string {
   const safeDate = Number.isNaN(now.getTime()) ? new Date() : now;
-  const day = safeDate.toISOString().split("T")[0];
+  const day = safeDate.toISOString().split('T')[0];
   return `jaina-report-${day}.pdf`;
 }
 
 export function createJainaReportHtmlFilename(now: Date = new Date()): string {
   const safeDate = Number.isNaN(now.getTime()) ? new Date() : now;
-  const day = safeDate.toISOString().split("T")[0];
+  const day = safeDate.toISOString().split('T')[0];
   return `jaina-report-${day}.html`;
 }
 
 function escapeHtml(value: unknown): string {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function serializeJsonForScript(value: unknown): string {
   return JSON.stringify(value ?? null)
-    .replaceAll("<", "\\u003c")
-    .replaceAll(">", "\\u003e")
-    .replaceAll("&", "\\u0026")
-    .replaceAll("\u2028", "\\u2028")
-    .replaceAll("\u2029", "\\u2029");
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e')
+    .replaceAll('&', '\\u0026')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029');
 }
 
 function renderParagraph(value: unknown): string {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  return `<p>${escapeHtml(text).replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br />")}</p>`;
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  return `<p>${escapeHtml(text)
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br />')}</p>`;
 }
 
 function renderKeyValueList(entries: Array<[string, unknown]>): string {
   const rows = entries
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim().length > 0)
-    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
-    .join("");
-  return rows ? `<dl class="kv">${rows}</dl>` : "";
+    .map(
+      ([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`,
+    )
+    .join('');
+  return rows ? `<dl class="kv">${rows}</dl>` : '';
 }
 
 function renderHtmlTable(title: string, table: PdfTable): string {
-  if (!table.headers.length || !table.rows.length) return "";
-  const head = table.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("");
+  if (!table.headers.length || !table.rows.length) return '';
+  const head = table.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('');
   const body = table.rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-    .join("");
+    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+    .join('');
   return `
     <section class="card">
       <h2>${escapeHtml(title)}</h2>
@@ -86,8 +90,8 @@ function renderChartFigure({
   type: unknown;
   payload: unknown;
 }): string {
-  const titleText = String(title || "Chart");
-  const typeText = String(type || "chart");
+  const titleText = String(title || 'Chart');
+  const typeText = String(type || 'chart');
   return `
     <div class="chart-visual" data-jaina-chart data-chart-type="${escapeHtml(typeText)}">
       <div class="chart-stage" role="img" aria-label="${escapeHtml(`${titleText} chart`)}"></div>
@@ -108,7 +112,7 @@ function renderReportShell({
 }): string {
   const generatedAt = new Date().toLocaleString();
   return `<!doctype html>
-<html lang="${escapeHtml(language || "en")}">
+<html lang="${escapeHtml(language || 'en')}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -196,7 +200,7 @@ function renderReportShell({
   <main>
     <header class="report-header">
       <h1>${escapeHtml(title)}</h1>
-      <div class="meta">Generated ${escapeHtml(generatedAt)}${language ? ` · ${escapeHtml(language)}` : ""}</div>
+      <div class="meta">Generated ${escapeHtml(generatedAt)}${language ? ` · ${escapeHtml(language)}` : ''}</div>
     </header>
     ${body}
   </main>
@@ -403,9 +407,9 @@ function renderReportShell({
 }
 
 export function formatMetricValueForPdf(
-  metric: FrontendCheckpointReport["performance_snapshot"][number]
+  metric: FrontendCheckpointReport['performance_snapshot'][number],
 ): string {
-  if (!metric || typeof metric !== "object") return "";
+  if (!metric || typeof metric !== 'object') return '';
   const typedMetric = metric as {
     value?: unknown;
     format?: string;
@@ -413,25 +417,25 @@ export function formatMetricValueForPdf(
     suffix?: string;
   };
   const value = typedMetric.value;
-  if (typeof value !== "number") return String(value);
-  if (typedMetric.format === "currency" || typedMetric.prefix === "$") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
+  if (typeof value !== 'number') return String(value);
+  if (typedMetric.format === 'currency' || typedMetric.prefix === '$') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
       maximumFractionDigits: 2,
     }).format(value);
   }
-  if (typedMetric.format === "percentage" || typedMetric.suffix === "%") {
+  if (typedMetric.format === 'percentage' || typedMetric.suffix === '%') {
     return `${value}%`;
   }
   const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return `${typedMetric.prefix || ""}${formatted}${typedMetric.suffix || ""}`;
+  return `${typedMetric.prefix || ''}${formatted}${typedMetric.suffix || ''}`;
 }
 
 export function renderReportPdf(
   doc: JainaPdfDocument,
   report: FrontendCheckpointReport,
-  fallbackTables: PdfTable[]
+  fallbackTables: PdfTable[],
 ) {
   const marginX = 40;
   const marginY = 44;
@@ -448,11 +452,11 @@ export function renderReportPdf(
 
   const addHeading = (text: string, size = 14) => {
     ensureSpace(size + 10);
-    doc.setFont("helvetica", "bold");
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(size);
     doc.text(text, marginX, y);
     y += size + 8;
-    doc.setFont("helvetica", "normal");
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
   };
 
@@ -479,21 +483,21 @@ export function renderReportPdf(
   const addTable = (title: string, table: PdfTable) => {
     if (!table.headers.length || !table.rows.length) return;
     addHeading(title, 12);
-    addParagraph(table.headers.join(" | "));
+    addParagraph(table.headers.join(' | '));
     for (const row of table.rows) {
-      addParagraph(row.join(" | "));
+      addParagraph(row.join(' | '));
     }
   };
 
-  addHeading("Performance Analysis Report", 16);
+  addHeading('Performance Analysis Report', 16);
   addParagraph(`Generated: ${new Date().toLocaleString()}`);
-  addParagraph(`Language: ${report.language || "EN"}`);
+  addParagraph(`Language: ${report.language || 'EN'}`);
 
-  addHeading("Executive Summary");
-  addParagraph(report.executive_summary || "No summary provided.");
+  addHeading('Executive Summary');
+  addParagraph(report.executive_summary || 'No summary provided.');
 
   if (report.performance_snapshot.length > 0) {
-    addHeading("Performance Snapshot");
+    addHeading('Performance Snapshot');
     for (const metric of report.performance_snapshot) {
       const metricRecord = metric as {
         metric?: string;
@@ -501,29 +505,29 @@ export function renderReportPdf(
         context?: string;
         sub_label?: string;
       };
-      const metricLabel = metricRecord.metric || "Metric";
+      const metricLabel = metricRecord.metric || 'Metric';
       const metricValue = formatMetricValueForPdf(metric);
       const change =
         metricRecord.change === undefined || metricRecord.change === null
-          ? ""
+          ? ''
           : ` (Δ ${metricRecord.change})`;
       const context =
         metricRecord.context || metricRecord.sub_label
           ? ` — ${metricRecord.context || metricRecord.sub_label}`
-          : "";
+          : '';
       addBullet(`${metricLabel}: ${metricValue}${change}${context}`);
     }
     y += 4;
   }
 
   if (report.sections.length > 0) {
-    addHeading("Strategic Insights");
+    addHeading('Strategic Insights');
     for (const section of report.sections) {
       addHeading(`${section.heading} (${section.scope})`, 12);
       addParagraph(section.summary);
       for (const insight of section.highlights) {
-        const title = insight.title ? `${insight.title}: ` : "";
-        const impact = insight.impact ? ` [${insight.impact}]` : "";
+        const title = insight.title ? `${insight.title}: ` : '';
+        const impact = insight.impact ? ` [${insight.impact}]` : '';
         addBullet(`${title}${insight.text}${impact}`);
       }
       for (let index = 0; index < section.tables.length; index += 1) {
@@ -534,7 +538,7 @@ export function renderReportPdf(
         addTable(`${section.heading} Table ${index + 1}`, {
           headers: table.headers.map((header) => String(header)),
           rows: table.rows.map((row) =>
-            Array.isArray(row) ? row.map((cell) => String(cell)) : []
+            Array.isArray(row) ? row.map((cell) => String(cell)) : [],
           ),
         });
       }
@@ -542,25 +546,23 @@ export function renderReportPdf(
   }
 
   if (fallbackTables.length > 0) {
-    addHeading("Detailed Data");
+    addHeading('Detailed Data');
     for (let index = 0; index < fallbackTables.length; index += 1) {
       addTable(`Data Table ${index + 1}`, fallbackTables[index]);
     }
   }
 
   if (report.strategic_recommendations.length > 0) {
-    addHeading("Priority Recommendations");
+    addHeading('Priority Recommendations');
     for (const recommendation of report.strategic_recommendations) {
-      const title = recommendation.title || "Recommendation";
-      const details = recommendation.rationale || "";
+      const title = recommendation.title || 'Recommendation';
+      const details = recommendation.rationale || '';
       const tags = [
-        recommendation.priority ? `Priority: ${recommendation.priority}` : "",
-        recommendation.expected_impact
-          ? `Impact: ${recommendation.expected_impact}`
-          : "",
+        recommendation.priority ? `Priority: ${recommendation.priority}` : '',
+        recommendation.expected_impact ? `Impact: ${recommendation.expected_impact}` : '',
       ]
         .filter(Boolean)
-        .join(" | ");
+        .join(' | ');
       addBullet(title);
       addParagraph(details);
       if (tags) addParagraph(tags);
@@ -571,16 +573,16 @@ export function renderReportPdf(
 // Walk up from the report node to the nearest non-transparent background so the
 // captured PDF matches the on-screen theme (light or dark) instead of a guess.
 function resolveExportBackground(node: HTMLElement | null): string {
-  if (!node || typeof window === "undefined") return "#ffffff";
+  if (!node || typeof window === 'undefined') return '#ffffff';
   let element: HTMLElement | null = node;
   while (element) {
     const background = window.getComputedStyle(element).backgroundColor;
-    if (background && background !== "transparent" && background !== "rgba(0, 0, 0, 0)") {
+    if (background && background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)') {
       return background;
     }
     element = element.parentElement;
   }
-  return "#ffffff";
+  return '#ffffff';
 }
 
 // Capture a LIVE rendered report node (the real React/Recharts output) into a
@@ -590,9 +592,9 @@ async function captureNodeToPdf(
   exportNode: HTMLElement,
   options: { backgroundColor: string; fileName: string },
 ): Promise<void> {
-  const { jsPDF } = await import("jspdf");
-  const html2canvas = (await import("html2canvas")).default;
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const { jsPDF } = await import('jspdf');
+  const html2canvas = (await import('html2canvas')).default;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
   const canvas = await html2canvas(exportNode, {
     scale: 2,
@@ -607,12 +609,21 @@ async function captureNodeToPdf(
   const usableWidth = pageWidth - margin * 2;
   const usableHeight = pageHeight - margin * 2;
   const imageHeight = (canvas.height * usableWidth) / canvas.width;
-  const imageData = canvas.toDataURL("image/png");
+  const imageData = canvas.toDataURL('image/png');
 
   let renderedHeight = 0;
   while (renderedHeight < imageHeight) {
     if (renderedHeight > 0) doc.addPage();
-    doc.addImage(imageData, "PNG", margin, margin - renderedHeight, usableWidth, imageHeight, undefined, "FAST");
+    doc.addImage(
+      imageData,
+      'PNG',
+      margin,
+      margin - renderedHeight,
+      usableWidth,
+      imageHeight,
+      undefined,
+      'FAST',
+    );
     renderedHeight += usableHeight;
   }
   doc.save(options.fileName);
@@ -622,19 +633,22 @@ export async function downloadJainaReportPdf({
   report,
   fallbackTables,
   exportNode,
-  backgroundColor = "#0b0b0b",
+  backgroundColor = '#0b0b0b',
 }: DownloadJainaReportPdfOptions): Promise<void> {
   if (exportNode) {
     try {
-      await captureNodeToPdf(exportNode, { backgroundColor, fileName: createJainaReportFilename() });
+      await captureNodeToPdf(exportNode, {
+        backgroundColor,
+        fileName: createJainaReportFilename(),
+      });
       return;
     } catch {
       // Fall back to deterministic text/pdf rendering if canvas export fails.
     }
   }
 
-  const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   renderReportPdf(doc, report, fallbackTables);
   doc.save(createJainaReportFilename());
 }
@@ -649,7 +663,7 @@ export async function downloadJainaReportV2Pdf({
   backgroundColor?: string;
 }): Promise<void> {
   if (!exportNode) {
-    throw new Error("No rendered report available to export.");
+    throw new Error('No rendered report available to export.');
   }
   await captureNodeToPdf(exportNode, {
     backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
@@ -658,11 +672,8 @@ export async function downloadJainaReportV2Pdf({
 }
 
 function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {
-  const charts = [
-    ...report.graphs,
-    ...report.sections.flatMap((section) => section.graphs),
-  ];
-  if (charts.length === 0) return "";
+  const charts = [...report.graphs, ...report.sections.flatMap((section) => section.graphs)];
+  if (charts.length === 0) return '';
 
   return `
     <section class="card">
@@ -671,7 +682,7 @@ function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {
         .map((chart, index) => {
           const record = chart as Record<string, unknown>;
           const title = record.title || `Chart ${index + 1}`;
-          const type = record.type || record.graph_type || record.chart_type || "chart";
+          const type = record.type || record.graph_type || record.chart_type || 'chart';
           return `
             <article class="chart-spec">
               <h3>${escapeHtml(title)}</h3>
@@ -681,21 +692,24 @@ function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {
                 payload: {
                   chart: record,
                   chart_type: type,
-                  category_key: record.category_key || record.x_axis_key || "date",
-                  value_key: record.value_key || record.y_axis_key || "value",
+                  category_key: record.category_key || record.x_axis_key || 'date',
+                  value_key: record.value_key || record.y_axis_key || 'value',
                 },
               })}
               ${renderKeyValueList([
-                ["Chart type", type],
-                ["X axis", record.x_axis_label],
-                ["Y axis", record.y_axis_label],
-                ["Cached sources", Array.isArray(record.cached_sources) ? record.cached_sources.join(", ") : ""],
+                ['Chart type', type],
+                ['X axis', record.x_axis_label],
+                ['Y axis', record.y_axis_label],
+                [
+                  'Cached sources',
+                  Array.isArray(record.cached_sources) ? record.cached_sources.join(', ') : '',
+                ],
               ])}
               <pre>${escapeHtml(JSON.stringify(record.data ?? record.datasets ?? record.series ?? record.labels ?? {}, null, 2))}</pre>
             </article>
           `;
         })
-        .join("")}
+        .join('')}
     </section>
   `;
 }
@@ -707,20 +721,20 @@ export function buildJainaReportHtml({
   report: FrontendCheckpointReport;
   fallbackTables: PdfTable[];
 }): string {
-  const title = report.report_title || "Jaina Performance Analysis";
+  const title = report.report_title || 'Jaina Performance Analysis';
   const metrics = report.performance_snapshot
     .map((metric) => {
       const record = metric as Record<string, unknown>;
       return `
         <div class="metric">
-          <div class="label">${escapeHtml(record.metric || "Metric")}</div>
+          <div class="label">${escapeHtml(record.metric || 'Metric')}</div>
           <div class="value">${escapeHtml(formatMetricValueForPdf(metric))}</div>
-          ${record.change ? `<p>${escapeHtml(`Change: ${record.change}`)}</p>` : ""}
-          ${record.context || record.sub_label ? `<p>${escapeHtml(record.context ?? record.sub_label)}</p>` : ""}
+          ${record.change ? `<p>${escapeHtml(`Change: ${record.change}`)}</p>` : ''}
+          ${record.context || record.sub_label ? `<p>${escapeHtml(record.context ?? record.sub_label)}</p>` : ''}
         </div>
       `;
     })
-    .join("");
+    .join('');
 
   const sections = report.sections
     .map(
@@ -728,55 +742,61 @@ export function buildJainaReportHtml({
         <section class="card">
           <h2>${escapeHtml(section.heading)}</h2>
           <span class="pill">${escapeHtml(section.scope)}</span>
-          ${section.confidence ? `<span class="pill">Confidence: ${escapeHtml(section.confidence)}</span>` : ""}
+          ${section.confidence ? `<span class="pill">Confidence: ${escapeHtml(section.confidence)}</span>` : ''}
           ${renderParagraph(section.summary)}
           ${
             section.highlights.length > 0
               ? `<h3>Highlights</h3><ul>${section.highlights
-                  .map((insight) => `<li><strong>${escapeHtml(insight.title || insight.category)}</strong>: ${escapeHtml(insight.text)}${insight.impact ? ` (${escapeHtml(insight.impact)})` : ""}</li>`)
-                  .join("")}</ul>`
-              : ""
+                  .map(
+                    (insight) =>
+                      `<li><strong>${escapeHtml(insight.title || insight.category)}</strong>: ${escapeHtml(insight.text)}${insight.impact ? ` (${escapeHtml(insight.impact)})` : ''}</li>`,
+                  )
+                  .join('')}</ul>`
+              : ''
           }
           ${
             section.actions.length > 0
               ? `<h3>Actions</h3><ul>${section.actions
-                  .map((action) => `<li><strong>${escapeHtml(action.title)}</strong>: ${escapeHtml(action.rationale)}${action.expected_impact ? ` (${escapeHtml(action.expected_impact)})` : ""}</li>`)
-                  .join("")}</ul>`
-              : ""
+                  .map(
+                    (action) =>
+                      `<li><strong>${escapeHtml(action.title)}</strong>: ${escapeHtml(action.rationale)}${action.expected_impact ? ` (${escapeHtml(action.expected_impact)})` : ''}</li>`,
+                  )
+                  .join('')}</ul>`
+              : ''
           }
         </section>
-      `
+      `,
     )
-    .join("");
+    .join('');
 
   const recommendations = report.strategic_recommendations
     .map(
       (recommendation) => `
         <li>
           <strong>${escapeHtml(recommendation.title)}</strong>
-          ${recommendation.priority ? `<span class="pill">${escapeHtml(recommendation.priority)}</span>` : ""}
+          ${recommendation.priority ? `<span class="pill">${escapeHtml(recommendation.priority)}</span>` : ''}
           ${renderParagraph(recommendation.rationale)}
-          ${recommendation.expected_impact ? `<p>Expected impact: ${escapeHtml(recommendation.expected_impact)}</p>` : ""}
+          ${recommendation.expected_impact ? `<p>Expected impact: ${escapeHtml(recommendation.expected_impact)}</p>` : ''}
         </li>
-      `
+      `,
     )
-    .join("");
+    .join('');
 
   const body = `
     ${
       report.executive_summary
         ? `<section class="card"><h2>Executive Summary</h2>${renderParagraph(report.executive_summary)}</section>`
-        : ""
+        : ''
     }
-    ${metrics ? `<section class="card"><h2>Performance Snapshot</h2><div class="grid">${metrics}</div></section>` : ""}
+    ${metrics ? `<section class="card"><h2>Performance Snapshot</h2><div class="grid">${metrics}</div></section>` : ''}
     ${sections}
     ${renderLegacyChartSpecs(report)}
-    ${fallbackTables.map((table, index) => renderHtmlTable(`Data Table ${index + 1}`, table)).join("")}
-    ${recommendations ? `<section class="card"><h2>Recommendations</h2><ul>${recommendations}</ul></section>` : ""}
+    ${fallbackTables.map((table, index) => renderHtmlTable(`Data Table ${index + 1}`, table)).join('')}
+    ${recommendations ? `<section class="card"><h2>Recommendations</h2><ul>${recommendations}</ul></section>` : ''}
     ${
       report.follow_up_questions.length > 0
-        ? `<section class="card"><h2>Follow-up Questions</h2><ul>${report.follow_up_questions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul></section>`
-        : ""
+        ? `<section class="card"><h2>Follow-up Questions</h2><ul>${report.follow_up_questions.map((question) => `<li>${escapeHtml(question)}</li>`).join('')}</ul></section>`
+        : ''
     }
   `;
 
@@ -789,9 +809,9 @@ export function buildJainaReportHtml({
 
 // ---------------------------------------------------------------------------
 function downloadHtmlFile(filename: string, html: string) {
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
+  const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
   document.body.appendChild(anchor);

@@ -53,7 +53,11 @@ describe('clipEffectsToCss', () => {
   });
 
   it('omits fields that are at their defaults', () => {
-    expect(clipEffectsToCss({ opacity: 1 }, 0)).toEqual({ filter: undefined, transform: undefined, opacity: undefined });
+    expect(clipEffectsToCss({ opacity: 1 }, 0)).toEqual({
+      filter: undefined,
+      transform: undefined,
+      opacity: undefined,
+    });
   });
 });
 
@@ -74,7 +78,13 @@ describe('scalars', () => {
 describe('resolveTextOverlays', () => {
   it('applies defaults for position/size/color', () => {
     const [resolved] = resolveTextOverlays({ text: [{ id: 't1', text: 'Hi' }] });
-    expect(resolved).toMatchObject({ xFrac: 0.5, yFrac: 0.88, sizeFrac: 0.06, color: '#ffffff', fontWeight: 700 });
+    expect(resolved).toMatchObject({
+      xFrac: 0.5,
+      yFrac: 0.88,
+      sizeFrac: 0.06,
+      color: '#ffffff',
+      fontWeight: 700,
+    });
   });
 });
 
@@ -159,7 +169,10 @@ describe('resolveTransformAt — keyframes', () => {
   it('takes precedence over kenBurns and sorts unordered stops', () => {
     const spec = {
       kenBurns: { from: { scale: 5 }, to: { scale: 9 } },
-      keyframes: [{ t: 1, transform: { scale: 3 } }, { t: 0, transform: { scale: 1 } }],
+      keyframes: [
+        { t: 1, transform: { scale: 3 } },
+        { t: 0, transform: { scale: 1 } },
+      ],
     };
     expect(resolveTransformAt(spec, 0.5).scale).toBeCloseTo(2, 5);
   });

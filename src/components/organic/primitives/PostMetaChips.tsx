@@ -1,67 +1,67 @@
-"use client"
+'use client';
 
-import * as React from "react"
+import * as React from 'react';
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
-import { normalizeTimeLabel } from "@/lib/organic/scheduling"
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { normalizeTimeLabel } from '@/lib/organic/scheduling';
+import { cn } from '@/lib/utils';
 
 const PLATFORM_OPTIONS: { value: OrganicPlatformKey; label: string }[] = [
-  { value: "instagram", label: "Instagram" },
-  { value: "facebook", label: "Facebook" },
-  { value: "linkedin", label: "LinkedIn" },
-]
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'linkedin', label: 'LinkedIn' },
+];
 
 // HyperFrame is a video-production method, not a selectable post format.
-const FORMAT_OPTIONS = ["Post", "Carousel", "Reel"] as const
-const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const
+const FORMAT_OPTIONS = ['Post', 'Carousel', 'Reel'] as const;
+const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
 
 const PLATFORM_DOT: Record<string, string> = {
-  instagram: "#E1306C",
-  facebook: "#1877F2",
-  linkedin: "#0A66C2",
-}
+  instagram: '#E1306C',
+  facebook: '#1877F2',
+  linkedin: '#0A66C2',
+};
 
 const chipClass =
-  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+  'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50';
 
 function Sep() {
-  return <span className="select-none text-muted-foreground/40">·</span>
+  return <span className="select-none text-muted-foreground/40">·</span>;
 }
 
 function platformLabel(platform: OrganicPlatformKey): string {
-  return PLATFORM_OPTIONS.find((p) => p.value === platform)?.label ?? "Instagram"
+  return PLATFORM_OPTIONS.find((p) => p.value === platform)?.label ?? 'Instagram';
 }
 
 function TimeChip({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  const [open, setOpen] = React.useState(false)
-  const [pending, setPending] = React.useState(value)
-  const [error, setError] = React.useState<string | null>(null)
+  const [open, setOpen] = React.useState(false);
+  const [pending, setPending] = React.useState(value);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (open) {
-      setPending(value)
-      setError(null)
+      setPending(value);
+      setError(null);
     }
-  }, [open, value])
+  }, [open, value]);
 
   const commit = (raw: string) => {
-    const normalized = normalizeTimeLabel(raw.trim())
+    const normalized = normalizeTimeLabel(raw.trim());
     if (!normalized) {
-      setError("Use 9:00 AM or 14:00")
-      return
+      setError('Use 9:00 AM or 14:00');
+      return;
     }
-    onChange(normalized)
-    setOpen(false)
-  }
+    onChange(normalized);
+    setOpen(false);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -81,10 +81,10 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
               type="button"
               onClick={() => commit(time)}
               className={cn(
-                "rounded-md border px-2 py-1 text-xs transition-colors duration-150",
+                'rounded-md border px-2 py-1 text-xs transition-colors duration-150',
                 time === value
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
               )}
             >
               {time}
@@ -95,11 +95,11 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
           value={pending}
           onChange={(event) => setPending(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault()
-              commit(pending)
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commit(pending);
             }
-            if (event.key === "Escape") setOpen(false)
+            if (event.key === 'Escape') setOpen(false);
           }}
           placeholder="Custom — 9:00 AM"
           className="h-8 text-xs"
@@ -108,7 +108,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
         {error && <p className="mt-1 text-2xs text-destructive">{error}</p>}
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 /**
@@ -125,13 +125,13 @@ export function PostMetaChips({
   onTimeChange,
   actions,
 }: {
-  platform: OrganicPlatformKey
-  format: string
-  timeLabel: string
-  onPlatformChange: (next: OrganicPlatformKey) => void
-  onFormatChange: (next: string) => void
-  onTimeChange: (next: string) => void
-  actions?: React.ReactNode
+  platform: OrganicPlatformKey;
+  format: string;
+  timeLabel: string;
+  onPlatformChange: (next: OrganicPlatformKey) => void;
+  onFormatChange: (next: string) => void;
+  onTimeChange: (next: string) => void;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-1 border-b border-border/60 bg-muted/40 px-2 py-1.5">
@@ -140,7 +140,7 @@ export function PostMetaChips({
           <button type="button" className={chipClass} aria-label="Change platform">
             <span
               className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: PLATFORM_DOT[platform] ?? "#7C6FFF" }}
+              style={{ backgroundColor: PLATFORM_DOT[platform] ?? '#7C6FFF' }}
             />
             {platformLabel(platform)}
           </button>
@@ -150,7 +150,7 @@ export function PostMetaChips({
             <DropdownMenuItem key={option.value} onSelect={() => onPlatformChange(option.value)}>
               <span
                 className="mr-2 h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: PLATFORM_DOT[option.value] ?? "#7C6FFF" }}
+                style={{ backgroundColor: PLATFORM_DOT[option.value] ?? '#7C6FFF' }}
               />
               {option.label}
             </DropdownMenuItem>
@@ -181,5 +181,5 @@ export function PostMetaChips({
 
       {actions ? <div className="ml-auto">{actions}</div> : null}
     </div>
-  )
+  );
 }

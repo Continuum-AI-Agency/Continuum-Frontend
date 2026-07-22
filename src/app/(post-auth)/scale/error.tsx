@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 
 export default function PaidMediaError({
   error,
@@ -11,7 +11,7 @@ export default function PaidMediaError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[paid-media] route error:", error);
+    console.error('[paid-media] route error:', error);
   }, [error]);
 
   return (
@@ -22,10 +22,7 @@ export default function PaidMediaError({
       <p className="max-w-md text-center text-sm text-zinc-500 dark:text-zinc-400">
         The paid media dashboard encountered an error. Your campaigns are unaffected.
       </p>
-      <Button
-        type="button"
-        onClick={reset}
-      >
+      <Button type="button" onClick={reset}>
         Try again
       </Button>
     </div>

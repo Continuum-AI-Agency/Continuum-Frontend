@@ -1,19 +1,18 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { List, Table as TableIcon } from "lucide-react";
-
-import { PageHeader } from "@/components/shared/PageHeader";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useDryRunMode, usePendingActions } from "@/lib/approvals/queries";
-import { useApprovalsStore } from "@/lib/approvals/store";
-import { LaneStrip } from "@/components/approvals/LaneStrip";
-import { FocusComposer } from "@/components/approvals/FocusComposer";
-import { QueueList } from "@/components/approvals/QueueList";
-import { QueueTable } from "@/components/approvals/QueueTable";
-import { LiveStatusDot } from "@/components/approvals/LiveStatusDot";
-import { KeymapHint } from "@/components/approvals/KeymapHint";
+import { List, Table as TableIcon } from 'lucide-react';
+import * as React from 'react';
+import { FocusComposer } from '@/components/approvals/FocusComposer';
+import { KeymapHint } from '@/components/approvals/KeymapHint';
+import { LaneStrip } from '@/components/approvals/LaneStrip';
+import { LiveStatusDot } from '@/components/approvals/LiveStatusDot';
+import { QueueList } from '@/components/approvals/QueueList';
+import { QueueTable } from '@/components/approvals/QueueTable';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDryRunMode, usePendingActions } from '@/lib/approvals/queries';
+import { useApprovalsStore } from '@/lib/approvals/store';
 
 type Props = {
   brandProfileId: string;
@@ -57,7 +56,8 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
       return;
     }
     const currentIndex = actions.findIndex((a) => a.id === focusedActionId);
-    const nextIndex = currentIndex + 1 < actions.length ? currentIndex + 1 : Math.max(0, currentIndex - 1);
+    const nextIndex =
+      currentIndex + 1 < actions.length ? currentIndex + 1 : Math.max(0, currentIndex - 1);
     const next = actions[nextIndex];
     setFocusedActionId(next?.id ?? null);
   }, [actions, focusedActionId, setFocusedActionId]);
@@ -66,15 +66,19 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
   React.useEffect(() => {
     function handler(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      )
+        return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key.toLowerCase() === "t") {
+      if (event.key.toLowerCase() === 't') {
         event.preventDefault();
-        setViewMode(viewMode === "focus" ? "table" : "focus");
+        setViewMode(viewMode === 'focus' ? 'table' : 'focus');
       }
     }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [setViewMode, viewMode]);
 
   const total = list.data?.total ?? actions.length;
@@ -106,7 +110,7 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
         onAdvance={advance}
       />
 
-      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "focus" | "table")}>
+      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'focus' | 'table')}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-2xs uppercase tracking-wider text-muted-foreground">
             Queue ({actions.length})
@@ -119,7 +123,9 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
                     <List className="h-3.5 w-3.5" strokeWidth={1.5} />
                   </TabsTrigger>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">List view</TooltipContent>
+                <TooltipContent side="bottom" className="text-xs">
+                  List view
+                </TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -127,7 +133,9 @@ export default function ApprovalsClient({ brandProfileId, brandName }: Props) {
                     <TableIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
                   </TabsTrigger>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">Table view · T</TooltipContent>
+                <TooltipContent side="bottom" className="text-xs">
+                  Table view · T
+                </TooltipContent>
               </Tooltip>
             </TabsList>
           </TooltipProvider>

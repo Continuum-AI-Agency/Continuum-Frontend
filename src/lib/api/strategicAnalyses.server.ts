@@ -1,12 +1,12 @@
-"use server";
+'use server';
 
-import "server-only";
-import { z } from "zod";
-import { httpServer } from "@/lib/api/http.server";
-import { readinessFindingSchema } from "@/lib/onboarding/agentClient";
+import 'server-only';
+import { z } from 'zod';
+import { httpServer } from '@/lib/api/http.server';
+import { readinessFindingSchema } from '@/lib/onboarding/agentClient';
 
 const runRequestSchema = z.object({
-  brandId: z.string().min(1, "brandId is required"),
+  brandId: z.string().min(1, 'brandId is required'),
   readinessScore: z.number().min(0).max(100).nullable().optional(),
   readinessFindings: z.array(readinessFindingSchema).nullable().optional(),
 });
@@ -28,19 +28,19 @@ export type StrategicAnalysisRunResponse = {
 export type StrategicAnalysisRunInput = z.input<typeof runRequestSchema>;
 
 export async function runStrategicAnalysisServer(
-  input: StrategicAnalysisRunInput
+  input: StrategicAnalysisRunInput,
 ): Promise<StrategicAnalysisRunResponse> {
   const parsedInput = runRequestSchema.parse(input);
 
   const response = await httpServer.request({
-    path: "/onboarding/strategic-analyses/run",
-    method: "POST",
+    path: '/onboarding/strategic-analyses/run',
+    method: 'POST',
     body: {
       brand_id: parsedInput.brandId,
       readiness_score: parsedInput.readinessScore ?? null,
       readiness_findings: parsedInput.readinessFindings ?? null,
     },
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   const parsed = runResponseSchema.optional().parse(response);

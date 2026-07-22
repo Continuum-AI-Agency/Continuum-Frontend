@@ -1,6 +1,6 @@
-import type { Edge } from "@xyflow/react";
-import type { StudioNode } from "../types";
-import { isVideoGeneratorNodeType } from "./videoModel";
+import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
+import { isVideoGeneratorNodeType } from './videoModel';
 
 // A run reuses a node's existing output unless the node was edited since it
 // generated. We detect that by comparing a canonical signature of the node's
@@ -12,18 +12,18 @@ import { isVideoGeneratorNodeType } from "./videoModel";
 // matching the base64 strip in workflowSerialization (isEncodedPayload), so it
 // is never dropped on save.
 
-const SIGNATURE_VERSION = "sig1";
+const SIGNATURE_VERSION = 'sig2';
 
 const VIDEO_GENERATOR_FIELDS = [
-  "prompt",
-  "negativePrompt",
-  "model",
-  "enhancePrompt",
-  "skillIds",
-  "aspectRatio",
-  "resolution",
-  "durationSeconds",
-  "referenceMode",
+  'prompt',
+  'negativePrompt',
+  'model',
+  'enhancePrompt',
+  'skillIds',
+  'aspectRatio',
+  'resolution',
+  'durationSeconds',
+  'referenceMode',
 ] as const;
 
 // Generation-relevant own fields per node type. These mirror the inputs
@@ -31,17 +31,19 @@ const VIDEO_GENERATOR_FIELDS = [
 // different asset would be produced.
 const OWN_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
   nanoGen: [
-    "positivePrompt",
-    "model",
-    "aspectRatio",
-    "imageSize",
-    "stylePreset",
-    "skillIds",
-    "seed",
-    "steps",
-    "guidance",
-    "scheduler",
-    "promptEnhancement",
+    'positivePrompt',
+    'negativePrompt',
+    'model',
+    'aspectRatio',
+    'imageSize',
+    'stylePreset',
+    'skillIds',
+    'seed',
+    'steps',
+    'guidance',
+    'scheduler',
+    'promptEnhancement',
+    'brandBookPieces',
   ],
   videoGen: VIDEO_GENERATOR_FIELDS,
   veoDirector: VIDEO_GENERATOR_FIELDS,
@@ -53,17 +55,17 @@ const OWN_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
 // videoEditor / timelineEditor) carry their own commit/await reuse semantics and
 // are intentionally NOT signature-tracked here.
 export function isSignatureTracked(nodeType?: string): boolean {
-  if (typeof nodeType !== "string") return false;
-  return nodeType === "nanoGen" || isVideoGeneratorNodeType(nodeType);
+  if (typeof nodeType !== 'string') return false;
+  return nodeType === 'nanoGen' || isVideoGeneratorNodeType(nodeType);
 }
 
 function serializeValue(value: unknown): string {
-  if (value === undefined || value === null) return "";
+  if (value === undefined || value === null) return '';
   if (Array.isArray(value)) {
     // Order-independent for sets like skillIds.
-    return [...value].map(serializeValue).sort().join(",");
+    return [...value].map(serializeValue).sort().join(',');
   }
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
 
@@ -79,16 +81,23 @@ function referenceSignature(
   const parts = edges
     .filter((edge) => edge.target === node.id)
     .map((edge) => {
-      const handle = `${edge.sourceHandle ?? ""}>${edge.targetHandle ?? ""}`;
+      const handle = `${edge.sourceHandle ?? ''}>${edge.targetHandle ?? ''}`;
       const source = nodeById.get(edge.source);
-      if (source && (source.type === "string" || source.type === "videoDecode")) {
+      if (source && (source.type === 'string' || source.type === 'videoDecode')) {
         const value = (source.data as Record<string, unknown>).value;
         return `${handle}:text=${serializeValue(value)}`;
       }
-      return `${handle}:src=${edge.source}`;
+      const sourceData = source?.data as Record<string, unknown> | undefined;
+      const durableIdentity = [
+        sourceData?.assetId,
+        sourceData?.sourcePath,
+        sourceData?.generatedImageStoragePath,
+        sourceData?.generatedVideoStoragePath,
+      ].find((value): value is string => typeof value === 'string' && value.length > 0);
+      return `${handle}:src=${edge.source}:media=${durableIdentity ?? ''}`;
     })
     .sort();
-  return parts.join("|");
+  return parts.join('|');
 }
 
 export function computeGenerationSignature(
@@ -97,10 +106,10 @@ export function computeGenerationSignature(
   nodeById: Map<string, StudioNode>,
 ): string {
   const data = node.data as Record<string, unknown>;
-  const fields = OWN_FIELDS_BY_TYPE[node.type ?? ""] ?? [];
-  const own = fields.map((field) => `${field}=${serializeValue(data[field])}`).join("|");
+  const fields = OWN_FIELDS_BY_TYPE[node.type ?? ''] ?? [];
+  const own = fields.map((field) => `${field}=${serializeValue(data[field])}`).join('|');
   const refs = referenceSignature(node, edges, nodeById);
-  return `${SIGNATURE_VERSION}:${node.type ?? ""}|${own}|refs(${refs})`;
+  return `${SIGNATURE_VERSION}:${node.type ?? ''}|${own}|refs(${refs})`;
 }
 
 // True when a signature-tracked node has output that no longer matches its
@@ -114,6 +123,6 @@ export function nodeIsStale(
 ): boolean {
   if (!isSignatureTracked(node.type)) return false;
   const stored = (node.data as Record<string, unknown>).generationSignature;
-  if (typeof stored !== "string" || stored.length === 0) return false;
+  if (typeof stored !== 'string' || stored.length === 0) return false;
   return stored !== computeGenerationSignature(node, edges, nodeById);
 }

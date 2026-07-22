@@ -1,26 +1,21 @@
-"use client";
+'use client';
 
-import { motion, useSpring } from "motion/react";
-import { memo, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { motion, useSpring } from 'motion/react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   resolveTooltipBoxMotion,
   type SpringConfig,
   useChartConfig,
-} from "../chart-config-context";
-import {
-  chartCssVars,
-  type LineConfig,
-  useChart,
-  useChartStable,
-} from "../chart-context";
-import { weekdayDateFmt } from "../chart-formatters";
-import type { IndicatorFadeEdges } from "../indicator-fade";
-import { DateTicker } from "./date-ticker";
-import { TooltipBox } from "./tooltip-box";
-import { TooltipContent, type TooltipRow } from "./tooltip-content";
-import { TooltipDot } from "./tooltip-dot";
-import { TooltipIndicator } from "./tooltip-indicator";
+} from '../chart-config-context';
+import { chartCssVars, type LineConfig, useChart, useChartStable } from '../chart-context';
+import { weekdayDateFmt } from '../chart-formatters';
+import type { IndicatorFadeEdges } from '../indicator-fade';
+import { DateTicker } from './date-ticker';
+import { TooltipBox } from './tooltip-box';
+import { TooltipContent, type TooltipRow } from './tooltip-content';
+import { TooltipDot } from './tooltip-dot';
+import { TooltipIndicator } from './tooltip-indicator';
 
 export interface ChartTooltipProps {
   /** Whether to show the date pill at bottom. Default: true */
@@ -30,7 +25,7 @@ export interface ChartTooltipProps {
   /** Whether to show dots on the lines. Default: true */
   showDots?: boolean;
   /** Dot style: filled circle or transparent ring. Default: "dot" */
-  dotVariant?: "dot" | "ring";
+  dotVariant?: 'dot' | 'ring';
   /** Dot / ring radius in pixels. Default: 5 */
   dotSize?: number;
   /** Ring corner radius as a fraction of side length (0 = square, 0.5 = circle). */
@@ -45,19 +40,14 @@ export interface ChartTooltipProps {
    */
   indicatorColor?: string | ((point: Record<string, unknown>) => string);
   /** Custom content renderer for the tooltip box */
-  content?: (props: {
-    point: Record<string, unknown>;
-    index: number;
-  }) => React.ReactNode;
+  content?: (props: { point: Record<string, unknown>; index: number }) => React.ReactNode;
   /** Custom row renderer - return array of TooltipRow */
   rows?: (point: Record<string, unknown>) => TooltipRow[];
   /**
    * Override tooltip dot fill. When omitted and `rows` is set, dot colors match row colors.
    * When a function, receives the hovered point and line config.
    */
-  dotColor?:
-    | string
-    | ((point: Record<string, unknown>, line: LineConfig) => string);
+  dotColor?: string | ((point: Record<string, unknown>, line: LineConfig) => string);
   /** Additional content to show below rows (e.g., markers) */
   children?: React.ReactNode;
   /** Custom class name */
@@ -99,7 +89,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
   showDatePill = true,
   showCrosshair = true,
   showDots = true,
-  dotVariant = "dot",
+  dotVariant = 'dot',
   dotSize = 5,
   dotRadiusFraction,
   dotScale = 1,
@@ -109,7 +99,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
   rows: rowsRenderer,
   dotColor: dotColorProp,
   children,
-  className = "",
+  className = '',
   container,
   springConfig,
   matchCrosshair = false,
@@ -139,25 +129,18 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
   } = useChart();
   const { tooltipSpring } = useChartConfig();
 
-  const isHorizontal = orientation === "horizontal";
+  const isHorizontal = orientation === 'horizontal';
   const discreteInteraction = dateLabels.length > 60;
 
   const resolvedDotSize = useMemo(() => {
-    if (dotVariant !== "ring" || !bandWidth || lines.length === 0) {
+    if (dotVariant !== 'ring' || !bandWidth || lines.length === 0) {
       return dotSize * dotScale;
     }
     const seriesCount = lines.length;
     const gap = squareSnap?.groupGap ?? (seriesCount > 1 ? 4 : 0);
     const squareSize = (bandWidth - gap * (seriesCount - 1)) / seriesCount;
     return (squareSize / 2) * dotScale;
-  }, [
-    bandWidth,
-    dotScale,
-    dotSize,
-    dotVariant,
-    lines.length,
-    squareSnap?.groupGap,
-  ]);
+  }, [bandWidth, dotScale, dotSize, dotVariant, lines.length, squareSnap?.groupGap]);
   const boxMotion = useMemo(() => {
     if (boxSpringConfig) {
       return {
@@ -172,14 +155,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
       };
     }
     return resolveTooltipBoxMotion(damping);
-  }, [
-    boxSpringConfig,
-    damping,
-    discreteInteraction,
-    matchCrosshair,
-    springConfig,
-    tooltipSpring,
-  ]);
+  }, [boxSpringConfig, damping, discreteInteraction, matchCrosshair, springConfig, tooltipSpring]);
 
   const visible = tooltipData !== null;
   const x = tooltipData?.x ?? 0;
@@ -187,9 +163,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
 
   // For horizontal charts, get the y position from the first line's yPosition (center of bar)
   const firstLineDataKey = lines[0]?.dataKey;
-  const firstLineY = firstLineDataKey
-    ? (tooltipData?.yPositions[firstLineDataKey] ?? 0)
-    : 0;
+  const firstLineY = firstLineDataKey ? (tooltipData?.yPositions[firstLineDataKey] ?? 0) : 0;
   const yWithMargin = firstLineY + margin.top;
 
   const tooltipRows = useMemo(() => {
@@ -215,10 +189,10 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
         return tooltipRows[index].color;
       }
       if (dotColorProp != null) {
-        if (typeof dotColorProp === "function" && tooltipData) {
+        if (typeof dotColorProp === 'function' && tooltipData) {
           return dotColorProp(tooltipData.point, line);
         }
-        if (typeof dotColorProp === "string") {
+        if (typeof dotColorProp === 'string') {
           return dotColorProp;
         }
       }
@@ -231,10 +205,8 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
     if (indicatorColorProp == null) {
       return chartCssVars.crosshair;
     }
-    if (typeof indicatorColorProp === "function") {
-      return tooltipData
-        ? indicatorColorProp(tooltipData.point)
-        : chartCssVars.crosshair;
+    if (typeof indicatorColorProp === 'function') {
+      return tooltipData ? indicatorColorProp(tooltipData.point) : chartCssVars.crosshair;
     }
     return indicatorColorProp;
   }, [indicatorColorProp, tooltipData]);
@@ -268,9 +240,7 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
               colorEdge={indicatorColor}
               colorMid={indicatorColor}
               columnWidth={columnWidth}
-              fadeEdges={
-                indicatorDasharray ? "none" : (indicatorFadeEdges ?? "both")
-              }
+              fadeEdges={indicatorDasharray ? 'none' : (indicatorFadeEdges ?? 'both')}
               fadeLength={indicatorFadeLength}
               height={innerHeight}
               springConfig={springConfig}
@@ -295,14 +265,12 @@ const ChartTooltipInner = memo(function ChartTooltipInner({
             {lines.map((line, index) => (
               <TooltipDot
                 color={resolveDotColor(line, index)}
-                cornerRadiusFraction={
-                  dotVariant === "ring" ? dotRadiusFraction : undefined
-                }
+                cornerRadiusFraction={dotVariant === 'ring' ? dotRadiusFraction : undefined}
                 key={line.dataKey}
                 size={resolvedDotSize}
                 springConfig={springConfig}
                 strokeColor={chartCssVars.background}
-                strokeWidth={dotVariant === "ring" ? dotStrokeWidth : undefined}
+                strokeWidth={dotVariant === 'ring' ? dotStrokeWidth : undefined}
                 variant={dotVariant}
                 visible={visible}
                 x={tooltipData?.xPositions?.[line.dataKey] ?? x}
@@ -373,7 +341,7 @@ export function ChartTooltip(props: ChartTooltipProps) {
   return <ChartTooltipInner {...props} container={container} />;
 }
 
-ChartTooltip.displayName = "ChartTooltip";
+ChartTooltip.displayName = 'ChartTooltip';
 
 interface DatePillTrackerProps {
   enabled: boolean;
@@ -420,15 +388,11 @@ function DatePillTrackerInner({
       className="pointer-events-none absolute z-50"
       style={{
         left: discreteInteraction ? xWithMargin : animatedX,
-        transform: "translateX(-50%)",
+        transform: 'translateX(-50%)',
         bottom: 4,
       }}
     >
-      <DateTicker
-        currentIndex={currentIndex}
-        labels={labels}
-        visible={visible}
-      />
+      <DateTicker currentIndex={currentIndex} labels={labels} visible={visible} />
     </motion.div>
   );
 }

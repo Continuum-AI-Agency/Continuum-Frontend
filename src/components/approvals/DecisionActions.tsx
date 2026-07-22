@@ -1,17 +1,16 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { motion, useReducedMotion } from "motion/react";
-import { CheckCircle2, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
-import { useApprove, useReject } from "@/lib/approvals/queries";
-import { useApprovalsStore } from "@/lib/approvals/store";
-import type { RuleAction } from "@/lib/approvals/types";
-import { actionTypeLabel } from "./formatters";
-import { RejectDialog } from "./RejectDialog";
+import { CheckCircle2, Loader2 } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import * as React from 'react';
+import { toast } from 'sonner';
+import { buttonVariants } from '@/components/ui/button';
+import { useApprove, useReject } from '@/lib/approvals/queries';
+import { useApprovalsStore } from '@/lib/approvals/store';
+import type { RuleAction } from '@/lib/approvals/types';
+import { cn } from '@/lib/utils';
+import { actionTypeLabel } from './formatters';
+import { RejectDialog } from './RejectDialog';
 
 type DecisionActionsHandle = {
   approve: () => Promise<void>;
@@ -39,14 +38,14 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
 
     const runApprove = React.useCallback(async () => {
       if (busy) return;
-      markOptimistic(action.id, "approve");
+      markOptimistic(action.id, 'approve');
       onAdvance();
       try {
         const result = await approve.mutateAsync({ ruleActionId: action.id });
         if (!result.ok) {
-          toast.error(`Approve failed · ${result.error ?? "Meta call rejected"}`);
+          toast.error(`Approve failed · ${result.error ?? 'Meta call rejected'}`);
         } else if (result.alreadyExecuted) {
-          toast.info("Action was already executed.");
+          toast.info('Action was already executed.');
         } else {
           toast.success(`Approved · ${actionTypeLabel(action.action_type)}`);
         }
@@ -59,13 +58,13 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
 
     const runReject = React.useCallback(
       async (reason: string) => {
-        markOptimistic(action.id, "reject");
+        markOptimistic(action.id, 'reject');
         setRejectOpen(false);
         onAdvance();
         try {
           const result = await reject.mutateAsync({ ruleActionId: action.id, reason });
           if (!result.ok) {
-            toast.error(`Reject failed · ${result.error ?? "Unknown error"}`);
+            toast.error(`Reject failed · ${result.error ?? 'Unknown error'}`);
           } else {
             toast.success(`Rejected · ${actionTypeLabel(action.action_type)}`);
           }
@@ -91,19 +90,23 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
       if (!bindGlobalKeys) return;
       function handler(event: KeyboardEvent) {
         const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+        if (
+          target &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+        )
+          return;
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         const key = event.key.toLowerCase();
-        if (event.key === "Enter" || key === "a") {
+        if (event.key === 'Enter' || key === 'a') {
           event.preventDefault();
           void runApprove();
-        } else if (key === "r") {
+        } else if (key === 'r') {
           event.preventDefault();
           setRejectOpen(true);
         }
       }
-      window.addEventListener("keydown", handler);
-      return () => window.removeEventListener("keydown", handler);
+      window.addEventListener('keydown', handler);
+      return () => window.removeEventListener('keydown', handler);
     }, [bindGlobalKeys, runApprove]);
 
     return (
@@ -113,11 +116,8 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
           onClick={runApprove}
           disabled={busy}
           whileTap={reduceMotion || busy ? undefined : { scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className={cn(
-            buttonVariants({ size: "lg" }),
-            "min-w-[10rem] gap-2",
-          )}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          className={cn(buttonVariants({ size: 'lg' }), 'min-w-[10rem] gap-2')}
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />

@@ -1,10 +1,5 @@
-import {
-  Children,
-  isValidElement,
-  type ReactElement,
-  type ReactNode,
-} from "react";
-import { normalizeYAxisId } from "./y-axis-scales";
+import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { normalizeYAxisId } from './y-axis-scales';
 
 export interface ReferenceAreaConfig {
   yAxisId: string;
@@ -22,19 +17,15 @@ interface ReferenceAreaConfigProps {
 
 function getChildComponentName(child: ReactElement) {
   const childType = child.type as { displayName?: string; name?: string };
-  return typeof child.type === "function"
-    ? childType.displayName || childType.name || ""
-    : "";
+  return typeof child.type === 'function' ? childType.displayName || childType.name || '' : '';
 }
 
 function isReferenceAreaElement(child: ReactElement): boolean {
-  return getChildComponentName(child) === "ReferenceArea";
+  return getChildComponentName(child) === 'ReferenceArea';
 }
 
 /** Collect {@link ReferenceArea} props from chart children for axis label styling. */
-export function extractReferenceAreaConfigs(
-  children: ReactNode
-): ReferenceAreaConfig[] {
+export function extractReferenceAreaConfigs(children: ReactNode): ReferenceAreaConfig[] {
   const configs: ReferenceAreaConfig[] = [];
 
   const visit = (node: ReactNode) => {

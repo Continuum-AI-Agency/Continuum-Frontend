@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export type PromptSource = "preset" | "custom";
+export type PromptSource = 'preset' | 'custom';
 
 export type PromptDefinition = {
   id: string;
@@ -11,7 +11,10 @@ export type PromptDefinition = {
   source: PromptSource;
 };
 
-export type PromptFormValue = Pick<PromptDefinition, "id" | "name" | "description" | "content" | "source">;
+export type PromptFormValue = Pick<
+  PromptDefinition,
+  'id' | 'name' | 'description' | 'content' | 'source'
+>;
 
 export const promptDefinitionSchema = z.object({
   id: z.string(),
@@ -19,7 +22,7 @@ export const promptDefinitionSchema = z.object({
   description: z.string().optional(),
   content: z.string(),
   category: z.string(),
-  source: z.enum(["preset", "custom"]),
+  source: z.enum(['preset', 'custom']),
 });
 
 export const promptFormValueSchema = promptDefinitionSchema.pick({
@@ -32,40 +35,40 @@ export const promptFormValueSchema = promptDefinitionSchema.pick({
 
 export const DEFAULT_PROMPTS: PromptDefinition[] = [
   {
-    id: "awareness-anchor",
-    name: "Awareness Anchor",
-    description: "Focus on top-of-funnel storytelling and brand positioning.",
+    id: 'awareness-anchor',
+    name: 'Awareness Anchor',
+    description: 'Focus on top-of-funnel storytelling and brand positioning.',
     content:
-      "Craft a cohesive 7-day plan that introduces the brand, highlights signature offerings, and nurtures curiosity. Emphasize educational hooks, founder stories, and social proof to warm net-new audiences.",
-    category: "Awareness",
-    source: "preset",
+      'Craft a cohesive 7-day plan that introduces the brand, highlights signature offerings, and nurtures curiosity. Emphasize educational hooks, founder stories, and social proof to warm net-new audiences.',
+    category: 'Awareness',
+    source: 'preset',
   },
   {
-    id: "engagement-orbit",
-    name: "Engagement Orbit",
-    description: "Drive conversation and community participation across channels.",
+    id: 'engagement-orbit',
+    name: 'Engagement Orbit',
+    description: 'Drive conversation and community participation across channels.',
     content:
-      "Develop a week of conversational prompts, polls, and interactive formats that invite audiences to share opinions, user-generated content, and personal stories. Spotlight community voices and encourage daily interaction.",
-    category: "Engagement",
-    source: "preset",
+      'Develop a week of conversational prompts, polls, and interactive formats that invite audiences to share opinions, user-generated content, and personal stories. Spotlight community voices and encourage daily interaction.',
+    category: 'Engagement',
+    source: 'preset',
   },
   {
-    id: "conversion-lift",
-    name: "Conversion Lift",
-    description: "Guide prospects toward a clear product or offer outcome.",
+    id: 'conversion-lift',
+    name: 'Conversion Lift',
+    description: 'Guide prospects toward a clear product or offer outcome.',
     content:
-      "Design a seven-day content mix that maps benefits, urgency, testimonials, and irresistible offers. Include platform-specific CTAs that align with the buyer journey for each channel.",
-    category: "Conversion",
-    source: "preset",
+      'Design a seven-day content mix that maps benefits, urgency, testimonials, and irresistible offers. Include platform-specific CTAs that align with the buyer journey for each channel.',
+    category: 'Conversion',
+    source: 'preset',
   },
   {
-    id: "thought-leadership",
-    name: "Thought Leadership Sprint",
-    description: "Position the brand as a category expert with authoritative POVs.",
+    id: 'thought-leadership',
+    name: 'Thought Leadership Sprint',
+    description: 'Position the brand as a category expert with authoritative POVs.',
     content:
-      "Outline a 7-day cadence of insights, data-backed takes, and futurecasting content that helps the audience anticipate trends and apply strategic guidance. Blend long-form perspectives with snackable stats.",
-    category: "Authority",
-    source: "preset",
+      'Outline a 7-day cadence of insights, data-backed takes, and futurecasting content that helps the audience anticipate trends and apply strategic guidance. Blend long-form perspectives with snackable stats.',
+    category: 'Authority',
+    source: 'preset',
   },
 ];
 

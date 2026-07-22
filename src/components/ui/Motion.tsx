@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { PropsWithChildren } from "react";
-import { motion, type Variants, type HTMLMotionProps } from "motion/react";
+import { type HTMLMotionProps, motion, type Variants } from 'motion/react';
+import type { PropsWithChildren } from 'react';
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
 
@@ -10,7 +10,7 @@ export const fadeInUp: Variants = {
   visible: (custom: number = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: "easeOut", delay: custom },
+    transition: { duration: 0.5, ease: 'easeOut', delay: custom },
   }),
 };
 
@@ -37,7 +37,7 @@ export const listItem: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.18, ease: EASE_OUT_EXPO } },
 };
 
-export function MotionBox({ children, ...props }: PropsWithChildren<HTMLMotionProps<"div">>) {
+export function MotionBox({ children, ...props }: PropsWithChildren<HTMLMotionProps<'div'>>) {
   return (
     <motion.div initial="hidden" animate="visible" variants={stagger} {...props}>
       {children}

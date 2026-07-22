@@ -25,6 +25,7 @@ const MEDIA_GROUP = 'Media library';
 const MIN_SEMANTIC_QUERY = 2;
 
 export type MediaSourceFolder = { value: SourceFilterValue; label: string };
+type MentionSource = AgentMentionReference['source'];
 
 // The browsable source folders shown when the user opens "Media library" with
 // no query. Derived from the canonical MEDIA_SOURCES so every composited bucket
@@ -38,14 +39,17 @@ export const MEDIA_SOURCE_FOLDERS: MediaSourceFolder[] = [
 export const MEDIA_SOURCE_FOLDER_PREFIX = 'media-source:';
 export const MEDIA_COLLECTION_FOLDER_PREFIX = 'media-collection:';
 
-export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSuggestion {
+export function mediaAssetToMentionSuggestion(
+  asset: MediaAsset,
+  referenceSource: MentionSource = 'organic',
+): AgentMentionSuggestion {
   const label = asset.title ?? asset.storagePath.split('/').pop() ?? asset.id;
   const previewUrl = asset.signedUrl ?? asset.thumbnailUrl ?? null;
   const reference: AgentMentionReference = {
     id: asset.id,
     type: 'media_asset',
     label,
-    source: 'organic',
+    source: referenceSource,
     metadata: {
       assetId: asset.id,
       kind: asset.kind,
@@ -67,7 +71,7 @@ export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSu
     key: `media:${asset.id}`,
     label,
     type: 'media_asset',
-    source: 'organic',
+    source: referenceSource,
     group: MEDIA_GROUP,
     description: [asset.kind, asset.description].filter(Boolean).join(' · '),
     badge: asset.kind,
@@ -81,24 +85,30 @@ export function mediaAssetToMentionSuggestion(asset: MediaAsset): AgentMentionSu
   };
 }
 
-export function sourceFolderToSuggestion(folder: MediaSourceFolder): AgentMentionSuggestion {
+export function sourceFolderToSuggestion(
+  folder: MediaSourceFolder,
+  referenceSource: MentionSource = 'organic',
+): AgentMentionSuggestion {
   return {
     key: `${MEDIA_SOURCE_FOLDER_PREFIX}${folder.value}`,
     label: folder.label,
     type: 'media_asset',
-    source: 'organic',
+    source: referenceSource,
     group: MEDIA_GROUP,
     childrenLabel: 'Browse creatives',
     isFolder: true,
   };
 }
 
-export function collectionToSuggestion(collection: MediaCollection): AgentMentionSuggestion {
+export function collectionToSuggestion(
+  collection: MediaCollection,
+  referenceSource: MentionSource = 'organic',
+): AgentMentionSuggestion {
   return {
     key: `${MEDIA_COLLECTION_FOLDER_PREFIX}${collection.id}`,
     label: collection.name,
     type: 'media_asset',
-    source: 'organic',
+    source: referenceSource,
     group: MEDIA_GROUP,
     childrenLabel: collection.kind === 'smart' ? 'Smart collection' : 'Collection',
     isFolder: true,
@@ -136,6 +146,7 @@ export type FetchMediaMentionAssetsInput = {
   collectionId?: string;
   query?: string;
   limit?: number;
+  referenceSource?: MentionSource;
 };
 
 // Lists library assets as mention suggestions. A query runs semantic search
@@ -145,7 +156,7 @@ export type FetchMediaMentionAssetsInput = {
 export async function fetchMediaMentionAssets(
   input: FetchMediaMentionAssetsInput,
 ): Promise<AgentMentionSuggestion[]> {
-  const { brandId, source, collectionId, query, limit = 24 } = input;
+  const { brandId, source, collectionId, query, limit = 24, referenceSource = 'organic' } = input;
   const trimmed = (query ?? '').trim();
 
   if (trimmed.length >= MIN_SEMANTIC_QUERY && !collectionId) {
@@ -163,14 +174,18 @@ export async function fetchMediaMentionAssets(
     });
     if (!response.ok) return [];
     const payload = (await response.json()) as { items?: MediaSearchResultItem[] };
-    return (payload.items ?? []).map((item) => mediaAssetToMentionSuggestion(item.asset));
+    return (payload.items ?? []).map((item) =>
+      mediaAssetToMentionSuggestion(item.asset, referenceSource),
+    );
   }
 
   const params = buildLibraryQuery({ brandId, source: source ?? 'all', collectionId, limit });
   const response = await fetch(`/api/library/assets?${params.toString()}`);
   if (!response.ok) return [];
   const payload = (await response.json()) as { items?: MediaAsset[] };
-  const suggestions = (payload.items ?? []).map(mediaAssetToMentionSuggestion);
+  const suggestions = (payload.items ?? []).map((asset) =>
+    mediaAssetToMentionSuggestion(asset, referenceSource),
+  );
   return filterSuggestionsByQuery(suggestions, trimmed);
 }
 
@@ -184,10 +199,13 @@ async function fetchMediaMentionCollections(brandId: string): Promise<MediaColle
 // The subfolders shown when "Media library" is opened with no query: the source
 // folders followed by the brand's collections. Fail-open on the collections
 // fetch so a miss still yields the source folders.
-export async function fetchMediaLibraryFolders(brandId: string): Promise<AgentMentionSuggestion[]> {
+export async function fetchMediaLibraryFolders(
+  brandId: string,
+  referenceSource: MentionSource = 'organic',
+): Promise<AgentMentionSuggestion[]> {
   const collections = await fetchMediaMentionCollections(brandId).catch(() => []);
   return [
-    ...MEDIA_SOURCE_FOLDERS.map(sourceFolderToSuggestion),
-    ...collections.map(collectionToSuggestion),
+    ...MEDIA_SOURCE_FOLDERS.map((folder) => sourceFolderToSuggestion(folder, referenceSource)),
+    ...collections.map((collection) => collectionToSuggestion(collection, referenceSource)),
   ];
 }

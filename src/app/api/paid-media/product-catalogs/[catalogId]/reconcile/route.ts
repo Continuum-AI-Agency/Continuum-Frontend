@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { type NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const paramsSchema = z.object({
   catalogId: z.string().uuid(),
@@ -9,23 +9,31 @@ const paramsSchema = z.object({
 
 const bodySchema = z.object({
   brandId: z.string().uuid(),
-  staleAfterHours: z.number().int().min(1).max(24 * 90).optional(),
+  staleAfterHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 90)
+    .optional(),
   dryRun: z.boolean().optional(),
 });
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-export async function POST(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = bodySchema.safeParse(body);
@@ -39,32 +47,34 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     error: sessionError,
   } = await supabase.auth.getSession();
   if (sessionError || !session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
-    return NextResponse.json({ error: "Supabase URL is not configured" }, { status: 500 });
+    return NextResponse.json({ error: 'Supabase URL is not configured' }, { status: 500 });
   }
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/catalog-reconcile-activity`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         ...parsed.data,
         catalogId: params.data.catalogId,
       }),
-      cache: "no-store",
+      cache: 'no-store',
     });
 
-    const responseBody = await response.json().catch(() => ({ error: "Invalid edge function response" }));
+    const responseBody = await response
+      .json()
+      .catch(() => ({ error: 'Invalid edge function response' }));
     return NextResponse.json(responseBody, { status: response.status });
   } catch (error) {
-    console.error("Failed to invoke catalog-reconcile-activity", error);
-    return NextResponse.json({ error: "Failed to invoke catalog reconcile job" }, { status: 500 });
+    console.error('Failed to invoke catalog-reconcile-activity', error);
+    return NextResponse.json({ error: 'Failed to invoke catalog reconcile job' }, { status: 500 });
   }
 }

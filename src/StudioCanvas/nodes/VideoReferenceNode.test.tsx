@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import React from 'react';
-import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
-import { VideoReferenceNode } from './VideoReferenceNode';
-import { useStudioStore } from '../stores/useStudioStore';
+import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { useStudioStore } from '../stores/useStudioStore';
+import { VideoReferenceNode } from './VideoReferenceNode';
 
 const updateNodeData = mock();
 const updateNode = mock();
@@ -67,7 +67,7 @@ describe('VideoReferenceNode', () => {
           <ReactFlowProvider>
             <VideoReferenceNode {...defaultProps} />
           </ReactFlowProvider>
-        </ToastProvider>
+        </ToastProvider>,
       );
     });
 
@@ -83,7 +83,7 @@ describe('VideoReferenceNode', () => {
           <ReactFlowProvider>
             <VideoReferenceNode {...defaultProps} />
           </ReactFlowProvider>
-        </ToastProvider>
+        </ToastProvider>,
       );
     });
     if (!renderResult) throw new Error('Render failed');
@@ -135,7 +135,7 @@ describe('VideoReferenceNode', () => {
                 data={{ video: 'https://example.com/portrait-reel.mp4', fileName: 'reel.mp4' }}
               />
             </ReactFlowProvider>
-          </ToastProvider>
+          </ToastProvider>,
         );
       });
       if (!renderResult) throw new Error('Render failed');

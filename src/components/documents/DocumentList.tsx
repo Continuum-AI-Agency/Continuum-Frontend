@@ -1,35 +1,34 @@
-"use client";
+'use client';
 
-import { useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, Loader2, Plus, Upload } from "lucide-react";
 import {
   DOCUMENT_CATEGORY_DEFAULT,
   DOCUMENT_CATEGORY_LABELS,
   DOCUMENT_CATEGORY_VALUES,
   type DocumentCategory,
-} from "@continuum/contracts";
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useToast } from "@/components/ui/ToastProvider";
+} from '@continuum/contracts';
+import { FileText, Loader2, Plus, Upload } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useMemo, useRef, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-import { useDocuments } from "./useDocuments";
-import { useDocumentMutations } from "./useDocumentMutations";
-import { DocumentCategorySelect } from "./DocumentCategorySelect";
-import { DocumentRow, PendingRow, ROW_EASE } from "./DocumentRow";
-import { filterDocumentsByCategory } from "./types";
-import type { CategoryFilter, DocumentDensity, DocumentView } from "./types";
-import type { OnboardingState } from "@/lib/onboarding/state";
+} from '@/components/ui/select';
+import { useToast } from '@/components/ui/ToastProvider';
+import type { OnboardingState } from '@/lib/onboarding/state';
+import { cn } from '@/lib/utils';
+import { DocumentCategorySelect } from './DocumentCategorySelect';
+import { DocumentRow, PendingRow, ROW_EASE } from './DocumentRow';
+import type { CategoryFilter, DocumentDensity, DocumentView } from './types';
+import { filterDocumentsByCategory } from './types';
+import { useDocumentMutations } from './useDocumentMutations';
+import { useDocuments } from './useDocuments';
 
-const ACCEPT =
-  ".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif";
+const ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif';
 
 const PANEL_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
@@ -46,7 +45,7 @@ export function DocumentManager({
   seed,
   density,
   onStateChange,
-  emptyHint = "PDFs, slides, sheets, docs, and images become brand context once indexed.",
+  emptyHint = 'PDFs, slides, sheets, docs, and images become brand context once indexed.',
 }: DocumentManagerProps) {
   const { show } = useToast();
   const reduceMotion = useReducedMotion();
@@ -55,36 +54,39 @@ export function DocumentManager({
   const inputRef = useRef<HTMLInputElement>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>(DOCUMENT_CATEGORY_DEFAULT);
 
-  const compact = density === "compact";
+  const compact = density === 'compact';
   const visibleDocuments = useMemo(
     () => filterDocumentsByCategory(documents, categoryFilter),
     [documents, categoryFilter],
   );
   const hasItems = visibleDocuments.length > 0 || mutations.uploads.length > 0;
-  const anyUploading = mutations.uploads.some((u) => u.status === "uploading");
-  const readyCount = documents.filter((d) => (d.progressStep ?? d.status) === "ready").length;
+  const anyUploading = mutations.uploads.some((u) => u.status === 'uploading');
+  const readyCount = documents.filter((d) => (d.progressStep ?? d.status) === 'ready').length;
   const processingCount =
-    documents.length - readyCount + mutations.uploads.filter((u) => u.status === "uploading").length;
-  const errorCount = documents.filter((d) => (d.progressStep ?? d.status) === "error").length;
+    documents.length -
+    readyCount +
+    mutations.uploads.filter((u) => u.status === 'uploading').length;
+  const errorCount = documents.filter((d) => (d.progressStep ?? d.status) === 'error').length;
 
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
     const result = await mutations.uploadFiles(files, onStateChange, uploadCategory);
     if (result.succeeded > 0) {
       show({
-        title: result.succeeded === 1 ? "Document uploaded" : `${result.succeeded} documents uploaded`,
-        description: "Indexing has started.",
-        variant: "success",
+        title:
+          result.succeeded === 1 ? 'Document uploaded' : `${result.succeeded} documents uploaded`,
+        description: 'Indexing has started.',
+        variant: 'success',
       });
     }
     if (result.failed > 0) {
       show({
-        title: "Upload failed",
-        description: `${result.failed} file${result.failed === 1 ? "" : "s"} could not be uploaded.`,
-        variant: "error",
+        title: 'Upload failed',
+        description: `${result.failed} file${result.failed === 1 ? '' : 's'} could not be uploaded.`,
+        variant: 'error',
       });
     }
   };
@@ -93,10 +95,10 @@ export function DocumentManager({
     if (!storagePath) return;
     try {
       const signedUrl = await mutations.openSignedUrl(storagePath);
-      window.open(signedUrl, "_blank", "noopener,noreferrer");
+      window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to generate download link.";
-      show({ title: "Download failed", description: message, variant: "error" });
+      const message = err instanceof Error ? err.message : 'Failed to generate download link.';
+      show({ title: 'Download failed', description: message, variant: 'error' });
     }
   };
 
@@ -104,10 +106,10 @@ export function DocumentManager({
     if (!storagePath) return;
     try {
       const url = await mutations.openInlineUrl(storagePath);
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to open document.";
-      show({ title: "Open failed", description: message, variant: "error" });
+      const message = err instanceof Error ? err.message : 'Failed to open document.';
+      show({ title: 'Open failed', description: message, variant: 'error' });
     }
   };
 
@@ -115,8 +117,8 @@ export function DocumentManager({
     try {
       await mutations.removeDocument(documentId, onStateChange);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not remove document.";
-      show({ title: "Remove failed", description: message, variant: "error" });
+      const message = err instanceof Error ? err.message : 'Could not remove document.';
+      show({ title: 'Remove failed', description: message, variant: 'error' });
     }
   };
 
@@ -124,21 +126,21 @@ export function DocumentManager({
     try {
       await mutations.updateCategory(documentId, category, onStateChange);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update category.";
-      show({ title: "Update failed", description: message, variant: "error" });
+      const message = err instanceof Error ? err.message : 'Could not update category.';
+      show({ title: 'Update failed', description: message, variant: 'error' });
     }
   };
 
   const handleInputChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length > 0) await handleFiles(files);
-    if (inputRef.current) inputRef.current.value = "";
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   const onDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.types.includes("Files")) setDragActive(true);
+    if (e.dataTransfer.types.includes('Files')) setDragActive(true);
   };
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -158,7 +160,12 @@ export function DocumentManager({
   };
 
   return (
-    <div onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+    <div
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <input
         ref={inputRef}
         type="file"
@@ -169,9 +176,9 @@ export function DocumentManager({
       />
       <Card
         className={cn(
-          "w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors",
-          compact ? "max-w-[560px]" : "max-w-none",
-          dragActive && "ring-2 ring-emerald-500/30",
+          'w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors',
+          compact ? 'max-w-[560px]' : 'max-w-none',
+          dragActive && 'ring-2 ring-emerald-500/30',
         )}
       >
         <CardContent className="space-y-3 p-0">
@@ -268,9 +275,9 @@ function SyncBar({
           onClick={onUploadClick}
           disabled={uploading}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors",
-            "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
-            uploading && "cursor-wait opacity-70",
+            'inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors',
+            'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
+            uploading && 'cursor-wait opacity-70',
           )}
         >
           {uploading ? (
@@ -278,7 +285,7 @@ function SyncBar({
           ) : (
             <Plus className="h-3.5 w-3.5" />
           )}
-          {uploading ? "Uploading…" : "Upload document"}
+          {uploading ? 'Uploading…' : 'Upload document'}
         </button>
       </div>
     </div>
@@ -325,12 +332,12 @@ function formatSummary({
   errors: number;
 }): string {
   const total = ready + processing + errors;
-  if (total === 0) return "Add files available to this brand.";
+  if (total === 0) return 'Add files available to this brand.';
   const parts: string[] = [];
   if (ready > 0) parts.push(`${ready} ready`);
   if (processing > 0) parts.push(`${processing} processing`);
-  if (errors > 0) parts.push(`${errors} error${errors === 1 ? "" : "s"}`);
-  return parts.join(" · ");
+  if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
+  return parts.join(' · ');
 }
 
 function ItemPanel({
@@ -350,7 +357,7 @@ function ItemPanel({
     <div className="relative overflow-hidden" style={{ height: maxHeight, minHeight: 200 }}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
-          key={hasItems ? "list" : "empty"}
+          key={hasItems ? 'list' : 'empty'}
           initial={reduceMotion ? false : { opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -14 }}
@@ -382,10 +389,8 @@ function EmptyState({
   return (
     <div
       className={cn(
-        "mx-auto flex max-w-sm flex-col items-center gap-3 rounded-2xl border border-dashed px-5 py-8",
-        dragActive
-          ? "border-emerald-500/60 bg-emerald-500/5"
-          : "border-border/70 bg-muted/20",
+        'mx-auto flex max-w-sm flex-col items-center gap-3 rounded-2xl border border-dashed px-5 py-8',
+        dragActive ? 'border-emerald-500/60 bg-emerald-500/5' : 'border-border/70 bg-muted/20',
       )}
     >
       <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">

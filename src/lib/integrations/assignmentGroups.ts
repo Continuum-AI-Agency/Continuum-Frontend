@@ -6,15 +6,15 @@
 // facebook/instagram/threads keys in the flat grouping are intentionally ignored
 // here to avoid double-listing them.
 
-import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
-import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
-import type { MetaSelectableAdAccountBundles } from "@/lib/integrations/selectableAssets";
+import { PLATFORMS, type PlatformKey } from '@/components/onboarding/platforms';
+import { isReadOnlyMetaRole } from '@/lib/integrations/metaRole';
+import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
+import type { MetaSelectableAdAccountBundles } from '@/lib/integrations/selectableAssets';
 import {
   getSelectableAssetLabel,
   getSelectableAssetsFlatList,
-} from "@/lib/integrations/selectableAssets";
-import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-import { isReadOnlyMetaRole } from "@/lib/integrations/metaRole";
+} from '@/lib/integrations/selectableAssets';
+import type { SelectableAsset, SelectableAssetsResponse } from '@/lib/schemas/integrations';
 
 export type AssignmentRow = {
   // Id used as the key in the caller's `selectedById` toggle map.
@@ -42,11 +42,11 @@ export type AssignmentSection = {
   extraSelectionIds: string[];
 };
 
-const META_KEYS: PlatformKey[] = ["facebook", "instagram", "threads"];
-const GOOGLE_KEYS: PlatformKey[] = ["youtube", "googleAds", "googleAnalytics", "dv360"];
+const META_KEYS: PlatformKey[] = ['facebook', 'instagram', 'threads'];
+const GOOGLE_KEYS: PlatformKey[] = ['youtube', 'googleAds', 'googleAnalytics', 'dv360'];
 
 const PLATFORM_LABEL_BY_KEY = new Map<PlatformKey, string>(
-  PLATFORMS.map(({ key, label }) => [key, label])
+  PLATFORMS.map(({ key, label }) => [key, label]),
 );
 
 function platformLabel(key: PlatformKey): string {
@@ -76,7 +76,7 @@ function toRows(assets: SelectableAsset[]): AssignmentRow[] {
 }
 
 function groupNonMetaAssets(
-  data: SelectableAssetsResponse | null
+  data: SelectableAssetsResponse | null,
 ): Map<PlatformKey, SelectableAsset[]> {
   const grouped = new Map<PlatformKey, SelectableAsset[]>();
   if (!data) return grouped;
@@ -96,7 +96,7 @@ function groupNonMetaAssets(
 function makePlatformSection(
   key: PlatformKey,
   assets: SelectableAsset[],
-  providerLabel: string | null
+  providerLabel: string | null,
 ): AssignmentSection {
   return {
     key: `platform:${key}`,
@@ -120,8 +120,8 @@ function makeMetaSections(metaBundles: MetaSelectableAdAccountBundles | null): A
       key: `meta-ad-account:${bundle.ad_account_id}`,
       title: bundle.ad_account ? getSelectableAssetLabel(bundle.ad_account) : bundle.ad_account_id,
       subtitle: null,
-      providerLabel: "Meta",
-      iconPlatformKey: "facebook",
+      providerLabel: 'Meta',
+      iconPlatformKey: 'facebook',
       readOnly: isReadOnlyMetaRole(bundle.ad_account?.role),
       rows: toRows(bundle.assets),
       extraSelectionIds: adAccountSelectionId ? [adAccountSelectionId] : [],
@@ -130,11 +130,11 @@ function makeMetaSections(metaBundles: MetaSelectableAdAccountBundles | null): A
 
   if (metaBundles.assets_without_ad_account.length > 0) {
     sections.push({
-      key: "meta-standalone",
-      title: "Standalone Meta accounts",
-      subtitle: "Not attached to a Meta ad account",
-      providerLabel: "Meta",
-      iconPlatformKey: "facebook",
+      key: 'meta-standalone',
+      title: 'Standalone Meta accounts',
+      subtitle: 'Not attached to a Meta ad account',
+      providerLabel: 'Meta',
+      iconPlatformKey: 'facebook',
       readOnly: false,
       rows: toRows(metaBundles.assets_without_ad_account),
       extraSelectionIds: [],
@@ -146,12 +146,12 @@ function makeMetaSections(metaBundles: MetaSelectableAdAccountBundles | null): A
 
 export function buildAssignmentSections(
   data: SelectableAssetsResponse | null,
-  metaBundles: MetaSelectableAdAccountBundles | null
+  metaBundles: MetaSelectableAdAccountBundles | null,
 ): AssignmentSection[] {
   const grouped = groupNonMetaAssets(data);
   const googleSections = GOOGLE_KEYS.map((key) => {
     const assets = grouped.get(key);
-    return assets && assets.length > 0 ? makePlatformSection(key, assets, "Google") : null;
+    return assets && assets.length > 0 ? makePlatformSection(key, assets, 'Google') : null;
   }).filter((section): section is AssignmentSection => section !== null);
 
   const otherSections = PLATFORMS.map(({ key }) => {
@@ -181,8 +181,7 @@ export function filterSection(section: AssignmentSection, query: string): Filter
 
   const visibleRows = section.rows.filter(
     (row) =>
-      row.label.toLowerCase().includes(trimmed) ||
-      row.externalId.toLowerCase().includes(trimmed)
+      row.label.toLowerCase().includes(trimmed) || row.externalId.toLowerCase().includes(trimmed),
   );
   return { visibleRows, titleMatched: false };
 }
@@ -192,7 +191,7 @@ export function filterSection(section: AssignmentSection, query: string): Filter
 export function sectionToggleIds(
   section: AssignmentSection,
   visibleRows: AssignmentRow[],
-  includeExtra: boolean
+  includeExtra: boolean,
 ): string[] {
   const ids = visibleRows.map((row) => row.selectionId);
   if (includeExtra) ids.push(...section.extraSelectionIds);

@@ -1,7 +1,13 @@
-import { useMemo } from "react";
-import { CheckCircle, MinusCircle, CircleNotch, ArrowsCounterClockwise, WarningCircle } from "@phosphor-icons/react";
-import { previewSectionSchema } from "@/lib/onboarding/agentClient";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import {
+  ArrowsCounterClockwise,
+  CheckCircle,
+  CircleNotch,
+  MinusCircle,
+  WarningCircle,
+} from '@phosphor-icons/react';
+import { useMemo } from 'react';
+import { previewSectionSchema } from '@/lib/onboarding/agentClient';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
 
 type RunProgressBannerProps = {
   buckets: AgentPreviewBuckets | null;
@@ -62,10 +68,10 @@ function tally(buckets: AgentPreviewBuckets | null) {
   if (!buckets) return out;
   for (const section of previewSectionSchema.options) {
     const s = buckets.sectionStatus[section];
-    if (s === "done") out.done += 1;
-    else if (s === "running") out.running += 1;
-    else if (s === "skipped") out.skipped += 1;
-    else if (s === "error") out.error += 1;
+    if (s === 'done') out.done += 1;
+    else if (s === 'running') out.running += 1;
+    else if (s === 'skipped') out.skipped += 1;
+    else if (s === 'error') out.error += 1;
     else out.idle += 1;
   }
   return out;

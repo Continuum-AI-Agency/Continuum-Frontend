@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { z } from "zod";
-import { toast } from "sonner";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { z } from 'zod';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export const reportJobSchema = z.object({
   job_id: z.string(),
   brand_id: z.string(),
-  status: z.enum(["pending", "running", "done", "failed"]),
+  status: z.enum(['pending', 'running', 'done', 'failed']),
   file_path: z.string().nullable(),
   error_message: z.string().nullable(),
   step_index: z.number().int().optional().default(0),
@@ -38,16 +38,15 @@ export function useReportJobsRealtime(brandProfileId: string) {
 
     channel
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "paid_media",
-          table: "report_jobs",
+          event: '*',
+          schema: 'paid_media',
+          table: 'report_jobs',
           filter: `brand_id=eq.${brandProfileId}`,
         },
         (payload) => {
-          const row =
-            payload.eventType === "DELETE" ? payload.old : payload.new;
+          const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
           const result = reportJobSchema.safeParse(row);
           if (!result.success) return;
 
@@ -56,38 +55,35 @@ export function useReportJobsRealtime(brandProfileId: string) {
 
           setJobs((prev) => {
             const map = new Map(prev.map((j) => [j.job_id, j]));
-            if (payload.eventType === "DELETE") {
+            if (payload.eventType === 'DELETE') {
               map.delete(job.job_id);
             } else {
               map.set(job.job_id, job);
             }
             return [...map.values()].sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime()
+              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
             );
           });
 
           if (prevStatus !== undefined && prevStatus !== job.status) {
-            if (job.status === "done") {
-              toast.success("Report ready", {
-                description: "Your Jaina report has been generated.",
+            if (job.status === 'done') {
+              toast.success('Report ready', {
+                description: 'Your Jaina report has been generated.',
               });
               setUnreadCount((c) => c + 1);
-            } else if (job.status === "failed") {
-              toast.error("Report failed", {
-                description:
-                  job.error_message ?? "Report generation failed.",
+            } else if (job.status === 'failed') {
+              toast.error('Report failed', {
+                description: job.error_message ?? 'Report generation failed.',
               });
               setUnreadCount((c) => c + 1);
             }
           }
 
           prevStatusRef.current.set(job.job_id, job.status);
-        }
+        },
       )
       .subscribe((status) => {
-        setIsConnected(status === "SUBSCRIBED");
+        setIsConnected(status === 'SUBSCRIBED');
       });
 
     return () => {

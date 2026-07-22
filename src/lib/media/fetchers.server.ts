@@ -14,11 +14,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
 import { getLibrarySortOrder, kindMatchOrFilter, paginateByMembership } from './filters';
 import { rowToSignedMediaAsset } from './mapper';
-import {
-  buildAssetPreview,
-  loadAssetRenditions,
-  renditionSignablePaths,
-} from './renditions';
+import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from './renditions';
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';

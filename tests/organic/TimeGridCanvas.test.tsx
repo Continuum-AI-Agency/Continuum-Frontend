@@ -1,16 +1,15 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import { cleanup, render } from '@testing-library/react';
+import React from 'react';
+import { organicCalendarDays } from '@/components/organic/primitives/mock-data';
+import { TimeGridCanvas } from '@/components/organic/primitives/TimeGridCanvas';
 
-import { expect, test, describe, afterEach } from "bun:test";
-import React from "react";
-import { render, cleanup } from "@testing-library/react";
-import { TimeGridCanvas } from "@/components/organic/primitives/TimeGridCanvas";
-import { organicCalendarDays } from "@/components/organic/primitives/mock-data";
-
-describe("TimeGridCanvas", () => {
+describe('TimeGridCanvas', () => {
   afterEach(() => {
     cleanup();
   });
 
-  test("renders a fixed 7-column weekly grid", () => {
+  test('renders a fixed 7-column weekly grid', () => {
     const { container } = render(
       <TimeGridCanvas
         days={organicCalendarDays}
@@ -19,14 +18,14 @@ describe("TimeGridCanvas", () => {
         onSelectDraft={() => {}}
         onToggleSelection={() => {}}
         onRegenerate={() => {}}
-      />
+      />,
     );
 
-    const grid = container.querySelector(".grid.grid-cols-7");
+    const grid = container.querySelector('.grid.grid-cols-7');
     expect(grid).toBeTruthy();
   });
 
-  test("renders one day column per week day", () => {
+  test('renders one day column per week day', () => {
     const { container } = render(
       <TimeGridCanvas
         days={organicCalendarDays}
@@ -35,7 +34,7 @@ describe("TimeGridCanvas", () => {
         onSelectDraft={() => {}}
         onToggleSelection={() => {}}
         onRegenerate={() => {}}
-      />
+      />,
     );
 
     const columns = container.querySelectorAll("[data-slot='time-grid-day-column']");

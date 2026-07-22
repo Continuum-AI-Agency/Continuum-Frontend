@@ -1,18 +1,22 @@
-import type { BrandRole, BrandInvite, BrandMember } from "@/lib/onboarding/state";
+import { z } from 'zod';
+import { httpServer } from '@/lib/api/http.server';
+import { fetchBrandInvites, fetchBrandMembers } from '@/lib/brands/members';
+import { setActiveBrandPreference } from '@/lib/brands/preferences';
+import {
+  type BrandProfileDetails,
+  fetchBrandProfileDetails,
+  invokeDeleteBrandProfile,
+} from '@/lib/brands/profile';
+import type { BrandInvite, BrandMember, BrandRole } from '@/lib/onboarding/state';
 import {
   createBrandProfile,
   createMagicLinkInvite,
   deleteBrandFromMetadata,
   removeMemberFromBrand,
   renameBrandProfile,
-  updateBrandLogo,
   revokeInvite,
-} from "@/lib/onboarding/storage";
-import { setActiveBrandPreference } from "@/lib/brands/preferences";
-import { z } from "zod";
-import { httpServer } from "@/lib/api/http.server";
-import { invokeDeleteBrandProfile, fetchBrandProfileDetails, type BrandProfileDetails } from "@/lib/brands/profile";
-import { fetchBrandMembers, fetchBrandInvites } from "@/lib/brands/members";
+  updateBrandLogo,
+} from '@/lib/onboarding/storage';
 
 export type BrandSummary = {
   id: string;
@@ -37,7 +41,12 @@ export interface BrandProfileRepository {
   updateLogo(brandId: string, logoPath: string | null): Promise<void>;
   createBrand(name?: string): Promise<{ brandId: string }>;
   removeMember(brandId: string, member: { userId?: string; email?: string }): Promise<void>;
-  createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }>;
+  createMagicLink(
+    brandId: string,
+    email: string,
+    role: BrandRole,
+    siteUrl: string,
+  ): Promise<{ link: string }>;
   revokeInvite(brandId: string, inviteId: string): Promise<void>;
   deleteBrand(brandId: string): Promise<string | null>;
   fetchProfile(brandId: string): Promise<BrandProfileDetails | null>;
@@ -90,34 +99,50 @@ export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
 export function createGatewayBrandProfileRepository(): BrandProfileRepository {
   return {
     async switchActiveBrand(brandId: string): Promise<void> {
-      await httpServer.request({ path: `/brands/${brandId}/switch`, method: "POST" });
+      await httpServer.request({ path: `/brands/${brandId}/switch`, method: 'POST' });
     },
     async renameBrand(brandId: string, name: string): Promise<void> {
-      await httpServer.request({ path: `/brands/${brandId}`, method: "PATCH", body: { name } });
+      await httpServer.request({ path: `/brands/${brandId}`, method: 'PATCH', body: { name } });
     },
     async updateLogo(brandId: string, logoPath: string | null): Promise<void> {
-      await httpServer.request({ path: `/brands/${brandId}`, method: "PATCH", body: { logoPath } });
+      await httpServer.request({ path: `/brands/${brandId}`, method: 'PATCH', body: { logoPath } });
     },
     async createBrand(name?: string): Promise<{ brandId: string }> {
       const schema = z.object({ brandId: z.string() });
-      return await httpServer.request({ path: "/brands", method: "POST", body: { name }, schema });
+      return await httpServer.request({ path: '/brands', method: 'POST', body: { name }, schema });
     },
-    async removeMember(brandId: string, member: { userId?: string; email?: string }): Promise<void> {
+    async removeMember(
+      brandId: string,
+      member: { userId?: string; email?: string },
+    ): Promise<void> {
       await httpServer.request({
         path: `/brands/${brandId}/members`,
-        method: "DELETE",
+        method: 'DELETE',
         body: { email: member.email, userId: member.userId },
       });
     },
-    async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }> {
+    async createMagicLink(
+      brandId: string,
+      email: string,
+      role: BrandRole,
+      siteUrl: string,
+    ): Promise<{ link: string }> {
       const schema = z.object({ link: z.string().min(1) });
-      return await httpServer.request({ path: `/brands/${brandId}/invites`, method: "POST", body: { email, role, siteUrl }, schema });
+      return await httpServer.request({
+        path: `/brands/${brandId}/invites`,
+        method: 'POST',
+        body: { email, role, siteUrl },
+        schema,
+      });
     },
     async revokeInvite(brandId: string, inviteId: string): Promise<void> {
-      await httpServer.request({ path: `/brands/${brandId}/invites/${inviteId}`, method: "DELETE" });
+      await httpServer.request({
+        path: `/brands/${brandId}/invites/${inviteId}`,
+        method: 'DELETE',
+      });
     },
     async deleteBrand(brandId: string): Promise<string | null> {
-      await httpServer.request({ path: `/brands/${brandId}`, method: "DELETE" });
+      await httpServer.request({ path: `/brands/${brandId}`, method: 'DELETE' });
       return null;
     },
     async fetchProfile(brandId: string): Promise<BrandProfileDetails | null> {
@@ -128,15 +153,31 @@ export function createGatewayBrandProfileRepository(): BrandProfileRepository {
         updatedAt: z.string(),
         createdBy: z.string(),
       });
-      return await httpServer.request({ path: `/brands/${brandId}`, method: "GET", schema });
+      return await httpServer.request({ path: `/brands/${brandId}`, method: 'GET', schema });
     },
     async fetchMembers(brandId: string): Promise<BrandMember[]> {
       const schema = z.array(z.object({ id: z.string(), email: z.string(), role: z.string() }));
-      return (await httpServer.request({ path: `/brands/${brandId}/members`, method: "GET", schema })) as BrandMember[];
+      return (await httpServer.request({
+        path: `/brands/${brandId}/members`,
+        method: 'GET',
+        schema,
+      })) as BrandMember[];
     },
     async fetchInvites(brandId: string): Promise<BrandInvite[]> {
-      const schema = z.array(z.object({ id: z.string(), email: z.string(), role: z.string(), createdAt: z.string(), expiresAt: z.string().nullable() }));
-      return (await httpServer.request({ path: `/brands/${brandId}/invites`, method: "GET", schema })) as BrandInvite[];
+      const schema = z.array(
+        z.object({
+          id: z.string(),
+          email: z.string(),
+          role: z.string(),
+          createdAt: z.string(),
+          expiresAt: z.string().nullable(),
+        }),
+      );
+      return (await httpServer.request({
+        path: `/brands/${brandId}/invites`,
+        method: 'GET',
+        schema,
+      })) as BrandInvite[];
     },
   };
 }

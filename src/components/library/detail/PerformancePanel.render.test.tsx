@@ -277,7 +277,11 @@ describe('the two click numbers, and Meta own grade', () => {
           ...LIVE_AD.deployments[0],
           ad: {
             ...LIVE_AD.deployments[0].ad!,
-            metrics: { ...LIVE_AD.deployments[0].ad!.metrics, qualityRanking: null, engagementRateRanking: null },
+            metrics: {
+              ...LIVE_AD.deployments[0].ad!.metrics,
+              qualityRanking: null,
+              engagementRateRanking: null,
+            },
           },
         },
       ],

@@ -1,10 +1,9 @@
-"use client";
+'use client';
 
-import { ChevronLeft, ChevronRight, Images, Play } from "lucide-react";
-
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import type { InstagramPost } from "@continuum/contracts";
+import type { InstagramPost } from '@continuum/contracts';
+import { ChevronLeft, ChevronRight, Images, Play } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface InstagramPostGridProps {
   posts: InstagramPost[];
@@ -19,15 +18,19 @@ const PostCover = ({ post }: { post: InstagramPost }) => {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={post.coverUrl} alt="" className="h-full w-full object-cover" />;
   }
-  const firstVideo = post.items.find((item) => item.kind === "video");
+  const firstVideo = post.items.find((item) => item.kind === 'video');
   if (firstVideo) {
     return <video src={firstVideo.url} className="h-full w-full object-cover" muted />;
   }
-  return <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No preview</div>;
+  return (
+    <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+      No preview
+    </div>
+  );
 };
 
 const PostBadge = ({ post }: { post: InstagramPost }) => {
-  if (post.kind === "carousel") {
+  if (post.kind === 'carousel') {
     return (
       <Badge variant="secondary" className="absolute right-1 top-1 gap-1">
         <Images className="h-3 w-3" />
@@ -35,7 +38,7 @@ const PostBadge = ({ post }: { post: InstagramPost }) => {
       </Badge>
     );
   }
-  if (post.kind === "reel") {
+  if (post.kind === 'reel') {
     return (
       <Badge variant="secondary" className="absolute right-1 top-1 gap-1">
         <Play className="h-3 w-3" />
@@ -46,7 +49,13 @@ const PostBadge = ({ post }: { post: InstagramPost }) => {
   return null;
 };
 
-export function InstagramPostGrid({ posts, page, pageSize, onPageChange, onSelect }: InstagramPostGridProps) {
+export function InstagramPostGrid({
+  posts,
+  page,
+  pageSize,
+  onPageChange,
+  onSelect,
+}: InstagramPostGridProps) {
   const totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
   const start = safePage * pageSize;

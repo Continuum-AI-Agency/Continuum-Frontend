@@ -5,14 +5,14 @@
 // dashboard fetches the book in an RSC and passes it down to render the panel.
 
 import {
-  deriveReadinessSummary,
   type BrandBookResponse,
+  deriveReadinessSummary,
   type ReadinessAnalysis,
   type ReadinessSummary,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
 
-export type { ReadinessSummary, ReadinessBand } from "@continuum/contracts";
-export { deriveReadinessSummary } from "@continuum/contracts";
+export type { ReadinessBand, ReadinessSummary } from '@continuum/contracts';
+export { deriveReadinessSummary } from '@continuum/contracts';
 
 // Readiness lives on the assembled report layer, with a back-compat mirror on
 // the top-level composite for older materialized books.

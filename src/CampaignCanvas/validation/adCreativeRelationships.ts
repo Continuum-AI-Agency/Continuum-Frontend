@@ -1,9 +1,4 @@
-import type {
-  AdData,
-  CampaignCanvasEdge,
-  CampaignCanvasNode,
-  CreativeData,
-} from '../types';
+import type { AdData, CampaignCanvasEdge, CampaignCanvasNode, CreativeData } from '../types';
 import { isAdFormatCompatibleWithCreativeType } from '../types/adCreativeCompatibility';
 
 interface RelationshipIssue {
@@ -19,7 +14,9 @@ function isAdNode(node: CampaignCanvasNode): node is CampaignCanvasNode & { data
   return node.type === 'ad';
 }
 
-function isCreativeNode(node: CampaignCanvasNode): node is CampaignCanvasNode & { data: CreativeData } {
+function isCreativeNode(
+  node: CampaignCanvasNode,
+): node is CampaignCanvasNode & { data: CreativeData } {
   return node.type === 'creative';
 }
 
@@ -31,10 +28,10 @@ function getErrorMessage(issue: RelationshipIssue): string {
 
 function getRelationshipErrorsForNode(
   existingErrors: string[] | undefined,
-  issues: RelationshipIssue[]
+  issues: RelationshipIssue[],
 ): string[] {
   const retainedErrors = (existingErrors ?? []).filter(
-    (error) => !error.startsWith(relationshipErrorPrefix)
+    (error) => !error.startsWith(relationshipErrorPrefix),
   );
   const relationshipErrors = issues.map(getErrorMessage);
   return [...retainedErrors, ...relationshipErrors];
@@ -42,7 +39,7 @@ function getRelationshipErrorsForNode(
 
 export function collectAdCreativeRelationshipIssues(
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): RelationshipIssue[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const issues: RelationshipIssue[] = [];
@@ -57,7 +54,7 @@ export function collectAdCreativeRelationshipIssues(
 
     const isCompatible = isAdFormatCompatibleWithCreativeType(
       source.data.adFormat,
-      target.data.assetType
+      target.data.assetType,
     );
 
     if (!isCompatible) {
@@ -75,7 +72,7 @@ export function collectAdCreativeRelationshipIssues(
 
 export function applyAdCreativeRelationshipValidation(
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): CampaignCanvasNode[] {
   const issues = collectAdCreativeRelationshipIssues(nodes, edges);
   const nodeIssues = new Map<string, RelationshipIssue[]>();
@@ -94,7 +91,7 @@ export function applyAdCreativeRelationshipValidation(
     const issuesForNode = nodeIssues.get(node.id) ?? [];
     const validationErrors = getRelationshipErrorsForNode(
       node.data.validationErrors,
-      issuesForNode
+      issuesForNode,
     );
 
     return {

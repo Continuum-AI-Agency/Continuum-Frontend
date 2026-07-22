@@ -1,15 +1,14 @@
-"use client";
-
-import { z } from "zod";
+'use client';
 
 import {
-  brandMdSaveResultSchema,
-  readinessAnalysisSchema,
   type BrandMdSaveResult,
+  brandMdSaveResultSchema,
   type ReadinessAnalysis,
-} from "@continuum/contracts";
+  readinessAnalysisSchema,
+} from '@continuum/contracts';
+import { z } from 'zod';
 
-import { http } from "@/lib/api/http";
+import { http } from '@/lib/api/http';
 
 const recomputeReadinessResponseSchema = z.object({
   brand_id: z.string().optional(),
@@ -37,14 +36,14 @@ export type DeepenBrandBookResponse = {
 export async function deepenBrandBook(brandId: string): Promise<DeepenBrandBookResponse> {
   const response = await http.request({
     path: `/onboarding/brand-profiles/${encodeURIComponent(brandId)}/deepen`,
-    method: "POST",
-    cache: "no-store",
+    method: 'POST',
+    cache: 'no-store',
   });
 
   const parsed = deepenResponseSchema.optional().parse(response);
   return {
     jobId: parsed?.job_id ?? null,
-    status: parsed?.status ?? "queued",
+    status: parsed?.status ?? 'queued',
   };
 }
 
@@ -56,9 +55,9 @@ export async function deepenBrandBook(brandId: string): Promise<DeepenBrandBookR
 export async function saveBrandMd(brandId: string, brandMd: string): Promise<BrandMdSaveResult> {
   const response = await http.request({
     path: `/onboarding/brand-profiles/${encodeURIComponent(brandId)}/brand-md`,
-    method: "POST",
+    method: 'POST',
     body: { brand_md: brandMd },
-    cache: "no-store",
+    cache: 'no-store',
   });
   return brandMdSaveResultSchema.parse(response);
 }
@@ -67,8 +66,8 @@ export async function saveBrandMd(brandId: string, brandMd: string): Promise<Bra
 export async function resetBrandMd(brandId: string): Promise<BrandMdSaveResult> {
   const response = await http.request({
     path: `/onboarding/brand-profiles/${encodeURIComponent(brandId)}/brand-md/reset`,
-    method: "POST",
-    cache: "no-store",
+    method: 'POST',
+    cache: 'no-store',
   });
   return brandMdSaveResultSchema.parse(response);
 }
@@ -80,8 +79,8 @@ export async function resetBrandMd(brandId: string): Promise<BrandMdSaveResult> 
 export async function recomputeReadiness(brandId: string): Promise<ReadinessAnalysis> {
   const response = await http.request({
     path: `/onboarding/brand-profiles/${encodeURIComponent(brandId)}/readiness/recompute`,
-    method: "POST",
-    cache: "no-store",
+    method: 'POST',
+    cache: 'no-store',
   });
   return recomputeReadinessResponseSchema.parse(response).readiness;
 }

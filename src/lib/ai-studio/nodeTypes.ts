@@ -1,5 +1,5 @@
-import type { Node } from "@xyflow/react";
-import type { AiStudioMedium, AiStudioProvider } from "@/lib/schemas/aiStudio";
+import type { Node } from '@xyflow/react';
+import type { AiStudioMedium, AiStudioProvider } from '@/lib/schemas/aiStudio';
 
 export type GeneratorNodeData = {
   provider: AiStudioProvider;
@@ -12,8 +12,8 @@ export type GeneratorNodeData = {
   negativePrompt?: string;
   guidanceScale?: number;
   seed?: number;
-  imageSize?: "1k" | "2k" | "4k";
-  responseModality?: "image" | "image+text";
+  imageSize?: '1k' | '2k' | '4k';
+  responseModality?: 'image' | 'image+text';
   status?: string;
   failureMessage?: string;
   jobId?: string;
@@ -43,8 +43,8 @@ export type ModelNodeData = {
   provider: AiStudioProvider;
   medium: AiStudioMedium;
   aspectRatio: string;
-  imageSize?: "1k" | "2k" | "4k";
-  responseModality?: "image" | "image+text";
+  imageSize?: '1k' | '2k' | '4k';
+  responseModality?: 'image' | 'image+text';
 };
 
 export type PreviewNodeData = {
@@ -65,7 +65,7 @@ export type IteratorNodeData = {
 };
 
 export type ImageProcessorNodeData = {
-  operation: "inpainting" | "outpainting" | "relighting";
+  operation: 'inpainting' | 'outpainting' | 'relighting';
   maskImage?: string;
   prompt?: string;
   strength?: number;
@@ -76,7 +76,7 @@ export type ImageProcessorNodeData = {
 };
 
 export type LLMNodeData = {
-  provider: "openai" | "anthropic" | "google";
+  provider: 'openai' | 'anthropic' | 'google';
   model: string;
   systemPrompt?: string;
   userPrompt: string;
@@ -87,12 +87,19 @@ export type LLMNodeData = {
 };
 
 export type CompositeNodeData = {
-  operation: "text-overlay" | "image-blend" | "mask-apply";
+  operation: 'text-overlay' | 'image-blend' | 'mask-apply';
   textContent?: string;
-  textPosition?: "top-left" | "top-center" | "top-right" | "center" | "bottom-left" | "bottom-center" | "bottom-right";
+  textPosition?:
+    | 'top-left'
+    | 'top-center'
+    | 'top-right'
+    | 'center'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'bottom-right';
   fontSize?: number;
   fontColor?: string;
-  blendMode?: "normal" | "multiply" | "screen" | "overlay";
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay';
   opacity?: number;
   status?: string;
   outputImage?: string;

@@ -32,7 +32,7 @@ function matchesBinding(event: KeyboardEvent, binding: ShortcutBinding): boolean
 function handleKeyDown(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null;
   const tagName = target?.tagName;
-  const inInput = tagName === "INPUT" || tagName === "TEXTAREA" || target?.isContentEditable;
+  const inInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || target?.isContentEditable;
 
   for (const binding of shortcuts.values()) {
     if (inInput && !binding.allowInInput) continue;
@@ -45,14 +45,14 @@ function handleKeyDown(event: KeyboardEvent) {
 }
 
 function ensureListener() {
-  if (listenerAttached || typeof document === "undefined") return;
-  document.addEventListener("keydown", handleKeyDown);
+  if (listenerAttached || typeof document === 'undefined') return;
+  document.addEventListener('keydown', handleKeyDown);
   listenerAttached = true;
 }
 
 function detachIfEmpty() {
   if (shortcuts.size > 0 || !listenerAttached) return;
-  document.removeEventListener("keydown", handleKeyDown);
+  document.removeEventListener('keydown', handleKeyDown);
   listenerAttached = false;
 }
 

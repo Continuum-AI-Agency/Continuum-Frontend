@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { useCallback, useMemo } from "react";
-import { z } from "zod";
+import { useCallback, useMemo } from 'react';
+import { z } from 'zod';
 
-import { usePersistentState } from "@/lib/usePersistentState";
+import { usePersistentState } from '@/lib/usePersistentState';
 import {
   DEFAULT_PROMPTS,
-  promptDefinitionSchema,
   type PromptDefinition,
   type PromptFormValue,
+  promptDefinitionSchema,
   toPromptFormValue,
-} from "./prompts";
+} from './prompts';
 
 const customPromptSchema = promptDefinitionSchema.extend({
-  source: z.literal("custom"),
+  source: z.literal('custom'),
 });
 
 const customPromptArraySchema = z.array(customPromptSchema);
@@ -30,12 +30,12 @@ export function useOrganicPromptLibrary(brandProfileId: string) {
   const [customPrompts, setCustomPrompts] = usePersistentState<PromptDefinition[]>(
     storageKey,
     [],
-    customPromptArraySchema
+    customPromptArraySchema,
   );
 
   const prompts = useMemo<PromptDefinition[]>(
     () => [...DEFAULT_PROMPTS, ...customPrompts],
-    [customPrompts]
+    [customPrompts],
   );
 
   const addCustomPrompt = useCallback(
@@ -43,7 +43,7 @@ export function useOrganicPromptLibrary(brandProfileId: string) {
       const trimmedName = input.name.trim();
       const trimmedContent = input.content.trim();
       if (!trimmedName || !trimmedContent) {
-        throw new Error("Prompt name and content are required.");
+        throw new Error('Prompt name and content are required.');
       }
 
       const newPrompt: PromptDefinition = {
@@ -51,27 +51,27 @@ export function useOrganicPromptLibrary(brandProfileId: string) {
         name: trimmedName,
         description: input.description?.trim() || undefined,
         content: trimmedContent,
-        category: input.category?.trim() || "Custom",
-        source: "custom",
+        category: input.category?.trim() || 'Custom',
+        source: 'custom',
       };
 
       setCustomPrompts((current) => [...current, newPrompt]);
       return newPrompt;
     },
-    [setCustomPrompts]
+    [setCustomPrompts],
   );
 
   const removeCustomPrompt = useCallback(
     (promptId: string) => {
       setCustomPrompts((current) => current.filter((prompt) => prompt.id !== promptId));
     },
-    [setCustomPrompts]
+    [setCustomPrompts],
   );
 
   const findPromptById = useCallback(
     (promptId: string): PromptDefinition | undefined =>
       prompts.find((prompt) => prompt.id === promptId),
-    [prompts]
+    [prompts],
   );
 
   const defaultPrompt: PromptFormValue = useMemo(() => {

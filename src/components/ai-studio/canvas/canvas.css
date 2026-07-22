@@ -43,5 +43,9 @@
 
   /* Canvas surface tokens */
   --studio-grid-dot: rgba(15, 23, 42, 0.06);
-  --studio-canvas-vignette: radial-gradient(120% 120% at 30% 0%, rgba(15, 23, 42, 0.04), transparent 60%);
+  --studio-canvas-vignette: radial-gradient(
+    120% 120% at 30% 0%,
+    rgba(15, 23, 42, 0.04),
+    transparent 60%
+  );
 }

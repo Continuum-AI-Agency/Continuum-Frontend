@@ -1,5 +1,6 @@
-"use client";
-import React, { useState, useRef, useEffect } from 'react';
+'use client';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 
 interface EditableAmountProps {
@@ -9,7 +10,12 @@ interface EditableAmountProps {
   className?: string;
 }
 
-export const EditableAmount = ({ value, currency = 'USD', onSave, className }: EditableAmountProps) => {
+export const EditableAmount = ({
+  value,
+  currency = 'USD',
+  onSave,
+  className,
+}: EditableAmountProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(value.toString());
   const inputRef = useRef<HTMLInputElement>(null);

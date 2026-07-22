@@ -6,10 +6,10 @@ type ResolveWorkflowInitUrlParams = {
   getApiUrl: (path: string) => string;
 };
 
-const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+const normalizePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
 const basePathHasApiPrefix = (pathname: string) =>
-  pathname === "/api" || pathname.startsWith("/api/");
+  pathname === '/api' || pathname.startsWith('/api/');
 
 export function resolveWorkflowInitUrl({
   path,
@@ -28,7 +28,7 @@ export function resolveWorkflowInitUrl({
     try {
       const parsedBase = new URL(clientApiBase, windowOrigin);
       const isSameOrigin = parsedBase.origin === windowOrigin;
-      const pathAlreadyPrefixed = normalizedPath.startsWith("/api/");
+      const pathAlreadyPrefixed = normalizedPath.startsWith('/api/');
 
       if (isSameOrigin && !basePathHasApiPrefix(parsedBase.pathname) && !pathAlreadyPrefixed) {
         return getApiUrl(`/api${normalizedPath}`);

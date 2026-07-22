@@ -1,7 +1,7 @@
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import * as storeRegistry from "@/lib/storage/storeRegistry";
-import type { OrganicPost } from "@/lib/schemas/organicMetrics";
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
+import * as storeRegistry from '@/lib/storage/storeRegistry';
 
 // In-session cache of per-post insight details so clicking between posts (and
 // switching tabs / remounting the dashboard) is instant. The server-side
@@ -12,7 +12,7 @@ import type { OrganicPost } from "@/lib/schemas/organicMetrics";
 // across accounts. Persisted to sessionStorage (tab-scoped) and wiped on brand
 // switch, mirroring useCalendarStore.
 
-const STORAGE_KEY = "organic-post-analytics-storage";
+const STORAGE_KEY = 'organic-post-analytics-storage';
 const STORE_VERSION = 1;
 
 export function buildPostDetailKey(integrationAccountId: string, postId: string): string {
@@ -37,12 +37,15 @@ export function selectAccountPostDetails(
 interface PostAnalyticsState {
   postDetailsById: Record<string, OrganicPost>;
   setPostDetail: (params: { integrationAccountId: string; post: OrganicPost }) => void;
-  getPostDetail: (params: { integrationAccountId: string; postId: string }) => OrganicPost | undefined;
+  getPostDetail: (params: {
+    integrationAccountId: string;
+    postId: string;
+  }) => OrganicPost | undefined;
   clearPostDetails: () => void;
   resetForBrandSwitch: () => void;
 }
 
-type PersistedPostAnalyticsState = Pick<PostAnalyticsState, "postDetailsById">;
+type PersistedPostAnalyticsState = Pick<PostAnalyticsState, 'postDetailsById'>;
 
 // Comment threads can be large; they are not needed for cards/charts/export, so
 // strip them before persisting to keep sessionStorage lean.
@@ -55,11 +58,11 @@ function sanitizePersistedState(
   state: Partial<PostAnalyticsState> | undefined,
 ): PersistedPostAnalyticsState {
   const source = state?.postDetailsById;
-  if (!source || typeof source !== "object") return { postDetailsById: {} };
+  if (!source || typeof source !== 'object') return { postDetailsById: {} };
 
   const postDetailsById: Record<string, OrganicPost> = {};
   for (const [key, post] of Object.entries(source)) {
-    if (post && typeof post === "object") {
+    if (post && typeof post === 'object') {
       postDetailsById[key] = stripPostBlobs(post as OrganicPost);
     }
   }
@@ -90,7 +93,7 @@ export const usePostAnalyticsStore = create<PostAnalyticsState>()(
       name: STORAGE_KEY,
       version: STORE_VERSION,
       storage: createJSONStorage(() =>
-        typeof window !== "undefined" ? window.sessionStorage : localStorage,
+        typeof window !== 'undefined' ? window.sessionStorage : localStorage,
       ),
       partialize: (state) => sanitizePersistedState(state),
       migrate: (persistedState) =>
@@ -99,16 +102,16 @@ export const usePostAnalyticsStore = create<PostAnalyticsState>()(
   ),
 );
 
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   storeRegistry.register({
-    name: "organic-post-analytics",
+    name: 'organic-post-analytics',
     teardown: () => {
       try {
         usePostAnalyticsStore.getState().resetForBrandSwitch();
         window.sessionStorage.removeItem(STORAGE_KEY);
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[organic-post-analytics] teardown failed", error);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[organic-post-analytics] teardown failed', error);
         }
       }
     },

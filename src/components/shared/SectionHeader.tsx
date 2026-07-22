@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 type SectionHeaderProps = {
   title?: ReactNode;
@@ -19,7 +19,7 @@ export function SectionHeader({ title, eyebrow, meta, action, className }: Secti
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2",
+        'flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2',
         className,
       )}
     >

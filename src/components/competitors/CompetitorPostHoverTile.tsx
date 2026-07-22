@@ -1,52 +1,69 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ExternalLink, Heart, Images, MessageCircle, Play } from "lucide-react";
-
-import type { InstagramMediaItem, InstagramPost } from "@continuum/contracts";
+import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
+import { ExternalLink, Heart, Images, MessageCircle, Play } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   Carousel,
+  type CarouselApi,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-  type CarouselApi,
-} from "@/components/ui/carousel";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { cn } from "@/lib/utils";
-import { carouselSlides, type CompetitorPostView } from "./competitorPostView";
+} from '@/components/ui/carousel';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { cn } from '@/lib/utils';
+import { type CompetitorPostView, carouselSlides } from './competitorPostView';
 
-const numberFormatter = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const numberFormatter = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
 
 function formatCount(value: number | null | undefined): string | null {
-  return typeof value === "number" ? numberFormatter.format(value) : null;
+  return typeof value === 'number' ? numberFormatter.format(value) : null;
 }
 
 function formatDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(
+    date,
+  );
 }
 
 /** First playable video URL on a reel (or null when the post has no video item). */
 function reelVideoUrl(post: InstagramPost): string | null {
-  if (post.kind !== "reel") return null;
-  const video = post.items.find((item) => item.kind === "video");
+  if (post.kind !== 'reel') return null;
+  const video = post.items.find((item) => item.kind === 'video');
   return video?.url ?? null;
 }
 
-function KindGlyph({ kind }: { kind: CompetitorPostView["post"]["kind"] }) {
-  if (kind === "reel") return <Play className="h-2.5 w-2.5 fill-current" aria-hidden />;
-  if (kind === "carousel") return <Images className="h-2.5 w-2.5" aria-hidden />;
+function KindGlyph({ kind }: { kind: CompetitorPostView['post']['kind'] }) {
+  if (kind === 'reel') return <Play className="h-2.5 w-2.5 fill-current" aria-hidden />;
+  if (kind === 'carousel') return <Images className="h-2.5 w-2.5" aria-hidden />;
   return null;
 }
 
-function PostThumb({ coverUrl, alt, className }: { coverUrl: string | null; alt: string; className?: string }) {
+function PostThumb({
+  coverUrl,
+  alt,
+  className,
+}: {
+  coverUrl: string | null;
+  alt: string;
+  className?: string;
+}) {
   const [errored, setErrored] = useState(false);
   if (!coverUrl || errored) {
     return (
-      <div className={cn("flex aspect-square items-center justify-center bg-muted text-2xs text-muted-foreground", className)}>
+      <div
+        className={cn(
+          'flex aspect-square items-center justify-center bg-muted text-2xs text-muted-foreground',
+          className,
+        )}
+      >
         No preview
       </div>
     );
@@ -58,7 +75,7 @@ function PostThumb({ coverUrl, alt, className }: { coverUrl: string | null; alt:
       alt={alt}
       loading="lazy"
       onError={() => setErrored(true)}
-      className={cn("w-full object-cover", className)}
+      className={cn('w-full object-cover', className)}
     />
   );
 }
@@ -117,16 +134,24 @@ function ReelVideo({
       loop
       playsInline
       controls={controls}
-      preload={shouldPlay ? "auto" : "metadata"}
+      preload={shouldPlay ? 'auto' : 'metadata'}
       aria-label={alt}
       onError={() => setErrored(true)}
-      className={cn("w-full bg-black object-cover", className)}
+      className={cn('w-full bg-black object-cover', className)}
     />
   );
 }
 
-function SlideMedia({ item, poster, alt }: { item: InstagramMediaItem; poster: string | null; alt: string }) {
-  if (item.kind === "video") {
+function SlideMedia({
+  item,
+  poster,
+  alt,
+}: {
+  item: InstagramMediaItem;
+  poster: string | null;
+  alt: string;
+}) {
+  if (item.kind === 'video') {
     return (
       <video
         src={item.url}
@@ -143,7 +168,15 @@ function SlideMedia({ item, poster, alt }: { item: InstagramMediaItem; poster: s
 
 // The enlarged, pageable preview for carousels: click the inward arrows to move
 // between slides while the pointer stays inside the hover card.
-function PostCarousel({ slides, poster, alt }: { slides: InstagramMediaItem[]; poster: string | null; alt: string }) {
+function PostCarousel({
+  slides,
+  poster,
+  alt,
+}: {
+  slides: InstagramMediaItem[];
+  poster: string | null;
+  alt: string;
+}) {
   const [api, setApi] = useState<CarouselApi | null>(null);
   const [current, setCurrent] = useState(0);
 
@@ -151,16 +184,16 @@ function PostCarousel({ slides, poster, alt }: { slides: InstagramMediaItem[]; p
     if (!api) return;
     const syncCurrent = () => setCurrent(api.selectedScrollSnap());
     syncCurrent();
-    api.on("select", syncCurrent);
-    api.on("reInit", syncCurrent);
+    api.on('select', syncCurrent);
+    api.on('reInit', syncCurrent);
     return () => {
-      api.off("select", syncCurrent);
-      api.off("reInit", syncCurrent);
+      api.off('select', syncCurrent);
+      api.off('reInit', syncCurrent);
     };
   }, [api]);
 
   const arrowClass =
-    "h-7 w-7 border-0 bg-black/55 text-white backdrop-blur-sm hover:bg-black/75 hover:text-white disabled:opacity-30";
+    'h-7 w-7 border-0 bg-black/55 text-white backdrop-blur-sm hover:bg-black/75 hover:text-white disabled:opacity-30';
 
   return (
     <div className="relative">
@@ -172,8 +205,8 @@ function PostCarousel({ slides, poster, alt }: { slides: InstagramMediaItem[]; p
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious className={cn("left-2", arrowClass)} />
-        <CarouselNext className={cn("right-2", arrowClass)} />
+        <CarouselPrevious className={cn('left-2', arrowClass)} />
+        <CarouselNext className={cn('right-2', arrowClass)} />
       </Carousel>
       <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
         {current + 1}/{slides.length}
@@ -200,7 +233,8 @@ export function CompetitorPostHoverTile({
   const slides = carouselSlides(post);
   const videoUrl = reelVideoUrl(post);
   const [tileHovering, setTileHovering] = useState(false);
-  const mediaClassName = "aspect-square h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-105";
+  const mediaClassName =
+    'aspect-square h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-105';
 
   return (
     <HoverCard openDelay={180} closeDelay={100}>
@@ -225,10 +259,10 @@ export function CompetitorPostHoverTile({
           ) : (
             <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
           )}
-          {(post.kind !== "post" || post.mediaCount > 1) && (
+          {(post.kind !== 'post' || post.mediaCount > 1) && (
             <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
               <KindGlyph kind={post.kind} />
-              {post.mediaCount > 1 ? post.mediaCount : post.kind === "reel" ? "Reel" : null}
+              {post.mediaCount > 1 ? post.mediaCount : post.kind === 'reel' ? 'Reel' : null}
             </span>
           )}
         </a>
@@ -255,7 +289,9 @@ export function CompetitorPostHoverTile({
               <p className="truncate text-sm font-medium text-foreground">{view.competitorName}</p>
               <p className="truncate text-xs text-muted-foreground">@{view.instagramUsername}</p>
             </div>
-            {postDate ? <span className="shrink-0 text-2xs text-muted-foreground">{postDate}</span> : null}
+            {postDate ? (
+              <span className="shrink-0 text-2xs text-muted-foreground">{postDate}</span>
+            ) : null}
           </div>
 
           {post.caption ? (

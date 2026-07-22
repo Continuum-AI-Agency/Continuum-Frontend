@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
+import * as React from 'react';
 
-import { useDryRunMode, usePendingActions } from "@/lib/approvals/queries";
-import { useApprovalsStore } from "@/lib/approvals/store";
-import { LaneStrip } from "./LaneStrip";
-import { FocusComposer } from "./FocusComposer";
-import { LiveStatusDot } from "./LiveStatusDot";
-import { cn } from "@/lib/utils";
+import { useDryRunMode, usePendingActions } from '@/lib/approvals/queries';
+import { useApprovalsStore } from '@/lib/approvals/store';
+import { cn } from '@/lib/utils';
+import { FocusComposer } from './FocusComposer';
+import { LaneStrip } from './LaneStrip';
+import { LiveStatusDot } from './LiveStatusDot';
 
 type Props = {
   brandId: string;
@@ -24,7 +24,7 @@ type Props = {
  */
 export function ApprovalsCompact({ brandId, className }: Props) {
   const optimistic = useApprovalsStore((s) => s.pendingDecisions);
-  const list = usePendingActions(brandId, "PENDING");
+  const list = usePendingActions(brandId, 'PENDING');
   const dryRun = useDryRunMode();
 
   // Local focus state — do NOT share useApprovalsStore.focusedActionId with the
@@ -57,7 +57,8 @@ export function ApprovalsCompact({ brandId, className }: Props) {
       return;
     }
     const currentIndex = actions.findIndex((a) => a.id === focusedActionId);
-    const nextIndex = currentIndex + 1 < actions.length ? currentIndex + 1 : Math.max(0, currentIndex - 1);
+    const nextIndex =
+      currentIndex + 1 < actions.length ? currentIndex + 1 : Math.max(0, currentIndex - 1);
     setFocusedActionId(actions[nextIndex]?.id ?? null);
   }, [actions, focusedActionId]);
 
@@ -65,16 +66,14 @@ export function ApprovalsCompact({ brandId, className }: Props) {
   const isDryRun = dryRun.data?.enabled ?? false;
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col gap-3 p-3", className)}>
+    <div className={cn('flex h-full min-h-0 flex-col gap-3 p-3', className)}>
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Pending
           </span>
           <LiveStatusDot isDryRun={isDryRun} isFetching={list.isFetching} />
-          <span className="font-data text-xs tabular-nums text-muted-foreground">
-            {total}
-          </span>
+          <span className="font-data text-xs tabular-nums text-muted-foreground">{total}</span>
         </div>
         <Link
           href="/scale/approvals"

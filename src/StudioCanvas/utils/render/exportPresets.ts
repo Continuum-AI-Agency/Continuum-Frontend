@@ -15,10 +15,34 @@ export interface ExportPreset {
 
 export const EXPORT_PRESETS: ExportPreset[] = [
   { id: 'source', label: 'Source resolution', width: null, height: null, videoBitrate: 6_000_000 },
-  { id: 'vertical-1080', label: 'Vertical · 1080×1920', width: 1080, height: 1920, videoBitrate: 9_000_000 },
-  { id: 'vertical-720', label: 'Vertical · 720×1280', width: 720, height: 1280, videoBitrate: 5_000_000 },
-  { id: 'square-1080', label: 'Square · 1080×1080', width: 1080, height: 1080, videoBitrate: 8_000_000 },
-  { id: 'wide-1080', label: 'Widescreen · 1920×1080', width: 1920, height: 1080, videoBitrate: 10_000_000 },
+  {
+    id: 'vertical-1080',
+    label: 'Vertical · 1080×1920',
+    width: 1080,
+    height: 1920,
+    videoBitrate: 9_000_000,
+  },
+  {
+    id: 'vertical-720',
+    label: 'Vertical · 720×1280',
+    width: 720,
+    height: 1280,
+    videoBitrate: 5_000_000,
+  },
+  {
+    id: 'square-1080',
+    label: 'Square · 1080×1080',
+    width: 1080,
+    height: 1080,
+    videoBitrate: 8_000_000,
+  },
+  {
+    id: 'wide-1080',
+    label: 'Widescreen · 1920×1080',
+    width: 1920,
+    height: 1080,
+    videoBitrate: 10_000_000,
+  },
 ];
 
 export const DEFAULT_EXPORT_PRESET_ID = 'source';

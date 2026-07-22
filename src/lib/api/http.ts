@@ -1,16 +1,18 @@
-import { getApiBaseUrl } from "@/lib/api/config";
-import { assertOk } from "@/lib/api/errors";
-import type { RequestOptions } from "@/lib/api/http.types";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
+import { getApiBaseUrl } from '@/lib/api/config';
+import { assertOk } from '@/lib/api/errors';
+import type { RequestOptions } from '@/lib/api/http.types';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 
-export async function request<TResponse = unknown>(options: RequestOptions<TResponse>): Promise<TResponse> {
-  const { path, method = "GET", body, headers = {}, schema, cache, next, signal } = options;
+export async function request<TResponse = unknown>(
+  options: RequestOptions<TResponse>,
+): Promise<TResponse> {
+  const { path, method = 'GET', body, headers = {}, schema, cache, next, signal } = options;
   const baseUrl = getApiBaseUrl();
-  const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const token = await getBrowserAccessToken();
   const finalHeaders: Record<string, string> = {
-    ...(body ? { "Content-Type": "application/json" } : {}),
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...headers,
   };

@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import React, { createContext, useContext, useOptimistic, useTransition, useCallback } from "react";
-import type { OnboardingState, OnboardingPatch } from "@/lib/onboarding/state";
-import { mutateOnboardingStateAction, resetOnboardingStateAction } from "@/app/onboarding/actions";
-import { mergeOnboardingState } from "@/lib/onboarding/state";
-import { useToast } from "@/components/ui/ToastProvider";
+import React, { createContext, useCallback, useContext, useOptimistic, useTransition } from 'react';
+import { mutateOnboardingStateAction, resetOnboardingStateAction } from '@/app/onboarding/actions';
+import { useToast } from '@/components/ui/ToastProvider';
+import type { OnboardingPatch, OnboardingState } from '@/lib/onboarding/state';
+import { mergeOnboardingState } from '@/lib/onboarding/state';
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type OnboardingContextValue = {
   brandId: string;
@@ -35,35 +35,48 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
   React.useEffect(() => {
     const fetchUser = async () => {
       const supabase = createSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) setUserId(user.id);
     };
     fetchUser();
   }, []);
 
-  const updateState = useCallback(async (patch: OnboardingPatch) => {
-    startTransition(async () => {
-      const nextOptimistic = mergeOnboardingState(state, patch);
-      setState(nextOptimistic);
+  const updateState = useCallback(
+    async (patch: OnboardingPatch) => {
+      startTransition(async () => {
+        const nextOptimistic = mergeOnboardingState(state, patch);
+        setState(nextOptimistic);
 
-      try {
-        const serverNext = await mutateOnboardingStateAction(brandId, patch);
-        setState(serverNext);
-      } catch (error) {
-        console.error("Failed to update onboarding state", error);
-        show({ title: "Save failed", description: "Could not update your changes.", variant: "error" });
-      }
-    });
-  }, [brandId, state, show]);
+        try {
+          const serverNext = await mutateOnboardingStateAction(brandId, patch);
+          setState(serverNext);
+        } catch (error) {
+          console.error('Failed to update onboarding state', error);
+          show({
+            title: 'Save failed',
+            description: 'Could not update your changes.',
+            variant: 'error',
+          });
+        }
+      });
+    },
+    [brandId, state, show],
+  );
 
   const resetState = useCallback(async () => {
     startTransition(async () => {
       try {
         const next = await resetOnboardingStateAction(brandId);
         setState(next);
-        show({ title: "Reset complete", description: "Onboarding state cleared.", variant: "success" });
+        show({
+          title: 'Reset complete',
+          description: 'Onboarding state cleared.',
+          variant: 'success',
+        });
       } catch (error) {
-        show({ title: "Reset failed", description: "Could not clear state.", variant: "error" });
+        show({ title: 'Reset failed', description: 'Could not clear state.', variant: 'error' });
       }
     });
   }, [brandId, show]);
@@ -73,7 +86,9 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
   }, []);
 
   return (
-    <OnboardingContext.Provider value={{ brandId, state, userId, isPending, updateState, resetState, reloadState }}>
+    <OnboardingContext.Provider
+      value={{ brandId, state, userId, isPending, updateState, resetState, reloadState }}
+    >
       {children}
     </OnboardingContext.Provider>
   );
@@ -82,7 +97,7 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
 export function useOnboarding() {
   const context = useContext(OnboardingContext);
   if (!context) {
-    throw new Error("useOnboarding must be used within an OnboardingProvider");
+    throw new Error('useOnboarding must be used within an OnboardingProvider');
   }
   return context;
 }
@@ -91,12 +106,10 @@ export function useOnboarding() {
 // Note: React context does not suppress re-renders automatically;
 // this improves ergonomics and co-locates the selector pattern.
 // Full elimination requires context splitting (future work).
-export function useOnboardingField<T>(
-  selector: (ctx: OnboardingContextValue) => T
-): T {
+export function useOnboardingField<T>(selector: (ctx: OnboardingContextValue) => T): T {
   const context = useContext(OnboardingContext);
   if (!context) {
-    throw new Error("useOnboardingField must be used within an OnboardingProvider");
+    throw new Error('useOnboardingField must be used within an OnboardingProvider');
   }
   return selector(context);
 }

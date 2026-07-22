@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { motion } from "motion/react";
-import { useId, useMemo } from "react";
-import { useChartStable } from "./chart-context";
+import { motion } from 'motion/react';
+import { useId, useMemo } from 'react';
+import { useChartStable } from './chart-context';
 import {
   type PatternPresetId,
   type PatternPresetOptions,
   renderPatternPreset,
-} from "./pattern-preset";
+} from './pattern-preset';
 
 export type BackgroundPatternPreset = PatternPresetId;
 
@@ -42,17 +42,17 @@ function fadeMaskStops(lengthPercent: number): Array<{
 }> {
   const edge = clampFadeLength(lengthPercent);
   return [
-    { offset: "0%", opacity: 0 },
+    { offset: '0%', opacity: 0 },
     { offset: `${edge}%`, opacity: 1 },
     { offset: `${100 - edge}%`, opacity: 1 },
-    { offset: "100%", opacity: 0 },
+    { offset: '100%', opacity: 0 },
   ];
 }
 
 /** Plot-area pattern fill for charts without a grid. Renders behind series layers. */
 export function Background({
-  pattern = "diagonal",
-  color = "var(--chart-grid)",
+  pattern = 'diagonal',
+  color = 'var(--chart-grid)',
   scale = 1,
   strokeWidth,
   radius,
@@ -67,21 +67,14 @@ export function Background({
   fadeHorizontalLength = 10,
   fadeVerticalLength = 10,
 }: BackgroundProps) {
-  const { innerWidth, innerHeight, isLoaded, enterTransition } =
-    useChartStable();
+  const { innerWidth, innerHeight, isLoaded, enterTransition } = useChartStable();
   const uniqueId = useId();
-  const patternId = `chart-background-${uniqueId.replace(/:/g, "")}`;
+  const patternId = `chart-background-${uniqueId.replace(/:/g, '')}`;
 
-  const hStops = useMemo(
-    () => fadeMaskStops(fadeHorizontalLength),
-    [fadeHorizontalLength]
-  );
-  const vStops = useMemo(
-    () => fadeMaskStops(fadeVerticalLength),
-    [fadeVerticalLength]
-  );
+  const hStops = useMemo(() => fadeMaskStops(fadeHorizontalLength), [fadeHorizontalLength]);
+  const vStops = useMemo(() => fadeMaskStops(fadeVerticalLength), [fadeVerticalLength]);
 
-  if (pattern === "none" || !showFill || innerWidth <= 0 || innerHeight <= 0) {
+  if (pattern === 'none' || !showFill || innerWidth <= 0 || innerHeight <= 0) {
     return null;
   }
 
@@ -100,11 +93,11 @@ export function Background({
   }
 
   const fadeMask = fadeHorizontal || fadeVertical;
-  const hMaskId = `chart-background-fade-h-${uniqueId.replace(/:/g, "")}`;
+  const hMaskId = `chart-background-fade-h-${uniqueId.replace(/:/g, '')}`;
   const hGradientId = `${hMaskId}-gradient`;
-  const vMaskId = `chart-background-fade-v-${uniqueId.replace(/:/g, "")}`;
+  const vMaskId = `chart-background-fade-v-${uniqueId.replace(/:/g, '')}`;
   const vGradientId = `${vMaskId}-gradient`;
-  const combinedMaskId = `chart-background-fade-${uniqueId.replace(/:/g, "")}`;
+  const combinedMaskId = `chart-background-fade-${uniqueId.replace(/:/g, '')}`;
 
   let maskRef: string | undefined;
   if (fadeHorizontal && fadeVertical) {
@@ -118,9 +111,9 @@ export function Background({
   const targetOpacity = opacity;
   const revealOpacity = isLoaded ? targetOpacity : 0;
   const enterFade =
-    enterTransition && typeof enterTransition === "object"
+    enterTransition && typeof enterTransition === 'object'
       ? enterTransition
-      : { duration: BACKGROUND_ENTER_FADE_MS / 1000, ease: "easeOut" as const };
+      : { duration: BACKGROUND_ENTER_FADE_MS / 1000, ease: 'easeOut' as const };
 
   return (
     // biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative plot-area pattern layer
@@ -129,18 +122,12 @@ export function Background({
         <defs>
           {fadeHorizontal ? (
             <>
-              <linearGradient
-                id={hGradientId}
-                x1="0%"
-                x2="100%"
-                y1="0%"
-                y2="0%"
-              >
+              <linearGradient id={hGradientId} x1="0%" x2="100%" y1="0%" y2="0%">
                 {hStops.map((stop) => (
                   <stop
                     key={stop.offset}
                     offset={stop.offset}
-                    style={{ stopColor: "white", stopOpacity: stop.opacity }}
+                    style={{ stopColor: 'white', stopOpacity: stop.opacity }}
                   />
                 ))}
               </linearGradient>
@@ -157,18 +144,12 @@ export function Background({
           ) : null}
           {fadeVertical ? (
             <>
-              <linearGradient
-                id={vGradientId}
-                x1="0%"
-                x2="0%"
-                y1="0%"
-                y2="100%"
-              >
+              <linearGradient id={vGradientId} x1="0%" x2="0%" y1="0%" y2="100%">
                 {vStops.map((stop) => (
                   <stop
                     key={stop.offset}
                     offset={stop.offset}
-                    style={{ stopColor: "white", stopOpacity: stop.opacity }}
+                    style={{ stopColor: 'white', stopOpacity: stop.opacity }}
                   />
                 ))}
               </linearGradient>
@@ -214,6 +195,6 @@ export function Background({
   );
 }
 
-Background.displayName = "Background";
+Background.displayName = 'Background';
 
 export default Background;

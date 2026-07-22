@@ -1,14 +1,24 @@
-"use client"
+'use client';
 
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Flag, UserMinus, Link, Code } from "lucide-react"
-import { demoInstagramPost } from './demo/social'
+import {
+  Bookmark,
+  Code,
+  Flag,
+  Heart,
+  Link,
+  MessageCircle,
+  MoreHorizontal,
+  Send,
+  UserMinus,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from '@/components/ui/dropdown-menu';
+import { demoInstagramPost } from './demo/social';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -21,20 +31,20 @@ import {
 export interface InstagramPostProps {
   data?: {
     /** Author's Instagram username. */
-    author?: string
+    author?: string;
     /** Avatar letter fallback or image URL for the profile picture. */
-    avatar?: string
+    avatar?: string;
     /** URL of the post image to display. */
-    image?: string
+    image?: string;
     /** Formatted like count (e.g., "2,847"). */
-    likes?: string
+    likes?: string;
     /** Post caption text content. */
-    caption?: string
+    caption?: string;
     /** Time since posted (e.g., "2 hours ago"). */
-    time?: string
+    time?: string;
     /** Whether the author has a verified badge. */
-    verified?: boolean
-  }
+    verified?: boolean;
+  };
 }
 
 /**
@@ -66,17 +76,17 @@ export interface InstagramPostProps {
  * ```
  */
 export function InstagramPost({ data }: InstagramPostProps) {
-  const resolved: NonNullable<InstagramPostProps['data']> = data ?? demoInstagramPost
-  const author = resolved?.author
-  const avatar = resolved?.avatar
-  const image = resolved?.image
-  const likes = resolved?.likes
-  const caption = resolved?.caption
-  const time = resolved?.time
-  const verified = resolved?.verified
+  const resolved: NonNullable<InstagramPostProps['data']> = data ?? demoInstagramPost;
+  const author = resolved?.author;
+  const avatar = resolved?.avatar;
+  const image = resolved?.image;
+  const likes = resolved?.likes;
+  const caption = resolved?.caption;
+  const time = resolved?.time;
+  const verified = resolved?.verified;
 
   if (!author && !image && !caption) {
-    return null
+    return null;
   }
 
   return (
@@ -130,24 +140,40 @@ export function InstagramPost({ data }: InstagramPostProps) {
       )}
       {image && (
         <div className="aspect-square bg-muted">
-          <img src={image} alt={author ? `Instagram post by ${author}` : 'Instagram post'} className="w-full h-full object-cover" />
+          <img
+            src={image}
+            alt={author ? `Instagram post by ${author}` : 'Instagram post'}
+            className="w-full h-full object-cover"
+          />
         </div>
       )}
       {(likes || caption || time) && (
         <div className="p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button aria-label="Like" className="hover:text-muted-foreground transition-colors cursor-pointer">
+              <button
+                aria-label="Like"
+                className="hover:text-muted-foreground transition-colors cursor-pointer"
+              >
                 <Heart className="h-6 w-6" />
               </button>
-              <button aria-label="Comment" className="hover:text-muted-foreground transition-colors cursor-pointer">
+              <button
+                aria-label="Comment"
+                className="hover:text-muted-foreground transition-colors cursor-pointer"
+              >
                 <MessageCircle className="h-6 w-6" />
               </button>
-              <button aria-label="Share" className="hover:text-muted-foreground transition-colors cursor-pointer">
+              <button
+                aria-label="Share"
+                className="hover:text-muted-foreground transition-colors cursor-pointer"
+              >
                 <Send className="h-6 w-6" />
               </button>
             </div>
-            <button aria-label="Save" className="hover:text-muted-foreground transition-colors cursor-pointer">
+            <button
+              aria-label="Save"
+              className="hover:text-muted-foreground transition-colors cursor-pointer"
+            >
               <Bookmark className="h-6 w-6" />
             </button>
           </div>
@@ -155,7 +181,7 @@ export function InstagramPost({ data }: InstagramPostProps) {
           {(author || caption) && (
             <p className="text-sm">
               {author && <span className="font-semibold">{author}</span>}
-              {author && caption && " "}
+              {author && caption && ' '}
               {caption}
             </p>
           )}
@@ -163,5 +189,5 @@ export function InstagramPost({ data }: InstagramPostProps) {
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -35,7 +35,7 @@ export function PostedContentPreview({ post }: { post: OrganicCalendarPostedCont
         </div>
         <p className="text-sm font-semibold leading-tight text-foreground">{post.title}</p>
         {post.caption ? (
-          <p className="line-clamp-5 text-xs leading-relaxed text-muted-foreground">
+          <p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
             {post.caption}
           </p>
         ) : null}

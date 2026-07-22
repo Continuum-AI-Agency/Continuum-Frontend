@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
 export default function OrganicError({
   error,
@@ -10,7 +10,7 @@ export default function OrganicError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[organic] route error:", error);
+    console.error('[organic] route error:', error);
   }, [error]);
 
   return (

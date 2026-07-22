@@ -22,13 +22,18 @@ export function probeVideoDuration(url: string, timeoutMs = 8000): Promise<numbe
       fn();
     };
 
-    const timer = window.setTimeout(() => finish(() => reject(new Error('Timed out probing media duration'))), timeoutMs);
+    const timer = window.setTimeout(
+      () => finish(() => reject(new Error('Timed out probing media duration'))),
+      timeoutMs,
+    );
 
     video.addEventListener('loadedmetadata', () => {
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
       finish(() => resolve(duration));
     });
-    video.addEventListener('error', () => finish(() => reject(new Error('Failed to load media for probing'))));
+    video.addEventListener('error', () =>
+      finish(() => reject(new Error('Failed to load media for probing'))),
+    );
 
     video.src = url;
   });

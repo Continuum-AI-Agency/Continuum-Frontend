@@ -1,13 +1,19 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
+import { useMemo } from 'react';
 
-import { BrandInsightsDataTable, type BrandInsightsTableRow } from "@/components/brand-insights/BrandInsightsDataTable";
-import { brandInsightsQuestionSchema, type BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import {
+  BrandInsightsDataTable,
+  type BrandInsightsTableRow,
+} from '@/components/brand-insights/BrandInsightsDataTable';
+import {
+  type BrandInsightsQuestionsByNiche,
+  brandInsightsQuestionSchema,
+} from '@/lib/schemas/brandInsights';
 
 type BrandQuestionsListProps = {
-  questionsByNiche: BrandInsightsQuestionsByNiche["questionsByNiche"];
-  density?: "default" | "compact";
+  questionsByNiche: BrandInsightsQuestionsByNiche['questionsByNiche'];
+  density?: 'default' | 'compact';
   scrollWithinSection?: boolean;
 };
 
@@ -21,7 +27,7 @@ function normalizePlatforms(value?: string) {
 
 export function BrandQuestionsList({
   questionsByNiche,
-  density = "default",
+  density = 'default',
   scrollWithinSection = false,
 }: BrandQuestionsListProps) {
   const allQuestions = useMemo(() => {
@@ -29,38 +35,38 @@ export function BrandQuestionsList({
       (nicheQuestions.questions ?? []).map((question) => ({
         ...question,
         audience,
-      }))
+      })),
     );
   }, [questionsByNiche]);
 
-  const rows = useMemo<BrandInsightsTableRow[]>(
-    () => {
-      const mappedRows: BrandInsightsTableRow[] = [];
+  const rows = useMemo<BrandInsightsTableRow[]>(() => {
+    const mappedRows: BrandInsightsTableRow[] = [];
 
-      allQuestions.forEach((questionWithNiche) => {
-        const parsed = brandInsightsQuestionSchema.safeParse(questionWithNiche);
-        if (!parsed.success) return;
-        const question = parsed.data;
-        mappedRows.push({
-          id: question.id,
-          title: question.question,
-          subtitle: question.whyRelevant ?? question.contentTypeSuggestion ?? `Audience: ${questionWithNiche.audience}`,
-          secondaryValue: questionWithNiche.audience,
-          platforms: normalizePlatforms(question.socialPlatform),
-          tags: ["question", questionWithNiche.audience],
-          details: [
-            { label: "Audience niche", value: questionWithNiche.audience },
-            { label: "Platform", value: question.socialPlatform },
-            { label: "Content suggestion", value: question.contentTypeSuggestion },
-            { label: "Why relevant", value: question.whyRelevant },
-          ],
-        });
+    allQuestions.forEach((questionWithNiche) => {
+      const parsed = brandInsightsQuestionSchema.safeParse(questionWithNiche);
+      if (!parsed.success) return;
+      const question = parsed.data;
+      mappedRows.push({
+        id: question.id,
+        title: question.question,
+        subtitle:
+          question.whyRelevant ??
+          question.contentTypeSuggestion ??
+          `Audience: ${questionWithNiche.audience}`,
+        secondaryValue: questionWithNiche.audience,
+        platforms: normalizePlatforms(question.socialPlatform),
+        tags: ['question', questionWithNiche.audience],
+        details: [
+          { label: 'Audience niche', value: questionWithNiche.audience },
+          { label: 'Platform', value: question.socialPlatform },
+          { label: 'Content suggestion', value: question.contentTypeSuggestion },
+          { label: 'Why relevant', value: question.whyRelevant },
+        ],
       });
+    });
 
-      return mappedRows;
-    },
-    [allQuestions]
-  );
+    return mappedRows;
+  }, [allQuestions]);
 
   return (
     <BrandInsightsDataTable

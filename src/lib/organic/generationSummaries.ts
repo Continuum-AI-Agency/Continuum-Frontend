@@ -64,7 +64,10 @@ export function useGenerationSummaries(brandId?: string | null) {
     queryFn: () =>
       brandId
         ? fetchGenerationSummaries(brandId)
-        : Promise.resolve({ summaries: [], window: emptyWindow() } satisfies GenerationSummariesResponse),
+        : Promise.resolve({
+            summaries: [],
+            window: emptyWindow(),
+          } satisfies GenerationSummariesResponse),
     enabled: Boolean(brandId),
     staleTime: 5_000,
     refetchInterval: (q) => ((q.state.data?.window.running ?? 0) > 0 ? 15_000 : false),

@@ -671,7 +671,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
         style: { width: 512, height: 360 },
       };
     case 'string':
-      return { data: { value: '' } };
+      return { data: { value: '', promptMode: 'enrich' } };
     case 'videoDecode':
       return { data: { value: '' }, style: { width: 360, height: 320 } };
     case 'image':

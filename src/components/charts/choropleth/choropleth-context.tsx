@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import type { ProvidedZoom, TransformMatrix } from "@visx/zoom";
-import type { Feature, FeatureCollection, Geometry } from "geojson";
-import type { Transition } from "motion/react";
+import type { ProvidedZoom, TransformMatrix } from '@visx/zoom';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import type { Transition } from 'motion/react';
 import {
   createContext,
   type Dispatch,
@@ -11,7 +11,7 @@ import {
   useContext,
   useMemo,
   useState,
-} from "react";
+} from 'react';
 
 // ZoomState from visx/zoom that includes isDragging
 interface ZoomState {
@@ -102,10 +102,8 @@ export interface ChoroplethStableContextValue {
 export type ChoroplethContextValue = ChoroplethStableContextValue &
   ChoroplethInteractionContextValue;
 
-const ChoroplethStableContext =
-  createContext<ChoroplethStableContextValue | null>(null);
-const ChoroplethInteractionContext =
-  createContext<ChoroplethInteractionContextValue | null>(null);
+const ChoroplethStableContext = createContext<ChoroplethStableContextValue | null>(null);
+const ChoroplethInteractionContext = createContext<ChoroplethInteractionContextValue | null>(null);
 
 export function ChoroplethStableProvider({
   children,
@@ -115,23 +113,13 @@ export function ChoroplethStableProvider({
   value: ChoroplethStableContextValue;
 }) {
   return (
-    <ChoroplethStableContext.Provider value={value}>
-      {children}
-    </ChoroplethStableContext.Provider>
+    <ChoroplethStableContext.Provider value={value}>{children}</ChoroplethStableContext.Provider>
   );
 }
 
-export function ChoroplethInteractionShell({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [hoveredFeatureIndex, setHoveredFeatureIndex] = useState<number | null>(
-    null
-  );
-  const [tooltipData, setTooltipData] = useState<ChoroplethTooltipData | null>(
-    null
-  );
+export function ChoroplethInteractionShell({ children }: { children: React.ReactNode }) {
+  const [hoveredFeatureIndex, setHoveredFeatureIndex] = useState<number | null>(null);
+  const [tooltipData, setTooltipData] = useState<ChoroplethTooltipData | null>(null);
 
   const interaction = useMemo<ChoroplethInteractionContextValue>(
     () => ({
@@ -140,7 +128,7 @@ export function ChoroplethInteractionShell({
       tooltipData,
       setTooltipData,
     }),
-    [hoveredFeatureIndex, tooltipData]
+    [hoveredFeatureIndex, tooltipData],
   );
 
   return (
@@ -193,7 +181,7 @@ export function ChoroplethProvider({
       value.animationDuration,
       value.enterTransition,
       value.revealEpoch,
-    ]
+    ],
   );
 
   const interaction = useMemo<ChoroplethInteractionContextValue>(
@@ -208,7 +196,7 @@ export function ChoroplethProvider({
       value.setHoveredFeatureIndex,
       value.tooltipData,
       value.setTooltipData,
-    ]
+    ],
   );
 
   return (
@@ -223,9 +211,7 @@ export function ChoroplethProvider({
 export function useChoroplethStable(): ChoroplethStableContextValue {
   const context = useContext(ChoroplethStableContext);
   if (!context) {
-    throw new Error(
-      "useChoroplethStable must be used within a ChoroplethProvider"
-    );
+    throw new Error('useChoroplethStable must be used within a ChoroplethProvider');
   }
   return context;
 }
@@ -233,9 +219,7 @@ export function useChoroplethStable(): ChoroplethStableContextValue {
 export function useChoroplethInteraction(): ChoroplethInteractionContextValue {
   const context = useContext(ChoroplethInteractionContext);
   if (!context) {
-    throw new Error(
-      "useChoroplethInteraction must be used within a ChoroplethProvider"
-    );
+    throw new Error('useChoroplethInteraction must be used within a ChoroplethProvider');
   }
   return context;
 }
@@ -244,7 +228,7 @@ export function useChoropleth(): ChoroplethContextValue {
   return { ...useChoroplethStable(), ...useChoroplethInteraction() };
 }
 
-import { CHART_SCALE_VARS, chartScaleCssVars } from "../chart-scale";
+import { CHART_SCALE_VARS, chartScaleCssVars } from '../chart-scale';
 
 // CSS variables for choropleth theming
 export const choroplethCssVars = {
@@ -254,8 +238,8 @@ export const choroplethCssVars = {
   scale04: chartScaleCssVars.scale04,
   scale05: chartScaleCssVars.scale05,
   patternColor: chartScaleCssVars.patternColor,
-  stroke: "var(--chart-grid)",
-  background: "var(--background)",
+  stroke: 'var(--chart-grid)',
+  background: 'var(--background)',
 };
 
 // Default colors array for cycling through features

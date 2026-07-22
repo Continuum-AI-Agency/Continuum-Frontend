@@ -1,31 +1,29 @@
-import { fetchOwnedConnections } from "@/lib/integrations/ownedConnections";
-import { fetchMyConnectionGrants } from "@/lib/integrations/grants";
-import { ShareConnectionButton } from "@/components/integrations/ShareConnectionButton";
-import { GlassPanel } from "@/components/ui/GlassPanel";
-import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
+import { ShareConnectionButton } from '@/components/integrations/ShareConnectionButton';
+import { GlassPanel } from '@/components/ui/GlassPanel';
+import { fetchMyConnectionGrants } from '@/lib/integrations/grants';
+import { fetchOwnedConnections } from '@/lib/integrations/ownedConnections';
+import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
 
 const PROVIDER_LABEL: Record<string, string> = {
-  meta: "Meta (Facebook & Instagram)",
-  google: "Google",
-  google_ads: "Google Ads",
-  googleAds: "Google Ads",
-  youtube: "YouTube",
-  tiktok: "TikTok",
-  linkedin: "LinkedIn",
-  threads: "Threads",
-  amazon: "Amazon Ads",
-  amazonAds: "Amazon Ads",
-  dv360: "Display & Video 360",
-  googleAnalytics: "Google Analytics",
+  meta: 'Meta (Facebook & Instagram)',
+  google: 'Google',
+  google_ads: 'Google Ads',
+  googleAds: 'Google Ads',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  threads: 'Threads',
+  amazon: 'Amazon Ads',
+  amazonAds: 'Amazon Ads',
+  dv360: 'Display & Video 360',
+  googleAnalytics: 'Google Analytics',
 };
 
 function formatProvider(provider: string): string {
   return (
     PROVIDER_LABEL[provider] ??
-    PROVIDER_LABEL[mapIntegrationTypeToPlatformKey(provider) ?? ""] ??
-    provider
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
+    PROVIDER_LABEL[mapIntegrationTypeToPlatformKey(provider) ?? ''] ??
+    provider.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   );
 }
 
@@ -55,7 +53,8 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
       <div className="mb-4">
         <h3 className="text-base font-semibold text-foreground">Share with brands</h3>
         <p className="text-sm text-muted-foreground">
-          Grant any brand you own or administer access to these connections so teammates can use them.
+          Grant any brand you own or administer access to these connections so teammates can use
+          them.
         </p>
       </div>
 
@@ -73,7 +72,7 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
                   <span className="text-sm font-medium text-foreground">{label}</span>
                   {connection.status ? (
                     <span className="text-xs text-muted-foreground capitalize">
-                      · {connection.status.replace(/_/g, " ")}
+                      · {connection.status.replace(/_/g, ' ')}
                     </span>
                   ) : null}
                 </div>

@@ -65,14 +65,6 @@ const ENRICHMENT_SUFFIX: Partial<Record<OrganicMediaStage, string>> = {
   realizing: 'Rendering…',
 };
 
-const FAILURE_SUMMARY_MAX_CHARS = 80;
-
-function truncateFailureMessage(message: string): string {
-  return message.length <= FAILURE_SUMMARY_MAX_CHARS
-    ? message
-    : `${message.slice(0, FAILURE_SUMMARY_MAX_CHARS).trimEnd()}…`;
-}
-
 // dayId is a YYYY-MM-DD slot (parsed as local midnight for a stable label).
 function formatDay(dayId: string | null | undefined): string | null {
   if (!dayId) return null;
@@ -144,10 +136,10 @@ function GenerationRow({
       ? (ENRICHMENT_SUFFIX[summary.mediaStage] ?? null)
       : null;
   // Failed rows carry the real reason (the backend folds enrichment failures
-  // into summary.error too); truncated inline, full message on hover.
+  // into summary.error too); rendered on its own clamped line, not truncated
+  // into the state line — the message is what the user needs to act on.
   const failureMessage = summary.status === 'failed' ? (summary.error?.message ?? null) : null;
-  const failureText = failureMessage ? truncateFailureMessage(failureMessage) : null;
-  const stateLine = [agentLabel, display.label, pctText, enrichmentText, failureText]
+  const stateLine = [agentLabel, display.label, pctText, enrichmentText]
     .filter(Boolean)
     .join(' · ');
 
@@ -164,13 +156,15 @@ function GenerationRow({
             </Badge>
           )}
           {day && <span className="text-2xs text-muted-foreground/70">{day}</span>}
-          <span
-            className={cn('truncate text-2xs font-medium', TONE_TEXT[display.tone])}
-            title={failureMessage ?? undefined}
-          >
+          <span className={cn('truncate text-2xs font-medium', TONE_TEXT[display.tone])}>
             {stateLine}
           </span>
         </div>
+        {failureMessage && (
+          <p className="line-clamp-2 text-2xs text-destructive/80" title={failureMessage}>
+            {failureMessage}
+          </p>
+        )}
       </div>
 
       {active && brandId && (
@@ -185,16 +179,19 @@ function GenerationRow({
         </Button>
       )}
 
-      {summary.status === 'completed' && summary.draftId && onViewDraftAction && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-5 shrink-0 px-1.5 text-2xs text-muted-foreground"
-          onClick={() => onViewDraftAction(summary.draftId as string)}
-        >
-          Open
-        </Button>
-      )}
+      {/* Failed rows open the planner draft too — that's where Retry/Clear live. */}
+      {(summary.status === 'completed' || summary.status === 'failed') &&
+        summary.draftId &&
+        onViewDraftAction && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-5 shrink-0 px-1.5 text-2xs text-muted-foreground"
+            onClick={() => onViewDraftAction(summary.draftId as string)}
+          >
+            Open
+          </Button>
+        )}
     </div>
   );
 }

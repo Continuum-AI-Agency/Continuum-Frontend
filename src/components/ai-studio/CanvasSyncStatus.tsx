@@ -1,12 +1,17 @@
-"use client";
+'use client';
 
-import React from "react";
-import { ReloadIcon, CheckCircledIcon, CrossCircledIcon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
 import {
-  deriveCanvasConnectionState,
+  CheckCircledIcon,
+  CrossCircledIcon,
+  ExclamationTriangleIcon,
+  ReloadIcon,
+} from '@radix-ui/react-icons';
+import React from 'react';
+import {
   type CanvasConnectionState,
+  deriveCanvasConnectionState,
   type RealtimeStatus,
-} from "./canvasConnectionState";
+} from './canvasConnectionState';
 
 interface CanvasSyncStatusProps {
   status: RealtimeStatus;
@@ -17,7 +22,7 @@ interface CanvasSyncStatusProps {
   hasRoom?: boolean;
 }
 
-const PILL = "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border";
+const PILL = 'flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border';
 
 export function CanvasSyncStatus({
   status,
@@ -37,39 +42,51 @@ export function CanvasSyncStatus({
   });
 
   switch (state) {
-    case "workspace-loading":
+    case 'workspace-loading':
       return (
-        <div className={`${PILL} bg-muted text-muted-foreground border-border`} title="Loading your workspace…">
+        <div
+          className={`${PILL} bg-muted text-muted-foreground border-border`}
+          title="Loading your workspace…"
+        >
           <ReloadIcon className="w-3.5 h-3.5 animate-spin opacity-70" />
           <span>Loading workspace...</span>
         </div>
       );
 
-    case "idle":
+    case 'idle':
       return (
-        <div className={`${PILL} bg-muted text-muted-foreground border-border`} title="No workspace open yet.">
+        <div
+          className={`${PILL} bg-muted text-muted-foreground border-border`}
+          title="No workspace open yet."
+        >
           <CheckCircledIcon className="w-3.5 h-3.5" />
           <span>Ready</span>
         </div>
       );
 
-    case "sync-error":
+    case 'sync-error':
       return (
-        <div className={`${PILL} bg-red-500/10 text-red-600 border-red-500/20`} title="Database sync failed. Reload to retry.">
+        <div
+          className={`${PILL} bg-red-500/10 text-red-600 border-red-500/20`}
+          title="Database sync failed. Reload to retry."
+        >
           <CrossCircledIcon className="w-3.5 h-3.5" />
           <span>Sync Error</span>
         </div>
       );
 
-    case "live-disconnected":
+    case 'live-disconnected':
       return (
-        <div className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`} title="Presence disconnected. cursors may lag.">
+        <div
+          className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`}
+          title="Presence disconnected. cursors may lag."
+        >
           <ExclamationTriangleIcon className="w-3.5 h-3.5" />
           <span>Live Disconnected</span>
         </div>
       );
 
-    case "saving":
+    case 'saving':
       return (
         <div className={`${PILL} bg-blue-500/10 text-blue-600 border-blue-500/20`}>
           <ReloadIcon className="w-3.5 h-3.5 animate-spin" />
@@ -77,15 +94,18 @@ export function CanvasSyncStatus({
         </div>
       );
 
-    case "saved-locally":
+    case 'saved-locally':
       return (
-        <div className={`${PILL} bg-muted text-muted-foreground border-border`} title="Offline — your work is saved locally and syncs when you reconnect.">
+        <div
+          className={`${PILL} bg-muted text-muted-foreground border-border`}
+          title="Offline — your work is saved locally and syncs when you reconnect."
+        >
           <CheckCircledIcon className="w-3.5 h-3.5" />
           <span>Saved locally</span>
         </div>
       );
 
-    case "connecting":
+    case 'connecting':
       return (
         <div className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`}>
           <ReloadIcon className="w-3.5 h-3.5 animate-spin" />

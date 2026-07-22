@@ -6,15 +6,15 @@ import {
   Clock,
   Eye,
   Heart,
+  type LucideIcon,
   MessageCircle,
   Share2,
   TrendingUp,
   Users,
   Zap,
-  type LucideIcon,
-} from "lucide-react";
+} from 'lucide-react';
 
-import type { MetricIconKey } from "./cardMetricSet";
+import type { MetricIconKey } from './cardMetricSet';
 
 export const METRIC_ICONS: Record<MetricIconKey, LucideIcon> = {
   views: Eye,

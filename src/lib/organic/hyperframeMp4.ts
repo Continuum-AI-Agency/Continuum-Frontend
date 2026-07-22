@@ -1,6 +1,6 @@
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const STORAGE_KEY_PREFIX = "continuum:hf-mp4:";
+const STORAGE_KEY_PREFIX = 'continuum:hf-mp4:';
 
 // Session-level guard so the background render fires at most once per composition
 // per tab; the edge function's renders table is the authoritative idempotency gate.
@@ -13,7 +13,10 @@ function storageKey(compositionId: string): string {
 function alreadyKickedOff(compositionId: string): boolean {
   if (inFlight.has(compositionId)) return true;
   try {
-    return typeof window !== "undefined" && window.localStorage.getItem(storageKey(compositionId)) === "1";
+    return (
+      typeof window !== 'undefined' &&
+      window.localStorage.getItem(storageKey(compositionId)) === '1'
+    );
   } catch {
     return false;
   }
@@ -22,7 +25,7 @@ function alreadyKickedOff(compositionId: string): boolean {
 function markKickedOff(compositionId: string): void {
   inFlight.add(compositionId);
   try {
-    window.localStorage.setItem(storageKey(compositionId), "1");
+    window.localStorage.setItem(storageKey(compositionId), '1');
   } catch {
     // localStorage may be unavailable (private mode); the in-memory guard still holds.
   }
@@ -47,7 +50,7 @@ export function resetHyperframeMp4Guard(compositionId: string): void {
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = "";
+  let binary = '';
   for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
@@ -64,20 +67,23 @@ export type PersistHyperframeMp4Params = {
 // Report a failed client render so the edge function flips the draft to
 // mp4Status:'failed'. Best-effort — a reporting failure just leaves the guard
 // cleared for a later retry.
-async function reportRenderFailure(params: PersistHyperframeMp4Params, error: unknown): Promise<void> {
+async function reportRenderFailure(
+  params: PersistHyperframeMp4Params,
+  error: unknown,
+): Promise<void> {
   try {
     const supabase = createSupabaseBrowserClient();
-    await supabase.functions.invoke("link-hyperframe-mp4", {
+    await supabase.functions.invoke('link-hyperframe-mp4', {
       body: {
         compositionId: params.compositionId,
         brandId: params.brandId,
         draftId: params.draftId,
-        outcome: "failed",
+        outcome: 'failed',
         error: error instanceof Error ? error.message : String(error),
       },
     });
   } catch (reportErr) {
-    console.warn("[hyperframe-mp4] render-failure report failed", reportErr);
+    console.warn('[hyperframe-mp4] render-failure report failed', reportErr);
   }
 }
 
@@ -91,7 +97,9 @@ async function reportRenderFailure(params: PersistHyperframeMp4Params, error: un
  * 'failed' (and the UI can offer Retry); the latter just clears the guard so a
  * later view retries silently.
  */
-export async function persistHyperframeMp4OnFirstRender(params: PersistHyperframeMp4Params): Promise<void> {
+export async function persistHyperframeMp4OnFirstRender(
+  params: PersistHyperframeMp4Params,
+): Promise<void> {
   const { compositionId } = params;
   if (!compositionId || alreadyKickedOff(compositionId)) return;
   markKickedOff(compositionId);
@@ -101,7 +109,7 @@ export async function persistHyperframeMp4OnFirstRender(params: PersistHyperfram
     blob = await params.renderMp4();
   } catch (renderErr) {
     clearKickedOff(compositionId);
-    console.warn("[hyperframe-mp4] render failed", renderErr);
+    console.warn('[hyperframe-mp4] render failed', renderErr);
     await reportRenderFailure(params, renderErr);
     return;
   }
@@ -109,13 +117,13 @@ export async function persistHyperframeMp4OnFirstRender(params: PersistHyperfram
   try {
     const mp4Base64 = await blobToBase64(blob);
     const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.functions.invoke("link-hyperframe-mp4", {
+    const { error } = await supabase.functions.invoke('link-hyperframe-mp4', {
       body: {
         compositionId,
         brandId: params.brandId,
         draftId: params.draftId,
         mp4Base64,
-        mimeType: "video/mp4",
+        mimeType: 'video/mp4',
         durationSec: params.durationSec,
       },
     });
@@ -123,6 +131,6 @@ export async function persistHyperframeMp4OnFirstRender(params: PersistHyperfram
   } catch (err) {
     // Transient persist/network failure: allow a later retry, don't mark failed.
     clearKickedOff(compositionId);
-    console.warn("[hyperframe-mp4] background persist failed", err);
+    console.warn('[hyperframe-mp4] background persist failed', err);
   }
 }

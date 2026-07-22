@@ -1,18 +1,14 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  MediaAsset,
-  MediaSearchFilters,
-  MediaSearchResultItem,
-} from "@continuum/contracts";
+import type { MediaAsset, MediaSearchFilters, MediaSearchResultItem } from '@continuum/contracts';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   buildLibraryQuery,
-  toContractKind,
-  toContractSource,
   type KindFilterValue,
   type SourceFilterValue,
-} from "@/lib/media/filters";
+  toContractKind,
+  toContractSource,
+} from '@/lib/media/filters';
 
 const PAGE_SIZE = 36;
 const SEARCH_DEBOUNCE_MS = 400;
@@ -45,10 +41,10 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQueryState] = useState("");
+  const [query, setQueryState] = useState('');
   const [filters, setFiltersState] = useState<StudioLibraryFilters>({
-    source: "all",
-    kind: "all",
+    source: 'all',
+    kind: 'all',
   });
 
   const offsetRef = useRef(0);
@@ -88,7 +84,7 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
         setHasMore(data.nextOffset != null);
       } catch (err) {
         if (requestId === requestIdRef.current) {
-          console.error("[useStudioLibraryBrowser] list failed", err);
+          console.error('[useStudioLibraryBrowser] list failed', err);
           setError("Couldn't load the library. Please try again.");
           setHasMore(false);
         }
@@ -109,12 +105,12 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
         const kind = toContractKind(filters.kind);
         if (source) searchFilters.source = source;
         if (kind) searchFilters.kind = kind;
-        const resp = await fetch("/api/library/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const resp = await fetch('/api/library/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             brandId,
-            mode: "text",
+            mode: 'text',
             query: q,
             limit: 48,
             ...(Object.keys(searchFilters).length > 0 ? { filters: searchFilters } : {}),
@@ -130,7 +126,7 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
         setHasMore(false);
       } catch (err) {
         if (requestId === requestIdRef.current) {
-          console.error("[useStudioLibraryBrowser] search failed", err);
+          console.error('[useStudioLibraryBrowser] search failed', err);
           setError("Couldn't search the library. Please try again.");
         }
       } finally {
@@ -163,8 +159,7 @@ export function useStudioLibraryBrowser(brandId: string): UseStudioLibraryBrowse
 
   const setQuery = useCallback((value: string) => setQueryState(value), []);
   const setFilters = useCallback(
-    (next: Partial<StudioLibraryFilters>) =>
-      setFiltersState((prev) => ({ ...prev, ...next })),
+    (next: Partial<StudioLibraryFilters>) => setFiltersState((prev) => ({ ...prev, ...next })),
     [],
   );
 

@@ -68,7 +68,10 @@ function renderColors(tokens: BrandMdTokens): string | null {
 function renderTypography(tokens: BrandMdTokens): string | null {
   if (tokens.typography.length === 0) return null;
   const list = tokens.typography
-    .map((font) => (font.role ? `${font.family} (${font.role})` : font.family))
+    .map((font) => {
+      const qualifier = [font.role, font.note].filter((part): part is string => !!part).join('; ');
+      return qualifier ? `${font.family} (${qualifier})` : font.family;
+    })
     .join(', ');
   return `Typography: ${list}`;
 }
@@ -141,6 +144,11 @@ export interface ForcedBrandBlock {
   // True when the logo piece was tagged AND a logo path exists — the caller
   // signs it into the generation as a reference image.
   wantsLogo: boolean;
+  // The tagged pieces that actually rendered a non-empty line (in fixed order).
+  // Callers that treat certain pieces as REQUIRED (e.g. the organic media path
+  // requires colors/typography/imagery) diff this against what they tagged to
+  // detect a silently-dropped piece instead of shipping a partial block.
+  renderedPieces: Exclude<BrandBookPieceKind, 'full'>[];
 }
 
 // Pure (no I/O): renders the tagged brand-book pieces of a fully-resolved
@@ -151,17 +159,25 @@ export function renderForcedBrandBlock(
   pieces: BrandBookPieceKind[],
 ): ForcedBrandBlock {
   const concrete = expandBrandBookPieces(pieces);
+  const renderedPieces: Exclude<BrandBookPieceKind, 'full'>[] = [];
   const lines = concrete
     .filter((piece) => piece !== 'logo')
-    .map((piece) => PIECE_RENDERERS[piece](tokens))
+    .map((piece) => {
+      const line = PIECE_RENDERERS[piece](tokens);
+      if (line !== null) renderedPieces.push(piece);
+      return line;
+    })
     .filter((line): line is string => line !== null);
 
   const wantsLogo = concrete.includes('logo') && !!tokens.logo?.storage_path;
   const logoLine = wantsLogo ? renderLogo(tokens) : null;
-  if (logoLine) lines.push(logoLine);
+  if (logoLine) {
+    lines.push(logoLine);
+    renderedPieces.push('logo');
+  }
 
-  if (lines.length === 0) return { block: '', wantsLogo };
+  if (lines.length === 0) return { block: '', wantsLogo, renderedPieces };
 
   const block = `<brand_book>(authoritative brand rules — the generation MUST comply)\n${lines.join('\n')}\n</brand_book>`;
-  return { block, wantsLogo };
+  return { block, wantsLogo, renderedPieces };
 }

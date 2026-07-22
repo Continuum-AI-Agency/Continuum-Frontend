@@ -1,30 +1,30 @@
-"use client"
+'use client';
 
-import React from "react"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
+import React from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 export interface AvatarData {
-  name: string
-  image?: string
-  fallback?: string
-  email?: string
+  name: string;
+  image?: string;
+  fallback?: string;
+  email?: string;
 }
 
 export interface AvatarStackProps {
-  avatars: AvatarData[]
-  max?: number
-  className?: string
+  avatars: AvatarData[];
+  max?: number;
+  className?: string;
 }
 
 export function AvatarStack({ avatars, max = 5, className }: AvatarStackProps) {
-  const visibleAvatars = avatars.slice(0, max)
-  const remainingCount = avatars.length - max
+  const visibleAvatars = avatars.slice(0, max);
+  const remainingCount = avatars.length - max;
 
   return (
     <TooltipProvider>
-      <div className={cn("flex -space-x-2 items-center", className)}>
+      <div className={cn('flex -space-x-2 items-center', className)}>
         {visibleAvatars.map((avatar, index) => (
           <Tooltip key={index}>
             <TooltipTrigger asChild>
@@ -38,7 +38,9 @@ export function AvatarStack({ avatars, max = 5, className }: AvatarStackProps) {
             <TooltipContent>
               <div className="text-sm">
                 <div className="font-medium">{avatar.name}</div>
-                {avatar.email && <div className="text-xs text-muted-foreground">{avatar.email}</div>}
+                {avatar.email && (
+                  <div className="text-xs text-muted-foreground">{avatar.email}</div>
+                )}
               </div>
             </TooltipContent>
           </Tooltip>
@@ -50,5 +52,5 @@ export function AvatarStack({ avatars, max = 5, className }: AvatarStackProps) {
         )}
       </div>
     </TooltipProvider>
-  )
+  );
 }

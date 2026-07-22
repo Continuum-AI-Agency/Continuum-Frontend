@@ -4,8 +4,8 @@
 // here; OrganicAgentPanel drains them into PromptInput via
 // `queuedMentionSuggestions` so the user never has to re-discover nested folders.
 
-import { create } from "zustand";
-import type { AgentMentionSuggestion } from "@/lib/agent-references";
+import { create } from 'zustand';
+import type { AgentMentionSuggestion } from '@/lib/agent-references';
 
 type MentionQueueState = {
   queue: AgentMentionSuggestion[];

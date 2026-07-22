@@ -183,8 +183,8 @@ export function BrandTrendsPanel({
                 {generatedLabel}
               </Badge>
             ) : null}
-            {status ? (
-              <Badge variant="secondary" className="h-6 text-xs">
+            {status && status !== 'success' ? (
+              <Badge variant="destructive" className="h-6 text-xs">
                 {status}
               </Badge>
             ) : null}

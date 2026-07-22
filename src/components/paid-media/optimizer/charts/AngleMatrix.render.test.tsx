@@ -26,8 +26,9 @@ describe('AngleMatrix', () => {
     expect(getByLabelText(/Prospecting, Social proof/i)).toBeTruthy();
   });
 
-  it('surfaces the pending-tagging note when every angle is untagged', () => {
+  it('surfaces the honest labeler note when every angle is untagged', () => {
     const { getByText } = render(<AngleMatrix cells={angleCellsUntagged} />);
-    expect(getByText(/Angle tagging pending/i)).toBeTruthy();
+    expect(getByText(/haven.t been analyzed for creative angle yet/i)).toBeTruthy();
+    expect(getByText(/labeler processes this account automatically/i)).toBeTruthy();
   });
 });

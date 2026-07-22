@@ -26,13 +26,22 @@ describe('fadeColorFor / isOverlapTransition', () => {
 
 describe('headFadeFor / tailFadeFor', () => {
   it('gives the first clip a full-duration fade-in and internal clips a half', () => {
-    expect(headFadeFor({ type: 'fade', durationSec: 1 }, true)).toEqual({ color: '#000000', durationSec: 1 });
-    expect(headFadeFor({ type: 'fade', durationSec: 1 }, false)).toEqual({ color: '#000000', durationSec: 0.5 });
+    expect(headFadeFor({ type: 'fade', durationSec: 1 }, true)).toEqual({
+      color: '#000000',
+      durationSec: 1,
+    });
+    expect(headFadeFor({ type: 'fade', durationSec: 1 }, false)).toEqual({
+      color: '#000000',
+      durationSec: 0.5,
+    });
     expect(headFadeFor({ type: 'cut', durationSec: 1 }, true)).toBeUndefined();
   });
 
   it('derives the outgoing tail fade from the next clip transition', () => {
-    expect(tailFadeFor({ type: 'dipWhite', durationSec: 1 })).toEqual({ color: '#ffffff', durationSec: 0.5 });
+    expect(tailFadeFor({ type: 'dipWhite', durationSec: 1 })).toEqual({
+      color: '#ffffff',
+      durationSec: 0.5,
+    });
     expect(tailFadeFor(undefined)).toBeUndefined();
   });
 });
@@ -97,8 +106,18 @@ describe('overlapTransitionAt', () => {
   });
 
   it('wipeRight reveals the incoming clip with a growing left-anchored rect', () => {
-    expect(overlapTransitionAt('wipeRight', 0, 100, 80).incoming.clip).toEqual({ x: 0, y: 0, w: 0, h: 80 });
-    expect(overlapTransitionAt('wipeRight', 1, 100, 80).incoming.clip).toEqual({ x: 0, y: 0, w: 100, h: 80 });
+    expect(overlapTransitionAt('wipeRight', 0, 100, 80).incoming.clip).toEqual({
+      x: 0,
+      y: 0,
+      w: 0,
+      h: 80,
+    });
+    expect(overlapTransitionAt('wipeRight', 1, 100, 80).incoming.clip).toEqual({
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 80,
+    });
   });
 
   it('zoomIn scales the incoming clip up with its alpha', () => {

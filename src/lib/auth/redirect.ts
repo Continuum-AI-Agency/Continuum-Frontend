@@ -11,28 +11,30 @@ type BuildAuthCallbackUrlOptions = {
   context?: string;
 };
 
-const UNSAFE_REDIRECT_PREFIXES = ["/api", "/_next", "/oauth"];
+const UNSAFE_REDIRECT_PREFIXES = ['/api', '/_next', '/oauth'];
 
 function normalizeSiteUrl(siteUrl: string): string {
-  return siteUrl.endsWith("/") ? siteUrl.slice(0, -1) : siteUrl;
+  return siteUrl.endsWith('/') ? siteUrl.slice(0, -1) : siteUrl;
 }
 
 function normalizeFallbackPath(fallbackPath: string): string {
-  if (!fallbackPath || !fallbackPath.startsWith("/") || fallbackPath.startsWith("//")) {
-    return "/dashboard";
+  if (!fallbackPath || !fallbackPath.startsWith('/') || fallbackPath.startsWith('//')) {
+    return '/dashboard';
   }
   return fallbackPath;
 }
 
 function isSafeRedirectPath(path: string): boolean {
-  if (!path.startsWith("/") || path.startsWith("//")) return false;
-  return !UNSAFE_REDIRECT_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+  if (!path.startsWith('/') || path.startsWith('//')) return false;
+  return !UNSAFE_REDIRECT_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
 }
 
 export function resolveAuthRedirectPath({
   requestedRedirect,
   siteUrl,
-  fallbackPath = "/dashboard",
+  fallbackPath = '/dashboard',
 }: ResolveAuthRedirectOptions): string {
   const fallback = normalizeFallbackPath(fallbackPath);
 
@@ -41,11 +43,11 @@ export function resolveAuthRedirectPath({
   }
 
   const trimmed = requestedRedirect.trim();
-  if (trimmed.length === 0 || trimmed.startsWith("//")) {
+  if (trimmed.length === 0 || trimmed.startsWith('//')) {
     return fallback;
   }
 
-  if (trimmed.startsWith("/")) {
+  if (trimmed.startsWith('/')) {
     return isSafeRedirectPath(trimmed) ? trimmed : fallback;
   }
 
@@ -66,7 +68,7 @@ export function resolveAuthRedirectPath({
 export function resolveAuthRedirect({
   requestedRedirect,
   siteUrl,
-  fallbackPath = "/dashboard",
+  fallbackPath = '/dashboard',
 }: ResolveAuthRedirectOptions): string {
   const origin = normalizeSiteUrl(siteUrl);
   return `${origin}${resolveAuthRedirectPath({ requestedRedirect, siteUrl: origin, fallbackPath })}`;
@@ -78,18 +80,18 @@ export function buildAuthCallbackUrl({
   provider,
   context,
 }: BuildAuthCallbackUrlOptions): string {
-  const callbackUrl = new URL("/auth/callback", normalizeSiteUrl(siteUrl));
+  const callbackUrl = new URL('/auth/callback', normalizeSiteUrl(siteUrl));
   callbackUrl.searchParams.set(
-    "next",
-    resolveAuthRedirectPath({ requestedRedirect: next, siteUrl, fallbackPath: "/dashboard" })
+    'next',
+    resolveAuthRedirectPath({ requestedRedirect: next, siteUrl, fallbackPath: '/dashboard' }),
   );
 
   if (context) {
-    callbackUrl.searchParams.set("context", context);
+    callbackUrl.searchParams.set('context', context);
   }
 
   if (provider) {
-    callbackUrl.searchParams.set("provider", provider);
+    callbackUrl.searchParams.set('provider', provider);
   }
 
   return callbackUrl.toString();

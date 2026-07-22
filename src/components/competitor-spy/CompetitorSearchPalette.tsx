@@ -1,13 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { useEffect, useState } from 'react';
 import {
   Command,
   CommandEmpty,
@@ -17,16 +10,23 @@ import {
   CommandList,
   CommandSeparator,
   CommandShortcut,
-} from "@/components/ui/command";
-import { useCompetitorSmartSearch } from "@/lib/api/competitorSpy";
-import { compactCount, initials, tileStyle } from "./brandVisuals";
+} from '@/components/ui/command';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useCompetitorSmartSearch } from '@/lib/api/competitorSpy';
+import { compactCount, initials, tileStyle } from './brandVisuals';
 
 // foreplay-style "Discovery" command palette: one query across the brand's
 // tracked competitors (grouped with ad counts) and their cached ads (copy/hook
 // matches), plus an inline "search Meta & track a new brand" action. Results are
 // server-driven, so cmdk's client filtering is disabled (shouldFilter=false).
 const COMMAND_DIALOG_CLASS =
-  "[&_[cmdk-group-heading]]:text-muted-foreground **:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5";
+  '[&_[cmdk-group-heading]]:text-muted-foreground **:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5';
 
 export function CompetitorSearchPalette({
   brandId,
@@ -41,8 +41,8 @@ export function CompetitorSearchPalette({
   onSelectCompetitor: (competitorId: string) => void;
   onTrackNew: (query: string) => void;
 }) {
-  const [raw, setRaw] = useState("");
-  const [term, setTerm] = useState("");
+  const [raw, setRaw] = useState('');
+  const [term, setTerm] = useState('');
 
   useEffect(() => {
     const id = setTimeout(() => setTerm(raw.trim()), 250);
@@ -51,8 +51,8 @@ export function CompetitorSearchPalette({
 
   useEffect(() => {
     if (!open) {
-      setRaw("");
-      setTerm("");
+      setRaw('');
+      setTerm('');
     }
   }, [open]);
 
@@ -86,7 +86,7 @@ export function CompetitorSearchPalette({
               </div>
             ) : (
               <>
-                <CommandEmpty>{isFetching ? "Searching…" : "No matches."}</CommandEmpty>
+                <CommandEmpty>{isFetching ? 'Searching…' : 'No matches.'}</CommandEmpty>
 
                 {brands.length > 0 ? (
                   <CommandGroup heading="Brands">
@@ -104,7 +104,9 @@ export function CompetitorSearchPalette({
                           {initials(brand.name)}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-foreground">{brand.name}</span>
+                          <span className="block truncate text-sm text-foreground">
+                            {brand.name}
+                          </span>
                           {brand.handle ? (
                             <span className="block truncate font-mono text-xs text-muted-foreground">
                               {brand.handle}
@@ -112,7 +114,7 @@ export function CompetitorSearchPalette({
                           ) : null}
                         </span>
                         <CommandShortcut className="font-mono tabular-nums">
-                          {compactCount(brand.adCount) ?? "0"} ads
+                          {compactCount(brand.adCount) ?? '0'} ads
                         </CommandShortcut>
                       </CommandItem>
                     ))}
@@ -131,7 +133,7 @@ export function CompetitorSearchPalette({
                         >
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm text-foreground">
-                              {ad.body ?? "(no copy)"}
+                              {ad.body ?? '(no copy)'}
                             </span>
                             <span className="block truncate font-mono text-xs text-muted-foreground">
                               {ad.competitorName} · {ad.status}

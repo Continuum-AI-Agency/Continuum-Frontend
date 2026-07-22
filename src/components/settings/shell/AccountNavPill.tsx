@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import Image from "next/image";
-import { useCurrentUserAvatar } from "@/hooks/useCurrentUserAvatar";
+import Image from 'next/image';
+import { useCurrentUserAvatar } from '@/hooks/useCurrentUserAvatar';
 
 type AccountNavPillProps = {
   email: string;
@@ -9,7 +9,7 @@ type AccountNavPillProps = {
 
 export function AccountNavPill({ email }: AccountNavPillProps) {
   const { avatarUrl, initials } = useCurrentUserAvatar();
-  const fallback = (initials || email.charAt(0) || "?").toUpperCase();
+  const fallback = (initials || email.charAt(0) || '?').toUpperCase();
 
   return (
     <span

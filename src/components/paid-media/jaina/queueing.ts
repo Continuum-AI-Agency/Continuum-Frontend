@@ -1,4 +1,4 @@
-import type { AgentMentionReference } from "@/lib/agent-references";
+import type { AgentMentionReference } from '@/lib/agent-references';
 
 export type QueuedJainaMessage = {
   id: string;
@@ -19,7 +19,7 @@ export function shouldQueueSubmission(input: {
 
 export function enqueueMessage(
   queuedMessages: QueuedJainaMessage[],
-  queuedMessage: QueuedJainaMessage
+  queuedMessage: QueuedJainaMessage,
 ): QueuedJainaMessage[] {
   return [...queuedMessages, queuedMessage];
 }
@@ -27,23 +27,21 @@ export function enqueueMessage(
 export function updateQueuedMessageContent(
   queuedMessages: QueuedJainaMessage[],
   messageId: string,
-  content: string
+  content: string,
 ): QueuedJainaMessage[] {
   return queuedMessages.map((message) =>
-    message.id === messageId ? { ...message, content } : message
+    message.id === messageId ? { ...message, content } : message,
   );
 }
 
 export function removeQueuedMessage(
   queuedMessages: QueuedJainaMessage[],
-  messageId: string
+  messageId: string,
 ): QueuedJainaMessage[] {
   return queuedMessages.filter((message) => message.id !== messageId);
 }
 
-export function takeNextQueuedMessage(
-  queuedMessages: QueuedJainaMessage[]
-): {
+export function takeNextQueuedMessage(queuedMessages: QueuedJainaMessage[]): {
   next: QueuedJainaMessage | null;
   remaining: QueuedJainaMessage[];
 } {

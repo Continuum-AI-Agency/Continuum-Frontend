@@ -1,14 +1,14 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { ArrowSquareOut, Sparkle } from "@phosphor-icons/react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
-import { ColorSwatch } from "./ColorSwatch";
-import { EditableHeading } from "./EditableHeading";
-import { FontSample } from "./FontSample";
-import { TonePicker } from "./TonePicker";
-import { FindingCallout } from "../readiness/FindingCallout";
-import type { ReadinessFinding } from "@/lib/onboarding/agentClient";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import { ArrowSquareOut, Sparkle } from '@phosphor-icons/react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
+import type { ReadinessFinding } from '@/lib/onboarding/agentClient';
+import { FindingCallout } from '../readiness/FindingCallout';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
+import { ColorSwatch } from './ColorSwatch';
+import { EditableHeading } from './EditableHeading';
+import { FontSample } from './FontSample';
+import { TonePicker } from './TonePicker';
 
 type IdentityPanelProps = {
   name: string;
@@ -42,29 +42,37 @@ export function IdentityPanel({
   const firstImpression = agentBuckets?.firstImpression?.headline ?? null;
   const firstImpressionStatus = agentBuckets?.sectionStatus.first_impression;
   const hideFirstImpression =
-    !firstImpression && (firstImpressionStatus === "skipped" || firstImpressionStatus === "error");
+    !firstImpression && (firstImpressionStatus === 'skipped' || firstImpressionStatus === 'error');
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm text-foreground">
       <div
         className={`grid grid-cols-1 divide-y divide-border/70 lg:divide-x lg:divide-y-0 ${
           hideFirstImpression
-            ? "lg:grid-cols-[minmax(0,1.4fr)_auto_auto]"
-            : "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
+            ? 'lg:grid-cols-[minmax(0,1.4fr)_auto_auto]'
+            : 'lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]'
         }`}
       >
         <Subsection className="lg:py-5">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 shrink-0 rounded-lg bg-muted">
               {resolvedLogo ? (
-                <AvatarImage src={resolvedLogo} alt={`${resolved.name || "brand"} logo`} className="object-cover" />
+                <AvatarImage
+                  src={resolvedLogo}
+                  alt={`${resolved.name || 'brand'} logo`}
+                  className="object-cover"
+                />
               ) : null}
               <AvatarFallback className="rounded-lg bg-muted text-sm font-bold text-foreground">
-                {(resolved.name || "B").slice(0, 2).toUpperCase()}
+                {(resolved.name || 'B').slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <EditableHeading value={resolved.name} placeholder="Untitled brand" onCommit={onRename} />
+              <EditableHeading
+                value={resolved.name}
+                placeholder="Untitled brand"
+                onCommit={onRename}
+              />
               {host ? (
                 <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
                   <ArrowSquareOut className="h-3 w-3" />
@@ -134,20 +142,22 @@ export function IdentityPanel({
 }
 
 function Subsection({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={`space-y-2 p-5 ${className ?? ""}`}>{children}</section>;
+  return <section className={`space-y-2 p-5 ${className ?? ''}`}>{children}</section>;
 }
 
 function SubsectionHeader({ title, chip }: { title: string; chip?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h3 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
       {chip}
     </div>
   );
 }
 
 function derivePaletteArray(palette: unknown): string[] {
-  if (!palette || typeof palette !== "object") return [];
+  if (!palette || typeof palette !== 'object') return [];
   const p = palette as {
     primary?: string | null;
     secondary?: string | null;
@@ -155,20 +165,30 @@ function derivePaletteArray(palette: unknown): string[] {
     background?: string | null;
     text?: string | null;
   };
-  return [p.primary, p.secondary, p.accent, p.background, p.text].filter((hex): hex is string => Boolean(hex));
+  return [p.primary, p.secondary, p.accent, p.background, p.text].filter((hex): hex is string =>
+    Boolean(hex),
+  );
 }
 
 function resolveFromBuckets(
-  brandInputs: { name: string; colors: string[]; typography: { primary: string | null; secondary: string | null }; heroStatement: string | null },
-  buckets?: AgentPreviewBuckets | null
+  brandInputs: {
+    name: string;
+    colors: string[];
+    typography: { primary: string | null; secondary: string | null };
+    heroStatement: string | null;
+  },
+  buckets?: AgentPreviewBuckets | null,
 ): {
   name: string;
   colors: string[];
   typography: { primary: string | null; secondary: string | null };
   heroStatement: string | null;
 } {
-  const name = brandInputs.name || buckets?.brandProfile?.brand_name || "";
-  const colors = brandInputs.colors.length > 0 ? brandInputs.colors : derivePaletteArray(buckets?.website?.palette);
+  const name = brandInputs.name || buckets?.brandProfile?.brand_name || '';
+  const colors =
+    brandInputs.colors.length > 0
+      ? brandInputs.colors
+      : derivePaletteArray(buckets?.website?.palette);
   const typography =
     brandInputs.typography.primary || brandInputs.typography.secondary
       ? brandInputs.typography

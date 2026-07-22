@@ -174,7 +174,7 @@ export function ChatPanel({
       const current = form.getValues('resolution');
       form.setValue('resolution', current || '1024x1024');
       form.setValue('imageSize', undefined);
-    } else if (model === 'gemini-3-pro-image-preview') {
+    } else if (model === 'gemini-3-pro-image') {
       form.setValue('resolution', '');
       form.setValue('imageSize', form.getValues('imageSize') || '1K');
     } else {
@@ -388,7 +388,7 @@ export function ChatPanel({
           </div>
         </div>
 
-        {model === 'gemini-3-pro-image-preview' ? (
+        {model === 'gemini-3-pro-image' ? (
           <div className="space-y-1">
             <span className="block text-xs text-gray-400">Image size</span>
             <div className="flex flex-wrap gap-2">

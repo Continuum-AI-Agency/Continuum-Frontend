@@ -94,6 +94,7 @@ export function useWorkflowExecution() {
       initUrl: string,
       expectedMedium: 'image' | 'video' | 'text',
       onPartialUpdate?: (data: any) => void,
+      onOutputAvailable?: (output: NodeOutput) => void,
     ): Promise<ExecutionResult> => {
       if (isCancelledRef.current) {
         return { success: false, error: 'Execution cancelled' };
@@ -158,6 +159,7 @@ export function useWorkflowExecution() {
                 bytes?: string;
                 mime_type?: string;
                 signed_url?: string;
+                signedUrl?: string;
                 download_url?: string;
                 url?: string;
                 video_url?: string;
@@ -165,11 +167,15 @@ export function useWorkflowExecution() {
                 size_bytes?: number;
                 storage?: { signed_url?: string; size_bytes?: number };
                 path?: string;
+                storagePath?: string;
                 bucket?: string;
+                mimeType?: string;
                 message?: string;
                 text?: string;
                 delta?: string;
                 progress?: number;
+                asset_id?: string;
+                delivery?: 'durable' | 'fallback';
               };
 
               const parsed = JSON.parse(jsonStr) as StreamPayload;
@@ -201,13 +207,15 @@ export function useWorkflowExecution() {
               const imageUrl =
                 typeof parsed.signed_url === 'string'
                   ? parsed.signed_url
-                  : typeof parsed.storage?.signed_url === 'string'
-                    ? parsed.storage?.signed_url
-                    : typeof parsed.download_url === 'string'
-                      ? parsed.download_url
-                      : typeof parsed.url === 'string'
-                        ? parsed.url
-                        : undefined;
+                  : typeof parsed.signedUrl === 'string'
+                    ? parsed.signedUrl
+                    : typeof parsed.storage?.signed_url === 'string'
+                      ? parsed.storage?.signed_url
+                      : typeof parsed.download_url === 'string'
+                        ? parsed.download_url
+                        : typeof parsed.url === 'string'
+                          ? parsed.url
+                          : undefined;
               const persistentImageUrl =
                 imageUrl && !imageUrl.startsWith('data:') ? imageUrl : undefined;
               const sizeBytes =
@@ -235,7 +243,9 @@ export function useWorkflowExecution() {
                     storagePath: typeof parsed.path === 'string' ? parsed.path : undefined,
                     storageBucket: typeof parsed.bucket === 'string' ? parsed.bucket : undefined,
                     sizeBytes,
+                    assetId: typeof parsed.asset_id === 'string' ? parsed.asset_id : undefined,
                   };
+                  onOutputAvailable?.(finalOutput);
                 }
               }
 
@@ -251,25 +261,27 @@ export function useWorkflowExecution() {
                 }
               }
 
-              const videoMime = parsed.mime_type ?? 'video/mp4';
+              const videoMime = parsed.mime_type ?? parsed.mimeType ?? 'video/mp4';
               const rawVideoString =
                 typeof parsed.signed_url === 'string'
                   ? parsed.signed_url
-                  : typeof parsed.storage?.signed_url === 'string'
-                    ? parsed.storage?.signed_url
-                    : typeof parsed.download_url === 'string'
-                      ? parsed.download_url
-                      : typeof parsed.url === 'string'
-                        ? parsed.url
-                        : typeof parsed.video_url === 'string'
-                          ? parsed.video_url
-                          : typeof parsed.data_url === 'string'
-                            ? parsed.data_url
-                            : typeof parsed.bytes === 'string'
-                              ? `data:${videoMime};base64,${parsed.bytes}`
-                              : typeof parsed.base64 === 'string'
-                                ? `data:${videoMime};base64,${parsed.base64}`
-                                : undefined;
+                  : typeof parsed.signedUrl === 'string'
+                    ? parsed.signedUrl
+                    : typeof parsed.storage?.signed_url === 'string'
+                      ? parsed.storage?.signed_url
+                      : typeof parsed.download_url === 'string'
+                        ? parsed.download_url
+                        : typeof parsed.url === 'string'
+                          ? parsed.url
+                          : typeof parsed.video_url === 'string'
+                            ? parsed.video_url
+                            : typeof parsed.data_url === 'string'
+                              ? parsed.data_url
+                              : typeof parsed.bytes === 'string'
+                                ? `data:${videoMime};base64,${parsed.bytes}`
+                                : typeof parsed.base64 === 'string'
+                                  ? `data:${videoMime};base64,${parsed.base64}`
+                                  : undefined;
               const videoUrl = rawVideoString;
 
               if (
@@ -294,7 +306,7 @@ export function useWorkflowExecution() {
                   type: 'video',
                   url: videoUrl,
                   posterBase64: parsed.poster_base64,
-                  storagePath: parsed.path,
+                  storagePath: parsed.path ?? parsed.storagePath,
                   storageBucket: parsed.bucket,
                   sizeBytes,
                 };
@@ -310,6 +322,7 @@ export function useWorkflowExecution() {
                     storagePath: typeof parsed.path === 'string' ? parsed.path : undefined,
                     storageBucket: typeof parsed.bucket === 'string' ? parsed.bucket : undefined,
                     sizeBytes,
+                    assetId: typeof parsed.asset_id === 'string' ? parsed.asset_id : undefined,
                   };
                 } else if (expectedMedium === 'video' && videoUrl) {
                   finalOutput = {
@@ -318,6 +331,14 @@ export function useWorkflowExecution() {
                     posterBase64: parsed.poster_base64,
                   };
                 }
+              }
+
+              if (
+                eventName === 'complete' &&
+                finalOutput?.type === 'image' &&
+                typeof parsed.asset_id === 'string'
+              ) {
+                finalOutput = { ...finalOutput, assetId: parsed.asset_id };
               }
 
               if (eventName === 'error') {
@@ -405,14 +426,25 @@ export function useWorkflowExecution() {
   );
 
   const executeGeneration = useCallback(
-    async (nodeId: string, payload: BackendChatImageRequestPayload): Promise<ExecutionResult> => {
+    async (
+      nodeId: string,
+      payload: BackendChatImageRequestPayload,
+      onOutputAvailable?: (output: NodeOutput) => void,
+    ): Promise<ExecutionResult> => {
       const expectedMedium = payload.medium;
       const initUrl =
         payload.medium === 'video'
           ? resolveInitUrl('/ai-studio/generate-video')
           : resolveInitUrl('/ai-studio/generate');
 
-      return executeStreamRequest(nodeId, payload, initUrl, expectedMedium);
+      return executeStreamRequest(
+        nodeId,
+        payload,
+        initUrl,
+        expectedMedium,
+        undefined,
+        onOutputAvailable,
+      );
     },
     [resolveInitUrl, executeStreamRequest],
   );

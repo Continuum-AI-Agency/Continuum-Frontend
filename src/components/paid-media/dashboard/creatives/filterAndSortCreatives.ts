@@ -1,11 +1,11 @@
-import type { CreativeAd, CreativeGalleryFilters, CreativeMetricKey } from "./types";
+import type { CreativeAd, CreativeGalleryFilters, CreativeMetricKey } from './types';
 
 const KNOWN_ASPECTS: ReadonlyArray<{ label: string; ratio: number }> = [
-  { label: "9:16", ratio: 9 / 16 },
-  { label: "4:5", ratio: 4 / 5 },
-  { label: "1:1", ratio: 1 },
-  { label: "4:3", ratio: 4 / 3 },
-  { label: "16:9", ratio: 16 / 9 },
+  { label: '9:16', ratio: 9 / 16 },
+  { label: '4:5', ratio: 4 / 5 },
+  { label: '1:1', ratio: 1 },
+  { label: '4:3', ratio: 4 / 3 },
+  { label: '16:9', ratio: 16 / 9 },
 ];
 
 // Snap a loaded image's natural dimensions to the closest common ad aspect ratio.
@@ -29,23 +29,23 @@ function matchesQuery(ad: CreativeAd, query: string): boolean {
   if (!query) return true;
   const haystack = [ad.name, ad.creative?.title, ad.creative?.body]
     .filter(Boolean)
-    .join(" ")
+    .join(' ')
     .toLowerCase();
   return haystack.includes(query);
 }
 
 function matchesStatus(
   ad: CreativeAd,
-  statusFilter: CreativeGalleryFilters["statusFilter"]
+  statusFilter: CreativeGalleryFilters['statusFilter'],
 ): boolean {
-  if (statusFilter === "all") return true;
-  const isActive = (ad.effectiveStatus ?? ad.status ?? "").toUpperCase() === "ACTIVE";
-  return statusFilter === "active" ? isActive : !isActive;
+  if (statusFilter === 'all') return true;
+  const isActive = (ad.effectiveStatus ?? ad.status ?? '').toUpperCase() === 'ACTIVE';
+  return statusFilter === 'active' ? isActive : !isActive;
 }
 
 export function filterAndSortCreatives(
   ads: readonly CreativeAd[],
-  filters: CreativeGalleryFilters
+  filters: CreativeGalleryFilters,
 ): CreativeAd[] {
   const query = filters.query.trim().toLowerCase();
 
@@ -57,7 +57,7 @@ export function filterAndSortCreatives(
   });
 
   const sorted = [...filtered];
-  if (filters.sortKey === "name") {
+  if (filters.sortKey === 'name') {
     sorted.sort((a, b) => a.name.localeCompare(b.name));
   } else {
     const key: CreativeMetricKey = filters.sortKey;

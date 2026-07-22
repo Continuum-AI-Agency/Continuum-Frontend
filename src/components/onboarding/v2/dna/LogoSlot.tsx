@@ -1,12 +1,12 @@
-import Image from "next/image";
-import { useEffect, useState } from "react";
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
+import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
 
 export function LogoSlot() {
   const { state } = useOnboarding();
   const path = state.brand.logoPath;
-  const name = state.brand.name || "Brand";
+  const name = state.brand.name || 'Brand';
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
 
   useEffect(() => {

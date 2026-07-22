@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { motion } from "motion/react";
-import { memo, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
-import { useChart, useChartStable } from "./chart-context";
+import { motion } from 'motion/react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { cn } from '@/lib/utils';
+import { useChart, useChartStable } from './chart-context';
 
 export interface BarXAxisProps {
   /** Width of the date ticker box for fade calculation. Default: 50 */
@@ -23,13 +23,7 @@ interface BarXAxisLabelProps {
   tickerHalfWidth: number;
 }
 
-function BarXAxisLabel({
-  label,
-  x,
-  crosshairX,
-  isHovering,
-  tickerHalfWidth,
-}: BarXAxisLabelProps) {
+function BarXAxisLabel({ label, x, crosshairX, isHovering, tickerHalfWidth }: BarXAxisLabelProps) {
   const fadeBuffer = 20;
   const fadeRadius = tickerHalfWidth + fadeBuffer;
 
@@ -51,15 +45,15 @@ function BarXAxisLabel({
         left: x,
         bottom: 12,
         width: 0,
-        display: "flex",
-        justifyContent: "center",
+        display: 'flex',
+        justifyContent: 'center',
       }}
     >
       <motion.span
         animate={{ opacity }}
-        className={cn("whitespace-nowrap text-chart-label text-xs")}
+        className={cn('whitespace-nowrap text-chart-label text-xs')}
         initial={{ opacity: 1 }}
-        transition={{ duration: 0.4, ease: "easeInOut" }}
+        transition={{ duration: 0.4, ease: 'easeInOut' }}
       >
         {label}
       </motion.span>
@@ -93,8 +87,7 @@ const BarXAxisInner = memo(function BarXAxisInner({
   maxLabels = 12,
   container,
 }: BarXAxisProps & { container: HTMLDivElement }) {
-  const { margin, tooltipData, barScale, bandWidth, barXAccessor, data } =
-    useChart();
+  const { margin, tooltipData, barScale, bandWidth, barXAccessor, data } = useChart();
 
   // Generate labels for each bar
   const labelsToShow = useMemo(() => {
@@ -118,15 +111,7 @@ const BarXAxisInner = memo(function BarXAxisInner({
     // Otherwise, skip some labels to avoid crowding
     const step = Math.ceil(allLabels.length / maxLabels);
     return allLabels.filter((_, i) => i % step === 0);
-  }, [
-    barScale,
-    bandWidth,
-    barXAccessor,
-    data,
-    margin.left,
-    showAllLabels,
-    maxLabels,
-  ]);
+  }, [barScale, bandWidth, barXAccessor, data, margin.left, showAllLabels, maxLabels]);
 
   const isHovering = tooltipData !== null;
   const crosshairX = tooltipData ? tooltipData.x + margin.left : null;
@@ -144,10 +129,10 @@ const BarXAxisInner = memo(function BarXAxisInner({
         />
       ))}
     </div>,
-    container
+    container,
   );
 });
 
-BarXAxis.displayName = "BarXAxis";
+BarXAxis.displayName = 'BarXAxis';
 
 export default BarXAxis;

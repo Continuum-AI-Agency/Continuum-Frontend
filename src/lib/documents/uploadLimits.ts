@@ -10,14 +10,14 @@
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024; // 25 MiB; mirror in brand-docs bucket file_size_limit
 export const MAX_DOCUMENT_MB = Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024);
 
-const ACCEPTED_MIME_PREFIXES = ["text/", "image/"] as const;
+const ACCEPTED_MIME_PREFIXES = ['text/', 'image/'] as const;
 const ACCEPTED_MIME_EXACT = new Set<string>([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/json",
-  "", // some browsers report no MIME for known document types; tolerated like the legacy route
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/json',
+  '', // some browsers report no MIME for known document types; tolerated like the legacy route
 ]);
 
 export function isAcceptedDocumentMime(mime: string): boolean {
@@ -36,9 +36,7 @@ export type DocumentUploadMetadata = {
   category?: string;
 };
 
-export type MetadataValidation =
-  | { ok: true }
-  | { ok: false; status: number; error: string };
+export type MetadataValidation = { ok: true } | { ok: false; status: number; error: string };
 
 // Validates the metadata posted after a direct browser upload. The storagePath
 // prefix check is the security boundary: it confirms the recorded object lives
@@ -46,34 +44,34 @@ export type MetadataValidation =
 export function validateDocumentUploadMetadata(
   input: Partial<DocumentUploadMetadata>,
 ): MetadataValidation {
-  if (!input.brandId || typeof input.brandId !== "string") {
-    return { ok: false, status: 400, error: "Missing brand context" };
+  if (!input.brandId || typeof input.brandId !== 'string') {
+    return { ok: false, status: 400, error: 'Missing brand context' };
   }
   if (
     !input.documentId ||
-    typeof input.documentId !== "string" ||
-    input.documentId.includes("/") ||
-    input.documentId.includes("..")
+    typeof input.documentId !== 'string' ||
+    input.documentId.includes('/') ||
+    input.documentId.includes('..')
   ) {
-    return { ok: false, status: 400, error: "Invalid document id" };
+    return { ok: false, status: 400, error: 'Invalid document id' };
   }
-  if (!input.storagePath || typeof input.storagePath !== "string") {
-    return { ok: false, status: 400, error: "Missing storage path" };
+  if (!input.storagePath || typeof input.storagePath !== 'string') {
+    return { ok: false, status: 400, error: 'Missing storage path' };
   }
   if (!input.storagePath.startsWith(`${input.brandId}/${input.documentId}/`)) {
-    return { ok: false, status: 400, error: "storagePath is outside the brand scope" };
+    return { ok: false, status: 400, error: 'storagePath is outside the brand scope' };
   }
-  if (typeof input.size !== "number" || !Number.isFinite(input.size) || input.size <= 0) {
-    return { ok: false, status: 400, error: "Invalid file size" };
+  if (typeof input.size !== 'number' || !Number.isFinite(input.size) || input.size <= 0) {
+    return { ok: false, status: 400, error: 'Invalid file size' };
   }
   if (input.size > MAX_DOCUMENT_BYTES) {
     return { ok: false, status: 413, error: `File exceeds ${MAX_DOCUMENT_MB} MB limit` };
   }
-  if (typeof input.mimeType !== "string" || !isAcceptedDocumentMime(input.mimeType)) {
+  if (typeof input.mimeType !== 'string' || !isAcceptedDocumentMime(input.mimeType)) {
     return {
       ok: false,
       status: 415,
-      error: `Unsupported file type: ${input.mimeType || "unknown"}`,
+      error: `Unsupported file type: ${input.mimeType || 'unknown'}`,
     };
   }
   return { ok: true };

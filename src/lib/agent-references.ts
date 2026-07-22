@@ -1,19 +1,19 @@
-import type { AgentMentionReference } from '@continuum/contracts'
+import type { AgentMentionReference } from '@continuum/contracts';
 
 export {
-  agentMentionReferenceTypeSchema,
-  agentMentionReferenceSourceSchema,
-  agentMentionReferenceSchema,
-  agentMentionMetadataSchema,
-  type AgentMentionReference,
   type AgentMentionMetadata,
-} from '@continuum/contracts'
+  type AgentMentionReference,
+  agentMentionMetadataSchema,
+  agentMentionReferenceSchema,
+  agentMentionReferenceSourceSchema,
+  agentMentionReferenceTypeSchema,
+} from '@continuum/contracts';
 
 export type AgentMentionSuggestion = {
   key: string;
   label: string;
-  type: AgentMentionReference["type"];
-  source: AgentMentionReference["source"];
+  type: AgentMentionReference['type'];
+  source: AgentMentionReference['source'];
   group?: string;
   description?: string;
   badge?: string;
@@ -22,7 +22,7 @@ export type AgentMentionSuggestion = {
   isFolder?: boolean;
   preview?: {
     url?: string | null;
-    kind?: "image" | "video" | "canvas";
+    kind?: 'image' | 'video' | 'canvas';
     label?: string;
   };
 };
@@ -33,10 +33,10 @@ export type AgentMentionProvider = {
   }) => AgentMentionSuggestion[] | Promise<AgentMentionSuggestion[]>;
   getChildSuggestions?: (
     parent: AgentMentionSuggestion,
-    query: string
+    query: string,
   ) => AgentMentionSuggestion[] | Promise<AgentMentionSuggestion[]>;
 };
 
 export function createMentionToken(label: string): string {
-  return `@${label.trim().replace(/\s+/g, " ")}`;
+  return `@${label.trim().replace(/\s+/g, ' ')}`;
 }

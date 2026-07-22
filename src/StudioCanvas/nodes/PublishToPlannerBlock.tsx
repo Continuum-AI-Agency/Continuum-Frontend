@@ -17,7 +17,8 @@ import {
   useNodeId,
 } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import {

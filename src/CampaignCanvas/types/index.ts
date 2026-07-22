@@ -1,11 +1,6 @@
-import { type Node, type NodeProps, type Edge } from '@xyflow/react';
+import type { Edge, Node, NodeProps } from '@xyflow/react';
 
-export type CampaignNodeType = 
-  | 'campaign' 
-  | 'ad-set' 
-  | 'ad' 
-  | 'audience' 
-  | 'creative';
+export type CampaignNodeType = 'campaign' | 'ad-set' | 'ad' | 'audience' | 'creative';
 
 export type AdFormat = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'COLLECTION';
 export type CreativeAssetType = 'image' | 'video';
@@ -19,7 +14,13 @@ export interface BaseCampaignNodeData extends Record<string, unknown> {
 }
 
 export interface CampaignData extends BaseCampaignNodeData {
-  objective: 'OUTCOME_SALES' | 'OUTCOME_LEADS' | 'OUTCOME_ENGAGEMENT' | 'OUTCOME_AWARENESS' | 'OUTCOME_TRAFFIC' | 'OUTCOME_APP_PROMOTION';
+  objective:
+    | 'OUTCOME_SALES'
+    | 'OUTCOME_LEADS'
+    | 'OUTCOME_ENGAGEMENT'
+    | 'OUTCOME_AWARENESS'
+    | 'OUTCOME_TRAFFIC'
+    | 'OUTCOME_APP_PROMOTION';
   buyingType: 'AUCTION' | 'RESERVATION';
   specialAdCategories: string[];
 }
@@ -78,6 +79,8 @@ export type CampaignCanvasNodeMap = {
 
 export type CampaignCanvasNode = Node<CampaignCanvasNodeData, CampaignNodeType>;
 
-export type CampaignNodeProps<NodeType extends CampaignNodeType> = NodeProps<CampaignCanvasNodeMap[NodeType]>;
+export type CampaignNodeProps<NodeType extends CampaignNodeType> = NodeProps<
+  CampaignCanvasNodeMap[NodeType]
+>;
 
 export type CampaignCanvasEdge = Edge;

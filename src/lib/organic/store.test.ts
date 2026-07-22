@@ -127,6 +127,51 @@ describe('useCalendarStore', () => {
     expect(state.days.find((day) => day.id === 'day-1')?.slots).toHaveLength(0);
   });
 
+  describe('bulkMoveDrafts', () => {
+    it('moves all ids to a real target day', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().addDraft('day-1', createDraft('d2'));
+
+      useCalendarStore.getState().bulkMoveDrafts(['d1', 'd2'], 'day-2');
+
+      const state = useCalendarStore.getState();
+      expect(state.days.find((d) => d.id === 'day-1')?.slots).toHaveLength(0);
+      expect(
+        state.days
+          .find((d) => d.id === 'day-2')
+          ?.slots.map((s) => s.id)
+          .sort(),
+      ).toEqual(['d1', 'd2']);
+    });
+
+    // The vanish bug: bulkMoveDrafts to a day outside the loaded set silently dropped
+    // the moved drafts. It must materialize the target day exactly like moveDraft.
+    it('materializes a not-yet-loaded target day instead of dropping the drafts', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+      useCalendarStore.getState().addDraft('day-2', createDraft('d2'));
+
+      useCalendarStore.getState().bulkMoveDrafts(['d1', 'd2'], '2026-09-14');
+
+      const state = useCalendarStore.getState();
+      const target = state.days.find((d) => d.id === '2026-09-14');
+      expect(target).toBeDefined();
+      expect(target?.slots.map((s) => s.id).sort()).toEqual(['d1', 'd2']);
+      expect(state.days.find((d) => d.id === 'day-1')?.slots).toHaveLength(0);
+      expect(state.days.find((d) => d.id === 'day-2')?.slots).toHaveLength(0);
+    });
+
+    it('is a no-op when none of the ids are present', () => {
+      useCalendarStore.getState().addDraft('day-1', createDraft('d1'));
+
+      useCalendarStore.getState().bulkMoveDrafts(['absent-1', 'absent-2'], 'day-2');
+
+      const state = useCalendarStore.getState();
+      expect(state.days.find((d) => d.id === 'day-1')?.slots.map((s) => s.id)).toEqual(['d1']);
+      expect(state.days.find((d) => d.id === 'day-2')?.slots).toHaveLength(0);
+      expect(state.days.some((d) => d.id === 'absent-1')).toBe(false);
+    });
+  });
+
   describe('focusedDayId', () => {
     it('defaults to null and records the day the user clicked', () => {
       expect(useCalendarStore.getState().focusedDayId).toBeNull();

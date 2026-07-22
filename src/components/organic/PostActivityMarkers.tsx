@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // Shared "post activity" markers for organic reporting time-series charts. Given
 // the canonical annotated join from @continuum/contracts, this renders one dashed
@@ -17,63 +17,63 @@ import {
   type AnnotatedDailyTrend,
   annotatePostActivityByDate,
   type OrganicPostSummary,
-} from "@continuum/contracts";
-import React from "react";
-import { ReferenceLine } from "recharts";
+} from '@continuum/contracts';
+import type React from 'react';
+import { ReferenceLine } from 'recharts';
 
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 
 // Platform-neutral content kinds shown on flag labels / colors. Product-type
 // strings from each fetcher (REELS, SHORTS, LINKEDIN_POST, …) collapse into these.
-export type PostContentType = "reel" | "short" | "story" | "video" | "post";
+export type PostContentType = 'reel' | 'short' | 'story' | 'video' | 'post';
 
 const CONTENT_TYPE_COLOR: Record<PostContentType, string> = {
-  reel: "var(--color-primary)",
-  short: "var(--color-primary)",
-  post: "var(--color-secondary)",
-  story: "var(--chart-3)",
-  video: "var(--chart-2)",
+  reel: 'var(--color-primary)',
+  short: 'var(--color-primary)',
+  post: 'var(--color-secondary)',
+  story: 'var(--chart-3)',
+  video: 'var(--chart-2)',
 };
 
 const CONTENT_TYPE_LABEL: Record<PostContentType, string> = {
-  reel: "Reel",
-  short: "Short",
-  post: "Post",
-  story: "Story",
-  video: "Video",
+  reel: 'Reel',
+  short: 'Short',
+  post: 'Post',
+  story: 'Story',
+  video: 'Video',
 };
 
-const MIXED_COLOR = "var(--color-muted-foreground)";
+const MIXED_COLOR = 'var(--color-muted-foreground)';
 
 // Map a post's platform-native type fields onto a display kind. Prefer
 // mediaProductType (Instagram REELS/FEED/STORY, YouTube SHORTS/VIDEO, LinkedIn
 // LINKEDIN_POST, Facebook status_type) and fall back to mediaType.
 export function classifyPostContentType(post: OrganicPostSummary): PostContentType {
-  const productType = (post.mediaProductType ?? "").toUpperCase();
-  if (productType === "REELS" || productType === "REEL") return "reel";
-  if (productType === "STORY" || productType === "STORIES") return "story";
-  if (productType === "SHORTS") return "short";
+  const productType = (post.mediaProductType ?? '').toUpperCase();
+  if (productType === 'REELS' || productType === 'REEL') return 'reel';
+  if (productType === 'STORY' || productType === 'STORIES') return 'story';
+  if (productType === 'SHORTS') return 'short';
   // YouTube long-form (and any fetcher that stamps VIDEO as the product type).
-  if (productType === "VIDEO" || productType === "VIDEO_ON_DEMAND") return "video";
+  if (productType === 'VIDEO' || productType === 'VIDEO_ON_DEMAND') return 'video';
   if (
-    productType === "FEED" ||
-    productType === "POST" ||
-    productType === "LINKEDIN_POST" ||
-    productType === "CAROUSEL" ||
-    productType === "CAROUSEL_ALBUM"
+    productType === 'FEED' ||
+    productType === 'POST' ||
+    productType === 'LINKEDIN_POST' ||
+    productType === 'CAROUSEL' ||
+    productType === 'CAROUSEL_ALBUM'
   ) {
-    return "post";
+    return 'post';
   }
 
-  const mediaType = (post.mediaType ?? "").toUpperCase();
+  const mediaType = (post.mediaType ?? '').toUpperCase();
   // Bare VIDEO with no product type: Instagram reels sometimes omit product type,
   // but TikTok/YouTube-ish payloads also land here. Prefer "video" as the neutral
   // multi-platform label; explicit REELS/SHORTS above still win when present.
-  if (mediaType === "VIDEO") return "video";
-  if (mediaType === "IMAGE" || mediaType === "CAROUSEL_ALBUM" || mediaType === "CAROUSEL") {
-    return "post";
+  if (mediaType === 'VIDEO') return 'video';
+  if (mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM' || mediaType === 'CAROUSEL') {
+    return 'post';
   }
-  return "post";
+  return 'post';
 }
 
 // One color for a marker: the shared content type when the day is homogeneous,
@@ -101,23 +101,23 @@ export function buildPostActivityDays(
 }
 
 function formatTime(timestamp: string | undefined): string {
-  if (!timestamp) return "";
+  if (!timestamp) return '';
   const parsed = new Date(timestamp);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function formatDayHeading(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return parsed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function PostRow({ post }: { post: OrganicPostSummary }) {
   const type = classifyPostContentType(post);
   const thumbnail = post.thumbnailUrl ?? post.mediaUrl ?? null;
   const time = formatTime(post.timestamp);
-  const caption = (post.caption ?? "").trim();
+  const caption = (post.caption ?? '').trim();
 
   return (
     <div className="flex gap-2 px-3 py-2">
@@ -177,25 +177,25 @@ function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend
       y={Math.max(0, top - boxHeight + 2)}
       width={boxWidth}
       height={boxHeight}
-      style={{ overflow: "visible" }}
+      style={{ overflow: 'visible' }}
     >
       <div className="flex h-full w-full items-start justify-center">
         <HoverCard openDelay={80} closeDelay={80}>
           <HoverCardTrigger asChild>
             <button
               type="button"
-              aria-label={`${count} post${count === 1 ? "" : "s"} published on ${day.date}`}
+              aria-label={`${count} post${count === 1 ? '' : 's'} published on ${day.date}`}
               className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white shadow-sm ring-1 ring-white/60 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
               style={{ backgroundColor: color }}
             >
-              {count > 1 ? count : ""}
+              {count > 1 ? count : ''}
             </button>
           </HoverCardTrigger>
           <HoverCardContent side="top" align="center" className="w-72 overflow-hidden p-0">
             <div className="border-b border-border/70 bg-muted/30 px-3 py-2">
               <p className="text-xs font-semibold text-foreground">{formatDayHeading(day.date)}</p>
               <p className="text-[11px] text-muted-foreground">
-                {count} post{count === 1 ? "" : "s"} published
+                {count} post{count === 1 ? '' : 's'} published
               </p>
             </div>
             <div className="max-h-64 divide-y divide-border/60 overflow-y-auto">

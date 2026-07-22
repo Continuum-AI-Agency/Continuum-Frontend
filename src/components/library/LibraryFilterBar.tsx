@@ -470,7 +470,9 @@ function TagChipRow({
       : [...options];
     return tagSort === 'az'
       ? matching.toSorted((left, right) => left.tag.localeCompare(right.tag))
-      : matching.toSorted((left, right) => right.count - left.count || left.tag.localeCompare(right.tag));
+      : matching.toSorted(
+          (left, right) => right.count - left.count || left.tag.localeCompare(right.tag),
+        );
   }, [options, query, tagSort]);
 
   if (variant === 'compact') {

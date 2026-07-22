@@ -17,6 +17,7 @@ import {
   versionSignUploadResponseSchema,
 } from '@continuum/contracts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { attachAssetPreview } from './assetPreview';
 import {
   listAssetVersions as listAssetVersionsOperation,
   registerAssetVersion as registerAssetVersionOperation,
@@ -25,7 +26,6 @@ import {
 } from './creativeOperations';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
 import { MAX_PROJECT_FILE_BYTES } from './uploadMediaAsset';
-import { attachAssetPreview } from './assetPreview';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -183,8 +183,7 @@ export async function uploadNewAssetVersion(
     mimeType: contentType,
     sizeBytes: file.size,
     note,
-    integrityState:
-      projectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
+    integrityState: projectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
     idempotencyKey: `version:${assetId}:${ticket.path}`,
   });
   if (registered.versionId) {

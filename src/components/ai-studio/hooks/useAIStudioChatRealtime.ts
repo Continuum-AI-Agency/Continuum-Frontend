@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useSession } from "@/hooks/useSession";
-import { toast } from "sonner";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { useSession } from '@/hooks/useSession';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type ChatMessage = {
   id: string;
@@ -16,10 +16,10 @@ export type ChatMessage = {
   created_at: string;
 };
 
-type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
+type RealtimeStatus = 'INITIALIZING' | 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'ERROR';
 
 const normalizeRealtimeStatus = (value: string): RealtimeStatus =>
-  value === "CHANNEL_ERROR" ? "ERROR" : (value as RealtimeStatus);
+  value === 'CHANNEL_ERROR' ? 'ERROR' : (value as RealtimeStatus);
 
 const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
@@ -34,16 +34,16 @@ const mergeMessages = (existing: ChatMessage[], incoming: ChatMessage[]) => {
   });
 
   return [...map.values()].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
 };
 
-export function useAIStudioChatRealtime(brandProfileId: string, roomId: string = "main") {
+export function useAIStudioChatRealtime(brandProfileId: string, roomId: string = 'main') {
   const supabase = createSupabaseBrowserClient();
   const { user } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [channelStatus, setChannelStatus] = useState<RealtimeStatus>("INITIALIZING");
+  const [channelStatus, setChannelStatus] = useState<RealtimeStatus>('INITIALIZING');
   const channelRef = useRef<any>(null);
 
   const loadLatestMessages = useCallback(
@@ -52,19 +52,19 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
       const cutoffIso = getChatRetentionCutoffIso();
 
       const { data, error } = await supabase
-        .schema("brand_profiles")
-        .from("chat_messages")
-        .select("*")
-        .eq("brand_profile_id", brandProfileId)
-        .eq("room_id", roomId)
-        .gte("created_at", cutoffIso)
-        .order("created_at", { ascending: false })
+        .schema('brand_profiles')
+        .from('chat_messages')
+        .select('*')
+        .eq('brand_profile_id', brandProfileId)
+        .eq('room_id', roomId)
+        .gte('created_at', cutoffIso)
+        .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) {
-        console.error("Error loading chat messages:", error);
+        console.error('Error loading chat messages:', error);
         if (showErrorToast) {
-          toast.error("Failed to load chat history");
+          toast.error('Failed to load chat history');
         }
         return;
       }
@@ -72,7 +72,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
       const latestMessages = [...(data ?? [])].reverse() as ChatMessage[];
       setMessages(latestMessages);
     },
-    [brandProfileId, roomId, supabase]
+    [brandProfileId, roomId, supabase],
   );
 
   // Load initial messages
@@ -105,23 +105,23 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
 
     channel
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "INSERT",
-          schema: "brand_profiles",
-          table: "chat_messages",
+          event: 'INSERT',
+          schema: 'brand_profiles',
+          table: 'chat_messages',
           filter: `brand_profile_id=eq.${brandProfileId}`,
         },
         async (payload) => {
           const newMessage = payload.new as ChatMessage;
           if (newMessage.room_id !== roomId) return;
           setMessages((prev) => mergeMessages(prev, [newMessage]));
-        }
+        },
       )
       .subscribe((subStatus) => {
         const normalizedStatus = normalizeRealtimeStatus(subStatus);
         setChannelStatus(normalizedStatus);
-        if (subStatus === "SUBSCRIBED") {
+        if (subStatus === 'SUBSCRIBED') {
           void loadLatestMessages(false);
         }
       });
@@ -131,7 +131,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
-      setChannelStatus("INITIALIZING");
+      setChannelStatus('INITIALIZING');
     };
   }, [brandProfileId, roomId, supabase, loadLatestMessages]);
 
@@ -140,22 +140,22 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
       if (!user || !brandProfileId) return;
 
       const { data, error } = await supabase
-        .schema("brand_profiles")
-        .from("chat_messages")
+        .schema('brand_profiles')
+        .from('chat_messages')
         .insert({
           brand_profile_id: brandProfileId,
           user_id: user.id,
-          user_name: user.user_metadata?.full_name || user.email || "Unknown",
-          user_avatar: user.user_metadata?.avatar_url || "",
+          user_name: user.user_metadata?.full_name || user.email || 'Unknown',
+          user_avatar: user.user_metadata?.avatar_url || '',
           room_id: roomId,
           content,
         })
-        .select("*")
+        .select('*')
         .single();
 
       if (error) {
-        console.error("Error sending message:", error);
-        toast.error("Failed to send message");
+        console.error('Error sending message:', error);
+        toast.error('Failed to send message');
         return;
       }
 
@@ -163,11 +163,11 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
         setMessages((prev) => mergeMessages(prev, [data as ChatMessage]));
       }
 
-      if (channelStatus !== "SUBSCRIBED" || !data) {
+      if (channelStatus !== 'SUBSCRIBED' || !data) {
         void loadLatestMessages(false);
       }
     },
-    [brandProfileId, roomId, user, supabase, channelStatus, loadLatestMessages]
+    [brandProfileId, roomId, user, supabase, channelStatus, loadLatestMessages],
   );
 
   return { messages, sendMessage, isLoading };

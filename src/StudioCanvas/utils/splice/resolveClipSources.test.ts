@@ -1,9 +1,9 @@
-import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
-import type { Edge } from '@xyflow/react';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
-import { resolveClipSources, resolveTimelineSources } from './resolveClipSources';
+import type { Edge } from '@xyflow/react';
 import type { ClipSlot, StudioNode, TimelineItem } from '../../types';
 import type { NodeOutput } from '../../types/execution';
+import { resolveClipSources, resolveTimelineSources } from './resolveClipSources';
 
 const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
@@ -18,22 +18,47 @@ describe('resolveClipSources', () => {
   const editorId = 'editor-1';
 
   it('resolves clips in slot order (not insertion order)', async () => {
-    const slots: ClipSlot[] = [
-      slot('b', 1),
-      slot('a', 0),
-    ];
+    const slots: ClipSlot[] = [slot('b', 1), slot('a', 0)];
 
     const nodes: StudioNode[] = [
-      { id: 'src-a', type: 'video', position: { x: 0, y: 0 }, data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` } } as StudioNode,
-      { id: 'src-b', type: 'video', position: { x: 0, y: 0 }, data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` } } as StudioNode,
+      {
+        id: 'src-a',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` },
+      } as StudioNode,
+      {
+        id: 'src-b',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` },
+      } as StudioNode,
     ];
 
     const edges: Edge[] = [
-      { id: 'e-a', source: 'src-a', target: editorId, sourceHandle: 'video', targetHandle: 'clip-a' },
-      { id: 'e-b', source: 'src-b', target: editorId, sourceHandle: 'video', targetHandle: 'clip-b' },
+      {
+        id: 'e-a',
+        source: 'src-a',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-a',
+      },
+      {
+        id: 'e-b',
+        source: 'src-b',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-b',
+      },
     ];
 
-    const resolved = await resolveClipSources(slots, edges, nodes, new Map<string, NodeOutput>(), editorId);
+    const resolved = await resolveClipSources(
+      slots,
+      edges,
+      nodes,
+      new Map<string, NodeOutput>(),
+      editorId,
+    );
     expect(resolved.map((clip) => clip.slotId)).toEqual(['a', 'b']);
   });
 
@@ -51,11 +76,28 @@ describe('resolveClipSources', () => {
     const slots: ClipSlot[] = [slot('a', 0), slot('b', 1)];
     const nodes: StudioNode[] = [
       { id: 'src-a', type: 'video', position: { x: 0, y: 0 }, data: {} } as StudioNode,
-      { id: 'src-b', type: 'video', position: { x: 0, y: 0 }, data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` } } as StudioNode,
+      {
+        id: 'src-b',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` },
+      } as StudioNode,
     ];
     const edges: Edge[] = [
-      { id: 'e-a', source: 'src-a', target: editorId, sourceHandle: 'video', targetHandle: 'clip-a' },
-      { id: 'e-b', source: 'src-b', target: editorId, sourceHandle: 'video', targetHandle: 'clip-b' },
+      {
+        id: 'e-a',
+        source: 'src-a',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-a',
+      },
+      {
+        id: 'e-b',
+        source: 'src-b',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-b',
+      },
     ];
 
     await expect(
@@ -68,15 +110,37 @@ describe('resolveClipSources', () => {
     const dataUrl = `data:video/mp4;base64,${TINY_PNG_BASE64}`;
     const liveUrl = `data:video/webm;base64,${TINY_PNG_BASE64}`;
     const nodes: StudioNode[] = [
-      { id: 'src-a', type: 'videoGen', position: { x: 0, y: 0 }, data: { generatedVideo: dataUrl } } as StudioNode,
-      { id: 'src-b', type: 'video', position: { x: 0, y: 0 }, data: { video: dataUrl } } as StudioNode,
+      {
+        id: 'src-a',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: { generatedVideo: dataUrl },
+      } as StudioNode,
+      {
+        id: 'src-b',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: dataUrl },
+      } as StudioNode,
     ];
     const resolvedOutputs = new Map<string, NodeOutput>([
       ['src-a', { type: 'video', url: liveUrl }],
     ]);
     const edges: Edge[] = [
-      { id: 'e-a', source: 'src-a', target: editorId, sourceHandle: 'video', targetHandle: 'clip-a' },
-      { id: 'e-b', source: 'src-b', target: editorId, sourceHandle: 'video', targetHandle: 'clip-b' },
+      {
+        id: 'e-a',
+        source: 'src-a',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-a',
+      },
+      {
+        id: 'e-b',
+        source: 'src-b',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-b',
+      },
     ];
 
     const resolved = await resolveClipSources(slots, edges, nodes, resolvedOutputs, editorId);
@@ -90,15 +154,43 @@ describe('resolveClipSources', () => {
       slot('b', 1, { trimStartSec: 0.5 }),
     ];
     const nodes: StudioNode[] = [
-      { id: 'src-a', type: 'video', position: { x: 0, y: 0 }, data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` } } as StudioNode,
-      { id: 'src-b', type: 'video', position: { x: 0, y: 0 }, data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` } } as StudioNode,
+      {
+        id: 'src-a',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` },
+      } as StudioNode,
+      {
+        id: 'src-b',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: `data:video/mp4;base64,${TINY_PNG_BASE64}` },
+      } as StudioNode,
     ];
     const edges: Edge[] = [
-      { id: 'e-a', source: 'src-a', target: editorId, sourceHandle: 'video', targetHandle: 'clip-a' },
-      { id: 'e-b', source: 'src-b', target: editorId, sourceHandle: 'video', targetHandle: 'clip-b' },
+      {
+        id: 'e-a',
+        source: 'src-a',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-a',
+      },
+      {
+        id: 'e-b',
+        source: 'src-b',
+        target: editorId,
+        sourceHandle: 'video',
+        targetHandle: 'clip-b',
+      },
     ];
 
-    const resolved = await resolveClipSources(slots, edges, nodes, new Map<string, NodeOutput>(), editorId);
+    const resolved = await resolveClipSources(
+      slots,
+      edges,
+      nodes,
+      new Map<string, NodeOutput>(),
+      editorId,
+    );
     expect(resolved[0].trimStartSec).toBe(1);
     expect(resolved[0].trimEndSec).toBe(5);
     expect(resolved[1].trimStartSec).toBe(0.5);
@@ -121,12 +213,23 @@ describe('resolveTimelineSources — Video Editor (timelineEditor) as a source',
   // "upstream produced no media". Both editor node types emit generatedVideo.
   it('resolves a timelineEditor output as a placeable video clip', async () => {
     const nodes: StudioNode[] = [
-      { id: 'src', type: 'timelineEditor', position: { x: 0, y: 0 }, data: { generatedVideo: clip } } as StudioNode,
+      {
+        id: 'src',
+        type: 'timelineEditor',
+        position: { x: 0, y: 0 },
+        data: { generatedVideo: clip },
+      } as StudioNode,
       { id: targetId, type: 'timelineEditor', position: { x: 0, y: 0 }, data: {} } as StudioNode,
     ];
     const items = [{ id: 'i1', order: 0, sourceNodeId: 'src' }] as unknown as TimelineItem[];
 
-    const resolved = await resolveTimelineSources(items, [mediaInEdge('src')], nodes, new Map<string, NodeOutput>(), targetId);
+    const resolved = await resolveTimelineSources(
+      items,
+      [mediaInEdge('src')],
+      nodes,
+      new Map<string, NodeOutput>(),
+      targetId,
+    );
     expect(resolved).toHaveLength(1);
     expect(resolved[0].kind).toBe('video');
     expect(resolved[0].blob).toBeInstanceOf(Blob);

@@ -1,9 +1,15 @@
-"use client";
+'use client';
 
-import { motion } from "motion/react";
-import { Task, TaskContent, TaskItem, TaskTrigger, type TaskStatus } from "@/components/ai-elements/task";
-import { cn } from "@/lib/utils";
-import type { JainaObjective } from "@/lib/jaina/schemas";
+import { motion } from 'motion/react';
+import {
+  Task,
+  TaskContent,
+  TaskItem,
+  type TaskStatus,
+  TaskTrigger,
+} from '@/components/ai-elements/task';
+import type { JainaObjective } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
 
 type ObjectivesQueueProps = {
   objectives: JainaObjective[];
@@ -13,18 +19,18 @@ type ObjectivesQueueProps = {
 export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProps) {
   if (objectives.length === 0) return null;
 
-  const completedCount = objectives.filter((o) => o.status === "completed").length;
+  const completedCount = objectives.filter((o) => o.status === 'completed').length;
   const total = objectives.length;
-  const hasFailed = objectives.some((o) => o.status === "failed");
-  const hasInProgress = objectives.some((o) => o.status === "in_progress");
+  const hasFailed = objectives.some((o) => o.status === 'failed');
+  const hasInProgress = objectives.some((o) => o.status === 'in_progress');
   const taskStatus: TaskStatus =
     completedCount === total
-      ? "completed"
+      ? 'completed'
       : hasFailed && !hasInProgress
-        ? "error"
+        ? 'error'
         : isStreaming || hasInProgress
-          ? "in_progress"
-          : "pending";
+          ? 'in_progress'
+          : 'pending';
 
   return (
     <motion.div
@@ -33,9 +39,9 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
     >
-      <Task status={taskStatus}>
+      <Task status={taskStatus} defaultOpen={false}>
         <TaskTrigger
-          title={`${total} objective${total !== 1 ? "s" : ""}`}
+          title={`${total} objective${total !== 1 ? 's' : ''}`}
           status={taskStatus}
           progress={{ current: completedCount, total }}
         />
@@ -45,10 +51,10 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
               <div className="min-w-0 flex-1">
                 <p
                   className={cn(
-                    "leading-snug",
-                    objective.status === "completed" &&
-                      "line-through text-muted-foreground opacity-65",
-                    objective.status === "failed" && "text-destructive"
+                    'leading-snug',
+                    objective.status === 'completed' &&
+                      'line-through text-muted-foreground opacity-65',
+                    objective.status === 'failed' && 'text-destructive',
                   )}
                 >
                   {objective.title}

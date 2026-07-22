@@ -1,7 +1,7 @@
-import Image from "next/image";
-import { buildInviteCallbackPath } from "@/lib/invites/urls";
-import { LoginForm } from "./LoginForm";
-import styles from "./login.module.css";
+import Image from 'next/image';
+import { buildInviteCallbackPath } from '@/lib/invites/urls';
+import { LoginForm } from './LoginForm';
+import styles from './login.module.css';
 
 type LoginPageSearchParams = {
   token?: string | string[];
@@ -15,8 +15,8 @@ type LoginPageProps = {
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
-  auth_callback_failed: "Authentication failed. Please try again.",
-  unexpected_error: "An unexpected error occurred. Please try again.",
+  auth_callback_failed: 'Authentication failed. Please try again.',
+  unexpected_error: 'An unexpected error occurred. Please try again.',
 };
 
 function firstParam(value: string | string[] | undefined): string | undefined {
@@ -24,7 +24,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 }
 
 function getSafeRedirectPath(path: string | undefined): string | undefined {
-  if (!path || !path.startsWith("/") || path.startsWith("//")) {
+  if (!path || !path.startsWith('/') || path.startsWith('//')) {
     return undefined;
   }
   return path;
@@ -50,7 +50,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : {};
 
   return (
-    <main className={`${styles.loginBackground} min-h-[100dvh] w-full max-w-full overflow-x-hidden`}>
+    <main
+      className={`${styles.loginBackground} min-h-[100dvh] w-full max-w-full overflow-x-hidden`}
+    >
       <div className={styles.wave} />
       <div className={`${styles.wave} ${styles.waveSecond}`} />
       <div className={`${styles.wave} ${styles.waveThird}`} />

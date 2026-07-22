@@ -23,8 +23,8 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     status: 'available',
   },
   {
-    id: 'gemini-3-pro-image-preview',
-    label: 'Nano Banana Pro (Gemini 3 Pro Image Preview)',
+    id: 'gemini-3-pro-image',
+    label: 'Nano Banana Pro (Gemini 3 Pro Image)',
     provider: 'google',
     medium: 'image',
     status: 'available',
@@ -120,7 +120,7 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
 // Subset exposed in the chat generation panel (excludes kling-omni which is canvas-only).
 export const CHAT_PANEL_MODEL_IDS = [
   'nano-banana',
-  'gemini-3-pro-image-preview',
+  'gemini-3-pro-image',
   'veo-3-1',
   'veo-3-1-fast',
   'sora-2',

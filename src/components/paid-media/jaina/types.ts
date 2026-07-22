@@ -1,16 +1,16 @@
+import type { PlanStatus } from '@/components/ai-elements/plan';
+import type { AgentMentionMetadata } from '@/lib/agent-references';
 import type {
+  ArtifactDeltaEventData,
+  CheckpointReportV2,
+  JainaObjective,
+  PlanStep,
+  ProgressEventData,
+  ReportAssembly,
+  ReportPayload,
   ToolCallEventData,
   ToolResultEventData,
-  ProgressEventData,
-  ReportPayload,
-  PlanStep,
-  ArtifactDeltaEventData,
-  ReportAssembly,
-  JainaObjective,
-  CheckpointReportV2,
-} from "@/lib/jaina/schemas";
-import type { PlanStatus } from "@/components/ai-elements/plan";
-import type { AgentMentionMetadata } from "@/lib/agent-references";
+} from '@/lib/jaina/schemas';
 
 export type JainaProgressEntry = {
   stage: string;
@@ -29,10 +29,10 @@ export type JainaPlan = {
 
 export type JainaChatMessage = {
   id: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   createdAt: string;
-  status?: "streaming" | "done" | "error";
+  status?: 'streaming' | 'done' | 'error';
   title?: string;
   finalThought?: string;
   renderAsReport?: boolean;

@@ -1,28 +1,28 @@
-"use client";
+'use client';
 
 // TEMPORARY visual-QA harness for PostQuickLook spacing/text rendering.
 // Not linked from any nav; safe to delete after review.
 
-import { PostQuickLook } from "@/components/organic/cards/PostQuickLook";
-import type { OrganicPost } from "@/lib/schemas/organicMetrics";
+import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 
 function days(count: number, offset: number, valueFor: (day: number) => Record<string, number>) {
   return Array.from({ length: count }, (_, index) => {
     const day = index + 1 + offset;
     return {
-      date: `2026-06-${String(day).padStart(2, "0")}`,
+      date: `2026-06-${String(day).padStart(2, '0')}`,
       ...valueFor(day),
     };
   });
 }
 
 const imageFullHistory: OrganicPost = {
-  id: "img-full",
-  mediaType: "IMAGE",
-  timestamp: "2026-06-16T20:34:00Z",
-  permalink: "https://instagram.com/p/example",
+  id: 'img-full',
+  mediaType: 'IMAGE',
+  timestamp: '2026-06-16T20:34:00Z',
+  permalink: 'https://instagram.com/p/example',
   caption:
-    "El Prompt Engineering ha muerto. Deja de perder el tiempo memorizando plantillas de copiar y pegar. Pasar horas redactando prompts interminables es la forma antigua de...",
+    'El Prompt Engineering ha muerto. Deja de perder el tiempo memorizando plantillas de copiar y pegar. Pasar horas redactando prompts interminables es la forma antigua de...',
   metrics: {
     reach: 426,
     views: 705,
@@ -32,7 +32,15 @@ const imageFullHistory: OrganicPost = {
     shares: 0,
     saved: 2,
   },
-  breakdown7d: days(7, 7, (d) => ({ views: 90 + d, reach: 55 + d, engagement: 1, comments: 0, likes: 0, shares: 0, saved: 0 })),
+  breakdown7d: days(7, 7, (d) => ({
+    views: 90 + d,
+    reach: 55 + d,
+    engagement: 1,
+    comments: 0,
+    likes: 0,
+    shares: 0,
+    saved: 0,
+  })),
   comparison: {
     views: { current: 705, previous: 640, percentageChange: 10.2 },
     engagement: { current: 10, previous: 10, percentageChange: 0 },
@@ -44,29 +52,53 @@ const imageFullHistory: OrganicPost = {
 } as unknown as OrganicPost;
 
 const imageBuildingHistory: OrganicPost = {
-  id: "img-building",
-  mediaType: "IMAGE",
-  timestamp: "2026-06-27T09:00:00Z",
-  caption: "New product teaser, still accruing history.",
-  metrics: { reach: 812, views: 1204, totalInteractions: 40, likes: 30, comments: 6, shares: 1, saved: 3 },
-  breakdown7d: days(5, 0, (d) => ({ views: 200 + d * 10, reach: 150 + d * 5, engagement: 8, comments: 1, likes: 6, shares: 0, saved: 1 })),
+  id: 'img-building',
+  mediaType: 'IMAGE',
+  timestamp: '2026-06-27T09:00:00Z',
+  caption: 'New product teaser, still accruing history.',
+  metrics: {
+    reach: 812,
+    views: 1204,
+    totalInteractions: 40,
+    likes: 30,
+    comments: 6,
+    shares: 1,
+    saved: 3,
+  },
+  breakdown7d: days(5, 0, (d) => ({
+    views: 200 + d * 10,
+    reach: 150 + d * 5,
+    engagement: 8,
+    comments: 1,
+    likes: 6,
+    shares: 0,
+    saved: 1,
+  })),
   comparison: null,
 } as unknown as OrganicPost;
 
 const imageBrandNew: OrganicPost = {
-  id: "img-brand-new",
-  mediaType: "IMAGE",
-  timestamp: "2026-07-01T08:00:00Z",
-  caption: "Just published, no history yet.",
-  metrics: { reach: 50, views: 80, totalInteractions: 2, likes: 2, comments: 0, shares: 0, saved: 0 },
+  id: 'img-brand-new',
+  mediaType: 'IMAGE',
+  timestamp: '2026-07-01T08:00:00Z',
+  caption: 'Just published, no history yet.',
+  metrics: {
+    reach: 50,
+    views: 80,
+    totalInteractions: 2,
+    likes: 2,
+    comments: 0,
+    shares: 0,
+    saved: 0,
+  },
 } as unknown as OrganicPost;
 
 const reelFullHistory: OrganicPost = {
-  id: "reel-full",
-  mediaType: "VIDEO",
-  mediaProductType: "REELS",
-  timestamp: "2026-06-20T18:00:00Z",
-  caption: "Hook rate check for reels layout.",
+  id: 'reel-full',
+  mediaType: 'VIDEO',
+  mediaProductType: 'REELS',
+  timestamp: '2026-06-20T18:00:00Z',
+  caption: 'Hook rate check for reels layout.',
   metrics: {
     views: 15230,
     reach: 9800,
@@ -79,7 +111,15 @@ const reelFullHistory: OrganicPost = {
     shares: 40,
     saved: 40,
   },
-  breakdown7d: days(7, 7, (d) => ({ views: 2000 + d * 50, reach: 1200 + d * 20, engagement: 100, comments: 10, likes: 80, shares: 4, saved: 4 })),
+  breakdown7d: days(7, 7, (d) => ({
+    views: 2000 + d * 50,
+    reach: 1200 + d * 20,
+    engagement: 100,
+    comments: 10,
+    likes: 80,
+    shares: 4,
+    saved: 4,
+  })),
   comparison: {
     views: { current: 15230, previous: 12100, percentageChange: 25.9 },
     engagement: { current: 900, previous: 950, percentageChange: -5.3 },
@@ -91,13 +131,29 @@ const reelFullHistory: OrganicPost = {
 } as unknown as OrganicPost;
 
 const carouselFullHistory: OrganicPost = {
-  id: "carousel-full",
-  mediaType: "CAROUSEL_ALBUM",
-  timestamp: "2026-06-18T12:00:00Z",
-  caption: "Carousel layout check with saves as primary.",
-  carouselMedia: [{ id: "c1" }, { id: "c2" }, { id: "c3" }],
-  metrics: { reach: 3400, views: 4100, saved: 210, totalInteractions: 300, likes: 250, comments: 30, shares: 20 },
-  breakdown7d: days(7, 7, (d) => ({ views: 500 + d * 5, reach: 400 + d * 3, engagement: 30, comments: 3, likes: 25, shares: 2, saved: 20 })),
+  id: 'carousel-full',
+  mediaType: 'CAROUSEL_ALBUM',
+  timestamp: '2026-06-18T12:00:00Z',
+  caption: 'Carousel layout check with saves as primary.',
+  carouselMedia: [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }],
+  metrics: {
+    reach: 3400,
+    views: 4100,
+    saved: 210,
+    totalInteractions: 300,
+    likes: 250,
+    comments: 30,
+    shares: 20,
+  },
+  breakdown7d: days(7, 7, (d) => ({
+    views: 500 + d * 5,
+    reach: 400 + d * 3,
+    engagement: 30,
+    comments: 3,
+    likes: 25,
+    shares: 2,
+    saved: 20,
+  })),
   comparison: {
     views: { current: 4100, previous: 4050, percentageChange: 1.2 },
     engagement: { current: 300, previous: 280, percentageChange: 7.1 },
@@ -109,12 +165,12 @@ const carouselFullHistory: OrganicPost = {
 } as unknown as OrganicPost;
 
 const bigNumbersBoosted: OrganicPost = {
-  id: "big-numbers",
-  mediaType: "IMAGE",
-  timestamp: "2026-05-01T00:00:00Z",
+  id: 'big-numbers',
+  mediaType: 'IMAGE',
+  timestamp: '2026-05-01T00:00:00Z',
   isBoosted: true,
   caption:
-    "A deliberately very long caption used to check line-clamp-3 truncation behavior across three full lines of wrapped text inside a narrow 340 pixel wide hover card so we can confirm it ellipsizes cleanly without breaking the surrounding layout or pushing other elements around unexpectedly.",
+    'A deliberately very long caption used to check line-clamp-3 truncation behavior across three full lines of wrapped text inside a narrow 340 pixel wide hover card so we can confirm it ellipsizes cleanly without breaking the surrounding layout or pushing other elements around unexpectedly.',
   metrics: {
     reach: 1284000,
     views: 2950000,
@@ -144,12 +200,12 @@ const bigNumbersBoosted: OrganicPost = {
 } as unknown as OrganicPost;
 
 const cases: Array<{ label: string; post: OrganicPost }> = [
-  { label: "Image · full history (comparison-ready)", post: imageFullHistory },
-  { label: "Image · building history (<14d, no comparison yet)", post: imageBuildingHistory },
-  { label: "Image · brand new (no breakdown at all)", post: imageBrandNew },
-  { label: "Reel · full history", post: reelFullHistory },
-  { label: "Carousel · full history", post: carouselFullHistory },
-  { label: "Big numbers + long caption + boosted", post: bigNumbersBoosted },
+  { label: 'Image · full history (comparison-ready)', post: imageFullHistory },
+  { label: 'Image · building history (<14d, no comparison yet)', post: imageBuildingHistory },
+  { label: 'Image · brand new (no breakdown at all)', post: imageBrandNew },
+  { label: 'Reel · full history', post: reelFullHistory },
+  { label: 'Carousel · full history', post: carouselFullHistory },
+  { label: 'Big numbers + long caption + boosted', post: bigNumbersBoosted },
 ];
 
 export default function PostQuickLookPreview() {

@@ -20,6 +20,14 @@ export const FLAG_LABEL: Record<CreativeWinRateFlag, string> = {
   spend_concentrated: 'spend concentrated',
   warm_audience_skew: 'warm-audience skew',
   confounded: 'confounded',
+  thumbnail_derived: 'thumbnail-derived',
+};
+
+// One-line "why this flag matters" copy for the explorer tooltip. Only flags that
+// need explaining live here; a missing entry renders the label alone.
+export const FLAG_TOOLTIP: Partial<Record<CreativeWinRateFlag, string>> = {
+  thumbnail_derived:
+    'Some labels here were read from Meta’s 64×64 thumbnail. Treat the visual attribute as inferred from the ad copy, not observed.',
 };
 
 export const DIMENSION_LABEL: Record<CreativeWinRateRow['dimension'], string> = {

@@ -1,11 +1,16 @@
 'use client';
 
-// One-click revert of a single prior ad-set budget write — the "Revert" action on an
-// apply_executed money row. Opens with a dry-run preview (the current → restored budget, zero
-// Meta writes), then the operator confirms a real revert (dryRun:false → optimizer-apply-revert
-// → service → the same ledger-guarded, audited write seam a normal apply uses). Observe-mode
-// portfolios hard-refuse on the service; this control surfaces the reason. Currency is not
-// threaded from the log page, so the preview falls back to the USD symbol (amounts are exact).
+// One-click revert of a single prior optimizer write, on a money/status log row. Opens with a
+// dry-run preview (zero Meta writes), then the operator confirms a real revert (dryRun:false →
+// optimizer-apply-revert → service → the same ledger-guarded, audited write seam a normal apply
+// uses). Observe-mode portfolios hard-refuse on the service; this control surfaces the reason.
+//
+// Two shapes share one dialog, chosen by the audit row's `scope`:
+//   - adset_budget → "Revert" restores the ad set's prior daily budget (current → restored).
+//   - adset_status → "Unpause" restarts the ad set's spend by restoring its prior status
+//                    (reverting a pause is an unpause). The preview names the status it restores.
+// Currency is not threaded from the log page, so budget amounts fall back to the USD symbol
+// (the amounts themselves are exact).
 
 import { Loader2Icon, TriangleAlertIcon, Undo2Icon } from 'lucide-react';
 import * as React from 'react';
@@ -28,18 +33,32 @@ type RevertApplyDialogProps = {
   auditId: string;
   portfolioId: string;
   brandId: string;
+  /** The audit row's scope. 'adset_status' switches the dialog to unpause copy; anything
+   *  else (or absent) keeps the budget-revert copy. */
+  scope?: string | null;
 };
+
+/** One would-item in the revert preview — a budget move or an ad-set status restore. */
+type RevertWould =
+  | { adset_id: string; current: number; proposed: number }
+  | { adset_id: string; target_status: string };
+
+function isStatusWould(would: RevertWould): would is { adset_id: string; target_status: string } {
+  return 'target_status' in would;
+}
 
 function reasonMessage(reason: string | undefined): string {
   switch (reason) {
     case 'observe_mode':
       return 'This portfolio is in Observe mode — Meta writes are blocked. Switch to Recommend in Manage.';
     case 'unsupported_scope':
-      return 'Only ad-set budget writes can be reverted.';
+      return 'Only ad-set budget and pause writes can be reverted.';
     case 'scope_mismatch':
       return 'This write does not belong to this portfolio.';
     case 'no_prior':
       return 'This write has no recorded prior budget to restore.';
+    case 'no_prior_status':
+      return 'This pause has no recorded prior status, so there is nothing safe to restore.';
     case 'audit_not_found':
       return 'The original write could not be found.';
     case 'campaign_unsupported':
@@ -51,7 +70,12 @@ function reasonMessage(reason: string | undefined): string {
   }
 }
 
-export function RevertApplyDialog({ auditId, portfolioId, brandId }: RevertApplyDialogProps) {
+export function RevertApplyDialog({
+  auditId,
+  portfolioId,
+  brandId,
+  scope,
+}: RevertApplyDialogProps) {
   const revert = useRevertApply();
   const [open, setOpen] = React.useState(false);
   const [phase, setPhase] = React.useState<'preview' | 'applying' | 'done' | 'error'>('preview');
@@ -65,7 +89,10 @@ export function RevertApplyDialog({ auditId, portfolioId, brandId }: RevertApply
   };
 
   const preview = revert.data;
-  const would = preview?.ok && preview.dryRun !== false ? preview.would : [];
+  const would = (preview?.ok && preview.dryRun !== false ? preview.would : []) as RevertWould[];
+  // The scope prop sets the copy immediately; the preview's would-shape confirms it once loaded
+  // (a status revert previews a target_status, a budget revert a current/proposed pair).
+  const isStatus = scope === 'adset_status' || (would[0] != null && isStatusWould(would[0]));
   const canRevert =
     phase === 'preview' && preview?.ok === true && would.length > 0 && !revert.isPending;
 
@@ -88,9 +115,9 @@ export function RevertApplyDialog({ auditId, portfolioId, brandId }: RevertApply
           }
           setPhase('done');
           setResultNote(
-            `Reverted ${data.applied ?? 0}` +
+            `${isStatus ? 'Unpaused' : 'Reverted'} ${data.applied ?? 0}` +
               (data.failed ? ` · ${data.failed} failed` : '') +
-              (data.deduped ? ` · ${data.deduped} already reverted` : ''),
+              (data.deduped ? ` · ${data.deduped} already done` : ''),
           );
         },
         onError: (err) => {
@@ -121,22 +148,27 @@ export function RevertApplyDialog({ auditId, portfolioId, brandId }: RevertApply
           className="h-6 shrink-0 gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
         >
           <Undo2Icon aria-hidden="true" className="size-3" />
-          Revert
+          {isStatus ? 'Unpause' : 'Revert'}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Revert this budget change</AlertDialogTitle>
+          <AlertDialogTitle>
+            {isStatus ? 'Unpause — restarts its spend' : 'Revert this budget change'}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Restore this ad set&rsquo;s daily budget to what it was before this write. This writes a
-            real ad-set budget to Meta. Observe mode will refuse the write.
+            {isStatus
+              ? 'Restart this ad set’s spend by restoring the status it had before this pause. This writes a real status change to Meta. Observe mode will refuse the write.'
+              : 'Restore this ad set’s daily budget to what it was before this write. This writes a real ad-set budget to Meta. Observe mode will refuse the write.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         {phase === 'applying' ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-            Restoring the prior budget on Meta…
+            {isStatus
+              ? 'Restoring the prior status on Meta…'
+              : 'Restoring the prior budget on Meta…'}
           </p>
         ) : phase === 'done' || phase === 'error' ? (
           <p
@@ -165,7 +197,7 @@ export function RevertApplyDialog({ auditId, portfolioId, brandId }: RevertApply
               {phase === 'applying' ? (
                 <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
               ) : null}
-              Revert budget
+              {isStatus ? 'Unpause ad set' : 'Revert budget'}
             </Button>
           ) : null}
         </AlertDialogFooter>
@@ -183,7 +215,7 @@ function RevertPreviewBody({
   isPending: boolean;
   isError: boolean;
   preview: ReturnType<typeof useRevertApply>['data'];
-  would: { adset_id: string; current: number; proposed: number }[];
+  would: RevertWould[];
 }) {
   if (isPending) {
     return (
@@ -207,6 +239,20 @@ function RevertPreviewBody({
   const move = would[0];
   if (!move) {
     return <p className="text-sm text-muted-foreground">Nothing to revert for this write.</p>;
+  }
+
+  // An ad-set status revert (unpause) restores the prior status — there is no budget to show.
+  if (isStatusWould(move)) {
+    const restoreLabel = move.target_status === 'ACTIVE' ? 'Active' : 'Paused';
+    return (
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-muted-foreground">Restored status</p>
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm">
+          <span className="min-w-0 truncate font-mono text-xs">{move.adset_id}</span>
+          <span className="shrink-0 font-medium tabular-nums">→ {restoreLabel}</span>
+        </div>
+      </div>
+    );
   }
 
   return (

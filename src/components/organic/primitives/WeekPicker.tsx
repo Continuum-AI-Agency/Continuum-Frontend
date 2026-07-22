@@ -1,9 +1,9 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import * as React from 'react';
 
-import type { CalendarState } from "@/components/kibo-ui/calendar"
+import type { CalendarState } from '@/components/kibo-ui/calendar';
 import {
   CalendarBody,
   CalendarDate,
@@ -15,17 +15,17 @@ import {
   CalendarYearPicker,
   useCalendarMonth,
   useCalendarYear,
-} from "@/components/kibo-ui/calendar"
-import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+} from '@/components/kibo-ui/calendar';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 type WeekPickerProps = {
-  value: Date
-  rangeLabel: string
-  onChange: (date: Date) => void
-  onPreviousWeek: () => void
-  onNextWeek: () => void
-}
+  value: Date;
+  rangeLabel: string;
+  onChange: (date: Date) => void;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+};
 
 export function WeekPicker({
   value,
@@ -34,15 +34,15 @@ export function WeekPicker({
   onPreviousWeek,
   onNextWeek,
 }: WeekPickerProps) {
-  const [open, setOpen] = React.useState(false)
-  const [, setMonth] = useCalendarMonth()
-  const [, setYear] = useCalendarYear()
-  const currentYear = new Date().getFullYear()
+  const [open, setOpen] = React.useState(false);
+  const [, setMonth] = useCalendarMonth();
+  const [, setYear] = useCalendarYear();
+  const currentYear = new Date().getFullYear();
 
   React.useEffect(() => {
-    setMonth(value.getMonth() as CalendarState["month"])
-    setYear(value.getFullYear())
-  }, [setMonth, setYear, value])
+    setMonth(value.getMonth() as CalendarState['month']);
+    setYear(value.getFullYear());
+  }, [setMonth, setYear, value]);
 
   return (
     <div className="flex items-center gap-2">
@@ -85,8 +85,8 @@ export function WeekPicker({
             <CalendarBody
               features={[]}
               onSelectDate={(date) => {
-                onChange(date)
-                setOpen(false)
+                onChange(date);
+                setOpen(false);
               }}
               selectedDate={value}
             />
@@ -103,5 +103,5 @@ export function WeekPicker({
         <ChevronRight className="h-4 w-4" />
       </Button>
     </div>
-  )
+  );
 }

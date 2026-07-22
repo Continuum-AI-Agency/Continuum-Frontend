@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   Sheet,
@@ -6,8 +6,8 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
-import type { RuleAction } from "@/lib/approvals/types";
+} from '@/components/ui/sheet';
+import type { RuleAction } from '@/lib/approvals/types';
 
 type Props = {
   action: RuleAction;

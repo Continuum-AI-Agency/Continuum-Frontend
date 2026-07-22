@@ -1,23 +1,27 @@
-import { motion } from "motion/react";
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { Skeleton } from "@/components/ui/skeleton";
-import { IdentityPanel } from "../dna/IdentityPanel";
-import { CardSurface } from "../dna/CardSurface";
-import { VoiceDetail } from "../dna/VoiceDetail";
-import { AudienceDetail } from "../dna/AudienceDetail";
-import { BusinessFeatureChips } from "../dna/BusinessFeatureChips";
-import { EditableProse } from "../dna/EditableProse";
-import { HorizontalRow } from "../dna/HorizontalRow";
-import { WebsiteSummaryCard } from "../dna/WebsiteSummaryCard";
-import { UnderstandingCard } from "../dna/UnderstandingCard";
-import { ReadinessCard } from "../dna/ReadinessCard";
-import { StrategyGuidelinesRow } from "../dna/StrategyGuidelinesRow";
-import { RunProgressBanner } from "../dna/RunProgressBanner";
-import { DimensionChip } from "../readiness/DimensionChip";
-import { FindingsStack } from "../readiness/FindingsStack";
-import { OverallReadinessChip } from "../readiness/OverallReadinessChip";
-import type { AgentPreviewBuckets, SectionStatus } from "../state/agentPreview";
-import type { PreviewSection, ReadinessAnalysis, ReadinessFinding } from "@/lib/onboarding/agentClient";
+import { motion } from 'motion/react';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { Skeleton } from '@/components/ui/skeleton';
+import type {
+  PreviewSection,
+  ReadinessAnalysis,
+  ReadinessFinding,
+} from '@/lib/onboarding/agentClient';
+import { AudienceDetail } from '../dna/AudienceDetail';
+import { BusinessFeatureChips } from '../dna/BusinessFeatureChips';
+import { CardSurface } from '../dna/CardSurface';
+import { EditableProse } from '../dna/EditableProse';
+import { HorizontalRow } from '../dna/HorizontalRow';
+import { IdentityPanel } from '../dna/IdentityPanel';
+import { ReadinessCard } from '../dna/ReadinessCard';
+import { RunProgressBanner } from '../dna/RunProgressBanner';
+import { StrategyGuidelinesRow } from '../dna/StrategyGuidelinesRow';
+import { UnderstandingCard } from '../dna/UnderstandingCard';
+import { VoiceDetail } from '../dna/VoiceDetail';
+import { WebsiteSummaryCard } from '../dna/WebsiteSummaryCard';
+import { DimensionChip } from '../readiness/DimensionChip';
+import { FindingsStack } from '../readiness/FindingsStack';
+import { OverallReadinessChip } from '../readiness/OverallReadinessChip';
+import type { AgentPreviewBuckets, SectionStatus } from '../state/agentPreview';
 
 type BrandDnaScreenProps = {
   agentBuckets: AgentPreviewBuckets | null;
@@ -26,10 +30,12 @@ type BrandDnaScreenProps = {
 };
 
 function placeholderFor(
-  status: AgentPreviewBuckets["sectionStatus"][keyof AgentPreviewBuckets["sectionStatus"]] | undefined,
+  status:
+    | AgentPreviewBuckets['sectionStatus'][keyof AgentPreviewBuckets['sectionStatus']]
+    | undefined,
   defaultText: string,
 ): string {
-  if (status === "skipped" || status === "error") {
+  if (status === 'skipped' || status === 'error') {
     return "We couldn't draft this — write your own";
   }
   return defaultText;
@@ -37,7 +43,7 @@ function placeholderFor(
 
 function countSuccessfulSections(buckets: AgentPreviewBuckets | null): number {
   if (!buckets) return 0;
-  return Object.values(buckets.sectionStatus).filter((s) => s === "done").length;
+  return Object.values(buckets.sectionStatus).filter((s) => s === 'done').length;
 }
 
 const reveal = {
@@ -52,11 +58,15 @@ const card = {
 
 const heroEnter = {
   hidden: { opacity: 0, scale: 0.96 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] as const } },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] as const },
+  },
 };
 
 const isTerminal = (status: SectionStatus | undefined): boolean =>
-  status === "done" || status === "error" || status === "skipped";
+  status === 'done' || status === 'error' || status === 'skipped';
 
 const proseSkeleton = (
   <div className="space-y-2" role="status" aria-label="Drafting">
@@ -76,13 +86,16 @@ const voiceSkeleton = (
   </div>
 );
 
-function findingFor(readiness: ReadinessAnalysis | null, dim: ReadinessFinding["dimension"]): ReadinessFinding | null {
+function findingFor(
+  readiness: ReadinessAnalysis | null,
+  dim: ReadinessFinding['dimension'],
+): ReadinessFinding | null {
   return readiness?.findings?.find((f) => f.dimension === dim) ?? null;
 }
 
 function safeHostname(url: string): string | null {
   try {
-    return new URL(url).hostname.replace(/^www\./, "");
+    return new URL(url).hostname.replace(/^www\./, '');
   } catch {
     return null;
   }
@@ -94,7 +107,7 @@ function isTerminallyEmpty<T>(
   data: T | null | undefined,
 ): boolean {
   const status = buckets?.sectionStatus[section];
-  return (status === "skipped" || status === "error") && data == null;
+  return (status === 'skipped' || status === 'error') && data == null;
 }
 
 export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: BrandDnaScreenProps) {
@@ -112,22 +125,28 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
   // section is terminal, so a parse failure degrades to the editable draft
   // ("write your own") instead of either janking mid-stream or dropping info.
   const voiceStatus = agentBuckets?.sectionStatus.voice;
-  const voiceDraft = agentBuckets?.voiceStream ?? "";
+  const voiceDraft = agentBuckets?.voiceStream ?? '';
   const voiceEmpty = !voice && !(isTerminal(voiceStatus) && voiceDraft.trim().length > 0);
 
   const businessStatus = agentBuckets?.sectionStatus.business;
-  const businessDraft = agentBuckets?.businessStream ?? "";
+  const businessDraft = agentBuckets?.businessStream ?? '';
   const businessEmpty =
-    !business && !brand.overview && !(isTerminal(businessStatus) && businessDraft.trim().length > 0);
+    !business &&
+    !brand.overview &&
+    !(isTerminal(businessStatus) && businessDraft.trim().length > 0);
   const overviewValue =
-    brand.overview || business?.business_description || (isTerminal(businessStatus) ? businessDraft : "");
+    brand.overview ||
+    business?.business_description ||
+    (isTerminal(businessStatus) ? businessDraft : '');
 
   const audienceStatus = agentBuckets?.sectionStatus.audience;
-  const audienceDraft = agentBuckets?.audienceStream ?? "";
+  const audienceDraft = agentBuckets?.audienceStream ?? '';
   const audienceEmpty =
-    !audience && !brand.targetAudience && !(isTerminal(audienceStatus) && audienceDraft.trim().length > 0);
+    !audience &&
+    !brand.targetAudience &&
+    !(isTerminal(audienceStatus) && audienceDraft.trim().length > 0);
   const audienceValue =
-    brand.targetAudience || audience?.summary || (isTerminal(audienceStatus) ? audienceDraft : "");
+    brand.targetAudience || audience?.summary || (isTerminal(audienceStatus) ? audienceDraft : '');
 
   const readiness: ReadinessAnalysis | null = brand.readiness ?? agentBuckets?.readiness ?? null;
   const loading = Boolean(readinessLoading) && !readiness;
@@ -154,13 +173,17 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             {thinResult ? (
               <>
                 <span className="text-muted-foreground">Let&apos;s get to know </span>
-                {brand.name || "your brand"}
+                {brand.name || 'your brand'}
               </>
             ) : (
-              brand.name || "Your brand"
+              brand.name || 'Your brand'
             )}
           </h2>
-          <RunProgressBanner buckets={agentBuckets} running={readinessLoading ?? false} onRetry={onRetry} />
+          <RunProgressBanner
+            buckets={agentBuckets}
+            running={readinessLoading ?? false}
+            onRetry={onRetry}
+          />
         </div>
         <div className="md:justify-self-end">
           <OverallReadinessChip readiness={readiness} loading={loading} />
@@ -175,9 +198,13 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           logoPath={brand.logoPath}
           colors={brand.colors}
           typography={brand.typography}
-          toneFinding={findingFor(readiness, "messaging_coherence")}
-          brandIdentityChip={<DimensionChip dim="brand_identity" readiness={readiness} loading={loading} />}
-          messagingChip={<DimensionChip dim="messaging_coherence" readiness={readiness} loading={loading} />}
+          toneFinding={findingFor(readiness, 'messaging_coherence')}
+          brandIdentityChip={
+            <DimensionChip dim="brand_identity" readiness={readiness} loading={loading} />
+          }
+          messagingChip={
+            <DimensionChip dim="messaging_coherence" readiness={readiness} loading={loading} />
+          }
           agentBuckets={agentBuckets}
           onRename={(next) => updateState({ brand: { name: next } })}
         />
@@ -203,15 +230,15 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             findings={
               <FindingsStack
                 findings={[
-                  findingFor(readiness, "value_proposition"),
-                  findingFor(readiness, "success_metrics"),
+                  findingFor(readiness, 'value_proposition'),
+                  findingFor(readiness, 'success_metrics'),
                 ]}
               />
             }
           >
             <EditableProse
               value={overviewValue}
-              placeholder={placeholderFor(businessStatus, "Write your own")}
+              placeholder={placeholderFor(businessStatus, 'Write your own')}
               onCommit={(next) => updateState({ brand: { overview: next } })}
             />
             {business ? <BusinessFeatureChips business={business} /> : null}
@@ -227,7 +254,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             skeleton={voiceSkeleton}
             className="h-full"
             chips={<DimensionChip dim="positioning" readiness={readiness} loading={loading} />}
-            findings={<FindingsStack findings={[findingFor(readiness, "positioning")]} />}
+            findings={<FindingsStack findings={[findingFor(readiness, 'positioning')]} />}
           >
             {voice ? (
               <VoiceDetail voice={voice} />
@@ -254,15 +281,15 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             findings={
               <FindingsStack
                 findings={[
-                  findingFor(readiness, "icp_clarity"),
-                  findingFor(readiness, "customer_pains"),
+                  findingFor(readiness, 'icp_clarity'),
+                  findingFor(readiness, 'customer_pains'),
                 ]}
               />
             }
           >
             <EditableProse
               value={audienceValue}
-              placeholder={placeholderFor(audienceStatus, "Write your own")}
+              placeholder={placeholderFor(audienceStatus, 'Write your own')}
               onCommit={(next) => updateState({ brand: { targetAudience: next } })}
             />
             {audience ? <AudienceDetail audience={audience} /> : null}
@@ -276,16 +303,15 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
 
       <motion.div variants={card} className="mb-4">
         <HorizontalRow label="Analysis" layout="grid">
-          {isTerminallyEmpty(agentBuckets, "website", agentBuckets?.website) ? null : (
+          {isTerminallyEmpty(agentBuckets, 'website', agentBuckets?.website) ? null : (
             <WebsiteSummaryCard buckets={agentBuckets} />
           )}
           <UnderstandingCard buckets={agentBuckets} />
-          {isTerminallyEmpty(agentBuckets, "readiness", readiness) ? null : (
+          {isTerminallyEmpty(agentBuckets, 'readiness', readiness) ? null : (
             <ReadinessCard buckets={agentBuckets} readiness={readiness} />
           )}
         </HorizontalRow>
       </motion.div>
-
     </motion.div>
   );
 }

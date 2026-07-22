@@ -1,4 +1,4 @@
-const DEFAULT_BUCKET = "brand-profile-assets";
+const DEFAULT_BUCKET = 'brand-profile-assets';
 
 export function getCreativeAssetsBucket(): string {
   return process.env.NEXT_PUBLIC_SUPABASE_CREATIVE_BUCKET?.trim() || DEFAULT_BUCKET;
@@ -6,5 +6,5 @@ export function getCreativeAssetsBucket(): string {
 
 export function resolveStoragePath(brandProfileId: string, folder: string, name?: string): string {
   const segments = [brandProfileId.trim(), folder.trim(), name?.trim()].filter(Boolean);
-  return segments.join("/").replace(/\/+/g, "/");
+  return segments.join('/').replace(/\/+/g, '/');
 }

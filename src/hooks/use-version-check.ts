@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 
 import {
   getClientCommitSha,
   isVersionMismatch,
   LOCAL_DEV_SHA,
   parseVersionResponse,
-} from "@/lib/system/version";
+} from '@/lib/system/version';
 
 const POLLING_INTERVAL_MS = 60_000;
 
@@ -22,7 +22,7 @@ export function useVersionCheck() {
 
     const checkForUpdate = async () => {
       try {
-        const res = await fetch("/api/system/version", { cache: "no-store" });
+        const res = await fetch('/api/system/version', { cache: 'no-store' });
         if (!res.ok) {
           throw new Error(`Version check failed with status ${res.status}.`);
         }
@@ -32,18 +32,18 @@ export function useVersionCheck() {
           setIsUpdateAvailable(true);
         }
       } catch (error) {
-        console.error("Failed to check version", error);
+        console.error('Failed to check version', error);
       }
     };
 
     const intervalId = window.setInterval(checkForUpdate, POLLING_INTERVAL_MS);
-    window.addEventListener("focus", checkForUpdate);
+    window.addEventListener('focus', checkForUpdate);
     void checkForUpdate();
 
     return () => {
       isActive = false;
       window.clearInterval(intervalId);
-      window.removeEventListener("focus", checkForUpdate);
+      window.removeEventListener('focus', checkForUpdate);
     };
   }, []);
 

@@ -5,11 +5,11 @@
 //   is only sent when the canvas could not upload the source (upload/sign failed)
 //   or for legacy un-persisted media. The Backend resolves the URL to base64
 //   in-process before calling Vertex/Gemini/FAL.
-// - Response side: a generation result carries `signed_url` + `bucket` + `path`;
-//   `base64`/`data_url` are present only when the Backend's upload/sign failed and
-//   it fell back to inlining the bytes so the generation is not lost.
+// - Response side: successful generation emits only `signed_url` + `bucket` +
+//   `path` after persistence. Inline bytes are emergency fallback only.
 
 import { z } from 'zod';
+import { studioEdgeSchema, studioNodeSchema } from '../ai-studio/workflow-graph';
 import {
   responseDoneSchema,
   responseErrorSchema,
@@ -48,13 +48,17 @@ export const aiStudioReferenceImageSchema = z
 export type AiStudioReferenceImage = z.infer<typeof aiStudioReferenceImageSchema>;
 
 // Generation result for an image. `signed_url` + `bucket` + `path` are the
-// durable, authoritative outputs; `base64`/`data_url` are fallback only.
+// durable, authoritative outputs. Inline bytes are allowed only as a fallback
+// when persistence fails.
 export const aiStudioImageResultEventSchema = z.object({
   mime_type: z.string(),
   signed_url: z.string().optional(),
   bucket: z.string().optional(),
   path: z.string().optional(),
   resolution: z.string().optional(),
+  delivery: z.enum(['durable', 'fallback']).optional(),
+  size_bytes: z.number().int().nonnegative().optional(),
+  asset_id: z.string().optional(),
   thought: z.boolean().optional(),
   thought_signature: z.string().nullable().optional(),
   base64: z.string().optional(),
@@ -70,6 +74,7 @@ export const aiStudioVideoResultEventSchema = z.object({
   download_url: z.string().nullable().optional(),
   bucket: z.string().optional(),
   path: z.string().optional(),
+  delivery: z.literal('durable').optional(),
   bytes: z.number().optional(),
   base64: z.string().optional(),
 });
@@ -79,15 +84,13 @@ export type AiStudioVideoResultEvent = z.infer<typeof aiStudioVideoResultEventSc
 // Canvas Composer — the in-app "prompt -> workflow" agent stream
 // ---------------------------------------------------------------------------
 //
-// NARRATION ONLY. The nodes themselves never travel this stream: the agent writes
-// them to brand_profiles.canvas_sessions and the open canvas merges the row over
-// Realtime (useCanvasRealtime). Anything here that looks like graph state is a
-// notification about a write that already landed, not the payload of one — so a
-// dropped frame costs the user a progress line, never a node.
+// The agent writes graph state to brand_profiles.canvas_sessions, then emits an
+// optimistic `composer.patch` for immediate paint. Realtime remains the durable
+// reconciliation path, so a dropped patch never loses the committed graph.
 
 const composerStartedSchema = z.object({
   type: z.literal('composer.started'),
-  data: z.object({ roomId: z.string().min(1) }).loose(),
+  data: z.object({ roomId: z.string().min(1), runId: z.string().min(1).optional() }).loose(),
 });
 
 const composerStatusSchema = z.object({
@@ -109,6 +112,14 @@ const composerGraphSchema = z.object({
     .loose(),
 });
 
+// Optimistic graph state emitted immediately after the same CAS write that feeds
+// Realtime. The browser can paint this without waiting for the database changefeed;
+// Realtime remains the durable reconciliation path.
+const composerPatchSchema = z.object({
+  type: z.literal('composer.patch'),
+  data: z.object({ nodes: z.array(studioNodeSchema), edges: z.array(studioEdgeSchema) }).strict(),
+});
+
 // A connection the canvas rules refused, or an op that could not apply. The build
 // still lands — the agent is told what was dropped and may repair it next step.
 const composerWarningSchema = z.object({
@@ -120,6 +131,7 @@ export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   composerStartedSchema,
   composerStatusSchema,
   composerGraphSchema,
+  composerPatchSchema,
   composerWarningSchema,
   toolCallSchema,
   toolResultSchema,

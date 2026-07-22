@@ -1,9 +1,19 @@
 'use client';
 
-import type { AiStudioComposerFrame, ComposerHistoryMessage } from '@continuum/contracts';
-import { COMPOSER_HISTORY_MAX_MESSAGES } from '@continuum/contracts';
+import type {
+  AgentMentionReference,
+  AiStudioComposerFrame,
+  CanvasComposerReference,
+  ComposerHistoryMessage,
+} from '@continuum/contracts';
+import {
+  CANVAS_COMPOSER_MAX_REFERENCES,
+  COMPOSER_HISTORY_MAX_MESSAGES,
+} from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { streamCanvasComposer } from '@/lib/ai-studio/composer/streamCanvasComposer';
+import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
+import type { StudioNode } from '@/StudioCanvas/types';
 
 // The composer's transcript. Narration only — the nodes it builds arrive on the
 // canvas through useCanvasRealtime, so this hook never touches the studio store.
@@ -35,6 +45,7 @@ export interface CanvasComposerState {
 export interface ComposerTurn {
   id: string;
   prompt: string;
+  references?: AgentMentionReference[];
   state: CanvasComposerState;
 }
 
@@ -107,6 +118,22 @@ export function buildHistoryPayload(turns: ComposerTurn[]): ComposerHistoryMessa
   return messages.slice(-COMPOSER_HISTORY_MAX_MESSAGES);
 }
 
+export function toCanvasComposerReferences(
+  references: AgentMentionReference[],
+): CanvasComposerReference[] {
+  const seen = new Set<string>();
+  const result: CanvasComposerReference[] = [];
+  for (const reference of references) {
+    if (reference.type !== 'skill' && reference.type !== 'media_asset') continue;
+    const key = `${reference.type}:${reference.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ type: reference.type, id: reference.id, label: reference.label });
+    if (result.length === CANVAS_COMPOSER_MAX_REFERENCES) break;
+  }
+  return result;
+}
+
 const newTurnId = (): string =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -141,8 +168,29 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
     setTurns([]);
   }, [cancel]);
 
+  // Retire the visible progress panel. `cancel()` only aborts the fetch and never
+  // touches `status`, so a done/errored turn's panel lingered forever (it hides
+  // only at status 'idle'). For a finished turn, reset it to idle so the panel
+  // disappears; for a running turn, abort it (the submit loop then settles it).
+  const dismiss = useCallback(() => {
+    const status = turnsRef.current.at(-1)?.state.status;
+    if (status === 'running') {
+      cancel();
+      return;
+    }
+    updateLastTurn(() => ({ ...IDLE_COMPOSER_STATE }));
+  }, [cancel, updateLastTurn]);
+
   const submit = useCallback(
-    async (prompt: string, selectedNodeIds?: string[], options?: { remember?: boolean }) => {
+    async (
+      prompt: string,
+      selectedNodeIds?: string[],
+      options?: {
+        remember?: boolean;
+        references?: AgentMentionReference[];
+        thinking?: boolean;
+      },
+    ) => {
       if (!brandProfileId || !roomId || !prompt.trim()) return;
 
       abortRef.current?.abort();
@@ -152,11 +200,13 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
       // History is captured BEFORE this turn joins the transcript, and only when
       // the expanded chat asked to remember.
       const history = options?.remember ? buildHistoryPayload(turnsRef.current) : [];
+      const references = toCanvasComposerReferences(options?.references ?? []);
       setTurns((previous) => [
         ...previous,
         {
           id: newTurnId(),
           prompt: prompt.trim(),
+          ...(options?.references?.length ? { references: options.references } : {}),
           state: { ...IDLE_COMPOSER_STATE, status: 'running' },
         },
       ]);
@@ -167,10 +217,19 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
             brandProfileId,
             roomId,
             prompt: prompt.trim(),
+            ...(options?.thinking ? { thinking: true } : {}),
             ...(selectedNodeIds?.length ? { selectedNodeIds } : {}),
+            ...(references.length ? { references } : {}),
             ...(history.length ? { history } : {}),
           },
-          onFrame: (frame) => updateLastTurn((state) => applyComposerFrame(state, frame)),
+          onFrame: (frame) => {
+            if (frame.type === 'composer.patch') {
+              const store = useStudioStore.getState();
+              store.setNodes(frame.data.nodes as StudioNode[]);
+              store.setEdges(frame.data.edges);
+            }
+            updateLastTurn((state) => applyComposerFrame(state, frame));
+          },
           signal: controller.signal,
         });
         // A stream that ends without response.done or response.error was cut off —
@@ -198,5 +257,5 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
 
   const state = turns.at(-1)?.state ?? IDLE_COMPOSER_STATE;
 
-  return { state, turns, submit, cancel, clear };
+  return { state, turns, submit, cancel, clear, dismiss };
 }

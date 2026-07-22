@@ -1,29 +1,34 @@
-"use client";
+'use client';
 
-import React, { Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import SaturnRingsGroup from "./SaturnRingsGroup";
-import GalaxyParticles from "./GalaxyParticles";
+import { OrbitControls } from '@react-three/drei';
+import { Canvas } from '@react-three/fiber';
+import type React from 'react';
+import { Suspense } from 'react';
+import GalaxyParticles from './GalaxyParticles';
+import SaturnRingsGroup from './SaturnRingsGroup';
 
 interface SaturnRingsSceneProps {
-  theme: "light" | "dark";
+  theme: 'light' | 'dark';
   showParticles?: boolean;
-  size?: "sm" | "md" | "lg" | "full";
+  size?: 'sm' | 'md' | 'lg' | 'full';
 }
 
 const SaturnRingsScene: React.FC<SaturnRingsSceneProps> = ({
   theme,
   showParticles = true,
-  size = "full"
+  size = 'full',
 }) => {
   // Camera settings based on size
   const getCameraSettings = () => {
     switch (size) {
-      case "sm": return { position: [0, 0, 4] as [number, number, number], fov: 50 };
-      case "md": return { position: [0, 0, 5] as [number, number, number], fov: 45 };
-      case "lg": return { position: [0, 0, 6] as [number, number, number], fov: 40 };
-      default: return { position: [0, 0, 6] as [number, number, number], fov: 45 };
+      case 'sm':
+        return { position: [0, 0, 4] as [number, number, number], fov: 50 };
+      case 'md':
+        return { position: [0, 0, 5] as [number, number, number], fov: 45 };
+      case 'lg':
+        return { position: [0, 0, 6] as [number, number, number], fov: 40 };
+      default:
+        return { position: [0, 0, 6] as [number, number, number], fov: 45 };
     }
   };
 
@@ -35,11 +40,11 @@ const SaturnRingsScene: React.FC<SaturnRingsSceneProps> = ({
         gl={{
           antialias: true,
           alpha: true,
-          powerPreference: "high-performance"
+          powerPreference: 'high-performance',
         }}
         camera={{
           position: cameraSettings.position,
-          fov: cameraSettings.fov
+          fov: cameraSettings.fov,
         }}
         dpr={[1, 2]}
         resize={{ debounce: 200 }}
@@ -57,7 +62,7 @@ const SaturnRingsScene: React.FC<SaturnRingsSceneProps> = ({
           {showParticles && <GalaxyParticles theme={theme} />}
 
           {/* Optional orbit controls for development */}
-          {process.env.NODE_ENV === "development" && (
+          {process.env.NODE_ENV === 'development' && (
             <OrbitControls
               enableZoom={false}
               enablePan={false}

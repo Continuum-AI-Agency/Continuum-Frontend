@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { toDocumentCategory } from "@continuum/contracts";
-import { appendDocument, ensureOnboardingState } from "@/lib/onboarding/storage";
-import type { OnboardingDocument } from "@/lib/onboarding/state";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { validateDocumentUploadMetadata } from "@/lib/documents/uploadLimits";
+import { toDocumentCategory } from '@continuum/contracts';
+import { NextResponse } from 'next/server';
+import { validateDocumentUploadMetadata } from '@/lib/documents/uploadLimits';
+import type { OnboardingDocument } from '@/lib/onboarding/state';
+import { appendDocument, ensureOnboardingState } from '@/lib/onboarding/storage';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 // The file itself is uploaded browser -> Supabase Storage directly (see
 // useDocumentMutations) to bypass the 4.5 MB Vercel Function request-body cap.
@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 // document and kicks off the embed pipeline. The size/type gate lives on the
 // brand-docs bucket (file_size_limit) plus the validation below.
 
-const STORAGE_BUCKET = "brand-docs";
+const STORAGE_BUCKET = 'brand-docs';
 
 type UploadRequestBody = {
   brandId?: unknown;
@@ -31,7 +31,7 @@ async function objectExists(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   storagePath: string,
 ): Promise<boolean> {
-  const lastSlash = storagePath.lastIndexOf("/");
+  const lastSlash = storagePath.lastIndexOf('/');
   const folder = storagePath.slice(0, lastSlash);
   const name = storagePath.slice(lastSlash + 1);
   const { data, error } = await supabase.storage
@@ -46,16 +46,16 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as UploadRequestBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const metadata = {
-    brandId: typeof body.brandId === "string" ? body.brandId : undefined,
-    documentId: typeof body.documentId === "string" ? body.documentId : undefined,
-    storagePath: typeof body.storagePath === "string" ? body.storagePath : undefined,
-    fileName: typeof body.fileName === "string" ? body.fileName : undefined,
-    mimeType: typeof body.mimeType === "string" ? body.mimeType : "",
-    size: typeof body.size === "number" ? body.size : undefined,
+    brandId: typeof body.brandId === 'string' ? body.brandId : undefined,
+    documentId: typeof body.documentId === 'string' ? body.documentId : undefined,
+    storagePath: typeof body.storagePath === 'string' ? body.storagePath : undefined,
+    fileName: typeof body.fileName === 'string' ? body.fileName : undefined,
+    mimeType: typeof body.mimeType === 'string' ? body.mimeType : '',
+    size: typeof body.size === 'number' ? body.size : undefined,
   };
 
   const validation = validateDocumentUploadMetadata(metadata);
@@ -66,12 +66,14 @@ export async function POST(request: Request) {
   const brandId = metadata.brandId as string;
   const documentId = metadata.documentId as string;
   const storagePath = metadata.storagePath as string;
-  const fileName = metadata.fileName ?? storagePath.slice(storagePath.lastIndexOf("/") + 1);
+  const fileName = metadata.fileName ?? storagePath.slice(storagePath.lastIndexOf('/') + 1);
   const displayName =
-    typeof body.displayName === "string" && body.displayName.trim() ? body.displayName : fileName;
+    typeof body.displayName === 'string' && body.displayName.trim() ? body.displayName : fileName;
   const mimeType = metadata.mimeType;
   const size = metadata.size as number;
-  const source = (typeof body.source === "string" ? body.source : "upload") as OnboardingDocument["source"];
+  const source = (
+    typeof body.source === 'string' ? body.source : 'upload'
+  ) as OnboardingDocument['source'];
   const category = toDocumentCategory(body.category);
 
   const supabase = await createSupabaseServerClient();
@@ -82,30 +84,29 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { data: brandRow } = await supabase
-    .schema("brand_profiles")
-    .from("brand_profiles")
-    .select("id")
-    .eq("id", brandId)
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('id')
+    .eq('id', brandId)
     .maybeSingle();
   if (!brandRow) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // Confirm the client actually uploaded the object before recording it, so we
   // never persist a document row that points at nothing.
   if (!(await objectExists(supabase, storagePath))) {
-    return NextResponse.json({ error: "Uploaded file not found in storage" }, { status: 422 });
+    return NextResponse.json({ error: 'Uploaded file not found in storage' }, { status: 422 });
   }
 
   await ensureOnboardingState(brandId);
 
   type EmbedInvokeResult = { jobId?: string };
-  const { data: invokeData, error: invokeError } = await supabase.functions.invoke<EmbedInvokeResult>(
-    "embed_document",
-    {
+  const { data: invokeData, error: invokeError } =
+    await supabase.functions.invoke<EmbedInvokeResult>('embed_document', {
       body: {
         brandId,
         documentId,
@@ -115,8 +116,7 @@ export async function POST(request: Request) {
         fileName,
         mimeType,
       },
-    },
-  );
+    });
 
   // If processing never even started, record the document as failed instead of
   // leaving it "processing" forever — the row only ever advances to a terminal
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
   // otherwise hang the UI on "Extracting text" with no end state.
   const invokeFailed = Boolean(invokeError);
   if (invokeFailed) {
-    console.error("embed_document invoke failed", invokeError);
+    console.error('embed_document invoke failed', invokeError);
   }
 
   const document: OnboardingDocument = {
@@ -133,17 +133,17 @@ export async function POST(request: Request) {
     source,
     category,
     createdAt: new Date().toISOString(),
-    status: invokeFailed ? "error" : "processing",
-    progressStep: invokeFailed ? "error" : "uploading",
+    status: invokeFailed ? 'error' : 'processing',
+    progressStep: invokeFailed ? 'error' : 'uploading',
     progressPercent: 100,
     size,
     mimeType,
     storagePath,
-    jobId: typeof invokeData?.jobId === "string" ? invokeData.jobId : undefined,
+    jobId: typeof invokeData?.jobId === 'string' ? invokeData.jobId : undefined,
     ...(invokeFailed
       ? {
-          errorCode: "INTERNAL_ERROR" as const,
-          errorMessage: invokeError?.message ?? "Could not start document processing.",
+          errorCode: 'INTERNAL_ERROR' as const,
+          errorMessage: invokeError?.message ?? 'Could not start document processing.',
         }
       : {}),
   };

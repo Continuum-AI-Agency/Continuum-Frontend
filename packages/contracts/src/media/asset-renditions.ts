@@ -36,6 +36,10 @@ export const assetRenditionSchema = z
     renderer: z.string().min(1).nullable().optional(),
     rendererVersion: z.string().min(1).nullable().optional(),
     sourceChecksum: z.string().min(1).nullable().optional(),
+    // Poster provenance: whether the current frame was picked by a person or
+    // chosen automatically, and which video moment it was decoded from.
+    posterSource: z.enum(['auto', 'user']).nullable().optional(),
+    sourceTimestampMs: z.number().int().nonnegative().nullable().optional(),
     errorCode: z.string().min(1).nullable().optional(),
     errorMessage: z.string().min(1).nullable().optional(),
     createdAt: z.string(),
@@ -46,7 +50,11 @@ export const assetRenditionSchema = z
   .superRefine((rendition, context) => {
     if (rendition.state !== 'ready') return;
     if (!rendition.bucket) {
-      context.addIssue({ code: 'custom', path: ['bucket'], message: 'Ready rendition needs bucket' });
+      context.addIssue({
+        code: 'custom',
+        path: ['bucket'],
+        message: 'Ready rendition needs bucket',
+      });
     }
     if (!rendition.storagePath) {
       context.addIssue({
@@ -141,6 +149,8 @@ export const completeAssetRenditionOperationSchema = z
     durationMs: z.number().int().nonnegative().nullable().optional(),
     renderer: z.string().min(1).max(100),
     rendererVersion: z.string().min(1).max(100).optional(),
+    posterSource: z.enum(['auto', 'user']).optional(),
+    sourceTimestampMs: z.number().int().nonnegative().optional(),
   })
   .strict();
 

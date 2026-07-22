@@ -17,23 +17,50 @@
 // Meta CDN URL re-resolves through the recovery hook; a letter tile is a failure,
 // not a graceful degrade.
 
-import type { AdsetAd } from '@continuum/contracts';
+import type { AdsetAd, PaidAdAngle } from '@continuum/contracts';
+import { useMemo } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromPaidVerdict } from '@/components/chat/media/media';
 import { VerdictHoverCard } from '@/components/paid-media/dashboard/whats-working/VerdictHoverCard';
 import { VERDICT_STYLE } from '@/components/paid-media/dashboard/whats-working/whatsWorkingModel';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
 import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
 import { cn } from '@/lib/utils';
-import { formatCpa } from '../format';
-import { useOptimizerAdsetAds } from '../useOptimizerData';
+import { formatCpa, humanize } from '../format';
+import { useOptimizerAdAngles, useOptimizerAdsetAds } from '../useOptimizerData';
 import {
   type AdsetCreativeVerdictRow,
   joinAdsetCreativeRows,
   summarizeVerdictCoverage,
   verdictCoverageNotice,
 } from './adsetVerdictRows';
+
+/** The communication-angle chip for one ad — the labeler's angle archetype, with
+ *  its hook + confidence exposed on hover. Shared with the pre-creation preview
+ *  drill-in. Renders nothing until the labeler has tagged the ad. */
+export function AngleChip({ angle }: { angle: PaidAdAngle }) {
+  const confidence =
+    typeof angle.confidence === 'number' ? `${Math.round(angle.confidence * 100)}%` : null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge className="shrink-0 text-3xs" variant="secondary">
+          {humanize(angle.angle)}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs space-y-1">
+        {angle.hook ? <p className="text-2xs">&ldquo;{angle.hook}&rdquo;</p> : null}
+        <p className="text-3xs text-muted-foreground">
+          {humanize(angle.angle)}
+          {confidence ? ` · ${confidence} confidence` : ''}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 type AdsetCreativeVerdictsProps = {
   brandId: string;
@@ -44,6 +71,7 @@ type AdsetCreativeVerdictsProps = {
 
 type CreativeRowProps = {
   row: AdsetCreativeVerdictRow;
+  angle?: PaidAdAngle | null;
   currency?: string | null;
   freshUrl: string | null;
   onRecover: (adId: string) => void;
@@ -53,7 +81,7 @@ function adLabel(ad: AdsetAd): string {
   return ad.name || ad.id;
 }
 
-function CreativeRow({ row, currency, freshUrl, onRecover }: CreativeRowProps) {
+function CreativeRow({ row, angle, currency, freshUrl, onRecover }: CreativeRowProps) {
   const { ad, verdict, thinEvidence } = row;
   const label = adLabel(ad);
   const media = mediaFromPaidVerdict({
@@ -80,6 +108,7 @@ function CreativeRow({ row, currency, freshUrl, onRecover }: CreativeRowProps) {
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-2xs text-foreground">{label}</span>
+      {angle ? <AngleChip angle={angle} /> : null}
       {verdict ? (
         <>
           <span
@@ -122,8 +151,13 @@ export function AdsetCreativeVerdicts({
   currency,
 }: AdsetCreativeVerdictsProps) {
   const adsQuery = useOptimizerAdsetAds(brandId, accountId, adsetId);
+  const anglesQuery = useOptimizerAdAngles(brandId, accountId, adsetId);
   const { report, isLoading: isReportLoading } = usePaidCreativeReport(brandId);
   const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId: accountId });
+  const angleByAd = useMemo(
+    () => new Map(anglesQuery.data.map((angle) => [angle.ad_id, angle])),
+    [anglesQuery.data],
+  );
 
   if (adsQuery.isLoading || isReportLoading) {
     return (
@@ -157,6 +191,7 @@ export function AdsetCreativeVerdicts({
       <ul className="space-y-0.5">
         {rows.map((row) => (
           <CreativeRow
+            angle={angleByAd.get(row.ad.id) ?? null}
             currency={currency}
             freshUrl={freshUrlById[row.ad.id] ?? null}
             key={row.ad.id}

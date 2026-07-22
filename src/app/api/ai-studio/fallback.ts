@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
 import type {
   AiStudioArtifact,
@@ -7,7 +7,7 @@ import type {
   AiStudioMedium,
   AiStudioProvider,
   AiStudioTemplate,
-} from "@/lib/schemas/aiStudio";
+} from '@/lib/schemas/aiStudio';
 
 type TemplateFilter = {
   provider?: AiStudioProvider;
@@ -22,166 +22,172 @@ type JobsQuery = {
 
 const FALLBACK_TEMPLATES: AiStudioTemplate[] = [
   {
-    id: "nano-hero-product",
-    name: "Hero Product Spotlight",
-    description: "Cinematic light-beam setup highlighting your flagship product on branded gradients.",
-    provider: "nano-banana",
-    medium: "image",
-    aspectRatio: "4:5",
+    id: 'nano-hero-product',
+    name: 'Hero Product Spotlight',
+    description:
+      'Cinematic light-beam setup highlighting your flagship product on branded gradients.',
+    provider: 'nano-banana',
+    medium: 'image',
+    aspectRatio: '4:5',
     defaultPrompt:
-      "Photoreal hero product shot of {brand} flagship item floating above a glass podium, volumetric lighting, branded gradients, crisp focus, studio reflections.",
+      'Photoreal hero product shot of {brand} flagship item floating above a glass podium, volumetric lighting, branded gradients, crisp focus, studio reflections.',
     defaultNegativePrompt:
-      "blurry, low resolution, distorted, watermarks, text overlay, extra limbs, disfigured",
+      'blurry, low resolution, distorted, watermarks, text overlay, extra limbs, disfigured',
     metadata: {
-      tone: "premium",
-      lighting: "volumetric",
-      recommendedColors: ["#7DD3FC", "#1E293B", "#F8FAFC"],
+      tone: 'premium',
+      lighting: 'volumetric',
+      recommendedColors: ['#7DD3FC', '#1E293B', '#F8FAFC'],
     },
-    tags: ["Product", "Launch", "Paid"],
+    tags: ['Product', 'Launch', 'Paid'],
   },
   {
-    id: "nano-campaign-flatlay",
-    name: "Campaign Flatlay",
-    description: "Editorial flatlay arrangement with props that telegraph campaign story and palette.",
-    provider: "nano-banana",
-    medium: "image",
-    aspectRatio: "16:9",
+    id: 'nano-campaign-flatlay',
+    name: 'Campaign Flatlay',
+    description:
+      'Editorial flatlay arrangement with props that telegraph campaign story and palette.',
+    provider: 'nano-banana',
+    medium: 'image',
+    aspectRatio: '16:9',
     defaultPrompt:
-      "Flatlay scene showing {brand} kit with supporting props, top-down camera, soft afternoon light, styled typography card, clean shadows.",
-    defaultNegativePrompt: "messy, harsh light, cluttered, text errors, extra hands",
+      'Flatlay scene showing {brand} kit with supporting props, top-down camera, soft afternoon light, styled typography card, clean shadows.',
+    defaultNegativePrompt: 'messy, harsh light, cluttered, text errors, extra hands',
     metadata: {
-      tone: "lifestyle",
-      props: ["notebook", "ceramic mug", "tablet display"],
-      surfaces: ["linen", "stone"],
+      tone: 'lifestyle',
+      props: ['notebook', 'ceramic mug', 'tablet display'],
+      surfaces: ['linen', 'stone'],
     },
-    tags: ["Organic", "Lifestyle"],
+    tags: ['Organic', 'Lifestyle'],
   },
   {
-    id: "veo-motion-anthem",
-    name: "Motion Anthem Loop",
-    description: "High-energy b-roll with macro details, parallax moves, and bold typography transitions.",
-    provider: "veo-3-1",
-    medium: "video",
-    aspectRatio: "9:16",
+    id: 'veo-motion-anthem',
+    name: 'Motion Anthem Loop',
+    description:
+      'High-energy b-roll with macro details, parallax moves, and bold typography transitions.',
+    provider: 'veo-3-1',
+    medium: 'video',
+    aspectRatio: '9:16',
     defaultPrompt:
-      "Cinematic montage of {brand} team collaborating in a luminous studio, macro product details, smooth gimbal shots, motivational energy, vibrant lighting transitions.",
+      'Cinematic montage of {brand} team collaborating in a luminous studio, macro product details, smooth gimbal shots, motivational energy, vibrant lighting transitions.',
     metadata: {
-      tone: "energetic",
+      tone: 'energetic',
       durationHint: 12,
-      musicCue: "uplifting electronic",
+      musicCue: 'uplifting electronic',
     },
-    tags: ["B-Roll", "Brand Story"],
+    tags: ['B-Roll', 'Brand Story'],
   },
   {
-    id: "veo-lite-quick-concept",
-    name: "Quick Concept Video",
-    description: "Fast short-form concept loop for high-volume creative iteration.",
-    provider: "veo-3-1-lite",
-    medium: "video",
-    aspectRatio: "16:9",
+    id: 'veo-lite-quick-concept',
+    name: 'Quick Concept Video',
+    description: 'Fast short-form concept loop for high-volume creative iteration.',
+    provider: 'veo-3-1-lite',
+    medium: 'video',
+    aspectRatio: '16:9',
     defaultPrompt:
-      "High-energy product concept video for {brand}, crisp motion, natural audio ambience, fast social-ready pacing.",
+      'High-energy product concept video for {brand}, crisp motion, natural audio ambience, fast social-ready pacing.',
     metadata: {
-      tone: "iterative",
+      tone: 'iterative',
       durationHint: 8,
-      musicCue: "bright rhythmic pulse",
+      musicCue: 'bright rhythmic pulse',
     },
-    tags: ["Concept", "Iteration"],
+    tags: ['Concept', 'Iteration'],
   },
   {
-    id: "sora-storyboard",
-    name: "Storyboard Narrative",
-    description: "Long-form narrative shot list for launch storytelling across hero, context, and CTA beats.",
-    provider: "sora-2",
-    medium: "video",
-    aspectRatio: "16:9",
+    id: 'sora-storyboard',
+    name: 'Storyboard Narrative',
+    description:
+      'Long-form narrative shot list for launch storytelling across hero, context, and CTA beats.',
+    provider: 'sora-2',
+    medium: 'video',
+    aspectRatio: '16:9',
     defaultPrompt:
-      "Three-act story of a founder using {brand} platform to orchestrate a product launch. Act 1: ideation in dawn light. Act 2: team collaboration with dashboards. Act 3: product reveal event with cheering audience.",
+      'Three-act story of a founder using {brand} platform to orchestrate a product launch. Act 1: ideation in dawn light. Act 2: team collaboration with dashboards. Act 3: product reveal event with cheering audience.',
     metadata: {
-      tone: "inspirational",
+      tone: 'inspirational',
       durationHint: 45,
-      chapters: ["Ideation", "Collaboration", "Reveal"],
+      chapters: ['Ideation', 'Collaboration', 'Reveal'],
     },
-    tags: ["Narrative", "Hero"],
+    tags: ['Narrative', 'Hero'],
   },
 ];
 
 const SAMPLE_ARTIFACTS: Record<AiStudioProvider, AiStudioArtifact> = {
-  "nano-banana": {
-    id: "sample-nano-artifact",
-    uri: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
-    previewUri: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=60",
-    mimeType: "image/jpeg",
-    medium: "image",
-    fileName: "continuum-concept.jpg",
+  'nano-banana': {
+    id: 'sample-nano-artifact',
+    uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80',
+    previewUri:
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=60',
+    mimeType: 'image/jpeg',
+    medium: 'image',
+    fileName: 'continuum-concept.jpg',
     sizeBytes: 820_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
-  "gemini-3-pro-image-preview": {
-    id: "sample-gemini-image-artifact",
-    uri: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
-    previewUri: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=60",
-    mimeType: "image/jpeg",
-    medium: "image",
-    fileName: "continuum-gemini-concept.jpg",
+  'gemini-3-pro-image': {
+    id: 'sample-gemini-image-artifact',
+    uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80',
+    previewUri:
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=60',
+    mimeType: 'image/jpeg',
+    medium: 'image',
+    fileName: 'continuum-gemini-concept.jpg',
     sizeBytes: 820_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
-  "veo-3-1": {
-    id: "sample-veo-artifact",
-    uri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    previewUri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    mimeType: "video/mp4",
-    medium: "video",
-    fileName: "continuum-veo-demo.mp4",
+  'veo-3-1': {
+    id: 'sample-veo-artifact',
+    uri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    previewUri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    mimeType: 'video/mp4',
+    medium: 'video',
+    fileName: 'continuum-veo-demo.mp4',
     sizeBytes: 6_200_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
-  "veo-3-1-fast": {
-    id: "sample-veo-fast-artifact",
-    uri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    previewUri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    mimeType: "video/mp4",
-    medium: "video",
-    fileName: "continuum-veo-fast-demo.mp4",
+  'veo-3-1-fast': {
+    id: 'sample-veo-fast-artifact',
+    uri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    previewUri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    mimeType: 'video/mp4',
+    medium: 'video',
+    fileName: 'continuum-veo-fast-demo.mp4',
     sizeBytes: 6_200_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
-  "veo-3-1-lite": {
-    id: "sample-veo-lite-artifact",
-    uri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    previewUri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    mimeType: "video/mp4",
-    medium: "video",
-    fileName: "continuum-veo-lite-demo.mp4",
+  'veo-3-1-lite': {
+    id: 'sample-veo-lite-artifact',
+    uri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    previewUri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    mimeType: 'video/mp4',
+    medium: 'video',
+    fileName: 'continuum-veo-lite-demo.mp4',
     sizeBytes: 6_200_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
-  "kling-omni": {
-    id: "sample-kling-artifact",
-    uri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    previewUri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
-    mimeType: "video/mp4",
-    medium: "video",
-    fileName: "continuum-kling-demo.mp4",
+  'kling-omni': {
+    id: 'sample-kling-artifact',
+    uri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    previewUri: 'https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4',
+    mimeType: 'video/mp4',
+    medium: 'video',
+    fileName: 'continuum-kling-demo.mp4',
     sizeBytes: 6_200_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
-  "sora-2": {
-    id: "sample-sora-artifact",
-    uri: "https://storage.googleapis.com/continuum-fallback-assets/sora-demo.mp4",
-    previewUri: "https://storage.googleapis.com/continuum-fallback-assets/sora-demo.mp4",
-    mimeType: "video/mp4",
-    medium: "video",
-    fileName: "continuum-sora-demo.mp4",
+  'sora-2': {
+    id: 'sample-sora-artifact',
+    uri: 'https://storage.googleapis.com/continuum-fallback-assets/sora-demo.mp4',
+    previewUri: 'https://storage.googleapis.com/continuum-fallback-assets/sora-demo.mp4',
+    mimeType: 'video/mp4',
+    medium: 'video',
+    fileName: 'continuum-sora-demo.mp4',
     sizeBytes: 14_400_000,
-    metadata: { source: "fallback" },
+    metadata: { source: 'fallback' },
     createdAt: new Date().toISOString(),
   },
 };
@@ -199,41 +205,43 @@ function ensureSeedJobs(brandProfileId: string): AiStudioJob[] {
     {
       id: randomUUID(),
       brandProfileId,
-      provider: "nano-banana",
-      medium: "image",
-      templateId: "nano-hero-product",
-      prompt: "Hero product spotlight for Continuum, volumetric lighting, gradient backdrop, glass podium.",
-      negativePrompt: "low quality, watermark, disfigured, text overlay",
-      aspectRatio: "4:5",
+      provider: 'nano-banana',
+      medium: 'image',
+      templateId: 'nano-hero-product',
+      prompt:
+        'Hero product spotlight for Continuum, volumetric lighting, gradient backdrop, glass podium.',
+      negativePrompt: 'low quality, watermark, disfigured, text overlay',
+      aspectRatio: '4:5',
       durationSeconds: undefined,
-      status: "completed",
+      status: 'completed',
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
-      artifacts: [SAMPLE_ARTIFACTS["nano-banana"]],
+      artifacts: [SAMPLE_ARTIFACTS['nano-banana']],
       failure: undefined,
       metadata: {
         fallback: true,
-        note: "Seeded preview render",
+        note: 'Seeded preview render',
       },
     },
     {
       id: randomUUID(),
       brandProfileId,
-      provider: "veo-3-1",
-      medium: "video",
-      templateId: "veo-motion-anthem",
-      prompt: "Energetic montage of Continuum team collaborating with glowing dashboards and macro product shots.",
-      negativePrompt: "blurry, jittery camera, text errors",
-      aspectRatio: "9:16",
+      provider: 'veo-3-1',
+      medium: 'video',
+      templateId: 'veo-motion-anthem',
+      prompt:
+        'Energetic montage of Continuum team collaborating with glowing dashboards and macro product shots.',
+      negativePrompt: 'blurry, jittery camera, text errors',
+      aspectRatio: '9:16',
       durationSeconds: 12,
-      status: "completed",
+      status: 'completed',
       createdAt: new Date(now.getTime() - 1000 * 60 * 20).toISOString(),
       updatedAt: new Date(now.getTime() - 1000 * 60 * 18).toISOString(),
-      artifacts: [SAMPLE_ARTIFACTS["veo-3-1"]],
+      artifacts: [SAMPLE_ARTIFACTS['veo-3-1']],
       failure: undefined,
       metadata: {
         fallback: true,
-        note: "Sample Veo motion loop",
+        note: 'Sample Veo motion loop',
       },
     },
   ];
@@ -247,16 +255,19 @@ function promoteCompletedJobs(jobs: AiStudioJob[]): AiStudioJob[] {
   let mutated = false;
 
   const nextJobs: AiStudioJob[] = jobs.map((job): AiStudioJob => {
-    if ((job.status === "queued" || job.status === "processing") && now - Date.parse(job.createdAt) > 4_000) {
+    if (
+      (job.status === 'queued' || job.status === 'processing') &&
+      now - Date.parse(job.createdAt) > 4_000
+    ) {
       mutated = true;
       const nextArtifacts =
         job.artifacts.length > 0
           ? job.artifacts
-          : [SAMPLE_ARTIFACTS[job.provider] ?? SAMPLE_ARTIFACTS["nano-banana"]];
+          : [SAMPLE_ARTIFACTS[job.provider] ?? SAMPLE_ARTIFACTS['nano-banana']];
 
       return {
         ...job,
-        status: "completed",
+        status: 'completed',
         artifacts: nextArtifacts,
         updatedAt: new Date().toISOString(),
         metadata: {
@@ -307,14 +318,14 @@ export function createFallbackJobFromRequest(payload: AiStudioGenerationRequest)
     negativePrompt: payload.negativePrompt ?? undefined,
     aspectRatio: payload.aspectRatio ?? undefined,
     durationSeconds: payload.durationSeconds ?? undefined,
-    status: "processing",
+    status: 'processing',
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     artifacts: [],
     failure: undefined,
     metadata: {
       fallback: true,
-      note: "Stub job enqueued while upstream generation service is unavailable.",
+      note: 'Stub job enqueued while upstream generation service is unavailable.',
     },
   };
 }
@@ -322,24 +333,25 @@ export function createFallbackJobFromRequest(payload: AiStudioGenerationRequest)
 export function markFallbackJobErrored(
   brandProfileId: string,
   jobId: string,
-  message: string
+  message: string,
 ): void {
   const jobs = fallbackJobsStore.get(brandProfileId);
   if (!jobs) return;
 
-  const nextJobs: AiStudioJob[] = jobs.map((job): AiStudioJob =>
-    job.id === jobId
-      ? {
-          ...job,
-          status: "failed",
-          failure: {
-            message,
-            code: "fallback-error",
-            retryable: true,
-          },
-          updatedAt: new Date().toISOString(),
-        }
-      : job
+  const nextJobs: AiStudioJob[] = jobs.map(
+    (job): AiStudioJob =>
+      job.id === jobId
+        ? {
+            ...job,
+            status: 'failed',
+            failure: {
+              message,
+              code: 'fallback-error',
+              retryable: true,
+            },
+            updatedAt: new Date().toISOString(),
+          }
+        : job,
   );
 
   fallbackJobsStore.set(brandProfileId, nextJobs);

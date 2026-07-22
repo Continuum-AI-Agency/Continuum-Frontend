@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
 import {
   DOCUMENT_CATEGORY_LABELS,
   DOCUMENT_CATEGORY_VALUES,
   type DocumentCategory,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 // Compact 5-option category picker, reused by the document row (re-tag) and the
 // upload bar (default for new uploads). For the list-level filter (which adds an
@@ -21,7 +21,7 @@ export function DocumentCategorySelect({
   value,
   onChange,
   disabled,
-  ariaLabel = "Document category",
+  ariaLabel = 'Document category',
   className,
 }: {
   value: DocumentCategory;
@@ -39,7 +39,7 @@ export function DocumentCategorySelect({
       <SelectTrigger
         size="sm"
         aria-label={ariaLabel}
-        className={cn("h-7 gap-1 rounded-full px-2.5 text-xs font-medium", className)}
+        className={cn('h-7 gap-1 rounded-full px-2.5 text-xs font-medium', className)}
       >
         <SelectValue />
       </SelectTrigger>

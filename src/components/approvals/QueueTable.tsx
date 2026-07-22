@@ -1,6 +1,5 @@
-"use client";
+'use client';
 
-import * as React from "react";
 import {
   type ColumnDef,
   flexRender,
@@ -8,15 +7,22 @@ import {
   getSortedRowModel,
   type SortingState,
   useReactTable,
-} from "@tanstack/react-table";
-import { ArrowUpDown } from "lucide-react";
-
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import type { RuleAction } from "@/lib/approvals/types";
-import { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } from "./formatters";
-import { getActionIcon } from "./actionIcons";
+} from '@tanstack/react-table';
+import { ArrowUpDown } from 'lucide-react';
+import * as React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import type { RuleAction } from '@/lib/approvals/types';
+import { getActionIcon } from './actionIcons';
+import { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } from './formatters';
 
 type Props = {
   actions: RuleAction[];
@@ -24,29 +30,30 @@ type Props = {
 };
 
 export function QueueTable({ actions, onSelect }: Props) {
-  const [sorting, setSorting] = React.useState<SortingState>([{ id: "created_at", desc: true }]);
+  const [sorting, setSorting] = React.useState<SortingState>([{ id: 'created_at', desc: true }]);
 
   const columns = React.useMemo<ColumnDef<RuleAction>[]>(
     () => [
       {
-        accessorKey: "created_at",
-        header: ({ column }) => (
-          <SortHeader column={column} label="Queued" />
-        ),
+        accessorKey: 'created_at',
+        header: ({ column }) => <SortHeader column={column} label="Queued" />,
         cell: ({ row }) => (
           <span className="font-data text-xs tabular-nums text-muted-foreground">
             {formatRelativeTime(row.original.created_at)}
           </span>
         ),
-        sortingFn: "datetime",
+        sortingFn: 'datetime',
       },
       {
-        accessorKey: "action_type",
-        header: "Type",
+        accessorKey: 'action_type',
+        header: 'Type',
         cell: ({ row }) => {
           const Icon = getActionIcon(row.original.action_type);
           return (
-            <Badge variant="secondary" className="gap-1.5 font-data text-2xs uppercase tracking-wide">
+            <Badge
+              variant="secondary"
+              className="gap-1.5 font-data text-2xs uppercase tracking-wide"
+            >
               <Icon className="h-3 w-3" strokeWidth={1.5} />
               {actionTypeLabel(row.original.action_type)}
             </Badge>
@@ -54,15 +61,15 @@ export function QueueTable({ actions, onSelect }: Props) {
         },
       },
       {
-        id: "scope",
-        header: "Scope",
+        id: 'scope',
+        header: 'Scope',
         cell: ({ row }) => (
           <span className="font-data text-xs text-foreground">{scopeLabel(row.original)}</span>
         ),
       },
       {
-        id: "why",
-        header: "Rationale",
+        id: 'why',
+        header: 'Rationale',
         cell: ({ row }) => (
           <span className="line-clamp-2 max-w-[36rem] text-xs text-muted-foreground">
             {whyText(row.original)}
@@ -101,7 +108,10 @@ export function QueueTable({ actions, onSelect }: Props) {
         <TableBody>
           {table.getRowModel().rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+              <TableCell
+                colSpan={columns.length}
+                className="h-24 text-center text-sm text-muted-foreground"
+              >
                 No actions match.
               </TableCell>
             </TableRow>
@@ -130,7 +140,7 @@ function SortHeader({
   column,
   label,
 }: {
-  column: { toggleSorting: (asc?: boolean) => void; getIsSorted: () => false | "asc" | "desc" };
+  column: { toggleSorting: (asc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' };
   label: string;
 }) {
   return (
@@ -139,7 +149,7 @@ function SortHeader({
       variant="ghost"
       size="sm"
       className="-ml-2 h-7 px-2 text-2xs uppercase tracking-wider text-muted-foreground"
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
     >
       {label}
       <ArrowUpDown className="ml-1 h-3 w-3" />

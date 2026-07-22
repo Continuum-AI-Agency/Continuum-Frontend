@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
-import { enrichAwarenessTopPost, type AwarenessTopPost } from './types';
+import { type AwarenessTopPost, enrichAwarenessTopPost } from './types';
 
 const base: AwarenessTopPost = {
   id: 'p1',

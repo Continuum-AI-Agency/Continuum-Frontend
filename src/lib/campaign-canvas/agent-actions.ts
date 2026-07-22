@@ -1,13 +1,13 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-const NODE_TYPES = ["campaign", "ad-set", "ad", "audience", "creative"] as const;
+const NODE_TYPES = ['campaign', 'ad-set', 'ad', 'audience', 'creative'] as const;
 const OBJECTIVES = [
-  "OUTCOME_SALES",
-  "OUTCOME_LEADS",
-  "OUTCOME_ENGAGEMENT",
-  "OUTCOME_AWARENESS",
-  "OUTCOME_TRAFFIC",
-  "OUTCOME_APP_PROMOTION",
+  'OUTCOME_SALES',
+  'OUTCOME_LEADS',
+  'OUTCOME_ENGAGEMENT',
+  'OUTCOME_AWARENESS',
+  'OUTCOME_TRAFFIC',
+  'OUTCOME_APP_PROMOTION',
 ] as const;
 
 const flowPositionSchema = z.object({
@@ -31,7 +31,7 @@ const createNodePayloadSchema = z
     }),
   ])
   .transform((payload) => {
-    const nodeType = "nodeType" in payload ? payload.nodeType : payload.type;
+    const nodeType = 'nodeType' in payload ? payload.nodeType : payload.type;
     return {
       nodeType,
       data: payload.data ?? {},
@@ -41,7 +41,7 @@ const createNodePayloadSchema = z
   });
 
 const actionCreateNodeSchema = z.object({
-  type: z.literal("CREATE_NODE"),
+  type: z.literal('CREATE_NODE'),
   payload: createNodePayloadSchema,
 });
 
@@ -57,12 +57,12 @@ const connectNodesPayloadSchema = z
     }),
   ])
   .transform((payload) => ({
-    sourceId: "sourceId" in payload ? payload.sourceId : payload.source_id,
-    targetId: "targetId" in payload ? payload.targetId : payload.target_id,
+    sourceId: 'sourceId' in payload ? payload.sourceId : payload.source_id,
+    targetId: 'targetId' in payload ? payload.targetId : payload.target_id,
   }));
 
 const actionConnectNodesSchema = z.object({
-  type: z.literal("CONNECT_NODES"),
+  type: z.literal('CONNECT_NODES'),
   payload: connectNodesPayloadSchema,
 });
 
@@ -78,23 +78,23 @@ const updateNodePayloadSchema = z
     }),
   ])
   .transform((payload) => ({
-    nodeId: "nodeId" in payload ? payload.nodeId : payload.node_id,
+    nodeId: 'nodeId' in payload ? payload.nodeId : payload.node_id,
     data: payload.data ?? {},
   }));
 
 const actionUpdateNodeSchema = z.object({
-  type: z.literal("UPDATE_NODE"),
+  type: z.literal('UPDATE_NODE'),
   payload: updateNodePayloadSchema,
 });
 
 const actionRecommendStructureSchema = z.object({
-  type: z.literal("RECOMMEND_STRUCTURE"),
+  type: z.literal('RECOMMEND_STRUCTURE'),
   payload: z.object({
     objective: z.enum(OBJECTIVES),
   }),
 });
 
-export const campaignCanvasAgentActionSchema = z.discriminatedUnion("type", [
+export const campaignCanvasAgentActionSchema = z.discriminatedUnion('type', [
   actionCreateNodeSchema,
   actionConnectNodesSchema,
   actionUpdateNodeSchema,
@@ -104,7 +104,7 @@ export const campaignCanvasAgentActionSchema = z.discriminatedUnion("type", [
 export type CampaignCanvasAgentAction = z.infer<typeof campaignCanvasAgentActionSchema>;
 
 export const campaignCanvasActionsEnvelopeSchema = z.object({
-  kind: z.literal("campaign_canvas_actions"),
+  kind: z.literal('campaign_canvas_actions'),
   brandId: z.string().min(1),
   userId: z.string().min(1),
   sessionId: z.string().min(1).optional(),
@@ -115,7 +115,7 @@ export const campaignCanvasActionsEnvelopeSchema = z.object({
 export type CampaignCanvasActionsEnvelope = z.infer<typeof campaignCanvasActionsEnvelopeSchema>;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
   return value as Record<string, unknown>;
@@ -137,15 +137,15 @@ function collectCandidates(value: unknown): unknown[] {
     if (!record) continue;
 
     const nestedKeys = [
-      "campaign_canvas_actions",
-      "campaignCanvasActions",
-      "campaign_canvas",
-      "campaignCanvas",
-      "payload",
-      "data",
-      "response",
-      "result",
-      "output",
+      'campaign_canvas_actions',
+      'campaignCanvasActions',
+      'campaign_canvas',
+      'campaignCanvas',
+      'payload',
+      'data',
+      'response',
+      'result',
+      'output',
     ];
 
     for (const key of nestedKeys) {
@@ -159,7 +159,7 @@ function collectCandidates(value: unknown): unknown[] {
 }
 
 export function extractCampaignCanvasActionsEnvelope(
-  value: unknown
+  value: unknown,
 ): CampaignCanvasActionsEnvelope | null {
   const candidates = collectCandidates(value);
 

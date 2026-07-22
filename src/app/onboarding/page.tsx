@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
-import { OnboardingExperience } from "@/components/onboarding/v2/OnboardingExperience";
-import { ensureOnboardingState } from "@/lib/onboarding/storage";
-import { isOnboardingComplete } from "@/lib/onboarding/state";
-import { ActiveBrandProvider } from "@/components/providers/ActiveBrandProvider";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { redirect } from 'next/navigation';
+import { OnboardingExperience } from '@/components/onboarding/v2/OnboardingExperience';
+import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { isOnboardingComplete } from '@/lib/onboarding/state';
+import { ensureOnboardingState } from '@/lib/onboarding/storage';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 type OnboardingPageProps = {
   searchParams?: Promise<{ brand?: string }>;
@@ -18,7 +18,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    redirect("/login");
+    redirect('/login');
   }
 
   const { brand: brandIdParam } = (searchParams ? await searchParams : {}) as { brand?: string };
@@ -26,7 +26,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const { brandId, state } = await ensureOnboardingState(brandIdParam);
 
   if (isOnboardingComplete(state)) {
-    redirect("/dashboard");
+    redirect('/dashboard');
   }
 
   const defaultUrl = inferDomainFromEmail(user.email);
@@ -44,22 +44,22 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 }
 
 const GENERIC_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "yahoo.com",
-  "outlook.com",
-  "hotmail.com",
-  "icloud.com",
-  "proton.me",
-  "protonmail.com",
-  "aol.com",
-  "live.com",
-  "me.com",
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'outlook.com',
+  'hotmail.com',
+  'icloud.com',
+  'proton.me',
+  'protonmail.com',
+  'aol.com',
+  'live.com',
+  'me.com',
 ]);
 
 function inferDomainFromEmail(email: string | null | undefined): string | null {
   if (!email) return null;
-  const at = email.lastIndexOf("@");
+  const at = email.lastIndexOf('@');
   if (at < 0) return null;
   const domain = email.slice(at + 1).toLowerCase();
   if (!domain || GENERIC_EMAIL_DOMAINS.has(domain)) return null;

@@ -1,17 +1,17 @@
-import { redirect } from "next/navigation";
-import type { Metadata } from "next";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { CompetitorSpyClient } from "@/components/competitor-spy/CompetitorSpyClient";
+import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+import { CompetitorSpyClient } from '@/components/competitor-spy/CompetitorSpyClient';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 
 export const metadata: Metadata = {
-  title: "Brand Spy | Continuum AI",
-  description: "Track competitor Instagram posts and paid ad creatives in one Ad Spy workspace.",
+  title: 'Brand Spy | Continuum AI',
+  description: 'Track competitor Instagram posts and paid ad creatives in one Ad Spy workspace.',
 };
 
 export default async function CompetitorSpyPage() {
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {
-    redirect("/onboarding");
+    redirect('/onboarding');
   }
 
   return (

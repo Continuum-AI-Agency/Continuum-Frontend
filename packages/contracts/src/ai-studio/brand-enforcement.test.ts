@@ -17,7 +17,7 @@ function makeTokens(overrides: Record<string, unknown> = {}): BrandMdTokens {
       { value: '#f5a623', role: 'accent' },
     ],
     typography: [
-      { family: 'Söhne', role: 'display' },
+      { family: 'Söhne', role: 'display', note: 'Semibold for headlines' },
       { family: 'Inter', role: 'body' },
     ],
     logo: { storage_path: 'brands/pizza/logo.png', treatment_default: 'logo' },
@@ -75,6 +75,11 @@ describe('renderForcedBrandBlock', () => {
     expect(block).toContain(
       'Voice — Tone: confident. Style: plainspoken. Power verbs: build, ship. Never use: cheap.',
     );
+  });
+
+  it('maps font family, role, and usage note into typography grounding', () => {
+    const { block } = renderForcedBrandBlock(makeTokens(), ['typography']);
+    expect(block).toContain('Typography: Söhne (display; Semibold for headlines), Inter (body)');
   });
 
   it('renders every piece for full and reports wantsLogo when a logo path exists', () => {

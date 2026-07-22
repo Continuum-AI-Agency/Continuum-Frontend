@@ -1,5 +1,30 @@
-import { describe, expect, it } from 'bun:test';
-import { summarizeReportRecipients } from './sendPulseReport';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
+
+let invokeResult: { data: unknown; error: unknown } = { data: null, error: null };
+const invoke = mock(async (_name: string, _args: { body?: unknown }) => invokeResult);
+
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({ functions: { invoke } }),
+}));
+
+const { summarizeReportRecipients, upsertReportSchedule, getReportSchedule } = await import(
+  './sendPulseReport'
+);
+
+const scheduleContract = {
+  brandId: 'brand-1',
+  presentation: 'continuum_report' as const,
+  cadence: 'weekly' as const,
+  dayOfWeek: 1,
+  dayOfMonth: null,
+  hour: 8,
+  timezone: 'America/New_York',
+  recipients: { memberUserIds: ['user-1'], externalEmails: ['ext@company.com'] },
+  enabled: true,
+  nextRunAt: '2026-03-09T12:00:00.000Z',
+  lastRunAt: null,
+  updatedAt: '2026-03-02T12:00:00.000Z',
+};
 
 describe('summarizeReportRecipients', () => {
   it('handles an empty list', () => {
@@ -22,5 +47,102 @@ describe('summarizeReportRecipients', () => {
     expect(summarizeReportRecipients(['a@x.com', 'b@x.com', 'c@x.com'])).toBe(
       'Sent to a@x.com and 2 other recipients.',
     );
+  });
+});
+
+describe('upsertReportSchedule', () => {
+  beforeEach(() => {
+    invoke.mockClear();
+    invokeResult = { data: null, error: null };
+  });
+
+  it('builds the correct edge body and returns the parsed schedule', async () => {
+    invokeResult = { data: { schedule: scheduleContract }, error: null };
+
+    const result = await upsertReportSchedule({
+      brandId: 'brand-1',
+      cadence: 'weekly',
+      dayOfWeek: 1,
+      dayOfMonth: null,
+      hour: 8,
+      timezone: 'America/New_York',
+      memberUserIds: ['user-1'],
+      externalEmails: ['ext@company.com'],
+    });
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const [functionName, args] = invoke.mock.calls[0];
+    expect(functionName).toBe('send-first-value-report');
+    expect(args.body).toEqual({
+      action: 'schedule',
+      brandId: 'brand-1',
+      cadence: 'weekly',
+      dayOfWeek: 1,
+      dayOfMonth: null,
+      hour: 8,
+      timezone: 'America/New_York',
+      recipients: { memberUserIds: ['user-1'], externalEmails: ['ext@company.com'] },
+    });
+    expect(result).toEqual(scheduleContract);
+  });
+
+  it('surfaces the edge body error message on failure', async () => {
+    invokeResult = {
+      data: null,
+      error: {
+        message: 'HTTP error',
+        context: new Response(JSON.stringify({ error: 'monthly schedules require dayOfMonth.' }), {
+          status: 400,
+        }),
+      },
+    };
+
+    await expect(
+      upsertReportSchedule({
+        brandId: 'brand-1',
+        cadence: 'monthly',
+        dayOfWeek: null,
+        dayOfMonth: null,
+        hour: 8,
+        timezone: 'UTC',
+        memberUserIds: [],
+        externalEmails: [],
+      }),
+    ).rejects.toThrow('monthly schedules require dayOfMonth.');
+  });
+
+  it('throws when the response fails contract validation', async () => {
+    invokeResult = { data: { schedule: { cadence: 'weekly' } }, error: null };
+    await expect(
+      upsertReportSchedule({
+        brandId: 'brand-1',
+        cadence: 'weekly',
+        dayOfWeek: 1,
+        dayOfMonth: null,
+        hour: 8,
+        timezone: 'UTC',
+        memberUserIds: [],
+        externalEmails: [],
+      }),
+    ).rejects.toThrow('malformed');
+  });
+});
+
+describe('getReportSchedule', () => {
+  beforeEach(() => {
+    invoke.mockClear();
+    invokeResult = { data: null, error: null };
+  });
+
+  it('returns null when no schedule is configured', async () => {
+    invokeResult = { data: { schedule: null }, error: null };
+    expect(await getReportSchedule('brand-1')).toBeNull();
+    const [, args] = invoke.mock.calls[0];
+    expect(args.body).toEqual({ action: 'get_schedule', brandId: 'brand-1' });
+  });
+
+  it('returns the parsed schedule when present', async () => {
+    invokeResult = { data: { schedule: scheduleContract }, error: null };
+    expect(await getReportSchedule('brand-1')).toEqual(scheduleContract);
   });
 });

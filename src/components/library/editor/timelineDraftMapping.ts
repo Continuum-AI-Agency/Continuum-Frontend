@@ -25,7 +25,7 @@ import type { CaptionStyle, CaptionStyleOverride } from '@/lib/clips/clipCaption
 import type { TimelineDocument } from '@/StudioCanvas/nodes/timeline/adapter';
 import type { TimelineInputSource, TimelineItem, TimelineTrack } from '@/StudioCanvas/types';
 import type { ClipEffectSpec } from '@/StudioCanvas/utils/render/effectSpec';
-import { groupWordsIntoCues, type CaptionCue } from '@/StudioCanvas/utils/splice/captionCues';
+import { type CaptionCue, groupWordsIntoCues } from '@/StudioCanvas/utils/splice/captionCues';
 
 // A bin member in the Library. Nothing is added to the canonical pool shape — the
 // alias exists so this module's signatures read as "a Library media-bin source",
@@ -205,10 +205,11 @@ export function fromDraftDocument(draft: TimelineDraftDocument): TimelineDocumen
     exportPresetId: draft.exportPresetId,
     markers: draft.markers,
     captionsEnabled: draft.captionsEnabled,
-    captionCues: draft.captionCues?.map((cue) => ({
-      ...cue,
-      style: fromOpaque<CaptionStyleOverride>(cue.style),
-    })) ?? (draft.captionWords?.length ? groupWordsIntoCues(draft.captionWords) : undefined),
+    captionCues:
+      draft.captionCues?.map((cue) => ({
+        ...cue,
+        style: fromOpaque<CaptionStyleOverride>(cue.style),
+      })) ?? (draft.captionWords?.length ? groupWordsIntoCues(draft.captionWords) : undefined),
     captionWords: draft.captionWords,
     captionStyle: fromOpaque<CaptionStyle>(draft.captionStyle),
   }) satisfies TimelineDocument;

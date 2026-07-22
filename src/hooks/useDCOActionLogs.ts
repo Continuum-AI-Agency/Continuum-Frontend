@@ -1,9 +1,16 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { DEFAULT_DATE_RANGE_DAYS, getDateRangeFromDays } from "@/lib/dco/dateRange";
-import type { ActionLog, ActionLogResponse, ActionLogFilters, ActionLogSort, CampaignOption, AdAccountOption } from "@/lib/types/dco";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { DEFAULT_DATE_RANGE_DAYS, getDateRangeFromDays } from '@/lib/dco/dateRange';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type {
+  ActionLog,
+  ActionLogFilters,
+  ActionLogResponse,
+  ActionLogSort,
+  AdAccountOption,
+  CampaignOption,
+} from '@/lib/types/dco';
 
 interface UseDCOActionLogsOptions {
   brandId: string;
@@ -63,7 +70,7 @@ export function useDCOActionLogs({
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: initialPageSize,
@@ -72,14 +79,14 @@ export function useDCOActionLogs({
     hasNextPage: false,
     hasPrevPage: false,
   });
-  
+
   const [filters, setFiltersState] = useState<ActionLogFilters>({
     metaAccountId: initialMetaAccountId,
   });
-  
+
   const [sort, setSortState] = useState<ActionLogSort>({
-    sortBy: "occurred_at",
-    sortOrder: "desc",
+    sortBy: 'occurred_at',
+    sortOrder: 'desc',
   });
   const filtersRef = useRef(filters);
   const sortRef = useRef(sort);
@@ -112,8 +119,10 @@ export function useDCOActionLogs({
     setIsLoadingCampaigns(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session?.access_token) return;
 
       const params = new URLSearchParams({
@@ -127,7 +136,7 @@ export function useDCOActionLogs({
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-campaigns-for-selector?${params}`,
         {
           headers: { Authorization: `Bearer ${session.access_token}` },
-        }
+        },
       );
 
       if (response.ok) {
@@ -135,7 +144,7 @@ export function useDCOActionLogs({
         setCampaigns(result.campaigns || []);
       }
     } catch (err) {
-      console.error("[useDCOActionLogs] fetch campaigns error:", err);
+      console.error('[useDCOActionLogs] fetch campaigns error:', err);
     } finally {
       setIsLoadingCampaigns(false);
     }
@@ -151,8 +160,10 @@ export function useDCOActionLogs({
     setIsLoadingAdAccounts(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session?.access_token) return;
 
       const params = new URLSearchParams({
@@ -165,7 +176,7 @@ export function useDCOActionLogs({
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-ad-accounts-for-selector?${params}`,
         {
           headers: { Authorization: `Bearer ${session.access_token}` },
-        }
+        },
       );
 
       if (response.ok) {
@@ -173,7 +184,7 @@ export function useDCOActionLogs({
         setAdAccounts(result.accounts || []);
       }
     } catch (err) {
-      console.error("[useDCOActionLogs] fetch ad accounts error:", err);
+      console.error('[useDCOActionLogs] fetch ad accounts error:', err);
     } finally {
       setIsLoadingAdAccounts(false);
     }
@@ -192,14 +203,16 @@ export function useDCOActionLogs({
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session?.access_token) {
-        throw new Error("No authentication session");
+        throw new Error('No authentication session');
       }
 
       const dateRange = getDefaultDateRange();
-      
+
       const params = new URLSearchParams({
         brandId,
         page: pagination.page.toString(),
@@ -210,37 +223,37 @@ export function useDCOActionLogs({
         dateTo: filters.dateTo ?? dateRange.dateTo,
       });
 
-      if (filters.campaignId) params.set("campaignId", filters.campaignId);
-      if (filters.metaAccountId) params.set("metaAccountId", filters.metaAccountId);
-      if (filters.actionType) params.set("actionType", filters.actionType);
-      if (filters.status) params.set("status", filters.status);
-      if (filters.scopeType) params.set("scopeType", filters.scopeType);
+      if (filters.campaignId) params.set('campaignId', filters.campaignId);
+      if (filters.metaAccountId) params.set('metaAccountId', filters.metaAccountId);
+      if (filters.actionType) params.set('actionType', filters.actionType);
+      if (filters.status) params.set('status', filters.status);
+      if (filters.scopeType) params.set('scopeType', filters.scopeType);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-rule-action-logs?${params}`,
         {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
-        }
+        },
       );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error ?? "Failed to fetch action logs");
+        throw new Error(errorData.error ?? 'Failed to fetch action logs');
       }
 
       const result: ActionLogResponse = await response.json();
-      
+
       setLogs(result.data);
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
         ...result.pagination,
       }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      console.error("[useDCOActionLogs] fetch error:", err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('[useDCOActionLogs] fetch error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -256,18 +269,18 @@ export function useDCOActionLogs({
     if (areFiltersEqual(previous, next)) return;
 
     setFiltersState(next);
-    setPagination(prev => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
   }, []);
 
   const setSort = useCallback((newSort: ActionLogSort) => {
     if (areSortEqual(sortRef.current, newSort)) return;
 
     setSortState(newSort);
-    setPagination(prev => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
   }, []);
 
   const goToPage = useCallback((page: number) => {
-    setPagination(prev => ({ ...prev, page }));
+    setPagination((prev) => ({ ...prev, page }));
   }, []);
 
   const refresh = useCallback(() => {

@@ -1,9 +1,9 @@
-export type ProjectionMode = "auto" | "target" | "manual";
-export type ProjectionAutoMethod = "linearRegression" | "lastSegment";
+export type ProjectionMode = 'auto' | 'target' | 'manual';
+export type ProjectionAutoMethod = 'linearRegression' | 'lastSegment';
 /** How the projection segment is drawn between anchor and horizon. */
-export type ProjectionCurveKind = "linear" | "bezier";
+export type ProjectionCurveKind = 'linear' | 'bezier';
 /** @deprecated Stepped density removed — projections always anchor → horizon. */
-export type ProjectionPathDensity = "stepped" | "endpoints";
+export type ProjectionPathDensity = 'stepped' | 'endpoints';
 
 export interface ProjectionPoint {
   date: Date;
@@ -33,28 +33,25 @@ function readDate(row: Record<string, unknown>, xDataKey: string): Date | null {
   if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
     return raw;
   }
-  if (typeof raw === "number" && Number.isFinite(raw)) {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
     const date = new Date(raw);
     return Number.isNaN(date.getTime()) ? null : date;
   }
-  if (typeof raw === "string") {
+  if (typeof raw === 'string') {
     const date = new Date(raw);
     return Number.isNaN(date.getTime()) ? null : date;
   }
   return null;
 }
 
-function readValue(
-  row: Record<string, unknown>,
-  seriesKey: string
-): number | null {
+function readValue(row: Record<string, unknown>, seriesKey: string): number | null {
   const raw = row[seriesKey];
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
 }
 
 function resolveStartIndex(
   sourceData: Record<string, unknown>[],
-  startIndex: number | undefined
+  startIndex: number | undefined,
 ): number {
   if (startIndex == null || !Number.isFinite(startIndex)) {
     return Math.max(0, sourceData.length - 1);
@@ -65,7 +62,7 @@ function resolveStartIndex(
 function intervalFromAdjacentRows(
   sourceData: Record<string, unknown>[],
   xDataKey: string,
-  startIndex: number
+  startIndex: number,
 ): number | null {
   if (startIndex < 1) {
     return null;
@@ -83,7 +80,7 @@ function intervalFromAdjacentRows(
 
 function intervalFromSeriesSpan(
   sourceData: Record<string, unknown>[],
-  xDataKey: string
+  xDataKey: string,
 ): number | null {
   if (sourceData.length < 2) {
     return null;
@@ -102,7 +99,7 @@ function intervalFromSeriesSpan(
 function resolveIntervalMs(
   sourceData: Record<string, unknown>[],
   xDataKey: string,
-  startIndex: number
+  startIndex: number,
 ): number {
   return (
     intervalFromAdjacentRows(sourceData, xDataKey, startIndex) ??
@@ -153,7 +150,7 @@ function buildAutoFutureValues(options: {
   } = options;
 
   const slope =
-    autoMethod === "lastSegment" && historyPoints.length >= 2
+    autoMethod === 'lastSegment' && historyPoints.length >= 2
       ? (() => {
           const prev = historyPoints.at(-2);
           const last = historyPoints.at(-1);
@@ -165,7 +162,7 @@ function buildAutoFutureValues(options: {
         })()
       : linearRegressionSlope(historyPoints);
 
-  if (pathDensity === "endpoints") {
+  if (pathDensity === 'endpoints') {
     const endTime = anchorTime + intervalMs * horizonPoints;
     const endValue = anchorValue + slope * intervalMs * horizonPoints;
     return [
@@ -174,9 +171,7 @@ function buildAutoFutureValues(options: {
     ];
   }
 
-  const result: ProjectionPoint[] = [
-    { date: new Date(anchorTime), value: anchorValue },
-  ];
+  const result: ProjectionPoint[] = [{ date: new Date(anchorTime), value: anchorValue }];
 
   for (let i = 1; i <= horizonPoints; i++) {
     const t = anchorTime + intervalMs * i;
@@ -191,8 +186,8 @@ function buildAutoFutureValues(options: {
 export function computeProjectionAnchorTangentSlope(
   sourceData: Record<string, unknown>[],
   seriesKey: string,
-  xDataKey = "date",
-  startIndexProp?: number
+  xDataKey = 'date',
+  startIndexProp?: number,
 ): number {
   if (sourceData.length < 2) {
     return 0;
@@ -229,7 +224,7 @@ export function buildHorizontalTangentBezierPath(
   x1: number,
   y1: number,
   /** How far control points sit along the x span (0–0.5). Default: 0.45 */
-  tension = 0.45
+  tension = 0.45,
 ): string {
   const dx = x1 - x0;
   if (Math.abs(dx) < 1e-6) {
@@ -248,8 +243,7 @@ function buildTargetPath(options: {
   horizonPoints: number;
   intervalMs: number;
 }): ProjectionPoint[] {
-  const { anchorTime, anchorValue, endValue, horizonPoints, intervalMs } =
-    options;
+  const { anchorTime, anchorValue, endValue, horizonPoints, intervalMs } = options;
   const endTime = anchorTime + intervalMs * horizonPoints;
   return [
     { date: new Date(anchorTime), value: anchorValue },
@@ -258,23 +252,21 @@ function buildTargetPath(options: {
 }
 
 /** Build a projection path from historical chart data or explicit points. */
-export function buildProjectionPath(
-  options: BuildProjectionPathOptions
-): ProjectionPoint[] {
+export function buildProjectionPath(options: BuildProjectionPathOptions): ProjectionPoint[] {
   const {
     sourceData,
     seriesKey,
-    xDataKey = "date",
+    xDataKey = 'date',
     mode,
-    autoMethod = "linearRegression",
-    pathDensity = "endpoints",
+    autoMethod = 'linearRegression',
+    pathDensity = 'endpoints',
     startIndex: startIndexProp,
     horizonPoints = 6,
     endValue,
     points,
   } = options;
 
-  if (mode === "manual" && points && points.length >= 2) {
+  if (mode === 'manual' && points && points.length >= 2) {
     return points.map((point) => ({
       date: new Date(point.date),
       value: point.value,
@@ -313,7 +305,7 @@ export function buildProjectionPath(
     }
   }
 
-  if (mode === "target" && endValue != null && Number.isFinite(endValue)) {
+  if (mode === 'target' && endValue != null && Number.isFinite(endValue)) {
     return buildTargetPath({
       anchorTime,
       anchorValue,
@@ -336,7 +328,7 @@ export function buildProjectionPath(
 
 /** Collect numeric Y extents from projection point arrays. */
 export function projectionValueExtents(
-  paths: ProjectionPoint[][]
+  paths: ProjectionPoint[][],
 ): { minValue: number; maxValue: number } | null {
   let minValue = Number.POSITIVE_INFINITY;
   let maxValue = Number.NEGATIVE_INFINITY;
@@ -361,7 +353,7 @@ export function projectionValueExtents(
 
 /** Collect date extents from projection point arrays. */
 export function projectionDateExtents(
-  paths: ProjectionPoint[][]
+  paths: ProjectionPoint[][],
 ): { minTime: number; maxTime: number } | null {
   let minTime = Number.POSITIVE_INFINITY;
   let maxTime = Number.NEGATIVE_INFINITY;

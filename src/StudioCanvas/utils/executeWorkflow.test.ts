@@ -1,9 +1,9 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { executeWorkflow, collectDownstreamLeafIds } from './executeWorkflow';
-import { computeGenerationSignature } from './generationSignature';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import type { Edge } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
-import { StudioNode } from '../types';
-import { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
+import { collectDownstreamLeafIds, executeWorkflow } from './executeWorkflow';
+import { computeGenerationSignature } from './generationSignature';
 
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
 
@@ -55,9 +55,7 @@ describe('executeWorkflow', () => {
       { id: '2', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
     ];
 
-    const edges: Edge[] = [
-      { id: 'e1', source: '1', target: '2', targetHandle: 'prompt' },
-    ];
+    const edges: Edge[] = [{ id: 'e1', source: '1', target: '2', targetHandle: 'prompt' }];
 
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
@@ -73,25 +71,32 @@ describe('executeWorkflow', () => {
 
     await executeWorkflow(controls as any);
 
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     expect(executeGeneration.mock.calls[0][0]).toBe('2');
-    expect(executeGeneration.mock.calls[0][1]).toEqual(expect.objectContaining({
-      prompt: 'prompt',
-      model: 'gemini-2.5-flash-image',
-    }));
+    expect(executeGeneration.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        prompt: 'prompt',
+        model: 'gemini-2.5-flash-image',
+      }),
+    );
 
     // Check store updates
     const finalNodes = useStudioStore.getState().nodes;
-    const updatedNode2 = finalNodes.find(n => n.id === '2');
+    const updatedNode2 = finalNodes.find((n) => n.id === '2');
     expect(updatedNode2?.data.generatedImage).toBeDefined();
     expect(updatedNode2?.data.isComplete).toBe(true);
   });
 
   it('should handle execution failure', async () => {
     const nodes: StudioNode[] = [
-      { id: '1', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'test' }, type: 'nanoGen' },
+      {
+        id: '1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'test' },
+        type: 'nanoGen',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -108,7 +113,7 @@ describe('executeWorkflow', () => {
     await executeWorkflow(controls as any);
 
     const finalNodes = useStudioStore.getState().nodes;
-    const updatedNode = finalNodes.find(n => n.id === '1');
+    const updatedNode = finalNodes.find((n) => n.id === '1');
     expect(updatedNode?.data.error).toBe('API Error');
     expect(updatedNode?.data.isComplete).toBe(false);
   });
@@ -237,7 +242,12 @@ describe('executeWorkflow', () => {
     const request = new Promise((resolve) => {
       resolveGeneration = resolve;
     });
-    const executeGeneration = mock(() => request);
+    const executeGeneration = mock(
+      (_nodeId: string, _payload: unknown, onOutputAvailable: (output: unknown) => void) => {
+        onOutputAvailable({ type: 'image', base64: 'preview', mimeType: 'image/png' });
+        return request;
+      },
+    );
     const execution = executeWorkflow(buildControls(executeGeneration) as any);
 
     while (executeGeneration.mock.calls.length === 0) {
@@ -247,6 +257,13 @@ describe('executeWorkflow', () => {
       useStudioStore.getState().nodes.find((node) => node.id === 'generate-image')?.data
         .isExecuting,
     ).toBe(true);
+    expect(
+      useStudioStore.getState().nodes.find((node) => node.id === 'generate-image')?.data
+        .generatedImage,
+    ).toBe('data:image/png;base64,preview');
+    expect(
+      useStudioStore.getState().nodes.find((node) => node.id === 'generate-image')?.data.isComplete,
+    ).toBe(false);
 
     resolveGeneration?.({
       success: true,
@@ -264,7 +281,12 @@ describe('executeWorkflow', () => {
     const nodes: StudioNode[] = [
       { id: '1', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
       { id: '2', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
-      { id: '3', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: 'video prompt' }, type: 'veoDirector' },
+      {
+        id: '3',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: 'video prompt' },
+        type: 'veoDirector',
+      },
     ];
 
     const edges: Edge[] = [
@@ -277,7 +299,10 @@ describe('executeWorkflow', () => {
 
     const executeGeneration = mock(async (nodeId, payload) => {
       if (nodeId === '2') {
-        return { success: true, output: { type: 'image', base64: 'img_data', mimeType: 'image/png' } };
+        return {
+          success: true,
+          output: { type: 'image', base64: 'img_data', mimeType: 'image/png' },
+        };
       }
       if (nodeId === '3') {
         return { success: true, output: { type: 'video', url: 'video_url' } };
@@ -289,11 +314,11 @@ describe('executeWorkflow', () => {
 
     await executeWorkflow(controls as any);
 
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(executeGeneration).toHaveBeenCalledWith('2', expect.anything());
-    
-    expect(executeGeneration).toHaveBeenCalledWith('3', expect.anything());
+    expect(executeGeneration).toHaveBeenCalledWith('2', expect.anything(), expect.any(Function));
+
+    expect(executeGeneration).toHaveBeenCalledWith('3', expect.anything(), expect.any(Function));
 
     expect(executeGeneration).toHaveBeenCalledTimes(2);
     // Ensure order: 2 then 3
@@ -301,7 +326,7 @@ describe('executeWorkflow', () => {
     expect(executeGeneration.mock.calls[1][0]).toBe('3');
 
     const finalNodes = useStudioStore.getState().nodes;
-    const veoNode = finalNodes.find(n => n.id === '3');
+    const veoNode = finalNodes.find((n) => n.id === '3');
     expect(veoNode?.data.generatedVideo).toBe('video_url');
   });
 
@@ -334,16 +359,23 @@ describe('executeWorkflow', () => {
 
     const payload = executeGeneration.mock.calls[0][1];
     expect(payload.reference_images?.length).toBe(1);
-    expect(payload.reference_images?.[0]).toEqual(expect.objectContaining({
-      data: 'ref_base64',
-      mime_type: 'image/png',
-    }));
+    expect(payload.reference_images?.[0]).toEqual(
+      expect.objectContaining({
+        data: 'ref_base64',
+        mime_type: 'image/png',
+      }),
+    );
   });
 
   it('should block when connected optional input is missing', async () => {
     const nodes: StudioNode[] = [
       { id: 'img', position: { x: 0, y: 0 }, data: {}, type: 'image' },
-      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'prompt' }, type: 'nanoGen' },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'prompt' },
+        type: 'nanoGen',
+      },
     ];
 
     const edges: Edge[] = [
@@ -365,7 +397,7 @@ describe('executeWorkflow', () => {
     await executeWorkflow(controls as any);
 
     const finalNodes = useStudioStore.getState().nodes;
-    const node = finalNodes.find(n => n.id === 'nano');
+    const node = finalNodes.find((n) => n.id === 'nano');
     expect(node?.data.error).toBe('Missing connected input for ref-image');
   });
 
@@ -399,14 +431,27 @@ describe('executeWorkflow', () => {
 
   it('should scope execution to a target node', async () => {
     const nodes: StudioNode[] = [
-      { id: 'nano-1', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'one' }, type: 'nanoGen' },
-      { id: 'nano-2', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'two' }, type: 'nanoGen' },
+      {
+        id: 'nano-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'one' },
+        type: 'nanoGen',
+      },
+      {
+        id: 'nano-2',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'two' },
+        type: 'nanoGen',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
 
     const executeGeneration = mock(async (nodeId) => {
-      return { success: true, output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' } };
+      return {
+        success: true,
+        output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' },
+      };
     });
 
     const controls = buildControls(executeGeneration);
@@ -419,19 +464,45 @@ describe('executeWorkflow', () => {
 
   it('should run only the targeted media node and reuse upstream values', async () => {
     const nodes: StudioNode[] = [
-      { id: 'prompt-1', position: { x: 0, y: 0 }, data: { value: 'keep this prompt' }, type: 'string' },
+      {
+        id: 'prompt-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'keep this prompt' },
+        type: 'string',
+      },
       {
         id: 'img-a',
         position: { x: 0, y: 0 },
-        data: { model: 'nano-banana', generatedImage: 'data:image/png;base64,img_a_base64', isComplete: true },
+        data: {
+          model: 'nano-banana',
+          generatedImage: 'data:image/png;base64,img_a_base64',
+          isComplete: true,
+        },
         type: 'nanoGen',
       },
-      { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
+      {
+        id: 'video-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: '' },
+        type: 'veoDirector',
+      },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'prompt-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
-      { id: 'e2', source: 'img-a', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
+      {
+        id: 'e1',
+        source: 'prompt-1',
+        sourceHandle: 'text',
+        target: 'video-1',
+        targetHandle: 'prompt-in',
+      },
+      {
+        id: 'e2',
+        source: 'img-a',
+        sourceHandle: 'image',
+        target: 'video-1',
+        targetHandle: 'ref-images',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -449,7 +520,7 @@ describe('executeWorkflow', () => {
     const controls = buildControls(
       executeGeneration,
       mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
-      executeEnrichment
+      executeEnrichment,
     );
 
     await executeWorkflow(controls as any, { targetNodeId: 'video-1', clearDownstream: false });
@@ -461,7 +532,9 @@ describe('executeWorkflow', () => {
     const payload = executeGeneration.mock.calls[0][1];
     expect(payload.prompt).toBe('keep this prompt');
     expect(payload.reference_images).toHaveLength(1);
-    expect(payload.reference_images?.[0]).toEqual(expect.objectContaining({ data: 'img_a_base64' }));
+    expect(payload.reference_images?.[0]).toEqual(
+      expect.objectContaining({ data: 'img_a_base64' }),
+    );
 
     const finalNodes = useStudioStore.getState().nodes;
     const promptNode = finalNodes.find((node) => node.id === 'prompt-1');
@@ -476,13 +549,30 @@ describe('executeWorkflow', () => {
     // — previously only img-b ran, so it failed with a missing reference input.
     const nodes: StudioNode[] = [
       { id: 'prompt-1', position: { x: 0, y: 0 }, data: { value: 'a cat' }, type: 'string' },
-      { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'first image' }, type: 'nanoGen' },
+      {
+        id: 'img-a',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'first image' },
+        type: 'nanoGen',
+      },
       { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'prompt-1', sourceHandle: 'text', target: 'img-b', targetHandle: 'prompt' },
-      { id: 'e2', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'prompt-1',
+        sourceHandle: 'text',
+        target: 'img-b',
+        targetHandle: 'prompt',
+      },
+      {
+        id: 'e2',
+        source: 'img-a',
+        sourceHandle: 'image',
+        target: 'img-b',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -514,14 +604,29 @@ describe('executeWorkflow', () => {
       {
         id: 'img-a',
         position: { x: 0, y: 0 },
-        data: { model: 'nano-banana', generatedImage: 'data:image/png;base64,existing_a', isComplete: true },
+        data: {
+          model: 'nano-banana',
+          generatedImage: 'data:image/png;base64,existing_a',
+          isComplete: true,
+        },
         type: 'nanoGen',
       },
-      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'second' }, type: 'nanoGen' },
+      {
+        id: 'img-b',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'second' },
+        type: 'nanoGen',
+      },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img-a',
+        sourceHandle: 'image',
+        target: 'img-b',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -548,12 +653,23 @@ describe('executeWorkflow', () => {
 
   it('should keep string node content untouched during workflow runs', async () => {
     const nodes: StudioNode[] = [
-      { id: 'string-1', position: { x: 0, y: 0 }, data: { value: 'persistent prompt' }, type: 'string' },
+      {
+        id: 'string-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'persistent prompt' },
+        type: 'string',
+      },
       { id: 'nano-1', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'string-1', sourceHandle: 'text', target: 'nano-1', targetHandle: 'prompt' },
+      {
+        id: 'e1',
+        source: 'string-1',
+        sourceHandle: 'text',
+        target: 'nano-1',
+        targetHandle: 'prompt',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -569,7 +685,7 @@ describe('executeWorkflow', () => {
     const controls = buildControls(
       executeGeneration,
       mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
-      executeEnrichment
+      executeEnrichment,
     );
 
     await executeWorkflow(controls as any);
@@ -583,14 +699,41 @@ describe('executeWorkflow', () => {
 
   it('should execute targeted media nodes when upstream string node has inputs but already has text', async () => {
     const nodes: StudioNode[] = [
-      { id: 'image-input', position: { x: 0, y: 0 }, data: { image: 'data:image/png;base64,ref_input' }, type: 'image' },
-      { id: 'string-1', position: { x: 0, y: 0 }, data: { value: 'locked prompt text' }, type: 'string' },
-      { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
+      {
+        id: 'image-input',
+        position: { x: 0, y: 0 },
+        data: { image: 'data:image/png;base64,ref_input' },
+        type: 'image',
+      },
+      {
+        id: 'string-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'locked prompt text' },
+        type: 'string',
+      },
+      {
+        id: 'video-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1', prompt: '' },
+        type: 'veoDirector',
+      },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'image-input', sourceHandle: 'image', target: 'string-1', targetHandle: 'image' },
-      { id: 'e2', source: 'string-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
+      {
+        id: 'e1',
+        source: 'image-input',
+        sourceHandle: 'image',
+        target: 'string-1',
+        targetHandle: 'image',
+      },
+      {
+        id: 'e2',
+        source: 'string-1',
+        sourceHandle: 'text',
+        target: 'video-1',
+        targetHandle: 'prompt-in',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -601,8 +744,15 @@ describe('executeWorkflow', () => {
       output: { type: 'video', url: 'video_url' },
       payload,
     }));
-    const executeEnrichment = mock(async () => ({ success: true, output: { type: 'text', value: 'enriched' } }));
-    const controls = buildControls(executeGeneration, mock(async () => ({ success: true })), executeEnrichment);
+    const executeEnrichment = mock(async () => ({
+      success: true,
+      output: { type: 'text', value: 'enriched' },
+    }));
+    const controls = buildControls(
+      executeGeneration,
+      mock(async () => ({ success: true })),
+      executeEnrichment,
+    );
 
     await executeWorkflow(controls as any, { targetNodeId: 'video-1', clearDownstream: false });
 
@@ -613,12 +763,23 @@ describe('executeWorkflow', () => {
 
   it('should execute extend video nodes with base64 input', async () => {
     const nodes: StudioNode[] = [
-      { id: 'vid-1', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,base64_video' }, type: 'video' },
+      {
+        id: 'vid-1',
+        position: { x: 0, y: 0 },
+        data: { video: 'data:video/mp4;base64,base64_video' },
+        type: 'video',
+      },
       { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'vid-1', sourceHandle: 'video', target: 'extend-1', targetHandle: 'video' },
+      {
+        id: 'e1',
+        source: 'vid-1',
+        sourceHandle: 'video',
+        target: 'extend-1',
+        targetHandle: 'video',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -629,21 +790,24 @@ describe('executeWorkflow', () => {
     });
 
     const executeVideoExtension = mock(async (_nodeId, payload) => {
-      return { success: true, output: { type: 'video', url: 'data:video/mp4;base64,extended_video' } };
+      return {
+        success: true,
+        output: { type: 'video', url: 'data:video/mp4;base64,extended_video' },
+      };
     });
 
     const controls = buildControls(executeGeneration, executeVideoExtension);
 
     await executeWorkflow(controls as any);
 
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
     const payload = executeVideoExtension.mock.calls[0][1];
     expect(payload.video?.data).toBe('base64_video');
 
     const finalNodes = useStudioStore.getState().nodes;
-    const updatedNode = finalNodes.find(n => n.id === 'extend-1');
+    const updatedNode = finalNodes.find((n) => n.id === 'extend-1');
     expect(updatedNode?.data.generatedVideo).toBe('data:video/mp4;base64,extended_video');
   });
 
@@ -662,13 +826,22 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'veo-1', sourceHandle: 'video', target: 'extend-1', targetHandle: 'video' },
+      {
+        id: 'e1',
+        source: 'veo-1',
+        sourceHandle: 'video',
+        target: 'extend-1',
+        targetHandle: 'video',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 
-    const executeGeneration = mock(async () => ({ success: true, output: { type: 'video', url: 'unused' } }));
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'video', url: 'unused' },
+    }));
     const executeVideoExtension = mock(async () => ({
       success: true,
       output: { type: 'video', url: 'data:video/mp4;base64,extended_from_veo' },
@@ -697,13 +870,22 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'veo-1', sourceHandle: 'video', target: 'extend-1', targetHandle: 'video' },
+      {
+        id: 'e1',
+        source: 'veo-1',
+        sourceHandle: 'video',
+        target: 'extend-1',
+        targetHandle: 'video',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 
-    const executeGeneration = mock(async () => ({ success: true, output: { type: 'video', url: 'unused' } }));
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'video', url: 'unused' },
+    }));
     const executeVideoExtension = mock(async () => ({
       success: true,
       output: { type: 'video', url: 'data:video/mp4;base64,extended_from_veo_uri' },
@@ -726,18 +908,24 @@ describe('executeWorkflow', () => {
       {
         id: 'nano-1',
         position: { x: 0, y: 0 },
-        data: { model: 'nano-banana', positivePrompt: '', skillIds: ['skill-x'], brandBookPieces: ['voice'] },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: '',
+          skillIds: ['skill-x'],
+          brandBookPieces: ['voice'],
+        },
         type: 'nanoGen',
       },
     ];
-    const edges = [
-      { id: 'e1', source: 'text-1', target: 'nano-1', targetHandle: 'prompt' },
-    ];
+    const edges = [{ id: 'e1', source: 'text-1', target: 'nano-1', targetHandle: 'prompt' }];
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges as any);
 
     const executeGeneration = mock(async () => ({ success: true }));
-    const executeEnrichment = mock(async () => ({ success: true, output: { type: 'text', value: 'enriched' } }));
+    const executeEnrichment = mock(async () => ({
+      success: true,
+      output: { type: 'text', value: 'enriched' },
+    }));
     const controls = buildControls(executeGeneration, undefined, executeEnrichment);
 
     await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
@@ -745,7 +933,10 @@ describe('executeWorkflow', () => {
     // No direct edge-function fetch — enrichment now flows through the Backend service.
     expect(fetchMock).not.toHaveBeenCalled();
     expect(executeEnrichment).toHaveBeenCalledTimes(1);
-    const payload = executeEnrichment.mock.calls[0][1] as { skillIds?: string[]; brandBookPieces?: string[] };
+    const payload = executeEnrichment.mock.calls[0][1] as {
+      skillIds?: string[];
+      brandBookPieces?: string[];
+    };
     expect(payload.skillIds).toEqual(['skill-x']);
     expect(payload.brandBookPieces).toEqual(['voice']);
   });
@@ -758,7 +949,10 @@ describe('executeWorkflow', () => {
     useStudioStore.getState().setEdges([]);
 
     const executeGeneration = mock(async () => ({ success: true }));
-    const executeEnrichment = mock(async () => ({ success: false, error: 'Gemini upstream failed' }));
+    const executeEnrichment = mock(async () => ({
+      success: false,
+      error: 'Gemini upstream failed',
+    }));
     const controls = buildControls(executeGeneration, undefined, executeEnrichment);
 
     await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
@@ -803,7 +997,13 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'img-markup', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img-markup',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -822,13 +1022,13 @@ describe('executeWorkflow', () => {
     await executeWorkflow(controls as any);
 
     // Wait for any async compositing
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Verify compositeImages was called with the original image and markup layer
     expect(compositeMock).toHaveBeenCalledTimes(1);
     expect(compositeMock).toHaveBeenCalledWith(
       'data:image/png;base64,original_image',
-      'data:image/png;base64,markup_layer'
+      'data:image/png;base64,markup_layer',
     );
 
     // Verify the payload received the composited image
@@ -856,7 +1056,13 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'img-no-markup', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img-no-markup',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -885,7 +1091,12 @@ describe('executeWorkflow', () => {
       {
         id: 'img',
         position: { x: 0, y: 0 },
-        data: { image: remoteUrl, sourceUrl: remoteUrl, sourcePath: 'brand/a.jpg', bucket: 'media-library' },
+        data: {
+          image: remoteUrl,
+          sourceUrl: remoteUrl,
+          sourcePath: 'brand/a.jpg',
+          bucket: 'media-library',
+        },
         type: 'image',
       },
       {
@@ -923,10 +1134,16 @@ describe('executeWorkflow', () => {
     // A saved canvas strips the inline base64 from `image`; only the durable signed
     // URL in `sourceUrl` survives. With no storage coords to re-sign, hydration is a
     // no-op, but the reference must still be passed to the Backend (not dropped).
-    const signedUrl = 'https://x.supabase.co/storage/v1/object/sign/media-library/c.jpg?token=fresh';
+    const signedUrl =
+      'https://x.supabase.co/storage/v1/object/sign/media-library/c.jpg?token=fresh';
     const nodes: StudioNode[] = [
       { id: 'img', position: { x: 0, y: 0 }, data: { sourceUrl: signedUrl }, type: 'image' },
-      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'use this' }, type: 'nanoGen' },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'use this' },
+        type: 'nanoGen',
+      },
     ];
     const edges: Edge[] = [
       { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
@@ -976,10 +1193,19 @@ describe('executeWorkflow', () => {
         id: 'img',
         position: { x: 0, y: 0 },
         // Inline base64 stripped on save; durable coords retained but URL expired.
-        data: { sourcePath: 'brand/d.jpg', bucket: 'media-library', sourceUrl: 'https://stale/d.jpg?token=expired' },
+        data: {
+          sourcePath: 'brand/d.jpg',
+          bucket: 'media-library',
+          sourceUrl: 'https://stale/d.jpg?token=expired',
+        },
         type: 'image',
       },
-      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'use this' }, type: 'nanoGen' },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'use this' },
+        type: 'nanoGen',
+      },
     ];
     const edges: Edge[] = [
       { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
@@ -1011,8 +1237,18 @@ describe('executeWorkflow', () => {
     // manual gate: with no committed render, the run must HALT at it — the editor
     // is "awaiting", and the downstream extend never runs and is not marked failed.
     const nodes: StudioNode[] = [
-      { id: 'vid', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,vvv' }, type: 'video' },
-      { id: 'edit', position: { x: 0, y: 0 }, data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }] }, type: 'timelineEditor' },
+      {
+        id: 'vid',
+        position: { x: 0, y: 0 },
+        data: { video: 'data:video/mp4;base64,vvv' },
+        type: 'video',
+      },
+      {
+        id: 'edit',
+        position: { x: 0, y: 0 },
+        data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }] },
+        type: 'timelineEditor',
+      },
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
     ];
     const edges: Edge[] = [
@@ -1023,8 +1259,14 @@ describe('executeWorkflow', () => {
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 
-    const executeGeneration = mock(async () => ({ success: true, output: { type: 'image', base64: 'x', mimeType: 'image/png' } }));
-    const executeVideoExtension = mock(async () => ({ success: true, output: { type: 'video', url: 'should_not_run' } }));
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'x', mimeType: 'image/png' },
+    }));
+    const executeVideoExtension = mock(async () => ({
+      success: true,
+      output: { type: 'video', url: 'should_not_run' },
+    }));
     const controls = buildControls(executeGeneration, executeVideoExtension);
 
     await executeWorkflow(controls as any);
@@ -1045,11 +1287,21 @@ describe('executeWorkflow', () => {
     // extend node without re-rendering the editor — and the extend node runs.
     const editedUrl = 'https://cdn.continuum.test/videos/edited.mp4';
     const nodes: StudioNode[] = [
-      { id: 'vid', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,vvv' }, type: 'video' },
+      {
+        id: 'vid',
+        position: { x: 0, y: 0 },
+        data: { video: 'data:video/mp4;base64,vvv' },
+        type: 'video',
+      },
       {
         id: 'edit',
         position: { x: 0, y: 0 },
-        data: { items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }], committed: true, generatedVideoUrl: editedUrl, isComplete: true },
+        data: {
+          items: [{ id: 'i1', order: 0, sourceNodeId: 'vid' }],
+          committed: true,
+          generatedVideoUrl: editedUrl,
+          isComplete: true,
+        },
         type: 'timelineEditor',
       },
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
@@ -1062,7 +1314,10 @@ describe('executeWorkflow', () => {
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 
-    const executeGeneration = mock(async () => ({ success: true, output: { type: 'image', base64: 'x', mimeType: 'image/png' } }));
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: { type: 'image', base64: 'x', mimeType: 'image/png' },
+    }));
     const executeVideoExtension = mock(async (_id: string, _payload: unknown) => ({
       success: true,
       output: { type: 'video', url: 'data:video/mp4;base64,extended' },
@@ -1092,13 +1347,28 @@ describe('executeWorkflow', () => {
         {
           id: 'img-a',
           position: { x: 0, y: 0 },
-          data: { model: 'nano-banana', positivePrompt: 'first', generatedImage: 'data:image/png;base64,existing_a' },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'first',
+            generatedImage: 'data:image/png;base64,existing_a',
+          },
           type: 'nanoGen',
         },
-        { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'second' }, type: 'nanoGen' },
+        {
+          id: 'img-b',
+          position: { x: 0, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'second' },
+          type: 'nanoGen',
+        },
       ];
       const edges: Edge[] = [
-        { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+        {
+          id: 'e1',
+          source: 'img-a',
+          sourceHandle: 'image',
+          target: 'img-b',
+          targetHandle: 'ref-image',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges(edges);
@@ -1115,10 +1385,77 @@ describe('executeWorkflow', () => {
       expect(imgA?.data.generatedImage).toBe('data:image/png;base64,existing_a');
     });
 
+    it('reuses a durable URL stored in generatedImage after reload', async () => {
+      const durableUrl = 'https://storage.example.com/generated.png?token=fresh';
+      const nodes: StudioNode[] = [
+        {
+          id: 'img-a',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'first',
+            generatedImage: durableUrl,
+            generatedImageUrl: durableUrl,
+            generatedImageBucket: 'brand-profile-assets',
+            generatedImageStoragePath: 'brand/generated.png',
+          },
+          type: 'nanoGen',
+        },
+        {
+          id: 'img-b',
+          position: { x: 0, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'second' },
+          type: 'nanoGen',
+        },
+      ];
+      const edges: Edge[] = [
+        {
+          id: 'e1',
+          source: 'img-a',
+          sourceHandle: 'image',
+          target: 'img-b',
+          targetHandle: 'ref-image',
+        },
+      ];
+      useStudioStore.getState().setNodes(nodes);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
+      await executeWorkflow(buildControls(executeGeneration) as any, {
+        targetNodeId: 'img-b',
+        clearDownstream: false,
+      });
+
+      expect(executeGeneration).toHaveBeenCalledTimes(1);
+      expect(executeGeneration.mock.calls[0][1].reference_images?.[0]).toMatchObject({
+        image_url: durableUrl,
+        storage_bucket: 'brand-profile-assets',
+        storage_path: 'brand/generated.png',
+      });
+    });
+
     it('Run-all reuses every node that already has content (no regeneration)', async () => {
       const nodes: StudioNode[] = [
-        { id: 'a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'a', generatedImage: 'data:image/png;base64,aaa' }, type: 'nanoGen' },
-        { id: 'b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b', generatedImage: 'data:image/png;base64,bbb' }, type: 'nanoGen' },
+        {
+          id: 'a',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'a',
+            generatedImage: 'data:image/png;base64,aaa',
+          },
+          type: 'nanoGen',
+        },
+        {
+          id: 'b',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'b',
+            generatedImage: 'data:image/png;base64,bbb',
+          },
+          type: 'nanoGen',
+        },
       ];
       const edges: Edge[] = [
         { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
@@ -1136,8 +1473,22 @@ describe('executeWorkflow', () => {
 
     it('Run-all fills an empty node while reusing its completed upstream', async () => {
       const nodes: StudioNode[] = [
-        { id: 'a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'a', generatedImage: 'data:image/png;base64,aaa' }, type: 'nanoGen' },
-        { id: 'b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b' }, type: 'nanoGen' },
+        {
+          id: 'a',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'a',
+            generatedImage: 'data:image/png;base64,aaa',
+          },
+          type: 'nanoGen',
+        },
+        {
+          id: 'b',
+          position: { x: 0, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'b' },
+          type: 'nanoGen',
+        },
       ];
       const edges: Edge[] = [
         { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
@@ -1159,14 +1510,44 @@ describe('executeWorkflow', () => {
       // img-a was generated with prompt OLD (signature stamped), then edited to
       // NEW. img-b is unedited but consumes img-a. Run-all must regenerate BOTH:
       // img-a is stale, img-b is downstream of a regenerating node.
-      const aOld: StudioNode = { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'OLD' }, type: 'nanoGen' };
+      const aOld: StudioNode = {
+        id: 'img-a',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'OLD' },
+        type: 'nanoGen',
+      };
       const staleSig = computeGenerationSignature(aOld, [], new Map([['img-a', aOld]]));
       const nodes: StudioNode[] = [
-        { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'NEW', generatedImage: 'data:image/png;base64,old_a', generationSignature: staleSig }, type: 'nanoGen' },
-        { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b', generatedImage: 'data:image/png;base64,old_b' }, type: 'nanoGen' },
+        {
+          id: 'img-a',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'NEW',
+            generatedImage: 'data:image/png;base64,old_a',
+            generationSignature: staleSig,
+          },
+          type: 'nanoGen',
+        },
+        {
+          id: 'img-b',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'b',
+            generatedImage: 'data:image/png;base64,old_b',
+          },
+          type: 'nanoGen',
+        },
       ];
       const edges: Edge[] = [
-        { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+        {
+          id: 'e1',
+          source: 'img-a',
+          sourceHandle: 'image',
+          target: 'img-b',
+          targetHandle: 'ref-image',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges(edges);
@@ -1181,14 +1562,38 @@ describe('executeWorkflow', () => {
     });
 
     it('reuses a completed upstream whose stored signature still matches (not stale)', async () => {
-      const aNode: StudioNode = { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'first', generatedImage: 'data:image/png;base64,a' }, type: 'nanoGen' };
+      const aNode: StudioNode = {
+        id: 'img-a',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: 'first',
+          generatedImage: 'data:image/png;base64,a',
+        },
+        type: 'nanoGen',
+      };
       const edges: Edge[] = [
-        { id: 'e1', source: 'img-a', sourceHandle: 'image', target: 'img-b', targetHandle: 'ref-image' },
+        {
+          id: 'e1',
+          source: 'img-a',
+          sourceHandle: 'image',
+          target: 'img-b',
+          targetHandle: 'ref-image',
+        },
       ];
-      (aNode.data as Record<string, unknown>).generationSignature = computeGenerationSignature(aNode, edges, new Map([['img-a', aNode]]));
+      (aNode.data as Record<string, unknown>).generationSignature = computeGenerationSignature(
+        aNode,
+        edges,
+        new Map([['img-a', aNode]]),
+      );
       const nodes: StudioNode[] = [
         aNode,
-        { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'second' }, type: 'nanoGen' },
+        {
+          id: 'img-b',
+          position: { x: 0, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'second' },
+          type: 'nanoGen',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges(edges);
@@ -1206,8 +1611,26 @@ describe('executeWorkflow', () => {
 
     it('forceRegenerateAll re-runs every node even when they already have content', async () => {
       const nodes: StudioNode[] = [
-        { id: 'a', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'a', generatedImage: 'data:image/png;base64,aaa' }, type: 'nanoGen' },
-        { id: 'b', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'b', generatedImage: 'data:image/png;base64,bbb' }, type: 'nanoGen' },
+        {
+          id: 'a',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'a',
+            generatedImage: 'data:image/png;base64,aaa',
+          },
+          type: 'nanoGen',
+        },
+        {
+          id: 'b',
+          position: { x: 0, y: 0 },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'b',
+            generatedImage: 'data:image/png;base64,bbb',
+          },
+          type: 'nanoGen',
+        },
       ];
       const edges: Edge[] = [
         { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
@@ -1226,7 +1649,12 @@ describe('executeWorkflow', () => {
 
     it('stamps a generation signature onto a node when it produces output', async () => {
       const nodes: StudioNode[] = [
-        { id: 'solo', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'hello' }, type: 'nanoGen' },
+        {
+          id: 'solo',
+          position: { x: 0, y: 0 },
+          data: { model: 'nano-banana', positivePrompt: 'hello' },
+          type: 'nanoGen',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges([]);
@@ -1239,7 +1667,7 @@ describe('executeWorkflow', () => {
       const solo = useStudioStore.getState().nodes.find((n) => n.id === 'solo');
       const sig = (solo?.data as Record<string, unknown>).generationSignature;
       expect(typeof sig).toBe('string');
-      expect((sig as string).startsWith('sig1:')).toBe(true);
+      expect((sig as string).startsWith('sig2:')).toBe(true);
     });
   });
 

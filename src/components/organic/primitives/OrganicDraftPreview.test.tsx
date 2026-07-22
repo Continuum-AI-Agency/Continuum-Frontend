@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render as rtlRender, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';
@@ -144,8 +144,21 @@ mock.module('./social-preview-utils', () => ({
 }));
 
 mock.module('./PreviewMediaDropZone', () => ({
-  PreviewMediaDropZone: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="drop-zone">{children}</div>
+  PreviewMediaDropZone: ({
+    children,
+    fallbackActions,
+  }: {
+    children?: ReactNode;
+    fallbackActions?: Array<{ key: string; label: string; onSelect: () => void }>;
+  }) => (
+    <div data-testid="drop-zone">
+      {fallbackActions?.map((action) => (
+        <button key={action.key} type="button" onClick={action.onSelect}>
+          {action.label}
+        </button>
+      ))}
+      {children}
+    </div>
   ),
 }));
 
@@ -191,12 +204,21 @@ describe('OrganicDraftPreview — contextual shell', () => {
     expect(screen.getByLabelText('Post actions')).toBeTruthy();
   });
 
-  it('renders the caption as click-to-edit text (no always-on textarea)', () => {
+  it('defaults to a locked read-only caption and reveals the editor only in edit mode', () => {
     renderPreview();
-    // EditableCaption read mode = a button labelled for editing carrying the text.
+    // Read (default) mode: the caption text is shown, but there is no edit affordance.
+    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
+    expect(screen.getByText('Test caption')).toBeTruthy();
+
+    // The pencil toggle flips the whole preview into edit mode.
+    fireEvent.click(screen.getByLabelText('Edit post'));
     const caption = screen.getByLabelText('Edit instagram caption');
     expect(caption.tagName).toBe('BUTTON');
     expect(caption.textContent).toContain('Test caption');
+
+    // Toggling back locks the preview again.
+    fireEvent.click(screen.getByLabelText('Done editing post'));
+    expect(screen.queryByLabelText('Edit instagram caption')).toBeNull();
   });
 });
 
@@ -223,14 +245,45 @@ describe('OrganicDraftPreview — media state', () => {
         brandProfileId="brand-1"
       />,
     );
-    // "Blueprint ready" now appears both as the header enrichment pill (media_stage
-    // = storyboard_ready) and the detailed media-section label, hence getAllByText.
+    // "Blueprint ready" appears as the header enrichment pill regardless of mode.
     expect(screen.getAllByText('Blueprint ready').length).toBeGreaterThan(0);
+    // The editable media slot (storyboard + generate/use-your-own CTAs) is gated
+    // behind edit mode — the default locked preview never surfaces it.
+    expect(screen.queryByAltText('Test post — storyboard frame 1')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Edit post'));
     expect(screen.getByAltText('Test post — storyboard frame 1')).toBeTruthy();
     // The blueprint state now exposes the durable next-step CTA directly (generate
     // final media) alongside the library fallback, instead of only opening the picker.
     expect(screen.getByRole('button', { name: 'Generate final media' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Use your own creative' })).toBeTruthy();
+  });
+
+  it('surfaces the Generate media and Enrich stage actions in the empty media slot for a pending text-only draft', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          backendDraftId: 'be-1',
+          mediaSuggestion: { mediaStatus: 'pending' },
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    // The generate/enrich stage actions live in the editable media slot, revealed
+    // only after switching into edit mode.
+    fireEvent.click(screen.getByLabelText('Edit post'));
+    expect(screen.getByRole('button', { name: 'Generate media' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Enrich (sketch first)' })).toBeTruthy();
+  });
+
+  it('offers no stage actions in the empty media slot for a draft without a persisted backend id', () => {
+    render(<OrganicDraftPreview draft={baseDraft()} brandProfileId="brand-1" />);
+
+    // Even inside the editable media slot, a draft with no persisted backend id
+    // cannot headless-generate, so no stage actions are offered.
+    fireEvent.click(screen.getByLabelText('Edit post'));
+    expect(screen.queryByRole('button', { name: 'Generate media' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enrich (sketch first)' })).toBeNull();
   });
 
   it('suppresses the storyboard state once real media is attached', () => {

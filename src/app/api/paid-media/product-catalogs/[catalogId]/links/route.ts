@@ -1,23 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { type NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import {
-  productAdActivityRecordSchema,
   catalogProductRecordSchema,
+  type ProductCatalogLinkRecord,
   paidMediaAdObjectRecordSchema,
+  productAdActivityRecordSchema,
   productCatalogLinkRecordSchema,
   removeCatalogProductSchema,
   renameCatalogProductSchema,
   toNullableText,
   upsertProductCatalogLinkSchema,
-  type ProductCatalogLinkRecord,
-} from "@/lib/schemas/productCatalogLinks";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+} from '@/lib/schemas/productCatalogLinks';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const PRODUCT_TABLE = "paid_media_catalog_products" as never;
-const AD_OBJECT_TABLE = "paid_media_ad_objects" as never;
-const ACTIVITY_TABLE = "paid_media_product_ad_activity" as never;
-const CATALOG_TABLE = "paid_media_product_catalogs" as never;
+const PRODUCT_TABLE = 'paid_media_catalog_products' as never;
+const AD_OBJECT_TABLE = 'paid_media_ad_objects' as never;
+const ACTIVITY_TABLE = 'paid_media_product_ad_activity' as never;
+const CATALOG_TABLE = 'paid_media_product_catalogs' as never;
 
 const paramsSchema = z.object({
   catalogId: z.string().uuid(),
@@ -25,7 +25,7 @@ const paramsSchema = z.object({
 
 const querySchema = z.object({
   brandId: z.string().uuid(),
-  activeOnly: z.enum(["true", "false"]).optional(),
+  activeOnly: z.enum(['true', 'false']).optional(),
 });
 
 type ProductRow = {
@@ -72,14 +72,14 @@ type ActivityRow = {
 };
 
 const PRODUCT_SELECT =
-  "id, brand_id, catalog_id, external_product_id, title, availability, image_url, product_url, currency, created_at, updated_at";
+  'id, brand_id, catalog_id, external_product_id, title, availability, image_url, product_url, currency, created_at, updated_at';
 const AD_OBJECT_SELECT =
-  "id, brand_id, platform, object_type, external_object_id, name, status, created_at, updated_at";
+  'id, brand_id, platform, object_type, external_object_id, name, status, created_at, updated_at';
 const ACTIVITY_SELECT =
-  "id, brand_id, catalog_id, product_id, ad_object_id, is_active, first_seen_at, last_seen_at, active_from, active_to, source, sync_job_id, created_at, updated_at";
+  'id, brand_id, catalog_id, product_id, ad_object_id, is_active, first_seen_at, last_seen_at, active_from, active_to, source, sync_job_id, created_at, updated_at';
 
 function normalizeProductRow(input: unknown) {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
   const parsed = catalogProductRecordSchema.safeParse({
     id: row.id,
@@ -99,7 +99,7 @@ function normalizeProductRow(input: unknown) {
 }
 
 function normalizeAdObjectRow(input: unknown) {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
   const parsed = paidMediaAdObjectRecordSchema.safeParse({
     id: row.id,
@@ -117,7 +117,7 @@ function normalizeAdObjectRow(input: unknown) {
 }
 
 function normalizeActivityRow(input: unknown) {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
   const parsed = productAdActivityRecordSchema.safeParse({
     id: row.id,
@@ -142,31 +142,34 @@ function normalizeActivityRow(input: unknown) {
 function buildLinkRecord(
   activity: ReturnType<typeof normalizeActivityRow>,
   product: ReturnType<typeof normalizeProductRow>,
-  adObject: ReturnType<typeof normalizeAdObjectRow>
+  adObject: ReturnType<typeof normalizeAdObjectRow>,
 ): ProductCatalogLinkRecord | null {
   if (!activity || !product || !adObject) return null;
   const parsed = productCatalogLinkRecordSchema.safeParse({ activity, product, adObject });
   return parsed.success ? parsed.data : null;
 }
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-export async function GET(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   const query = querySchema.safeParse({
-    brandId: request.nextUrl.searchParams.get("brandId"),
-    activeOnly: request.nextUrl.searchParams.get("activeOnly") ?? undefined,
+    brandId: request.nextUrl.searchParams.get('brandId'),
+    activeOnly: request.nextUrl.searchParams.get('activeOnly') ?? undefined,
   });
 
   if (!query.success) {
-    return NextResponse.json({ error: "brandId is required" }, { status: 400 });
+    return NextResponse.json({ error: 'brandId is required' }, { status: 400 });
   }
 
-  const activeOnly = query.data.activeOnly !== "false";
+  const activeOnly = query.data.activeOnly !== 'false';
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -176,15 +179,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(CATALOG_TABLE)
-      .select("id")
-      .eq("id", params.data.catalogId)
-      .eq("brand_id", query.data.brandId)
+      .select('id')
+      .eq('id', params.data.catalogId)
+      .eq('brand_id', query.data.brandId)
       .maybeSingle();
 
     if (catalogMatchError) {
@@ -192,19 +195,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
     }
 
     if (!catalogMatch) {
-      return NextResponse.json({ error: "Catalog not found for brand" }, { status: 404 });
+      return NextResponse.json({ error: 'Catalog not found for brand' }, { status: 404 });
     }
 
     let activityQuery = supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(ACTIVITY_TABLE)
       .select(ACTIVITY_SELECT)
-      .eq("brand_id", query.data.brandId)
-      .eq("catalog_id", params.data.catalogId)
-      .order("last_seen_at", { ascending: false });
+      .eq('brand_id', query.data.brandId)
+      .eq('catalog_id', params.data.catalogId)
+      .order('last_seen_at', { ascending: false });
 
     if (activeOnly) {
-      activityQuery = activityQuery.eq("is_active", true);
+      activityQuery = activityQuery.eq('is_active', true);
     }
 
     const { data: activityRows, error: activityError } = await activityQuery;
@@ -224,20 +227,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
     const productIds = Array.from(new Set(activities.map((row) => row.productId)));
     const adObjectIds = Array.from(new Set(activities.map((row) => row.adObjectId)));
 
-    const [{ data: productRows, error: productError }, { data: adObjectRows, error: adObjectError }] = await Promise.all([
+    const [
+      { data: productRows, error: productError },
+      { data: adObjectRows, error: adObjectError },
+    ] = await Promise.all([
       supabase
-        .schema("paid_media" as never)
+        .schema('paid_media' as never)
         .from(PRODUCT_TABLE)
         .select(PRODUCT_SELECT)
-        .eq("brand_id", query.data.brandId)
-        .eq("catalog_id", params.data.catalogId)
-        .in("id", productIds),
+        .eq('brand_id', query.data.brandId)
+        .eq('catalog_id', params.data.catalogId)
+        .in('id', productIds),
       supabase
-        .schema("paid_media" as never)
+        .schema('paid_media' as never)
         .from(AD_OBJECT_TABLE)
         .select(AD_OBJECT_SELECT)
-        .eq("brand_id", query.data.brandId)
-        .in("id", adObjectIds),
+        .eq('brand_id', query.data.brandId)
+        .in('id', adObjectIds),
     ]);
 
     if (productError) {
@@ -251,38 +257,47 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
       (productRows ?? [])
         .map((row) => normalizeProductRow(row as ProductRow))
         .filter((row): row is NonNullable<typeof row> => row !== null)
-        .map((row) => [row.id, row])
+        .map((row) => [row.id, row]),
     );
 
     const adObjectsById = new Map(
       (adObjectRows ?? [])
         .map((row) => normalizeAdObjectRow(row as AdObjectRow))
         .filter((row): row is NonNullable<typeof row> => row !== null)
-        .map((row) => [row.id, row])
+        .map((row) => [row.id, row]),
     );
 
     const links = activities
-      .map((activity) => buildLinkRecord(activity, productsById.get(activity.productId) ?? null, adObjectsById.get(activity.adObjectId) ?? null))
+      .map((activity) =>
+        buildLinkRecord(
+          activity,
+          productsById.get(activity.productId) ?? null,
+          adObjectsById.get(activity.adObjectId) ?? null,
+        ),
+      )
       .filter((link): link is ProductCatalogLinkRecord => link !== null);
 
     return NextResponse.json({ links }, { status: 200 });
   } catch (error) {
-    console.error("Failed to list product catalog links", error);
-    return NextResponse.json({ error: "Failed to list product catalog links" }, { status: 500 });
+    console.error('Failed to list product catalog links', error);
+    return NextResponse.json({ error: 'Failed to list product catalog links' }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = upsertProductCatalogLinkSchema.safeParse(body);
@@ -300,15 +315,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(CATALOG_TABLE)
-      .select("id")
-      .eq("id", params.data.catalogId)
-      .eq("brand_id", parsed.data.brandId)
+      .select('id')
+      .eq('id', params.data.catalogId)
+      .eq('brand_id', parsed.data.brandId)
       .maybeSingle();
 
     if (catalogMatchError) {
@@ -316,11 +331,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     }
 
     if (!catalogMatch) {
-      return NextResponse.json({ error: "Catalog not found for brand" }, { status: 404 });
+      return NextResponse.json({ error: 'Catalog not found for brand' }, { status: 404 });
     }
 
     const { data: productUpsertData, error: productUpsertError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_TABLE)
       .upsert(
         {
@@ -333,7 +348,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
           product_url: toNullableText(parsed.data.product.productUrl),
           currency: toNullableText(parsed.data.product.currency)?.toUpperCase() ?? null,
         } as never,
-        { onConflict: "brand_id,catalog_id,external_product_id" }
+        { onConflict: 'brand_id,catalog_id,external_product_id' },
       )
       .select(PRODUCT_SELECT)
       .single();
@@ -344,11 +359,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
 
     const product = normalizeProductRow(productUpsertData as ProductRow);
     if (!product) {
-      return NextResponse.json({ error: "Invalid product response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid product response' }, { status: 502 });
     }
 
     const { data: adObjectUpsertData, error: adObjectUpsertError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(AD_OBJECT_TABLE)
       .upsert(
         {
@@ -359,7 +374,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
           name: toNullableText(parsed.data.adObject.name),
           status: toNullableText(parsed.data.adObject.status),
         } as never,
-        { onConflict: "brand_id,platform,object_type,external_object_id" }
+        { onConflict: 'brand_id,platform,object_type,external_object_id' },
       )
       .select(AD_OBJECT_SELECT)
       .single();
@@ -370,17 +385,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
 
     const adObject = normalizeAdObjectRow(adObjectUpsertData as AdObjectRow);
     if (!adObject) {
-      return NextResponse.json({ error: "Invalid ad object response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid ad object response' }, { status: 502 });
     }
 
     const { data: existingActivityData, error: existingActivityError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(ACTIVITY_TABLE)
       .select(ACTIVITY_SELECT)
-      .eq("brand_id", parsed.data.brandId)
-      .eq("catalog_id", params.data.catalogId)
-      .eq("product_id", product.id)
-      .eq("ad_object_id", adObject.id)
+      .eq('brand_id', parsed.data.brandId)
+      .eq('catalog_id', params.data.catalogId)
+      .eq('product_id', product.id)
+      .eq('ad_object_id', adObject.id)
       .maybeSingle();
 
     if (existingActivityError) {
@@ -392,26 +407,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     if (existingActivityData) {
       const existing = existingActivityData as ActivityRow;
       const { data: updatedActivity, error: updateActivityError } = await supabase
-        .schema("paid_media" as never)
+        .schema('paid_media' as never)
         .from(ACTIVITY_TABLE)
-        .update(
-          {
-            is_active: parsed.data.activity.isActive,
-            last_seen_at: seenAt,
-            active_from:
-              parsed.data.activity.activeFrom ??
-              (parsed.data.activity.isActive
-                ? existing.active_from ?? seenAt
-                : existing.active_from),
-            active_to:
-              parsed.data.activity.isActive
-                ? null
-                : parsed.data.activity.activeTo ?? seenAt,
-            source: parsed.data.activity.source,
-            sync_job_id: parsed.data.activity.syncJobId ?? null,
-          } as never
-        )
-        .eq("id", existing.id)
+        .update({
+          is_active: parsed.data.activity.isActive,
+          last_seen_at: seenAt,
+          active_from:
+            parsed.data.activity.activeFrom ??
+            (parsed.data.activity.isActive
+              ? (existing.active_from ?? seenAt)
+              : existing.active_from),
+          active_to: parsed.data.activity.isActive
+            ? null
+            : (parsed.data.activity.activeTo ?? seenAt),
+          source: parsed.data.activity.source,
+          sync_job_id: parsed.data.activity.syncJobId ?? null,
+        } as never)
+        .eq('id', existing.id)
         .select(ACTIVITY_SELECT)
         .single();
 
@@ -422,28 +434,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
       activityData = updatedActivity as ActivityRow;
     } else {
       const { data: insertedActivity, error: insertActivityError } = await supabase
-        .schema("paid_media" as never)
+        .schema('paid_media' as never)
         .from(ACTIVITY_TABLE)
-        .insert(
-          {
-            brand_id: parsed.data.brandId,
-            catalog_id: params.data.catalogId,
-            product_id: product.id,
-            ad_object_id: adObject.id,
-            is_active: parsed.data.activity.isActive,
-            first_seen_at: seenAt,
-            last_seen_at: seenAt,
-            active_from:
-              parsed.data.activity.activeFrom ??
-              (parsed.data.activity.isActive ? seenAt : null),
-            active_to:
-              parsed.data.activity.isActive
-                ? null
-                : parsed.data.activity.activeTo ?? seenAt,
-            source: parsed.data.activity.source,
-            sync_job_id: parsed.data.activity.syncJobId ?? null,
-          } as never
-        )
+        .insert({
+          brand_id: parsed.data.brandId,
+          catalog_id: params.data.catalogId,
+          product_id: product.id,
+          ad_object_id: adObject.id,
+          is_active: parsed.data.activity.isActive,
+          first_seen_at: seenAt,
+          last_seen_at: seenAt,
+          active_from:
+            parsed.data.activity.activeFrom ?? (parsed.data.activity.isActive ? seenAt : null),
+          active_to: parsed.data.activity.isActive
+            ? null
+            : (parsed.data.activity.activeTo ?? seenAt),
+          source: parsed.data.activity.source,
+          sync_job_id: parsed.data.activity.syncJobId ?? null,
+        } as never)
         .select(ACTIVITY_SELECT)
         .single();
 
@@ -458,27 +466,30 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     const link = buildLinkRecord(activity, product, adObject);
 
     if (!link) {
-      return NextResponse.json({ error: "Invalid link response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid link response' }, { status: 502 });
     }
 
     return NextResponse.json({ link }, { status: 200 });
   } catch (error) {
-    console.error("Failed to upsert product catalog link", error);
-    return NextResponse.json({ error: "Failed to upsert product catalog link" }, { status: 500 });
+    console.error('Failed to upsert product catalog link', error);
+    return NextResponse.json({ error: 'Failed to upsert product catalog link' }, { status: 500 });
   }
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = renameCatalogProductSchema.safeParse(body);
@@ -494,15 +505,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ c
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(CATALOG_TABLE)
-      .select("id")
-      .eq("id", params.data.catalogId)
-      .eq("brand_id", parsed.data.brandId)
+      .select('id')
+      .eq('id', params.data.catalogId)
+      .eq('brand_id', parsed.data.brandId)
       .maybeSingle();
 
     if (catalogMatchError) {
@@ -510,21 +521,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ c
     }
 
     if (!catalogMatch) {
-      return NextResponse.json({ error: "Catalog not found for brand" }, { status: 404 });
+      return NextResponse.json({ error: 'Catalog not found for brand' }, { status: 404 });
     }
 
     const { data: updatedProduct, error: updateError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_TABLE)
-      .update(
-        {
-          title: toNullableText(parsed.data.title),
-        } as never
-      )
-      .eq("brand_id", parsed.data.brandId)
-      .eq("catalog_id", params.data.catalogId)
-      .eq("external_product_id", parsed.data.externalProductId.trim())
-      .select("id")
+      .update({
+        title: toNullableText(parsed.data.title),
+      } as never)
+      .eq('brand_id', parsed.data.brandId)
+      .eq('catalog_id', params.data.catalogId)
+      .eq('external_product_id', parsed.data.externalProductId.trim())
+      .select('id')
       .maybeSingle();
 
     if (updateError) {
@@ -532,27 +541,30 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ c
     }
 
     if (!updatedProduct) {
-      return NextResponse.json({ error: "Product not found in catalog" }, { status: 404 });
+      return NextResponse.json({ error: 'Product not found in catalog' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error("Failed to rename catalog product", error);
-    return NextResponse.json({ error: "Failed to rename catalog product" }, { status: 500 });
+    console.error('Failed to rename catalog product', error);
+    return NextResponse.json({ error: 'Failed to rename catalog product' }, { status: 500 });
   }
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = removeCatalogProductSchema.safeParse(body);
@@ -568,15 +580,15 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(CATALOG_TABLE)
-      .select("id")
-      .eq("id", params.data.catalogId)
-      .eq("brand_id", parsed.data.brandId)
+      .select('id')
+      .eq('id', params.data.catalogId)
+      .eq('brand_id', parsed.data.brandId)
       .maybeSingle();
 
     if (catalogMatchError) {
@@ -584,16 +596,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     if (!catalogMatch) {
-      return NextResponse.json({ error: "Catalog not found for brand" }, { status: 404 });
+      return NextResponse.json({ error: 'Catalog not found for brand' }, { status: 404 });
     }
 
     const productLookup = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_TABLE)
-      .select("id")
-      .eq("brand_id", parsed.data.brandId)
-      .eq("catalog_id", params.data.catalogId)
-      .eq("external_product_id", parsed.data.externalProductId.trim())
+      .select('id')
+      .eq('brand_id', parsed.data.brandId)
+      .eq('catalog_id', params.data.catalogId)
+      .eq('external_product_id', parsed.data.externalProductId.trim())
       .maybeSingle();
     const productLookupError = productLookup.error;
     const productRow = productLookup.data as { id: string } | null;
@@ -603,27 +615,27 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     if (!productRow?.id) {
-      return NextResponse.json({ error: "Product not found in catalog" }, { status: 404 });
+      return NextResponse.json({ error: 'Product not found in catalog' }, { status: 404 });
     }
 
     const { error: activityDeleteError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(ACTIVITY_TABLE)
       .delete()
-      .eq("brand_id", parsed.data.brandId)
-      .eq("catalog_id", params.data.catalogId)
-      .eq("product_id", productRow.id);
+      .eq('brand_id', parsed.data.brandId)
+      .eq('catalog_id', params.data.catalogId)
+      .eq('product_id', productRow.id);
 
     if (activityDeleteError) {
       return NextResponse.json({ error: activityDeleteError.message }, { status: 500 });
     }
 
     const { error: productDeleteError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_TABLE)
       .delete()
-      .eq("id", productRow.id)
-      .eq("brand_id", parsed.data.brandId);
+      .eq('id', productRow.id)
+      .eq('brand_id', parsed.data.brandId);
 
     if (productDeleteError) {
       return NextResponse.json({ error: productDeleteError.message }, { status: 500 });
@@ -631,7 +643,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error("Failed to remove catalog product", error);
-    return NextResponse.json({ error: "Failed to remove catalog product" }, { status: 500 });
+    console.error('Failed to remove catalog product', error);
+    return NextResponse.json({ error: 'Failed to remove catalog product' }, { status: 500 });
   }
 }

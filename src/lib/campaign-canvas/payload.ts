@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import type {
   AdData,
@@ -11,40 +11,40 @@ import type {
   CampaignNodeType,
   CreativeAssetType,
   CreativeData,
-} from "@/CampaignCanvas/types";
+} from '@/CampaignCanvas/types';
 import {
   DEFAULT_AD_FORMAT,
   DEFAULT_CREATIVE_ASSET_TYPE,
-} from "@/CampaignCanvas/types/adCreativeCompatibility";
+} from '@/CampaignCanvas/types/adCreativeCompatibility';
 
-const NODE_TYPES = ["campaign", "ad-set", "ad", "audience", "creative"] as const;
-const VALIDATION_STATUSES = ["valid", "warning", "error"] as const;
+const NODE_TYPES = ['campaign', 'ad-set', 'ad', 'audience', 'creative'] as const;
+const VALIDATION_STATUSES = ['valid', 'warning', 'error'] as const;
 const OBJECTIVES = [
-  "OUTCOME_SALES",
-  "OUTCOME_LEADS",
-  "OUTCOME_ENGAGEMENT",
-  "OUTCOME_AWARENESS",
-  "OUTCOME_TRAFFIC",
-  "OUTCOME_APP_PROMOTION",
+  'OUTCOME_SALES',
+  'OUTCOME_LEADS',
+  'OUTCOME_ENGAGEMENT',
+  'OUTCOME_AWARENESS',
+  'OUTCOME_TRAFFIC',
+  'OUTCOME_APP_PROMOTION',
 ] as const;
-const BUYING_TYPES = ["AUCTION", "RESERVATION"] as const;
-const BUDGET_TYPES = ["DAILY", "LIFETIME"] as const;
+const BUYING_TYPES = ['AUCTION', 'RESERVATION'] as const;
+const BUDGET_TYPES = ['DAILY', 'LIFETIME'] as const;
 const CALL_TO_ACTIONS = [
-  "LEARN_MORE",
-  "SHOP_NOW",
-  "SIGN_UP",
-  "BOOK_NOW",
-  "CONTACT_US",
-  "DOWNLOAD",
+  'LEARN_MORE',
+  'SHOP_NOW',
+  'SIGN_UP',
+  'BOOK_NOW',
+  'CONTACT_US',
+  'DOWNLOAD',
 ] as const;
-const PAYLOAD_SOURCES = ["export", "deploy", "agent-check-in", "unknown"] as const;
+const PAYLOAD_SOURCES = ['export', 'deploy', 'agent-check-in', 'unknown'] as const;
 
 const campaignNodeTypeSchema = z.enum(NODE_TYPES);
 const validationStatusSchema = z.enum(VALIDATION_STATUSES);
 const objectiveSchema = z.enum(OBJECTIVES);
 const buyingTypeSchema = z.enum(BUYING_TYPES);
-const adFormatSchema = z.enum(["IMAGE", "VIDEO", "CAROUSEL", "COLLECTION"]);
-const creativeAssetTypeSchema = z.enum(["image", "video"]);
+const adFormatSchema = z.enum(['IMAGE', 'VIDEO', 'CAROUSEL', 'COLLECTION']);
+const creativeAssetTypeSchema = z.enum(['image', 'video']);
 const budgetTypeSchema = z.enum(BUDGET_TYPES);
 const callToActionSchema = z.enum(CALL_TO_ACTIONS);
 const payloadSourceSchema = z.enum(PAYLOAD_SOURCES);
@@ -59,7 +59,7 @@ const baseNodeSchema = z.object({
     x: z.number(),
     y: z.number(),
   }),
-  status: z.enum(["draft", "active", "paused", "archived"]).nullable(),
+  status: z.enum(['draft', 'active', 'paused', 'archived']).nullable(),
   validation: z.object({
     status: validationStatusSchema,
     errors: z.array(z.string()),
@@ -70,7 +70,7 @@ const baseNodeSchema = z.object({
 });
 
 const campaignNodePayloadSchema = baseNodeSchema.extend({
-  nodeType: z.literal("campaign"),
+  nodeType: z.literal('campaign'),
   options: z.object({
     objective: objectiveSchema.nullable(),
     buyingType: buyingTypeSchema,
@@ -79,7 +79,7 @@ const campaignNodePayloadSchema = baseNodeSchema.extend({
 });
 
 const adSetNodePayloadSchema = baseNodeSchema.extend({
-  nodeType: z.literal("ad-set"),
+  nodeType: z.literal('ad-set'),
   options: z.object({
     optimizationGoal: z.string().min(1),
     billingEvent: z.string().min(1),
@@ -94,7 +94,7 @@ const adSetNodePayloadSchema = baseNodeSchema.extend({
 });
 
 const adNodePayloadSchema = baseNodeSchema.extend({
-  nodeType: z.literal("ad"),
+  nodeType: z.literal('ad'),
   options: z.object({
     adFormat: adFormatSchema,
     primaryText: z.string(),
@@ -105,7 +105,7 @@ const adNodePayloadSchema = baseNodeSchema.extend({
 });
 
 const audienceNodePayloadSchema = baseNodeSchema.extend({
-  nodeType: z.literal("audience"),
+  nodeType: z.literal('audience'),
   options: z.object({
     locations: z.array(z.string()),
     ageMin: z.number().int().nullable(),
@@ -118,7 +118,7 @@ const audienceNodePayloadSchema = baseNodeSchema.extend({
 });
 
 const creativeNodePayloadSchema = baseNodeSchema.extend({
-  nodeType: z.literal("creative"),
+  nodeType: z.literal('creative'),
   options: z.object({
     assetType: creativeAssetTypeSchema,
     assetUrl: z.string().nullable(),
@@ -128,7 +128,7 @@ const creativeNodePayloadSchema = baseNodeSchema.extend({
   }),
 });
 
-const campaignCanvasNodePayloadSchema = z.discriminatedUnion("nodeType", [
+const campaignCanvasNodePayloadSchema = z.discriminatedUnion('nodeType', [
   campaignNodePayloadSchema,
   adSetNodePayloadSchema,
   adNodePayloadSchema,
@@ -152,7 +152,7 @@ const campaignCanvasSummarySchema = z.object({
   edgeCount: z.number().int().nonnegative(),
   byType: z.object({
     campaign: z.number().int().nonnegative(),
-    "ad-set": z.number().int().nonnegative(),
+    'ad-set': z.number().int().nonnegative(),
     ad: z.number().int().nonnegative(),
     audience: z.number().int().nonnegative(),
     creative: z.number().int().nonnegative(),
@@ -174,7 +174,7 @@ const campaignAgentIssueSchema = z.object({
   nodeId: z.string().min(1),
   nodeType: campaignNodeTypeSchema,
   label: z.string().min(1),
-  severity: z.enum(["warning", "error"]),
+  severity: z.enum(['warning', 'error']),
   errors: z.array(z.string()).min(1),
 });
 
@@ -185,7 +185,7 @@ const campaignAgentCheckInSchema = z.object({
 });
 
 export const campaignCanvasPayloadSchema = z.object({
-  schemaVersion: z.literal("campaign-canvas.v1"),
+  schemaVersion: z.literal('campaign-canvas.v1'),
   generatedAt: z.string(),
   context: campaignCanvasContextSchema,
   summary: campaignCanvasSummarySchema,
@@ -197,13 +197,13 @@ export const campaignCanvasPayloadSchema = z.object({
 export type CampaignCanvasPayload = z.infer<typeof campaignCanvasPayloadSchema>;
 
 export type CampaignCanvasPayloadContext = Partial<
-  Omit<CampaignCanvasPayload["context"], "source">
+  Omit<CampaignCanvasPayload['context'], 'source'>
 > & {
-  source?: CampaignCanvasPayload["context"]["source"];
+  source?: CampaignCanvasPayload['context']['source'];
 };
 
 function normalizeString(value: unknown): string | null {
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return null;
   }
 
@@ -227,21 +227,21 @@ function normalizeStringArray(value: unknown): string[] {
 }
 
 function normalizeValidationStatus(value: unknown): (typeof VALIDATION_STATUSES)[number] {
-  if (value === "warning" || value === "error" || value === "valid") {
+  if (value === 'warning' || value === 'error' || value === 'valid') {
     return value;
   }
-  return "valid";
+  return 'valid';
 }
 
 function normalizeNumber(value: unknown, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
   return fallback;
 }
 
 function normalizeInteger(value: unknown): number | null {
-  if (typeof value === "number" && Number.isInteger(value)) {
+  if (typeof value === 'number' && Number.isInteger(value)) {
     return value;
   }
   return null;
@@ -256,8 +256,8 @@ function normalizeLabel(value: unknown, fallback: string): string {
 }
 
 function normalizeBaseNode(
-  node: CampaignCanvasNode
-): Omit<z.infer<typeof baseNodeSchema>, "nodeType"> {
+  node: CampaignCanvasNode,
+): Omit<z.infer<typeof baseNodeSchema>, 'nodeType'> {
   const nodeData = node.data as Record<string, unknown>;
   return {
     nodeId: node.id,
@@ -268,10 +268,10 @@ function normalizeBaseNode(
       y: normalizeNumber(node.position.y, 0),
     },
     status:
-      nodeData.status === "draft" ||
-      nodeData.status === "active" ||
-      nodeData.status === "paused" ||
-      nodeData.status === "archived"
+      nodeData.status === 'draft' ||
+      nodeData.status === 'active' ||
+      nodeData.status === 'paused' ||
+      nodeData.status === 'archived'
         ? nodeData.status
         : null,
     validation: {
@@ -289,14 +289,14 @@ function normalizeCampaignNode(node: CampaignCanvasNode) {
   const data = node.data as Partial<CampaignData>;
   return {
     ...base,
-    nodeType: "campaign" as const,
+    nodeType: 'campaign' as const,
     options: {
       objective: OBJECTIVES.includes(data.objective as (typeof OBJECTIVES)[number])
         ? (data.objective as (typeof OBJECTIVES)[number])
         : null,
       buyingType: BUYING_TYPES.includes(data.buyingType as (typeof BUYING_TYPES)[number])
         ? (data.buyingType as (typeof BUYING_TYPES)[number])
-        : "AUCTION",
+        : 'AUCTION',
       specialAdCategories: normalizeStringArray(data.specialAdCategories),
     },
   };
@@ -307,16 +307,16 @@ function normalizeAdSetNode(node: CampaignCanvasNode) {
   const data = node.data as Partial<AdSetData>;
   return {
     ...base,
-    nodeType: "ad-set" as const,
+    nodeType: 'ad-set' as const,
     options: {
-      optimizationGoal: normalizeLabel(data.optimizationGoal, "CONVERSIONS"),
-      billingEvent: normalizeLabel(data.billingEvent, "IMPRESSIONS"),
-      bidStrategy: normalizeLabel(data.bidStrategy, "LOWEST_COST_WITHOUT_CAP"),
+      optimizationGoal: normalizeLabel(data.optimizationGoal, 'CONVERSIONS'),
+      billingEvent: normalizeLabel(data.billingEvent, 'IMPRESSIONS'),
+      bidStrategy: normalizeLabel(data.bidStrategy, 'LOWEST_COST_WITHOUT_CAP'),
       budgetType: BUDGET_TYPES.includes(data.budgetType as (typeof BUDGET_TYPES)[number])
         ? (data.budgetType as (typeof BUDGET_TYPES)[number])
-        : "DAILY",
+        : 'DAILY',
       budgetAmount: normalizeNumber(data.budgetAmount, 0),
-      budgetCurrency: normalizeLabel(data.budgetCurrency, "USD"),
+      budgetCurrency: normalizeLabel(data.budgetCurrency, 'USD'),
       startTime: normalizeString(data.startTime),
       endTime: normalizeString(data.endTime),
       pacingType: normalizeStringArray(data.pacingType),
@@ -329,19 +329,19 @@ function normalizeAdNode(node: CampaignCanvasNode) {
   const data = node.data as Partial<AdData>;
   return {
     ...base,
-    nodeType: "ad" as const,
+    nodeType: 'ad' as const,
     options: {
-      adFormat: (["IMAGE", "VIDEO", "CAROUSEL", "COLLECTION"] as const).includes(
-        data.adFormat as AdFormat
+      adFormat: (['IMAGE', 'VIDEO', 'CAROUSEL', 'COLLECTION'] as const).includes(
+        data.adFormat as AdFormat,
       )
         ? (data.adFormat as AdFormat)
         : DEFAULT_AD_FORMAT,
-      primaryText: normalizeLabel(data.primaryText, ""),
-      headline: normalizeLabel(data.headline, ""),
+      primaryText: normalizeLabel(data.primaryText, ''),
+      headline: normalizeLabel(data.headline, ''),
       description: normalizeString(data.description),
       callToAction: CALL_TO_ACTIONS.includes(data.callToAction as (typeof CALL_TO_ACTIONS)[number])
         ? (data.callToAction as (typeof CALL_TO_ACTIONS)[number])
-        : "LEARN_MORE",
+        : 'LEARN_MORE',
     },
   };
 }
@@ -351,7 +351,7 @@ function normalizeAudienceNode(node: CampaignCanvasNode) {
   const data = node.data as Partial<AudienceData>;
   return {
     ...base,
-    nodeType: "audience" as const,
+    nodeType: 'audience' as const,
     options: {
       locations: normalizeStringArray(data.locations),
       ageMin: normalizeInteger(data.ageMin),
@@ -371,10 +371,10 @@ function normalizeCreativeNode(node: CampaignCanvasNode) {
   const data = node.data as Partial<CreativeData>;
   return {
     ...base,
-    nodeType: "creative" as const,
+    nodeType: 'creative' as const,
     options: {
       assetType:
-        data.assetType === "image" || data.assetType === "video"
+        data.assetType === 'image' || data.assetType === 'video'
           ? (data.assetType as CreativeAssetType)
           : DEFAULT_CREATIVE_ASSET_TYPE,
       assetUrl: normalizeString(data.assetUrl),
@@ -387,15 +387,15 @@ function normalizeCreativeNode(node: CampaignCanvasNode) {
 
 function normalizeNode(node: CampaignCanvasNode) {
   switch (node.type) {
-    case "campaign":
+    case 'campaign':
       return normalizeCampaignNode(node);
-    case "ad-set":
+    case 'ad-set':
       return normalizeAdSetNode(node);
-    case "ad":
+    case 'ad':
       return normalizeAdNode(node);
-    case "audience":
+    case 'audience':
       return normalizeAudienceNode(node);
-    case "creative":
+    case 'creative':
       return normalizeCreativeNode(node);
     default: {
       const exhaustiveCheck: never = node.type;
@@ -406,26 +406,26 @@ function normalizeNode(node: CampaignCanvasNode) {
 
 function buildEdgeRelationship(
   sourceType: CampaignNodeType | null,
-  targetType: CampaignNodeType | null
+  targetType: CampaignNodeType | null,
 ): string {
   if (!sourceType || !targetType) {
-    return "unknown_relationship";
+    return 'unknown_relationship';
   }
   return `${sourceType}_to_${targetType}`;
 }
 
 function buildChecklist(hasValidationIssues: boolean, hasDisconnectedNodes: boolean): string[] {
   const checklist = [
-    "Confirm campaign objective, ad-set optimization, and bid strategy align with goals.",
-    "Review audience constraints for geography, age, and gender consistency.",
-    "Verify ad formats are compatible with connected creative asset types.",
+    'Confirm campaign objective, ad-set optimization, and bid strategy align with goals.',
+    'Review audience constraints for geography, age, and gender consistency.',
+    'Verify ad formats are compatible with connected creative asset types.',
   ];
 
   if (hasValidationIssues) {
-    checklist.unshift("Resolve error-level validation issues before backend handoff.");
+    checklist.unshift('Resolve error-level validation issues before backend handoff.');
   }
   if (hasDisconnectedNodes) {
-    checklist.push("Review disconnected nodes and confirm whether they should remain in scope.");
+    checklist.push('Review disconnected nodes and confirm whether they should remain in scope.');
   }
 
   return checklist;
@@ -434,7 +434,7 @@ function buildChecklist(hasValidationIssues: boolean, hasDisconnectedNodes: bool
 export function buildCampaignCanvasPayload(
   nodes: CampaignCanvasNode[],
   edges: CampaignCanvasEdge[],
-  context: CampaignCanvasPayloadContext = {}
+  context: CampaignCanvasPayloadContext = {},
 ): CampaignCanvasPayload {
   const normalizedNodes = nodes.map(normalizeNode);
   const nodesById = new Map(normalizedNodes.map((node) => [node.nodeId, node]));
@@ -449,7 +449,10 @@ export function buildCampaignCanvasPayload(
       targetNodeId: edge.target,
       sourceType: sourceNode?.nodeType ?? null,
       targetType: targetNode?.nodeType ?? null,
-      relationship: buildEdgeRelationship(sourceNode?.nodeType ?? null, targetNode?.nodeType ?? null),
+      relationship: buildEdgeRelationship(
+        sourceNode?.nodeType ?? null,
+        targetNode?.nodeType ?? null,
+      ),
       sourceHandle: normalizeString(edge.sourceHandle),
       targetHandle: normalizeString(edge.targetHandle),
     };
@@ -462,22 +465,23 @@ export function buildCampaignCanvasPayload(
     },
     {
       campaign: 0,
-      "ad-set": 0,
+      'ad-set': 0,
       ad: 0,
       audience: 0,
       creative: 0,
-    } as Record<CampaignNodeType, number>
+    } as Record<CampaignNodeType, number>,
   );
 
-  const validationIssues: CampaignCanvasPayload["agentCheckIn"]["validationIssues"] = normalizedNodes
-    .filter((node) => node.validation.status === "warning" || node.validation.status === "error")
-    .map((node) => ({
-      nodeId: node.nodeId,
-      nodeType: node.nodeType,
-      label: node.label,
-      severity: node.validation.status === "error" ? "error" : "warning",
-      errors: node.validation.errors.length ? node.validation.errors : ["No details provided."],
-    }));
+  const validationIssues: CampaignCanvasPayload['agentCheckIn']['validationIssues'] =
+    normalizedNodes
+      .filter((node) => node.validation.status === 'warning' || node.validation.status === 'error')
+      .map((node) => ({
+        nodeId: node.nodeId,
+        nodeType: node.nodeType,
+        label: node.label,
+        severity: node.validation.status === 'error' ? 'error' : 'warning',
+        errors: node.validation.errors.length ? node.validation.errors : ['No details provided.'],
+      }));
 
   const nodesWithConnections = new Set<string>();
   for (const edge of normalizedEdges) {
@@ -490,10 +494,10 @@ export function buildCampaignCanvasPayload(
     .map((node) => node.nodeId);
 
   const payload: CampaignCanvasPayload = {
-    schemaVersion: "campaign-canvas.v1",
+    schemaVersion: 'campaign-canvas.v1',
     generatedAt: new Date().toISOString(),
     context: {
-      source: context.source ?? "unknown",
+      source: context.source ?? 'unknown',
       brandProfileId: normalizeString(context.brandProfileId),
       adAccountId: normalizeString(context.adAccountId),
       campaignId: normalizeString(context.campaignId),
@@ -503,14 +507,14 @@ export function buildCampaignCanvasPayload(
       edgeCount: normalizedEdges.length,
       byType: {
         campaign: byType.campaign,
-        "ad-set": byType["ad-set"],
+        'ad-set': byType['ad-set'],
         ad: byType.ad,
         audience: byType.audience,
         creative: byType.creative,
       },
       validation: {
-        errorCount: validationIssues.filter((issue) => issue.severity === "error").length,
-        warningCount: validationIssues.filter((issue) => issue.severity === "warning").length,
+        errorCount: validationIssues.filter((issue) => issue.severity === 'error').length,
+        warningCount: validationIssues.filter((issue) => issue.severity === 'warning').length,
       },
     },
     nodes: normalizedNodes,

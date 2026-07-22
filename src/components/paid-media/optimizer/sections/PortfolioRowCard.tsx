@@ -16,6 +16,8 @@ type PortfolioRowCardProps = {
   currency?: string | null;
   selected?: boolean;
   onSelect?: () => void;
+  // Warm the portfolio's detail reads on hover/focus so opening it paints from cache.
+  onPrefetch?: () => void;
 };
 
 export function PortfolioRowCard({
@@ -23,6 +25,7 @@ export function PortfolioRowCard({
   currency,
   selected,
   onSelect,
+  onPrefetch,
 }: PortfolioRowCardProps) {
   const pending = portfolio.pending_recommendations;
 
@@ -30,6 +33,8 @@ export function PortfolioRowCard({
     <button
       type="button"
       onClick={onSelect}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
       className={cn(
         'flex w-full items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 text-left transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

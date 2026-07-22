@@ -1,11 +1,12 @@
-"use client";
+'use client';
 
 /**
  * Hover previews for context-grabber rows: full text (no truncation), type-specific
  * detail (What's Working creatives, KPI 7d sparklines, packs, media enlarge).
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { getOrganicMetric } from '@continuum/contracts';
+import { useQuery } from '@tanstack/react-query';
 import {
   BookOpen,
   FileText,
@@ -17,76 +18,77 @@ import {
   Target,
   TrendingUp,
   Workflow,
-} from "lucide-react";
-import * as React from "react";
-
-import { Badge } from "@/components/ui/badge";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import type { AgentMentionReference, AgentMentionSuggestion } from "@/lib/agent-references";
-import { OPTIMIZATION_PACKS } from "@/lib/agent/kpi-mentions";
-import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
-import type { OrganicPlatform } from "@/lib/schemas/organicMetrics";
-import { cn } from "@/lib/utils";
-import { getOrganicMetric } from "@continuum/contracts";
+} from 'lucide-react';
+import * as React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { OPTIMIZATION_PACKS } from '@/lib/agent/kpi-mentions';
+import type { AgentMentionReference, AgentMentionSuggestion } from '@/lib/agent-references';
+import { fetchOrganicAnalytics } from '@/lib/api/organicAnalytics.client';
+import type { OrganicPlatform } from '@/lib/schemas/organicMetrics';
+import { cn } from '@/lib/utils';
 
 export type MentionAnalyticsContext = {
   brandId?: string;
   integrationAccountId?: string | null;
-  platform?: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin"> | null;
+  platform?: Extract<
+    OrganicPlatform,
+    'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin'
+  > | null;
 };
 
 function readString(meta: Record<string, unknown> | undefined, key: string): string | null {
   const v = meta?.[key];
-  return typeof v === "string" && v.trim() ? v : null;
+  return typeof v === 'string' && v.trim() ? v : null;
 }
 
 function readNumber(meta: Record<string, unknown> | undefined, key: string): number | null {
   const v = meta?.[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-function typeLabel(type: AgentMentionReference["type"]): string {
+function typeLabel(type: AgentMentionReference['type']): string {
   switch (type) {
-    case "creative_insight":
+    case 'creative_insight':
       return "What's Working";
-    case "organic_insight":
-      return "Insight";
-    case "kpi":
-      return "Metric";
-    case "media_asset":
-      return "Media";
-    case "canvas_node":
-      return "Canvas";
+    case 'organic_insight':
+      return 'Insight';
+    case 'kpi':
+      return 'Metric';
+    case 'media_asset':
+      return 'Media';
+    case 'canvas_node':
+      return 'Canvas';
     default:
-      return type.replace(/_/g, " ");
+      return type.replace(/_/g, ' ');
   }
 }
 
-function TypeIcon({ type }: { type: AgentMentionReference["type"] }) {
-  const cls = "size-3.5 text-muted-foreground";
+function TypeIcon({ type }: { type: AgentMentionReference['type'] }) {
+  const cls = 'size-3.5 text-muted-foreground';
   switch (type) {
-    case "media_asset":
+    case 'media_asset':
       return <ImageIcon className={cls} />;
-    case "canvas_node":
+    case 'canvas_node':
       return <Workflow className={cls} />;
-    case "skill":
+    case 'skill':
       return <Sparkles className={cls} />;
-    case "document":
+    case 'document':
       return <BookOpen className={cls} />;
-    case "trend":
-    case "event":
+    case 'trend':
+    case 'event':
       return <TrendingUp className={cls} />;
-    case "question":
+    case 'question':
       return <Lightbulb className={cls} />;
-    case "draft":
+    case 'draft':
       return <FileText className={cls} />;
-    case "campaign":
-    case "adset":
+    case 'campaign':
+    case 'adset':
       return <Target className={cls} />;
-    case "creative_insight":
-    case "organic_insight":
-    case "kpi":
+    case 'creative_insight':
+    case 'organic_insight':
+    case 'kpi':
       return <LineChart className={cls} />;
     default:
       return <FileText className={cls} />;
@@ -94,19 +96,13 @@ function TypeIcon({ type }: { type: AgentMentionReference["type"] }) {
 }
 
 /** Compact 7-day bars (matches InstagramOrganicReportingWidget MiniBars). */
-export function MiniBars({
-  values,
-  className,
-}: {
-  values: number[];
-  className?: string;
-}) {
+export function MiniBars({ values, className }: { values: number[]; className?: string }) {
   if (values.length === 0) {
-    return <div className={cn("h-10", className)} aria-hidden />;
+    return <div className={cn('h-10', className)} aria-hidden />;
   }
   const max = Math.max(...values, 1);
   return (
-    <div className={cn("flex h-10 items-end gap-0.5", className)} aria-hidden>
+    <div className={cn('flex h-10 items-end gap-0.5', className)} aria-hidden>
       {values.map((value, index) => (
         <span
           key={index}
@@ -129,7 +125,7 @@ function useMetricTrendSeries(params: {
   const platform = analytics?.platform;
 
   return useQuery({
-    queryKey: ["mention-kpi-series", brandId, accountId, platform, metricKey, "last_7d"],
+    queryKey: ['mention-kpi-series', brandId, accountId, platform, metricKey, 'last_7d'],
     enabled: Boolean(
       enabled && brandId && accountId && platform && metricKey && metricKey.length > 0,
     ),
@@ -139,8 +135,8 @@ function useMetricTrendSeries(params: {
         brandId: brandId as string,
         integrationAccountId: accountId as string,
         platform: platform as NonNullable<typeof platform>,
-        range: { preset: "last_7d" },
-        scope: "kpis",
+        range: { preset: 'last_7d' },
+        scope: 'kpis',
       });
       const trends = data.trends ?? [];
       const key = metricKey as string;
@@ -148,7 +144,7 @@ function useMetricTrendSeries(params: {
         .slice(-7)
         .map((point) => {
           const raw = (point as Record<string, unknown>)[key];
-          return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+          return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
         })
         .filter((v): v is number => v != null);
       const comparison = data.comparison as
@@ -201,7 +197,7 @@ function MetricSeriesBlock({
         <div className="text-right">
           {current != null ? (
             <p className="text-sm font-semibold tabular-nums leading-none">
-              {typeof current === "number" && current < 1 && current > 0
+              {typeof current === 'number' && current < 1 && current > 0
                 ? `${(current * 100).toFixed(1)}%`
                 : current.toLocaleString()}
             </p>
@@ -213,11 +209,13 @@ function MetricSeriesBlock({
           {delta != null ? (
             <p
               className={cn(
-                "mt-1 text-2xs tabular-nums",
-                delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+                'mt-1 text-2xs tabular-nums',
+                delta >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400',
               )}
             >
-              {delta >= 0 ? "+" : ""}
+              {delta >= 0 ? '+' : ''}
               {delta.toFixed(1)}%
             </p>
           ) : null}
@@ -236,28 +234,22 @@ function MetricSeriesBlock({
   );
 }
 
-function CreativeInsightHover({
-  meta,
-  label,
-}: {
-  meta: Record<string, unknown>;
-  label: string;
-}) {
+function CreativeInsightHover({ meta, label }: { meta: Record<string, unknown>; label: string }) {
   const thumbs = Array.isArray(meta.exemplarThumbnails)
-    ? (meta.exemplarThumbnails as unknown[]).filter((u): u is string => typeof u === "string")
+    ? (meta.exemplarThumbnails as unknown[]).filter((u): u is string => typeof u === 'string')
     : [];
   const snippets = Array.isArray(meta.exemplarSnippets)
-    ? (meta.exemplarSnippets as unknown[]).filter((u): u is string => typeof u === "string")
+    ? (meta.exemplarSnippets as unknown[]).filter((u): u is string => typeof u === 'string')
     : [];
   const permalinks = Array.isArray(meta.exemplarPermalinks)
-    ? (meta.exemplarPermalinks as unknown[]).filter((u): u is string => typeof u === "string")
+    ? (meta.exemplarPermalinks as unknown[]).filter((u): u is string => typeof u === 'string')
     : [];
-  const description = readString(meta, "description");
-  const recommendation = readString(meta, "recommendation");
-  const performance = readString(meta, "performanceSummary");
-  const metricName = readString(meta, "metricName");
-  const metricValue = readNumber(meta, "metricValue");
-  const confidence = readNumber(meta, "confidence");
+  const description = readString(meta, 'description');
+  const recommendation = readString(meta, 'recommendation');
+  const performance = readString(meta, 'performanceSummary');
+  const metricName = readString(meta, 'metricName');
+  const metricValue = readNumber(meta, 'metricValue');
+  const confidence = readNumber(meta, 'confidence');
   const count = Math.max(thumbs.length, snippets.length, 1);
 
   return (
@@ -266,7 +258,9 @@ function CreativeInsightHover({
         <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
       ) : null}
       {recommendation ? (
-        <p className="rounded-md bg-muted/60 px-2 py-1.5 text-xs leading-relaxed">{recommendation}</p>
+        <p className="rounded-md bg-muted/60 px-2 py-1.5 text-xs leading-relaxed">
+          {recommendation}
+        </p>
       ) : null}
       <div className="flex flex-wrap gap-1.5 text-2xs">
         {performance ? (
@@ -276,7 +270,8 @@ function CreativeInsightHover({
         ) : null}
         {metricName && metricValue != null ? (
           <Badge variant="outline" className="font-normal tabular-nums">
-            {metricName.replace(/_/g, " ")} {metricValue < 1 ? `${(metricValue * 100).toFixed(0)}%` : metricValue.toLocaleString()}
+            {metricName.replace(/_/g, ' ')}{' '}
+            {metricValue < 1 ? `${(metricValue * 100).toFixed(0)}%` : metricValue.toLocaleString()}
           </Badge>
         ) : null}
         {confidence != null ? (
@@ -303,7 +298,7 @@ function CreativeInsightHover({
                       <img src={thumb} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center text-2xs text-muted-foreground">
-                        {(label || "·").charAt(0)}
+                        {(label || '·').charAt(0)}
                       </span>
                     )}
                   </span>
@@ -350,16 +345,16 @@ function PackHover({
   analytics?: MentionAnalyticsContext | null;
   open: boolean;
 }) {
-  const packId = readString(meta, "packId");
+  const packId = readString(meta, 'packId');
   const pack = OPTIMIZATION_PACKS.find((p) => p.id === packId);
   const keys = Array.isArray(meta.metricKeys)
-    ? (meta.metricKeys as unknown[]).filter((k): k is string => typeof k === "string")
+    ? (meta.metricKeys as unknown[]).filter((k): k is string => typeof k === 'string')
     : (pack?.metricKeys ?? []);
 
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">
-        {pack?.description ?? "Optimization pack — metrics included below."}
+        {pack?.description ?? 'Optimization pack — metrics included below.'}
       </p>
       <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
         {keys.slice(0, 5).map((key) => {
@@ -387,24 +382,22 @@ function MediaHover({
   meta: Record<string, unknown>;
 }) {
   const url =
-    suggestion.preview?.url ??
-    readString(meta, "previewUrl") ??
-    readString(meta, "thumbnailUrl");
+    suggestion.preview?.url ?? readString(meta, 'previewUrl') ?? readString(meta, 'thumbnailUrl');
   const kind =
     suggestion.preview?.kind ??
-    readString(meta, "previewKind") ??
-    readString(meta, "kind") ??
-    "image";
-  const description = readString(meta, "description");
+    readString(meta, 'previewKind') ??
+    readString(meta, 'kind') ??
+    'image';
+  const description = readString(meta, 'description');
   const tags = Array.isArray(meta.tags)
-    ? (meta.tags as unknown[]).filter((t): t is string => typeof t === "string").slice(0, 8)
+    ? (meta.tags as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 8)
     : [];
 
   return (
     <div className="flex flex-col gap-2.5">
       {url ? (
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-          {kind === "video" ? (
+          {kind === 'video' ? (
             <video
               src={url}
               muted
@@ -446,14 +439,14 @@ function GenericTextHover({
   meta: Record<string, unknown>;
 }) {
   const body =
-    readString(meta, "description") ??
-    readString(meta, "text") ??
-    readString(meta, "recommendation") ??
-    readString(meta, "relevanceToBrand") ??
-    readString(meta, "whyRelevant") ??
-    readString(meta, "opportunity") ??
-    readString(meta, "summary") ??
-    readString(meta, "captionPreview") ??
+    readString(meta, 'description') ??
+    readString(meta, 'text') ??
+    readString(meta, 'recommendation') ??
+    readString(meta, 'relevanceToBrand') ??
+    readString(meta, 'whyRelevant') ??
+    readString(meta, 'opportunity') ??
+    readString(meta, 'summary') ??
+    readString(meta, 'captionPreview') ??
     suggestion.description ??
     null;
 
@@ -476,7 +469,7 @@ function HoverBody({
   const ref = suggestion.reference;
   const meta = (ref?.metadata ?? {}) as Record<string, unknown>;
   const type = suggestion.type;
-  const isPack = meta.isPack === true || suggestion.badge === "pack";
+  const isPack = meta.isPack === true || suggestion.badge === 'pack';
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -484,53 +477,54 @@ function HoverBody({
         <div className="min-w-0">
           <p className="text-sm font-medium leading-snug text-foreground">{suggestion.label}</p>
           <p className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
-            {isPack ? "Pack" : typeLabel(type)}
-            {readString(meta, "kind") ? ` · ${readString(meta, "kind")}` : null}
-            {readString(meta, "category") ? ` · ${readString(meta, "category")}` : null}
+            {isPack ? 'Pack' : typeLabel(type)}
+            {readString(meta, 'kind') ? ` · ${readString(meta, 'kind')}` : null}
+            {readString(meta, 'category') ? ` · ${readString(meta, 'category')}` : null}
           </p>
         </div>
         <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
-          {isPack ? <Package className="size-3.5 text-muted-foreground" /> : <TypeIcon type={type} />}
+          {isPack ? (
+            <Package className="size-3.5 text-muted-foreground" />
+          ) : (
+            <TypeIcon type={type} />
+          )}
         </span>
       </div>
 
-      {type === "creative_insight" && ref ? (
+      {type === 'creative_insight' && ref ? (
         <CreativeInsightHover meta={meta} label={suggestion.label} />
       ) : isPack ? (
         <PackHover meta={meta} analytics={analytics} open={open} />
-      ) : type === "kpi" && readString(meta, "metricKey") ? (
+      ) : type === 'kpi' && readString(meta, 'metricKey') ? (
         <MetricSeriesBlock
-          metricKey={readString(meta, "metricKey") as string}
-          label={
-            readString(meta, "metricLabel") ??
-            suggestion.label
-          }
+          metricKey={readString(meta, 'metricKey') as string}
+          label={readString(meta, 'metricLabel') ?? suggestion.label}
           analytics={analytics}
           open={open}
-          fallbackValue={readNumber(meta, "value")}
-          fallbackDelta={readNumber(meta, "percentageChange")}
+          fallbackValue={readNumber(meta, 'value')}
+          fallbackDelta={readNumber(meta, 'percentageChange')}
         />
-      ) : type === "media_asset" || type === "canvas_node" ? (
+      ) : type === 'media_asset' || type === 'canvas_node' ? (
         <MediaHover suggestion={suggestion} meta={meta} />
       ) : (
         <GenericTextHover suggestion={suggestion} meta={meta} />
       )}
 
-      {type === "organic_insight" ? (
+      {type === 'organic_insight' ? (
         <div className="flex flex-wrap gap-1.5">
-          {readString(meta, "severity") ? (
+          {readString(meta, 'severity') ? (
             <Badge variant="muted" className="font-normal capitalize">
-              {readString(meta, "severity")}
+              {readString(meta, 'severity')}
             </Badge>
           ) : null}
-          {readNumber(meta, "delta") != null ? (
+          {readNumber(meta, 'delta') != null ? (
             <Badge variant="outline" className="font-normal tabular-nums">
-              Δ {readNumber(meta, "delta")!.toFixed(1)}%
+              Δ {readNumber(meta, 'delta')!.toFixed(1)}%
             </Badge>
           ) : null}
-          {readString(meta, "metric") ? (
+          {readString(meta, 'metric') ? (
             <Badge variant="secondary" className="font-normal">
-              {readString(meta, "metric")!.replace(/_/g, " ")}
+              {readString(meta, 'metric')!.replace(/_/g, ' ')}
             </Badge>
           ) : null}
         </div>
@@ -564,8 +558,8 @@ export function MentionSuggestionHover({
         align="start"
         sideOffset={10}
         className={cn(
-          "z-[80] w-80 p-3",
-          (suggestion.type === "media_asset" || suggestion.type === "canvas_node") && "w-96",
+          'z-[80] w-80 p-3',
+          (suggestion.type === 'media_asset' || suggestion.type === 'canvas_node') && 'w-96',
         )}
         // Keep hover interactive (links on creatives) without dismissing the menu.
         onPointerDownOutside={(e) => e.preventDefault()}
@@ -574,7 +568,7 @@ export function MentionSuggestionHover({
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium">{suggestion.label}</p>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {suggestion.childrenLabel ?? suggestion.description ?? "Open folder"}
+              {suggestion.childrenLabel ?? suggestion.description ?? 'Open folder'}
             </p>
           </div>
         ) : (

@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { motion } from "motion/react";
-import { memo, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
-import { useChart, useChartStable } from "./chart-context";
+import { motion } from 'motion/react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { cn } from '@/lib/utils';
+import { useChart, useChartStable } from './chart-context';
 
 export interface BarYAxisProps {
   /** Whether to show all labels or skip some for dense data. Default: true */
@@ -20,12 +20,7 @@ interface BarYAxisLabelProps {
   isHovered: boolean;
 }
 
-function BarYAxisLabel({
-  label,
-  y,
-  bandHeight,
-  isHovered,
-}: BarYAxisLabelProps) {
+function BarYAxisLabel({ label, y, bandHeight, isHovered }: BarYAxisLabelProps) {
   return (
     <div
       className="absolute right-0 flex items-center justify-end pr-2"
@@ -37,14 +32,12 @@ function BarYAxisLabel({
       <motion.span
         animate={{
           opacity: isHovered ? 1 : 0.7,
-          color: isHovered
-            ? "var(--foreground)"
-            : "var(--chart-label, var(--color-zinc-500))",
+          color: isHovered ? 'var(--foreground)' : 'var(--chart-label, var(--color-zinc-500))',
         }}
-        className={cn("truncate whitespace-nowrap text-right text-xs")}
+        className={cn('truncate whitespace-nowrap text-right text-xs')}
         initial={{
           opacity: 0.7,
-          color: "var(--chart-label, var(--color-zinc-500))",
+          color: 'var(--chart-label, var(--color-zinc-500))',
         }}
         style={{ maxWidth: 70 }}
         transition={{ duration: 0.15 }}
@@ -80,8 +73,7 @@ const BarYAxisInner = memo(function BarYAxisInner({
   maxLabels = 20,
   container,
 }: BarYAxisProps & { container: HTMLDivElement }) {
-  const { margin, barScale, bandWidth, barXAccessor, data, hoveredBarIndex } =
-    useChart();
+  const { margin, barScale, bandWidth, barXAccessor, data, hoveredBarIndex } = useChart();
 
   // Generate labels for each bar
   const labelsToShow = useMemo(() => {
@@ -105,15 +97,7 @@ const BarYAxisInner = memo(function BarYAxisInner({
     // Otherwise, skip some labels to avoid crowding
     const step = Math.ceil(allLabels.length / maxLabels);
     return allLabels.filter((_, i) => i % step === 0);
-  }, [
-    barScale,
-    bandWidth,
-    barXAccessor,
-    data,
-    margin.top,
-    showAllLabels,
-    maxLabels,
-  ]);
+  }, [barScale, bandWidth, barXAccessor, data, margin.top, showAllLabels, maxLabels]);
 
   return createPortal(
     <div
@@ -133,10 +117,10 @@ const BarYAxisInner = memo(function BarYAxisInner({
         />
       ))}
     </div>,
-    container
+    container,
   );
 });
 
-BarYAxis.displayName = "BarYAxis";
+BarYAxis.displayName = 'BarYAxis';
 
 export default BarYAxis;

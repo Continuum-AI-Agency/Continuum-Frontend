@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { Lock, SearchX } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { PLATFORM_ICONS } from "@/components/settings/shell/platformIcons";
+import { Lock, SearchX } from 'lucide-react';
+import { PLATFORM_ICONS } from '@/components/settings/shell/platformIcons';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-  filterSection,
-  sectionToggleIds,
   type AssignmentRow,
   type AssignmentSection,
-} from "@/lib/integrations/assignmentGroups";
+  filterSection,
+  sectionToggleIds,
+} from '@/lib/integrations/assignmentGroups';
+import { cn } from '@/lib/utils';
 
 type AssignmentAccountListProps = {
   sections: AssignmentSection[];
@@ -29,10 +29,10 @@ const PROVIDER_BAND_ICON = {
 } as const;
 
 const iconChipClass =
-  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground";
+  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground';
 
 function safeId(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return value.replace(/[^a-zA-Z0-9_-]/g, '-');
 }
 
 function AccountRow({
@@ -55,8 +55,8 @@ function AccountRow({
       htmlFor={controlId}
       title={`ID: ${row.externalId}`}
       className={cn(
-        "flex min-h-10 items-center gap-3 rounded-md px-2 py-1.5 transition-colors",
-        disabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-accent/40"
+        'flex min-h-10 items-center gap-3 rounded-md px-2 py-1.5 transition-colors',
+        disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-accent/40',
       )}
     >
       <Checkbox
@@ -74,7 +74,10 @@ function AccountRow({
         <span className="flex items-center gap-2">
           <span className="block truncate text-sm font-medium text-foreground">{row.label}</span>
           {row.readOnly ? (
-            <Badge variant="outline" className="shrink-0 text-2xs font-normal text-muted-foreground">
+            <Badge
+              variant="outline"
+              className="shrink-0 text-2xs font-normal text-muted-foreground"
+            >
               Read-only
             </Badge>
           ) : null}
@@ -134,7 +137,7 @@ export function AssignmentAccountList({
       {rendered.map(({ section, visibleRows, toggleIds, showBand }) => {
         const selectedCount = toggleIds.reduce(
           (count, id) => (selectedById[id] === true ? count + 1 : count),
-          0
+          0,
         );
         const total = toggleIds.length;
         const allSelected = total > 0 && selectedCount === total;
@@ -161,7 +164,7 @@ export function AssignmentAccountList({
               >
                 <Checkbox
                   id={selectAllId}
-                  checked={partiallySelected ? "indeterminate" : allSelected}
+                  checked={partiallySelected ? 'indeterminate' : allSelected}
                   disabled={isSaving || total === 0}
                   onCheckedChange={(value) => onToggleMany(toggleIds, value === true)}
                 />

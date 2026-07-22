@@ -1,8 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import * as React from 'react';
+import { grantIntegrationToBrandAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -10,12 +14,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useToast } from "@/components/ui/ToastProvider";
-import { grantIntegrationToBrandAction } from "@/app/(post-auth)/settings/integrations/actions";
+} from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/ToastProvider';
 
 type GrantToBrandDialogProps = {
   open: boolean;
@@ -46,7 +46,7 @@ export function GrantToBrandDialog({
   const eligibleBrands: EligibleBrand[] = React.useMemo(() => {
     const ownerOrAdminBrandIds = new Set(
       permissions
-        .filter((p) => p.role === "owner" || p.role === "admin")
+        .filter((p) => p.role === 'owner' || p.role === 'admin')
         .map((p) => p.brand_profile_id),
     );
 
@@ -85,7 +85,7 @@ export function GrantToBrandDialog({
         } catch (error) {
           const brandName = eligibleBrands.find((b) => b.id === brandId)?.name ?? brandId;
           failures.push(brandName);
-          if (process.env.NODE_ENV !== "production") {
+          if (process.env.NODE_ENV !== 'production') {
             console.error(`[GrantToBrandDialog] grant failed for ${brandId}`, error);
           }
         }
@@ -96,8 +96,8 @@ export function GrantToBrandDialog({
 
     if (failures.length === 0) {
       show({
-        title: "Access granted",
-        description: `${integrationLabel} is now available to ${ids.length} brand${ids.length === 1 ? "" : "s"}.`,
+        title: 'Access granted',
+        description: `${integrationLabel} is now available to ${ids.length} brand${ids.length === 1 ? '' : 's'}.`,
       });
       onOpenChange(false);
       router.refresh();
@@ -105,9 +105,9 @@ export function GrantToBrandDialog({
     }
 
     show({
-      title: "Some grants failed",
-      description: `Could not grant access to: ${failures.join(", ")}.`,
-      variant: "error",
+      title: 'Some grants failed',
+      description: `Could not grant access to: ${failures.join(', ')}.`,
+      variant: 'error',
     });
     onOpenChange(false);
     router.refresh();
@@ -138,7 +138,9 @@ export function GrantToBrandDialog({
                 <label
                   key={brand.id}
                   className={`flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 ${
-                    isAlreadyGranted ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-accent/40"
+                    isAlreadyGranted
+                      ? 'opacity-60 cursor-not-allowed'
+                      : 'cursor-pointer hover:bg-accent/40'
                   }`}
                 >
                   <Checkbox
@@ -164,7 +166,7 @@ export function GrantToBrandDialog({
             onClick={handleSubmit}
             disabled={isSubmitting || selected.size === 0 || eligibleBrands.length === 0}
           >
-            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : "Grant access"}
+            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : 'Grant access'}
           </Button>
         </DialogFooter>
       </DialogContent>

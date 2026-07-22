@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface ScheduledTooltipControls<T> {
   tooltipData: T | null;
@@ -12,13 +12,13 @@ export interface ScheduledTooltipControls<T> {
 
 function defaultDedupeKey<T>(tooltip: T): string {
   if (
-    typeof tooltip === "object" &&
+    typeof tooltip === 'object' &&
     tooltip !== null &&
-    "index" in tooltip &&
-    typeof (tooltip as { index: unknown }).index === "number"
+    'index' in tooltip &&
+    typeof (tooltip as { index: unknown }).index === 'number'
   ) {
     const { index, x } = tooltip as { index: number; x?: number };
-    if (typeof x === "number") {
+    if (typeof x === 'number') {
       return `${index}:${Math.round(x)}`;
     }
     return String(index);
@@ -69,7 +69,7 @@ export function useScheduledTooltip<T>(): ScheduledTooltipControls<T> {
         }
       });
     },
-    [commitTooltip]
+    [commitTooltip],
   );
 
   const clearTooltip = useCallback(() => {

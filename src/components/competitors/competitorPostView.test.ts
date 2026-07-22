@@ -1,58 +1,58 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 import type {
   CompetitorOrganicPost,
   InstagramCompetitorSearchResult,
   InstagramPost,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
 
 import {
   carouselSlides,
   competitorPostViewKey,
   organicPostToView,
   searchResultToViews,
-} from "./competitorPostView";
+} from './competitorPostView';
 
 const post: InstagramPost = {
-  id: "p1",
-  shortcode: "abc",
-  permalink: "https://instagram.com/p/abc/",
-  kind: "post",
-  coverUrl: "https://cdn.example.com/cover.jpg",
-  caption: "hello",
-  timestamp: "2026-01-01T00:00:00.000Z",
+  id: 'p1',
+  shortcode: 'abc',
+  permalink: 'https://instagram.com/p/abc/',
+  kind: 'post',
+  coverUrl: 'https://cdn.example.com/cover.jpg',
+  caption: 'hello',
+  timestamp: '2026-01-01T00:00:00.000Z',
   likeCount: 12,
   commentsCount: 3,
   mediaCount: 1,
-  items: [{ kind: "image", url: "https://cdn.example.com/cover.jpg" }],
+  items: [{ kind: 'image', url: 'https://cdn.example.com/cover.jpg' }],
 };
 
-describe("competitorPostView", () => {
-  it("maps a tracked organic post preserving competitorId and the raw post", () => {
+describe('competitorPostView', () => {
+  it('maps a tracked organic post preserving competitorId and the raw post', () => {
     const item: CompetitorOrganicPost = {
-      competitorId: "c1",
-      competitorName: "Nike",
-      instagramUsername: "nike",
+      competitorId: 'c1',
+      competitorName: 'Nike',
+      instagramUsername: 'nike',
       post,
     };
     const view = organicPostToView(item);
-    expect(view.competitorId).toBe("c1");
-    expect(view.competitorName).toBe("Nike");
-    expect(view.instagramUsername).toBe("nike");
+    expect(view.competitorId).toBe('c1');
+    expect(view.competitorName).toBe('Nike');
+    expect(view.instagramUsername).toBe('nike');
     expect(view.post).toBe(post);
-    expect(competitorPostViewKey(view)).toBe("nike:p1");
+    expect(competitorPostViewKey(view)).toBe('nike:p1');
   });
 
-  it("maps search results with no competitorId and account name fallback", () => {
+  it('maps search results with no competitorId and account name fallback', () => {
     const result: InstagramCompetitorSearchResult = {
-      query: "nike",
-      resolvedUsername: "nike",
+      query: 'nike',
+      resolvedUsername: 'nike',
       account: {
-        id: "1",
-        username: "nike",
-        name: "Nike",
+        id: '1',
+        username: 'nike',
+        name: 'Nike',
         followersCount: 1000,
         mediaCount: 50,
-        profilePictureUrl: "https://cdn.example.com/pic.jpg",
+        profilePictureUrl: 'https://cdn.example.com/pic.jpg',
       },
       posts: [post],
       metaPageCandidates: [],
@@ -61,49 +61,49 @@ describe("competitorPostView", () => {
     const views = searchResultToViews(result);
     expect(views).toHaveLength(1);
     expect(views[0].competitorId).toBeUndefined();
-    expect(views[0].competitorName).toBe("Nike");
-    expect(views[0].instagramUsername).toBe("nike");
+    expect(views[0].competitorName).toBe('Nike');
+    expect(views[0].instagramUsername).toBe('nike');
   });
 
-  it("falls back to the username when the account has no display name", () => {
+  it('falls back to the username when the account has no display name', () => {
     const result: InstagramCompetitorSearchResult = {
-      query: "someshop",
-      resolvedUsername: "someshop",
-      account: { username: "someshop", name: null, followersCount: null },
+      query: 'someshop',
+      resolvedUsername: 'someshop',
+      account: { username: 'someshop', name: null, followersCount: null },
       posts: [post],
       metaPageCandidates: [],
       warnings: [],
     };
     const [view] = searchResultToViews(result);
-    expect(view.competitorName).toBe("someshop");
+    expect(view.competitorName).toBe('someshop');
   });
 
-  describe("carouselSlides", () => {
-    it("returns every media item for a multi-item carousel", () => {
+  describe('carouselSlides', () => {
+    it('returns every media item for a multi-item carousel', () => {
       const carousel: InstagramPost = {
         ...post,
-        id: "p2",
-        kind: "carousel",
+        id: 'p2',
+        kind: 'carousel',
         mediaCount: 3,
         items: [
-          { kind: "image", url: "https://cdn.example.com/1.jpg" },
-          { kind: "video", url: "https://cdn.example.com/2.mp4" },
-          { kind: "image", url: "https://cdn.example.com/3.jpg" },
+          { kind: 'image', url: 'https://cdn.example.com/1.jpg' },
+          { kind: 'video', url: 'https://cdn.example.com/2.mp4' },
+          { kind: 'image', url: 'https://cdn.example.com/3.jpg' },
         ],
       };
       const slides = carouselSlides(carousel);
       expect(slides).toHaveLength(3);
-      expect(slides.map((slide) => slide.kind)).toEqual(["image", "video", "image"]);
+      expect(slides.map((slide) => slide.kind)).toEqual(['image', 'video', 'image']);
     });
 
-    it("returns no slides for a single-item post or reel", () => {
+    it('returns no slides for a single-item post or reel', () => {
       expect(carouselSlides(post)).toHaveLength(0);
       const reel: InstagramPost = {
         ...post,
-        id: "p3",
-        kind: "reel",
+        id: 'p3',
+        kind: 'reel',
         mediaCount: 1,
-        items: [{ kind: "video", url: "https://cdn.example.com/reel.mp4" }],
+        items: [{ kind: 'video', url: 'https://cdn.example.com/reel.mp4' }],
       };
       expect(carouselSlides(reel)).toHaveLength(0);
     });

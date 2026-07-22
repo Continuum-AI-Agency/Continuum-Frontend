@@ -1,12 +1,12 @@
-import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
+import type { UserIntegrationSummary } from '@/lib/integrations/userIntegrations';
 
-type ProviderKey = "google" | "meta" | "facebook" | "tiktok" | "linkedin" | "x";
+type ProviderKey = 'google' | 'meta' | 'facebook' | 'tiktok' | 'linkedin' | 'x';
 
 function normalizeProviders(provider: ProviderKey): Set<string> {
-  if (provider === "facebook") return new Set(["meta", "facebook"]);
-  if (provider === "tiktok") return new Set(["tiktok"]);
-  if (provider === "linkedin") return new Set(["linkedin"]);
-  if (provider === "x") return new Set(["x"]);
+  if (provider === 'facebook') return new Set(['meta', 'facebook']);
+  if (provider === 'tiktok') return new Set(['tiktok']);
+  if (provider === 'linkedin') return new Set(['linkedin']);
+  if (provider === 'x') return new Set(['x']);
   return new Set([provider]);
 }
 
@@ -24,23 +24,23 @@ export type ProviderConnectionSummary = {
 
 export function getProviderConnectionSummary(
   summary: UserIntegrationSummary,
-  provider: ProviderKey
+  provider: ProviderKey,
 ): ProviderConnectionSummary {
   const providers = normalizeProviders(provider);
   const accountNames = Array.from(
     new Set(
       Object.values(summary)
-        .flatMap(group => group.accounts.filter(account => providers.has(account.provider)))
-        .map(account => account.name)
-        .filter((name): name is string => Boolean(name))
-    )
+        .flatMap((group) => group.accounts.filter((account) => providers.has(account.provider)))
+        .map((account) => account.name)
+        .filter((name): name is string => Boolean(name)),
+    ),
   );
   return { connected: accountNames.length > 0, accountNames };
 }
 
 export function hasProviderConnections(
   summary: UserIntegrationSummary,
-  provider: ProviderKey
+  provider: ProviderKey,
 ): boolean {
   return getProviderConnectionSummary(summary, provider).connected;
 }

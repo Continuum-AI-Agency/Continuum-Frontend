@@ -1,5 +1,5 @@
-import { FindingCallout } from "./FindingCallout";
-import type { ReadinessFinding } from "@/lib/onboarding/agentClient";
+import type { ReadinessFinding } from '@/lib/onboarding/agentClient';
+import { FindingCallout } from './FindingCallout';
 
 export function FindingsStack({ findings }: { findings: (ReadinessFinding | null)[] }) {
   const real = findings.filter((f): f is ReadinessFinding => f !== null);

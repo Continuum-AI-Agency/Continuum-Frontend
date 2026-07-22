@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
-import { Plug, Plus } from "lucide-react";
+import { Plug, Plus } from 'lucide-react';
+import { useMemo } from 'react';
+import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   IntegrationSwitcher,
   type IntegrationSwitcherData,
   type IntegrationSwitcherItem,
   type IntegrationSwitcherItemStatus,
   type IntegrationSwitcherTab,
-} from "@/components/shadcn-studio/card/integration-switcher";
-import { Button } from "@/components/ui/button";
-import { ConnectProviderPopover } from "./ConnectProviderPopover";
-import { PLATFORM_ICONS, PLATFORM_LABELS } from "../shell/platformIcons";
-import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
-import type { PlatformKey } from "@/components/onboarding/platforms";
+} from '@/components/shadcn-studio/card/integration-switcher';
+import { Button } from '@/components/ui/button';
+import type { UserIntegrationSummary } from '@/lib/integrations/userIntegrations';
+import { PLATFORM_ICONS, PLATFORM_LABELS } from '../shell/platformIcons';
+import { ConnectProviderPopover } from './ConnectProviderPopover';
 
 type UserConnectionsSwitcherProps = {
   integrations: UserIntegrationSummary;
 };
 
 function statusFor(status: string | null): IntegrationSwitcherItemStatus {
-  return status && status.toLowerCase() === "active" ? "checked" : "copy";
+  return status && status.toLowerCase() === 'active' ? 'checked' : 'copy';
 }
 
 export function UserConnectionsSwitcher({ integrations }: UserConnectionsSwitcherProps) {
@@ -40,7 +40,7 @@ export function UserConnectionsSwitcher({ integrations }: UserConnectionsSwitche
 
       data[platformKey] = accounts.map<IntegrationSwitcherItem>((account) => ({
         id: account.externalAccountId ?? account.id.slice(0, 6),
-        title: account.name || "Unnamed account",
+        title: account.name || 'Unnamed account',
         icon: PLATFORM_ICONS[platformKey] ?? Plug,
         status: statusFor(account.status),
       }));

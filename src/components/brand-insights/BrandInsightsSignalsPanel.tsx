@@ -1,11 +1,10 @@
-import type { ReactNode } from "react";
-
+import type { ReactNode } from 'react';
+import { BrandTrendsPanel } from '@/components/brand-insights/BrandTrendsPanel';
 import type {
   BrandInsightsEvent,
   BrandInsightsQuestionsByNiche,
   BrandInsightsTrend,
-} from "@/lib/schemas/brandInsights";
-import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
+} from '@/lib/schemas/brandInsights';
 
 type BrandInsightsSignalsPanelProps = {
   trends: BrandInsightsTrend[];

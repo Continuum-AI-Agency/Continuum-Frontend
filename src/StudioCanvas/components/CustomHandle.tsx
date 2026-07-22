@@ -1,7 +1,13 @@
-"use client";
+'use client';
 
+import {
+  type Connection,
+  Handle,
+  type HandleProps,
+  useNodeConnections,
+  useNodeId,
+} from '@xyflow/react';
 import { useMemo } from 'react';
-import { Handle, useNodeConnections, useNodeId, type HandleProps, type Connection } from '@xyflow/react';
 
 export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnectable'> {
   /**
@@ -24,7 +30,7 @@ export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnect
 
 /**
  * CustomHandle - A handle component that enforces connection limits
- * 
+ *
  * Usage:
  * ```tsx
  * <CustomHandle
@@ -57,7 +63,7 @@ export function CustomHandle({
 
   const handleStyle = useMemo(() => {
     const baseStyle = props.style || {};
-    
+
     if (isAtLimit) {
       return {
         ...baseStyle,
@@ -65,7 +71,7 @@ export function CustomHandle({
         cursor: 'not-allowed',
       };
     }
-    
+
     return baseStyle;
   }, [isAtLimit, props.style]);
 
@@ -103,7 +109,11 @@ export function CustomHandle({
 /**
  * Hook to check if a handle has reached its connection limit
  */
-export function useConnectionLimit(handleId: string, maxConnections?: number, type: 'source' | 'target' = 'target') {
+export function useConnectionLimit(
+  handleId: string,
+  maxConnections?: number,
+  type: 'source' | 'target' = 'target',
+) {
   const nodeId = useNodeId();
   const resolvedNodeId = nodeId ?? '__detached_connection_limit__';
   const connections = useNodeConnections({
@@ -113,7 +123,8 @@ export function useConnectionLimit(handleId: string, maxConnections?: number, ty
   });
 
   return useMemo(() => {
-    if (maxConnections === undefined) return { isAtLimit: false, remaining: Infinity, used: connections.length };
+    if (maxConnections === undefined)
+      return { isAtLimit: false, remaining: Infinity, used: connections.length };
     return {
       isAtLimit: connections.length >= maxConnections,
       remaining: Math.max(0, maxConnections - connections.length),
@@ -129,7 +140,7 @@ export function useConnectionLimit(handleId: string, maxConnections?: number, ty
 export function validateConnectionLimit(
   existingConnections: Connection[],
   newConnection: Connection,
-  maxConnections?: number
+  maxConnections?: number,
 ): { valid: boolean; error?: string } {
   if (maxConnections === undefined) {
     return { valid: true };
@@ -138,14 +149,17 @@ export function validateConnectionLimit(
   // Count connections for this specific handle
   const handleId = newConnection.targetHandle || newConnection.sourceHandle;
   const isTarget = !!newConnection.targetHandle;
-  
-  const existingCount = existingConnections.filter(conn => {
+
+  const existingCount = existingConnections.filter((conn) => {
     const connHandleId = isTarget ? conn.targetHandle : conn.sourceHandle;
     return connHandleId === handleId;
   }).length;
 
   if (existingCount >= maxConnections) {
-    return { valid: false, error: `Maximum ${maxConnections} connection${maxConnections === 1 ? '' : 's'} allowed` };
+    return {
+      valid: false,
+      error: `Maximum ${maxConnections} connection${maxConnections === 1 ? '' : 's'} allowed`,
+    };
   }
 
   return { valid: true };

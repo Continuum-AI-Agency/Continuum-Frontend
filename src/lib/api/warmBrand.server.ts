@@ -1,7 +1,7 @@
-"use server";
+'use server';
 
-import "server-only";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import 'server-only';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 // Fire-and-forget warm: invokes the warm-brand-now Edge Function, which populates
 // the same dashboard caches (organic analytics -> insights, paid metrics + insights,
@@ -25,7 +25,7 @@ export async function warmBrandNowServer(brandId: string): Promise<void> {
     // caller runs this inside after() with its own error handling.
   }
 
-  const { error } = await supabase.functions.invoke("warm-brand-now", {
+  const { error } = await supabase.functions.invoke('warm-brand-now', {
     body: { brandId },
     headers,
   });

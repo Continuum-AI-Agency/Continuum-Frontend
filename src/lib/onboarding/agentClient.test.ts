@@ -1,19 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import {
   computePreviewInputHash,
   fetchPreviewLatest,
   fetchPreviewSnapshot,
   fetchPreviewStatus,
+  type OnboardingPreviewEvent,
   PreviewRateLimitedError,
   resumeOnboardingPreview,
   runOnboardingPreview,
-  type OnboardingPreviewEvent,
-} from "@/lib/onboarding/agentClient";
+} from '@/lib/onboarding/agentClient';
 
 const ENV_KEYS = [
-  "NEXT_PUBLIC_AGENTS_TS_BASE_URL",
-  "AGENTS_TS_BASE_URL",
-  "NEXT_PUBLIC_AGENT_PUBLIC_URL",
+  'NEXT_PUBLIC_AGENTS_TS_BASE_URL',
+  'AGENTS_TS_BASE_URL',
+  'NEXT_PUBLIC_AGENT_PUBLIC_URL',
 ];
 
 function setBaseUrl(url: string) {
@@ -38,35 +38,35 @@ function makeStreamResponse(chunks: string[], headers?: Record<string, string>):
   });
   return new Response(stream, {
     status: 200,
-    headers: { "content-type": "text/event-stream", ...(headers ?? {}) },
+    headers: { 'content-type': 'text/event-stream', ...(headers ?? {}) },
   });
 }
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
-    headers: { "content-type": "application/json" },
+    headers: { 'content-type': 'application/json' },
     ...init,
   });
 }
 
 function sse(payload: Record<string, unknown>, sequence?: number): string {
-  const idLine = sequence !== undefined ? `id: ${sequence}\n` : "";
+  const idLine = sequence !== undefined ? `id: ${sequence}\n` : '';
   return `${idLine}data: ${JSON.stringify(payload)}\n\n`;
 }
 
-function runHandshake(runId = "run-test", reused = false): string {
+function runHandshake(runId = 'run-test', reused = false): string {
   return `event: run\ndata: ${JSON.stringify({ run_id: runId, reused })}\n`;
 }
 
 const minimalPayload = {
-  brandProfile: { id: "brand-1", brand_name: "Acme", website_url: "https://acme.com" },
+  brandProfile: { id: 'brand-1', brand_name: 'Acme', website_url: 'https://acme.com' },
   runContext: {
-    user_id: "user-1",
-    brand_id: "brand-1",
-    brand_name: "Acme",
-    created_at: "2026-05-10T00:00:00.000Z",
-    platform_urls: ["https://acme.com"],
+    user_id: 'user-1',
+    brand_id: 'brand-1',
+    brand_name: 'Acme',
+    created_at: '2026-05-10T00:00:00.000Z',
+    platform_urls: ['https://acme.com'],
     integrated_platforms: [] as string[],
     brand_voice_tags: [] as string[],
     integration_account_ids: [] as string[],
@@ -74,14 +74,13 @@ const minimalPayload = {
   scrape: null,
 };
 
-describe("runOnboardingPreview SSE parser", () => {
+describe('runOnboardingPreview SSE parser', () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    setBaseUrl("https://agents.example.com");
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      (async () => makeStreamResponse([])) as unknown as typeof fetch
-    );
+    setBaseUrl('https://agents.example.com');
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async () =>
+      makeStreamResponse([])) as unknown as typeof fetch);
   });
 
   afterEach(() => {
@@ -89,13 +88,13 @@ describe("runOnboardingPreview SSE parser", () => {
     clearBaseUrl();
   });
 
-  it("dispatches voice + complete events from a well-formed stream", async () => {
+  it('dispatches voice + complete events from a well-formed stream', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 1),
-        sse({ kind: "complete", phase: "preview", status: "ok" }, 2),
-      ])
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold' } }, 1),
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }, 2),
+      ]),
     );
 
     const events: OnboardingPreviewEvent[] = [];
@@ -110,17 +109,17 @@ describe("runOnboardingPreview SSE parser", () => {
       },
     });
 
-    expect(events.some((e) => e.type === "voice")).toBe(true);
-    expect(events.some((e) => e.type === "complete")).toBe(true);
+    expect(events.some((e) => e.type === 'voice')).toBe(true);
+    expect(events.some((e) => e.type === 'complete')).toBe(true);
     expect(sequences).toEqual([1, 2]);
   });
 
-  it("surfaces runId from the run handshake via onRunId + return", async () => {
+  it('surfaces runId from the run handshake via onRunId + return', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
-        runHandshake("run-abc"),
-        sse({ kind: "complete", phase: "preview", status: "ok" }),
-      ])
+        runHandshake('run-abc'),
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }),
+      ]),
     );
     const observed: { runId: string | null } = { runId: null };
     const result = await runOnboardingPreview({
@@ -130,67 +129,70 @@ describe("runOnboardingPreview SSE parser", () => {
         observed.runId = id;
       },
     });
-    expect(observed.runId).toBe("run-abc");
-    expect(result.runId).toBe("run-abc");
+    expect(observed.runId).toBe('run-abc');
+    expect(result.runId).toBe('run-abc');
   });
 
-  it("sends richMode=true in the body and no X-Idempotency-Key header (server-side dedup)", async () => {
+  it('sends richMode=true in the body and no X-Idempotency-Key header (server-side dedup)', async () => {
     fetchSpy.mockImplementationOnce(async () =>
-      makeStreamResponse([runHandshake(), sse({ kind: "complete", phase: "preview", status: "ok" })])
+      makeStreamResponse([
+        runHandshake(),
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }),
+      ]),
     );
 
     await runOnboardingPreview({ payload: minimalPayload, onEvent: () => {} });
 
     const init = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
     const headers = init?.headers as Record<string, string> | undefined;
-    expect(headers?.["X-Idempotency-Key"]).toBeUndefined();
-    const body = init?.body ? JSON.parse(String(init.body)) as { richMode?: boolean } : {};
+    expect(headers?.['X-Idempotency-Key']).toBeUndefined();
+    const body = init?.body ? (JSON.parse(String(init.body)) as { richMode?: boolean }) : {};
     expect(body.richMode).toBe(true);
   });
 
-  it("throws PreviewRateLimitedError on 429 with Retry-After", async () => {
+  it('throws PreviewRateLimitedError on 429 with Retry-After', async () => {
     fetchSpy.mockImplementationOnce(
       async () =>
-        new Response("rate limited", {
+        new Response('rate limited', {
           status: 429,
-          headers: { "Retry-After": "12" },
-        })
+          headers: { 'Retry-After': '12' },
+        }),
     );
     try {
       await runOnboardingPreview({ payload: minimalPayload, onEvent: () => {} });
-      throw new Error("expected throw");
+      throw new Error('expected throw');
     } catch (error) {
       expect(error).toBeInstanceOf(PreviewRateLimitedError);
       expect((error as PreviewRateLimitedError).retryAfterSeconds).toBe(12);
     }
   });
 
-  it("logs a warning for unknown SSE event kinds without throwing", async () => {
+  it('logs a warning for unknown SSE event kinds without throwing', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "telemetry_unknown_v9", payload: { hello: "world" } }),
-        sse({ kind: "complete", phase: "preview", status: "ok" }),
-      ])
+        sse({ kind: 'telemetry_unknown_v9', payload: { hello: 'world' } }),
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }),
+      ]),
     );
 
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
       await runOnboardingPreview({ payload: minimalPayload, onEvent: () => {} });
-      const calls = warnSpy.mock.calls.map((args) => String(args[0] ?? ""));
-      expect(calls.some((msg) => msg.includes("Unknown SSE event kind"))).toBe(true);
+      const calls = warnSpy.mock.calls.map((args) => String(args[0] ?? ''));
+      expect(calls.some((msg) => msg.includes('Unknown SSE event kind'))).toBe(true);
     } finally {
       warnSpy.mockRestore();
     }
   });
 
-  it("does not throw on complete.status=partial (renderable per contract)", async () => {
+  it('does not throw on complete.status=partial (renderable per contract)', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 1),
-        sse({ kind: "complete", phase: "preview", status: "partial" }, 2),
-      ])
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold' } }, 1),
+        sse({ kind: 'complete', phase: 'preview', status: 'partial' }, 2),
+      ]),
     );
 
     const events: OnboardingPreviewEvent[] = [];
@@ -198,11 +200,11 @@ describe("runOnboardingPreview SSE parser", () => {
       payload: minimalPayload,
       onEvent: (event: OnboardingPreviewEvent) => events.push(event),
     });
-    const complete = events.find((e) => e.type === "complete");
-    expect(complete && "status" in complete && complete.status).toBe("partial");
+    const complete = events.find((e) => e.type === 'complete');
+    expect(complete && 'status' in complete && complete.status).toBe('partial');
   });
 
-  it("does not abort the stream when complete.result fails strict validation (degraded run)", async () => {
+  it('does not abort the stream when complete.result fails strict validation (degraded run)', async () => {
     // A degraded run (e.g. the audience section failed all structured-gen attempts)
     // still fires `complete`, but its `result.structured` is missing FE-required
     // fields (website/documents). The consumer must surface the sections that DID
@@ -210,66 +212,75 @@ describe("runOnboardingPreview SSE parser", () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 1),
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold' } }, 1),
         sse(
-          { kind: "data", section: "business", data: { business_name: "Acme", business_description: "B2B analytics platform" } },
+          {
+            kind: 'data',
+            section: 'business',
+            data: { business_name: 'Acme', business_description: 'B2B analytics platform' },
+          },
           2,
         ),
         sse(
-          { kind: "complete", phase: "preview", status: "partial", result: { structured: { target_audience: {} } } },
+          {
+            kind: 'complete',
+            phase: 'preview',
+            status: 'partial',
+            result: { structured: { target_audience: {} } },
+          },
           3,
         ),
-      ])
+      ]),
     );
 
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const events: OnboardingPreviewEvent[] = [];
       await runOnboardingPreview({
         payload: minimalPayload,
         onEvent: (event: OnboardingPreviewEvent) => events.push(event),
       });
-      expect(events.some((e) => e.type === "voice")).toBe(true);
-      expect(events.some((e) => e.type === "business")).toBe(true);
-      expect(events.some((e) => e.type === "complete")).toBe(true);
+      expect(events.some((e) => e.type === 'voice')).toBe(true);
+      expect(events.some((e) => e.type === 'business')).toBe(true);
+      expect(events.some((e) => e.type === 'complete')).toBe(true);
     } finally {
       warnSpy.mockRestore();
     }
   });
 
-  it("skips a single malformed data event without aborting the stream", async () => {
+  it('skips a single malformed data event without aborting the stream', async () => {
     // A malformed/degraded section data event must not nuke the sections around it.
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "data", section: "brand_profile", data: {} }, 1), // missing id/brand_name
-        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 2),
-        sse({ kind: "complete", phase: "preview", status: "partial" }, 3),
-      ])
+        sse({ kind: 'data', section: 'brand_profile', data: {} }, 1), // missing id/brand_name
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold' } }, 2),
+        sse({ kind: 'complete', phase: 'preview', status: 'partial' }, 3),
+      ]),
     );
 
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const events: OnboardingPreviewEvent[] = [];
       await runOnboardingPreview({
         payload: minimalPayload,
         onEvent: (event: OnboardingPreviewEvent) => events.push(event),
       });
-      expect(events.some((e) => e.type === "brand_profile")).toBe(false);
-      expect(events.some((e) => e.type === "voice")).toBe(true);
-      expect(events.some((e) => e.type === "complete")).toBe(true);
+      expect(events.some((e) => e.type === 'brand_profile')).toBe(false);
+      expect(events.some((e) => e.type === 'voice')).toBe(true);
+      expect(events.some((e) => e.type === 'complete')).toBe(true);
     } finally {
       warnSpy.mockRestore();
     }
   });
 
-  it("does not throw on an error frame; dispatches it and lets the stream settle", async () => {
+  it('does not throw on an error frame; dispatches it and lets the stream settle', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 1),
-        sse({ kind: "error", message: "section synthesis failed" }, 2),
-      ])
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold' } }, 1),
+        sse({ kind: 'error', message: 'section synthesis failed' }, 2),
+      ]),
     );
 
     const events: OnboardingPreviewEvent[] = [];
@@ -277,88 +288,87 @@ describe("runOnboardingPreview SSE parser", () => {
       payload: minimalPayload,
       onEvent: (event: OnboardingPreviewEvent) => events.push(event),
     });
-    expect(events.some((e) => e.type === "voice")).toBe(true);
-    expect(events.some((e) => e.type === "error")).toBe(true);
+    expect(events.some((e) => e.type === 'voice')).toBe(true);
+    expect(events.some((e) => e.type === 'error')).toBe(true);
   });
 
-  it("dedupes events whose SSE id is <= the high-water mark", async () => {
+  it('dedupes events whose SSE id is <= the high-water mark', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 5),
-        sse({ kind: "data", section: "voice", data: { tone: "Bold (duplicate)" } }, 5),
-        sse({ kind: "data", section: "audience", data: { summary: "stale" } }, 4),
-        sse({ kind: "complete", phase: "preview", status: "ok" }, 6),
-      ])
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold' } }, 5),
+        sse({ kind: 'data', section: 'voice', data: { tone: 'Bold (duplicate)' } }, 5),
+        sse({ kind: 'data', section: 'audience', data: { summary: 'stale' } }, 4),
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }, 6),
+      ]),
     );
 
     const voiceEvents: OnboardingPreviewEvent[] = [];
     await runOnboardingPreview({
       payload: minimalPayload,
       onEvent: (event: OnboardingPreviewEvent) => {
-        if (event.type === "voice" || event.type === "audience") voiceEvents.push(event);
+        if (event.type === 'voice' || event.type === 'audience') voiceEvents.push(event);
       },
     });
     expect(voiceEvents.length).toBe(1);
-    expect(voiceEvents[0].type).toBe("voice");
+    expect(voiceEvents[0].type).toBe('voice');
   });
 
-  it("ignores spark events with an unknown section (warns, continues)", async () => {
+  it('ignores spark events with an unknown section (warns, continues)', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "spark", section: "made_up_section", label: "x" }, 1),
-        sse({ kind: "complete", phase: "preview", status: "ok" }, 2),
-      ])
+        sse({ kind: 'spark', section: 'made_up_section', label: 'x' }, 1),
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }, 2),
+      ]),
     );
 
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const events: OnboardingPreviewEvent[] = [];
       await runOnboardingPreview({
         payload: minimalPayload,
         onEvent: (event: OnboardingPreviewEvent) => events.push(event),
       });
-      expect(events.some((e) => e.type === "spark")).toBe(false);
-      expect(events.some((e) => e.type === "complete")).toBe(true);
-      const calls = warnSpy.mock.calls.map((args) => String(args[0] ?? ""));
-      expect(calls.some((msg) => msg.includes("Malformed spark event ignored"))).toBe(true);
+      expect(events.some((e) => e.type === 'spark')).toBe(false);
+      expect(events.some((e) => e.type === 'complete')).toBe(true);
+      const calls = warnSpy.mock.calls.map((args) => String(args[0] ?? ''));
+      expect(calls.some((msg) => msg.includes('Malformed spark event ignored'))).toBe(true);
     } finally {
       warnSpy.mockRestore();
     }
   });
 
-  it("dispatches enrich events with the union section type", async () => {
+  it('dispatches enrich events with the union section type', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
         runHandshake(),
-        sse({ kind: "complete", phase: "preview", status: "ok" }, 1),
-        sse({ kind: "enrich", section: "audit.voice", data: { score: 80 }, seq: 2 }, 2),
-        sse({ kind: "enrich", section: "first_impression", data: { headline: "Late" }, seq: 3 }, 3),
-      ])
+        sse({ kind: 'complete', phase: 'preview', status: 'ok' }, 1),
+        sse({ kind: 'enrich', section: 'audit.voice', data: { score: 80 }, seq: 2 }, 2),
+        sse({ kind: 'enrich', section: 'first_impression', data: { headline: 'Late' }, seq: 3 }, 3),
+      ]),
     );
 
     const enrichEvents: OnboardingPreviewEvent[] = [];
     await runOnboardingPreview({
       payload: minimalPayload,
       onEvent: (event: OnboardingPreviewEvent) => {
-        if (event.type === "enrich") enrichEvents.push(event);
+        if (event.type === 'enrich') enrichEvents.push(event);
       },
     });
     expect(enrichEvents.length).toBe(2);
-    expect(enrichEvents[0].type === "enrich" && enrichEvents[0].section).toBe("audit.voice");
-    expect(enrichEvents[1].type === "enrich" && enrichEvents[1].section).toBe("first_impression");
+    expect(enrichEvents[0].type === 'enrich' && enrichEvents[0].section).toBe('audit.voice');
+    expect(enrichEvents[1].type === 'enrich' && enrichEvents[1].section).toBe('first_impression');
   });
 });
 
-describe("resumeOnboardingPreview", () => {
+describe('resumeOnboardingPreview', () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    setBaseUrl("https://agents.example.com");
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      (async () => makeStreamResponse([])) as unknown as typeof fetch
-    );
+    setBaseUrl('https://agents.example.com');
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async () =>
+      makeStreamResponse([])) as unknown as typeof fetch);
   });
 
   afterEach(() => {
@@ -366,44 +376,47 @@ describe("resumeOnboardingPreview", () => {
     clearBaseUrl();
   });
 
-  it("GETs /events with Last-Event-ID when lastEventId > 0", async () => {
+  it('GETs /events with Last-Event-ID when lastEventId > 0', async () => {
     fetchSpy.mockImplementationOnce(async () =>
-      makeStreamResponse([sse({ kind: "complete", phase: "preview", status: "ok" })])
+      makeStreamResponse([sse({ kind: 'complete', phase: 'preview', status: 'ok' })]),
     );
 
-    await resumeOnboardingPreview("run-abc", { lastEventId: 7, onEvent: () => {} });
+    await resumeOnboardingPreview('run-abc', { lastEventId: 7, onEvent: () => {} });
 
     const [url, init] = fetchSpy.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/onboarding/brand-profiles/preview/run-abc/events");
-    const headers = (init as RequestInit | undefined)?.headers as Record<string, string> | undefined;
-    expect(headers?.["Last-Event-ID"]).toBe("7");
-    expect(headers?.["Accept"]).toBe("text/event-stream");
+    expect(String(url)).toContain('/onboarding/brand-profiles/preview/run-abc/events');
+    const headers = (init as RequestInit | undefined)?.headers as
+      | Record<string, string>
+      | undefined;
+    expect(headers?.['Last-Event-ID']).toBe('7');
+    expect(headers?.['Accept']).toBe('text/event-stream');
   });
 
-  it("omits Last-Event-ID when 0 or unset", async () => {
+  it('omits Last-Event-ID when 0 or unset', async () => {
     fetchSpy.mockImplementationOnce(async () =>
-      makeStreamResponse([sse({ kind: "complete", phase: "preview", status: "ok" })])
+      makeStreamResponse([sse({ kind: 'complete', phase: 'preview', status: 'ok' })]),
     );
-    await resumeOnboardingPreview("run-abc", { onEvent: () => {} });
+    await resumeOnboardingPreview('run-abc', { onEvent: () => {} });
     const init = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
     const headers = init?.headers as Record<string, string> | undefined;
-    expect(headers?.["Last-Event-ID"]).toBeUndefined();
+    expect(headers?.['Last-Event-ID']).toBeUndefined();
   });
 
-  it("throws on 404", async () => {
-    fetchSpy.mockImplementationOnce(async () => new Response("not found", { status: 404 }));
-    await expect(resumeOnboardingPreview("missing", { onEvent: () => {} })).rejects.toThrow(/not found/i);
+  it('throws on 404', async () => {
+    fetchSpy.mockImplementationOnce(async () => new Response('not found', { status: 404 }));
+    await expect(resumeOnboardingPreview('missing', { onEvent: () => {} })).rejects.toThrow(
+      /not found/i,
+    );
   });
 });
 
-describe("fetchPreviewLatest + fetchPreviewSnapshot", () => {
+describe('fetchPreviewLatest + fetchPreviewSnapshot', () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    setBaseUrl("https://agents.example.com");
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      (async () => jsonResponse({})) as unknown as typeof fetch
-    );
+    setBaseUrl('https://agents.example.com');
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async () =>
+      jsonResponse({})) as unknown as typeof fetch);
   });
 
   afterEach(() => {
@@ -411,83 +424,83 @@ describe("fetchPreviewLatest + fetchPreviewSnapshot", () => {
     clearBaseUrl();
   });
 
-  it("fetchPreviewLatest returns null on 404", async () => {
-    fetchSpy.mockImplementationOnce(async () => new Response("nope", { status: 404 }));
-    const result = await fetchPreviewLatest("brand-1");
+  it('fetchPreviewLatest returns null on 404', async () => {
+    fetchSpy.mockImplementationOnce(async () => new Response('nope', { status: 404 }));
+    const result = await fetchPreviewLatest('brand-1');
     expect(result).toBeNull();
   });
 
-  it("fetchPreviewLatest parses the discovery payload", async () => {
+  it('fetchPreviewLatest parses the discovery payload', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       jsonResponse({
-        run_id: "run-abc",
-        brand_id: "brand-1",
-        status: "completed",
+        run_id: 'run-abc',
+        brand_id: 'brand-1',
+        status: 'completed',
         prompt_version: 1,
-        started_at: "2026-05-10T00:00:00.000Z",
-        completed_at: "2026-05-10T00:01:00.000Z",
-        input_hash: "abc123",
-      })
+        started_at: '2026-05-10T00:00:00.000Z',
+        completed_at: '2026-05-10T00:01:00.000Z',
+        input_hash: 'abc123',
+      }),
     );
-    const result = await fetchPreviewLatest("brand-1");
-    expect(result?.run_id).toBe("run-abc");
-    expect(result?.status).toBe("completed");
-    expect(result?.input_hash).toBe("abc123");
+    const result = await fetchPreviewLatest('brand-1');
+    expect(result?.run_id).toBe('run-abc');
+    expect(result?.status).toBe('completed');
+    expect(result?.input_hash).toBe('abc123');
   });
 
-  it("fetchPreviewStatus returns null on 404", async () => {
-    fetchSpy.mockImplementationOnce(async () => new Response("nope", { status: 404 }));
-    const result = await fetchPreviewStatus("run-missing");
+  it('fetchPreviewStatus returns null on 404', async () => {
+    fetchSpy.mockImplementationOnce(async () => new Response('nope', { status: 404 }));
+    const result = await fetchPreviewStatus('run-missing');
     expect(result).toBeNull();
   });
 
-  it("fetchPreviewStatus parses the status snapshot", async () => {
+  it('fetchPreviewStatus parses the status snapshot', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       jsonResponse({
-        runId: "run-abc",
-        status: "completed",
+        runId: 'run-abc',
+        status: 'completed',
         lastSeq: 42,
-        startedAt: "2026-05-22T00:00:00.000Z",
-        completedAt: "2026-05-22T00:01:00.000Z",
+        startedAt: '2026-05-22T00:00:00.000Z',
+        completedAt: '2026-05-22T00:01:00.000Z',
         result: { prompt_version: 1 },
         error: null,
-      })
+      }),
     );
-    const result = await fetchPreviewStatus("run-abc");
-    expect(result?.runId).toBe("run-abc");
-    expect(result?.status).toBe("completed");
+    const result = await fetchPreviewStatus('run-abc');
+    expect(result?.runId).toBe('run-abc');
+    expect(result?.status).toBe('completed');
     expect(result?.lastSeq).toBe(42);
     expect(result?.result?.prompt_version).toBe(1);
   });
 
-  it("fetchPreviewSnapshot includes ?events=true when requested", async () => {
+  it('fetchPreviewSnapshot includes ?events=true when requested', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       jsonResponse({
-        run_id: "run-abc",
-        brand_id: "brand-1",
-        status: "completed",
+        run_id: 'run-abc',
+        brand_id: 'brand-1',
+        status: 'completed',
         prompt_version: 1,
-        started_at: "2026-05-10T00:00:00.000Z",
-        completed_at: "2026-05-10T00:01:00.000Z",
+        started_at: '2026-05-10T00:00:00.000Z',
+        completed_at: '2026-05-10T00:01:00.000Z',
         result: null,
-      })
+      }),
     );
-    await fetchPreviewSnapshot("run-abc", { events: true });
-    const url = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    await fetchPreviewSnapshot('run-abc', { events: true });
+    const url = String(fetchSpy.mock.calls[0]?.[0] ?? '');
     expect(url).toMatch(/\/preview\/run-abc\?events=true$/);
   });
 });
 
-describe("computePreviewInputHash", () => {
-  it("is deterministic across key order", async () => {
+describe('computePreviewInputHash', () => {
+  it('is deterministic across key order', async () => {
     const a = await computePreviewInputHash({
       payload: {
-        brandProfile: { id: "b", brand_name: "Acme" },
+        brandProfile: { id: 'b', brand_name: 'Acme' },
         runContext: {
-          user_id: "u",
-          brand_id: "b",
-          brand_name: "Acme",
-          created_at: "2026-05-10T00:00:00.000Z",
+          user_id: 'u',
+          brand_id: 'b',
+          brand_name: 'Acme',
+          created_at: '2026-05-10T00:00:00.000Z',
           platform_urls: [],
           integrated_platforms: [],
           brand_voice_tags: [],
@@ -503,12 +516,12 @@ describe("computePreviewInputHash", () => {
           brand_voice_tags: [],
           integrated_platforms: [],
           platform_urls: [],
-          created_at: "2026-05-10T00:00:00.000Z",
-          brand_name: "Acme",
-          brand_id: "b",
-          user_id: "u",
+          created_at: '2026-05-10T00:00:00.000Z',
+          brand_name: 'Acme',
+          brand_id: 'b',
+          user_id: 'u',
         },
-        brandProfile: { brand_name: "Acme", id: "b" },
+        brandProfile: { brand_name: 'Acme', id: 'b' },
         scrape: null,
       },
     });
@@ -516,13 +529,21 @@ describe("computePreviewInputHash", () => {
     expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("changes when prompt_version bumps", async () => {
+  it('changes when prompt_version bumps', async () => {
     const a = await computePreviewInputHash({
-      payload: { brandProfile: { id: "b", brand_name: "Acme" }, runContext: {} as never, scrape: null },
+      payload: {
+        brandProfile: { id: 'b', brand_name: 'Acme' },
+        runContext: {} as never,
+        scrape: null,
+      },
       promptVersion: 1,
     });
     const b = await computePreviewInputHash({
-      payload: { brandProfile: { id: "b", brand_name: "Acme" }, runContext: {} as never, scrape: null },
+      payload: {
+        brandProfile: { id: 'b', brand_name: 'Acme' },
+        runContext: {} as never,
+        scrape: null,
+      },
       promptVersion: 2,
     });
     expect(a).not.toBe(b);

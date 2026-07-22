@@ -1,4 +1,4 @@
-import { PostHog } from "posthog-node";
+import { PostHog } from 'posthog-node';
 
 export function getPostHogClient(): PostHog {
   return new PostHog(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN!, {

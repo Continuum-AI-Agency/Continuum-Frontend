@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
-import { normalizeInviteBrandId, normalizeInviteToken } from "@/lib/invites/params";
-import { finalizeInviteAcceptance } from "@/lib/invites/finalize";
+import { redirect } from 'next/navigation';
+import { finalizeInviteAcceptance } from '@/lib/invites/finalize';
+import { normalizeInviteBrandId, normalizeInviteToken } from '@/lib/invites/params';
 
 type InviteCallbackPageProps = {
   searchParams?: Promise<{ token?: string; brand?: string }>;
@@ -12,7 +12,7 @@ export default async function InviteCallbackPage({ searchParams }: InviteCallbac
   const brandId = normalizeInviteBrandId(params.brand ?? null);
 
   if (!token || !brandId) {
-    redirect("/dashboard?invite=missing_params");
+    redirect('/dashboard?invite=missing_params');
   }
 
   const result = await finalizeInviteAcceptance(token, brandId);

@@ -1,38 +1,38 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { resolveCallbackContext } from "../../src/lib/auth/callback-context";
+import { resolveCallbackContext } from '../../src/lib/auth/callback-context';
 
-test("resolveCallbackContext prefers query params over cookies", () => {
+test('resolveCallbackContext prefers query params over cookies', () => {
   const resolved = resolveCallbackContext({
-    queryContext: "login",
-    queryProvider: "google",
-    cookieContext: "auth",
-    cookieProvider: "github",
+    queryContext: 'login',
+    queryProvider: 'google',
+    cookieContext: 'auth',
+    cookieProvider: 'github',
   });
 
-  assert.deepEqual(resolved, { context: "login", provider: "google" });
+  assert.deepEqual(resolved, { context: 'login', provider: 'google' });
 });
 
-test("resolveCallbackContext falls back to cookies when query is absent", () => {
+test('resolveCallbackContext falls back to cookies when query is absent', () => {
   const resolved = resolveCallbackContext({
     queryContext: null,
     queryProvider: null,
-    cookieContext: "auth",
-    cookieProvider: "google",
+    cookieContext: 'auth',
+    cookieProvider: 'google',
   });
 
-  assert.deepEqual(resolved, { context: "auth", provider: "google" });
+  assert.deepEqual(resolved, { context: 'auth', provider: 'google' });
 });
 
-test("resolveCallbackContext uses default context when none supplied", () => {
+test('resolveCallbackContext uses default context when none supplied', () => {
   const resolved = resolveCallbackContext({
     queryContext: null,
     queryProvider: null,
     cookieContext: undefined,
     cookieProvider: undefined,
-    defaultContext: "login",
+    defaultContext: 'login',
   });
 
-  assert.deepEqual(resolved, { context: "login", provider: null });
+  assert.deepEqual(resolved, { context: 'login', provider: null });
 });

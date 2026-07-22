@@ -1,15 +1,14 @@
-"use client";
+'use client';
 
-import * as React from "react";
-
-import type { DailyMetric } from "@/types/timeline";
-import type { CampaignPerformanceMetricKey } from "@/lib/paid-media/performance-types";
-import { cn } from "@/lib/utils";
+import * as React from 'react';
+import type { CampaignPerformanceMetricKey } from '@/lib/paid-media/performance-types';
+import { cn } from '@/lib/utils';
+import type { DailyMetric } from '@/types/timeline';
 
 type MetricSparklineProps = {
   trends: DailyMetric[] | undefined;
   metric: CampaignPerformanceMetricKey;
-  tone?: "positive" | "negative" | "flat";
+  tone?: 'positive' | 'negative' | 'flat';
   width?: number;
   height?: number;
   className?: string;
@@ -20,25 +19,25 @@ type MetricSparklineProps = {
 // DailyMetric series and never selectable in the matrix — they map to nothing and
 // fall through to the flat placeholder below.
 const TREND_FIELD_BY_METRIC: Partial<Record<CampaignPerformanceMetricKey, keyof DailyMetric>> = {
-  spend: "spend",
-  roas: "roas",
-  ctr: "ctr_pct",
-  cpc: "cpc",
-  cpa: "cpa",
-  impressions: "impressions",
-  clicks: "clicks",
+  spend: 'spend',
+  roas: 'roas',
+  ctr: 'ctr_pct',
+  cpc: 'cpc',
+  cpa: 'cpa',
+  impressions: 'impressions',
+  clicks: 'clicks',
 };
 
-const TONE_STROKE: Record<"positive" | "negative" | "flat", string> = {
-  positive: "oklch(72% 0.16 154)",
-  negative: "oklch(64% 0.20 28)",
-  flat: "oklch(60% 0.02 250)",
+const TONE_STROKE: Record<'positive' | 'negative' | 'flat', string> = {
+  positive: 'oklch(72% 0.16 154)',
+  negative: 'oklch(64% 0.20 28)',
+  flat: 'oklch(60% 0.02 250)',
 };
 
 export function MetricSparkline({
   trends,
   metric,
-  tone = "flat",
+  tone = 'flat',
   width = 80,
   height = 20,
   className,
@@ -49,13 +48,13 @@ export function MetricSparkline({
     if (!trends || !field || trends.length < 2) return [];
     return trends
       .map((point) => point[field])
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
   }, [trends, field]);
 
   if (values.length < 2) {
     return (
       <div
-        className={cn("inline-flex items-center text-muted-foreground/60", className)}
+        className={cn('inline-flex items-center text-muted-foreground/60', className)}
         style={{ width, height }}
         aria-hidden
       >
@@ -75,7 +74,7 @@ export function MetricSparkline({
       const y = height - ((value - min) / span) * (height - 2) - 1;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
-    .join(" ");
+    .join(' ');
 
   const lastIndex = values.length - 1;
   const lastX = lastIndex * stepX;
@@ -83,7 +82,7 @@ export function MetricSparkline({
 
   return (
     <svg
-      className={cn("inline-block align-middle", className)}
+      className={cn('inline-block align-middle', className)}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}

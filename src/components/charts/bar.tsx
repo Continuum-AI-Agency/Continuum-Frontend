@@ -1,25 +1,18 @@
-"use client";
+'use client';
 
-import type { scaleBand } from "@visx/scale";
-import type { Transition } from "motion/react";
-import { motion } from "motion/react";
-import { memo, useId, useMemo } from "react";
-import { barDepthAndRise, barDepthMaxDepth } from "./bar-depth-geometry";
-import {
-  chartCssVars,
-  useChart,
-  useChartStable,
-  useYScale,
-} from "./chart-context";
-import { useChartLegendHover } from "./chart-legend-hover";
-import { transitionWithDelay } from "./motion-utils";
+import type { scaleBand } from '@visx/scale';
+import type { Transition } from 'motion/react';
+import { motion } from 'motion/react';
+import { memo, useId, useMemo } from 'react';
+import { barDepthAndRise, barDepthMaxDepth } from './bar-depth-geometry';
+import { chartCssVars, useChart, useChartStable, useYScale } from './chart-context';
+import { useChartLegendHover } from './chart-legend-hover';
+import { transitionWithDelay } from './motion-utils';
 
-type ScaleBand<Domain extends { toString(): string }> = ReturnType<
-  typeof scaleBand<Domain>
->;
+type ScaleBand<Domain extends { toString(): string }> = ReturnType<typeof scaleBand<Domain>>;
 
-export type BarLineCap = "round" | "butt" | number;
-export type BarAnimationType = "grow" | "fade";
+export type BarLineCap = 'round' | 'butt' | number;
+export type BarAnimationType = 'grow' | 'fade';
 
 // ── Bar-depth perspective trim ───────────────────────────────────────────
 // Uses the SHARED geometry (`bar-depth-geometry.ts`) so a
@@ -35,14 +28,13 @@ function barDepthPerspectiveRise(
   innerWidth: number,
   datum: Record<string, unknown>,
   topY: number,
-  baselineY: number
+  baselineY: number,
 ): number {
   const centerX = innerWidth / 2;
   if (centerX <= 0) {
     return 0;
   }
-  const step =
-    (barScale as unknown as { step?: () => number }).step?.() ?? bandWidth;
+  const step = (barScale as unknown as { step?: () => number }).step?.() ?? bandWidth;
   const maxDepth = barDepthMaxDepth(step, bandWidth);
   const bandX = barScale(barXAccessor(datum)) ?? 0;
   const cx = bandX + bandWidth / 2;
@@ -130,16 +122,16 @@ function AnimatedBar({
 }: AnimatedBarProps) {
   const enterAnim = transitionWithDelay(enterTransition, index * staggerDelay);
 
-  if (animationType === "fade") {
+  if (animationType === 'fade') {
     return (
       <motion.rect
         animate={{
           opacity: isFaded ? fadedOpacity : 1,
-          filter: "blur(0px)",
+          filter: 'blur(0px)',
         }}
         fill={fill}
         height={height}
-        initial={{ opacity: 0, filter: "blur(2px)" }}
+        initial={{ opacity: 0, filter: 'blur(2px)' }}
         key={`fade-${index}-${revealEpoch}`}
         rx={rx}
         ry={ry}
@@ -154,15 +146,10 @@ function AnimatedBar({
   const initial = isHorizontal
     ? { width: 0, height, x: 0, y }
     : { width, height: 0, x, y: innerHeight };
-  const target = isHorizontal
-    ? { width, height, x: 0, y }
-    : { width, height, x, y };
+  const target = isHorizontal ? { width, height, x: 0, y } : { width, height, x, y };
 
   return (
-    <g
-      opacity={isFaded ? fadedOpacity : 1}
-      style={{ transition: "opacity 0.15s ease-in-out" }}
-    >
+    <g opacity={isFaded ? fadedOpacity : 1} style={{ transition: 'opacity 0.15s ease-in-out' }}>
       <motion.rect
         animate={target}
         fill={fill}
@@ -180,9 +167,9 @@ const BarInner = memo(function BarInner({
   dataKey,
   yAxisId,
   fill = chartCssVars.linePrimary,
-  lineCap = "round",
+  lineCap = 'round',
   animate = true,
-  animationType = "grow",
+  animationType = 'grow',
   fadedOpacity = 0.3,
   staggerDelay,
   stackGap = 0,
@@ -217,7 +204,7 @@ const BarInner = memo(function BarInner({
     staggerDelay ?? (data.length > 1 ? staggerSpread / 1000 / data.length : 0);
   const uniqueId = useId();
 
-  const isHorizontal = orientation === "horizontal";
+  const isHorizontal = orientation === 'horizontal';
 
   // Find the index of this bar series among all bar series
   const { hoveredIndex: legendHoveredIndex } = useChartLegendHover();
@@ -230,8 +217,7 @@ const BarInner = memo(function BarInner({
   const seriesConfig = lines[seriesIndex];
   const valueScale = useYScale(yAxisId ?? seriesConfig?.yAxisId);
 
-  const isLegendDimmed =
-    legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
+  const isLegendDimmed = legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
 
   const seriesCount = lines.length;
   const isLastSeries = seriesIndex === seriesCount - 1;
@@ -257,10 +243,10 @@ const BarInner = memo(function BarInner({
     if (perspective) {
       return 0;
     }
-    if (typeof lineCap === "number") {
+    if (typeof lineCap === 'number') {
       return lineCap;
     }
-    if (lineCap === "round" && barWidth) {
+    if (lineCap === 'round' && barWidth) {
       return Math.min(barWidth / 2, 8);
     }
     return 0;
@@ -270,7 +256,7 @@ const BarInner = memo(function BarInner({
     <g className={`bar-series-${uniqueId}`}>
       {data.map((d, i) => {
         const value = d[dataKey];
-        if (typeof value !== "number") {
+        if (typeof value !== 'number') {
           return null;
         }
 
@@ -308,8 +294,7 @@ const BarInner = memo(function BarInner({
           }
           y = stacked
             ? bandPos
-            : bandPos +
-              seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
+            : bandPos + seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
         } else {
           // Vertical bars: category on x-axis, value on y-axis
           const valuePos = scale(value) ?? 0;
@@ -334,8 +319,7 @@ const BarInner = memo(function BarInner({
           }
           x = stacked
             ? bandPos
-            : bandPos +
-              seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
+            : bandPos + seriesIndex * (barWidth + (seriesCount > 1 ? groupGap : 0));
 
           // Minimum visible height — floor short/zero non-stacked bars so a
           // zero-value data point still reads as a tiny bar instead of
@@ -343,12 +327,7 @@ const BarInner = memo(function BarInner({
           // perspective trim (sub-pixel on a 3px bar; keeps the front aligned
           // with bar-depth, which also skips trim for floored bars).
           let isFloored = false;
-          if (
-            !stacked &&
-            minBarHeight > 0 &&
-            value >= 0 &&
-            barHeight < minBarHeight
-          ) {
+          if (!stacked && minBarHeight > 0 && value >= 0 && barHeight < minBarHeight) {
             const baselineY = scale(0) ?? innerHeight;
             barHeight = minBarHeight;
             y = baselineY - minBarHeight;
@@ -360,12 +339,7 @@ const BarInner = memo(function BarInner({
           // lid back edge. Stacked: only the last (topmost) series; grouped or
           // single: every positive bar. Clamped to `barHeight - 1` so very
           // short bars keep a positive height (matches bar-depth's clamp).
-          if (
-            perspective &&
-            value > 0 &&
-            !isFloored &&
-            (!stacked || isLastSeries)
-          ) {
+          if (perspective && value > 0 && !isFloored && (!stacked || isLastSeries)) {
             const baselineY = scale(0) ?? innerHeight;
             const rise = barDepthPerspectiveRise(
               barScale,
@@ -374,7 +348,7 @@ const BarInner = memo(function BarInner({
               innerWidth,
               d,
               y,
-              baselineY
+              baselineY,
             );
             const trim = Math.min(rise, Math.max(0, barHeight - 1));
             y += trim;
@@ -382,8 +356,7 @@ const BarInner = memo(function BarInner({
           }
         }
 
-        const isFaded =
-          (hoveredBarIndex !== null && hoveredBarIndex !== i) || isLegendDimmed;
+        const isFaded = (hoveredBarIndex !== null && hoveredBarIndex !== i) || isLegendDimmed;
 
         // Use categoryValue as key since it's the unique identifier from data
         const barKey = `bar-${dataKey}-${categoryValue}`;
@@ -430,8 +403,8 @@ const BarInner = memo(function BarInner({
             rx={effectiveRx}
             ry={effectiveRy}
             style={{
-              cursor: "default",
-              transition: "opacity 0.15s ease-in-out",
+              cursor: 'default',
+              transition: 'opacity 0.15s ease-in-out',
             }}
             width={barW}
             x={x}
@@ -447,20 +420,15 @@ export function Bar(props: BarProps) {
   const { barScale, bandWidth, barXAccessor } = useChartStable();
 
   if (!(barScale && bandWidth && barXAccessor)) {
-    console.warn("Bar component must be used within a BarChart");
+    console.warn('Bar component must be used within a BarChart');
     return null;
   }
 
   return (
-    <BarInner
-      {...props}
-      bandWidth={bandWidth}
-      barScale={barScale}
-      barXAccessor={barXAccessor}
-    />
+    <BarInner {...props} bandWidth={bandWidth} barScale={barScale} barXAccessor={barXAccessor} />
   );
 }
 
-Bar.displayName = "Bar";
+Bar.displayName = 'Bar';
 
 export default Bar;

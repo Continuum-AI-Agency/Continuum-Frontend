@@ -3,7 +3,23 @@
 // selected (validated server-side against permissions). When recipientUserIds is
 // omitted, the edge falls back to the brand's scheduled Pulse subscription list.
 
+import {
+  getReportScheduleResponseSchema,
+  type ReportCadence,
+  type ReportSchedule,
+} from '@continuum/contracts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+
+// FunctionsHttpError keeps the JSON body on `context`; its `error` field carries
+// the human message (429 rate limit, 409 no-data-yet, 400 validation). Falls back
+// to the SDK error message when the body can't be read.
+async function edgeErrorMessage(error: unknown): Promise<string> {
+  const context = (error as { context?: Response }).context;
+  const bodyJson = context
+    ? await context.json().catch(() => null as { error?: string } | null)
+    : null;
+  return bodyJson?.error ?? (error instanceof Error ? error.message : 'Unknown error.');
+}
 
 export type SendContinuumReportInput = {
   brandId: string;
@@ -43,12 +59,7 @@ export async function sendContinuumReport(
   });
 
   if (error) {
-    // FunctionsHttpError keeps the body on `context`; 429 (rate limited) and 409
-    // (no performance data yet) messages are the useful ones for the toast.
-    const bodyJson = await (error as { context?: Response }).context
-      ?.json()
-      .catch(() => null as { error?: string } | null);
-    throw new Error(bodyJson?.error ?? error.message);
+    throw new Error(await edgeErrorMessage(error));
   }
 
   const recipients = (data as { recipients?: string[] } | null)?.recipients ?? [];
@@ -58,4 +69,77 @@ export async function sendContinuumReport(
 /** @deprecated Prefer sendContinuumReport */
 export async function sendPulseReport(brandId: string): Promise<SendContinuumReportResult> {
   return sendContinuumReport({ brandId });
+}
+
+// --- Recurring schedule (send-first-value-report schedule / get_schedule /
+// cancel_schedule). One schedule per brand; recipients mix brand members and
+// external stakeholder emails. Responses are validated against the contracts
+// schema at this boundary.
+
+export type ReportScheduleInput = {
+  brandId: string;
+  cadence: ReportCadence;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  hour: number;
+  timezone: string;
+  memberUserIds: string[];
+  externalEmails: string[];
+};
+
+export async function upsertReportSchedule(input: ReportScheduleInput): Promise<ReportSchedule> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.functions.invoke('send-first-value-report', {
+    body: {
+      action: 'schedule',
+      brandId: input.brandId,
+      cadence: input.cadence,
+      dayOfWeek: input.dayOfWeek,
+      dayOfMonth: input.dayOfMonth,
+      hour: input.hour,
+      timezone: input.timezone,
+      recipients: {
+        memberUserIds: input.memberUserIds,
+        externalEmails: input.externalEmails,
+      },
+    },
+  });
+
+  if (error) {
+    throw new Error(await edgeErrorMessage(error));
+  }
+
+  const parsed = getReportScheduleResponseSchema.safeParse(data);
+  if (!parsed.success || !parsed.data.schedule) {
+    throw new Error('The saved schedule response was malformed.');
+  }
+  return parsed.data.schedule;
+}
+
+export async function getReportSchedule(brandId: string): Promise<ReportSchedule | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.functions.invoke('send-first-value-report', {
+    body: { action: 'get_schedule', brandId },
+  });
+
+  if (error) {
+    throw new Error(await edgeErrorMessage(error));
+  }
+
+  const parsed = getReportScheduleResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error('The schedule response was malformed.');
+  }
+  return parsed.data.schedule;
+}
+
+export async function cancelReportSchedule(brandId: string): Promise<void> {
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.functions.invoke('send-first-value-report', {
+    body: { action: 'cancel_schedule', brandId },
+  });
+
+  if (error) {
+    throw new Error(await edgeErrorMessage(error));
+  }
 }

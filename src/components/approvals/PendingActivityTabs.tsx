@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { usePendingActions } from "@/lib/approvals/queries";
-import { ApprovalsCompact } from "./ApprovalsCompact";
-import { cn } from "@/lib/utils";
+import type * as React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePendingActions } from '@/lib/approvals/queries';
+import { cn } from '@/lib/utils';
+import { ApprovalsCompact } from './ApprovalsCompact';
 
-type Variant = "rail" | "dropdown";
+type Variant = 'rail' | 'dropdown';
 
 type Props = {
   brandId: string;
@@ -23,19 +23,24 @@ type Props = {
  * DCOActionAlertsBox were mounted previously; the consumer passes the activity
  * widget as `activityContent`.
  */
-export function PendingActivityTabs({ brandId, variant = "rail", activityContent, className }: Props) {
-  const list = usePendingActions(brandId, "PENDING");
+export function PendingActivityTabs({
+  brandId,
+  variant = 'rail',
+  activityContent,
+  className,
+}: Props) {
+  const list = usePendingActions(brandId, 'PENDING');
   const pendingCount = list.data?.total ?? 0;
 
   return (
     <Tabs
-      defaultValue={pendingCount > 0 ? "pending" : "activity"}
-      className={cn("flex h-full min-h-0 flex-col", className)}
+      defaultValue={pendingCount > 0 ? 'pending' : 'activity'}
+      className={cn('flex h-full min-h-0 flex-col', className)}
     >
       <div
         className={cn(
-          "flex items-center justify-between gap-2 border-b border-border/70 bg-card px-2 py-1.5",
-          variant === "dropdown" && "px-3",
+          'flex items-center justify-between gap-2 border-b border-border/70 bg-card px-2 py-1.5',
+          variant === 'dropdown' && 'px-3',
         )}
       >
         <TabsList className="h-7 p-0.5">

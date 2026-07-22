@@ -136,7 +136,13 @@ function resolveVideoInput(
   nodes: StudioNode[],
   edges: Edge[],
 ):
-  | { data: string; mimeType: string; filename?: string; sourcePath?: string; sourceUrl?: string }
+  | {
+      data?: string;
+      mimeType: string;
+      filename?: string;
+      sourcePath?: string;
+      sourceUrl?: string;
+    }
   | undefined {
   const incomingEdge = edges.find((e) => e.target === nodeId && e.targetHandle === handleId);
 
@@ -147,6 +153,13 @@ function resolveVideoInput(
     const parsed = parseDataUrl(sourceOutput.url);
     if (parsed?.base64) {
       return { data: parsed.base64, mimeType: parsed.mimeType };
+    }
+    if (sourceOutput.url.trim()) {
+      return {
+        mimeType: 'video/mp4',
+        sourceUrl: sourceOutput.url.trim(),
+        sourcePath: sourceOutput.storagePath,
+      };
     }
     return undefined;
   }
@@ -161,6 +174,18 @@ function resolveVideoInput(
         filename: (sourceNode.data as any).fileName,
         sourcePath: (sourceNode.data as any).sourcePath,
         sourceUrl: (sourceNode.data as any).sourceUrl,
+      };
+    }
+    const sourceUrl =
+      (typeof (sourceNode.data as any).sourceUrl === 'string' &&
+        (sourceNode.data as any).sourceUrl.trim()) ||
+      (typeof (sourceNode.data as any).video === 'string' && (sourceNode.data as any).video.trim());
+    if (sourceUrl) {
+      return {
+        mimeType: 'video/mp4',
+        filename: (sourceNode.data as any).fileName,
+        sourcePath: (sourceNode.data as any).sourcePath,
+        sourceUrl,
       };
     }
   }
@@ -395,6 +420,11 @@ export async function buildEnrichPayload(
   const data = node.data as StringNodeData;
   const prompt = data.value || '';
 
+  // Composer already authored the generation-ready prompt. Re-enriching it adds a
+  // second model call, latency, cost, and another chance to dilute explicit brand
+  // constraints. Manually-authored strings keep the historical enrich behavior.
+  if (data.promptMode === 'literal') return null;
+
   // Resolve Images (Multiple allowed)
   const imageEdges = allEdges.filter((e) => e.target === node.id && e.targetHandle === 'image');
 
@@ -531,9 +561,9 @@ export function buildNanoGenPayload(
     data.model === 'nano-banana'
       ? 'gemini-2.5-flash-image'
       : data.model === 'nano-banana-pro'
-        ? 'gemini-3-pro-image-preview'
+        ? 'gemini-3-pro-image'
         : data.model === 'nano-banana-2'
-          ? 'gemini-3.1-flash-image-preview'
+          ? 'gemini-3.1-flash-image'
           : data.model === 'gpt-image-2'
             ? 'openai/gpt-image-2/edit'
             : data.model === 'flux-2-pro'
@@ -676,9 +706,10 @@ export function buildVeoPayload(
 
   if (supportsVideoGeneratorReferenceVideo(model)) {
     const refVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
-    if (refVideoInput?.data) {
+    if (refVideoInput?.data || refVideoInput?.sourceUrl) {
       referenceVideo = {
         data: refVideoInput.data,
+        videoUrl: refVideoInput.sourceUrl,
         mimeType: refVideoInput.mimeType,
         filename: refVideoInput.filename || 'reference-video.mp4',
       };
@@ -836,6 +867,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     reference_video: payload.referenceVideo
       ? {
           data: payload.referenceVideo.data,
+          video_url: payload.referenceVideo.videoUrl,
           mime_type: payload.referenceVideo.mimeType,
           filename: payload.referenceVideo.filename,
         }

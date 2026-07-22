@@ -1,7 +1,7 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { CardSurface } from "./CardSurface";
-import { ColorSwatch } from "./ColorSwatch";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
+import { CardSurface } from './CardSurface';
+import { ColorSwatch } from './ColorSwatch';
 
 type Props = {
   buckets: AgentPreviewBuckets | null;
@@ -9,7 +9,7 @@ type Props = {
 
 export function WebsiteSummaryCard({ buckets }: Props) {
   const website = buckets?.website ?? null;
-  const status = buckets?.sectionStatus.website ?? "indeterminate";
+  const status = buckets?.sectionStatus.website ?? 'indeterminate';
   const isEmpty = website === null;
 
   return (
@@ -72,14 +72,17 @@ export function WebsiteSummaryCard({ buckets }: Props) {
                 Typography
               </p>
               <p className="text-sm text-muted-foreground">
-                {[website.typography.primary, website.typography.secondary].filter(Boolean).join(" · ") ||
-                  "Not detected"}
+                {[website.typography.primary, website.typography.secondary]
+                  .filter(Boolean)
+                  .join(' · ') || 'Not detected'}
               </p>
             </div>
           ) : null}
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">Website analysis didn&apos;t produce data for this run.</p>
+        <p className="text-sm text-muted-foreground">
+          Website analysis didn&apos;t produce data for this run.
+        </p>
       )}
     </CardSurface>
   );

@@ -13,12 +13,19 @@ export type LogFilter = 'all' | EventFamily;
  *  portfolio name can never collide with it. */
 export const ALL_PORTFOLIOS = '__all__';
 
-/** Every money write the service persists is an `apply_*` (budget) or `convert_*`
- *  (CBO→ABO) event; the config audit trail arrives as the single `setting_changed`
- *  event; everything else (cycle_*, ingest_*, ops warnings) is a cycle-family row. */
+/** Every money write the service persists is an `apply_*` (budget), `convert_*`
+ *  (CBO→ABO), or `adset_status_*` (spend-stopping pause/unpause) event; the config
+ *  audit trail arrives as the single `setting_changed` event; everything else
+ *  (cycle_*, ingest_*, ops warnings) is a cycle-family row. */
 export function classifyEvent(event: string): EventFamily {
   if (event === 'setting_changed') return 'settings';
-  if (event.startsWith('apply_') || event.startsWith('convert_')) return 'money';
+  if (
+    event.startsWith('apply_') ||
+    event.startsWith('convert_') ||
+    event.startsWith('adset_status_')
+  ) {
+    return 'money';
+  }
   return 'cycles';
 }
 
@@ -82,19 +89,26 @@ function readText(value: unknown): string | null {
 export type MoneyMove = {
   prior: number | null;
   target: number | null;
+  /** Status transition on an `adset_status_executed` row (PAUSED/ACTIVE) — a status
+   *  write moves no minor units, so prior/target stay null and these carry the change. */
+  priorStatus: string | null;
+  targetStatus: string | null;
   actorKind: string | null;
   receipt: string | null;
 };
 
-/** Read an `apply_executed`-shaped row. Returns null when the row carries no
- *  budget/receipt fields at all, so the caller falls back to the generic renderer. */
+/** Read an `apply_executed`- or `adset_status_executed`-shaped row. Returns null when
+ *  the row carries no budget/status/receipt fields at all, so the caller falls back to
+ *  the generic renderer. */
 export function readMoneyMove(fields: Fields): MoneyMove | null {
   const prior = readNumber(fields.priorMinor);
   const target = readNumber(fields.targetMinor);
+  const priorStatus = readText(fields.priorStatus);
+  const targetStatus = readText(fields.targetStatus);
   const actorKind = readText(fields.authorizedKind);
   const receipt = readText(fields.fbtraceId);
-  if (prior == null && target == null && receipt == null) return null;
-  return { prior, target, actorKind, receipt };
+  if (prior == null && target == null && targetStatus == null && receipt == null) return null;
+  return { prior, target, priorStatus, targetStatus, actorKind, receipt };
 }
 
 /** The config-audit fields the RPC union writes for a `setting_changed` row. */

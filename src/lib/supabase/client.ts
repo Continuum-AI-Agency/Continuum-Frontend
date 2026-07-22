@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { createBrowserClient } from "@supabase/ssr";
-import type { Database } from "./types";
-import { getSupabaseCookieOptions } from "./cookies";
+import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseCookieOptions } from './cookies';
+import type { Database } from './types';
 
 let client: ReturnType<typeof createBrowserClient<Database>> | undefined;
 
@@ -18,17 +18,13 @@ export function createSupabaseBrowserClient() {
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      "Supabase client is not configured. Missing NEXT_PUBLIC_SUPABASE_URL or publishable/anon key."
+      'Supabase client is not configured. Missing NEXT_PUBLIC_SUPABASE_URL or publishable/anon key.',
     );
   }
 
-  client = createBrowserClient<Database>(
-    supabaseUrl,
-    supabaseKey,
-    {
-      cookieOptions: getSupabaseCookieOptions(),
-    }
-  );
+  client = createBrowserClient<Database>(supabaseUrl, supabaseKey, {
+    cookieOptions: getSupabaseCookieOptions(),
+  });
 
   return client;
 }

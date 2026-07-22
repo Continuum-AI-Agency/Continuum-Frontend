@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { motion, useSpring } from "motion/react";
-import type { RefObject } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
-import { type SpringConfig, useChartConfig } from "../chart-config-context";
-import { chartCssVars } from "../chart-context";
+import { motion, useSpring } from 'motion/react';
+import type { RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { cn } from '@/lib/utils';
+import { type SpringConfig, useChartConfig } from '../chart-config-context';
+import { chartCssVars } from '../chart-context';
 
 export interface TooltipBoxProps {
   /** X position in pixels (relative to container) */
@@ -73,7 +73,7 @@ function TooltipBoxInner({
   containerWidth,
   containerHeight,
   offset = 16,
-  className = "",
+  className = '',
   children,
   left: leftOverride,
   top: topOverride,
@@ -84,7 +84,7 @@ function TooltipBoxInner({
   panelStyle,
   backgroundColor = chartCssVars.tooltipBackground,
   container,
-}: Omit<TooltipBoxProps, "visible" | "containerRef"> & {
+}: Omit<TooltipBoxProps, 'visible' | 'containerRef'> & {
   container: HTMLElement;
 }) {
   const { tooltipBoxSpring } = useChartConfig();
@@ -99,10 +99,7 @@ function TooltipBoxInner({
   const th = tooltipHeightRef.current;
   const shouldFlipX = x + tw + offset > containerWidth;
   const targetX = shouldFlipX ? x - offset - tw : x + offset;
-  const targetY = Math.max(
-    offset,
-    Math.min(y - th / 2, containerHeight - th - offset)
-  );
+  const targetY = Math.max(offset, Math.min(y - th / 2, containerHeight - th - offset));
 
   const animatedLeft = useSpring(targetX, effectiveSpring);
   const animatedTop = useSpring(targetY, effectiveSpring);
@@ -131,10 +128,7 @@ function TooltipBoxInner({
     const h2 = tooltipHeightRef.current;
     const flip = x + w2 + offset > containerWidth;
     const tx = flip ? x - offset - w2 : x + offset;
-    const ty = Math.max(
-      offset,
-      Math.min(y - h2 / 2, containerHeight - h2 - offset)
-    );
+    const ty = Math.max(offset, Math.min(y - h2 / 2, containerHeight - h2 - offset));
     if (!animate) {
       setStaticPosition({ left: tx, top: ty });
       return;
@@ -168,19 +162,17 @@ function TooltipBoxInner({
     }
   }, [shouldFlipX]);
 
-  const finalLeft = animate
-    ? (leftOverride ?? animatedLeft)
-    : staticPosition.left;
+  const finalLeft = animate ? (leftOverride ?? animatedLeft) : staticPosition.left;
   const finalTop = animate ? (topOverride ?? animatedTop) : staticPosition.top;
   const isFlipped = flippedOverride ?? shouldFlipX;
-  const transformOrigin = isFlipped ? "right top" : "left top";
+  const transformOrigin = isFlipped ? 'right top' : 'left top';
 
   const panelClassName = cn(
-    "min-w-[140px] overflow-hidden rounded-lg text-chart-tooltip-foreground shadow-lg",
+    'min-w-[140px] overflow-hidden rounded-lg text-chart-tooltip-foreground shadow-lg',
     panelStyle?.backgroundColor === undefined &&
       backgroundColor === chartCssVars.tooltipBackground &&
-      "bg-chart-tooltip-background",
-    panelStyle?.backdropFilter === undefined && "backdrop-blur-md"
+      'bg-chart-tooltip-background',
+    panelStyle?.backdropFilter === undefined && 'backdrop-blur-md',
   );
   const panelStyleResolved = {
     transformOrigin,
@@ -193,7 +185,7 @@ function TooltipBoxInner({
   if (!entrance) {
     return createPortal(
       <div
-        className={cn("pointer-events-none absolute z-50", className)}
+        className={cn('pointer-events-none absolute z-50', className)}
         ref={tooltipRef}
         style={{ left: staticPosition.left, top: staticPosition.top }}
       >
@@ -201,14 +193,14 @@ function TooltipBoxInner({
           {children}
         </div>
       </div>,
-      container
+      container,
     );
   }
 
   return createPortal(
     <motion.div
       animate={{ opacity: 1 }}
-      className={cn("pointer-events-none absolute z-50", className)}
+      className={cn('pointer-events-none absolute z-50', className)}
       exit={{ opacity: 0 }}
       initial={{ opacity: 0 }}
       ref={tooltipRef}
@@ -221,15 +213,15 @@ function TooltipBoxInner({
         initial={{ scale: 0.85, opacity: 0, x: isFlipped ? 20 : -20 }}
         key={flipKey}
         style={panelStyleResolved}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       >
         {children}
       </motion.div>
     </motion.div>,
-    container
+    container,
   );
 }
 
-TooltipBox.displayName = "TooltipBox";
+TooltipBox.displayName = 'TooltipBox';
 
 export default TooltipBox;

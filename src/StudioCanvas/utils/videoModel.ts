@@ -3,22 +3,21 @@
 // headless run worker, and this canvas all share one matrix. This module is a
 // thin re-export kept so existing `./videoModel` imports continue to resolve.
 
+export type { VideoGeneratorModel, VideoGeneratorNodeType } from '@continuum/contracts';
 export {
-  VIDEO_GENERATOR_MODELS,
   DEFAULT_VIDEO_GENERATOR_MODEL,
-  VIDEO_GENERATOR_MODEL_LABELS,
-  VIDEO_IMAGE_REFERENCE_HANDLES,
-  VIDEO_FRAME_HANDLES,
-  VIDEO_REFERENCE_VIDEO_HANDLE,
+  getVideoGeneratorBackendModel,
+  getVideoGeneratorImageLimit,
+  getVideoGeneratorReferenceMode,
+  getVideoGeneratorTargetHandles,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
-  getVideoGeneratorReferenceMode,
   supportsVideoGeneratorFrameInputs,
-  supportsVideoGeneratorReferenceVideo,
   supportsVideoGeneratorReferenceImages,
-  getVideoGeneratorTargetHandles,
-  getVideoGeneratorImageLimit,
-  getVideoGeneratorBackendModel,
-} from "@continuum/contracts";
-
-export type { VideoGeneratorModel, VideoGeneratorNodeType } from "@continuum/contracts";
+  supportsVideoGeneratorReferenceVideo,
+  VIDEO_FRAME_HANDLES,
+  VIDEO_GENERATOR_MODEL_LABELS,
+  VIDEO_GENERATOR_MODELS,
+  VIDEO_IMAGE_REFERENCE_HANDLES,
+  VIDEO_REFERENCE_VIDEO_HANDLE,
+} from '@continuum/contracts';

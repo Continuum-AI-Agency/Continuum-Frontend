@@ -6,13 +6,13 @@
 
 import {
   deriveFreshnessMeta,
-  freshnessFromDiagnosticsMeta,
   type FreshnessInput,
   type FreshnessMeta,
-} from "@continuum/contracts";
+  freshnessFromDiagnosticsMeta,
+} from '@continuum/contracts';
 
-export type { FreshnessMeta, FreshnessStatus } from "@continuum/contracts";
-export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from "@continuum/contracts";
+export type { FreshnessMeta, FreshnessStatus } from '@continuum/contracts';
+export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from '@continuum/contracts';
 
 // The common surface case: a card knows only its own last-synced timestamp
 // (e.g. a competitor row's last_resolved_at, a dashboard module's synced_at).
@@ -20,7 +20,7 @@ export { deriveFreshnessMeta, freshnessFromDiagnosticsMeta } from "@continuum/co
 // optional so the same helper covers the richer surfaces too.
 export function freshnessFromSyncedAt(
   lastSyncedAt: string | null | undefined,
-  extra: Omit<FreshnessInput, "lastSyncedAt"> = {},
+  extra: Omit<FreshnessInput, 'lastSyncedAt'> = {},
 ): FreshnessMeta {
   return deriveFreshnessMeta({ ...extra, lastSyncedAt: lastSyncedAt ?? null });
 }

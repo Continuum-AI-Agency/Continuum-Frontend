@@ -4,7 +4,7 @@
 // tags.ts: tags gate Next's own data cache; these keys gate the cross-request
 // Upstash app cache.
 
-const NAMESPACE = "fe";
+const NAMESPACE = 'fe';
 
 export const appCacheKeys = {
   // Per-(brand, user). The cached value is exactly what THAT user's RLS-scoped

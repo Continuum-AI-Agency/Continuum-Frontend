@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useState } from 'react';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 
-const WELCOME_SEEN_KEY = "continuum:welcome-seen";
+const WELCOME_SEEN_KEY = 'continuum:welcome-seen';
 
 interface WelcomeScreenProps {
   onDismiss: () => void;
@@ -26,7 +26,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
 
   const handleContinue = () => {
     try {
-      window.localStorage.setItem(WELCOME_SEEN_KEY, "1");
+      window.localStorage.setItem(WELCOME_SEEN_KEY, '1');
     } catch {
       // localStorage may be unavailable (private mode); ignore — flag is best-effort.
     }
@@ -63,7 +63,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
           <motion.span
             className="mt-3 block font-extrabold tracking-tight text-primary"
             style={{
-              fontSize: "1.4em",
+              fontSize: '1.4em',
               lineHeight: 1.1,
             }}
             initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
@@ -99,9 +99,9 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
 }
 
 export function hasSeenWelcome(): boolean {
-  if (typeof window === "undefined") return true;
+  if (typeof window === 'undefined') return true;
   try {
-    return window.localStorage.getItem(WELCOME_SEEN_KEY) === "1";
+    return window.localStorage.getItem(WELCOME_SEEN_KEY) === '1';
   } catch {
     return true;
   }

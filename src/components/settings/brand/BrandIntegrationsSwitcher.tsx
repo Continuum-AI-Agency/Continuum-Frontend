@@ -2,26 +2,26 @@
 // (`brand_profile_integration_accounts`). To assign new ones, the user opens
 // `AssignmentsDialog`. Never reach for the caller's full user_integrations list
 // here — that's `UserConnectionsSwitcher`'s job.
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import { Plug, Plus } from "lucide-react";
+import { Plug, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AssignmentsDialog } from '@/components/integrations/AssignmentsDialog';
+import type { PlatformKey } from '@/components/onboarding/platforms';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import {
   IntegrationSwitcher,
   type IntegrationSwitcherData,
   type IntegrationSwitcherItem,
   type IntegrationSwitcherItemStatus,
   type IntegrationSwitcherTab,
-} from "@/components/shadcn-studio/card/integration-switcher";
-import { Button } from "@/components/ui/button";
-import { AssignmentsDialog } from "@/components/integrations/AssignmentsDialog";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
-import { PLATFORM_ICONS, PLATFORM_LABELS } from "../shell/platformIcons";
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import type { PlatformKey } from "@/components/onboarding/platforms";
-import type { BrandMember } from "@/lib/onboarding/state";
-import { getMemberDisplayName } from "@/lib/brands/memberDisplay";
+} from '@/components/shadcn-studio/card/integration-switcher';
+import { Button } from '@/components/ui/button';
+import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import { getMemberDisplayName } from '@/lib/brands/memberDisplay';
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import type { BrandMember } from '@/lib/onboarding/state';
+import { PLATFORM_ICONS, PLATFORM_LABELS } from '../shell/platformIcons';
 
 type BrandIntegrationsSwitcherProps = {
   initialSummary?: BrandIntegrationSummary;
@@ -30,7 +30,7 @@ type BrandIntegrationsSwitcherProps = {
 };
 
 function statusFor(status: string | null): IntegrationSwitcherItemStatus {
-  return status && status.toLowerCase() === "active" ? "checked" : "copy";
+  return status && status.toLowerCase() === 'active' ? 'checked' : 'copy';
 }
 
 function extractAssignedIntegrationAccountIds(summary?: BrandIntegrationSummary): string[] {
@@ -58,7 +58,12 @@ export function BrandIntegrationsSwitcher({
 
   const { tabs, data, hasAny } = useMemo(() => {
     const summary = resolvedSummary ?? null;
-    if (!summary) return { tabs: [] as IntegrationSwitcherTab[], data: {} as IntegrationSwitcherData, hasAny: false };
+    if (!summary)
+      return {
+        tabs: [] as IntegrationSwitcherTab[],
+        data: {} as IntegrationSwitcherData,
+        hasAny: false,
+      };
 
     const tabs: IntegrationSwitcherTab[] = [];
     const data: IntegrationSwitcherData = {};
@@ -74,11 +79,11 @@ export function BrandIntegrationsSwitcher({
       });
 
       data[platformKey] = accounts.map<IntegrationSwitcherItem>((account) => {
-        const isTeammate =
-          account.ownerUserId !== null && account.ownerUserId !== currentUserId;
+        const isTeammate = account.ownerUserId !== null && account.ownerUserId !== currentUserId;
         return {
-          id: account.externalAccountId ?? account.alias ?? account.integrationAccountId.slice(0, 6),
-          title: account.name || account.alias || "Unnamed account",
+          id:
+            account.externalAccountId ?? account.alias ?? account.integrationAccountId.slice(0, 6),
+          title: account.name || account.alias || 'Unnamed account',
           icon: PLATFORM_ICONS[platformKey] ?? Plug,
           status: statusFor(account.status),
           subtitle: isTeammate
@@ -93,7 +98,7 @@ export function BrandIntegrationsSwitcher({
 
   const assignedIds = useMemo(
     () => extractAssignedIntegrationAccountIds(resolvedSummary),
-    [resolvedSummary]
+    [resolvedSummary],
   );
 
   const openAssignments = () => setAssignmentsOpen(true);
@@ -129,9 +134,7 @@ export function BrandIntegrationsSwitcher({
           <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
             Assign provider accounts to this brand to surface them across the app.
           </p>
-          <div className="mt-4 inline-block">
-            {assignButton}
-          </div>
+          <div className="mt-4 inline-block">{assignButton}</div>
         </div>
       )}
 

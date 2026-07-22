@@ -37,16 +37,16 @@ describe('chatImageRequestSchema', () => {
   test('pro image requires image_size and aspect_ratio', () => {
     const missing = chatImageRequestSchema.safeParse({
       brandProfileId: 'brand-1',
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-3-pro-image',
       prompt: 'test',
     });
     assert.ok(!missing.success);
 
     const valid = chatImageRequestSchema.safeParse({
       brandProfileId: 'brand-1',
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-3-pro-image',
       prompt: 'test',
-      aspectRatio: getAspectsForModel('gemini-3-pro-image-preview')[0],
+      aspectRatio: getAspectsForModel('gemini-3-pro-image')[0],
       imageSize: '2K',
     });
     assert.ok(valid.success, valid.success ? '' : valid.error.message);

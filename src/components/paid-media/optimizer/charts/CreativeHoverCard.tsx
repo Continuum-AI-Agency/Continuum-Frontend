@@ -12,6 +12,7 @@ import type { AdDailyTrend, AdsetAd, PaidAdAngle } from '@continuum/contracts';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { AdThumb } from '../AdThumb';
 import { formatCpa, formatCurrency, humanize } from '../format';
 
 function Sparkline({ values, color = 'var(--chart-1)' }: { values: number[]; color?: string }) {
@@ -19,8 +20,12 @@ function Sparkline({ values, color = 'var(--chart-1)' }: { values: number[]; col
   if (points.length < 2) return null;
   const width = 240;
   const height = 32;
-  const max = Math.max(...points);
-  const min = Math.min(...points);
+  // Anchored at zero, not at the series minimum. Min-max normalization turns
+  // $100.00 / $100.05 / $100.02 into a mountain range at full amplitude — flat
+  // spend has to look flat, because "is this creative ramping" is the only
+  // question this sparkline exists to answer.
+  const max = Math.max(...points, 0);
+  const min = 0;
   const span = max - min || 1;
   const path = points
     .map((value, index) => {
@@ -54,6 +59,13 @@ type CreativeHoverCardProps = {
   angle?: PaidAdAngle | null;
   trend?: AdDailyTrend | null;
   currency?: string | null;
+  // Threading these from a caller wires the recovery path (an expired Meta CDN URL
+  // re-resolves through the Jaina preview). Absent, the thumb still renders through
+  // ChatMediaThumb — never a raw <img> — it just cannot self-heal a dead URL.
+  brandId?: string | null;
+  accountId?: string | null;
+  /** The 480×848 creative poster, preferred over the 64×64 Meta thumbnail. */
+  posterUrl?: string | null;
   children: ReactNode;
 };
 
@@ -62,6 +74,9 @@ export function CreativeHoverCard({
   angle,
   trend,
   currency,
+  brandId,
+  accountId,
+  posterUrl,
   children,
 }: CreativeHoverCardProps) {
   const series = trend?.series ?? [];
@@ -74,20 +89,16 @@ export function CreativeHoverCard({
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent className="w-72 space-y-3">
         <div className="flex gap-3">
-          {ad.thumbnailUrl ? (
-            // Meta CDN thumbnail — a plain img is correct here (external, ephemeral URL).
-            // biome-ignore lint/performance/noImgElement: external ad-thumbnail URL, not a bundled asset
-            <img
-              alt={ad.name ?? 'Creative'}
-              className="size-14 shrink-0 rounded-md object-cover"
-              loading="lazy"
-              src={ad.thumbnailUrl}
-            />
-          ) : (
-            <div className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-3xs text-muted-foreground">
-              no image
-            </div>
-          )}
+          <AdThumb
+            accountId={accountId ?? null}
+            adId={ad.id}
+            adName={ad.name}
+            brandId={brandId ?? ''}
+            className="rounded-md"
+            posterUrl={posterUrl}
+            sizeClassName="size-14"
+            thumbnailUrl={ad.thumbnailUrl}
+          />
           <div className="min-w-0 space-y-1">
             <p className="truncate font-medium text-sm">{ad.name ?? ad.id}</p>
             {angle ? (

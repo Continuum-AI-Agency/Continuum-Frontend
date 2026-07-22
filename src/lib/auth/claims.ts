@@ -1,14 +1,14 @@
-import "server-only";
+import 'server-only';
 
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { AuthIdentity } from "@/lib/auth/identity";
+import { redirect } from 'next/navigation';
+import type { AuthIdentity } from '@/lib/auth/identity';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 type SupabaseClaims = {
   sub?: string;
   email?: string;
-  app_metadata?: AuthIdentity["app_metadata"];
-  user_metadata?: AuthIdentity["user_metadata"];
+  app_metadata?: AuthIdentity['app_metadata'];
+  user_metadata?: AuthIdentity['user_metadata'];
 };
 
 // Identity is the Supabase UUID, which native Supabase tokens carry in `sub`.
@@ -40,7 +40,7 @@ export async function requireClaimsIdentity(): Promise<AuthIdentity> {
   const identity = await getClaimsIdentity();
 
   if (!identity) {
-    redirect("/login");
+    redirect('/login');
   }
 
   return identity;

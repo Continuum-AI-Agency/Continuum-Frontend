@@ -1,19 +1,16 @@
-"use client";
+'use client';
 
-import { ParentSize } from "@visx/responsive";
-import { motion, type Transition, useReducedMotion } from "motion/react";
-import { type ReactNode, useId, useMemo } from "react";
-import { cn } from "@/lib/utils";
-import {
-  type ChartStatFlowFormat,
-  defaultChartStatFlowFormat,
-} from "./chart-stat-flow";
+import { ParentSize } from '@visx/responsive';
+import { motion, type Transition, useReducedMotion } from 'motion/react';
+import { type ReactNode, useId, useMemo } from 'react';
+import { cn } from '@/lib/utils';
+import { type ChartStatFlowFormat, defaultChartStatFlowFormat } from './chart-stat-flow';
 import {
   type GaugeLabelAlign,
   GaugeLabelLayout,
   type GaugeLabelPlacement,
   GaugeLabelShell,
-} from "./gauge-label-layout";
+} from './gauge-label-layout';
 import {
   type ComputedNotch,
   collectGaugeDefsElements,
@@ -25,16 +22,16 @@ import {
   interpolateGaugeHex,
   resolveGaugeActiveFill,
   resolveGaugeBgFill,
-} from "./notch-gauge-shared";
-import { PieCenterShell } from "./pie-center-shell";
+} from './notch-gauge-shared';
+import { PieCenterShell } from './pie-center-shell';
 
 const DEFAULT_NOTCH_ENTER_TRANSITION: Transition = {
-  type: "spring",
+  type: 'spring',
   stiffness: 300,
   damping: 20,
 };
 
-export type GaugeOrientation = "arc" | "linear";
+export type GaugeOrientation = 'arc' | 'linear';
 
 export interface GaugeProps {
   /** Arc (default) or horizontal linear notch track */
@@ -83,7 +80,7 @@ export interface GaugeProps {
   geometryScrubbing?: boolean;
 }
 
-interface GaugeInnerProps extends Omit<GaugeProps, "className" | "minWidth"> {
+interface GaugeInnerProps extends Omit<GaugeProps, 'className' | 'minWidth'> {
   width: number;
   height: number;
 }
@@ -132,13 +129,7 @@ function GaugeNotchSvg({
       {defsChildren.length > 0 || useThemePaletteGradient ? (
         <defs>
           {useThemePaletteGradient ? (
-            <linearGradient
-              id={themeActiveGradientId}
-              x1="0%"
-              x2="100%"
-              y1="0%"
-              y2="0%"
-            >
+            <linearGradient id={themeActiveGradientId} x1="0%" x2="100%" y1="0%" y2="0%">
               <stop offset="0%" stopColor="var(--chart-1)" />
               <stop offset="100%" stopColor="var(--chart-5)" />
             </linearGradient>
@@ -147,11 +138,7 @@ function GaugeNotchSvg({
         </defs>
       ) : null}
       {notches.map((notch) => {
-        const pathD = createNotchPath(
-          notch.points,
-          notchCornerRadius,
-          cornerDepth
-        );
+        const pathD = createNotchPath(notch.points, notchCornerRadius, cornerDepth);
         if (geometryScrubbing) {
           return (
             <path
@@ -183,11 +170,7 @@ function GaugeNotchSvg({
       {notches
         .filter((n) => n.isActive)
         .map((notch) => {
-          const pathD = createNotchPath(
-            notch.points,
-            notchCornerRadius,
-            cornerDepth
-          );
+          const pathD = createNotchPath(notch.points, notchCornerRadius, cornerDepth);
           if (geometryScrubbing) {
             return (
               <path
@@ -233,14 +216,10 @@ function useGaugeFillState(props: GaugeInnerProps) {
     totalNotches = 40,
   } = props;
 
-  const themeActiveGradientId = `gauge-theme-active-${useId().replace(/:/g, "")}`;
-  const defsChildren = useMemo(
-    () => collectGaugeDefsElements(children),
-    [children]
-  );
+  const themeActiveGradientId = `gauge-theme-active-${useId().replace(/:/g, '')}`;
+  const defsChildren = useMemo(() => collectGaugeDefsElements(children), [children]);
 
-  const hasCustomInactive =
-    inactiveFill !== undefined && inactiveFill.length > 0;
+  const hasCustomInactive = inactiveFill !== undefined && inactiveFill.length > 0;
   const hasCustomActive = activeFill !== undefined && activeFill.length > 0;
 
   const activeGrad0 = activeGradient?.[0] ?? DEFAULT_ACTIVE_GRADIENT[0];
@@ -260,8 +239,7 @@ function useGaugeFillState(props: GaugeInnerProps) {
     inactiveGrad1,
     useThemePaletteGradient,
     resolvedActiveFillOpacity: activeFillOpacity ?? DEFAULT_ACTIVE_FILL_OPACITY,
-    resolvedInactiveFillOpacity:
-      inactiveFillOpacity ?? DEFAULT_INACTIVE_FILL_OPACITY,
+    resolvedInactiveFillOpacity: inactiveFillOpacity ?? DEFAULT_INACTIVE_FILL_OPACITY,
     totalNotches,
   };
 }
@@ -279,7 +257,7 @@ function GaugeArcInner(props: GaugeInnerProps) {
     endAngle = 405,
     useGradient = false,
     centerValue,
-    defaultLabel = "Total",
+    defaultLabel = 'Total',
     prefix,
     suffix,
     formatOptions = defaultChartStatFlowFormat,
@@ -349,12 +327,8 @@ function GaugeArcInner(props: GaugeInnerProps) {
       const denom = totalNotches > 1 ? totalNotches - 1 : 1;
       const gradientColor =
         useGradient && !fillState.useThemePaletteGradient
-          ? interpolateGaugeHex(
-              fillState.activeGrad0,
-              fillState.activeGrad1,
-              i / denom
-            )
-          : "var(--chart-1)";
+          ? interpolateGaugeHex(fillState.activeGrad0, fillState.activeGrad1, i / denom)
+          : 'var(--chart-1)';
 
       return {
         index: i,
@@ -393,8 +367,8 @@ function GaugeArcInner(props: GaugeInnerProps) {
       useGradient,
       inactiveGrad0: fillState.inactiveGrad0,
       inactiveGrad1: fillState.inactiveGrad1,
-      arcTrackFill: "var(--border)",
-      linearTrackFill: "var(--chart-background)",
+      arcTrackFill: 'var(--border)',
+      linearTrackFill: 'var(--chart-background)',
       linearMode: false,
     });
 
@@ -406,7 +380,7 @@ function GaugeArcInner(props: GaugeInnerProps) {
       useThemePaletteGradient: fillState.useThemePaletteGradient,
       themeActiveGradientId: fillState.themeActiveGradientId,
       useGradient,
-      activeFillSolid: "var(--chart-1)",
+      activeFillSolid: 'var(--chart-1)',
     });
 
   const showCenter = centerValue != null;
@@ -461,12 +435,12 @@ function GaugeLinearInner(props: GaugeInnerProps) {
     height,
     useGradient = false,
     centerValue,
-    defaultLabel = "Total",
+    defaultLabel = 'Total',
     prefix,
     suffix,
     formatOptions = defaultChartStatFlowFormat,
-    labelPlacement = "top",
-    labelAlign = "start",
+    labelPlacement = 'top',
+    labelAlign = 'start',
     inactiveFill,
     activeFill,
     notchLengthPercent = 100,
@@ -538,12 +512,8 @@ function GaugeLinearInner(props: GaugeInnerProps) {
       const denom = totalNotches > 1 ? totalNotches - 1 : 1;
       const gradientColor =
         useGradient && !fillState.useThemePaletteGradient
-          ? interpolateGaugeHex(
-              fillState.activeGrad0,
-              fillState.activeGrad1,
-              i / denom
-            )
-          : "var(--chart-1)";
+          ? interpolateGaugeHex(fillState.activeGrad0, fillState.activeGrad1, i / denom)
+          : 'var(--chart-1)';
 
       return {
         index: i,
@@ -581,8 +551,8 @@ function GaugeLinearInner(props: GaugeInnerProps) {
       useGradient,
       inactiveGrad0: fillState.inactiveGrad0,
       inactiveGrad1: fillState.inactiveGrad1,
-      arcTrackFill: "var(--border)",
-      linearTrackFill: "var(--chart-background)",
+      arcTrackFill: 'var(--border)',
+      linearTrackFill: 'var(--chart-background)',
       linearMode: true,
     });
 
@@ -594,7 +564,7 @@ function GaugeLinearInner(props: GaugeInnerProps) {
       useThemePaletteGradient: fillState.useThemePaletteGradient,
       themeActiveGradientId: fillState.themeActiveGradientId,
       useGradient,
-      activeFillSolid: "var(--chart-1)",
+      activeFillSolid: 'var(--chart-1)',
     });
 
   const label =
@@ -632,18 +602,14 @@ function GaugeLinearInner(props: GaugeInnerProps) {
   );
 
   return (
-    <GaugeLabelLayout
-      align={labelAlign}
-      label={label}
-      placement={labelPlacement}
-    >
+    <GaugeLabelLayout align={labelAlign} label={label} placement={labelPlacement}>
       {track}
     </GaugeLabelLayout>
   );
 }
 
 function GaugeInner(props: GaugeInnerProps) {
-  if (props.orientation === "linear") {
+  if (props.orientation === 'linear') {
     return <GaugeLinearInner {...props} />;
   }
   return <GaugeArcInner {...props} />;
@@ -654,21 +620,18 @@ export function Gauge({
   height: heightProp,
   className,
   minWidth,
-  orientation = "arc",
+  orientation = 'arc',
   linearHeight,
   ...props
 }: GaugeProps) {
-  const isLinear = orientation === "linear";
+  const isLinear = orientation === 'linear';
   const resolvedMinWidth = minWidth ?? (isLinear ? 200 : 300);
   const resolvedLinearHeight = linearHeight ?? DEFAULT_LINEAR_GAUGE_HEIGHT;
 
   if (isLinear) {
     if (widthProp != null) {
       return (
-        <div
-          className={cn("relative w-full max-w-full", className)}
-          style={{ width: widthProp }}
-        >
+        <div className={cn('relative w-full max-w-full', className)} style={{ width: widthProp }}>
           <GaugeInner
             height={heightProp ?? resolvedLinearHeight}
             orientation="linear"
@@ -680,7 +643,7 @@ export function Gauge({
     }
 
     return (
-      <div className={cn("relative w-full min-w-0 max-w-full", className)}>
+      <div className={cn('relative w-full min-w-0 max-w-full', className)}>
         <div className="w-full min-w-0" style={{ minWidth: resolvedMinWidth }}>
           <ParentSize debounceTime={10}>
             {({ width }) =>
@@ -701,32 +664,22 @@ export function Gauge({
 
   if (widthProp != null && heightProp != null) {
     return (
-      <div className={cn("relative inline-flex max-w-full", className)}>
-        <GaugeInner
-          height={heightProp}
-          orientation="arc"
-          width={widthProp}
-          {...props}
-        />
+      <div className={cn('relative inline-flex max-w-full', className)}>
+        <GaugeInner height={heightProp} orientation="arc" width={widthProp} {...props} />
       </div>
     );
   }
 
   return (
     <div
-      className={cn("relative w-full max-w-full", className)}
+      className={cn('relative w-full max-w-full', className)}
       style={{ minWidth: resolvedMinWidth }}
     >
       <div className="mx-auto aspect-[21/16] w-full max-w-[560px]">
         <ParentSize debounceTime={10}>
           {({ width, height }) =>
             width > 0 && height > 0 ? (
-              <GaugeInner
-                height={height}
-                orientation="arc"
-                width={width}
-                {...props}
-              />
+              <GaugeInner height={height} orientation="arc" width={width} {...props} />
             ) : null
           }
         </ParentSize>
@@ -735,4 +688,4 @@ export function Gauge({
   );
 }
 
-Gauge.displayName = "Gauge";
+Gauge.displayName = 'Gauge';

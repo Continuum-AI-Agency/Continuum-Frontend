@@ -1,16 +1,25 @@
 'use client';
 
-import { CalendarDays, List, Loader2, PencilRuler, RefreshCw, Sparkles, Wand2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 import {
   type OrganicGenerationStatus,
   type OrganicGenerationTone,
   type OrganicMediaStage,
   resolveOrganicGenerationDisplay,
 } from '@continuum/contracts';
-import { Progress } from '@/components/ui/progress';
+import {
+  CalendarDays,
+  List,
+  Loader2,
+  PencilRuler,
+  RefreshCw,
+  Sparkles,
+  Wand2,
+  X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromPreviewUrls } from '@/components/chat/media/media';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { AgentArtifactCard, MetaRow, PlatformTag, StatusLabel } from './agentCardKit';
 import { resolveConceptPreviewUrl } from './conceptPreview';
@@ -50,7 +59,8 @@ const TONE_TO_CARD_TONE: Record<OrganicGenerationTone, CardTone> = {
 // understands — the running-label fallback when no pipeline stage is set yet.
 function deriveCardMediaStage(checkpoint: CheckpointState | undefined): OrganicMediaStage | null {
   if (!checkpoint) return null;
-  if (checkpoint.mediaStatus === 'ready' || checkpoint.mediaStatus === 'user_supplied') return 'realized';
+  if (checkpoint.mediaStatus === 'ready' || checkpoint.mediaStatus === 'user_supplied')
+    return 'realized';
   if (checkpoint.mediaStatus === 'generating') return 'realizing';
   if (checkpoint.blueprintReady) return 'storyboard_ready';
   if (checkpoint.textReady) return 'text_only';

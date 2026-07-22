@@ -1,23 +1,23 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { OnboardingDocument } from "@/lib/onboarding/state";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { DocumentView } from "./types";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { OnboardingDocument } from '@/lib/onboarding/state';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { DocumentView } from './types';
 
 type RealtimeRow = {
   id: string;
   brand_id: string;
   name: string;
-  source: OnboardingDocument["source"];
-  status?: "processing" | "ready" | "error";
-  category?: OnboardingDocument["category"] | null;
-  progress_step?: OnboardingDocument["progressStep"];
+  source: OnboardingDocument['source'];
+  status?: 'processing' | 'ready' | 'error';
+  category?: OnboardingDocument['category'] | null;
+  progress_step?: OnboardingDocument['progressStep'];
   progress_percent?: number | null;
-  error_code?: OnboardingDocument["errorCode"] | null;
+  error_code?: OnboardingDocument['errorCode'] | null;
   error_message?: string | null;
   mime_type?: string | null;
-  kind?: OnboardingDocument["kind"] | null;
+  kind?: OnboardingDocument['kind'] | null;
   page_count?: number | null;
   text_excerpt?: string | null;
   preview_path?: string | null;
@@ -33,20 +33,20 @@ function rowToView(row: RealtimeRow): DocumentView {
     name: row.name,
     source: row.source,
     createdAt: row.created_at ?? new Date().toISOString(),
-    status: (row.status as OnboardingDocument["status"]) ?? "processing",
+    status: (row.status as OnboardingDocument['status']) ?? 'processing',
     category: row.category ?? undefined,
     progressStep: row.progress_step ?? undefined,
-    progressPercent: typeof row.progress_percent === "number" ? row.progress_percent : undefined,
+    progressPercent: typeof row.progress_percent === 'number' ? row.progress_percent : undefined,
     errorCode: row.error_code ?? undefined,
     errorMessage: row.error_message ?? undefined,
     mimeType: row.mime_type ?? undefined,
     kind: row.kind ?? undefined,
-    pageCount: typeof row.page_count === "number" ? row.page_count : undefined,
+    pageCount: typeof row.page_count === 'number' ? row.page_count : undefined,
     textExcerpt: row.text_excerpt ?? undefined,
     previewPath: row.preview_path ?? undefined,
     storagePath: row.storage_path ?? undefined,
     externalUrl: row.external_url ?? undefined,
-    size: typeof row.size === "number" ? row.size : undefined,
+    size: typeof row.size === 'number' ? row.size : undefined,
   };
 }
 
@@ -79,28 +79,28 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
     const channel = supabase
       .channel(`brand-documents-${brandId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "brand_profiles",
-          table: "brand_documents",
+          event: '*',
+          schema: 'brand_profiles',
+          table: 'brand_documents',
           filter: `brand_id=eq.${brandId}`,
         },
         (payload) => {
-          if (payload.eventType === "UPDATE") {
+          if (payload.eventType === 'UPDATE') {
             const updated = payload.new as RealtimeRow;
             lastSeenRef.current[updated.id] = Date.now();
             setDocuments((prev) =>
               prev.map((doc) => (doc.id === updated.id ? mergeRealtimeUpdate(doc, updated) : doc)),
             );
-          } else if (payload.eventType === "INSERT") {
+          } else if (payload.eventType === 'INSERT') {
             const inserted = payload.new as RealtimeRow;
             lastSeenRef.current[inserted.id] = Date.now();
             setDocuments((prev) => {
               if (prev.some((doc) => doc.id === inserted.id)) return prev;
               return [...prev, rowToView(inserted)];
             });
-          } else if (payload.eventType === "DELETE") {
+          } else if (payload.eventType === 'DELETE') {
             const removedId = (payload.old as { id?: string }).id;
             if (!removedId) return;
             setDocuments((prev) => prev.filter((doc) => doc.id !== removedId));
@@ -116,7 +116,7 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
 
   // Fail documents that have gone silent mid-processing so the row reaches a
   // terminal state even when no realtime "error" update ever arrives.
-  const hasProcessing = documents.some((doc) => doc.status === "processing");
+  const hasProcessing = documents.some((doc) => doc.status === 'processing');
   useEffect(() => {
     if (!hasProcessing) return;
     const id = setInterval(() => {
@@ -124,16 +124,16 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentVie
       setDocuments((prev) => {
         let changed = false;
         const next = prev.map((doc) => {
-          if (doc.status !== "processing") return doc;
+          if (doc.status !== 'processing') return doc;
           const lastSeen = lastSeenRef.current[doc.id] ?? Date.parse(doc.createdAt);
           if (Number.isNaN(lastSeen) || now - lastSeen < STALE_PROCESSING_MS) return doc;
           changed = true;
           return {
             ...doc,
-            status: "error" as const,
-            progressStep: "error" as const,
+            status: 'error' as const,
+            progressStep: 'error' as const,
             errorMessage:
-              doc.errorMessage ?? "Processing timed out. Please try uploading the document again.",
+              doc.errorMessage ?? 'Processing timed out. Please try uploading the document again.',
           };
         });
         return changed ? next : prev;

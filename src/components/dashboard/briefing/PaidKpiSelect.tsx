@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import type { PaidEntityKpi } from "@continuum/contracts";
+import type { PaidEntityKpi } from '@continuum/contracts';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { useDashboardPrefsStore } from "@/stores/dashboardPrefs";
-import { PAID_KPI_OPTIONS } from "@/lib/paid-media/paid-kpi";
+} from '@/components/ui/select';
+import { PAID_KPI_OPTIONS } from '@/lib/paid-media/paid-kpi';
+import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 
 // Chooses the KPI the top-ads tables rank by. The selection lives in the
 // persisted dashboard store, so both tables re-sort their already-fetched rows

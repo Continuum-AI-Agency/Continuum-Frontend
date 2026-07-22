@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const PlacementBreakdownSchema = z.object({
   publisher_platform: z.string(),
@@ -61,11 +61,11 @@ export type FormatBreakdown = z.infer<typeof FormatBreakdownSchema>;
 export type DeviceBreakdown = z.infer<typeof DeviceBreakdownSchema>;
 export type AccountBreakdownsResponse = z.infer<typeof AccountBreakdownsResponseSchema>;
 
-export type InsightCategory = "formats" | "placements" | "audiences" | "creative" | "budget";
+export type InsightCategory = 'formats' | 'placements' | 'audiences' | 'creative' | 'budget';
 
-export type InsightSeverity = "positive" | "negative" | "neutral";
+export type InsightSeverity = 'positive' | 'negative' | 'neutral';
 
-export type InsightSource = "computed" | "llm";
+export type InsightSource = 'computed' | 'llm';
 
 export type ComputedInsight = {
   category: InsightCategory;
@@ -82,10 +82,10 @@ export type ComputedInsight = {
 };
 
 export const ComputedInsightSchema = z.object({
-  category: z.enum(["formats", "placements", "audiences", "creative", "budget"]),
+  category: z.enum(['formats', 'placements', 'audiences', 'creative', 'budget']),
   text: z.string(),
-  severity: z.enum(["positive", "negative", "neutral"]),
-  source: z.enum(["computed", "llm"]),
+  severity: z.enum(['positive', 'negative', 'neutral']),
+  source: z.enum(['computed', 'llm']),
   metric: z.string().optional(),
   value: z.number().optional(),
   delta: z.number().optional(),

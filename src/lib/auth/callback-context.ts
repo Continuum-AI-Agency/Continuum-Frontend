@@ -10,8 +10,7 @@ export function resolveCallbackContext(input: {
   cookieProvider: string | undefined;
   defaultContext?: string;
 }): CallbackContext {
-  const context = input.queryContext ?? input.cookieContext ?? input.defaultContext ?? "login";
+  const context = input.queryContext ?? input.cookieContext ?? input.defaultContext ?? 'login';
   const provider = input.queryProvider ?? input.cookieProvider ?? null;
   return { context, provider };
 }
-

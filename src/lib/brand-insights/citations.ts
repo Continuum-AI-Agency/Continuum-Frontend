@@ -1,13 +1,12 @@
-import { z } from "zod";
-
-import { request } from "@/lib/api/http";
-import { ApiError } from "@/lib/api/errors";
+import { z } from 'zod';
+import { ApiError } from '@/lib/api/errors';
+import { request } from '@/lib/api/http';
+import type { TrendInsightKind } from '@/lib/organic/trends';
 import {
   BRAND_TRENDS_SCHEMA,
-  brandInsightsCitationSchema,
   type BrandInsightsCitation,
-} from "@/lib/schemas/brandInsights";
-import type { TrendInsightKind } from "@/lib/organic/trends";
+  brandInsightsCitationSchema,
+} from '@/lib/schemas/brandInsights';
 
 const responseSchema = z.object({
   status: z.string().optional(),
@@ -39,10 +38,10 @@ export async function fetchInsightCitations({
   try {
     const result = await request<z.infer<typeof responseSchema>>({
       path: `/insights/citations?${params.toString()}`,
-      method: "GET",
+      method: 'GET',
       schema: responseSchema,
-      headers: { "X-Supabase-Schema": BRAND_TRENDS_SCHEMA },
-      cache: "no-store",
+      headers: { 'X-Supabase-Schema': BRAND_TRENDS_SCHEMA },
+      cache: 'no-store',
     });
     return result.data?.citations ?? result.citations ?? [];
   } catch (error) {

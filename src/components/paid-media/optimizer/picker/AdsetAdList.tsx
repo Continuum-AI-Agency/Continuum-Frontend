@@ -5,8 +5,8 @@
 // enrollable — the optimizer acts at the ad-set level — so nothing here is
 // selectable.
 
-import { Image as ImageIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AdThumb } from '../AdThumb';
 import { useOptimizerAdsetAds } from '../useOptimizerData';
 
 type AdsetAdListProps = {
@@ -45,9 +45,14 @@ export function AdsetAdList({ brandId, accountId, adsetId }: AdsetAdListProps) {
     <ul className="space-y-0.5 p-1 pl-9">
       {ads.map((ad) => (
         <li key={ad.id} className="flex items-center gap-2 rounded-md px-2 py-1">
-          <span className="grid size-5 shrink-0 place-content-center rounded bg-muted text-muted-foreground">
-            <ImageIcon className="size-3" aria-hidden />
-          </span>
+          <AdThumb
+            accountId={accountId}
+            adId={ad.id}
+            adName={ad.name}
+            brandId={brandId}
+            sizeClassName="size-5"
+            thumbnailUrl={ad.thumbnailUrl}
+          />
           <span className="min-w-0 flex-1 truncate text-2xs text-foreground">
             {ad.name || ad.id}
           </span>

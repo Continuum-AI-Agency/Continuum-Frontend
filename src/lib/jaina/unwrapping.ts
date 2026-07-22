@@ -1,13 +1,13 @@
-import type { JainaPlan } from "@/components/paid-media/jaina/types";
+import type { JainaPlan } from '@/components/paid-media/jaina/types';
 
 export function sanitizeJsonStringLiterals(input: string): string {
   let inString = false;
   let isEscaped = false;
-  let output = "";
+  let output = '';
 
   for (const char of input) {
     if (!inString) {
-      if (char === "\"") inString = true;
+      if (char === '"') inString = true;
       output += char;
       continue;
     }
@@ -18,28 +18,28 @@ export function sanitizeJsonStringLiterals(input: string): string {
       continue;
     }
 
-    if (char === "\\") {
+    if (char === '\\') {
       isEscaped = true;
       output += char;
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inString = false;
       output += char;
       continue;
     }
 
-    if (char === "\n") {
-      output += "\\n";
+    if (char === '\n') {
+      output += '\\n';
       continue;
     }
-    if (char === "\r") {
-      output += "\\r";
+    if (char === '\r') {
+      output += '\\r';
       continue;
     }
-    if (char === "\t") {
-      output += "\\t";
+    if (char === '\t') {
+      output += '\\t';
       continue;
     }
 
@@ -76,7 +76,7 @@ function findJsonValueStartByKey(text: string, key: string): number | null {
     const keyIndex = text.indexOf(`"${key}"`, searchFrom);
     if (keyIndex === -1) break;
     let cursor = skipWhitespace(text, keyIndex + key.length + 2);
-    if (text[cursor] !== ":") {
+    if (text[cursor] !== ':') {
       searchFrom = keyIndex + 1;
       continue;
     }
@@ -90,9 +90,9 @@ function findJsonValueStartByKey(text: string, key: string): number | null {
 function extractBalancedJsonSegment(
   text: string,
   startIndex: number,
-  openChar: "{" | "["
+  openChar: '{' | '[',
 ): string | null {
-  const closeChar = openChar === "{" ? "}" : "]";
+  const closeChar = openChar === '{' ? '}' : ']';
   if (text[startIndex] !== openChar) return null;
 
   let depth = 0;
@@ -107,17 +107,17 @@ function extractBalancedJsonSegment(
         isEscaped = false;
         continue;
       }
-      if (char === "\\") {
+      if (char === '\\') {
         isEscaped = true;
         continue;
       }
-      if (char === "\"") {
+      if (char === '"') {
         inString = false;
       }
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inString = true;
       continue;
     }
@@ -136,13 +136,10 @@ function extractBalancedJsonSegment(
   return null;
 }
 
-export function extractStringFieldByKeys(
-  text: string,
-  keys: string[]
-): string | undefined {
+export function extractStringFieldByKeys(text: string, keys: string[]): string | undefined {
   for (const key of keys) {
     const valueStart = findJsonValueStartByKey(text, key);
-    if (valueStart === null || text[valueStart] !== "\"") continue;
+    if (valueStart === null || text[valueStart] !== '"') continue;
 
     let cursor = valueStart + 1;
     let isEscaped = false;
@@ -153,15 +150,15 @@ export function extractStringFieldByKeys(
         cursor += 1;
         continue;
       }
-      if (char === "\\") {
+      if (char === '\\') {
         isEscaped = true;
         cursor += 1;
         continue;
       }
-      if (char === "\"") {
+      if (char === '"') {
         const encoded = text.slice(valueStart, cursor + 1);
         const parsed = parseLooseJsonCandidate(encoded);
-        if (typeof parsed === "string") return parsed;
+        if (typeof parsed === 'string') return parsed;
         return undefined;
       }
       cursor += 1;
@@ -170,14 +167,11 @@ export function extractStringFieldByKeys(
   return undefined;
 }
 
-export function extractArrayFieldByKeys(
-  text: string,
-  keys: string[]
-): unknown[] | undefined {
+export function extractArrayFieldByKeys(text: string, keys: string[]): unknown[] | undefined {
   for (const key of keys) {
     const valueStart = findJsonValueStartByKey(text, key);
-    if (valueStart === null || text[valueStart] !== "[") continue;
-    const segment = extractBalancedJsonSegment(text, valueStart, "[");
+    if (valueStart === null || text[valueStart] !== '[') continue;
+    const segment = extractBalancedJsonSegment(text, valueStart, '[');
     if (!segment) continue;
     const parsed = parseLooseJsonCandidate(segment);
     if (Array.isArray(parsed)) return parsed;
@@ -187,15 +181,15 @@ export function extractArrayFieldByKeys(
 
 export function extractObjectFieldByKeys(
   text: string,
-  keys: string[]
+  keys: string[],
 ): Record<string, unknown> | undefined {
   for (const key of keys) {
     const valueStart = findJsonValueStartByKey(text, key);
-    if (valueStart === null || text[valueStart] !== "{") continue;
-    const segment = extractBalancedJsonSegment(text, valueStart, "{");
+    if (valueStart === null || text[valueStart] !== '{') continue;
+    const segment = extractBalancedJsonSegment(text, valueStart, '{');
     if (!segment) continue;
     const parsed = parseLooseJsonCandidate(segment);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
   }
@@ -205,19 +199,19 @@ export function extractObjectFieldByKeys(
 export function shouldAttemptStringReportExtraction(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return true;
   return (
-    trimmed.includes("checkpoint_report") ||
-    trimmed.includes("executive_summary") ||
-    trimmed.includes("performance_snapshot") ||
-    trimmed.includes("sections") ||
-    trimmed.includes("blocks") ||
-    trimmed.includes("strategic_recommendations")
+    trimmed.includes('checkpoint_report') ||
+    trimmed.includes('executive_summary') ||
+    trimmed.includes('performance_snapshot') ||
+    trimmed.includes('sections') ||
+    trimmed.includes('blocks') ||
+    trimmed.includes('strategic_recommendations')
   );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
@@ -267,22 +261,22 @@ function collectBalancedJsonObjectCandidates(value: string): string[] {
         isEscaped = false;
         continue;
       }
-      if (char === "\\") {
+      if (char === '\\') {
         isEscaped = true;
         continue;
       }
-      if (char === "\"") {
+      if (char === '"') {
         inString = false;
       }
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inString = true;
       continue;
     }
 
-    if (char === "{") {
+    if (char === '{') {
       if (depth === 0) {
         segmentStart = index;
       }
@@ -290,7 +284,7 @@ function collectBalancedJsonObjectCandidates(value: string): string[] {
       continue;
     }
 
-    if (char === "}" && depth > 0) {
+    if (char === '}' && depth > 0) {
       depth -= 1;
       if (depth === 0 && segmentStart >= 0) {
         candidates.push(value.slice(segmentStart, index + 1));
@@ -307,8 +301,8 @@ export function extractJsonObjectCandidates(value: string): unknown[] {
   if (!trimmed) return [];
 
   const rawCandidates = [trimmed];
-  const firstBraceIndex = trimmed.indexOf("{");
-  const lastBraceIndex = trimmed.lastIndexOf("}");
+  const firstBraceIndex = trimmed.indexOf('{');
+  const lastBraceIndex = trimmed.lastIndexOf('}');
   if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
     const sliced = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
     if (sliced !== trimmed) rawCandidates.push(sliced);
@@ -324,17 +318,17 @@ export function extractJsonObjectCandidates(value: string): unknown[] {
 }
 
 function toNonEmptyString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function parsePersistedResultWrapper(
   content: string,
-  fallbackTitle?: string
+  fallbackTitle?: string,
 ): { text?: string; plan?: JainaPlan } | null {
   const trimmed = content.trim();
-  if (!trimmed.startsWith("{")) return null;
+  if (!trimmed.startsWith('{')) return null;
 
   const parsedValue = parseLooseJsonCandidate(trimmed);
   const parsed = asRecord(parsedValue);
@@ -343,22 +337,20 @@ export function parsePersistedResultWrapper(
   const type = toNonEmptyString(parsed.type);
   if (!type) return null;
 
-  const normalizedType = type.startsWith("response.")
-    ? type.slice("response.".length)
-    : type;
+  const normalizedType = type.startsWith('response.') ? type.slice('response.'.length) : type;
   const dataRecord = asRecord(parsed.data);
 
-  if (normalizedType === "text") {
-    if (typeof parsed.content === "string") {
+  if (normalizedType === 'text') {
+    if (typeof parsed.content === 'string') {
       return { text: parsed.content };
     }
-    if (typeof dataRecord?.content === "string") {
+    if (typeof dataRecord?.content === 'string') {
       return { text: dataRecord.content };
     }
     return null;
   }
 
-  if (normalizedType !== "plan_ready") {
+  if (normalizedType !== 'plan_ready') {
     return null;
   }
 
@@ -371,7 +363,7 @@ export function parsePersistedResultWrapper(
     : Array.isArray(planRecord.objectives)
       ? planRecord.objectives
       : [];
-  const steps = rawSteps.reduce<JainaPlan["steps"]>((acc, step) => {
+  const steps = rawSteps.reduce<JainaPlan['steps']>((acc, step) => {
     const stepRecord = asRecord(step);
     if (!stepRecord) return acc;
     const title =
@@ -389,9 +381,9 @@ export function parsePersistedResultWrapper(
       title,
       ...(description ? { description } : {}),
       status:
-        typeof stepRecord.status === "string"
-          ? (stepRecord.status as JainaPlan["steps"][number]["status"])
-          : "pending",
+        typeof stepRecord.status === 'string'
+          ? (stepRecord.status as JainaPlan['steps'][number]['status'])
+          : 'pending',
     });
     return acc;
   }, []);
@@ -402,32 +394,30 @@ export function parsePersistedResultWrapper(
     toNonEmptyString(planRecord.title) ??
     toNonEmptyString(dataRecord?.chat_title) ??
     toNonEmptyString(dataRecord?.title) ??
-    (normalizedFallback && normalizedFallback.length > 0
-      ? normalizedFallback
-      : undefined) ??
-    (typeof planRecord.intent === "string"
+    (normalizedFallback && normalizedFallback.length > 0 ? normalizedFallback : undefined) ??
+    (typeof planRecord.intent === 'string'
       ? `${planRecord.intent.charAt(0).toUpperCase()}${planRecord.intent.slice(1)} plan`
-      : "Execution Plan");
+      : 'Execution Plan');
 
   const description =
     toNonEmptyString(planRecord.description) ??
     toNonEmptyString(planRecord.summary) ??
     toNonEmptyString(dataRecord?.description) ??
     toNonEmptyString(dataRecord?.summary) ??
-    (typeof planRecord.date_preset === "string" && planRecord.date_preset
+    (typeof planRecord.date_preset === 'string' && planRecord.date_preset
       ? `Scope: ${planRecord.date_preset}`
-      : "Review this execution plan.");
+      : 'Review this execution plan.');
 
   return {
-    text: "",
+    text: '',
     plan: {
       id: planId,
       title,
       description,
       status:
-        typeof planRecord.status === "string"
-          ? (planRecord.status as JainaPlan["status"])
-          : "pending",
+        typeof planRecord.status === 'string'
+          ? (planRecord.status as JainaPlan['status'])
+          : 'pending',
       steps,
     },
   };
@@ -435,15 +425,13 @@ export function parsePersistedResultWrapper(
 
 export function isPersistedResultStub(content: string): boolean {
   const trimmed = content.trim();
-  if (!trimmed.startsWith("{")) return false;
+  if (!trimmed.startsWith('{')) return false;
 
   const parsed = asRecord(parseLooseJsonCandidate(trimmed));
   if (!parsed) return false;
 
   const type = toNonEmptyString(parsed.type);
   if (!type) return false;
-  const normalizedType = type.startsWith("response.")
-    ? type.slice("response.".length)
-    : type;
-  return normalizedType === "plan_ready" || normalizedType === "text";
+  const normalizedType = type.startsWith('response.') ? type.slice('response.'.length) : type;
+  return normalizedType === 'plan_ready' || normalizedType === 'text';
 }

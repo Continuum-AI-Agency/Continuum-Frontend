@@ -17,7 +17,7 @@ function hostnameFromUrl(url: string): string {
   try {
     return new URL(/^https?:\/\//.test(url) ? url : `https://${url}`).hostname;
   } catch {
-    return "Untitled Brand";
+    return 'Untitled Brand';
   }
 }
 

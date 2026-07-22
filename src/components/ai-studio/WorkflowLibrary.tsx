@@ -1,19 +1,20 @@
-"use client";
+'use client';
 
-import React from "react";
-import { BookOpen, RefreshCw, LayoutTemplate } from "lucide-react";
-import { useReactFlow } from "@xyflow/react";
-import type { Edge } from "@xyflow/react";
+import type { Edge } from '@xyflow/react';
+import { useReactFlow } from '@xyflow/react';
+import { BookOpen, LayoutTemplate, RefreshCw } from 'lucide-react';
+import React from 'react';
 
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useToast } from "@/components/ui/ToastProvider";
-import { useWorkflowLibrary } from "@/lib/ai-studio/useWorkflowLibrary";
-import type { WorkflowLibraryItem } from "@/lib/schemas/workflowLibrary";
-import { useStudioStore } from "@/StudioCanvas/stores/useStudioStore";
-import type { StudioNode } from "@/StudioCanvas/types";
-import { normalizeWorkflowSnapshot } from "@/StudioCanvas/utils/workflowSerialization";
-import { rehydrateWorkflowMediaNodes } from "@/StudioCanvas/utils/rehydrateWorkflowMedia";
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useWorkflowLibrary } from '@/lib/ai-studio/useWorkflowLibrary';
+import type { WorkflowLibraryItem } from '@/lib/schemas/workflowLibrary';
+import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
+import type { StudioNode } from '@/StudioCanvas/types';
+import { STUDIO_FIT_VIEW_OPTIONS } from '@/StudioCanvas/utils/fitViewOptions';
+import { rehydrateWorkflowMediaNodes } from '@/StudioCanvas/utils/rehydrateWorkflowMedia';
+import { normalizeWorkflowSnapshot } from '@/StudioCanvas/utils/workflowSerialization';
 
 // ─── Mini canvas constants ────────────────────────────────────────────────────
 
@@ -24,25 +25,25 @@ const SVG_W = 252;
 const SVG_H = 152;
 
 const NODE_TYPE_LABEL: Record<string, string> = {
-  string:      "Prompt",
-  nanoGen:     "Image Gen",
-  videoGen:    "Video Gen",
-  extendVideo: "Extend Video",
-  image:       "Image",
-  video:       "Video",
-  audio:       "Audio",
-  document:    "Document",
+  string: 'Prompt',
+  nanoGen: 'Image Gen',
+  videoGen: 'Video Gen',
+  extendVideo: 'Extend Video',
+  image: 'Image',
+  video: 'Video',
+  audio: 'Audio',
+  document: 'Document',
 };
 
 const NODE_TYPE_COLOR: Record<string, string> = {
-  string:      "#5A48F9",
-  nanoGen:     "#10b981",
-  videoGen:    "#f59e0b",
-  extendVideo: "#f59e0b",
-  image:       "#3b82f6",
-  video:       "#8b5cf6",
-  audio:       "#ec4899",
-  document:    "#6b7280",
+  string: '#5A48F9',
+  nanoGen: '#10b981',
+  videoGen: '#f59e0b',
+  extendVideo: '#f59e0b',
+  image: '#3b82f6',
+  video: '#8b5cf6',
+  audio: '#ec4899',
+  document: '#6b7280',
 };
 
 // ─── Raw node / edge shapes from the library content ─────────────────────────
@@ -74,7 +75,10 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
     );
   }
 
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const n of rawNodes) {
     if (!n.position) continue;
     minX = Math.min(minX, n.position.x);
@@ -100,8 +104,12 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
   const offsetX = (SVG_W - scaledW) / 2;
   const offsetY = (SVG_H - scaledH) / 2;
 
-  function tx(x: number) { return (x - minX + CANVAS_PAD) * scale + offsetX; }
-  function ty(y: number) { return (y - minY + CANVAS_PAD) * scale + offsetY; }
+  function tx(x: number) {
+    return (x - minX + CANVAS_PAD) * scale + offsetX;
+  }
+  function ty(y: number) {
+    return (y - minY + CANVAS_PAD) * scale + offsetY;
+  }
 
   const nw = NODE_W * scale;
   const nh = NODE_H * scale;
@@ -141,11 +149,11 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
         if (!n.position) return null;
         const x = tx(n.position.x);
         const y = ty(n.position.y);
-        const type = n.type ?? "string";
-        const color = NODE_TYPE_COLOR[type] ?? "#5A48F9";
+        const type = n.type ?? 'string';
+        const color = NODE_TYPE_COLOR[type] ?? '#5A48F9';
         const label = n.data?.label ?? NODE_TYPE_LABEL[type] ?? type;
         const fontSize = Math.max(7, Math.round(9 * scale));
-        const truncated = label.length > 16 ? label.slice(0, 16) + "…" : label;
+        const truncated = label.length > 16 ? label.slice(0, 16) + '…' : label;
         return (
           <g key={n.id}>
             <rect
@@ -198,13 +206,11 @@ function WorkflowCard({
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm font-medium">{item.name}</p>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {nodeCount} {nodeCount === 1 ? "node" : "nodes"}
+            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'}
           </span>
         </div>
         {item.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-            {item.description}
-          </p>
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
         )}
         {item.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -230,7 +236,7 @@ function WorkflowCard({
 
 export function WorkflowLibrary() {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState('');
   const [activeTag, setActiveTag] = React.useState<string | null>(null);
 
   const { items, isLoading, isError, refetch } = useWorkflowLibrary({ enabled: isOpen });
@@ -240,7 +246,7 @@ export function WorkflowLibrary() {
 
   const allTags = React.useMemo(
     () => [...new Set(items.flatMap((item) => item.tags))].sort(),
-    [items]
+    [items],
   );
 
   const filtered = items.filter((item) => {
@@ -257,7 +263,7 @@ export function WorkflowLibrary() {
         nodes: item.content.nodes as unknown as StudioNode[],
         edges: item.content.edges as unknown as Edge[],
       },
-      defaultEdgeType
+      defaultEdgeType,
     );
     const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes);
 
@@ -265,10 +271,10 @@ export function WorkflowLibrary() {
     setNodes(hydratedNodes);
     setEdges(snapshot.edges);
     requestAnimationFrame(() => {
-      fitView({ padding: 0.2, duration: 300 });
+      fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
     });
 
-    show({ title: "Template applied", description: item.name, variant: "success" });
+    show({ title: 'Template applied', description: item.name, variant: 'success' });
     setIsOpen(false);
   }
 
@@ -278,7 +284,7 @@ export function WorkflowLibrary() {
       onOpenChange={(open) => {
         setIsOpen(open);
         if (!open) {
-          setQuery("");
+          setQuery('');
           setActiveTag(null);
         }
       }}
@@ -293,14 +299,15 @@ export function WorkflowLibrary() {
         <div className="border-b border-border p-3">
           <p className="text-sm font-semibold">Workflow Templates</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Pre-built starting points — pick one to apply it to the canvas. Looking for your own work? Use <span className="font-medium">My Workflows</span>.
+            Pre-built starting points — pick one to apply it to the canvas. Looking for your own
+            work? Use <span className="font-medium">My Workflows</span>.
           </p>
           <input
             type="text"
             placeholder="Search templates…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-                    className="mt-2.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className="mt-2.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
 
@@ -311,8 +318,8 @@ export function WorkflowLibrary() {
               onClick={() => setActiveTag(null)}
               className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                 activeTag === null
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border text-muted-foreground hover:bg-muted"
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:bg-muted'
               }`}
             >
               All
@@ -324,8 +331,8 @@ export function WorkflowLibrary() {
                 onClick={() => setActiveTag(tag)}
                 className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                   activeTag === tag
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted"
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {tag}
@@ -364,18 +371,18 @@ export function WorkflowLibrary() {
               <LayoutTemplate className="h-8 w-8 text-muted-foreground/40" />
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  {query ? "No templates match your search" : "No templates yet"}
+                  {query ? 'No templates match your search' : 'No templates yet'}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {query
-                    ? "Try a different search term or clear the filter."
-                    : "Templates will appear here once the library is populated."}
+                    ? 'Try a different search term or clear the filter.'
+                    : 'Templates will appear here once the library is populated.'}
                 </p>
               </div>
               {query && (
                 <button
                   type="button"
-                  onClick={() => setQuery("")}
+                  onClick={() => setQuery('')}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                 >
                   Clear search
@@ -390,7 +397,9 @@ export function WorkflowLibrary() {
               <WorkflowCard
                 key={item.id}
                 item={item}
-                onUse={(workflow) => { void handleLoad(workflow); }}
+                onUse={(workflow) => {
+                  void handleLoad(workflow);
+                }}
               />
             ))}
         </div>

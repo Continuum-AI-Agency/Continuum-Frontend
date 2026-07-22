@@ -1,47 +1,43 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getWsUrl } from "@/lib/api/ws";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getWsUrl } from '@/lib/api/ws';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import {
   createInitialJainaStreamState,
-  reduceJainaStreamEvent,
-  parseJainaStreamEvent,
   type JainaStreamState,
-} from "@/lib/jaina/stream";
+  parseJainaStreamEvent,
+  reduceJainaStreamEvent,
+} from '@/lib/jaina/stream';
 
-export type JainaSocketStatus = "connecting" | "connected" | "disconnected" | "error";
+export type JainaSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 export function useJainaSocket(
-  brandId: string, 
+  brandId: string,
   adAccountId: string | null,
-  options: { disabled?: boolean } = {}
+  options: { disabled?: boolean } = {},
 ) {
-  const [state, setState] = useState<JainaStreamState>(() =>
-    createInitialJainaStreamState()
-  );
-  const [socketStatus, setSocketStatus] = useState<JainaSocketStatus>(
-    "disconnected"
-  );
-  
+  const [state, setState] = useState<JainaStreamState>(() => createInitialJainaStreamState());
+  const [socketStatus, setSocketStatus] = useState<JainaSocketStatus>('disconnected');
+
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connect = useCallback(async () => {
     if (options.disabled) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
-    
-    setSocketStatus("connecting");
-    
+
+    setSocketStatus('connecting');
+
     try {
       const token = await getBrowserAccessToken();
       const url = getWsUrl(`/api/agents/jaina/chat/socket?brand_id=${brandId}&token=${token}`);
-      
+
       const ws = new WebSocket(url);
       socketRef.current = ws;
 
       ws.onopen = () => {
-        setSocketStatus("connected");
+        setSocketStatus('connected');
       };
 
       ws.onmessage = (event) => {
@@ -52,17 +48,17 @@ export function useJainaSocket(
       };
 
       ws.onclose = () => {
-        setSocketStatus("disconnected");
+        setSocketStatus('disconnected');
         if (!options.disabled) {
           reconnectTimeoutRef.current = setTimeout(connect, 3000);
         }
       };
 
       ws.onerror = () => {
-        setSocketStatus("error");
+        setSocketStatus('error');
       };
     } catch (err) {
-      setSocketStatus("error");
+      setSocketStatus('error');
     }
   }, [brandId, options.disabled]);
 
@@ -71,7 +67,7 @@ export function useJainaSocket(
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       socketRef.current?.close();
       socketRef.current = null;
-      setSocketStatus("disconnected");
+      setSocketStatus('disconnected');
       return;
     }
 
@@ -84,31 +80,37 @@ export function useJainaSocket(
 
   useEffect(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN && adAccountId) {
-      socketRef.current.send(JSON.stringify({ 
-        type: "context.sync", 
-        data: { adAccountId } 
-      }));
+      socketRef.current.send(
+        JSON.stringify({
+          type: 'context.sync',
+          data: { adAccountId },
+        }),
+      );
     }
   }, [adAccountId, socketStatus]);
 
   const sendPrompt = useCallback((query: string, metadata: any = {}) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return false;
-    
-    socketRef.current.send(JSON.stringify({
-      type: "prompt",
-      data: { query, ...metadata }
-    }));
-    
+
+    socketRef.current.send(
+      JSON.stringify({
+        type: 'prompt',
+        data: { query, ...metadata },
+      }),
+    );
+
     return true;
   }, []);
 
   const sendFeedback = useCallback((payload: { text: string; planId?: string }) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return false;
 
-    socketRef.current.send(JSON.stringify({
-      type: "feedback",
-      data: { text: payload.text, planId: payload.planId }
-    }));
+    socketRef.current.send(
+      JSON.stringify({
+        type: 'feedback',
+        data: { text: payload.text, planId: payload.planId },
+      }),
+    );
 
     return true;
   }, []);
@@ -123,6 +125,6 @@ export function useJainaSocket(
     sendPrompt,
     sendFeedback,
     reset,
-    reconnect: connect
+    reconnect: connect,
   };
 }

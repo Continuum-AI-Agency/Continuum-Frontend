@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import dynamic from "next/dynamic";
+import dynamic from 'next/dynamic';
 
 /**
  * Lazily-loaded SafeMarkdown component.
@@ -8,6 +8,6 @@ import dynamic from "next/dynamic";
  * that do not render markdown on first paint.
  */
 export const SafeMarkdown = dynamic(
-  () => import("./SafeMarkdown").then((mod) => mod.SafeMarkdown),
-  { ssr: false }
+  () => import('./SafeMarkdown').then((mod) => mod.SafeMarkdown),
+  { ssr: false },
 );

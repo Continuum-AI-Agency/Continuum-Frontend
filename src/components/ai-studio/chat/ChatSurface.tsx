@@ -225,7 +225,7 @@ export function ChatSurface({
             : medium === 'video'
               ? form.resolution || '720p'
               : undefined,
-        imageSize: form.model === 'gemini-3-pro-image-preview' ? form.imageSize || '1K' : undefined,
+        imageSize: form.model === 'gemini-3-pro-image' ? form.imageSize || '1K' : undefined,
         durationSeconds:
           medium === 'video' ? ((form.durationSeconds as 4 | 6 | 8 | undefined) ?? 8) : undefined,
         negativePrompt: form.negativePrompt || undefined,
@@ -248,7 +248,7 @@ export function ChatSurface({
 
       const userTurn = { role: 'user' as const, content: form.prompt };
       const nextConversationTurns =
-        form.model === 'gemini-3-pro-image-preview' ? [...conversationTurns, userTurn] : [];
+        form.model === 'gemini-3-pro-image' ? [...conversationTurns, userTurn] : [];
 
       const apiPayload: BackendChatImageRequestPayload = {
         brand_id: payload.brandProfileId,
@@ -267,7 +267,7 @@ export function ChatSurface({
             ? (String((payload.durationSeconds as 4 | 6 | 8 | undefined) ?? 8) as '4' | '6' | '8')
             : undefined,
         image_size:
-          payload.model === 'gemini-3-pro-image-preview' ? (payload.imageSize ?? '1K') : undefined,
+          payload.model === 'gemini-3-pro-image' ? (payload.imageSize ?? '1K') : undefined,
         reference_images:
           payload.refs?.map((r) => ({
             data: r.base64,
@@ -297,11 +297,9 @@ export function ChatSurface({
         cfg_scale: payload.cfgScale,
         steps: payload.steps,
         continue_from:
-          payload.model === 'gemini-3-pro-image-preview' && continueFrom.length
-            ? continueFrom
-            : undefined,
+          payload.model === 'gemini-3-pro-image' && continueFrom.length ? continueFrom : undefined,
         history:
-          payload.model === 'gemini-3-pro-image-preview' && nextConversationTurns.length
+          payload.model === 'gemini-3-pro-image' && nextConversationTurns.length
             ? nextConversationTurns
             : undefined,
         reset: resetNext || undefined,
@@ -384,7 +382,7 @@ export function ChatSurface({
         );
       }
 
-      if (payload.model === 'gemini-3-pro-image-preview') {
+      if (payload.model === 'gemini-3-pro-image') {
         setConversationTurns(nextConversationTurns);
       }
     },
@@ -433,7 +431,7 @@ export function ChatSurface({
 
   const handleReset = React.useCallback(() => {
     reset();
-    if (activeModel === 'gemini-3-pro-image-preview') {
+    if (activeModel === 'gemini-3-pro-image') {
       setContinueFrom([]);
       setResetNext(true);
       setConversationTurns([]);
@@ -451,7 +449,7 @@ export function ChatSurface({
     const lastEvent = streamState.lastEvent as
       | { event?: string; message?: string; text?: string }
       | undefined;
-    if (!lastEvent || activeModel !== 'gemini-3-pro-image-preview') return;
+    if (!lastEvent || activeModel !== 'gemini-3-pro-image') return;
     if (lastEvent.event === 'text' || lastEvent.event === 'conversation_append') {
       const content = (lastEvent.message ?? lastEvent.text ?? '').trim();
       if (!content) return;
@@ -671,7 +669,7 @@ function HistoryPanel({
                   </div>
                 )}
                 <span className="absolute left-1 top-1 rounded bg-slate-900/70 px-1 text-2xs uppercase text-gray-200">
-                  {item.model === 'nano-banana' || item.model === 'gemini-3-pro-image-preview'
+                  {item.model === 'nano-banana' || item.model === 'gemini-3-pro-image'
                     ? 'Image'
                     : 'Video'}
                 </span>

@@ -1,11 +1,12 @@
-"use client";
+'use client';
 
-import React, { useRef, useMemo } from "react";
-import { useFrame } from "@react-three/fiber";
-import * as THREE from "three";
+import { useFrame } from '@react-three/fiber';
+import type React from 'react';
+import { useMemo, useRef } from 'react';
+import * as THREE from 'three';
 
 interface GalaxyParticlesProps {
-  theme: "light" | "dark";
+  theme: 'light' | 'dark';
   count?: number;
 }
 
@@ -19,17 +20,14 @@ const galaxyParams = {
   randomnessPower: 3,
 };
 
-const GalaxyParticles: React.FC<GalaxyParticlesProps> = ({
-  theme,
-  count = galaxyParams.count
-}) => {
+const GalaxyParticles: React.FC<GalaxyParticlesProps> = ({ theme, count = galaxyParams.count }) => {
   const pointsRef = useRef<THREE.Points>(null);
 
   // Theme colors
   const galaxyColors = useMemo(() => {
-    return theme === "light"
-      ? { inside: "#5A48F9", outside: "#1b3984" } // Brand colors
-      : { inside: "#8B5CF6", outside: "#2E2257" }; // Accent colors
+    return theme === 'light'
+      ? { inside: '#5A48F9', outside: '#1b3984' } // Brand colors
+      : { inside: '#8B5CF6', outside: '#2E2257' }; // Accent colors
   }, [theme]);
 
   // Generate spiral galaxy particles
@@ -42,14 +40,23 @@ const GalaxyParticles: React.FC<GalaxyParticlesProps> = ({
       const i3 = i * 3;
       const radius = Math.random() * galaxyParams.radius;
       const spinAngle = radius * galaxyParams.spin;
-      const branchAngle = (i % galaxyParams.branches) / galaxyParams.branches * Math.PI * 2;
+      const branchAngle = ((i % galaxyParams.branches) / galaxyParams.branches) * Math.PI * 2;
 
-      const randomX = Math.pow(Math.random(), galaxyParams.randomnessPower) *
-        (Math.random() < 0.5 ? 1 : -1) * galaxyParams.randomness * radius;
-      const randomY = Math.pow(Math.random(), galaxyParams.randomnessPower) *
-        (Math.random() < 0.5 ? 1 : -1) * galaxyParams.randomness * radius;
-      const randomZ = Math.pow(Math.random(), galaxyParams.randomnessPower) *
-        (Math.random() < 0.5 ? 1 : -1) * galaxyParams.randomness * radius;
+      const randomX =
+        Math.random() ** galaxyParams.randomnessPower *
+        (Math.random() < 0.5 ? 1 : -1) *
+        galaxyParams.randomness *
+        radius;
+      const randomY =
+        Math.random() ** galaxyParams.randomnessPower *
+        (Math.random() < 0.5 ? 1 : -1) *
+        galaxyParams.randomness *
+        radius;
+      const randomZ =
+        Math.random() ** galaxyParams.randomnessPower *
+        (Math.random() < 0.5 ? 1 : -1) *
+        galaxyParams.randomness *
+        radius;
 
       positions[i3] = Math.cos(branchAngle + spinAngle) * radius + randomX;
       positions[i3 + 1] = randomY;
@@ -59,7 +66,7 @@ const GalaxyParticles: React.FC<GalaxyParticlesProps> = ({
       const mixedColor = new THREE.Color().lerpColors(
         new THREE.Color(galaxyColors.inside),
         new THREE.Color(galaxyColors.outside),
-        radius / galaxyParams.radius
+        radius / galaxyParams.radius,
       );
 
       colors[i3] = mixedColor.r;
@@ -84,18 +91,9 @@ const GalaxyParticles: React.FC<GalaxyParticlesProps> = ({
   return (
     <points ref={pointsRef}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[particleData.positions, 3]}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          args={[particleData.colors, 3]}
-        />
-        <bufferAttribute
-          attach="attributes-scale"
-          args={[particleData.scales, 1]}
-        />
+        <bufferAttribute attach="attributes-position" args={[particleData.positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[particleData.colors, 3]} />
+        <bufferAttribute attach="attributes-scale" args={[particleData.scales, 1]} />
       </bufferGeometry>
       <pointsMaterial
         size={0.03}

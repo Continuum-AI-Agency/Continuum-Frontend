@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDownIcon, WrenchIcon } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import * as React from 'react';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
   ChainOfThoughtStep,
-} from "@/components/ai-elements/chain-of-thought";
-import { Badge } from "@/components/ui/badge";
-import { WrenchIcon, ChevronDownIcon } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
-import { cn } from "@/lib/utils";
-import { ToolCallChip } from "./ToolCallChip";
-import type { ToolCallEvent } from "./types";
-import { formatOrganicToolName } from "./organicToolLabels";
+} from '@/components/ai-elements/chain-of-thought';
+import { Badge } from '@/components/ui/badge';
+import { CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
+import { formatOrganicToolName } from './organicToolLabels';
+import { ToolCallChip } from './ToolCallChip';
+import type { ToolCallEvent } from './types';
 
 type OrganicThinkingPanelProps = {
   toolCalls: ToolCallEvent[];
@@ -30,7 +30,9 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
     for (let i = toolCalls.length - 1; i >= 0; i--) {
       if (toolCalls[i].result === undefined) return formatOrganicToolName(toolCalls[i].toolName);
     }
-    return toolCalls.length > 0 ? formatOrganicToolName(toolCalls[toolCalls.length - 1].toolName) : null;
+    return toolCalls.length > 0
+      ? formatOrganicToolName(toolCalls[toolCalls.length - 1].toolName)
+      : null;
   }, [toolCalls, isStreaming]);
 
   if (toolCalls.length === 0) return null;
@@ -48,15 +50,15 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
             <WrenchIcon className="size-3.5 shrink-0 text-foreground/50" />
           )}
           <span className="flex-1 font-medium">
-            {isStreaming ? "Thinking..." : "Actions taken"}
+            {isStreaming ? 'Thinking...' : 'Actions taken'}
           </span>
           <Badge variant="secondary" className="px-1.5 text-2xs">
-            {toolCalls.length} tool{toolCalls.length !== 1 ? "s" : ""}
+            {toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}
           </Badge>
           <ChevronDownIcon
             className={cn(
-              "size-4 shrink-0 transition-transform",
-              isOpen ? "rotate-180" : "rotate-0"
+              'size-4 shrink-0 transition-transform',
+              isOpen ? 'rotate-180' : 'rotate-0',
             )}
           />
         </button>
@@ -80,8 +82,8 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
       <ChainOfThoughtContent className="space-y-1 px-2 pb-3">
         <ChainOfThoughtStep
           icon={WrenchIcon}
-          label={`${toolCalls.length} tool call${toolCalls.length !== 1 ? "s" : ""}`}
-          status={hasRunning ? "active" : "complete"}
+          label={`${toolCalls.length} tool call${toolCalls.length !== 1 ? 's' : ''}`}
+          status={hasRunning ? 'active' : 'complete'}
         >
           <div className="space-y-1">
             {toolCalls.map((tc, i) => (

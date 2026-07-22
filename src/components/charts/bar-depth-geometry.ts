@@ -25,7 +25,7 @@ export function barDepthMaxDepth(stepWidth: number, bandWidth: number): number {
 export function barDepthAndRise(
   absOffset: number,
   naturalHeight: number,
-  maxDepth: number
+  maxDepth: number,
 ): { depth: number; perspectiveRise: number } {
   const offset = Math.min(1, Math.max(0, absOffset));
   const cappedMaxDepth = Math.min(maxDepth, Math.max(0, naturalHeight));

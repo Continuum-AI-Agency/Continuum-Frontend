@@ -1,13 +1,9 @@
-"use client";
+'use client';
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-import { getCreativeAssetsBucket, resolveStoragePath } from "./config";
-import type {
-  CreativeAsset,
-  CreativeAssetListing,
-  UploadResult,
-} from "./types";
+import { getCreativeAssetsBucket, resolveStoragePath } from './config';
+import type { CreativeAsset, CreativeAssetListing, UploadResult } from './types';
 
 type ListOptions = {
   limit?: number;
@@ -32,21 +28,18 @@ type StorageListItem = {
 function mapStorageListing(
   brandProfileId: string,
   folder: string,
-  items: StorageListItem[]
+  items: StorageListItem[],
 ): CreativeAsset[] {
   return items.map((item) => {
     const parentPath = resolveStoragePath(brandProfileId, folder);
     const fullPath = resolveStoragePath(brandProfileId, folder, item.name);
     const isFile = Boolean(item.id);
-    const size = typeof item.metadata?.size === "number" ? item.metadata.size : null;
-    const mime =
-      typeof item.metadata?.mimetype === "string"
-        ? item.metadata.mimetype
-        : null;
+    const size = typeof item.metadata?.size === 'number' ? item.metadata.size : null;
+    const mime = typeof item.metadata?.mimetype === 'string' ? item.metadata.mimetype : null;
     return {
       id: item.id ?? fullPath,
       name: item.name,
-      kind: isFile ? "file" : "folder",
+      kind: isFile ? 'file' : 'folder',
       path: parentPath,
       fullPath,
       size,
@@ -66,19 +59,17 @@ export async function listCreativeBuckets(): Promise<string[]> {
 export async function listCreativeAssets(
   brandProfileId: string,
   folder: string,
-  options?: ListOptions
+  options?: ListOptions,
 ): Promise<CreativeAssetListing> {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const path = resolveStoragePath(brandProfileId, folder);
 
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .list(path === "" ? undefined : path, {
-      limit: options?.limit ?? 1000,
-      offset: options?.offset ?? 0,
-      sortBy: { column: "name", order: "asc" },
-    });
+  const { data, error } = await supabase.storage.from(bucket).list(path === '' ? undefined : path, {
+    limit: options?.limit ?? 1000,
+    offset: options?.offset ?? 0,
+    sortBy: { column: 'name', order: 'asc' },
+  });
 
   if (error) {
     throw error;
@@ -93,18 +84,16 @@ export async function listCreativeAssets(
 export async function uploadCreativeAsset(
   brandProfileId: string,
   folder: string,
-  file: File
+  file: File,
 ): Promise<UploadResult> {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const targetPath = resolveStoragePath(brandProfileId, folder, file.name);
 
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(targetPath, file, {
-      upsert: false,
-      cacheControl: "3600",
-    });
+  const { error } = await supabase.storage.from(bucket).upload(targetPath, file, {
+    upsert: false,
+    cacheControl: '3600',
+  });
 
   if (error) {
     throw error;
@@ -113,7 +102,7 @@ export async function uploadCreativeAsset(
   const asset: CreativeAsset = {
     id: targetPath,
     name: file.name,
-    kind: "file",
+    kind: 'file',
     path: resolveStoragePath(brandProfileId, folder),
     fullPath: targetPath,
     size: file.size,
@@ -127,20 +116,18 @@ export async function uploadCreativeAsset(
 export async function renameCreativeAsset(
   brandProfileId: string,
   fullPath: string,
-  newName: string
+  newName: string,
 ) {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
-  const segments = fullPath.split("/");
+  const segments = fullPath.split('/');
   const currentName = segments.pop();
   if (!currentName) {
-    throw new Error("Invalid asset path");
+    throw new Error('Invalid asset path');
   }
-  const destination = resolveStoragePath(brandProfileId, segments.slice(1).join("/"), newName);
+  const destination = resolveStoragePath(brandProfileId, segments.slice(1).join('/'), newName);
 
-  const { error } = await supabase.storage
-    .from(bucket)
-    .move(fullPath, destination);
+  const { error } = await supabase.storage.from(bucket).move(fullPath, destination);
 
   if (error) {
     throw error;
@@ -152,14 +139,14 @@ export async function renameCreativeAsset(
 export async function moveCreativeAsset(
   brandProfileId: string,
   fullPath: string,
-  options: MoveOptions
+  options: MoveOptions,
 ) {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
-  const segments = fullPath.split("/");
+  const segments = fullPath.split('/');
   const fileName = segments.pop();
-  if (!fileName) throw new Error("Invalid asset path");
-  const destination = resolveStoragePath(brandProfileId, options.destinationFolder ?? "", fileName);
+  if (!fileName) throw new Error('Invalid asset path');
+  const destination = resolveStoragePath(brandProfileId, options.destinationFolder ?? '', fileName);
   const { error } = await supabase.storage.from(bucket).move(fullPath, destination);
   if (error) throw error;
   return destination;
@@ -177,18 +164,18 @@ export async function deleteCreativeAsset(fullPath: string) {
 export async function createCreativeFolder(
   brandProfileId: string,
   parentFolder: string,
-  folderName: string
+  folderName: string,
 ): Promise<string> {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
-  const normalizedName = folderName.trim().replace(/\/+/g, "");
-  if (!normalizedName) throw new Error("Folder name is required");
+  const normalizedName = folderName.trim().replace(/\/+/g, '');
+  if (!normalizedName) throw new Error('Folder name is required');
   const folderPath = resolveStoragePath(brandProfileId, parentFolder, normalizedName);
   // Supabase creates "folders" implicitly via object keys; upload a tiny placeholder.
   const placeholderPath = `${folderPath}/.keep`;
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(placeholderPath, new Blob([""], { type: "text/plain" }), { upsert: false });
+    .upload(placeholderPath, new Blob([''], { type: 'text/plain' }), { upsert: false });
   if (error) throw error;
   return folderPath;
 }
@@ -196,7 +183,7 @@ export async function createCreativeFolder(
 export async function createSignedAssetUrl(
   fullPath: string,
   expiresInSeconds: number,
-  bucketOverride?: string
+  bucketOverride?: string,
 ): Promise<string> {
   const supabase = createSupabaseBrowserClient();
   const bucket = bucketOverride?.trim() || getCreativeAssetsBucket();
@@ -210,7 +197,7 @@ export async function createSignedAssetUrl(
     .createSignedUrl(fullPath, expiresInSeconds, options);
 
   if (error || !data?.signedUrl) {
-    throw error ?? new Error("Failed to create signed URL");
+    throw error ?? new Error('Failed to create signed URL');
   }
 
   return data.signedUrl;
@@ -219,7 +206,7 @@ export async function createSignedAssetUrl(
 export async function createSignedDownloadUrl(
   fullPath: string,
   expiresInSeconds: number,
-  _fileName: string
+  _fileName: string,
 ): Promise<string> {
   return createSignedAssetUrl(fullPath, expiresInSeconds);
 }
@@ -229,11 +216,14 @@ export async function getPublicAssetUrl(fullPath: string): Promise<string> {
   const bucket = getCreativeAssetsBucket();
   const { data } = supabase.storage.from(bucket).getPublicUrl(fullPath);
   if (!data?.publicUrl) {
-    throw new Error("Failed to resolve public URL");
+    throw new Error('Failed to resolve public URL');
   }
   return data.publicUrl;
 }
 
-export async function getPublicAssetDownloadUrl(fullPath: string, _fileName: string): Promise<string> {
+export async function getPublicAssetDownloadUrl(
+  fullPath: string,
+  _fileName: string,
+): Promise<string> {
   return getPublicAssetUrl(fullPath);
 }

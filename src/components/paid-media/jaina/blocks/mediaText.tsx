@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { createContext, useContext, type ReactNode } from "react";
-import type { MediaMap } from "@/lib/jaina/schemas";
-import { MediaPreview } from "./MediaPreview";
+import { createContext, type ReactNode, useContext } from 'react';
+import type { MediaMap } from '@/lib/jaina/schemas';
+import { MediaPreview } from './MediaPreview';
 
 const MediaMapContext = createContext<MediaMap>({});
 
@@ -13,25 +13,18 @@ export function MediaMapProvider({
   mediaMap: MediaMap;
   children: ReactNode;
 }) {
-  return (
-    <MediaMapContext.Provider value={mediaMap}>
-      {children}
-    </MediaMapContext.Provider>
-  );
+  return <MediaMapContext.Provider value={mediaMap}>{children}</MediaMapContext.Provider>;
 }
 
 export function useMediaMap(): MediaMap {
   return useContext(MediaMapContext);
 }
 
-export function processMediaText(
-  text: string,
-  mediaMap: MediaMap,
-): ReactNode[] {
+export function processMediaText(text: string, mediaMap: MediaMap): ReactNode[] {
   const keys = Object.keys(mediaMap);
   if (keys.length === 0) return [text];
 
-  const pattern = new RegExp(`(${keys.map(escapeRegExp).join("|")})`, "g");
+  const pattern = new RegExp(`(${keys.map(escapeRegExp).join('|')})`, 'g');
   const parts = text.split(pattern);
 
   return parts.map((part, index) => {
@@ -48,7 +41,7 @@ export function processMediaText(
 }
 
 function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function MediaText({ children }: { children: string }) {

@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-import type { GeneratedCampaignInsight } from "../../lib/paid-media/insight-data-points";
+import type { GeneratedCampaignInsight } from '../../lib/paid-media/insight-data-points';
 
-const BRAND_ID = "11111111-1111-4111-8111-111111111111";
-const OTHER_BRAND_ID = "22222222-2222-4222-8222-222222222222";
-const AD_ACCOUNT_ID = "act_123";
+const BRAND_ID = '11111111-1111-4111-8111-111111111111';
+const OTHER_BRAND_ID = '22222222-2222-4222-8222-222222222222';
+const AD_ACCOUNT_ID = 'act_123';
 
 type SnapshotRow = {
   id: string;
@@ -32,15 +32,18 @@ const state: FakeState = {
   insights: [],
   failInsightInsert: false,
   brandContext: {
-    user: { id: "user-1" },
-    permissions: [{ brand_profile_id: BRAND_ID, role: "owner" }],
+    user: { id: 'user-1' },
+    permissions: [{ brand_profile_id: BRAND_ID, role: 'owner' }],
   },
 };
 
 function buildClient() {
   const builder = {
-    _table: "",
-    _pendingInsert: null as null | { row: SnapshotRow | InsightRow | InsightRow[]; returnsId: boolean },
+    _table: '',
+    _pendingInsert: null as null | {
+      row: SnapshotRow | InsightRow | InsightRow[];
+      returnsId: boolean;
+    },
     schema() {
       return builder;
     },
@@ -50,20 +53,20 @@ function buildClient() {
       return builder;
     },
     insert(row: unknown) {
-      if (builder._table === "media_insight_snapshots") {
-        const r = row as Omit<SnapshotRow, "id">;
+      if (builder._table === 'media_insight_snapshots') {
+        const r = row as Omit<SnapshotRow, 'id'>;
         const snapshot: SnapshotRow = { ...r, id: `snap-${state.snapshots.length + 1}` };
         builder._pendingInsert = { row: snapshot, returnsId: true };
         state.snapshots.push(snapshot);
         return builder;
       }
-      if (builder._table === "media_insights") {
+      if (builder._table === 'media_insights') {
         if (state.failInsightInsert) {
           return {
-            select: () => ({ single: async () => ({ data: null, error: { message: "boom" } }) }),
+            select: () => ({ single: async () => ({ data: null, error: { message: 'boom' } }) }),
             // for the bare insert() awaited form:
             then: (resolve: (v: { data: null; error: { message: string } }) => unknown) =>
-              resolve({ data: null, error: { message: "boom" } }),
+              resolve({ data: null, error: { message: 'boom' } }),
           };
         }
         const rows = row as InsightRow[];
@@ -81,7 +84,7 @@ function buildClient() {
           if (builder._pendingInsert?.returnsId) {
             return { data: { id: (builder._pendingInsert.row as SnapshotRow).id }, error: null };
           }
-          return { data: null, error: { message: "no pending insert" } };
+          return { data: null, error: { message: 'no pending insert' } };
         },
       };
     },
@@ -97,48 +100,48 @@ function buildClient() {
   return builder;
 }
 
-mock.module("@/lib/brands/active-brand-context", () => ({
+mock.module('@/lib/brands/active-brand-context', () => ({
   getActiveBrandContext: async () => state.brandContext,
 }));
 
-mock.module("@/lib/supabase/server", () => ({
+mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => buildClient(),
 }));
 
-const { persistCampaignInsightsSnapshot } = await import("./paidMediaInsights");
+const { persistCampaignInsightsSnapshot } = await import('./paidMediaInsights');
 
 function makeInsight(overrides: Partial<GeneratedCampaignInsight> = {}): GeneratedCampaignInsight {
   return {
-    id: "ins-1",
-    scope: "campaign",
-    severity: "warning",
-    title: "Title",
-    summary: "Summary",
-    source: "matrix",
+    id: 'ins-1',
+    scope: 'campaign',
+    severity: 'warning',
+    title: 'Title',
+    summary: 'Summary',
+    source: 'matrix',
     evidence: [
       {
-        campaignId: "camp-1",
-        campaignName: "Camp",
-        metric: "roas",
+        campaignId: 'camp-1',
+        campaignName: 'Camp',
+        metric: 'roas',
         currentValue: 1.2,
         percentileRank: 0.1,
-        direction: "higher_is_better",
-        status: "risk",
-        evidenceWindow: "last_14d",
+        direction: 'higher_is_better',
+        status: 'risk',
+        evidenceWindow: 'last_14d',
       },
     ],
     ...overrides,
   };
 }
 
-describe("persistCampaignInsightsSnapshot", () => {
+describe('persistCampaignInsightsSnapshot', () => {
   beforeEach(() => {
     state.snapshots = [];
     state.insights = [];
     state.failInsightInsert = false;
     state.brandContext = {
-      user: { id: "user-1" },
-      permissions: [{ brand_profile_id: BRAND_ID, role: "owner" }],
+      user: { id: 'user-1' },
+      permissions: [{ brand_profile_id: BRAND_ID, role: 'owner' }],
     };
   });
 
@@ -147,11 +150,11 @@ describe("persistCampaignInsightsSnapshot", () => {
     state.insights = [];
   });
 
-  it("rejects empty insight arrays", async () => {
+  it('rejects empty insight arrays', async () => {
     const result = await persistCampaignInsightsSnapshot({
       brandId: BRAND_ID,
       adAccountId: AD_ACCOUNT_ID,
-      rangePreset: "last_14d",
+      rangePreset: 'last_14d',
       peerSetSize: 0,
       insights: [],
     });
@@ -159,11 +162,11 @@ describe("persistCampaignInsightsSnapshot", () => {
     expect(state.snapshots).toHaveLength(0);
   });
 
-  it("rejects when caller has no brand access", async () => {
+  it('rejects when caller has no brand access', async () => {
     const result = await persistCampaignInsightsSnapshot({
       brandId: OTHER_BRAND_ID,
       adAccountId: AD_ACCOUNT_ID,
-      rangePreset: "last_14d",
+      rangePreset: 'last_14d',
       peerSetSize: 3,
       insights: [makeInsight()],
     });
@@ -174,25 +177,25 @@ describe("persistCampaignInsightsSnapshot", () => {
     expect(state.snapshots).toHaveLength(0);
   });
 
-  it("rejects when no user is present", async () => {
+  it('rejects when no user is present', async () => {
     state.brandContext = { user: null, permissions: [] };
     const result = await persistCampaignInsightsSnapshot({
       brandId: BRAND_ID,
       adAccountId: AD_ACCOUNT_ID,
-      rangePreset: "last_14d",
+      rangePreset: 'last_14d',
       peerSetSize: 3,
       insights: [makeInsight()],
     });
     expect(result.ok).toBe(false);
   });
 
-  it("inserts snapshot + insight rows atomically on success", async () => {
+  it('inserts snapshot + insight rows atomically on success', async () => {
     const result = await persistCampaignInsightsSnapshot({
       brandId: BRAND_ID,
       adAccountId: AD_ACCOUNT_ID,
-      rangePreset: "last_14d",
+      rangePreset: 'last_14d',
       peerSetSize: 5,
-      insights: [makeInsight(), makeInsight({ id: "ins-2" })],
+      insights: [makeInsight(), makeInsight({ id: 'ins-2' })],
     });
     expect(result.ok).toBe(true);
     expect(state.snapshots).toHaveLength(1);
@@ -201,12 +204,12 @@ describe("persistCampaignInsightsSnapshot", () => {
     expect(state.insights.every((r) => r.snapshot_id === state.snapshots[0].id)).toBe(true);
   });
 
-  it("rolls back the snapshot if insight insert fails", async () => {
+  it('rolls back the snapshot if insight insert fails', async () => {
     state.failInsightInsert = true;
     const result = await persistCampaignInsightsSnapshot({
       brandId: BRAND_ID,
       adAccountId: AD_ACCOUNT_ID,
-      rangePreset: "last_14d",
+      rangePreset: 'last_14d',
       peerSetSize: 5,
       insights: [makeInsight()],
     });

@@ -3,15 +3,15 @@
 // media url is referenced directly (not re-hosted): it drives both the node's
 // preview (data.image/data.video) and its durable reference (data.sourceUrl).
 
-import type { UnfurlMediaItem } from "@continuum/contracts";
+import type { UnfurlMediaItem } from '@continuum/contracts';
 
-import type { Point } from "./layoutImportedNodes";
+import type { Point } from './layoutImportedNodes';
 
 const NODE_SIZE = 192;
 
 export interface BuiltReferenceNode {
   id: string;
-  type: "image" | "video";
+  type: 'image' | 'video';
   position: Point;
   data: Record<string, unknown>;
   style: { width: number; height: number };
@@ -20,11 +20,11 @@ export interface BuiltReferenceNode {
 const fileNameFromUrl = (rawUrl: string): string => {
   try {
     const url = new URL(rawUrl);
-    const segment = url.pathname.split("/").filter(Boolean).pop();
+    const segment = url.pathname.split('/').filter(Boolean).pop();
     if (segment) return decodeURIComponent(segment);
     return `${url.hostname}-media`;
   } catch {
-    return "imported-media";
+    return 'imported-media';
   }
 };
 
@@ -38,10 +38,10 @@ export function buildReferenceNodes(
     const fileName = fileNameFromUrl(item.url);
     const style = { width: NODE_SIZE, height: NODE_SIZE };
 
-    if (item.kind === "video") {
+    if (item.kind === 'video') {
       return {
         id: makeId(),
-        type: "video",
+        type: 'video',
         position,
         data: { video: item.url, sourceUrl: item.url, fileName },
         style,
@@ -49,9 +49,9 @@ export function buildReferenceNodes(
     }
     return {
       id: makeId(),
-      type: "image",
+      type: 'image',
       position,
-      data: { image: item.url, sourceUrl: item.url, fileName, aspectRatio: "1:1" },
+      data: { image: item.url, sourceUrl: item.url, fileName, aspectRatio: '1:1' },
       style,
     };
   });

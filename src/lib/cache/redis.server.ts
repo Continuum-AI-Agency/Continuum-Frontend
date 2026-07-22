@@ -1,6 +1,6 @@
-import "server-only";
+import 'server-only';
 
-import { Redis } from "@upstash/redis";
+import { Redis } from '@upstash/redis';
 
 // Frontend half of the shared app cache. Points at the SAME Upstash DB as the
 // backend (APP_CACHE_REDIS_* — REST endpoint), so both tiers share one cache
@@ -82,7 +82,7 @@ export async function invalidateCachePrefix(prefix: string): Promise<void> {
   const redis = getClient();
   if (!redis) return;
   try {
-    let cursor = "0";
+    let cursor = '0';
     let iterations = 0;
     do {
       const [next, keys] = await withTimeout(
@@ -92,7 +92,7 @@ export async function invalidateCachePrefix(prefix: string): Promise<void> {
       cursor = next;
       if (keys.length > 0) await withTimeout(redis.del(...keys), TIMEOUT_MS);
       iterations += 1;
-    } while (cursor !== "0" && iterations < SCAN_MAX_ITERATIONS);
+    } while (cursor !== '0' && iterations < SCAN_MAX_ITERATIONS);
   } catch {
     // best-effort — a missed invalidation self-heals at the TTL
   }

@@ -1,13 +1,13 @@
-import { beforeEach, expect, test, vi } from "bun:test";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, expect, test, vi } from 'bun:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { AdminPagination, AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
+import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
 
 const routerPushSpy = vi.fn<(path: string) => void>();
 let searchParams = new URLSearchParams();
 
-vi.mock("next/navigation", () => ({
+vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPushSpy }),
   useSearchParams: () => ({
     get: (key: string) => searchParams.get(key),
@@ -15,46 +15,46 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("lucide-react", () => {
+vi.mock('lucide-react', () => {
   const icon = (name: string) => {
     const MockIcon = (props: Record<string, unknown>) =>
-      React.createElement("span", { "data-icon": name, ...props });
+      React.createElement('span', { 'data-icon': name, ...props });
     MockIcon.displayName = `${name}Icon`;
     return MockIcon;
   };
 
   return {
-    Search: icon("search"),
-    ChevronDown: icon("chevron-down"),
-    ShieldAlert: icon("shield-alert"),
-    UserCog: icon("user-cog"),
-    Building2: icon("building"),
-    Library: icon("library"),
-    History: icon("history"),
-    Copy: icon("copy"),
-    Globe2: icon("globe"),
-    Trash2: icon("trash"),
-    Lock: icon("lock"),
-    RefreshCw: icon("refresh"),
-    CheckCircle2: icon("check-circle"),
-    Loader2: icon("loader"),
-    ChevronLeft: icon("chevron-left"),
-    ChevronRight: icon("chevron-right"),
-    MoreHorizontal: icon("more-horizontal"),
-    Mail: icon("mail"),
-    PlayCircle: icon("play-circle"),
-    CheckIcon: icon("check"),
-    ChevronDownIcon: icon("chevron-down"),
-    ChevronUpIcon: icon("chevron-up"),
-    XIcon: icon("x"),
+    Search: icon('search'),
+    ChevronDown: icon('chevron-down'),
+    ShieldAlert: icon('shield-alert'),
+    UserCog: icon('user-cog'),
+    Building2: icon('building'),
+    Library: icon('library'),
+    History: icon('history'),
+    Copy: icon('copy'),
+    Globe2: icon('globe'),
+    Trash2: icon('trash'),
+    Lock: icon('lock'),
+    RefreshCw: icon('refresh'),
+    CheckCircle2: icon('check-circle'),
+    Loader2: icon('loader'),
+    ChevronLeft: icon('chevron-left'),
+    ChevronRight: icon('chevron-right'),
+    MoreHorizontal: icon('more-horizontal'),
+    Mail: icon('mail'),
+    PlayCircle: icon('play-circle'),
+    CheckIcon: icon('check'),
+    ChevronDownIcon: icon('chevron-down'),
+    ChevronUpIcon: icon('chevron-up'),
+    XIcon: icon('x'),
   };
 });
 
-vi.mock("@/components/ui/ToastProvider", () => ({
+vi.mock('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: vi.fn() }),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
+vi.mock('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
     functions: { invoke: vi.fn() },
   }),
@@ -66,26 +66,26 @@ async function renderAdminUserList(props: {
   pagination: AdminPagination;
   searchQuery: string;
 }) {
-  const { AdminUserList } = await import("@/components/admin/AdminUserList");
+  const { AdminUserList } = await import('@/components/admin/AdminUserList');
   return renderToStaticMarkup(
     <AdminUserList
       users={props.users}
       permissions={props.permissions ?? []}
       pagination={props.pagination}
       searchQuery={props.searchQuery}
-    />
+    />,
   );
 }
 
 beforeEach(() => {
   routerPushSpy.mockReset();
-  searchParams = new URLSearchParams({ query: "duane", page: "2", pageSize: "50" });
+  searchParams = new URLSearchParams({ query: 'duane', page: '2', pageSize: '50' });
 });
 
-test("keeps query param when paging search results", async () => {
+test('keeps query param when paging search results', async () => {
   const users: AdminUser[] = [
-    { id: "user-1", email: "duane@example.com", name: "Duane", isAdmin: false, createdAt: null },
-    { id: "user-2", email: "sam@example.com", name: "Sam", isAdmin: true, createdAt: null },
+    { id: 'user-1', email: 'duane@example.com', name: 'Duane', isAdmin: false, createdAt: null },
+    { id: 'user-2', email: 'sam@example.com', name: 'Sam', isAdmin: true, createdAt: null },
   ];
   const pagination: AdminPagination = {
     page: 2,
@@ -98,23 +98,23 @@ test("keeps query param when paging search results", async () => {
     hasPrevPage: true,
   };
 
-  const html = await renderAdminUserList({ users, pagination, searchQuery: "duane" });
+  const html = await renderAdminUserList({ users, pagination, searchQuery: 'duane' });
 
-  expect(html).toContain("matches");
-  expect(html).toContain("?query=duane&amp;page=3&amp;pageSize=50");
+  expect(html).toContain('matches');
+  expect(html).toContain('?query=duane&amp;page=3&amp;pageSize=50');
 });
 
-test("renders brand tier values from permissions", async () => {
+test('renders brand tier values from permissions', async () => {
   const users: AdminUser[] = [
-    { id: "user-1", email: "duane@example.com", name: "Duane", isAdmin: false, createdAt: null },
+    { id: 'user-1', email: 'duane@example.com', name: 'Duane', isAdmin: false, createdAt: null },
   ];
   const permissions: PermissionRow[] = [
     {
-      user_id: "user-1",
-      brand_profile_id: "brand-1",
-      role: "owner",
+      user_id: 'user-1',
+      brand_profile_id: 'brand-1',
+      role: 'owner',
       brand_tier: 2,
-      brand_name: "Brand One",
+      brand_name: 'Brand One',
     },
   ];
   const pagination: AdminPagination = {
@@ -128,14 +128,14 @@ test("renders brand tier values from permissions", async () => {
     hasPrevPage: false,
   };
 
-  const html = await renderAdminUserList({ users, permissions, pagination, searchQuery: "" });
+  const html = await renderAdminUserList({ users, permissions, pagination, searchQuery: '' });
 
-  expect(html).toContain("Tier 2");
+  expect(html).toContain('Tier 2');
 });
 
-test("renders an accessible search label", async () => {
+test('renders an accessible search label', async () => {
   const users: AdminUser[] = [
-    { id: "user-1", email: "duane@example.com", name: "Duane", isAdmin: false, createdAt: null },
+    { id: 'user-1', email: 'duane@example.com', name: 'Duane', isAdmin: false, createdAt: null },
   ];
   const pagination: AdminPagination = {
     page: 1,
@@ -148,7 +148,7 @@ test("renders an accessible search label", async () => {
     hasPrevPage: false,
   };
 
-  const html = await renderAdminUserList({ users, pagination, searchQuery: "" });
+  const html = await renderAdminUserList({ users, pagination, searchQuery: '' });
 
-  expect(html).toContain("for=\"admin-user-search\"");
+  expect(html).toContain('for="admin-user-search"');
 });

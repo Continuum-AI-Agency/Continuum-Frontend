@@ -68,10 +68,25 @@ export type TrendsGenerationStatus = z.infer<typeof trendsGenerationStatusSchema
 export const trendsGenerationEventTypeSchema = z.enum([
   'job_started',
   'status_update',
+  // Progressive preview: one lane's synthesized items the moment it settles, so
+  // the first trend is readable ~a lane before the whole run completes. These
+  // items are PROVISIONAL (pre-canonicalization) — the authoritative persisted
+  // set arrives via the post-completion trends.read stream. Non-terminal.
+  'insight_ready',
   'job_completed',
   'job_failed',
 ]);
 export type TrendsGenerationEventType = z.infer<typeof trendsGenerationEventTypeSchema>;
+
+// Payload for an `insight_ready` progressive-preview event. Section vocabulary
+// mirrors trendsReadSectionSchema (declared below; inlined here to keep the
+// event contract above the read-frame block without a forward reference).
+export const trendsInsightReadyPayloadSchema = z.object({
+  section: z.enum(['trends', 'events', 'questions']),
+  items: z.array(z.unknown()),
+  count: z.number().int().nonnegative(),
+});
+export type TrendsInsightReadyPayload = z.infer<typeof trendsInsightReadyPayloadSchema>;
 
 // Runtime telemetry attached to status_update / terminal event payloads. Drives
 // the Frontend "~Xs remaining" estimate.

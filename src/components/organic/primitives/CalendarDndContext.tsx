@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
 import {
-  DndContext,
-  DragOverlay,
   closestCorners,
+  DndContext,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
-  DragStartEvent,
-} from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+} from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 export function CalendarDndContext({
   children,
@@ -32,7 +32,7 @@ export function CalendarDndContext({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   return (
@@ -43,9 +43,7 @@ export function CalendarDndContext({
       onDragStart={onDragStart}
     >
       {children}
-      <DragOverlay dropAnimation={null}>
-        {dragOverlay}
-      </DragOverlay>
+      <DragOverlay dropAnimation={null}>{dragOverlay}</DragOverlay>
     </DndContext>
   );
 }

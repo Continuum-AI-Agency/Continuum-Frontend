@@ -1,6 +1,5 @@
-"use client";
+'use client';
 
-import React from "react";
 import {
   BookOpen,
   FileText,
@@ -12,11 +11,11 @@ import {
   TrendingUp,
   Video,
   Workflow,
-} from "lucide-react";
-
-import type { AgentMentionReference } from "@/lib/agent-references";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { cn } from "@/lib/utils";
+} from 'lucide-react';
+import React from 'react';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import type { AgentMentionReference } from '@/lib/agent-references';
+import { cn } from '@/lib/utils';
 
 const URL_SPLIT_RE = /(https?:\/\/[^\s<>"]+)/;
 
@@ -29,81 +28,87 @@ type MentionifiedTextProps = {
 
 function buildMentionSplitRe(references: AgentMentionReference[]): RegExp | null {
   if (!references.length) return null;
-  const tokens = [...new Set(references.map((r) => `@${r.label.trim().replace(/\s+/g, " ")}`))];
+  const tokens = [...new Set(references.map((r) => `@${r.label.trim().replace(/\s+/g, ' ')}`))];
   tokens.sort((a, b) => b.length - a.length);
-  const escaped = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  return new RegExp(`(${escaped.join("|")})`);
+  const escaped = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`(${escaped.join('|')})`);
 }
 
 function readMetaString(meta: Record<string, unknown> | undefined, key: string): string | null {
   const value = meta?.[key];
-  return typeof value === "string" && value.trim() ? value : null;
+  return typeof value === 'string' && value.trim() ? value : null;
 }
 
 function readMetaNumber(meta: Record<string, unknown> | undefined, key: string): number | null {
   const value = meta?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function typeLabel(type: AgentMentionReference["type"]): string {
+function typeLabel(type: AgentMentionReference['type']): string {
   switch (type) {
-    case "media_asset":
-      return "Media";
-    case "canvas_node":
-      return "Canvas";
-    case "skill":
-      return "Skill";
-    case "document":
-      return "Document";
-    case "trend":
-      return "Trend";
-    case "event":
-      return "Event";
-    case "question":
-      return "Question";
-    case "draft":
-      return "Draft";
-    case "campaign":
-      return "Campaign";
-    case "adset":
-      return "Ad set";
-    case "creative_insight":
+    case 'media_asset':
+      return 'Media';
+    case 'canvas_node':
+      return 'Canvas';
+    case 'skill':
+      return 'Skill';
+    case 'document':
+      return 'Document';
+    case 'trend':
+      return 'Trend';
+    case 'event':
+      return 'Event';
+    case 'question':
+      return 'Question';
+    case 'draft':
+      return 'Draft';
+    case 'campaign':
+      return 'Campaign';
+    case 'adset':
+      return 'Ad set';
+    case 'creative_insight':
       return "What's Working";
-    case "organic_insight":
-      return "Insight";
-    case "kpi":
-      return "Metric";
-    case "link":
-      return "Link";
+    case 'organic_insight':
+      return 'Insight';
+    case 'kpi':
+      return 'Metric';
+    case 'link':
+      return 'Link';
     default:
-      return "Reference";
+      return 'Reference';
   }
 }
 
-function TypeIcon({ type, className }: { type: AgentMentionReference["type"]; className?: string }) {
-  const cls = cn("size-3.5 shrink-0", className);
+function TypeIcon({
+  type,
+  className,
+}: {
+  type: AgentMentionReference['type'];
+  className?: string;
+}) {
+  const cls = cn('size-3.5 shrink-0', className);
   switch (type) {
-    case "media_asset":
+    case 'media_asset':
       return <ImageIcon className={cls} />;
-    case "canvas_node":
+    case 'canvas_node':
       return <Workflow className={cls} />;
-    case "skill":
+    case 'skill':
       return <Sparkles className={cls} />;
-    case "document":
+    case 'document':
       return <BookOpen className={cls} />;
-    case "trend":
-    case "event":
+    case 'trend':
+    case 'event':
       return <TrendingUp className={cls} />;
-    case "question":
+    case 'question':
       return <Lightbulb className={cls} />;
-    case "draft":
+    case 'draft':
       return <FileText className={cls} />;
-    case "campaign":
-    case "adset":
+    case 'campaign':
+    case 'adset':
       return <Target className={cls} />;
-    case "creative_insight":
-    case "organic_insight":
-    case "kpi":
+    case 'creative_insight':
+    case 'organic_insight':
+    case 'kpi':
       return <LineChart className={cls} />;
     default:
       return <FileText className={cls} />;
@@ -112,65 +117,65 @@ function TypeIcon({ type, className }: { type: AgentMentionReference["type"]; cl
 
 function previewFromReference(ref: AgentMentionReference): {
   url: string | null;
-  kind: "image" | "video" | "canvas" | null;
+  kind: 'image' | 'video' | 'canvas' | null;
 } {
   const meta = ref.metadata as Record<string, unknown> | undefined;
   const url =
-    readMetaString(meta, "previewUrl") ??
-    readMetaString(meta, "thumbnailUrl") ??
-    readMetaString(meta, "signedUrl") ??
+    readMetaString(meta, 'previewUrl') ??
+    readMetaString(meta, 'thumbnailUrl') ??
+    readMetaString(meta, 'signedUrl') ??
     null;
   const rawKind =
-    readMetaString(meta, "previewKind") ??
-    readMetaString(meta, "kind") ??
-    readMetaString(meta, "outputKind");
+    readMetaString(meta, 'previewKind') ??
+    readMetaString(meta, 'kind') ??
+    readMetaString(meta, 'outputKind');
   const kind =
-    rawKind === "video" ? "video" : rawKind === "canvas" ? "canvas" : url ? "image" : null;
+    rawKind === 'video' ? 'video' : rawKind === 'canvas' ? 'canvas' : url ? 'image' : null;
   return { url, kind };
 }
 
 function isVisualReference(ref: AgentMentionReference): boolean {
-  return ref.type === "media_asset" || ref.type === "canvas_node";
+  return ref.type === 'media_asset' || ref.type === 'canvas_node';
 }
 
 function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
   const meta = (reference.metadata ?? {}) as Record<string, unknown>;
   const preview = previewFromReference(reference);
   const description =
-    readMetaString(meta, "description") ??
-    readMetaString(meta, "text") ??
-    readMetaString(meta, "recommendation") ??
-    readMetaString(meta, "performanceSummary") ??
-    readMetaString(meta, "relevanceToBrand") ??
-    readMetaString(meta, "summary") ??
-    readMetaString(meta, "captionPreview");
-  const recommendation = readMetaString(meta, "recommendation");
-  const metricKey = readMetaString(meta, "metricKey") ?? readMetaString(meta, "metric");
-  const metricLabel = readMetaString(meta, "metricLabel");
-  const value = readMetaNumber(meta, "value");
-  const delta = readMetaNumber(meta, "delta") ?? readMetaNumber(meta, "percentageChange");
-  const platform = readMetaString(meta, "platform");
-  const category = readMetaString(meta, "category");
-  const severity = readMetaString(meta, "severity");
-  const kind = readMetaString(meta, "kind");
-  const surface = readMetaString(meta, "surface");
-  const intent = readMetaString(meta, "intent");
+    readMetaString(meta, 'description') ??
+    readMetaString(meta, 'text') ??
+    readMetaString(meta, 'recommendation') ??
+    readMetaString(meta, 'performanceSummary') ??
+    readMetaString(meta, 'relevanceToBrand') ??
+    readMetaString(meta, 'summary') ??
+    readMetaString(meta, 'captionPreview');
+  const recommendation = readMetaString(meta, 'recommendation');
+  const metricKey = readMetaString(meta, 'metricKey') ?? readMetaString(meta, 'metric');
+  const metricLabel = readMetaString(meta, 'metricLabel');
+  const value = readMetaNumber(meta, 'value');
+  const delta = readMetaNumber(meta, 'delta') ?? readMetaNumber(meta, 'percentageChange');
+  const platform = readMetaString(meta, 'platform');
+  const category = readMetaString(meta, 'category');
+  const severity = readMetaString(meta, 'severity');
+  const kind = readMetaString(meta, 'kind');
+  const surface = readMetaString(meta, 'surface');
+  const intent = readMetaString(meta, 'intent');
   const tags = Array.isArray(meta.tags)
-    ? (meta.tags as unknown[]).filter((t): t is string => typeof t === "string").slice(0, 8)
+    ? (meta.tags as unknown[]).filter((t): t is string => typeof t === 'string').slice(0, 8)
     : [];
   const exemplarSnippets = Array.isArray(meta.exemplarSnippets)
     ? (meta.exemplarSnippets as unknown[])
-        .filter((t): t is string => typeof t === "string")
+        .filter((t): t is string => typeof t === 'string')
         .slice(0, 4)
     : [];
   const exemplarPermalinks = Array.isArray(meta.exemplarPermalinks)
     ? (meta.exemplarPermalinks as unknown[])
-        .filter((t): t is string => typeof t === "string" && t.startsWith("http"))
+        .filter((t): t is string => typeof t === 'string' && t.startsWith('http'))
         .slice(0, 4)
     : [];
   const exemplarThumbnails = Array.isArray(meta.exemplarThumbnails)
     ? (meta.exemplarThumbnails as unknown[])
-        .filter((t): t is string => typeof t === "string")
+        .filter((t): t is string => typeof t === 'string')
         .slice(0, 4)
     : [];
 
@@ -178,7 +183,7 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
     <div className="flex flex-col gap-2.5">
       {preview.url ? (
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-          {preview.kind === "video" ? (
+          {preview.kind === 'video' ? (
             <video
               src={preview.url}
               muted
@@ -209,7 +214,9 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
 
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium leading-snug text-foreground">{reference.label}</p>
+          <p className="truncate text-sm font-medium leading-snug text-foreground">
+            {reference.label}
+          </p>
           <p className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
             {typeLabel(reference.type)}
             {kind ? ` · ${kind}` : null}
@@ -232,9 +239,9 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
       ) : null}
 
       {/* KPI / metric snapshot */}
-      {(reference.type === "kpi" || metricKey || value != null || delta != null) && (
+      {(reference.type === 'kpi' || metricKey || value != null || delta != null) && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {intent === "optimize_for" ? (
+          {intent === 'optimize_for' ? (
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary">
               Optimize for
             </span>
@@ -248,11 +255,13 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
           {delta != null ? (
             <span
               className={cn(
-                "tabular-nums",
-                delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+                'tabular-nums',
+                delta >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400',
               )}
             >
-              {delta >= 0 ? "+" : ""}
+              {delta >= 0 ? '+' : ''}
               {delta.toFixed(1)}%
             </span>
           ) : null}
@@ -292,7 +301,7 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
               “{snippet}”
               {exemplarPermalinks[i] ? (
                 <>
-                  {" "}
+                  {' '}
                   <a
                     href={exemplarPermalinks[i]}
                     target="_blank"
@@ -319,20 +328,15 @@ function InlineMention({
   reference?: AgentMentionReference;
   fallbackLabel: string;
 }) {
-  const label = reference?.label ?? fallbackLabel.replace(/^@/, "");
+  const label = reference?.label ?? fallbackLabel.replace(/^@/, '');
   const preview = reference ? previewFromReference(reference) : { url: null, kind: null };
   const visual = reference ? isVisualReference(reference) : false;
   const showInlineThumb = Boolean(visual && preview.url);
 
   const trigger = (
-    <span
-      className={cn(
-        "mention-inline",
-        showInlineThumb && "mention-inline--media",
-      )}
-    >
+    <span className={cn('mention-inline', showInlineThumb && 'mention-inline--media')}>
       {showInlineThumb && preview.url ? (
-        preview.kind === "video" ? (
+        preview.kind === 'video' ? (
           <video
             src={preview.url}
             muted
@@ -347,7 +351,7 @@ function InlineMention({
         )
       ) : reference ? (
         <span className="mention-inline__icon" aria-hidden>
-          {preview.kind === "video" ? (
+          {preview.kind === 'video' ? (
             <Video className="size-3" />
           ) : (
             <TypeIcon type={reference.type} className="size-3" />
@@ -375,8 +379,8 @@ function InlineMention({
         align="start"
         side="top"
         className={cn(
-          "w-80 p-3",
-          (reference.type === "media_asset" || reference.type === "canvas_node") && "p-3",
+          'w-80 p-3',
+          (reference.type === 'media_asset' || reference.type === 'canvas_node') && 'p-3',
         )}
       >
         <MentionHoverBody reference={reference} />
@@ -394,7 +398,7 @@ export function MentionifiedText({
   const byToken = React.useMemo(() => {
     const map = new Map<string, AgentMentionReference>();
     for (const ref of references ?? []) {
-      map.set(`@${ref.label.trim().replace(/\s+/g, " ")}`, ref);
+      map.set(`@${ref.label.trim().replace(/\s+/g, ' ')}`, ref);
     }
     return map;
   }, [references]);
@@ -417,7 +421,7 @@ export function MentionifiedText({
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                "break-all text-sky-500 underline underline-offset-2 hover:text-sky-400",
+                'break-all text-sky-500 underline underline-offset-2 hover:text-sky-400',
                 linkClassName,
               )}
               onClick={(e) => e.stopPropagation()}
@@ -432,13 +436,7 @@ export function MentionifiedText({
         return part.split(mentionSplitRe).map((seg, mIdx) => {
           if (mIdx % 2 !== 1) return seg;
           const ref = byToken.get(seg);
-          return (
-            <InlineMention
-              key={`u${urlIdx}m${mIdx}`}
-              reference={ref}
-              fallbackLabel={seg}
-            />
-          );
+          return <InlineMention key={`u${urlIdx}m${mIdx}`} reference={ref} fallbackLabel={seg} />;
         });
       })}
     </span>

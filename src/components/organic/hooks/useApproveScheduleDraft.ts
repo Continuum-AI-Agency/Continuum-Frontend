@@ -16,6 +16,14 @@ const APPROVE_ERROR_MESSAGES: Record<string, string> = {
   unsupported_platform: "Posts for this platform can't be auto-published yet.",
 };
 
+export type ApproveScheduleOptions = {
+  /**
+   * Suppress the per-draft toasts. The bulk-approve path passes this so it can show a
+   * single "Approved N • skipped M" summary instead of N toasts stacking up.
+   */
+  silent?: boolean;
+};
+
 export type UseApproveScheduleDraftResult = {
   /**
    * Persist "Approve & Schedule" through the gated backend chain:
@@ -24,7 +32,10 @@ export type UseApproveScheduleDraftResult = {
    * local store flip alone never reaches the scheduled-publish poller. Returns
    * true when the draft is now scheduled server-side.
    */
-  approveAndSchedule: (draft: OrganicCalendarDraft) => Promise<boolean>;
+  approveAndSchedule: (
+    draft: OrganicCalendarDraft,
+    options?: ApproveScheduleOptions,
+  ) => Promise<boolean>;
   isApproving: boolean;
 };
 
@@ -34,10 +45,13 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
   const [isApproving, setIsApproving] = React.useState(false);
 
   const approveAndSchedule = React.useCallback(
-    async (draft: OrganicCalendarDraft): Promise<boolean> => {
+    async (draft: OrganicCalendarDraft, options?: ApproveScheduleOptions): Promise<boolean> => {
+      const notify: typeof show = (toast) => {
+        if (!options?.silent) show(toast);
+      };
       const backendDraftId = draft.backendDraftId;
       if (!backendDraftId) {
-        show({
+        notify({
           title: 'Not saved yet',
           description: 'This draft has not been saved to the server yet — try again in a moment.',
           variant: 'error',
@@ -70,7 +84,7 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
               (payload.reason && APPROVE_ERROR_MESSAGES[payload.reason]) ??
               payload.message ??
               'The draft could not be approved.';
-            show({ title: 'Approval blocked', description, variant: 'error' });
+            notify({ title: 'Approval blocked', description, variant: 'error' });
             return false;
           }
         }
@@ -84,7 +98,7 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
 
         if (!scheduleResp.ok) {
           const payload = (await scheduleResp.json().catch(() => ({}))) as { message?: string };
-          show({
+          notify({
             title: 'Scheduling failed',
             description: payload.message ?? 'The draft was approved but could not be scheduled.',
             variant: 'error',
@@ -93,14 +107,14 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
         }
 
         updateDraft(draft.id, (d) => ({ ...d, status: 'scheduled' as const }));
-        show({
+        notify({
           title: 'Approved & scheduled',
           description: 'The post will publish automatically at its scheduled time.',
           variant: 'success',
         });
         return true;
       } catch {
-        show({
+        notify({
           title: 'Approval failed',
           description: 'Network error. Please try again.',
           variant: 'error',

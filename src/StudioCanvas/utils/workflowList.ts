@@ -14,7 +14,10 @@ export function sortWorkflowsByRecency(workflows: AiStudioWorkflow[]): AiStudioW
   });
 }
 
-export function filterWorkflowsByQuery(workflows: AiStudioWorkflow[], query: string): AiStudioWorkflow[] {
+export function filterWorkflowsByQuery(
+  workflows: AiStudioWorkflow[],
+  query: string,
+): AiStudioWorkflow[] {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return workflows;
 

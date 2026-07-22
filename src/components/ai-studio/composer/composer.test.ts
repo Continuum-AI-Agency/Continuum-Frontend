@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import type { AiStudioComposerFrame } from '@continuum/contracts';
-import { parseComposerFrame } from '@/lib/ai-studio/composer/streamCanvasComposer';
+import type { AgentMentionReference, AiStudioComposerFrame } from '@continuum/contracts';
 import { composerHistoryMessageSchema } from '@continuum/contracts';
+import { parseComposerFrame } from '@/lib/ai-studio/composer/streamCanvasComposer';
 import {
   applyComposerFrame,
   buildHistoryPayload,
   type CanvasComposerState,
   type ComposerTurn,
   IDLE_COMPOSER_STATE,
+  toCanvasComposerReferences,
 } from './useCanvasComposer';
 
 // The wire adds the envelope fields to every frame.
@@ -98,6 +99,19 @@ describe('applyComposerFrame', () => {
 
     expect(state).toEqual(IDLE_COMPOSER_STATE);
   });
+
+  it('parses an optimistic composer patch without treating it as narration', () => {
+    const frame = parseComposerFrame(
+      line({
+        type: 'composer.patch',
+        data: {
+          nodes: [{ id: 'prompt', type: 'string', position: { x: 0, y: 0 }, data: {} }],
+          edges: [],
+        },
+      }),
+    );
+    expect(frame?.type).toBe('composer.patch');
+  });
 });
 
 describe('buildHistoryPayload', () => {
@@ -155,5 +169,20 @@ describe('buildHistoryPayload', () => {
     for (const message of history) {
       expect(composerHistoryMessageSchema.safeParse(message).success).toBe(true);
     }
+  });
+});
+
+describe('toCanvasComposerReferences', () => {
+  it('keeps only exact skill/media references and deduplicates by type + id', () => {
+    const references: AgentMentionReference[] = [
+      { id: 'skill-1', type: 'skill', label: 'Bold', source: 'canvas' },
+      { id: 'asset-1', type: 'media_asset', label: 'Hero', source: 'canvas' },
+      { id: 'skill-1', type: 'skill', label: 'Bold duplicate', source: 'canvas' },
+      { id: 'doc-1', type: 'document', label: 'Brief', source: 'canvas' },
+    ];
+    expect(toCanvasComposerReferences(references)).toEqual([
+      { id: 'skill-1', type: 'skill', label: 'Bold' },
+      { id: 'asset-1', type: 'media_asset', label: 'Hero' },
+    ]);
   });
 });

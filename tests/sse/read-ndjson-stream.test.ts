@@ -1,7 +1,7 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { readNdjsonStream } from "../../src/lib/streaming/readNdjsonStream";
+import { readNdjsonStream } from '../../src/lib/streaming/readNdjsonStream';
 
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -13,19 +13,19 @@ function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-test("readNdjsonStream emits trimmed non-empty lines", async () => {
+test('readNdjsonStream emits trimmed non-empty lines', async () => {
   const lines: string[] = [];
-  const stream = streamFromChunks(["first\nsecond\n", "\nthird"]);
+  const stream = streamFromChunks(['first\nsecond\n', '\nthird']);
 
   await readNdjsonStream({
     reader: stream.getReader(),
     onLine: (line) => lines.push(line),
   });
 
-  assert.deepEqual(lines, ["first", "second", "third"]);
+  assert.deepEqual(lines, ['first', 'second', 'third']);
 });
 
-test("readNdjsonStream splits concatenated JSON events without newline delimiters", async () => {
+test('readNdjsonStream splits concatenated JSON events without newline delimiters', async () => {
   const lines: string[] = [];
   const stream = streamFromChunks([
     '{"type":"response.sot_report","data":{"item_id":"item_1","part_id":"part_1","report":{"language":"en","executive_summary":"ok","performance_snapshot":[],"sections":[],"strategic_recommendations":[],"follow_up_questions":[],"handoff_trace":[],"cached_sources":[],"graphs":[]}}}',
@@ -44,9 +44,9 @@ test("readNdjsonStream splits concatenated JSON events without newline delimiter
   });
 
   assert.deepEqual(eventTypes, [
-    "response.sot_report",
-    "response.content_part.done",
-    "response.output_item.done",
-    "response.done",
+    'response.sot_report',
+    'response.content_part.done',
+    'response.output_item.done',
+    'response.done',
   ]);
 });

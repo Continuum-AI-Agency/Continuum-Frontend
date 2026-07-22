@@ -1,33 +1,30 @@
-"use client";
+'use client';
 
-import { curveMonotoneX } from "@visx/curve";
-import { AreaClosed, LinePath } from "@visx/shape";
+import { curveMonotoneX } from '@visx/curve';
+import { AreaClosed, LinePath } from '@visx/shape';
 
 // CurveFactory type - simplified version compatible with visx
 // biome-ignore lint/suspicious/noExplicitAny: d3 curve factory type
 type CurveFactory = any;
 
-import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { AreaGradientDefs } from "./area-gradient-defs";
-import { chartCssVars, useChartStable, useYScale } from "./chart-context";
-import type { ChartPhase, LoadingStyle } from "./chart-phase";
-import { type FadeEdges, resolveFadeSides } from "./fade-edges";
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { AreaGradientDefs } from './area-gradient-defs';
+import { chartCssVars, useChartStable, useYScale } from './chart-context';
+import type { ChartPhase, LoadingStyle } from './chart-phase';
+import { type FadeEdges, resolveFadeSides } from './fade-edges';
 import {
   type LineLoadingPulseMode,
   LineLoadingPulseStroke,
   resolveLineLoadingPulseMode,
-} from "./line-loading-pulse";
-import { LINE_LOADING_LOOP_PAUSE_MS } from "./line-loading-timing";
-import { LineLoadingSweep } from "./loading-sweep";
-import {
-  resolveDashTailBounds,
-  usePathStrokeMetrics,
-} from "./path-stroke-utils";
-import { SeriesDashTailOverlay } from "./series-dash-tail-overlay";
-import { SeriesHighlightLayer } from "./series-highlight-layer";
-import { SeriesHoverDim } from "./series-hover-dim";
-import { SeriesMarkers } from "./series-markers";
-import type { SeriesPointMarkerStyle } from "./series-point-marker";
+} from './line-loading-pulse';
+import { LINE_LOADING_LOOP_PAUSE_MS } from './line-loading-timing';
+import { LineLoadingSweep } from './loading-sweep';
+import { resolveDashTailBounds, usePathStrokeMetrics } from './path-stroke-utils';
+import { SeriesDashTailOverlay } from './series-dash-tail-overlay';
+import { SeriesHighlightLayer } from './series-highlight-layer';
+import { SeriesHoverDim } from './series-hover-dim';
+import { SeriesMarkers } from './series-markers';
+import type { SeriesPointMarkerStyle } from './series-point-marker';
 
 export interface AreaProps {
   /** Key in data to use for y values */
@@ -99,22 +96,18 @@ function useAreaLoadingPulseState(
   chartPhase: ChartPhase,
   loading: boolean | undefined,
   loadingPulseMode: LineLoadingPulseMode | undefined,
-  notifyLoadingPulseComplete?: () => void
+  notifyLoadingPulseComplete?: () => void,
 ) {
   const phasePulseMode = resolveLineLoadingPulseMode(chartPhase);
   const pulseMode =
-    loading === false
-      ? null
-      : (loadingPulseMode ?? (loading === true ? "loop" : phasePulseMode));
+    loading === false ? null : (loadingPulseMode ?? (loading === true ? 'loop' : phasePulseMode));
   const showLoadingPulse = pulseMode != null;
   const showSeriesContent =
-    chartPhase === "revealing" ||
-    chartPhase === "ready" ||
-    chartPhase === "exitingReady";
+    chartPhase === 'revealing' || chartPhase === 'ready' || chartPhase === 'exitingReady';
   const [pulseEpoch, setPulseEpoch] = useState(0);
 
   const handleLoadingPulseComplete = useCallback(() => {
-    if (pulseMode === "loop") {
+    if (pulseMode === 'loop') {
       window.setTimeout(() => {
         setPulseEpoch((epoch) => epoch + 1);
       }, LINE_LOADING_LOOP_PAUSE_MS);
@@ -150,12 +143,12 @@ export function Area({
   showMarkers = false,
   markers,
   dashFromIndex,
-  dashArray = "6,4",
+  dashArray = '6,4',
   loading,
   loadingStroke = chartCssVars.foreground,
   loadingStrokeOpacity = 0.5,
   loadingPulseMode,
-  loadingStyle = "pulse",
+  loadingStyle = 'pulse',
 }: AreaProps) {
   // Stable slice only: hover state lives inside `<SeriesHoverDim>` and
   // `<SeriesHighlightLayer>` so this component (and its expensive
@@ -175,18 +168,8 @@ export function Area({
     notifyLoadingPulseComplete,
   } = useChartStable();
   const yScale = useYScale(yAxisId);
-  const {
-    handleLoadingPulseComplete,
-    pulseMode,
-    pulseEpoch,
-    showLoadingPulse,
-    showSeriesContent,
-  } = useAreaLoadingPulseState(
-    chartPhase,
-    loading,
-    loadingPulseMode,
-    notifyLoadingPulseComplete
-  );
+  const { handleLoadingPulseComplete, pulseMode, pulseEpoch, showLoadingPulse, showSeriesContent } =
+    useAreaLoadingPulseState(chartPhase, loading, loadingPulseMode, notifyLoadingPulseComplete);
 
   const seriesIndex = useMemo(() => {
     const index = lines.findIndex((line) => line.dataKey === dataKey);
@@ -210,20 +193,30 @@ export function Area({
   const edgeMaskId = `area-edge-mask-${dataKey}-${uniqueId}`;
   const edgeGradientId = `${edgeMaskId}-gradient`;
 
-  const isPatternFill = fill.startsWith("url(");
+  const isPatternFill = fill.startsWith('url(');
   const showAreaFill = isPatternFill || fillOpacity > 0;
   const areaFill = isPatternFill ? fill : `url(#${gradientId})`;
 
   // Resolved stroke color (defaults to fill; pattern URLs need a real color)
-  const resolvedStroke =
-    stroke || (isPatternFill ? chartCssVars.linePrimary : fill);
+  const resolvedStroke = stroke || (isPatternFill ? chartCssVars.linePrimary : fill);
 
   const getY = useCallback(
     (d: Record<string, unknown>) => {
       const value = d[dataKey];
-      return typeof value === "number" ? (yScale(value) ?? 0) : 0;
+      return typeof value === 'number' && Number.isFinite(value) ? (yScale(value) ?? 0) : 0;
     },
-    [dataKey, yScale]
+    [dataKey, yScale],
+  );
+
+  // A row with no numeric value for this series is a GAP, not a zero. Without
+  // this the fallback above puts it at pixel 0 — the top of the plot, i.e. the
+  // highest value on the chart — so an absence of data would read as a peak.
+  const getDefined = useCallback(
+    (d: Record<string, unknown>) => {
+      const value = d[dataKey];
+      return typeof value === 'number' && Number.isFinite(value);
+    },
+    [dataKey],
   );
 
   const hasDashTail = resolveDashTailBounds(dashFromIndex, data.length);
@@ -235,10 +228,9 @@ export function Area({
   if (!useViewportEdgeFade && fadeSides.any) {
     strokePaint = `url(#${strokeGradientId})`;
   }
-  const highlightEnabled =
-    showHighlight && showLine && !showLoadingPulse && showSeriesContent;
+  const highlightEnabled = showHighlight && showLine && !showLoadingPulse && showSeriesContent;
   const showSeriesStroke = showSeriesContent && showLine;
-  let visibleStroke = "transparent";
+  let visibleStroke = 'transparent';
   if (showSeriesStroke && !hasDashTail) {
     visibleStroke = strokePaint;
   }
@@ -250,6 +242,7 @@ export function Area({
         <AreaClosed
           curve={curve}
           data={renderData}
+          defined={getDefined}
           fill={areaFill}
           x={(d) => xScale(xAccessor(d)) ?? 0}
           y={getY}
@@ -262,6 +255,7 @@ export function Area({
           <LinePath
             curve={curve}
             data={renderData}
+            defined={getDefined}
             innerRef={pathRef}
             stroke={visibleStroke}
             strokeLinecap="round"
@@ -291,8 +285,7 @@ export function Area({
 
   // Sweep style owns all loading modes (loop + the exit/enter transitions),
   // drawing its own silhouette; the pulse covers the default style.
-  const sweepLoading =
-    showLoadingPulse && innerWidth > 0 && loadingStyle === "sweep";
+  const sweepLoading = showLoadingPulse && innerWidth > 0 && loadingStyle === 'sweep';
   const pulseLoading = showLoadingPulse && innerWidth > 0 && !sweepLoading;
 
   return (
@@ -313,16 +306,8 @@ export function Area({
         strokeGradientId={strokeGradientId}
       />
 
-      <SeriesHoverDim
-        dimOpacity={0.6}
-        enabled={showHighlight}
-        seriesIndex={seriesIndex}
-      >
-        {useViewportEdgeFade ? (
-          <g mask={`url(#${edgeMaskId})`}>{seriesLayers}</g>
-        ) : (
-          seriesLayers
-        )}
+      <SeriesHoverDim dimOpacity={0.6} enabled={showHighlight} seriesIndex={seriesIndex}>
+        {useViewportEdgeFade ? <g mask={`url(#${edgeMaskId})`}>{seriesLayers}</g> : seriesLayers}
       </SeriesHoverDim>
 
       {/* Highlight segment on hover — isolated hover subscriber. */}
@@ -348,7 +333,7 @@ export function Area({
         <LineLoadingSweep
           curve={curve}
           key="loading-sweep"
-          mode={pulseMode ?? "loop"}
+          mode={pulseMode ?? 'loop'}
           onTransitionComplete={handleLoadingPulseComplete}
           stroke={loadingStroke}
           strokeOpacity={loadingStrokeOpacity}
@@ -372,6 +357,6 @@ export function Area({
   );
 }
 
-Area.displayName = "Area";
+Area.displayName = 'Area';
 
 export default Area;

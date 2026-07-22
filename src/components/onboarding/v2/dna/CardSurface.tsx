@@ -1,19 +1,19 @@
-import type { ReactNode } from "react";
-import { motion } from "motion/react";
-import { WarningCircle, MinusCircle } from "@phosphor-icons/react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { BreathingDot } from "./BreathingDot";
-import type { SectionStatus } from "../state/agentPreview";
+import { MinusCircle, WarningCircle } from '@phosphor-icons/react';
+import { motion } from 'motion/react';
+import type { ReactNode } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import type { SectionStatus } from '../state/agentPreview';
+import { BreathingDot } from './BreathingDot';
 
 type CardSurfaceProps = {
   title: string;
   badge?: string;
   chips?: ReactNode;
   findings?: ReactNode;
-  status?: SectionStatus | "indeterminate";
+  status?: SectionStatus | 'indeterminate';
   isEmpty: boolean;
   minBodyHeight?: number;
   // When set, the body is capped at this height and scrolls — so a long
@@ -32,7 +32,7 @@ export function CardSurface({
   badge,
   chips,
   findings,
-  status = "indeterminate",
+  status = 'indeterminate',
   isEmpty,
   minBodyHeight = DEFAULT_MIN_BODY_HEIGHT,
   maxBodyHeight,
@@ -41,16 +41,19 @@ export function CardSurface({
   children,
   className,
 }: CardSurfaceProps) {
-  const isLoading = isEmpty && (status === "idle" || status === "running" || status === "indeterminate");
-  const isError = status === "error" && isEmpty;
-  const isSkipped = status === "skipped" && isEmpty;
+  const isLoading =
+    isEmpty && (status === 'idle' || status === 'running' || status === 'indeterminate');
+  const isError = status === 'error' && isEmpty;
+  const isSkipped = status === 'skipped' && isEmpty;
 
   let body: ReactNode;
   if (isError) {
     body = (
       <div className="flex items-start gap-2 text-sm text-muted-foreground">
         <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
-        <span>{errorMessage ?? "Couldn't load this section. We'll keep trying in the background."}</span>
+        <span>
+          {errorMessage ?? "Couldn't load this section. We'll keep trying in the background."}
+        </span>
       </div>
     );
   } else if (isSkipped) {
@@ -69,16 +72,16 @@ export function CardSurface({
   // Cross-fade the body when it transitions between phases (skeleton → content,
   // etc.) so the swap reveals cleanly instead of snapping. The bounded
   // min/max-height keeps the card from resizing during the fade.
-  const phaseKey = isLoading ? "loading" : isError ? "error" : isSkipped ? "skipped" : "content";
+  const phaseKey = isLoading ? 'loading' : isError ? 'error' : isSkipped ? 'skipped' : 'content';
 
   return (
-    <Card className={cn("border-border bg-card shadow-sm text-foreground", className)}>
+    <Card className={cn('border-border bg-card shadow-sm text-foreground', className)}>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
         <div className="flex items-center gap-2">
-          {isLoading ? <BreathingDot tone={isError ? "rose" : "emerald"} /> : null}
+          {isLoading ? <BreathingDot tone={isError ? 'rose' : 'emerald'} /> : null}
           <CardTitle className="text-base">{title}</CardTitle>
         </div>
-        {(chips || badge) ? (
+        {chips || badge ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {chips}
             {badge ? (
@@ -94,8 +97,8 @@ export function CardSurface({
       </CardHeader>
       <CardContent
         className={cn(
-          "space-y-3 text-sm leading-relaxed text-muted-foreground",
-          maxBodyHeight ? "overflow-y-auto" : undefined,
+          'space-y-3 text-sm leading-relaxed text-muted-foreground',
+          maxBodyHeight ? 'overflow-y-auto' : undefined,
         )}
         style={{
           minHeight: minBodyHeight,

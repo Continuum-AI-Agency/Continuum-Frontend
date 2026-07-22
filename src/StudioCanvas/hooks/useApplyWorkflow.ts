@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
+import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
 import { rehydrateWorkflowMediaNodes } from '../utils/rehydrateWorkflowMedia';
 import { normalizeWorkflowSnapshot } from '../utils/workflowSerialization';
 
@@ -35,7 +36,7 @@ export function useApplyWorkflow() {
       setNodes(hydratedNodes);
       setEdges(snapshot.edges);
       requestAnimationFrame(() => {
-        fitView({ padding: 0.2, duration: 300 });
+        fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
       });
 
       show({

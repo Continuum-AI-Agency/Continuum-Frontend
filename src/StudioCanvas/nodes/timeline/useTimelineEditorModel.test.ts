@@ -4,16 +4,16 @@ import {
   clipAtTime,
   computeLayout,
   DEFAULT_STILL_SEC,
+  duplicateItem,
   effectiveItemDuration,
   placeItem,
   removeItem,
-  duplicateItem,
-  toggleMarkerTime,
   reorderItems,
   setItemAudio,
   setItemMuteAudio,
   setStillDuration,
   splitItem,
+  toggleMarkerTime,
   trimItem,
 } from './useTimelineEditorModel';
 
@@ -170,10 +170,18 @@ describe('setItemAudio', () => {
 
 describe('duplicateItem', () => {
   it('inserts a copy with a new id directly after the original and renumbers', () => {
-    const next = duplicateItem([video('a', 0, { trimStartSec: 1, trimEndSec: 3 }), video('b', 1)], 'a');
+    const next = duplicateItem(
+      [video('a', 0, { trimStartSec: 1, trimEndSec: 3 }), video('b', 1)],
+      'a',
+    );
     expect(next.map((i) => i.id).length).toBe(3);
     expect(next[1].id).not.toBe('a');
-    expect(next[1]).toMatchObject({ sourceNodeId: 'src-a', trimStartSec: 1, trimEndSec: 3, order: 1 });
+    expect(next[1]).toMatchObject({
+      sourceNodeId: 'src-a',
+      trimStartSec: 1,
+      trimEndSec: 3,
+      order: 1,
+    });
     expect(next.map((i) => i.order)).toEqual([0, 1, 2]);
   });
 

@@ -5,16 +5,12 @@
 // Discover signals -> Generate content -> Measure -> Optimize. The first two
 // nodes reflect real setup signals (done vs todo); the rest are navigational.
 
-import Link from "next/link";
-import { Check, ChevronRight, Circle } from "lucide-react";
+import { Check, ChevronRight, Circle } from 'lucide-react';
+import Link from 'next/link';
 
-import { cn } from "@/lib/utils";
-import type { DashboardSetupState } from "./setupState";
-import {
-  ORGANIC_HREF,
-  SETTINGS_BRAND_BOOK_HREF,
-  SETTINGS_INTEGRATIONS_HREF,
-} from "./setupState";
+import { cn } from '@/lib/utils';
+import type { DashboardSetupState } from './setupState';
+import { ORGANIC_HREF, SETTINGS_BRAND_BOOK_HREF, SETTINGS_INTEGRATIONS_HREF } from './setupState';
 
 type WorkflowNode = {
   key: string;
@@ -27,42 +23,42 @@ type WorkflowNode = {
 function buildNodes(setup: DashboardSetupState): WorkflowNode[] {
   return [
     {
-      key: "brand-context",
-      title: "Set brand context",
-      description: "Generate your Brand Book",
+      key: 'brand-context',
+      title: 'Set brand context',
+      description: 'Generate your Brand Book',
       href: SETTINGS_BRAND_BOOK_HREF,
       done: setup.brandBookReady,
     },
     {
-      key: "connect-data",
-      title: "Connect data",
-      description: "Link and assign accounts",
+      key: 'connect-data',
+      title: 'Connect data',
+      description: 'Link and assign accounts',
       href: SETTINGS_INTEGRATIONS_HREF,
       done: setup.hasConnectedData,
     },
     {
-      key: "discover-signals",
-      title: "Discover signals",
-      description: "Trends and competitors",
+      key: 'discover-signals',
+      title: 'Discover signals',
+      description: 'Trends and competitors',
       href: `${ORGANIC_HREF}?tab=metrics`,
     },
     {
-      key: "generate-content",
-      title: "Generate content",
-      description: "Plan and draft posts",
+      key: 'generate-content',
+      title: 'Generate content',
+      description: 'Plan and draft posts',
       href: ORGANIC_HREF,
     },
     {
-      key: "measure",
-      title: "Measure",
-      description: "Track performance",
-      href: "/dashboard",
+      key: 'measure',
+      title: 'Measure',
+      description: 'Track performance',
+      href: '/dashboard',
     },
     {
-      key: "optimize",
-      title: "Optimize",
-      description: "Scale what works",
-      href: "/scale",
+      key: 'optimize',
+      title: 'Optimize',
+      description: 'Scale what works',
+      href: '/scale',
     },
   ];
 }
@@ -72,12 +68,12 @@ function WorkflowMapNode({ node }: { node: WorkflowNode }) {
     <Link
       href={node.href}
       data-testid={`workflow-node-${node.key}`}
-      aria-label={`${node.title}: ${node.done ? "done" : "to do"}. ${node.description}`}
+      aria-label={`${node.title}: ${node.done ? 'done' : 'to do'}. ${node.description}`}
       className={cn(
-        "group flex min-w-[9.5rem] flex-1 flex-col rounded-md border px-3 py-2 transition-colors",
+        'group flex min-w-[9.5rem] flex-1 flex-col rounded-md border px-3 py-2 transition-colors',
         node.done
-          ? "border-emerald-500/40 bg-emerald-500/5"
-          : "border-border/70 bg-background hover:border-border hover:bg-muted/40",
+          ? 'border-emerald-500/40 bg-emerald-500/5'
+          : 'border-border/70 bg-background hover:border-border hover:bg-muted/40',
       )}
     >
       <span className="flex items-center gap-1 text-xs font-semibold text-foreground">

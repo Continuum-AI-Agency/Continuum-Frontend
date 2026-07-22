@@ -3,16 +3,12 @@
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  DEFAULT_CAPTION_STYLE,
-  resolveCaptionStyle,
   type CaptionStyle,
   type CaptionStyleOverride,
+  DEFAULT_CAPTION_STYLE,
+  resolveCaptionStyle,
 } from '@/lib/clips/clipCaptionStyle';
-import {
-  captionCueText,
-  type CaptionCue,
-  updateCaptionCue,
-} from '../../utils/splice/captionCues';
+import { type CaptionCue, captionCueText, updateCaptionCue } from '../../utils/splice/captionCues';
 
 type Props = {
   cues: CaptionCue[];
@@ -52,17 +48,16 @@ export function CaptionEditor({
     updateSelected({ style: { ...selected.style, ...patch } });
   };
 
-  const cueRows = useMemo(
-    () => cues.map((cue) => ({ cue, text: captionCueText(cue) })),
-    [cues],
-  );
+  const cueRows = useMemo(() => cues.map((cue) => ({ cue, text: captionCueText(cue) })), [cues]);
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-lg border border-border/60 p-3">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xs font-semibold">Captions</h3>
-          <p className="text-2xs text-muted-foreground">Edit copy, timing, placement, and colors.</p>
+          <p className="text-2xs text-muted-foreground">
+            Edit copy, timing, placement, and colors.
+          </p>
         </div>
         <span className="text-2xs tabular-nums text-muted-foreground">{cues.length} cues</span>
       </div>
@@ -81,7 +76,9 @@ export function CaptionEditor({
           <input
             type="color"
             value={globalStyle.highlightColor}
-            onChange={(event) => onChangeStyle({ ...globalStyle, highlightColor: event.target.value })}
+            onChange={(event) =>
+              onChangeStyle({ ...globalStyle, highlightColor: event.target.value })
+            }
           />
         </label>
         <label className="grid gap-1">
@@ -161,7 +158,9 @@ export function CaptionEditor({
                 step="0.1"
                 min="0"
                 value={selected.startSec}
-                onChange={(event) => updateSelected({ startSec: number(event.target.value, selected.startSec) })}
+                onChange={(event) =>
+                  updateSelected({ startSec: number(event.target.value, selected.startSec) })
+                }
               />
             </label>
             <label className="grid gap-1">
@@ -172,7 +171,9 @@ export function CaptionEditor({
                 step="0.1"
                 min="0"
                 value={selected.endSec}
-                onChange={(event) => updateSelected({ endSec: number(event.target.value, selected.endSec) })}
+                onChange={(event) =>
+                  updateSelected({ endSec: number(event.target.value, selected.endSec) })
+                }
               />
             </label>
           </div>

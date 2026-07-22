@@ -1,30 +1,32 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { ReloadIcon } from "@radix-ui/react-icons";
-import { GaugeCircleIcon } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { BudgetPacingWidget } from "@/components/paid-media/budget-pacing/BudgetPacingWidget";
-import { CampaignPerformanceMatrix } from "./CampaignPerformanceMatrix";
-import { CampaignInsightEvidencePanel } from "./CampaignInsightEvidencePanel";
-import { CampaignMetricHeatmap } from "./CampaignMetricHeatmap";
-import { HeatmapLegend } from "./HeatmapLegend";
+import { ReloadIcon } from '@radix-ui/react-icons';
+import { GaugeCircleIcon } from 'lucide-react';
+import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { persistCampaignInsightsSnapshot } from '@/app/_actions/paidMediaInsights';
+import { BudgetPacingWidget } from '@/components/paid-media/budget-pacing/BudgetPacingWidget';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   buildCampaignInsightDataPoints,
   buildGeneratedCampaignInsights,
-} from "@/lib/paid-media/insight-data-points";
-import { persistCampaignInsightsSnapshot } from "@/app/_actions/paidMediaInsights";
+} from '@/lib/paid-media/insight-data-points';
 import {
   makeBudgetPacingKey,
   makeCampaignPerformanceKey,
   usePaidMediaPerformanceStore,
-} from "@/lib/paid-media/performance-store";
-import type { PaidMetricsRange } from "@/lib/schemas/paidMetrics";
-import type { CampaignPerformanceMetricKey, PaidMediaPlatform } from "@/lib/paid-media/performance-types";
-import { cn } from "@/lib/utils";
+} from '@/lib/paid-media/performance-store';
+import type {
+  CampaignPerformanceMetricKey,
+  PaidMediaPlatform,
+} from '@/lib/paid-media/performance-types';
+import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
+import { cn } from '@/lib/utils';
+import { CampaignInsightEvidencePanel } from './CampaignInsightEvidencePanel';
+import { CampaignMetricHeatmap } from './CampaignMetricHeatmap';
+import { CampaignPerformanceMatrix } from './CampaignPerformanceMatrix';
+import { HeatmapLegend } from './HeatmapLegend';
 
 type CampaignPerformanceTabProps = {
   brandId: string;
@@ -32,12 +34,12 @@ type CampaignPerformanceTabProps = {
   platform: PaidMediaPlatform;
 };
 
-type RangePreset = "last_7d" | "last_14d" | "last_30d";
+type RangePreset = 'last_7d' | 'last_14d' | 'last_30d';
 
 const RANGE_OPTIONS: Array<{ value: RangePreset; label: string }> = [
-  { value: "last_7d", label: "7D" },
-  { value: "last_14d", label: "14D" },
-  { value: "last_30d", label: "30D" },
+  { value: 'last_7d', label: '7D' },
+  { value: 'last_14d', label: '14D' },
+  { value: 'last_30d', label: '30D' },
 ];
 
 const EMPTY_CAMPAIGNS: [] = [];
@@ -46,9 +48,13 @@ function toRange(preset: RangePreset): PaidMetricsRange {
   return { preset };
 }
 
-export function CampaignPerformanceTab({ brandId, adAccountId, platform }: CampaignPerformanceTabProps) {
-  const [rangePreset, setRangePreset] = React.useState<RangePreset>("last_14d");
-  const [selectedMetric, setSelectedMetric] = React.useState<CampaignPerformanceMetricKey>("roas");
+export function CampaignPerformanceTab({
+  brandId,
+  adAccountId,
+  platform,
+}: CampaignPerformanceTabProps) {
+  const [rangePreset, setRangePreset] = React.useState<RangePreset>('last_14d');
+  const [selectedMetric, setSelectedMetric] = React.useState<CampaignPerformanceMetricKey>('roas');
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | null>(null);
   const range = React.useMemo(() => toRange(rangePreset), [rangePreset]);
   const campaignKey = React.useMemo(() => {
@@ -70,7 +76,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
       campaignEntry: campaignKey ? state.campaigns[campaignKey] : undefined,
       budgetEntry: budgetKey ? state.budgetPacing[budgetKey] : undefined,
       loadCampaignPerformance: state.loadCampaignPerformance,
-    }))
+    })),
   );
 
   const load = React.useCallback(
@@ -83,10 +89,10 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
           platform,
           range,
         },
-        { force }
+        { force },
       );
     },
-    [adAccountId, brandId, loadCampaignPerformance, platform, range]
+    [adAccountId, brandId, loadCampaignPerformance, platform, range],
   );
 
   React.useEffect(() => {
@@ -101,7 +107,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
         budgetPacing: budgetEntry?.data,
         evidenceWindow: rangePreset,
       }),
-    [budgetEntry?.data, campaigns, rangePreset]
+    [budgetEntry?.data, campaigns, rangePreset],
   );
   const insights = React.useMemo(() => buildGeneratedCampaignInsights(dataPoints), [dataPoints]);
   const selectedCampaign = campaigns.find((campaign) => campaign.id === selectedCampaignId);
@@ -109,12 +115,12 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
   const lastPersistedHashRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!adAccountId || insights.length === 0) return;
-    if (campaignEntry?.status !== "success") return;
+    if (campaignEntry?.status !== 'success') return;
 
     const hash = `${adAccountId}:${rangePreset}:${insights
       .map((insight) => insight.id)
       .toSorted()
-      .join(",")}`;
+      .join(',')}`;
     if (hash === lastPersistedHashRef.current) return;
 
     const handle = window.setTimeout(() => {
@@ -128,14 +134,22 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
         insights,
       }).then((result) => {
         if (!result.ok) {
-          console.warn("[paid-media] Failed to persist insights snapshot:", result.error);
+          console.warn('[paid-media] Failed to persist insights snapshot:', result.error);
           lastPersistedHashRef.current = null;
         }
       });
     }, 2000);
 
     return () => window.clearTimeout(handle);
-  }, [adAccountId, brandId, campaignEntry?.status, campaigns.length, insights, platform, rangePreset]);
+  }, [
+    adAccountId,
+    brandId,
+    campaignEntry?.status,
+    campaigns.length,
+    insights,
+    platform,
+    rangePreset,
+  ]);
 
   if (!adAccountId) {
     return (
@@ -154,7 +168,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
     );
   }
 
-  const isLoadingFresh = campaignEntry?.status === "loading" && campaigns.length === 0;
+  const isLoadingFresh = campaignEntry?.status === 'loading' && campaigns.length === 0;
   const hasCampaigns = campaigns.length > 0;
 
   return (
@@ -162,9 +176,7 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/10 px-3 py-2">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold tracking-tight">Performance</h2>
-          <p className="text-xs text-muted-foreground">
-            Heatmap · matrix · insights · pacing.
-          </p>
+          <p className="text-xs text-muted-foreground">Heatmap · matrix · insights · pacing.</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
@@ -172,10 +184,10 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
               <Button
                 key={option.value}
                 size="sm"
-                variant={rangePreset === option.value ? "secondary" : "ghost"}
+                variant={rangePreset === option.value ? 'secondary' : 'ghost'}
                 className={cn(
-                  "h-7 px-2.5 font-mono text-xs tracking-tight",
-                  rangePreset === option.value && "shadow-sm"
+                  'h-7 px-2.5 font-mono text-xs tracking-tight',
+                  rangePreset === option.value && 'shadow-sm',
                 )}
                 onClick={() => setRangePreset(option.value)}
               >
@@ -188,17 +200,17 @@ export function CampaignPerformanceTab({ brandId, adAccountId, platform }: Campa
             size="icon-sm"
             variant="secondary"
             className="h-7 w-7"
-            disabled={campaignEntry?.status === "loading"}
+            disabled={campaignEntry?.status === 'loading'}
             onClick={() => load(true)}
             aria-label="Refresh performance"
           >
-            <ReloadIcon className={cn(campaignEntry?.status === "loading" && "animate-spin")} />
+            <ReloadIcon className={cn(campaignEntry?.status === 'loading' && 'animate-spin')} />
           </Button>
         </div>
       </div>
 
       <div className="min-h-0 space-y-2 overflow-y-auto p-2">
-        {campaignEntry?.status === "error" ? (
+        {campaignEntry?.status === 'error' ? (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {campaignEntry.error}
           </div>

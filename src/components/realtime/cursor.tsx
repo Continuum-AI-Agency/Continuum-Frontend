@@ -1,29 +1,29 @@
-"use client"
+'use client';
 
-import React from "react"
-import { cn } from "@/lib/utils"
+import React from 'react';
+import { cn } from '@/lib/utils';
 
 interface CursorProps {
-  x: number
-  y: number
-  color: string
-  name: string
-  className?: string
-  isLocal?: boolean
+  x: number;
+  y: number;
+  color: string;
+  name: string;
+  className?: string;
+  isLocal?: boolean;
 }
 
 export function Cursor({ x, y, color, name, className, isLocal = false }: CursorProps) {
   return (
     <div
       className={cn(
-        "pointer-events-none absolute z-[9999] flex flex-col items-start transition-all",
-        isLocal && "animate-pulse-glow",
-        className
+        'pointer-events-none absolute z-[9999] flex flex-col items-start transition-all',
+        isLocal && 'animate-pulse-glow',
+        className,
       )}
       style={{
         left: x,
         top: y,
-        transform: "translate(-2px, -2px)",
+        transform: 'translate(-2px, -2px)',
         ...(isLocal && {
           filter: `drop-shadow(0 0 8px ${color})`,
         }),
@@ -50,5 +50,5 @@ export function Cursor({ x, y, color, name, className, isLocal = false }: Cursor
         {name}
       </div>
     </div>
-  )
+  );
 }

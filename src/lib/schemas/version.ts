@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const versionResponseSchema = z.object({
   sha: z.string().min(1),

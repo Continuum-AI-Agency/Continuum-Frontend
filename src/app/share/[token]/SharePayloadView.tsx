@@ -15,6 +15,8 @@ import type {
 } from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
 import { initialsFor } from '@/lib/library/comments';
+import { ExternalApprovalControl } from './ExternalApprovalControl';
+import { ExternalCommentComposer } from './ExternalCommentComposer';
 import {
   authorLabel,
   buildPublicShareThreads,
@@ -22,8 +24,6 @@ import {
   ShareCommentThreads,
 } from './ShareCommentThreads';
 import { type ShareTimeMarker, ShareVideoPlayer } from './ShareVideoPlayer';
-import { ExternalCommentComposer } from './ExternalCommentComposer';
-import { ExternalApprovalControl } from './ExternalApprovalControl';
 
 const MARKER_TITLE_MAX = 80;
 
@@ -110,7 +110,9 @@ function PublicImageAnnotations({ comments }: { comments: PublicShareComment[] }
           );
         }
         if (annotation.kind === 'freehand') {
-          const points = annotation.points.map((point) => `${point.x * 1000},${point.y * 1000}`).join(' ');
+          const points = annotation.points
+            .map((point) => `${point.x * 1000},${point.y * 1000}`)
+            .join(' ');
           return (
             <polyline
               key={id}
@@ -299,7 +301,8 @@ function SharedAssetTile({
         <div className="min-w-0">
           <p className="truncate text-sm text-foreground">{asset.title ?? asset.fileName}</p>
           <p className="text-2xs text-muted-foreground">
-            Version {versionNumber}{isHead ? ' · Latest' : ''}
+            Version {versionNumber}
+            {isHead ? ' · Latest' : ''}
           </p>
         </div>
         {allowDownload ? <DownloadButton asset={asset} /> : null}
@@ -353,9 +356,7 @@ export function SharePayloadView({
   const heading =
     payload.scope === 'collection'
       ? (payload.collectionName ?? 'Shared collection')
-      : (payload.assets[0]?.asset.title ??
-        payload.assets[0]?.asset.fileName ??
-        'Shared asset');
+      : (payload.assets[0]?.asset.title ?? payload.assets[0]?.asset.fileName ?? 'Shared asset');
   const grouped = commentsByAsset(payload.comments);
 
   const tiles = payload.assets.map((sharedAsset) => (

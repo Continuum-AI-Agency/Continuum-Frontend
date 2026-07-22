@@ -1,11 +1,11 @@
 export type ValueFormat =
-  | "currency"
-  | "percent"
-  | "multiplier"
-  | "number"
-  | "integer"
-  | "compact"
-  | "text"
+  | 'currency'
+  | 'percent'
+  | 'multiplier'
+  | 'number'
+  | 'integer'
+  | 'compact'
+  | 'text'
   | (string & {});
 
 type FormatOptions = {
@@ -23,10 +23,8 @@ function isConversionCountLabel(label: string): boolean {
   const normalized = label.toLowerCase();
   const namesCountMetric = /\b(conversions?|purchases?)\b/.test(normalized);
   const namesRateMetric =
-    /\b(rate|cvr|percentage|percent|pct|ratio)\b/.test(normalized) ||
-    normalized.includes("%");
-  const namesValueMetric =
-    /\b(value|revenue|roas|cost|cpa|cpc|cpm|cac|per)\b/.test(normalized);
+    /\b(rate|cvr|percentage|percent|pct|ratio)\b/.test(normalized) || normalized.includes('%');
+  const namesValueMetric = /\b(value|revenue|roas|cost|cpa|cpc|cpm|cac|per)\b/.test(normalized);
 
   return namesCountMetric && !namesRateMetric && !namesValueMetric;
 }
@@ -34,7 +32,7 @@ function isConversionCountLabel(label: string): boolean {
 function isPercentUnit(unit?: string | null): boolean {
   if (!unit) return false;
   const normalized = unit.trim().toLowerCase();
-  return normalized === "%" || normalized === "percent" || normalized === "percentage";
+  return normalized === '%' || normalized === 'percent' || normalized === 'percentage';
 }
 
 export function resolveMetricDisplayFormat({
@@ -46,9 +44,9 @@ export function resolveMetricDisplayFormat({
   if (
     label &&
     isConversionCountLabel(label) &&
-    (resolvedFormat === "percent" || isPercentUnit(unit))
+    (resolvedFormat === 'percent' || isPercentUnit(unit))
   ) {
-    return "number";
+    return 'number';
   }
 
   return resolvedFormat;
@@ -59,47 +57,47 @@ export function formatValue(
   format?: ValueFormat | string,
   options?: FormatOptions,
 ): string {
-  const locale = options?.locale ?? "en-US";
+  const locale = options?.locale ?? 'en-US';
 
-  if (typeof value === "string" && !format) return value;
+  if (typeof value === 'string' && !format) return value;
 
-  const num = typeof value === "number" ? value : Number(value);
+  const num = typeof value === 'number' ? value : Number(value);
   if (Number.isNaN(num)) return String(value);
 
   switch (format) {
-    case "currency":
+    case 'currency':
       return new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency: options?.currency ?? "USD",
+        style: 'currency',
+        currency: options?.currency ?? 'USD',
         maximumFractionDigits: 2,
       }).format(num);
 
-    case "percent":
+    case 'percent':
       return new Intl.NumberFormat(locale, {
-        style: "percent",
+        style: 'percent',
         maximumFractionDigits: 1,
       }).format(num < 1 && num > -1 ? num : num / 100);
 
-    case "multiplier":
+    case 'multiplier':
       return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(num)}x`;
 
-    case "number":
+    case 'number':
       return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(num);
 
-    case "integer":
+    case 'integer':
       return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(num);
 
-    case "compact":
+    case 'compact':
       return new Intl.NumberFormat(locale, {
-        notation: "compact",
+        notation: 'compact',
         maximumFractionDigits: 1,
       }).format(num);
 
-    case "text":
+    case 'text':
       return String(value);
 
     default:
-      return typeof value === "number"
+      return typeof value === 'number'
         ? new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(num)
         : String(value);
   }

@@ -45,7 +45,7 @@ export function DashboardBriefing({
 
       <div
         data-tour-id="dashboard-top-content"
-        className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2"
+        className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]"
       >
         {insightsSlot}
         {creativesSlot}

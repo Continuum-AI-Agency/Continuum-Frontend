@@ -64,7 +64,9 @@ async function provisionBrandWithoutReadiness(): Promise<ProvisionedBrand> {
       p_brand_name: 'E2E First-Run Brand',
     });
   if (stubError || typeof brandId !== 'string') {
-    throw new Error(`[e2e/onboarding] create_brand_stub failed for ${email}: ${stubError?.message}`);
+    throw new Error(
+      `[e2e/onboarding] create_brand_stub failed for ${email}: ${stubError?.message}`,
+    );
   }
 
   return { email, userId, brandId };
@@ -75,7 +77,11 @@ async function teardownProvisionedBrand(brand: ProvisionedBrand): Promise<void> 
   // Best-effort cleanup — orphaned test rows are low-harm, so failures here must
   // not fail the spec.
   try {
-    await admin.schema('brand_profiles').from('permissions').delete().eq('brand_profile_id', brand.brandId);
+    await admin
+      .schema('brand_profiles')
+      .from('permissions')
+      .delete()
+      .eq('brand_profile_id', brand.brandId);
   } catch {
     /* ignore */
   }

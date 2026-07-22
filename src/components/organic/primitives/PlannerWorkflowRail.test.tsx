@@ -4,13 +4,41 @@ import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail'
 
 describe('resolvePlannerStage', () => {
   it('prioritizes active generation and review context', () => {
-    expect(resolvePlannerStage({ draftsCount: 2, scheduledCount: 0, isGenerating: true, hasSelection: true })).toBe('generate');
-    expect(resolvePlannerStage({ draftsCount: 2, scheduledCount: 0, isGenerating: false, hasSelection: true })).toBe('review');
+    expect(
+      resolvePlannerStage({
+        draftsCount: 2,
+        scheduledCount: 0,
+        isGenerating: true,
+        hasSelection: true,
+      }),
+    ).toBe('generate');
+    expect(
+      resolvePlannerStage({
+        draftsCount: 2,
+        scheduledCount: 0,
+        isGenerating: false,
+        hasSelection: true,
+      }),
+    ).toBe('review');
   });
 
   it('moves from planning to scheduling as work becomes ready', () => {
-    expect(resolvePlannerStage({ draftsCount: 0, scheduledCount: 0, isGenerating: false, hasSelection: false })).toBe('plan');
-    expect(resolvePlannerStage({ draftsCount: 2, scheduledCount: 1, isGenerating: false, hasSelection: false })).toBe('schedule');
+    expect(
+      resolvePlannerStage({
+        draftsCount: 0,
+        scheduledCount: 0,
+        isGenerating: false,
+        hasSelection: false,
+      }),
+    ).toBe('plan');
+    expect(
+      resolvePlannerStage({
+        draftsCount: 2,
+        scheduledCount: 1,
+        isGenerating: false,
+        hasSelection: false,
+      }),
+    ).toBe('schedule');
   });
 });
 

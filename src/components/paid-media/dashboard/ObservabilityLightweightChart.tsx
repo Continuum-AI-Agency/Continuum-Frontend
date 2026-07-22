@@ -1,23 +1,23 @@
-"use client";
+'use client';
 
-import * as React from "react";
 import {
   ColorType,
-  createChart,
   CrosshairMode,
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
   LineSeries,
   LineStyle,
   LineType,
-  type IChartApi,
-  type ISeriesApi,
   type MouseEventParams,
   type Time,
   type UTCTimestamp,
-} from "lightweight-charts";
+} from 'lightweight-charts';
+import * as React from 'react';
 
-import { useTheme } from "@/components/theme-provider";
-import type { ActionStatus } from "@/lib/types/dco";
-import { cn } from "@/lib/utils";
+import { useTheme } from '@/components/theme-provider';
+import type { ActionStatus } from '@/lib/types/dco';
+import { cn } from '@/lib/utils';
 
 export type ObservabilityChartPoint = {
   time: UTCTimestamp;
@@ -30,7 +30,7 @@ export type ObservabilityChartSeries = {
   color: string;
   points: ObservabilityChartPoint[];
   markers?: ObservabilityChartMarker[];
-  variant?: "line";
+  variant?: 'line';
   emphasized?: boolean;
   dashed?: boolean;
 };
@@ -42,8 +42,8 @@ export type ObservabilityChartMarker = {
   detail?: string;
   color?: string;
   text?: string;
-  shape?: "circle" | "square" | "arrowUp" | "arrowDown";
-  position?: "aboveBar" | "belowBar" | "inBar";
+  shape?: 'circle' | 'square' | 'arrowUp' | 'arrowDown';
+  position?: 'aboveBar' | 'belowBar' | 'inBar';
   scopeType?: string;
   scopeId?: string | null;
   campaignId?: string | null;
@@ -56,7 +56,7 @@ export type ObservabilityChartMarker = {
 };
 
 export type ObservabilityChartMarkerSelection = {
-  kind: "marker" | "bookmark";
+  kind: 'marker' | 'bookmark';
   time: UTCTimestamp;
   marker: ObservabilityChartMarker;
   markers: ObservabilityChartMarker[];
@@ -71,7 +71,7 @@ type ObservabilityLightweightChartProps = {
   onMarkerSelect?: (selection: ObservabilityChartMarkerSelection) => void;
 };
 
-type SupportedSeriesType = "Line";
+type SupportedSeriesType = 'Line';
 
 type RegisteredSeries = {
   api: ISeriesApi<SupportedSeriesType, Time>;
@@ -91,7 +91,7 @@ type OverlayMarker = {
   label: string;
   detail?: string;
   color: string;
-  position: "aboveBar" | "belowBar" | "inBar";
+  position: 'aboveBar' | 'belowBar' | 'inBar';
   scopeType?: string;
   actionCount: number;
   status?: ActionStatus;
@@ -134,7 +134,9 @@ function sanitizePoints(points: ObservabilityChartPoint[]): ObservabilityChartPo
     .map(([time, value]) => ({ time: time as UTCTimestamp, value }));
 }
 
-function getSeriesTimeBounds(series: ObservabilityChartSeries[]): { min: number; max: number } | null {
+function getSeriesTimeBounds(
+  series: ObservabilityChartSeries[],
+): { min: number; max: number } | null {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
 
@@ -152,19 +154,19 @@ function getSeriesTimeBounds(series: ObservabilityChartSeries[]): { min: number;
 }
 
 function bookmarkScopeLabel(scopes: Set<string>): string {
-  const hasCampaign = scopes.has("CAMPAIGN");
-  const hasAdset = scopes.has("ADSET");
-  const hasAd = scopes.has("AD");
-  const hasAccount = scopes.has("ACCOUNT");
-  const hasGlobal = scopes.has("GLOBAL");
-  if (hasCampaign && (hasAdset || hasAd)) return "Nested";
-  if (hasCampaign) return "Campaign";
-  if (hasAdset && hasAd) return "Adset/Ad";
-  if (hasAdset) return "Adset";
-  if (hasAd) return "Ad";
-  if (hasAccount) return "Account";
-  if (hasGlobal) return "Global";
-  return "Entity";
+  const hasCampaign = scopes.has('CAMPAIGN');
+  const hasAdset = scopes.has('ADSET');
+  const hasAd = scopes.has('AD');
+  const hasAccount = scopes.has('ACCOUNT');
+  const hasGlobal = scopes.has('GLOBAL');
+  if (hasCampaign && (hasAdset || hasAd)) return 'Nested';
+  if (hasCampaign) return 'Campaign';
+  if (hasAdset && hasAd) return 'Adset/Ad';
+  if (hasAdset) return 'Adset';
+  if (hasAd) return 'Ad';
+  if (hasAccount) return 'Account';
+  if (hasGlobal) return 'Global';
+  return 'Entity';
 }
 
 function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): OverlayBookmark[] {
@@ -217,8 +219,10 @@ function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): O
   return clusters.map((cluster, index) => {
     const scopeLabel = bookmarkScopeLabel(cluster.scopeTypes);
     const x = cluster.weightedX / Math.max(1, cluster.weight);
-    const label = `${cluster.count} action${cluster.count === 1 ? "" : "s"} in ${scopeLabel}`;
-    const details = Array.from(new Set(cluster.markers.map((marker) => marker.label))).slice(0, 3).join("\n");
+    const label = `${cluster.count} action${cluster.count === 1 ? '' : 's'} in ${scopeLabel}`;
+    const details = Array.from(new Set(cluster.markers.map((marker) => marker.label)))
+      .slice(0, 3)
+      .join('\n');
     const sortedMarkers = cluster.markers.slice().sort((left, right) => left.time - right.time);
     const primary = sortedMarkers[sortedMarkers.length - 1] ?? cluster.markers[0];
     const sourceMarkers = sortedMarkers.map((marker) => marker.source);
@@ -250,11 +254,14 @@ export function ObservabilityLightweightChart({
   const [hover, setHover] = React.useState<HoverState | null>(null);
   const [overlayMarkers, setOverlayMarkers] = React.useState<OverlayMarker[]>([]);
   const [overlayBookmarks, setOverlayBookmarks] = React.useState<OverlayBookmark[]>([]);
-  const [overlayGeometry, setOverlayGeometry] = React.useState<OverlayGeometry>({ lineTop: 8, lineBottom: 8 });
+  const [overlayGeometry, setOverlayGeometry] = React.useState<OverlayGeometry>({
+    lineTop: 8,
+    lineBottom: 8,
+  });
   const [annotationHover, setAnnotationHover] = React.useState<AnnotationHover | null>(null);
 
   const { appearance } = useTheme();
-  const isDark = appearance === "dark";
+  const isDark = appearance === 'dark';
 
   const recalcOverlays = React.useCallback(() => {
     const chart = chartRef.current;
@@ -269,7 +276,7 @@ export function ObservabilityLightweightChart({
 
     const lineTop = 8;
     const lineBottom = Math.max(lineTop + 24, container.clientHeight - 28);
-    const mergedMarkers = new Map<string, Omit<OverlayMarker, "key" | "x">>();
+    const mergedMarkers = new Map<string, Omit<OverlayMarker, 'key' | 'x'>>();
 
     series.forEach((entry) => {
       (entry.markers ?? []).forEach((marker) => {
@@ -280,7 +287,7 @@ export function ObservabilityLightweightChart({
           label: marker.label,
           detail: marker.detail,
           color: marker.color ?? entry.color,
-          position: marker.position ?? "aboveBar",
+          position: marker.position ?? 'aboveBar',
           scopeType: marker.scopeType,
           actionCount: Math.max(1, marker.actionCount ?? 1),
           status: marker.status,
@@ -289,22 +296,25 @@ export function ObservabilityLightweightChart({
       });
     });
 
-    const positioned = Array.from(mergedMarkers.entries()).reduce<OverlayMarker[]>((acc, [key, marker]) => {
-      const coordinate = chart.timeScale().timeToCoordinate(marker.time as Time);
-      if (typeof coordinate !== "number" || !Number.isFinite(coordinate)) return acc;
-      if (coordinate < -12 || coordinate > container.clientWidth + 12) return acc;
+    const positioned = Array.from(mergedMarkers.entries()).reduce<OverlayMarker[]>(
+      (acc, [key, marker]) => {
+        const coordinate = chart.timeScale().timeToCoordinate(marker.time as Time);
+        if (typeof coordinate !== 'number' || !Number.isFinite(coordinate)) return acc;
+        if (coordinate < -12 || coordinate > container.clientWidth + 12) return acc;
 
-      acc.push({
-        key,
-        x: Number(coordinate),
-        ...marker,
-      });
-      return acc;
-    }, []);
+        acc.push({
+          key,
+          x: Number(coordinate),
+          ...marker,
+        });
+        return acc;
+      },
+      [],
+    );
     positioned.sort((left, right) => left.time - right.time);
 
-    const topMarkers = positioned.filter((marker) => marker.position !== "belowBar");
-    const bookmarkMarkers = positioned.filter((marker) => marker.position === "belowBar");
+    const topMarkers = positioned.filter((marker) => marker.position !== 'belowBar');
+    const bookmarkMarkers = positioned.filter((marker) => marker.position === 'belowBar');
 
     setOverlayMarkers(topMarkers);
     setOverlayBookmarks(buildBottomBookmarks(bookmarkMarkers, 72));
@@ -318,9 +328,9 @@ export function ObservabilityLightweightChart({
     const chart = createChart(container, {
       autoSize: true,
       layout: {
-        background: { type: ColorType.Solid, color: "transparent" },
-        textColor: isDark ? "#8f9ab2" : "#5d6679",
-        fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif",
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: isDark ? '#8f9ab2' : '#5d6679',
+        fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, sans-serif',
         fontSize: compact ? 10 : 11,
         attributionLogo: false,
       },
@@ -331,20 +341,20 @@ export function ObservabilityLightweightChart({
           }
         : {
             vertLines: { visible: false },
-            horzLines: { color: isDark ? "rgba(71, 85, 105, 0.25)" : "rgba(148, 163, 184, 0.25)" },
+            horzLines: { color: isDark ? 'rgba(71, 85, 105, 0.25)' : 'rgba(148, 163, 184, 0.25)' },
           },
       timeScale: {
         visible: !compact,
         timeVisible: true,
         secondsVisible: false,
         borderVisible: !compact,
-        borderColor: isDark ? "rgba(51, 65, 85, 0.5)" : "rgba(203, 213, 225, 0.8)",
+        borderColor: isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(203, 213, 225, 0.8)',
         ticksVisible: !compact,
       },
       rightPriceScale: {
         visible: !compact,
         borderVisible: !compact,
-        borderColor: isDark ? "rgba(51, 65, 85, 0.5)" : "rgba(203, 213, 225, 0.8)",
+        borderColor: isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(203, 213, 225, 0.8)',
         scaleMargins: compact ? { top: 0.16, bottom: 0.16 } : { top: 0.12, bottom: 0.12 },
       },
       leftPriceScale: { visible: false },
@@ -355,12 +365,12 @@ export function ObservabilityLightweightChart({
         : {
             mode: CrosshairMode.Normal,
             vertLine: {
-              color: isDark ? "rgba(148, 163, 184, 0.55)" : "rgba(71, 85, 105, 0.45)",
+              color: isDark ? 'rgba(148, 163, 184, 0.55)' : 'rgba(71, 85, 105, 0.45)',
               style: LineStyle.Dashed,
               width: 1,
             },
             horzLine: {
-              color: isDark ? "rgba(148, 163, 184, 0.55)" : "rgba(71, 85, 105, 0.45)",
+              color: isDark ? 'rgba(148, 163, 184, 0.55)' : 'rgba(71, 85, 105, 0.45)',
               style: LineStyle.Dashed,
               width: 1,
             },
@@ -368,7 +378,7 @@ export function ObservabilityLightweightChart({
       handleScroll: !compact,
       handleScale: !compact,
     });
-    container.querySelectorAll("#tv-attr-logo").forEach((node) => node.remove());
+    container.querySelectorAll('#tv-attr-logo').forEach((node) => node.remove());
 
     chartRef.current = chart;
 
@@ -426,7 +436,7 @@ export function ObservabilityLightweightChart({
     });
 
     const bounds = getSeriesTimeBounds(series);
-    if (bounds && typeof visibleWindowSeconds === "number" && visibleWindowSeconds > 0) {
+    if (bounds && typeof visibleWindowSeconds === 'number' && visibleWindowSeconds > 0) {
       const to = bounds.max;
       const from = Math.max(bounds.min, to - visibleWindowSeconds);
       chart.timeScale().setVisibleRange({
@@ -448,11 +458,11 @@ export function ObservabilityLightweightChart({
 
     const currentRange = chart.timeScale().getVisibleRange();
     const currentSpan =
-      currentRange && typeof currentRange.from === "number" && typeof currentRange.to === "number"
+      currentRange && typeof currentRange.from === 'number' && typeof currentRange.to === 'number'
         ? Math.max(1, Math.floor((Number(currentRange.to) - Number(currentRange.from)) / 2))
         : null;
     const windowSpan =
-      typeof visibleWindowSeconds === "number" && visibleWindowSeconds > 0
+      typeof visibleWindowSeconds === 'number' && visibleWindowSeconds > 0
         ? Math.max(1, Math.floor(visibleWindowSeconds / 2))
         : null;
     const fallbackSpan = Math.max(60 * 60 * 6, Math.floor((bounds.max - bounds.min) / 2));
@@ -524,17 +534,21 @@ export function ObservabilityLightweightChart({
         .map((entry) => {
           const registered = seriesMapRef.current.get(entry.id);
           if (!registered) return null;
-          const data = param.seriesData.get(registered.api) as { value?: number; close?: number } | undefined;
-          const value = typeof data?.value === "number" ? data.value : data?.close;
-          if (typeof value !== "number" || !Number.isFinite(value)) return null;
+          const data = param.seriesData.get(registered.api) as
+            | { value?: number; close?: number }
+            | undefined;
+          const value = typeof data?.value === 'number' ? data.value : data?.close;
+          if (typeof value !== 'number' || !Number.isFinite(value)) return null;
           return {
             id: entry.id,
             label: entry.label,
             color: entry.color,
-            value: value.toLocaleString("en-US", { maximumFractionDigits: 2 }),
+            value: value.toLocaleString('en-US', { maximumFractionDigits: 2 }),
           };
         })
-        .filter((row): row is { id: string; label: string; color: string; value: string } => Boolean(row));
+        .filter((row): row is { id: string; label: string; color: string; value: string } =>
+          Boolean(row),
+        );
 
       if (rows.length === 0) {
         setHover(null);
@@ -542,12 +556,12 @@ export function ObservabilityLightweightChart({
       }
 
       const timeLabel =
-        typeof param.time === "number"
-          ? new Date(param.time * 1000).toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
+        typeof param.time === 'number'
+          ? new Date(param.time * 1000).toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
             })
           : String(param.time);
 
@@ -569,7 +583,10 @@ export function ObservabilityLightweightChart({
   }, [compact, series]);
 
   return (
-    <div ref={containerRef} className={cn("relative h-full w-full [&_a#tv-attr-logo]:hidden", className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative h-full w-full [&_a#tv-attr-logo]:hidden', className)}
+    >
       {!compact ? (
         <div className="pointer-events-none absolute inset-0 z-10">
           {overlayMarkers.map((marker) => (
@@ -590,13 +607,13 @@ export function ObservabilityLightweightChart({
                 style={{
                   left: marker.x - 5,
                   top: overlayGeometry.lineTop - 4,
-                  backgroundColor: marker.status === "PENDING" ? "transparent" : marker.color,
+                  backgroundColor: marker.status === 'PENDING' ? 'transparent' : marker.color,
                   borderColor: marker.color,
                 }}
                 aria-label={marker.label}
                 onClick={() => {
                   onMarkerSelect?.({
-                    kind: "marker",
+                    kind: 'marker',
                     time: marker.time,
                     marker: marker.source,
                     markers: [marker.source],
@@ -641,7 +658,7 @@ export function ObservabilityLightweightChart({
               }}
               onClick={() => {
                 onMarkerSelect?.({
-                  kind: "bookmark",
+                  kind: 'bookmark',
                   time: bookmark.time,
                   marker: bookmark.marker,
                   markers: bookmark.markers,
@@ -691,7 +708,10 @@ export function ObservabilityLightweightChart({
             {hover.rows.map((row) => (
               <div key={`hover-row-${row.id}`} className="flex items-center justify-between gap-2">
                 <span className="inline-flex min-w-0 items-center gap-1">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: row.color }}
+                  />
                   <span className="truncate text-muted-foreground">{row.label}</span>
                 </span>
                 <span className="font-medium text-foreground">{row.value}</span>
@@ -710,7 +730,9 @@ export function ObservabilityLightweightChart({
           }}
         >
           <div className="font-semibold">{annotationHover.label}</div>
-          {annotationHover.detail ? <div className="mt-0.5 whitespace-pre-line">{annotationHover.detail}</div> : null}
+          {annotationHover.detail ? (
+            <div className="mt-0.5 whitespace-pre-line">{annotationHover.detail}</div>
+          ) : null}
         </div>
       ) : null}
     </div>

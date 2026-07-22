@@ -1,8 +1,8 @@
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export function GET() {
   return Response.json({
-    status: "ok",
+    status: 'ok',
     timestamp: new Date().toISOString(),
   });
 }

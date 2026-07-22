@@ -7,7 +7,7 @@
 export function resolveConfirmBrandId(
   requestedBrandId: string | null | undefined,
   accessibleBrandIds: readonly string[],
-  activeBrandId: string | null
+  activeBrandId: string | null,
 ): string | null {
   if (requestedBrandId && accessibleBrandIds.includes(requestedBrandId)) {
     return requestedBrandId;

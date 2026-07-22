@@ -1,16 +1,9 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-} from "recharts";
-
-import type { DailyMetric } from "@/types/timeline";
-import { cn } from "@/lib/utils";
+import * as React from 'react';
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+import { cn } from '@/lib/utils';
+import type { DailyMetric } from '@/types/timeline';
 
 export type PaidMetricsComparison = Record<
   string,
@@ -30,42 +23,42 @@ type PerformanceDetailsProps = {
 };
 
 const COMPARISON_LABELS: Record<string, string> = {
-  spend: "Spend",
-  roas: "ROAS",
-  ctr: "CTR",
-  cpc: "CPC",
-  cpa: "CPA",
-  impressions: "Impr.",
-  clicks: "Clicks",
+  spend: 'Spend',
+  roas: 'ROAS',
+  ctr: 'CTR',
+  cpc: 'CPC',
+  cpa: 'CPA',
+  impressions: 'Impr.',
+  clicks: 'Clicks',
 };
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     minimumFractionDigits: 2,
   }).format(value);
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat('en-US').format(value);
 }
 
 function formatPercent(value: number): string {
   const normalized = Math.abs(value).toFixed(1);
-  return `${value >= 0 ? "+" : "-"}${normalized}%`;
+  return `${value >= 0 ? '+' : '-'}${normalized}%`;
 }
 
 function renderMetricValue(metricKey: string, value: number): string {
-  if (metricKey === "spend" || metricKey === "cpc" || metricKey === "cpa") {
+  if (metricKey === 'spend' || metricKey === 'cpc' || metricKey === 'cpa') {
     return formatCurrency(value);
   }
 
-  if (metricKey === "roas") {
+  if (metricKey === 'roas') {
     return value.toFixed(2);
   }
 
-  if (metricKey === "ctr") {
+  if (metricKey === 'ctr') {
     return `${value.toFixed(2)}%`;
   }
 
@@ -101,7 +94,10 @@ function TrendSparkline({
             <XAxis dataKey="date" hide />
             <Tooltip
               labelFormatter={(value) =>
-                new Date(String(value)).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                new Date(String(value)).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })
               }
               formatter={(value) => valueFormatter(Number(value))}
             />
@@ -122,48 +118,52 @@ function TrendSparkline({
 
 export function PerformanceDetails({ comparison, trends, className }: PerformanceDetailsProps) {
   const comparisonEntries = React.useMemo(
-    () =>
-      Object.entries(comparison ?? {}).filter(([metricKey]) => metricKey in COMPARISON_LABELS),
-    [comparison]
+    () => Object.entries(comparison ?? {}).filter(([metricKey]) => metricKey in COMPARISON_LABELS),
+    [comparison],
   );
   const latestTrend = trends && trends.length > 0 ? trends[trends.length - 1] : null;
   const spendTrend = (trends ?? [])
     .map((point) =>
-      typeof point.spend === "number"
-        ? { date: point.date, value: point.spend }
-        : null
+      typeof point.spend === 'number' ? { date: point.date, value: point.spend } : null,
     )
     .filter((point): point is { date: string; value: number } => Boolean(point));
   const roasTrend = (trends ?? [])
     .map((point) =>
-      typeof point.roas === "number"
-        ? { date: point.date, value: point.roas }
-        : null
+      typeof point.roas === 'number' ? { date: point.date, value: point.roas } : null,
     )
     .filter((point): point is { date: string; value: number } => Boolean(point));
-  const latestSpend = typeof latestTrend?.spend === "number" ? latestTrend.spend : 0;
-  const latestRoas = typeof latestTrend?.roas === "number" ? latestTrend.roas : 0;
+  const latestSpend = typeof latestTrend?.spend === 'number' ? latestTrend.spend : 0;
+  const latestRoas = typeof latestTrend?.roas === 'number' ? latestTrend.roas : 0;
   const latestRows = (trends ?? []).slice(-3);
 
-  if (comparisonEntries.length === 0 && !latestTrend && spendTrend.length < 2 && roasTrend.length < 2) {
+  if (
+    comparisonEntries.length === 0 &&
+    !latestTrend &&
+    spendTrend.length < 2 &&
+    roasTrend.length < 2
+  ) {
     return null;
   }
 
   return (
-    <div className={cn("rounded-md border bg-muted/20 p-3", className)}>
+    <div className={cn('rounded-md border bg-muted/20 p-3', className)}>
       {comparisonEntries.length > 0 ? (
         <div className="mb-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {comparisonEntries.map(([metricKey, metric]) => (
             <div key={metricKey} className="rounded-md border bg-background px-2 py-1.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">{COMPARISON_LABELS[metricKey]}</span>
-                <span className={metric.percentageChange >= 0 ? "text-emerald-600" : "text-destructive"}>
+                <span
+                  className={metric.percentageChange >= 0 ? 'text-emerald-600' : 'text-destructive'}
+                >
                   {formatPercent(metric.percentageChange)}
                 </span>
               </div>
               <div className="mt-1 font-medium">
                 {renderMetricValue(metricKey, metric.current)}
-                <span className="ml-1 text-muted-foreground">vs {renderMetricValue(metricKey, metric.previous)}</span>
+                <span className="ml-1 text-muted-foreground">
+                  vs {renderMetricValue(metricKey, metric.previous)}
+                </span>
               </div>
             </div>
           ))}
@@ -172,10 +172,18 @@ export function PerformanceDetails({ comparison, trends, className }: Performanc
 
       {latestTrend ? (
         <div className="text-xs text-muted-foreground">
-          Latest trend ({new Date(latestTrend.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}):
-          {" "}Spend {formatCurrency(latestSpend)}, ROAS {latestRoas.toFixed(2)}
-          {typeof latestTrend.impressions === "number" ? `, Impr. ${formatNumber(latestTrend.impressions)}` : ""}
-          {typeof latestTrend.clicks === "number" ? `, Clicks ${formatNumber(latestTrend.clicks)}` : ""}
+          Latest trend (
+          {new Date(latestTrend.date).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })}
+          ): Spend {formatCurrency(latestSpend)}, ROAS {latestRoas.toFixed(2)}
+          {typeof latestTrend.impressions === 'number'
+            ? `, Impr. ${formatNumber(latestTrend.impressions)}`
+            : ''}
+          {typeof latestTrend.clicks === 'number'
+            ? `, Clicks ${formatNumber(latestTrend.clicks)}`
+            : ''}
         </div>
       ) : null}
 
@@ -203,7 +211,10 @@ export function PerformanceDetails({ comparison, trends, className }: Performanc
             {latestRows.map((row) => (
               <div key={row.date} className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">
-                  {new Date(row.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  {new Date(row.date).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
                 </span>
                 <span>Spend {formatCurrency(row.spend ?? 0)}</span>
                 <span>ROAS {(row.roas ?? 0).toFixed(2)}</span>

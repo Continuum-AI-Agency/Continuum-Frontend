@@ -1,21 +1,21 @@
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export const useCurrentUserImage = () => {
-  const [image, setImage] = useState<string | null>(null)
+  const [image, setImage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserImage = async () => {
       const supabase = createSupabaseBrowserClient();
-      const { data, error } = await supabase.auth.getSession()
+      const { data, error } = await supabase.auth.getSession();
       if (error) {
-        console.error(error)
+        console.error(error);
       }
 
-      setImage(data.session?.user.user_metadata.avatar_url ?? null)
-    }
-    fetchUserImage()
-  }, [])
+      setImage(data.session?.user.user_metadata.avatar_url ?? null);
+    };
+    fetchUserImage();
+  }, []);
 
-  return image
-}
+  return image;
+};

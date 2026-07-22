@@ -46,20 +46,23 @@ describe('buildConversionFunnel', () => {
       'Purchases',
     ]);
     expect(stages.map((s) => s.value)).toEqual([10_000, 500, 100, 25]);
-    // Top stage shows an absolute count and carries no heat color.
-    expect(stages[0].displayValue).toBe('10,000');
+    // Every stage labels its absolute count on the chart.
+    expect(stages.map((s) => s.displayValue)).toEqual(['10,000', '500', '100', '25']);
+    // Top stage carries no step rate and no heat color.
+    expect(stages[0].stepPct).toBeNull();
     expect(stages[0].color).toBeUndefined();
-    // Downstream stages show step conversion % and a heat fill.
-    expect(stages[1].displayValue).toBe('5%'); // 500 / 10000
-    expect(stages[2].displayValue).toBe('20%'); // 100 / 500
-    expect(stages[3].displayValue).toBe('25%'); // 25 / 100
+    // Downstream stages carry the step conversion rate and a heat fill.
+    expect(stages[1].stepPct).toBeCloseTo(0.05); // 500 / 10000
+    expect(stages[2].stepPct).toBeCloseTo(0.2); // 100 / 500
+    expect(stages[3].stepPct).toBeCloseTo(0.25); // 25 / 100
     expect(stages[1].color).toContain('color-mix');
   });
 
   it('is objective-aware — awareness is impressions → reach', () => {
     const stages = buildConversionFunnel({ impressions: 8000, reach: 6000 }, 'awareness');
     expect(stages.map((s) => s.label)).toEqual(['Impressions', 'Reach']);
-    expect(stages[1].displayValue).toBe('75%');
+    expect(stages[1].displayValue).toBe('6,000');
+    expect(stages[1].stepPct).toBeCloseTo(0.75);
   });
 
   it('renders a zero-upstream stage honestly instead of dividing by zero', () => {
@@ -68,7 +71,8 @@ describe('buildConversionFunnel', () => {
       'purchase',
     );
     expect(stages).toHaveLength(4);
-    expect(stages[1].displayValue).toBe('0%');
+    expect(stages[1].stepPct).toBe(0);
+    expect(stages[1].displayValue).toBe('0');
   });
 
   it('falls back to the purchase funnel for an unknown objective', () => {
@@ -179,6 +183,40 @@ describe('pacingSnapshot', () => {
     });
     expect(snapshot.pctSpent).toBeCloseTo(30);
     expect(snapshot.projectedEndSpend).toBe(900); // (300 / 10) * 30
+    // A real period budget is not flagged estimated.
+    expect(snapshot.estimated).toBe(false);
+    expect(snapshot.periodBudget).toBe(1000);
+  });
+
+  it('estimates the period budget from the daily total when none is set (never blanks)', () => {
+    const snapshot = pacingSnapshot({
+      actualSpendToDate: 1500,
+      dailyTotal: 100,
+      periodDays: 30,
+    });
+    // 100 × 30 = 3000 → 1500 is 50% of the estimated budget.
+    expect(snapshot.estimated).toBe(true);
+    expect(snapshot.periodBudget).toBe(3000);
+    expect(snapshot.pctSpent).toBeCloseTo(50);
+  });
+
+  it('defaults to a 30-day period when estimating without an explicit periodDays', () => {
+    const snapshot = pacingSnapshot({ actualSpendToDate: 300, dailyTotal: 100 });
+    expect(snapshot.estimated).toBe(true);
+    expect(snapshot.periodBudget).toBe(3000); // 100 × DEFAULT 30
+  });
+
+  it('prefers a real period budget over the daily-total estimate', () => {
+    const snapshot = pacingSnapshot({ periodBudget: 6000, dailyTotal: 100, periodDays: 30 });
+    expect(snapshot.estimated).toBe(false);
+    expect(snapshot.periodBudget).toBe(6000);
+  });
+
+  it('returns a null budget only when neither a period nor a daily budget is known', () => {
+    const snapshot = pacingSnapshot({ actualSpendToDate: 500 });
+    expect(snapshot.periodBudget).toBeNull();
+    expect(snapshot.pctSpent).toBeNull();
+    expect(snapshot.estimated).toBe(false);
   });
 });
 
@@ -254,7 +292,11 @@ describe('mergeAdDailyByMetric', () => {
     expect(rows[1].b).toBe(5);
   });
 
-  it('coerces null cost-per-event days to 0 so a gap does not fake a value', () => {
+  // A day with no conversions has no cost-per-conversion. Zero is not that
+  // number — on a "lower is better" axis zero is the BEST possible value, so
+  // coercing to it renders a creative that bought nothing as the cheapest one on
+  // the chart. Null keeps the day out of the series and the line breaks there.
+  it('leaves a null cost-per-event day null rather than plotting it as zero', () => {
     const trends = [
       {
         ad_id: 'a',
@@ -264,8 +306,25 @@ describe('mergeAdDailyByMetric', () => {
     ] as unknown as Parameters<typeof mergeAdDailyByMetric>[0];
 
     const { rows } = mergeAdDailyByMetric(trends, 'cpa');
-    expect(rows[0].a).toBe(0);
+    expect(rows[0].a).toBeNull();
     expect(rows[1].a).toBe(20);
+  });
+
+  it('treats a non-finite cost-per-event as absent, not as a plottable number', () => {
+    const trends = [
+      {
+        ad_id: 'a',
+        ad_name: null,
+        series: [
+          trendPoint('2026-07-01', { cpa: Number.POSITIVE_INFINITY }),
+          trendPoint('2026-07-02', { cpa: Number.NaN }),
+        ],
+      },
+    ] as unknown as Parameters<typeof mergeAdDailyByMetric>[0];
+
+    const { rows } = mergeAdDailyByMetric(trends, 'cpa');
+    expect(rows[0].a).toBeNull();
+    expect(rows[1].a).toBeNull();
   });
 });
 

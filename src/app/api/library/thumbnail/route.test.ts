@@ -93,12 +93,21 @@ function setAuth(user: { id: string } | null) {
 }
 
 function posterRequest(
-  fields: { brandId?: string; assetId?: string },
+  fields: {
+    brandId?: string;
+    assetId?: string;
+    sourceWidth?: number;
+    sourceHeight?: number;
+    durationMs?: number;
+  },
   poster?: { bytes: Uint8Array; type: string; name?: string },
 ) {
   const form = new FormData();
   if (fields.brandId) form.append('brandId', fields.brandId);
   if (fields.assetId) form.append('assetId', fields.assetId);
+  if (fields.sourceWidth !== undefined) form.append('sourceWidth', String(fields.sourceWidth));
+  if (fields.sourceHeight !== undefined) form.append('sourceHeight', String(fields.sourceHeight));
+  if (fields.durationMs !== undefined) form.append('durationMs', String(fields.durationMs));
   if (poster) {
     form.append(
       'poster',
@@ -154,6 +163,114 @@ describe('POST /api/library/thumbnail', () => {
     const update = queries.flatMap((query) => query.calls).find((call) => call.method === 'update')
       ?.args[0];
     expect(update).toEqual({ thumbnail_path: `${BRAND_ID}/${ASSET_ID}/thumb.webp` });
+  });
+
+  it('persists source width/height/duration alongside the poster on a fresh upload', async () => {
+    const { client, queries } = createAdminStub([VIDEO_ROW, { data: null, error: null }]);
+    hooks.__testCreateSupabaseAdminClient = () => client;
+
+    const response = await POST(
+      posterRequest(
+        {
+          brandId: BRAND_ID,
+          assetId: ASSET_ID,
+          sourceWidth: 1080,
+          sourceHeight: 1920,
+          durationMs: 14200,
+        },
+        { bytes: WEBP_BYTES, type: 'image/webp' },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const update = queries.flatMap((query) => query.calls).find((call) => call.method === 'update')
+      ?.args[0];
+    expect(update).toEqual({
+      thumbnail_path: `${BRAND_ID}/${ASSET_ID}/thumb.webp`,
+      width: 1080,
+      height: 1920,
+      duration_ms: 14200,
+    });
+  });
+
+  it('backfills metadata even when the poster already exists (the duration_desc fix)', async () => {
+    const existingPath = `${BRAND_ID}/${ASSET_ID}/thumb.webp`;
+    const { client, queries, uploads } = createAdminStub([
+      {
+        data: {
+          id: ASSET_ID,
+          bucket: 'media-library',
+          kind: 'video',
+          thumbnail_path: existingPath,
+          width: null,
+          height: null,
+          duration_ms: null,
+        },
+        error: null,
+      },
+      { data: null, error: null },
+    ]);
+    hooks.__testCreateSupabaseAdminClient = () => client;
+
+    const response = await POST(
+      posterRequest(
+        {
+          brandId: BRAND_ID,
+          assetId: ASSET_ID,
+          sourceWidth: 1080,
+          sourceHeight: 1920,
+          durationMs: 14200,
+        },
+        { bytes: WEBP_BYTES, type: 'image/webp' },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    // No new poster bytes — the existing one stands — but metadata is written.
+    expect(uploads).toHaveLength(0);
+    const update = queries.flatMap((query) => query.calls).find((call) => call.method === 'update')
+      ?.args[0];
+    expect(update).toEqual({ width: 1080, height: 1920, duration_ms: 14200 });
+  });
+
+  it('never clobbers metadata a row already carries', async () => {
+    const { client, queries } = createAdminStub([
+      {
+        data: {
+          id: ASSET_ID,
+          bucket: 'media-library',
+          kind: 'video',
+          width: 720,
+          height: 1280,
+          duration_ms: null,
+        },
+        error: null,
+      },
+      { data: null, error: null },
+    ]);
+    hooks.__testCreateSupabaseAdminClient = () => client;
+
+    const response = await POST(
+      posterRequest(
+        {
+          brandId: BRAND_ID,
+          assetId: ASSET_ID,
+          sourceWidth: 1080,
+          sourceHeight: 1920,
+          durationMs: 14200,
+        },
+        { bytes: WEBP_BYTES, type: 'image/webp' },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const update = queries.flatMap((query) => query.calls).find((call) => call.method === 'update')
+      ?.args[0];
+    // width/height were already set — only the null duration is filled, plus the poster.
+    expect(update).toEqual({
+      thumbnail_path: `${BRAND_ID}/${ASSET_ID}/thumb.webp`,
+      duration_ms: 14200,
+    });
   });
 
   it('leaves an existing poster untouched when registration is replayed', async () => {

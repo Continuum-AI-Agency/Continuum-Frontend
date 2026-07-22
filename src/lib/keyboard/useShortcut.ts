@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { registerShortcut, unregisterShortcut } from "./registry";
+import { useEffect, useRef } from 'react';
+import { registerShortcut, unregisterShortcut } from './registry';
 
 interface ShortcutOptions {
   key: string;
@@ -27,5 +27,13 @@ export function useShortcut(
     return () => unregisterShortcut(id);
     // handler is intentionally excluded — changes are captured via ref
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, options.key, options.meta, options.shift, options.alt, options.description, options.allowInInput]);
+  }, [
+    id,
+    options.key,
+    options.meta,
+    options.shift,
+    options.alt,
+    options.description,
+    options.allowInInput,
+  ]);
 }

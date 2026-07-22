@@ -1,5 +1,5 @@
-import type { StudioNode } from '@/StudioCanvas/types';
 import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '@/StudioCanvas/types';
 
 const runtimeDataKeys = [
   'isExecuting',
@@ -36,7 +36,10 @@ const richTextDataKeys = ['positivePrompt', 'prompt', 'negativePrompt'] as const
 
 const localOnlyDataKeys = ['isToolbarVisible'] as const;
 
-const isRemoteValueEffectivelyMissing = (key: (typeof richInputDataKeys)[number], value: unknown) => {
+const isRemoteValueEffectivelyMissing = (
+  key: (typeof richInputDataKeys)[number],
+  value: unknown,
+) => {
   if (value === undefined || value === null) return true;
   if (typeof value === 'string') return value.trim().length === 0;
   if (Array.isArray(value)) {
@@ -74,7 +77,7 @@ const isRemoteTextValueMissing = (value: unknown) => {
 
 const mergeExecutionFlags = (
   localData: Record<string, unknown>,
-  mergedData: Record<string, unknown>
+  mergedData: Record<string, unknown>,
 ) => {
   const localIsExecuting = localData.isExecuting === true;
   const localIsComplete = localData.isComplete === true;
@@ -102,19 +105,19 @@ export function mergeNodes(
   local: StudioNode[],
   remote: StudioNode[],
   remoteDeletedIds: string[],
-  prevRemoteIds: Set<string> = new Set()
+  prevRemoteIds: Set<string> = new Set(),
 ): StudioNode[] {
   const localFiltered = local.filter((n) => !remoteDeletedIds.includes(n.id));
-  
+
   const remoteMap = new Map(remote.map((n) => [n.id, n]));
   const localMap = new Map(localFiltered.map((n) => [n.id, n]));
-  
+
   const merged = new Map<string, StudioNode>();
-  
+
   // 1. All remote nodes are authoritative
   for (const remoteNode of remote) {
     const localNode = localMap.get(remoteNode.id);
-    
+
     const mergedData: Record<string, unknown> = { ...remoteNode.data };
     if (localNode) {
       const localData = localNode.data as Record<string, unknown>;
@@ -126,7 +129,7 @@ export function mergeNodes(
         }
       });
 
-      runtimeDataKeys.forEach(key => {
+      runtimeDataKeys.forEach((key) => {
         const localValue = localData[key];
         if (localValue === undefined) return;
         const remoteValue = mergedData[key];
@@ -163,7 +166,7 @@ export function mergeNodes(
       data: mergedData as StudioNode['data'],
     } as StudioNode);
   }
-  
+
   // 2. Handle local nodes that are not in the remote update
   for (const localNode of localFiltered) {
     if (!remoteMap.has(localNode.id)) {
@@ -172,12 +175,12 @@ export function mergeNodes(
       if (prevRemoteIds.has(localNode.id)) {
         continue;
       }
-      
+
       // Otherwise, it's a new local-only addition. Keep it.
       merged.set(localNode.id, localNode);
     }
   }
-  
+
   return Array.from(merged.values());
 }
 
@@ -185,15 +188,15 @@ export function mergeEdges(
   local: Edge[],
   remote: Edge[],
   remoteDeletedIds: string[],
-  prevRemoteIds: Set<string> = new Set()
+  prevRemoteIds: Set<string> = new Set(),
 ): Edge[] {
   const localFiltered = local.filter((e) => !remoteDeletedIds.includes(e.id));
-  
+
   const remoteMap = new Map(remote.map((e) => [e.id, e]));
   const localMap = new Map(localFiltered.map((e) => [e.id, e]));
-  
+
   const merged = new Map<string, Edge>();
-  
+
   for (const remoteEdge of remote) {
     const localEdge = localMap.get(remoteEdge.id);
     merged.set(remoteEdge.id, {
@@ -201,7 +204,7 @@ export function mergeEdges(
       selected: localEdge?.selected,
     });
   }
-  
+
   for (const localEdge of localFiltered) {
     if (!remoteMap.has(localEdge.id)) {
       if (prevRemoteIds.has(localEdge.id)) {
@@ -210,6 +213,6 @@ export function mergeEdges(
       merged.set(localEdge.id, localEdge);
     }
   }
-  
+
   return Array.from(merged.values());
 }

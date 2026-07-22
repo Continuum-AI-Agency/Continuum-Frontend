@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { ParentSize } from "@visx/responsive";
-import type { Transition } from "motion/react";
+import { ParentSize } from '@visx/responsive';
+import type { Transition } from 'motion/react';
 import {
   Children,
   type CSSProperties,
@@ -11,20 +11,20 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
-import { cn } from "@/lib/utils";
-import { Area, type AreaProps } from "./area";
-import type { LineConfig, Margin } from "./chart-context";
-import { ChartLoadingLabel } from "./chart-loading-label";
+} from 'react';
+import { cn } from '@/lib/utils';
+import { Area, type AreaProps } from './area';
+import type { LineConfig, Margin } from './chart-context';
+import { ChartLoadingLabel } from './chart-loading-label';
 import {
   type ChartPhase,
   type ChartStatus,
   DEFAULT_CHART_STATUS,
   DEFAULT_Y_DOMAIN_TWEEN_MS,
   resolveRestingChartPhase,
-} from "./chart-phase";
-import { PatternArea } from "./pattern-area";
-import { TimeSeriesChartInner } from "./time-series-chart-shell";
+} from './chart-phase';
+import { PatternArea } from './pattern-area';
+import { TimeSeriesChartInner } from './time-series-chart-shell';
 
 export interface AreaChartProps {
   /** Data array - each item should have a date field and numeric values */
@@ -82,25 +82,19 @@ function extractAreaConfigs(children: ReactNode): LineConfig[] {
       name?: string;
     };
     const componentName =
-      typeof child.type === "function"
-        ? childType.displayName || childType.name || ""
-        : "";
+      typeof child.type === 'function' ? childType.displayName || childType.name || '' : '';
 
     const props = child.props as AreaProps | undefined;
-    const isPatternArea =
-      componentName === "PatternArea" || child.type === PatternArea;
+    const isPatternArea = componentName === 'PatternArea' || child.type === PatternArea;
     const isAreaComponent =
-      componentName === "Area" ||
+      componentName === 'Area' ||
       child.type === Area ||
-      (props &&
-        typeof props.dataKey === "string" &&
-        props.dataKey.length > 0 &&
-        !isPatternArea);
+      (props && typeof props.dataKey === 'string' && props.dataKey.length > 0 && !isPatternArea);
 
     if (isAreaComponent && props?.dataKey) {
       configs.push({
         dataKey: props.dataKey,
-        stroke: props.stroke || props.fill || "var(--chart-line-primary)",
+        stroke: props.stroke || props.fill || 'var(--chart-line-primary)',
         strokeWidth: props.strokeWidth || 2,
         yAxisId: props.yAxisId,
       });
@@ -185,14 +179,14 @@ function ChartInner({
 
 export function AreaChart({
   data,
-  xDataKey = "date",
+  xDataKey = 'date',
   margin: marginProp,
   animationDuration = 1100,
   animationEasing,
   enterTransition,
   revealSignature,
-  aspectRatio = "2 / 1",
-  className = "",
+  aspectRatio = '2 / 1',
+  className = '',
   status = DEFAULT_CHART_STATUS,
   loadingLabel,
   yDomainTweenDuration = DEFAULT_Y_DOMAIN_TWEEN_MS,
@@ -206,30 +200,28 @@ export function AreaChart({
 }: AreaChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const margin = { ...DEFAULT_MARGIN, ...marginProp };
-  const [chartPhase, setChartPhase] = useState<ChartPhase>(() =>
-    resolveRestingChartPhase(status)
-  );
+  const [chartPhase, setChartPhase] = useState<ChartPhase>(() => resolveRestingChartPhase(status));
   const handlePhaseChange = useCallback(
     (phase: ChartPhase) => {
       setChartPhase(phase);
       onPhaseChange?.(phase);
     },
-    [onPhaseChange]
+    [onPhaseChange],
   );
 
   const showLoadingLabel = Boolean(
     loadingLabel?.trim() &&
-      (chartPhase === "loading" ||
-        chartPhase === "exiting" ||
-        chartPhase === "gridTweenReady" ||
-        chartPhase === "revealingLoading")
+      (chartPhase === 'loading' ||
+        chartPhase === 'exiting' ||
+        chartPhase === 'gridTweenReady' ||
+        chartPhase === 'revealingLoading'),
   );
 
   return (
     <div
-      className={cn("relative w-full", className)}
+      className={cn('relative w-full', className)}
       ref={containerRef}
-      style={{ aspectRatio, touchAction: "none", ...style }}
+      style={{ aspectRatio, touchAction: 'none', ...style }}
     >
       <ParentSize debounceTime={10}>
         {({ width, height }) => (
@@ -258,15 +250,12 @@ export function AreaChart({
         )}
       </ParentSize>
       {showLoadingLabel ? (
-        <ChartLoadingLabel
-          exiting={chartPhase !== "loading"}
-          text={loadingLabel}
-        />
+        <ChartLoadingLabel exiting={chartPhase !== 'loading'} text={loadingLabel} />
       ) : null}
     </div>
   );
 }
 
-export { Area, type AreaProps } from "./area";
+export { Area, type AreaProps } from './area';
 
 export default AreaChart;

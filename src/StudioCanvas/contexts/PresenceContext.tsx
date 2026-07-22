@@ -1,4 +1,5 @@
-import React, { createContext, useContext } from 'react';
+import type React from 'react';
+import { createContext, useContext } from 'react';
 
 type PresenceUser = {
   user_id: string;
@@ -67,7 +68,7 @@ export function usePresence() {
       remoteCursors: {},
       updateCursor: () => {},
       updatePresence: () => {},
-      status: "INITIALIZING",
+      status: 'INITIALIZING',
       isLoading: true,
     };
   }
@@ -76,11 +77,11 @@ export function usePresence() {
 
 export function useNodeSelection(nodeId: string) {
   const { onlineUsers, currentUserId } = usePresence();
-  
+
   const selectingUser = onlineUsers.find(
-    user => user.user_id !== currentUserId && user.selected_node_ids?.includes(nodeId)
+    (user) => user.user_id !== currentUserId && user.selected_node_ids?.includes(nodeId),
   );
-  
+
   return {
     isSelectedByOther: !!selectingUser,
     selectingUser,

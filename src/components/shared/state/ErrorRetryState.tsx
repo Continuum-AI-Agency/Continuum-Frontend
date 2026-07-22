@@ -2,9 +2,9 @@
 // organic/primitives/CalendarToolbar.tsx). role="alert" announces the failure;
 // the retry button appears only when a handler is supplied.
 
-import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react"
-import type { ReactNode } from "react"
-
+import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Empty,
   EmptyContent,
@@ -12,29 +12,28 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+} from '@/components/ui/empty';
+import { cn } from '@/lib/utils';
 
 type ErrorRetryStateProps = {
-  message: string
-  title?: string
-  onRetry?: () => void
-  retryLabel?: string
-  media?: ReactNode
-  className?: string
-}
+  message: string;
+  title?: string;
+  onRetry?: () => void;
+  retryLabel?: string;
+  media?: ReactNode;
+  className?: string;
+};
 
 export function ErrorRetryState({
   message,
-  title = "Something went wrong",
+  title = 'Something went wrong',
   onRetry,
-  retryLabel = "Retry",
+  retryLabel = 'Retry',
   media,
   className,
 }: ErrorRetryStateProps) {
   return (
-    <Empty role="alert" className={cn("gap-3", className)}>
+    <Empty role="alert" className={cn('gap-3', className)}>
       <EmptyHeader>
         <EmptyMedia variant="icon" className="bg-destructive/10 text-destructive">
           {media !== undefined ? media : <TriangleAlertIcon aria-hidden="true" />}
@@ -51,5 +50,5 @@ export function ErrorRetryState({
         </EmptyContent>
       ) : null}
     </Empty>
-  )
+  );
 }

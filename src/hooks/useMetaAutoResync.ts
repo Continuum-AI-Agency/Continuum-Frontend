@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useResyncMeta } from "@/lib/api/integrations";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useResyncMeta } from '@/lib/api/integrations';
 
 // Debounce so a fast mount/unmount (e.g. dialog flicker) doesn't fire a resync.
 const RESYNC_DEBOUNCE_MS = 600;
@@ -9,10 +9,10 @@ const RESYNC_DEBOUNCE_MS = 600;
 // /meta/resync every time — one auto-heal per window is plenty. Manual triggers
 // bypass this.
 const RESYNC_COOLDOWN_MS = 60_000;
-const COOLDOWN_KEY = "continuum:meta-auto-resync-at";
+const COOLDOWN_KEY = 'continuum:meta-auto-resync-at';
 
 function withinCooldown(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === 'undefined') return false;
   try {
     const raw = window.sessionStorage.getItem(COOLDOWN_KEY);
     if (!raw) return false;
@@ -23,7 +23,7 @@ function withinCooldown(): boolean {
 }
 
 function stampCooldown(): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.setItem(COOLDOWN_KEY, String(Date.now()));
   } catch {
@@ -54,7 +54,11 @@ type UseMetaAutoResyncResult = {
 // Wires the picker to the already-tested POST /meta/resync (#154): when Meta
 // connected but no ad accounts came through, quietly re-pull assets in the
 // background instead of leaving the user staring at an empty list.
-export function useMetaAutoResync({ enabled, isMetaEmpty, onResynced }: UseMetaAutoResyncParams): UseMetaAutoResyncResult {
+export function useMetaAutoResync({
+  enabled,
+  isMetaEmpty,
+  onResynced,
+}: UseMetaAutoResyncParams): UseMetaAutoResyncResult {
   const resync = useResyncMeta();
   const [isResyncing, setIsResyncing] = useState(false);
   const [resyncError, setResyncError] = useState<string | null>(null);

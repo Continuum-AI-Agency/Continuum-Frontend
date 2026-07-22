@@ -1,31 +1,35 @@
-import { expect, test } from "bun:test";
-
-import { createDefaultOnboardingState } from "@/lib/onboarding/state";
-import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
-import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
-import { mergeSelectableAssetsConnections } from "@/components/onboarding/selectableAssetsMerge";
+import { expect, test } from 'bun:test';
+import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
+import { mergeSelectableAssetsConnections } from '@/components/onboarding/selectableAssetsMerge';
+import { createDefaultOnboardingState } from '@/lib/onboarding/state';
+import type { SelectableAsset, SelectableAssetsResponse } from '@/lib/schemas/integrations';
 
 function createEmptySelections(): Record<PlatformKey, Set<string>> {
-  return PLATFORM_KEYS.reduce((acc, key) => {
-    acc[key] = new Set();
-    return acc;
-  }, {} as Record<PlatformKey, Set<string>>);
+  return PLATFORM_KEYS.reduce(
+    (acc, key) => {
+      acc[key] = new Set();
+      return acc;
+    },
+    {} as Record<PlatformKey, Set<string>>,
+  );
 }
 
 function createAsset(overrides: Partial<SelectableAsset> = {}): SelectableAsset {
   return {
-    asset_pk: "11111111-1111-1111-1111-111111111111",
-    integration_account_id: "22222222-2222-2222-2222-222222222222",
-    external_id: "ext-1",
-    type: "facebook_page",
-    name: "Test Page",
+    asset_pk: '11111111-1111-1111-1111-111111111111',
+    integration_account_id: '22222222-2222-2222-2222-222222222222',
+    external_id: 'ext-1',
+    type: 'facebook_page',
+    name: 'Test Page',
     business_id: null,
     ad_account_id: null,
     ...overrides,
   };
 }
 
-function createResponse(overrides: Partial<SelectableAssetsResponse> = {}): SelectableAssetsResponse {
+function createResponse(
+  overrides: Partial<SelectableAssetsResponse> = {},
+): SelectableAssetsResponse {
   return {
     synced_at: null,
     stale: false,
@@ -35,11 +39,11 @@ function createResponse(overrides: Partial<SelectableAssetsResponse> = {}): Sele
   };
 }
 
-test("mergeSelectableAssetsConnections merges assets into connections", () => {
+test('mergeSelectableAssetsConnections merges assets into connections', () => {
   const state = createDefaultOnboardingState();
   const asset = createAsset();
   const selections = createEmptySelections();
-  selections.facebook.add(asset.integration_account_id ?? "");
+  selections.facebook.add(asset.integration_account_id ?? '');
 
   const result = mergeSelectableAssetsConnections({
     prevConnections: state.connections,
@@ -57,20 +61,20 @@ test("mergeSelectableAssetsConnections merges assets into connections", () => {
   expect(facebook?.connected).toBe(true);
 });
 
-test("mergeSelectableAssetsConnections clears connections after hydration on empty payload", () => {
+test('mergeSelectableAssetsConnections clears connections after hydration on empty payload', () => {
   const state = createDefaultOnboardingState();
   state.connections.facebook = {
     connected: true,
-    accountId: "33333333-3333-3333-3333-333333333333",
+    accountId: '33333333-3333-3333-3333-333333333333',
     accounts: [
       {
-        id: "33333333-3333-3333-3333-333333333333",
-        name: "Old Page",
-        status: "active",
+        id: '33333333-3333-3333-3333-333333333333',
+        name: 'Old Page',
+        status: 'active',
         selected: true,
       },
     ],
-    integrationIds: ["44444444-4444-4444-4444-444444444444"],
+    integrationIds: ['44444444-4444-4444-4444-444444444444'],
     lastSyncedAt: null,
   };
 
@@ -90,7 +94,7 @@ test("mergeSelectableAssetsConnections clears connections after hydration on emp
   expect(facebook?.accountId).toBeNull();
 });
 
-test("mergeSelectableAssetsConnections skips clearing before hydration", () => {
+test('mergeSelectableAssetsConnections skips clearing before hydration', () => {
   const state = createDefaultOnboardingState();
   state.connections.facebook.connected = true;
 

@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { type NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import {
   normalizeNullableText,
+  type ProductCatalogRecord,
   productCatalogRecordSchema,
   productCatalogUpdateSchema,
-  type ProductCatalogRecord,
-} from "@/lib/schemas/productCatalogs";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+} from '@/lib/schemas/productCatalogs';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const PRODUCT_CATALOG_TABLE = "paid_media_product_catalogs" as never;
+const PRODUCT_CATALOG_TABLE = 'paid_media_product_catalogs' as never;
 
 const paramsSchema = z.object({
   catalogId: z.string().uuid(),
@@ -40,10 +40,12 @@ type ProductCatalogRow = {
   updated_at: string;
 };
 
-type ProductCatalogUpdatePayload = Partial<Omit<ProductCatalogRow, "id" | "brand_id" | "created_at" | "updated_at">>;
+type ProductCatalogUpdatePayload = Partial<
+  Omit<ProductCatalogRow, 'id' | 'brand_id' | 'created_at' | 'updated_at'>
+>;
 
 function normalizeProductCatalogRow(input: unknown): ProductCatalogRecord | null {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
 
   const parsed = productCatalogRecordSchema.safeParse({
@@ -75,25 +77,31 @@ function normalizeProductCatalogRow(input: unknown): ProductCatalogRecord | null
 }
 
 const SELECT_COLUMNS =
-  "id, brand_id, external_catalog_id, name, business_id, catalog_store_id, vertical, feed_url, default_image_url, fallback_image_url, linked_ad_object_level, linked_ad_object_ids, data_feed_enabled, product_tagging_enabled, sync_status, product_count, feed_count, product_set_count, last_synced_at, notes, created_at, updated_at";
+  'id, brand_id, external_catalog_id, name, business_id, catalog_store_id, vertical, feed_url, default_image_url, fallback_image_url, linked_ad_object_level, linked_ad_object_ids, data_feed_enabled, product_tagging_enabled, sync_status, product_count, feed_count, product_set_count, last_synced_at, notes, created_at, updated_at';
 
-function hasOwn<T extends object, K extends PropertyKey>(value: T, key: K): value is T & Record<K, unknown> {
-  return Object.prototype.hasOwnProperty.call(value, key);
+function hasOwn<T extends object, K extends PropertyKey>(
+  value: T,
+  key: K,
+): value is T & Record<K, unknown> {
+  return Object.hasOwn(value, key);
 }
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-export async function PUT(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = productCatalogUpdateSchema.safeParse(body);
@@ -109,70 +117,70 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ cat
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const updates: ProductCatalogUpdatePayload = {};
-    if (hasOwn(parsed.data, "name")) {
+    if (hasOwn(parsed.data, 'name')) {
       updates.name = parsed.data.name?.trim();
     }
-    if (hasOwn(parsed.data, "externalCatalogId")) {
+    if (hasOwn(parsed.data, 'externalCatalogId')) {
       updates.external_catalog_id = parsed.data.externalCatalogId?.trim();
     }
-    if (hasOwn(parsed.data, "businessId")) {
+    if (hasOwn(parsed.data, 'businessId')) {
       updates.business_id = normalizeNullableText(parsed.data.businessId);
     }
-    if (hasOwn(parsed.data, "catalogStoreId")) {
+    if (hasOwn(parsed.data, 'catalogStoreId')) {
       updates.catalog_store_id = normalizeNullableText(parsed.data.catalogStoreId);
     }
-    if (hasOwn(parsed.data, "vertical")) {
+    if (hasOwn(parsed.data, 'vertical')) {
       updates.vertical = parsed.data.vertical;
     }
-    if (hasOwn(parsed.data, "feedUrl")) {
+    if (hasOwn(parsed.data, 'feedUrl')) {
       updates.feed_url = normalizeNullableText(parsed.data.feedUrl);
     }
-    if (hasOwn(parsed.data, "defaultImageUrl")) {
+    if (hasOwn(parsed.data, 'defaultImageUrl')) {
       updates.default_image_url = normalizeNullableText(parsed.data.defaultImageUrl);
     }
-    if (hasOwn(parsed.data, "fallbackImageUrl")) {
+    if (hasOwn(parsed.data, 'fallbackImageUrl')) {
       updates.fallback_image_url = normalizeNullableText(parsed.data.fallbackImageUrl);
     }
-    if (hasOwn(parsed.data, "linkedAdObjectLevel")) {
+    if (hasOwn(parsed.data, 'linkedAdObjectLevel')) {
       updates.linked_ad_object_level = parsed.data.linkedAdObjectLevel;
     }
-    if (hasOwn(parsed.data, "linkedAdObjectIds")) {
+    if (hasOwn(parsed.data, 'linkedAdObjectIds')) {
       updates.linked_ad_object_ids = Array.from(new Set(parsed.data.linkedAdObjectIds ?? []));
     }
-    if (hasOwn(parsed.data, "dataFeedEnabled")) {
+    if (hasOwn(parsed.data, 'dataFeedEnabled')) {
       updates.data_feed_enabled = parsed.data.dataFeedEnabled;
     }
-    if (hasOwn(parsed.data, "productTaggingEnabled")) {
+    if (hasOwn(parsed.data, 'productTaggingEnabled')) {
       updates.product_tagging_enabled = parsed.data.productTaggingEnabled;
     }
-    if (hasOwn(parsed.data, "syncStatus")) {
+    if (hasOwn(parsed.data, 'syncStatus')) {
       updates.sync_status = parsed.data.syncStatus;
     }
-    if (hasOwn(parsed.data, "productCount")) {
+    if (hasOwn(parsed.data, 'productCount')) {
       updates.product_count = parsed.data.productCount;
     }
-    if (hasOwn(parsed.data, "feedCount")) {
+    if (hasOwn(parsed.data, 'feedCount')) {
       updates.feed_count = parsed.data.feedCount;
     }
-    if (hasOwn(parsed.data, "productSetCount")) {
+    if (hasOwn(parsed.data, 'productSetCount')) {
       updates.product_set_count = parsed.data.productSetCount;
     }
-    if (hasOwn(parsed.data, "lastSyncedAt")) {
+    if (hasOwn(parsed.data, 'lastSyncedAt')) {
       updates.last_synced_at = parsed.data.lastSyncedAt ?? null;
     }
-    if (hasOwn(parsed.data, "notes")) {
+    if (hasOwn(parsed.data, 'notes')) {
       updates.notes = normalizeNullableText(parsed.data.notes);
     }
 
     const { data, error } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_CATALOG_TABLE)
       .update(updates as never)
-      .eq("id", params.data.catalogId)
+      .eq('id', params.data.catalogId)
       .select(SELECT_COLUMNS)
       .single();
 
@@ -182,20 +190,23 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ cat
 
     const catalog = normalizeProductCatalogRow(data as ProductCatalogRow);
     if (!catalog) {
-      return NextResponse.json({ error: "Invalid product catalog response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid product catalog response' }, { status: 502 });
     }
 
     return NextResponse.json({ catalog }, { status: 200 });
   } catch (error) {
-    console.error("Failed to update product catalog", error);
-    return NextResponse.json({ error: "Failed to update product catalog" }, { status: 500 });
+    console.error('Failed to update product catalog', error);
+    return NextResponse.json({ error: 'Failed to update product catalog' }, { status: 500 });
   }
 }
 
-export async function DELETE(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ catalogId: string }> },
+) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
-    return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid catalog id' }, { status: 400 });
   }
 
   // Optional Meta deletion params — if provided, catalog is also removed from Meta before DB delete.
@@ -203,9 +214,10 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   let metaAccountId: string | undefined;
   try {
     const body = await request.json().catch(() => ({}));
-    const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-    if (typeof b.brandId === "string" && b.brandId.trim()) brandId = b.brandId.trim();
-    if (typeof b.metaAccountId === "string" && b.metaAccountId.trim()) metaAccountId = b.metaAccountId.trim();
+    const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    if (typeof b.brandId === 'string' && b.brandId.trim()) brandId = b.brandId.trim();
+    if (typeof b.metaAccountId === 'string' && b.metaAccountId.trim())
+      metaAccountId = b.metaAccountId.trim();
   } catch {
     // body is optional — proceed without it
   }
@@ -218,22 +230,24 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch catalog to get externalCatalogId for Meta deletion
     const { data: catalogRow, error: fetchError } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_CATALOG_TABLE)
-      .select("id, external_catalog_id")
-      .eq("id", params.data.catalogId)
+      .select('id, external_catalog_id')
+      .eq('id', params.data.catalogId)
       .single();
 
     if (fetchError || !catalogRow) {
-      return NextResponse.json({ error: "Catalog not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Catalog not found' }, { status: 404 });
     }
 
-    const externalCatalogId = (catalogRow as { external_catalog_id: string }).external_catalog_id?.trim();
+    const externalCatalogId = (
+      catalogRow as { external_catalog_id: string }
+    ).external_catalog_id?.trim();
 
     // Attempt Meta deletion — log failures but never block the DB delete
     if (brandId && metaAccountId && externalCatalogId) {
@@ -241,29 +255,29 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       if (supabaseUrl) {
         try {
           const metaResp = await fetch(`${supabaseUrl}/functions/v1/catalog-delete-meta`, {
-            method: "POST",
+            method: 'POST',
             headers: {
-              "Content-Type": "application/json",
+              'Content-Type': 'application/json',
               Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({ brandId, externalCatalogId, metaAccountId }),
-            cache: "no-store",
+            cache: 'no-store',
           });
           if (!metaResp.ok) {
             const detail = await metaResp.json().catch(() => ({}));
-            console.error("catalog-delete-meta failed", { status: metaResp.status, detail });
+            console.error('catalog-delete-meta failed', { status: metaResp.status, detail });
           }
         } catch (metaError) {
-          console.error("Failed to invoke catalog-delete-meta", metaError);
+          console.error('Failed to invoke catalog-delete-meta', metaError);
         }
       }
     }
 
     const { error } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_CATALOG_TABLE)
       .delete()
-      .eq("id", params.data.catalogId);
+      .eq('id', params.data.catalogId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -271,7 +285,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error("Failed to delete product catalog", error);
-    return NextResponse.json({ error: "Failed to delete product catalog" }, { status: 500 });
+    console.error('Failed to delete product catalog', error);
+    return NextResponse.json({ error: 'Failed to delete product catalog' }, { status: 500 });
   }
 }

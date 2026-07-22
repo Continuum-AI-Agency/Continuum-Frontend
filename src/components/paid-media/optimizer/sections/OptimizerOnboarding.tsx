@@ -43,10 +43,14 @@ export function OptimizerOnboarding({
           <GaugeCircleIcon className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h2 className="font-semibold text-sm tracking-tight">Set up the Optimizer</h2>
+          <h2 className="font-semibold text-sm tracking-tight">Put ad sets under the Optimizer</h2>
+          {/* Says what the user gets, then the money-safety promise. The old line
+              described the algorithm — "per-$ efficiency over trailing 3/7/14-day
+              windows" — which is true, unreadable, and answers a question nobody
+              arriving at an empty state is asking. */}
           <p className="truncate text-muted-foreground text-xs">
-            Group ad sets into a portfolio; the optimizer scores per-$ efficiency over trailing
-            3/7/14-day windows and proposes reallocations.
+            Pick the ad sets to manage as one budget. Every night it moves money toward whichever
+            ones buy results cheapest — and it changes nothing until you say so.
           </p>
         </div>
       </header>

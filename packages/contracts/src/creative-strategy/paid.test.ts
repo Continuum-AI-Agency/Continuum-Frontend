@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  creativeWinRateFlagSchema,
   creativeWinRateRowSchema,
+  isThumbnailDerivedLabelSource,
+  isVisuallyGroundedLabelSource,
   META_REPORTED_ATTRIBUTION_NOTE,
   paidCreativeLabelsSchema,
   paidCreativeReportSchema,
@@ -94,6 +97,50 @@ describe('creativeWinRateRowSchema', () => {
       winRate: 1.33,
     });
     expect(bad.success).toBe(false);
+  });
+
+  it('accepts the thumbnail_derived trust flag', () => {
+    expect(creativeWinRateFlagSchema.safeParse('thumbnail_derived').success).toBe(true);
+    const row = creativeWinRateRowSchema.parse({
+      dimension: 'visual_style',
+      value: 'ugc_raw',
+      funnelStage: 'tof',
+      eligibleAds: 6,
+      winners: 4,
+      winRate: 4 / 6,
+      flags: ['thumbnail_derived'],
+    });
+    expect(row.flags).toContain('thumbnail_derived');
+  });
+});
+
+describe('label-source trust helpers', () => {
+  it('treats poster/frame sources as grounded and thumbnail sources as derived', () => {
+    expect(isVisuallyGroundedLabelSource('poster_copy')).toBe(true);
+    expect(isVisuallyGroundedLabelSource('thumbnail_copy')).toBe(false);
+    expect(isThumbnailDerivedLabelSource('thumbnail_copy')).toBe(true);
+    expect(isThumbnailDerivedLabelSource('thumbnail_transcript_copy')).toBe(true);
+    expect(isThumbnailDerivedLabelSource('poster_copy')).toBe(false);
+  });
+
+  it('the two sets are disjoint — a source is never both grounded and derived', () => {
+    for (const source of [
+      'poster_copy',
+      'poster_transcript_copy',
+      'thumbnail_copy',
+      'thumbnail_transcript_copy',
+      'video_frames_transcript',
+      'copy_only',
+    ]) {
+      expect(isVisuallyGroundedLabelSource(source) && isThumbnailDerivedLabelSource(source)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('handles null/undefined without throwing', () => {
+    expect(isThumbnailDerivedLabelSource(null)).toBe(false);
+    expect(isThumbnailDerivedLabelSource(undefined)).toBe(false);
   });
 });
 

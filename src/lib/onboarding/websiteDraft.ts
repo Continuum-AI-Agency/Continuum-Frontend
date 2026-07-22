@@ -12,7 +12,7 @@ export function resolveWebsiteDraftUrl(input: string): string | null {
 
   try {
     const parsed = new URL(withScheme);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return null;
     }
     return parsed.toString();

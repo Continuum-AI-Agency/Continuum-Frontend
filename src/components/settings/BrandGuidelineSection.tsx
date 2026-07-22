@@ -1,5 +1,5 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { RegenerateGuidelineButton } from "./RegenerateGuidelineButton";
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { RegenerateGuidelineButton } from './RegenerateGuidelineButton';
 
 interface BrandGuidelineSectionProps {
   brandId: string;
@@ -24,40 +24,40 @@ export async function BrandGuidelineSection({ brandId }: BrandGuidelineSectionPr
   const supabase = await createSupabaseServerClient();
 
   const { data: guideline } = await supabase
-    .schema("brand_profiles")
-    .from("brand_guidelines")
+    .schema('brand_profiles')
+    .from('brand_guidelines')
     .select(
-      "id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, updated_at",
+      'id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, updated_at',
     )
-    .eq("brand_id", brandId)
-    .neq("status", "archived")
-    .order("version", { ascending: false })
+    .eq('brand_id', brandId)
+    .neq('status', 'archived')
+    .order('version', { ascending: false })
     .limit(1)
     .maybeSingle<GuidelineRow>();
 
   const { data: report } = await supabase
-    .schema("brand_profiles")
-    .from("brand_reports")
-    .select("id")
-    .eq("brand_profile_id", brandId)
-    .eq("active", true)
+    .schema('brand_profiles')
+    .from('brand_reports')
+    .select('id')
+    .eq('brand_profile_id', brandId)
+    .eq('active', true)
     .limit(1)
     .maybeSingle();
 
   const { count: nonReadyCount } = await supabase
-    .schema("brand_profiles")
-    .from("brand_documents")
-    .select("id", { count: "exact", head: true })
-    .eq("brand_id", brandId)
+    .schema('brand_profiles')
+    .from('brand_documents')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
     // progress_step column added by 20260528100000_extend_brand_documents; regenerate types after applying
-    .neq("progress_step" as never, "ready" as never);
+    .neq('progress_step' as never, 'ready' as never);
 
   const hasReport = Boolean(report);
   const docsReady = (nonReadyCount ?? 0) === 0;
   const blockReason = !hasReport
-    ? "Waiting on brand report to finish."
+    ? 'Waiting on brand report to finish.'
     : !docsReady
-      ? "Waiting on document indexing to finish."
+      ? 'Waiting on document indexing to finish.'
       : null;
 
   return (
@@ -65,19 +65,23 @@ export async function BrandGuidelineSection({ brandId }: BrandGuidelineSectionPr
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">
-            {guideline ? `Brand guideline · v${guideline.version}` : "Brand guideline"}
+            {guideline ? `Brand guideline · v${guideline.version}` : 'Brand guideline'}
           </div>
           <p className="text-xs text-muted-foreground">
             {guideline
               ? `Status: ${guideline.status} · Updated ${new Date(guideline.updated_at).toLocaleDateString()}`
-              : "Auto-generated once your brand report and uploaded documents are processed."}
+              : 'Auto-generated once your brand report and uploaded documents are processed.'}
           </p>
         </div>
-        <RegenerateGuidelineButton brandId={brandId} disabled={!!blockReason} blockReason={blockReason} />
+        <RegenerateGuidelineButton
+          brandId={brandId}
+          disabled={!!blockReason}
+          blockReason={blockReason}
+        />
       </div>
       {guideline ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <GuidelineCard heading="Notes" body={guideline.notes ?? "—"} />
+          <GuidelineCard heading="Notes" body={guideline.notes ?? '—'} />
           <GuidelineCard heading="Colors" body={summarize(guideline.colors)} />
           <GuidelineCard heading="Typography" body={summarize(guideline.typography)} />
           <GuidelineCard heading="Logo" body={summarize(guideline.logo)} />
@@ -86,7 +90,7 @@ export async function BrandGuidelineSection({ brandId }: BrandGuidelineSectionPr
         </div>
       ) : (
         <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center text-sm text-muted-foreground">
-          {blockReason ?? "Your guideline will appear here once generation completes."}
+          {blockReason ?? 'Your guideline will appear here once generation completes.'}
         </p>
       )}
     </div>
@@ -105,14 +109,14 @@ function GuidelineCard({ heading, body }: { heading: string; body: string }) {
 }
 
 function summarize(value: Record<string, unknown> | null | undefined): string {
-  if (!value || Object.keys(value).length === 0) return "—";
+  if (!value || Object.keys(value).length === 0) return '—';
   const entries = Object.entries(value)
     .slice(0, 6)
     .map(([k, v]) => {
-      const display = typeof v === "string" ? v : JSON.stringify(v);
+      const display = typeof v === 'string' ? v : JSON.stringify(v);
       return `${k}: ${truncate(display, 80)}`;
     });
-  return entries.join("\n");
+  return entries.join('\n');
 }
 
 function truncate(value: string, max: number): string {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { compositeImages } from './compositeImages';
 
 // Mock canvas context
@@ -100,7 +100,7 @@ describe('compositeImages', () => {
     const overlayDataUrl = 'data:image/png;base64,overlay_image_data';
 
     await expect(compositeImages(baseDataUrl, overlayDataUrl)).rejects.toThrow(
-      'Failed to get canvas 2D context'
+      'Failed to get canvas 2D context',
     );
 
     // Restore for subsequent tests
@@ -124,7 +124,7 @@ describe('compositeImages', () => {
     const overlayDataUrl = 'data:image/png;base64,overlay_image_data';
 
     await expect(compositeImages(baseDataUrl, overlayDataUrl)).rejects.toThrow(
-      'Failed to load image'
+      'Failed to load image',
     );
   });
 

@@ -227,7 +227,9 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
           <Button
             size="sm"
             onClick={() => void handleCreate()}
-            disabled={creating || ((versionMode === 'pinned' || allowApproval) && !asset.headVersionId)}
+            disabled={
+              creating || ((versionMode === 'pinned' || allowApproval) && !asset.headVersionId)
+            }
           >
             {creating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
             Create link

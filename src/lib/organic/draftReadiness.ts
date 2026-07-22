@@ -3,9 +3,9 @@
 // platform are implied by the calendar cell the draft was created in. Kept pure so
 // it can drive both the editor checklist and the schedule/publish gates.
 
-import type { OrganicCalendarDraft } from "@/components/organic/primitives/types";
+import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 
-export type ReadinessCheckId = "caption" | "media";
+export type ReadinessCheckId = 'caption' | 'media';
 
 export type ReadinessCheck = {
   id: ReadinessCheckId;
@@ -20,7 +20,7 @@ export type DraftReadiness = {
 };
 
 function isUsableUrl(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 // Mirrors the URL fields DraftCardMedia resolves so "has media" agrees with what
@@ -46,9 +46,7 @@ export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {
   if (
     suggestion.assets?.some(
       (asset) =>
-        isUsableUrl(asset.assetUrl) ||
-        isUsableUrl(asset.url) ||
-        isUsableUrl(asset.signedUrl),
+        isUsableUrl(asset.assetUrl) || isUsableUrl(asset.url) || isUsableUrl(asset.signedUrl),
     )
   ) {
     return true;
@@ -74,17 +72,17 @@ function hasCaption(draft: OrganicCalendarDraft): boolean {
 
 function buildReason(missing: ReadinessCheck[]): string {
   if (missing.length === 1) {
-    return missing[0].id === "caption"
-      ? "Add a caption to schedule this post."
-      : "Add at least one image or video to schedule this post.";
+    return missing[0].id === 'caption'
+      ? 'Add a caption to schedule this post.'
+      : 'Add at least one image or video to schedule this post.';
   }
-  return "Add a caption and at least one image or video to schedule this post.";
+  return 'Add a caption and at least one image or video to schedule this post.';
 }
 
 export function evaluateDraftReadiness(draft: OrganicCalendarDraft): DraftReadiness {
   const checks: ReadinessCheck[] = [
-    { id: "caption", label: "Caption", met: hasCaption(draft) },
-    { id: "media", label: "Media (image or video)", met: hasDraftMedia(draft) },
+    { id: 'caption', label: 'Caption', met: hasCaption(draft) },
+    { id: 'media', label: 'Media (image or video)', met: hasDraftMedia(draft) },
   ];
 
   const missing = checks.filter((check) => !check.met);

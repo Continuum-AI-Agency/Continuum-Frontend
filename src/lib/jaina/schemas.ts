@@ -1,26 +1,23 @@
-import { z } from "zod";
 import {
+  checkpointBlockV2LenientSchema,
   blockBaseSchema as contractBlockBaseSchema,
-  narrativeBlockSchema as contractNarrativeBlockSchema,
-  metricGridBlockSchema as contractMetricGridBlockSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
   chartBlockSchema as contractChartBlockSchema,
-  dataTableBlockSchema as contractDataTableBlockSchema,
-  insightListBlockSchema as contractInsightListBlockSchema,
-  comparisonBlockSchema as contractComparisonBlockSchema,
-  metricItemSchema as contractMetricItemSchema,
-  tableColumnSchema as contractTableColumnSchema,
-  insightListItemSchema as contractInsightListItemSchema,
-  comparisonPairSchema as contractComparisonPairSchema,
   chartSeriesConfigSchema as contractChartSeriesConfigSchema,
-  checkpointBlockV2LenientSchema,
+  comparisonBlockSchema as contractComparisonBlockSchema,
+  comparisonPairSchema as contractComparisonPairSchema,
+  dataTableBlockSchema as contractDataTableBlockSchema,
   degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
-} from "@continuum/contracts";
-import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
-import {
-  agentMentionMetadataSchema,
-  agentMentionReferenceSchema,
-} from "@/lib/agent-references";
+  insightListBlockSchema as contractInsightListBlockSchema,
+  insightListItemSchema as contractInsightListItemSchema,
+  metricGridBlockSchema as contractMetricGridBlockSchema,
+  metricItemSchema as contractMetricItemSchema,
+  narrativeBlockSchema as contractNarrativeBlockSchema,
+  tableColumnSchema as contractTableColumnSchema,
+} from '@continuum/contracts';
+import { z } from 'zod';
+import { agentMentionMetadataSchema, agentMentionReferenceSchema } from '@/lib/agent-references';
+import { campaignCanvasActionsEnvelopeSchema } from '@/lib/campaign-canvas/agent-actions';
 
 // ============================================================================
 // Handoff Schemas
@@ -33,7 +30,7 @@ export const handoffTraceEntrySchema = z.object({
   to_scope: z.string(),
   objective: z.string().nullable(),
   entity_id: z.string().nullable(),
-  status: z.enum(["started", "completed", "failed"]),
+  status: z.enum(['started', 'completed', 'failed']),
   started_at: z.string(),
   finished_at: z.string().nullable(),
   duration_ms: z.number().nullable(),
@@ -47,7 +44,7 @@ export type HandoffTraceEntry = z.infer<typeof handoffTraceEntrySchema>;
 // ============================================================================
 
 export const jainaPlanActionSchema = z.object({
-  type: z.enum(["approve", "refine", "abandon"]),
+  type: z.enum(['approve', 'refine', 'abandon']),
   plan_id: z.string().min(1),
   edits: z.string().optional(),
 });
@@ -73,9 +70,7 @@ export const jainaChatRequestSchema = z.object({
     sessionId: z.string().min(1).optional(),
     canvas: z.boolean().optional(),
     references: z.array(agentMentionReferenceSchema).optional(),
-    images: z
-      .array(z.object({ url: z.string().url(), name: z.string().optional() }))
-      .optional(),
+    images: z.array(z.object({ url: z.string().url(), name: z.string().optional() })).optional(),
   }),
 });
 
@@ -97,14 +92,14 @@ export const jainaChatStopRequestSchema = z.union([
 export type JainaChatStopRequest = z.infer<typeof jainaChatStopRequestSchema>;
 
 export const jainaChatStopResponseSchema = z.object({
-  status: z.enum(["stopped", "idle"]),
+  status: z.enum(['stopped', 'idle']),
   stopped_runs: z.number().int().nonnegative(),
 });
 
 export type JainaChatStopResponse = z.infer<typeof jainaChatStopResponseSchema>;
 
 export const jainaChatInputSchema = z.object({
-  query: z.string().min(3, "Ask Jaina a specific question."),
+  query: z.string().min(3, 'Ask Jaina a specific question.'),
 });
 
 export type JainaChatInputValues = z.infer<typeof jainaChatInputSchema>;
@@ -115,12 +110,14 @@ export type JainaChatInputValues = z.infer<typeof jainaChatInputSchema>;
 
 export const streamEventSchema = <TType extends string, TData extends z.ZodTypeAny>(
   type: TType,
-  data: TData
+  data: TData,
 ) =>
-  z.object({
-    type: z.literal(type),
-    data: data.optional(),
-  }).passthrough();
+  z
+    .object({
+      type: z.literal(type),
+      data: data.optional(),
+    })
+    .passthrough();
 
 export type StreamEvent<TType extends string, TData = Record<string, unknown>> = {
   type: TType;
@@ -141,7 +138,7 @@ export const insightSchema = z.object({
   title: z.string().optional(),
   text: z.string(),
   impact: z.string().nullable(),
-  severity: z.enum(["positive", "neutral", "watch", "risk"]),
+  severity: z.enum(['positive', 'neutral', 'watch', 'risk']),
   confidence: z.string().nullable(),
   evidence: z.array(z.string()),
 });
@@ -170,7 +167,7 @@ export type DataSeries = z.infer<typeof dataSeriesSchema>;
 export const graphSpecSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
-  graph_type: z.enum(["line", "bar", "stacked_bar", "area", "pie"]),
+  graph_type: z.enum(['line', 'bar', 'stacked_bar', 'area', 'pie']),
   labels: z.array(z.string()),
   series: z.array(z.unknown()),
   cached_sources: z.array(z.string()),
@@ -212,13 +209,13 @@ export const executionObjectiveSchema = z.object({
   title: z.string(),
   // Mirrors the Backend objective lifecycle (richer than the original 4 states).
   status: z.enum([
-    "pending",
-    "in_progress",
-    "completed",
-    "failed",
-    "blocked",
-    "deferred",
-    "partial",
+    'pending',
+    'in_progress',
+    'completed',
+    'failed',
+    'blocked',
+    'deferred',
+    'partial',
   ]),
   scope: z.string().nullable(),
   details: z.string().nullable(),
@@ -248,10 +245,10 @@ export const frontendGraphSchema = z
   .passthrough();
 
 export const checkpointBlockCategorySchema = z.enum([
-  "summary_breakdown",
-  "insight_recommendation",
-  "data",
-  "graph",
+  'summary_breakdown',
+  'insight_recommendation',
+  'data',
+  'graph',
 ]);
 
 export type CheckpointBlockCategory = z.infer<typeof checkpointBlockCategorySchema>;
@@ -275,20 +272,20 @@ export const insightRecommendationItemSchema = z.object({
 export type InsightRecommendationItem = z.infer<typeof insightRecommendationItemSchema>;
 
 export const summaryBreakdownBlockSchema = checkpointBlockBaseSchema.extend({
-  category: z.literal("summary_breakdown"),
+  category: z.literal('summary_breakdown'),
   highlights: z.array(insightSchema).default([]),
   actions: z.array(recommendationItemSchema).default([]),
   tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])).default([]),
 });
 
 export const insightRecommendationBlockSchema = checkpointBlockBaseSchema.extend({
-  category: z.literal("insight_recommendation"),
+  category: z.literal('insight_recommendation'),
   items: z.array(insightRecommendationItemSchema).default([]),
 });
 
 export const dataBlockSchema = checkpointBlockBaseSchema
   .extend({
-    category: z.literal("data"),
+    category: z.literal('data'),
     rows: z.array(z.record(z.string(), z.unknown())).default([]),
     tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])).default([]),
   })
@@ -296,18 +293,18 @@ export const dataBlockSchema = checkpointBlockBaseSchema
     if (value.rows.length === 0 && value.tables.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "data blocks require rows and/or tables",
-        path: ["rows"],
+        message: 'data blocks require rows and/or tables',
+        path: ['rows'],
       });
     }
   });
 
 export const graphBlockSchema = checkpointBlockBaseSchema.extend({
-  category: z.literal("graph"),
+  category: z.literal('graph'),
   graphs: z.array(frontendGraphSchema).min(1),
 });
 
-export const checkpointReportBlockSchema = z.discriminatedUnion("category", [
+export const checkpointReportBlockSchema = z.discriminatedUnion('category', [
   summaryBreakdownBlockSchema,
   insightRecommendationBlockSchema,
   dataBlockSchema,
@@ -331,9 +328,9 @@ export const checkpointSectionSchema = z.object({
 export type CheckpointSection = z.infer<typeof checkpointSectionSchema>;
 
 export const frontendCheckpointReportSchema = z.object({
-  language: z.string().default("en"),
-  report_title: z.string().default(""),
-  executive_summary: z.string().default(""),
+  language: z.string().default('en'),
+  report_title: z.string().default(''),
+  executive_summary: z.string().default(''),
   budget: frontendBudgetSchema.nullable().default(null),
   performance_snapshot: z.array(frontendMetricItemSchema).default([]),
   blocks: z.array(checkpointReportBlockSchema).default([]),
@@ -371,45 +368,45 @@ export type FrontendCheckpointReport = z.infer<typeof frontendCheckpointReportSc
 //      persisted reports that used them still render. New emits stay within the
 //      contract enum.
 
-export const severitySchema = z.enum(["positive", "neutral", "watch", "risk"]);
+export const severitySchema = z.enum(['positive', 'neutral', 'watch', 'risk']);
 export type Severity = z.infer<typeof severitySchema>;
 
-export const changeDirectionSchema = z.enum(["up", "down", "flat"]);
+export const changeDirectionSchema = z.enum(['up', 'down', 'flat']);
 export type ChangeDirection = z.infer<typeof changeDirectionSchema>;
 
 // Render-only superset of the contract format enums (adds legacy
 // integer/compact/text understood by `formatValue`).
 export const valueFormatSchema = z.enum([
-  "currency",
-  "percent",
-  "multiplier",
-  "number",
-  "integer",
-  "compact",
-  "text",
+  'currency',
+  'percent',
+  'multiplier',
+  'number',
+  'integer',
+  'compact',
+  'text',
 ]);
 
 // Table columns additionally allow "creative" (a lazy-loaded creative preview
 // cell, per the contract). Scoped to table columns so it never leaks into chart
 // `value_format` or metric `format`, which must stay numeric/text only.
 export const tableColumnFormatSchema = z.enum([
-  "currency",
-  "percent",
-  "multiplier",
-  "number",
-  "integer",
-  "compact",
-  "text",
-  "creative",
+  'currency',
+  'percent',
+  'multiplier',
+  'number',
+  'integer',
+  'compact',
+  'text',
+  'creative',
 ]);
 
 export const checkpointBlockCategoryV2Schema = z.enum([
-  "narrative",
-  "metric_grid",
-  "chart",
-  "data_table",
-  "insight_list",
-  "comparison",
+  'narrative',
+  'metric_grid',
+  'chart',
+  'data_table',
+  'insight_list',
+  'comparison',
 ]);
 export type CheckpointBlockCategoryV2 = z.infer<typeof checkpointBlockCategoryV2Schema>;
 
@@ -424,8 +421,8 @@ const BLOCK_PRIORITY_RANK: Record<string, number> = {
 // numerically. Accept the enum strings, legacy rank strings, or raw numbers and
 // project them onto a numeric rank.
 const blockPriorityV2Schema = z.preprocess((value) => {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
     if (normalized in BLOCK_PRIORITY_RANK) return BLOCK_PRIORITY_RANK[normalized];
     const parsed = Number(normalized);
@@ -513,7 +510,7 @@ export const comparisonBlockV2Schema = contractComparisonBlockSchema.extend({
 });
 export type ComparisonBlockV2 = z.infer<typeof comparisonBlockV2Schema>;
 
-const checkpointBlockV2UnionSchema = z.discriminatedUnion("category", [
+const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockV2Schema,
   metricGridBlockV2Schema,
   chartBlockV2Schema,
@@ -526,34 +523,32 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion("category", [
 // on every row; for cartesian charts every chart_config series key appears in a
 // data row). The discriminated union can't hold a ZodEffects member, so the
 // chart branch is validated against the contract's refined `chartBlockSchema`.
-export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine(
-  (block, ctx) => {
-    if (block.category !== "chart") return;
-    // Re-parse against the contract's refined chart schema to re-apply the
-    // chart-renderability invariants. Our union has already projected
-    // `priority` (→ number) and `value_format` (→ render superset) onto shapes
-    // the contract's base would reject; a base-field rejection short-circuits
-    // the refine before the invariant checks run, so normalize those two fields
-    // to contract-valid values first, then forward only the invariant issues
-    // (data/chart_config paths).
-    const normalizedForInvariants = {
-      ...block,
-      priority: "secondary" as const,
-      value_format: "number" as const,
-    };
-    const chartResult = contractChartBlockSchema.safeParse(normalizedForInvariants);
-    if (chartResult.success) return;
-    const invariantPaths = new Set(["data", "chart_config"]);
-    for (const issue of chartResult.error.issues) {
-      if (issue.path.length > 0 && invariantPaths.has(String(issue.path[0]))) {
-        // Re-emit as a well-typed custom issue (forwarding the raw $ZodIssue
-        // union trips Zod 4's addIssue input typing on the unrecognized_keys
-        // variant). The invariant issues are all code:"custom" anyway.
-        ctx.addIssue({ code: "custom", message: issue.message, path: [...issue.path] });
-      }
+export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
+  if (block.category !== 'chart') return;
+  // Re-parse against the contract's refined chart schema to re-apply the
+  // chart-renderability invariants. Our union has already projected
+  // `priority` (→ number) and `value_format` (→ render superset) onto shapes
+  // the contract's base would reject; a base-field rejection short-circuits
+  // the refine before the invariant checks run, so normalize those two fields
+  // to contract-valid values first, then forward only the invariant issues
+  // (data/chart_config paths).
+  const normalizedForInvariants = {
+    ...block,
+    priority: 'secondary' as const,
+    value_format: 'number' as const,
+  };
+  const chartResult = contractChartBlockSchema.safeParse(normalizedForInvariants);
+  if (chartResult.success) return;
+  const invariantPaths = new Set(['data', 'chart_config']);
+  for (const issue of chartResult.error.issues) {
+    if (issue.path.length > 0 && invariantPaths.has(String(issue.path[0]))) {
+      // Re-emit as a well-typed custom issue (forwarding the raw $ZodIssue
+      // union trips Zod 4's addIssue input typing on the unrecognized_keys
+      // variant). The invariant issues are all code:"custom" anyway.
+      ctx.addIssue({ code: 'custom', message: issue.message, path: [...issue.path] });
     }
-  },
-);
+  }
+});
 export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
 
 // Fail-visible degradation. The canonical placeholder logic is shared from
@@ -561,7 +556,7 @@ export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
 // only re-parses through `narrativeBlockV2Schema` to apply the render-only
 // layering (numeric `priority` rank) the renderer sorts on.
 const asRenderRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
+  typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 
@@ -573,25 +568,20 @@ export function degradeToNarrativeBlockV2(block: unknown): NarrativeBlockV2 {
 // against the canonical block schema; on failure it is replaced by a visible
 // degraded narrative placeholder (with a console.warn for diagnostics). Used by
 // both the live stream report and persisted-report ingestion.
-export const tolerantCheckpointBlocksV2Schema = z
-  .array(z.unknown())
-  .transform((rawBlocks) =>
-    rawBlocks.map((rawBlock) => {
-      const parsed = checkpointBlockV2Schema.safeParse(rawBlock);
-      if (parsed.success) return parsed.data;
-      const rec = asRenderRecord(rawBlock);
-      // eslint-disable-next-line no-console -- render-boundary diagnostic
-      console.warn(
-        "Jaina report block failed contract validation; rendering degraded placeholder.",
-        {
-          category: rec.category,
-          block_id: rec.block_id,
-          issues: parsed.error.issues,
-        },
-      );
-      return degradeToNarrativeBlockV2(rawBlock);
-    }),
-  );
+export const tolerantCheckpointBlocksV2Schema = z.array(z.unknown()).transform((rawBlocks) =>
+  rawBlocks.map((rawBlock) => {
+    const parsed = checkpointBlockV2Schema.safeParse(rawBlock);
+    if (parsed.success) return parsed.data;
+    const rec = asRenderRecord(rawBlock);
+    // eslint-disable-next-line no-console -- render-boundary diagnostic
+    console.warn('Jaina report block failed contract validation; rendering degraded placeholder.', {
+      category: rec.category,
+      block_id: rec.block_id,
+      issues: parsed.error.issues,
+    });
+    return degradeToNarrativeBlockV2(rawBlock);
+  }),
+);
 
 export const mediaMapEntrySchema = z.object({
   image_url: z.string(),
@@ -605,7 +595,7 @@ export const mediaMapSchema = z.record(z.string(), mediaMapEntrySchema);
 export type MediaMap = z.infer<typeof mediaMapSchema>;
 
 export const checkpointReportV2MetaSchema = z.object({
-  schema_version: z.union([z.literal("2"), z.literal(2)]).transform(() => "2" as const),
+  schema_version: z.union([z.literal('2'), z.literal(2)]).transform(() => '2' as const),
   block_count: z.number().int().nonnegative(),
   has_charts: z.boolean(),
   has_media: z.boolean().default(false),
@@ -613,9 +603,9 @@ export const checkpointReportV2MetaSchema = z.object({
 });
 
 export const checkpointReportV2Schema = z.object({
-  language: z.string().default("en"),
-  executive_summary: z.string().default(""),
-  reasoning_trace: z.string().catch(""),
+  language: z.string().default('en'),
+  executive_summary: z.string().default(''),
+  reasoning_trace: z.string().catch(''),
   blocks: tolerantCheckpointBlocksV2Schema.default([]),
   follow_up_questions: z.array(z.string()).default([]),
   media_map: mediaMapSchema.default({}),
@@ -639,7 +629,7 @@ export type ChartDataset = z.infer<typeof chartDatasetSchema>;
 
 export const chartSpecificationSchema = z.object({
   title: z.string(),
-  chart_type: z.enum(["bar", "line", "pie", "doughnut"]),
+  chart_type: z.enum(['bar', 'line', 'pie', 'doughnut']),
   labels: z.array(z.string()),
   datasets: z.array(chartDatasetSchema),
   options: z.record(z.string(), z.any()).optional(),
@@ -653,7 +643,7 @@ export const metricComparisonSchema = z.object({
   actual: z.union([z.number(), z.string()]),
   index_percent: z.number(),
   unit: z.string(),
-  deviation_type: z.enum(["positive", "negative", "neutral"]),
+  deviation_type: z.enum(['positive', 'negative', 'neutral']),
 });
 
 export type MetricComparison = z.infer<typeof metricComparisonSchema>;
@@ -679,155 +669,161 @@ export const reportAssemblySchema = z.object({
 export type ReportAssembly = z.infer<typeof reportAssemblySchema>;
 
 export const responseCreatedSchema = streamEventSchema(
-  "response.created",
+  'response.created',
   z.object({
     id: z.string(),
-    object: z.literal("realtime.response"),
+    object: z.literal('realtime.response'),
     status: z.string().optional(),
     status_details: z.unknown().optional(),
     output: z.array(z.unknown()).optional(),
-  })
+  }),
 );
 
 export const responseOutputItemSchema = streamEventSchema(
-  "response.output_item.added",
+  'response.output_item.added',
   z.object({
     item: z.object({
       id: z.string(),
-      object: z.literal("realtime.item"),
-      type: z.literal("message"),
-      status: z.literal("in_progress"),
-      role: z.literal("assistant"),
+      object: z.literal('realtime.item'),
+      type: z.literal('message'),
+      status: z.literal('in_progress'),
+      role: z.literal('assistant'),
       content: z.array(z.unknown()),
     }),
-  })
+  }),
 );
 
 export const responseRunCreatedSchema = streamEventSchema(
-  "response.run.created",
+  'response.run.created',
   z.object({
     run_id: z.string(),
     session_id: z.string().nullable().optional(),
-  })
+  }),
 );
 
 export const responseHeartbeatSchema = streamEventSchema(
-  "response.heartbeat",
+  'response.heartbeat',
   z.object({
     ts: z.number(),
-  })
+  }),
 );
 
 export const responseContentPartSchema = streamEventSchema(
-  "response.content_part.added",
+  'response.content_part.added',
   z.object({
     item_id: z.string(),
     part: z.object({
       id: z.string(),
-      object: z.literal("realtime.content_part"),
-      type: z.enum(["text", "json"]),
+      object: z.literal('realtime.content_part'),
+      type: z.enum(['text', 'json']),
       text: z.string().optional(),
       json: z.string().optional(),
     }),
-  })
+  }),
 );
 
 export const progressEventSchema = streamEventSchema(
-  "response.progress",
-  z.object({
-    stage: z.string(),
-  }).passthrough()
+  'response.progress',
+  z
+    .object({
+      stage: z.string(),
+    })
+    .passthrough(),
 );
 
-export type ProgressEventData = Exclude<z.infer<typeof progressEventSchema>["data"], undefined>;
+export type ProgressEventData = Exclude<z.infer<typeof progressEventSchema>['data'], undefined>;
 
 export const stateDeltaSchema = streamEventSchema(
-  "state.delta",
+  'state.delta',
   z.object({
     source: z.string().optional(),
     delta: z.record(z.string(), z.unknown()),
-  })
+  }),
 );
 
-export type StateDeltaEventData = Exclude<z.infer<typeof stateDeltaSchema>["data"], undefined>;
+export type StateDeltaEventData = Exclude<z.infer<typeof stateDeltaSchema>['data'], undefined>;
 
 export const responsePlanDeltaSchema = streamEventSchema(
-  "response.plan.delta",
+  'response.plan.delta',
   z.object({
     item_id: z.string().optional(),
     part_id: z.string().optional(),
     delta: z.string(),
-  })
+  }),
 );
 
 export type ResponsePlanDeltaEventData = Exclude<
-  z.infer<typeof responsePlanDeltaSchema>["data"],
+  z.infer<typeof responsePlanDeltaSchema>['data'],
   undefined
 >;
 
 export const responsePlanReadySchema = streamEventSchema(
-  "response.plan_ready",
+  'response.plan_ready',
   z.object({
     item_id: z.string().optional(),
     part_id: z.string().optional(),
     plan: z.record(z.string(), z.unknown()),
-  })
+  }),
 );
 
 export const hitlPausedSchema = streamEventSchema(
-  "hitl.paused",
+  'hitl.paused',
   z.object({
     prompt: z.string(),
-  })
+  }),
 );
 
-export type HitlPausedEventData = Exclude<z.infer<typeof hitlPausedSchema>["data"], undefined>;
+export type HitlPausedEventData = Exclude<z.infer<typeof hitlPausedSchema>['data'], undefined>;
 
 export const canvasActionsProposedSchema = streamEventSchema(
-  "canvas.actions.proposed",
-  campaignCanvasActionsEnvelopeSchema
+  'canvas.actions.proposed',
+  campaignCanvasActionsEnvelopeSchema,
 );
 
 export type CanvasActionsProposedEventData = Exclude<
-  z.infer<typeof canvasActionsProposedSchema>["data"],
+  z.infer<typeof canvasActionsProposedSchema>['data'],
   undefined
 >;
 
 export const toolBatchSchema = streamEventSchema(
-  "tool.batch",
+  'tool.batch',
   z.object({
     calls: z.array(z.lazy(() => toolCallSchema)),
     results: z.array(z.lazy(() => toolResultSchema)),
-  })
+  }),
 );
 
 export const handoffStartSchema = streamEventSchema(
-  "handoff.start",
-  z.object({
-    correlation_id: z.string(),
-    from_scope: z.string().nullable(),
-    to_scope: z.string(),
-    objective: z.string().nullable(),
-    entity_id: z.string().nullable(),
-    display_name: z.string().nullable().optional(),
-    name: z.string().nullable().optional(),
-  }).passthrough()
+  'handoff.start',
+  z
+    .object({
+      correlation_id: z.string(),
+      from_scope: z.string().nullable(),
+      to_scope: z.string(),
+      objective: z.string().nullable(),
+      entity_id: z.string().nullable(),
+      display_name: z.string().nullable().optional(),
+      name: z.string().nullable().optional(),
+    })
+    .passthrough(),
 );
 
 export const handoffCompleteSchema = streamEventSchema(
-  "handoff.complete",
-  z.object({
-    correlation_id: z.string(),
-    status: z.enum(["completed", "failed"]),
-    duration_ms: z.number(),
-    error: z.string().nullable(),
-    from_scope: z.string().nullable(),
-    to_scope: z.string(),
-    objective: z.string().nullable(),
-    entity_id: z.string().nullable(),
-    display_name: z.string().nullable().optional(),
-    name: z.string().nullable().optional(),
-  }).passthrough()
+  'handoff.complete',
+  z
+    .object({
+      correlation_id: z.string(),
+      status: z.enum(['completed', 'failed']),
+      duration_ms: z.number(),
+      error: z.string().nullable(),
+      from_scope: z.string().nullable(),
+      to_scope: z.string(),
+      objective: z.string().nullable(),
+      entity_id: z.string().nullable(),
+      display_name: z.string().nullable().optional(),
+      name: z.string().nullable().optional(),
+    })
+    .passthrough(),
 );
 
 export const agentSpawnEventSchema = z.object({
@@ -844,7 +840,7 @@ export type AgentSpawnEventData = z.infer<typeof agentSpawnEventSchema>;
 export const agentCompleteEventSchema = z.object({
   agent_id: z.string(),
   task_id: z.string().optional(),
-  status: z.enum(["completed", "failed", "cancelled", "partial"]).optional(),
+  status: z.enum(['completed', 'failed', 'cancelled', 'partial']).optional(),
   duration_ms: z.number().optional(),
   error: z.string().optional(),
   display_name: z.string().nullable().optional(),
@@ -855,38 +851,40 @@ export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
 export const canvasContextLoadedEventSchema = z.object({}).passthrough();
 
 export const agentEnvelopeSchema = streamEventSchema(
-  "agent.envelope",
+  'agent.envelope',
   z.object({
-    envelope: z.object({
-      version: z.literal("1"),
-      kind: z.enum(["tool", "handoff", "agent"]),
-      event: z.enum(["start", "complete", "error"]),
-      correlation_id: z.string(),
-      parent_correlation_id: z.string().nullable(),
-      session_id: z.string().nullable(),
-      scope: z.string().nullable(),
-      timestamp: z.string(),
-      display_name: z.string().nullable().optional(),
-      name: z.string().nullable().optional(),
-      agent_id: z.string().nullable().optional(),
-      parent_agent_id: z.string().nullable().optional(),
-      agent_name: z.string().nullable().optional(),
-      payload: z.record(z.string(), z.unknown()),
-    }).passthrough(),
-  })
+    envelope: z
+      .object({
+        version: z.literal('1'),
+        kind: z.enum(['tool', 'handoff', 'agent']),
+        event: z.enum(['start', 'complete', 'error']),
+        correlation_id: z.string(),
+        parent_correlation_id: z.string().nullable(),
+        session_id: z.string().nullable(),
+        scope: z.string().nullable(),
+        timestamp: z.string(),
+        display_name: z.string().nullable().optional(),
+        name: z.string().nullable().optional(),
+        agent_id: z.string().nullable().optional(),
+        parent_agent_id: z.string().nullable().optional(),
+        agent_name: z.string().nullable().optional(),
+        payload: z.record(z.string(), z.unknown()),
+      })
+      .passthrough(),
+  }),
 );
 
 export const responseCheckpointReportSchema = streamEventSchema(
-  "response.checkpoint_report",
+  'response.checkpoint_report',
   z.object({
     item_id: z.string(),
     part_id: z.string(),
     report: z.unknown(),
-  })
+  }),
 );
 
 export const responseBlockDeltaSchema = streamEventSchema(
-  "response.block.delta",
+  'response.block.delta',
   z.object({
     sequence: z.number().int().nonnegative(),
     source: z.string(),
@@ -894,11 +892,11 @@ export const responseBlockDeltaSchema = streamEventSchema(
     block_category: z.string().optional(),
     chart_type: z.string().optional(),
     block: checkpointReportBlockSchema,
-  })
+  }),
 );
 
 export const responseBlockDeltaV2Schema = streamEventSchema(
-  "response.block.delta",
+  'response.block.delta',
   z.object({
     sequence: z.number().int().nonnegative(),
     source: z.string(),
@@ -906,7 +904,7 @@ export const responseBlockDeltaV2Schema = streamEventSchema(
     block_category: z.string().optional(),
     chart_type: z.string().optional(),
     block: checkpointBlockV2Schema,
-  })
+  }),
 );
 
 // Envelope for a V2 block delta whose block is parsed tolerantly: a block that
@@ -915,7 +913,7 @@ export const responseBlockDeltaV2Schema = streamEventSchema(
 // blocks are excluded by `checkpointBlockCategoryV2Schema` so they still fall
 // through to the legacy delta path.
 export const responseBlockDeltaV2TolerantSchema = streamEventSchema(
-  "response.block.delta",
+  'response.block.delta',
   z.object({
     sequence: z.number().int().nonnegative(),
     source: z.string(),
@@ -923,21 +921,21 @@ export const responseBlockDeltaV2TolerantSchema = streamEventSchema(
     block_category: z.string().optional(),
     chart_type: z.string().optional(),
     block: checkpointBlockV2LenientSchema,
-  })
+  }),
 );
 
 export const responseReportAssemblySchema = streamEventSchema(
-  "response.report_assembly",
+  'response.report_assembly',
   z.object({
     item_id: z.string(),
     part_id: z.string(),
     report: reportAssemblySchema,
     html_preview: z.string(),
-  })
+  }),
 );
 
 export const responseReportArtifactJobStartedSchema = streamEventSchema(
-  "response.report_artifact_job.started",
+  'response.report_artifact_job.started',
   z
     .object({
       item_id: z.string(),
@@ -948,40 +946,40 @@ export const responseReportArtifactJobStartedSchema = streamEventSchema(
       status_endpoint: z.string().min(1),
       file_url_endpoint: z.string().min(1),
     })
-    .passthrough()
+    .passthrough(),
 );
 
 export type ResponseReportArtifactJobStartedEventData = Exclude<
-  z.infer<typeof responseReportArtifactJobStartedSchema>["data"],
+  z.infer<typeof responseReportArtifactJobStartedSchema>['data'],
   undefined
 >;
 
 export const outputTextDeltaSchema = streamEventSchema(
-  "response.output_text.delta",
+  'response.output_text.delta',
   z.object({
     item_id: z.string().optional(),
     part_id: z.string().optional(),
     delta: z.string(),
-  })
+  }),
 );
 
 export const responseContentPartDoneSchema = streamEventSchema(
-  "response.content_part.done",
+  'response.content_part.done',
   z.object({
     item_id: z.string(),
     part_id: z.string(),
-  })
+  }),
 );
 
 export const responseOutputItemDoneSchema = streamEventSchema(
-  "response.output_item.done",
+  'response.output_item.done',
   z.object({
     item_id: z.string(),
-  })
+  }),
 );
 
 export const responseClarificationRequestSchema = streamEventSchema(
-  "response.clarification_request",
+  'response.clarification_request',
   z
     .object({
       id: z.string().optional(),
@@ -990,7 +988,7 @@ export const responseClarificationRequestSchema = streamEventSchema(
       prompt: z.string().optional(),
       message: z.string().optional(),
     })
-    .passthrough()
+    .passthrough(),
 );
 
 const objectiveEventItemSchema = z
@@ -1007,7 +1005,7 @@ const objectiveEventItemSchema = z
   .passthrough();
 
 export const responseObjectivesSchema = streamEventSchema(
-  "response.objectives",
+  'response.objectives',
   z.union([
     z
       .object({
@@ -1017,11 +1015,11 @@ export const responseObjectivesSchema = streamEventSchema(
       })
       .passthrough(),
     z.array(objectiveEventItemSchema),
-  ])
+  ]),
 );
 
 export const responseObjectiveUpdatedSchema = streamEventSchema(
-  "response.objective.updated",
+  'response.objective.updated',
   z
     .object({
       objective: objectiveEventItemSchema.optional(),
@@ -1035,28 +1033,28 @@ export const responseObjectiveUpdatedSchema = streamEventSchema(
       summary: z.string().optional(),
       status: z.string().optional(),
     })
-    .passthrough()
+    .passthrough(),
 );
 
 export const responseDoneSchema = streamEventSchema(
-  "response.done",
+  'response.done',
   z.object({
     id: z.string(),
-    object: z.literal("realtime.response"),
+    object: z.literal('realtime.response'),
     status: z.string(),
     status_details: z.unknown().optional(),
     output: z.array(z.unknown()).optional(),
-  })
+  }),
 );
 
 export const streamErrorSchema = streamEventSchema(
-  "error",
+  'error',
   z.object({
     type: z.string(),
     code: z.string(),
     message: z.string(),
     param: z.null(),
-  })
+  }),
 );
 
 export const outputJsonDeltaSchema = z.object({
@@ -1066,8 +1064,8 @@ export const outputJsonDeltaSchema = z.object({
 });
 
 export const responseOutputJsonDeltaSchema = streamEventSchema(
-  "response.output_json.delta",
-  outputJsonDeltaSchema
+  'response.output_json.delta',
+  outputJsonDeltaSchema,
 );
 
 export type JainaStreamEvent =
@@ -1086,9 +1084,9 @@ export type JainaStreamEvent =
   | z.infer<typeof handoffStartSchema>
   | z.infer<typeof handoffCompleteSchema>
   | z.infer<typeof agentEnvelopeSchema>
-  | { type: "agent.spawn"; data: AgentSpawnEventData }
-  | { type: "agent.complete"; data: AgentCompleteEventData }
-  | { type: "canvas.context.loaded"; data: Record<string, unknown> }
+  | { type: 'agent.spawn'; data: AgentSpawnEventData }
+  | { type: 'agent.complete'; data: AgentCompleteEventData }
+  | { type: 'canvas.context.loaded'; data: Record<string, unknown> }
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaSchema>
   | z.infer<typeof responseReportAssemblySchema>
@@ -1119,9 +1117,9 @@ export const jainaStreamEventSchema = z.union([
   handoffStartSchema,
   handoffCompleteSchema,
   agentEnvelopeSchema,
-  z.object({ type: z.literal("agent.spawn"), data: agentSpawnEventSchema }),
-  z.object({ type: z.literal("agent.complete"), data: agentCompleteEventSchema }),
-  z.object({ type: z.literal("canvas.context.loaded"), data: z.record(z.string(), z.unknown()) }),
+  z.object({ type: z.literal('agent.spawn'), data: agentSpawnEventSchema }),
+  z.object({ type: z.literal('agent.complete'), data: agentCompleteEventSchema }),
+  z.object({ type: z.literal('canvas.context.loaded'), data: z.record(z.string(), z.unknown()) }),
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
   responseReportAssemblySchema,
@@ -1187,35 +1185,34 @@ export type ToolResultEventData = z.infer<typeof toolResultSchema>;
 
 export const creativeArtifactSchema = z.object({
   id: z.string(),
-  type: z.literal("creative"),
+  type: z.literal('creative'),
   url: z.string().url(),
   thumbnail_url: z.string().url().optional(),
   post_copy: z.string().optional(),
   headline: z.string().optional(),
   description: z.string().optional(),
   call_to_action: z.string().optional(),
-  platform: z.enum(["facebook", "instagram", "tiktok", "google"]).optional(),
-  format: z.enum(["image", "video", "carousel"]).optional(),
+  platform: z.enum(['facebook', 'instagram', 'tiktok', 'google']).optional(),
+  format: z.enum(['image', 'video', 'carousel']).optional(),
 });
 
 export type CreativeArtifact = z.infer<typeof creativeArtifactSchema>;
 
 export const artifactDeltaSchema = z.object({
   creatives: z.array(creativeArtifactSchema).optional(),
-  images: z.array(z.object({
-    url: z.string().url(),
-    caption: z.string().optional(),
-  })).optional(),
+  images: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        caption: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type ArtifactDeltaEventData = z.infer<typeof artifactDeltaSchema>;
 
-export const jainaObjectiveStatusSchema = z.enum([
-  "pending",
-  "in_progress",
-  "completed",
-  "failed",
-]);
+export const jainaObjectiveStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'failed']);
 
 export type JainaObjectiveStatus = z.infer<typeof jainaObjectiveStatusSchema>;
 
@@ -1231,18 +1228,12 @@ export type JainaObjective = z.infer<typeof jainaObjectiveSchema>;
 export const planStepSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
-  status: z.enum(["pending", "in_progress", "completed", "failed", "cancelled"]).optional(),
+  status: z.enum(['pending', 'in_progress', 'completed', 'failed', 'cancelled']).optional(),
 });
 
 export type PlanStep = z.infer<typeof planStepSchema>;
 
-export const planScopeSchema = z.enum([
-  "account",
-  "campaign",
-  "adset",
-  "ad",
-  "creative",
-]);
+export const planScopeSchema = z.enum(['account', 'campaign', 'adset', 'ad', 'creative']);
 
 export type PlanScope = z.infer<typeof planScopeSchema>;
 
@@ -1257,7 +1248,7 @@ export type PlanRequestedArgs = z.infer<typeof planRequestedArgsSchema>;
 export const responsePlanRequestedSchema = z.object({
   plan_id: z.string(),
   tool_name: z.string(),
-  status: z.literal("awaiting_approval"),
+  status: z.literal('awaiting_approval'),
   summary: z.string(),
   args: planRequestedArgsSchema,
   created_at: z.string(),
@@ -1265,22 +1256,22 @@ export const responsePlanRequestedSchema = z.object({
 
 export type ResponsePlanRequestedEventData = z.infer<typeof responsePlanRequestedSchema>;
 
-export const responsePlanRequestedPayloadSchema = z.object({
-  plan_id: z.string().optional(),
-  planId: z.string().optional(),
-  tool_name: z.string().optional(),
-  toolName: z.string().optional(),
-  status: z.string().optional(),
-  summary: z.string().optional(),
-  description: z.string().optional(),
-  args: z.record(z.string(), z.unknown()).optional(),
-  created_at: z.string().optional(),
-  createdAt: z.string().optional(),
-}).passthrough();
+export const responsePlanRequestedPayloadSchema = z
+  .object({
+    plan_id: z.string().optional(),
+    planId: z.string().optional(),
+    tool_name: z.string().optional(),
+    toolName: z.string().optional(),
+    status: z.string().optional(),
+    summary: z.string().optional(),
+    description: z.string().optional(),
+    args: z.record(z.string(), z.unknown()).optional(),
+    created_at: z.string().optional(),
+    createdAt: z.string().optional(),
+  })
+  .passthrough();
 
-export function parsePlanRequestedPayload(
-  payload: unknown
-): ResponsePlanRequestedEventData | null {
+export function parsePlanRequestedPayload(payload: unknown): ResponsePlanRequestedEventData | null {
   const parsedPayload = responsePlanRequestedPayloadSchema.safeParse(payload);
   if (!parsedPayload.success) return null;
 
@@ -1288,7 +1279,7 @@ export function parsePlanRequestedPayload(
   const planId = raw.plan_id ?? raw.planId;
   if (!planId) return null;
 
-  const summary = raw.summary ?? raw.description ?? "Review the plan below.";
+  const summary = raw.summary ?? raw.description ?? 'Review the plan below.';
   const parsedArgs = planRequestedArgsSchema.safeParse(raw.args);
   const args = parsedArgs.success
     ? parsedArgs.data
@@ -1299,53 +1290,51 @@ export function parsePlanRequestedPayload(
 
   const normalized: ResponsePlanRequestedEventData = {
     plan_id: planId,
-    tool_name: raw.tool_name ?? raw.toolName ?? "unknown_tool",
-    status: "awaiting_approval",
+    tool_name: raw.tool_name ?? raw.toolName ?? 'unknown_tool',
+    status: 'awaiting_approval',
     summary,
     args,
     created_at: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
   };
 
-  return responsePlanRequestedSchema.safeParse(normalized).success
-    ? normalized
-    : null;
+  return responsePlanRequestedSchema.safeParse(normalized).success ? normalized : null;
 }
 
 export const responsePlanDecisionSchema = z.object({
   plan_id: z.string(),
   approved: z.boolean(),
-  status: z.enum(["approved", "rejected"]),
+  status: z.enum(['approved', 'rejected']),
   note: z.string().optional(),
 });
 
 export type ResponsePlanDecisionEventData = z.infer<typeof responsePlanDecisionSchema>;
 
-export const responsePlanDecisionPayloadSchema = z.object({
-  plan_id: z.string().optional(),
-  planId: z.string().optional(),
-  approved: z.boolean().optional(),
-  status: z.string().optional(),
-  decision: z.string().optional(),
-  action: z.string().optional(),
-  note: z.string().optional(),
-  reason: z.string().optional(),
-}).passthrough();
+export const responsePlanDecisionPayloadSchema = z
+  .object({
+    plan_id: z.string().optional(),
+    planId: z.string().optional(),
+    approved: z.boolean().optional(),
+    status: z.string().optional(),
+    decision: z.string().optional(),
+    action: z.string().optional(),
+    note: z.string().optional(),
+    reason: z.string().optional(),
+  })
+  .passthrough();
 
-function resolveDecisionBoolean(
-  value: string | undefined
-): boolean | undefined {
+function resolveDecisionBoolean(value: string | undefined): boolean | undefined {
   if (!value) return undefined;
   const normalized = value.trim().toLowerCase();
   if (
-    ["approve", "approved", "accept", "accepted", "proceed", "proceeded", "yes", "true"].includes(
-      normalized
+    ['approve', 'approved', 'accept', 'accepted', 'proceed', 'proceeded', 'yes', 'true'].includes(
+      normalized,
     )
   ) {
     return true;
   }
   if (
-    ["deny", "denied", "reject", "rejected", "decline", "declined", "no", "false"].includes(
-      normalized
+    ['deny', 'denied', 'reject', 'rejected', 'decline', 'declined', 'no', 'false'].includes(
+      normalized,
     )
   ) {
     return false;
@@ -1353,9 +1342,7 @@ function resolveDecisionBoolean(
   return undefined;
 }
 
-export function parsePlanDecisionPayload(
-  payload: unknown
-): ResponsePlanDecisionEventData | null {
+export function parsePlanDecisionPayload(payload: unknown): ResponsePlanDecisionEventData | null {
   const parsedPayload = responsePlanDecisionPayloadSchema.safeParse(payload);
   if (!parsedPayload.success) return null;
 
@@ -1365,27 +1352,23 @@ export function parsePlanDecisionPayload(
 
   const decisionToken = raw.decision ?? raw.status ?? raw.action;
   const approved =
-    typeof raw.approved === "boolean"
-      ? raw.approved
-      : resolveDecisionBoolean(decisionToken);
-  if (typeof approved !== "boolean") return null;
+    typeof raw.approved === 'boolean' ? raw.approved : resolveDecisionBoolean(decisionToken);
+  if (typeof approved !== 'boolean') return null;
 
   const normalized: ResponsePlanDecisionEventData = {
     plan_id: planId,
     approved,
-    status: approved ? "approved" : "rejected",
+    status: approved ? 'approved' : 'rejected',
     note: raw.note ?? raw.reason,
   };
 
-  return responsePlanDecisionSchema.safeParse(normalized).success
-    ? normalized
-    : null;
+  return responsePlanDecisionSchema.safeParse(normalized).success ? normalized : null;
 }
 
 export const planDecisionCommandSchema = z.object({
-  type: z.literal("plan.decision"),
+  type: z.literal('plan.decision'),
   data: z.object({
-    decision: z.enum(["approve", "deny"]),
+    decision: z.enum(['approve', 'deny']),
     planId: z.string().min(1),
     reason: z.string().optional(),
   }),
@@ -1394,7 +1377,7 @@ export const planDecisionCommandSchema = z.object({
 export type PlanDecisionCommand = z.infer<typeof planDecisionCommandSchema>;
 
 export const feedbackApprovalCommandSchema = z.object({
-  type: z.literal("feedback"),
+  type: z.literal('feedback'),
   data: z.object({
     approved: z.boolean(),
     planId: z.string().min(1),
@@ -1405,7 +1388,7 @@ export const feedbackApprovalCommandSchema = z.object({
 export type FeedbackApprovalCommand = z.infer<typeof feedbackApprovalCommandSchema>;
 
 export const planApprovalCommandSchema = z.object({
-  type: z.literal("plan.approval"),
+  type: z.literal('plan.approval'),
   data: z.object({
     plan_id: z.string().min(1),
     approved: z.boolean(),
@@ -1430,53 +1413,61 @@ export const thoughtEventSchema = z.object({
 
 export type ThoughtEventData = z.infer<typeof thoughtEventSchema>;
 
-export const adkEventSchema = z.object({
-  author: z.string().optional(),
-  // Top-level flat format (backend may omit content wrapper)
-  functionResponse: z.object({
-    name: z.string(),
-    id: z.string(),
-    response: z.record(z.string(), z.unknown()),
-  }).optional(),
-  functionCall: z.object({
-    name: z.string(),
-    id: z.string(),
-    args: z.record(z.string(), z.unknown()),
-  }).optional(),
-  // Structured format with parts array
-  content: z.object({
-    role: z.string().optional(),
-    parts: z.array(
-      z.union([
-        z.object({ text: z.string() }),
-        z.object({
-          functionCall: z.object({
-            name: z.string(),
-            args: z.record(z.string(), z.unknown()),
-            id: z.string(),
-          }),
-        }),
-        z.object({
-          functionResponse: z.object({
-            name: z.string(),
-            response: z.record(z.string(), z.unknown()),
-            id: z.string(),
-          }),
-        }),
-      ])
-    ),
-  }).optional(),
-}).passthrough();
+export const adkEventSchema = z
+  .object({
+    author: z.string().optional(),
+    // Top-level flat format (backend may omit content wrapper)
+    functionResponse: z
+      .object({
+        name: z.string(),
+        id: z.string(),
+        response: z.record(z.string(), z.unknown()),
+      })
+      .optional(),
+    functionCall: z
+      .object({
+        name: z.string(),
+        id: z.string(),
+        args: z.record(z.string(), z.unknown()),
+      })
+      .optional(),
+    // Structured format with parts array
+    content: z
+      .object({
+        role: z.string().optional(),
+        parts: z.array(
+          z.union([
+            z.object({ text: z.string() }),
+            z.object({
+              functionCall: z.object({
+                name: z.string(),
+                args: z.record(z.string(), z.unknown()),
+                id: z.string(),
+              }),
+            }),
+            z.object({
+              functionResponse: z.object({
+                name: z.string(),
+                response: z.record(z.string(), z.unknown()),
+                id: z.string(),
+              }),
+            }),
+          ]),
+        ),
+      })
+      .optional(),
+  })
+  .passthrough();
 
 export type AdkEventData = z.infer<typeof adkEventSchema>;
 
 export const compatibilityStreamEventSchema = z.union([
   z.object({
-    type: z.literal("thought"),
+    type: z.literal('thought'),
     data: thoughtEventSchema,
   }),
   z.object({
-    type: z.literal("adk.event"),
+    type: z.literal('adk.event'),
     data: adkEventSchema,
   }),
 ]);
@@ -1518,7 +1509,7 @@ export const chartSeriesSchema = z.object({
 
 export const chartSchema = z.object({
   title: z.string(),
-  type: z.enum(["line", "bar", "pie", "area", "stacked_bar"]),
+  type: z.enum(['line', 'bar', 'pie', 'area', 'stacked_bar']),
   data: z.array(chartDataPointSchema).optional(),
   series: z.array(chartSeriesSchema).optional(),
   x_axis_label: z.string().optional(),
@@ -1542,13 +1533,12 @@ export const recommendationSchema = recommendationItemSchema.extend({
   expected_outcome: z.string().optional(),
 });
 
-
 // ============================================================================
 // Legacy/Direct Answer Schemas
 // ============================================================================
 
 export const directAnswerSchema = z.object({
-  type: z.literal("direct_answer"),
+  type: z.literal('direct_answer'),
   content: z.string(),
 });
 
@@ -1561,11 +1551,11 @@ export type DirectAnswerPayload = z.infer<typeof directAnswerSchema>;
 function extractJsonArrayFromString(str: string): any[] {
   const startIdx = str.indexOf('[');
   const endIdx = str.lastIndexOf(']');
-  
+
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
     return [];
   }
-  
+
   try {
     return JSON.parse(str.slice(startIdx, endIdx + 1));
   } catch {
@@ -1574,8 +1564,8 @@ function extractJsonArrayFromString(str: string): any[] {
 }
 
 function toFiniteNumber(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
     const parsed = Number.parseFloat(value);
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -1583,83 +1573,88 @@ function toFiniteNumber(value: unknown): number {
 }
 
 function toDisplayString(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return String(value);
 }
 
 function formatEnumLabel(value: unknown): string {
   const raw = toDisplayString(value).trim();
-  if (!raw) return "";
+  if (!raw) return '';
   return raw
     .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function normalizeChartType(value: unknown): "line" | "bar" | "pie" | "area" | "stacked_bar" {
+function normalizeChartType(value: unknown): 'line' | 'bar' | 'pie' | 'area' | 'stacked_bar' {
   const raw = toDisplayString(value).toLowerCase().trim();
-  if (!raw) return "bar";
+  if (!raw) return 'bar';
 
-  if (raw === "stacked-bar" || raw === "stackedbar" || raw === "stacked_bar") {
-    return "stacked_bar";
+  if (raw === 'stacked-bar' || raw === 'stackedbar' || raw === 'stacked_bar') {
+    return 'stacked_bar';
   }
-  if (raw === "line") return "line";
-  if (raw === "bar" || raw === "column") return "bar";
-  if (raw === "pie" || raw === "donut") return "pie";
-  if (raw === "area") return "area";
-  return "bar";
+  if (raw === 'line') return 'line';
+  if (raw === 'bar' || raw === 'column') return 'bar';
+  if (raw === 'pie' || raw === 'donut') return 'pie';
+  if (raw === 'area') return 'area';
+  return 'bar';
 }
 
 function toMetricStatus(input: any): string {
-  if (typeof input?.status === "string" && input.status.trim().length > 0) {
+  if (typeof input?.status === 'string' && input.status.trim().length > 0) {
     return input.status;
   }
-  if (typeof input?.impact === "string") {
+  if (typeof input?.impact === 'string') {
     const impact = input.impact.toLowerCase();
-    if (impact.includes("negative") || impact.includes("risk") || impact.includes("critical")) {
-      return "risk";
+    if (impact.includes('negative') || impact.includes('risk') || impact.includes('critical')) {
+      return 'risk';
     }
-    if (impact.includes("positive")) {
-      return "positive";
+    if (impact.includes('positive')) {
+      return 'positive';
     }
   }
-  if (typeof input?.is_positive_change === "boolean") {
-    return input.is_positive_change ? "positive" : "risk";
+  if (typeof input?.is_positive_change === 'boolean') {
+    return input.is_positive_change ? 'positive' : 'risk';
   }
-  if (typeof input?.is_positive === "boolean") {
-    return input.is_positive ? "positive" : "risk";
+  if (typeof input?.is_positive === 'boolean') {
+    return input.is_positive ? 'positive' : 'risk';
   }
-  return "neutral";
+  return 'neutral';
 }
 
-function toInsightSeverity(input: any): "positive" | "neutral" | "watch" | "risk" {
-  if (typeof input?.severity === "string") {
+function toInsightSeverity(input: any): 'positive' | 'neutral' | 'watch' | 'risk' {
+  if (typeof input?.severity === 'string') {
     const severity = input.severity.toLowerCase();
-    if (severity === "positive" || severity === "neutral" || severity === "watch" || severity === "risk") {
+    if (
+      severity === 'positive' ||
+      severity === 'neutral' ||
+      severity === 'watch' ||
+      severity === 'risk'
+    ) {
       return severity;
     }
   }
-  if (typeof input?.impact === "string") {
+  if (typeof input?.impact === 'string') {
     const impact = input.impact.toLowerCase();
-    if (impact.includes("negative") || impact.includes("risk") || impact.includes("critical")) {
-      return "risk";
+    if (impact.includes('negative') || impact.includes('risk') || impact.includes('critical')) {
+      return 'risk';
     }
-    if (impact.includes("watch") || impact.includes("caution")) {
-      return "watch";
+    if (impact.includes('watch') || impact.includes('caution')) {
+      return 'watch';
     }
-    if (impact.includes("positive")) {
-      return "positive";
+    if (impact.includes('positive')) {
+      return 'positive';
     }
   }
-  if (typeof input?.type === "string") {
+  if (typeof input?.type === 'string') {
     const type = input.type.toLowerCase();
-    if (type === "risk") return "risk";
-    if (type === "opportunity" || type === "performance" || type === "positive") return "positive";
+    if (type === 'risk') return 'risk';
+    if (type === 'opportunity' || type === 'performance' || type === 'positive') return 'positive';
   }
-  return "neutral";
+  return 'neutral';
 }
 
 function toTableFromRows(rows: any[] | undefined): { headers: string[]; rows: string[][] } | null {
@@ -1673,49 +1668,49 @@ function toTableFromRows(rows: any[] | undefined): { headers: string[]; rows: st
 }
 
 const legacyBlockCategoryAliasMap: Record<string, CheckpointBlockCategory> = {
-  section: "summary_breakdown",
-  sections: "summary_breakdown",
-  summary: "summary_breakdown",
-  summary_breakdown: "summary_breakdown",
-  strategic_section: "summary_breakdown",
-  insight: "insight_recommendation",
-  insights: "insight_recommendation",
-  recommendation: "insight_recommendation",
-  recommendations: "insight_recommendation",
-  question: "insight_recommendation",
-  questions: "insight_recommendation",
-  insight_recommendation: "insight_recommendation",
-  data: "data",
-  table: "data",
-  tables: "data",
-  metric: "data",
-  metrics: "data",
-  performance_snapshot: "data",
-  graph: "graph",
-  graphs: "graph",
-  chart: "graph",
-  charts: "graph",
-  visualization: "graph",
+  section: 'summary_breakdown',
+  sections: 'summary_breakdown',
+  summary: 'summary_breakdown',
+  summary_breakdown: 'summary_breakdown',
+  strategic_section: 'summary_breakdown',
+  insight: 'insight_recommendation',
+  insights: 'insight_recommendation',
+  recommendation: 'insight_recommendation',
+  recommendations: 'insight_recommendation',
+  question: 'insight_recommendation',
+  questions: 'insight_recommendation',
+  insight_recommendation: 'insight_recommendation',
+  data: 'data',
+  table: 'data',
+  tables: 'data',
+  metric: 'data',
+  metrics: 'data',
+  performance_snapshot: 'data',
+  graph: 'graph',
+  graphs: 'graph',
+  chart: 'graph',
+  charts: 'graph',
+  visualization: 'graph',
   // V2 category fallbacks — maps to nearest V1 equivalent
-  narrative: "summary_breakdown",
-  metric_grid: "data",
-  insight_list: "insight_recommendation",
-  comparison: "summary_breakdown",
-  data_table: "data",
+  narrative: 'summary_breakdown',
+  metric_grid: 'data',
+  insight_list: 'insight_recommendation',
+  comparison: 'summary_breakdown',
+  data_table: 'data',
 };
 
 type LegacyFieldsFromBlocks = Pick<
   FrontendCheckpointReport,
-  | "performance_snapshot"
-  | "sections"
-  | "strategic_recommendations"
-  | "follow_up_questions"
-  | "graphs"
-  | "cached_sources"
+  | 'performance_snapshot'
+  | 'sections'
+  | 'strategic_recommendations'
+  | 'follow_up_questions'
+  | 'graphs'
+  | 'cached_sources'
 >;
 
 function toRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
@@ -1727,14 +1722,14 @@ function toRecordArray(value: unknown): Record<string, unknown>[] {
 }
 
 function toNonEmptyString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
 
 function resolveBlockCategory(
   category: unknown,
-  blockType: unknown
+  blockType: unknown,
 ): CheckpointBlockCategory | null {
   const categoryKey = toDisplayString(category).toLowerCase().trim();
   if (categoryKey && categoryKey in legacyBlockCategoryAliasMap) {
@@ -1750,15 +1745,15 @@ function resolveBlockCategory(
 }
 
 function mapRecommendationValue(value: unknown): z.infer<typeof recommendationSchema> | null {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return null;
     return {
-      title: "Recommendation",
+      title: 'Recommendation',
       rationale: trimmed,
       expected_impact: null,
-      priority: "MEDIUM",
-      action: "Recommendation",
+      priority: 'MEDIUM',
+      action: 'Recommendation',
       description: trimmed,
       type: undefined,
       target: undefined,
@@ -1774,50 +1769,42 @@ function mapRecommendationValue(value: unknown): z.infer<typeof recommendationSc
     toNonEmptyString(item.action) ||
     toNonEmptyString(item.title) ||
     formatEnumLabel(item.type) ||
-    "Recommendation";
+    'Recommendation';
   const rationale =
     toNonEmptyString(item.rationale) ||
     toNonEmptyString(item.description) ||
     toNonEmptyString(item.recommendation) ||
     toNonEmptyString(item.reasoning) ||
-    "";
+    '';
 
   return {
     title,
     rationale,
     expected_impact:
-      toNonEmptyString(item.expected_impact) ||
-      toNonEmptyString(item.impact) ||
-      null,
+      toNonEmptyString(item.expected_impact) || toNonEmptyString(item.impact) || null,
     priority:
       item.priority !== undefined && item.priority !== null
         ? String(item.priority).toUpperCase()
-        : "MEDIUM",
+        : 'MEDIUM',
     action: title,
     description: rationale,
     type: formatEnumLabel(item.type) || undefined,
     target: toNonEmptyString(item.target) ?? undefined,
-    reasoning:
-      toNonEmptyString(item.reasoning) ??
-      toNonEmptyString(item.rationale) ??
-      undefined,
-    impact:
-      toNonEmptyString(item.impact) ??
-      toNonEmptyString(item.expected_impact) ??
-      undefined,
+    reasoning: toNonEmptyString(item.reasoning) ?? toNonEmptyString(item.rationale) ?? undefined,
+    impact: toNonEmptyString(item.impact) ?? toNonEmptyString(item.expected_impact) ?? undefined,
   };
 }
 
 function mapHighlightValue(value: unknown): InsightItem | null {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) return null;
     return {
-      category: "analysis",
-      title: "",
+      category: 'analysis',
+      title: '',
       text: trimmed,
       impact: null,
-      severity: "neutral",
+      severity: 'neutral',
       confidence: null,
       evidence: [],
     };
@@ -1830,12 +1817,12 @@ function mapHighlightValue(value: unknown): InsightItem | null {
     toNonEmptyString(insight.content) ||
     toNonEmptyString(insight.description) ||
     toNonEmptyString(insight.text) ||
-    "";
+    '';
   if (!text) return null;
 
   return {
-    category: toNonEmptyString(insight.category) || "analysis",
-    title: toNonEmptyString(insight.title) || toNonEmptyString(insight.name) || "",
+    category: toNonEmptyString(insight.category) || 'analysis',
+    title: toNonEmptyString(insight.title) || toNonEmptyString(insight.name) || '',
     text,
     impact: toNonEmptyString(insight.impact) || toNonEmptyString(insight.metric),
     severity: toInsightSeverity(insight),
@@ -1848,18 +1835,18 @@ function mapHighlightValue(value: unknown): InsightItem | null {
 
 function toRecommendationItems(
   values: unknown,
-  itemType: "recommendation" | "insight" | "question"
+  itemType: 'recommendation' | 'insight' | 'question',
 ): InsightRecommendationItem[] {
   if (!Array.isArray(values)) return [];
 
   return values
     .map((value) => {
-      if (typeof value === "string") {
+      if (typeof value === 'string') {
         const trimmed = value.trim();
         if (!trimmed) return null;
         return {
           item_type: itemType,
-          title: itemType === "question" ? "Question" : formatEnumLabel(itemType),
+          title: itemType === 'question' ? 'Question' : formatEnumLabel(itemType),
           summary: trimmed,
           payload: {},
         };
@@ -1881,7 +1868,7 @@ function toRecommendationItems(
         toNonEmptyString(item.rationale) ||
         toNonEmptyString(item.description) ||
         toNonEmptyString(item.text) ||
-        "";
+        '';
       if (!title || !summary) return null;
 
       const payload = { ...item };
@@ -1925,21 +1912,21 @@ function summarizeIncomingBlock(rawBlock: Record<string, unknown>): string {
 
   const pairs = toRecordArray(rawBlock.pairs);
   if (pairs.length > 0) {
-    const beforeLabel = toNonEmptyString(rawBlock.before_label) || "Before";
-    const afterLabel = toNonEmptyString(rawBlock.after_label) || "After";
+    const beforeLabel = toNonEmptyString(rawBlock.before_label) || 'Before';
+    const afterLabel = toNonEmptyString(rawBlock.after_label) || 'After';
     return `${beforeLabel} compared with ${afterLabel}.`;
   }
 
   const rowCount = toRecordArray(rawBlock.rows).length;
   if (rowCount > 0) return `${rowCount} rows available.`;
 
-  return "No summary provided.";
+  return 'No summary provided.';
 }
 
-function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["blocks"] {
+function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport['blocks'] {
   if (!Array.isArray(rawBlocks)) return [];
 
-  const normalizedBlocks: FrontendCheckpointReport["blocks"] = [];
+  const normalizedBlocks: FrontendCheckpointReport['blocks'] = [];
 
   rawBlocks.forEach((value, index) => {
     const rawBlock = toRecord(value);
@@ -1954,7 +1941,7 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
         toNonEmptyString(rawBlock.id) ||
         `block_${index + 1}`,
       category,
-      scope: toNonEmptyString(rawBlock.scope) || "account",
+      scope: toNonEmptyString(rawBlock.scope) || 'account',
       title: toNonEmptyString(rawBlock.title) || `Block ${index + 1}`,
       summary: summarizeIncomingBlock(rawBlock),
       cached_sources: Array.isArray(rawBlock.cached_sources)
@@ -1962,7 +1949,7 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
         : [],
     } as const;
 
-    if (category === "summary_breakdown") {
+    if (category === 'summary_breakdown') {
       const candidate = summaryBreakdownBlockSchema.safeParse({
         ...blockBase,
         category,
@@ -1977,12 +1964,8 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
             : [],
         actions: [
           ...(Array.isArray(rawBlock.actions) ? rawBlock.actions : []),
-          ...(Array.isArray(rawBlock.recommendations)
-            ? rawBlock.recommendations
-            : []),
-          ...(Array.isArray(rawBlock.reccomendations)
-            ? rawBlock.reccomendations
-            : []),
+          ...(Array.isArray(rawBlock.recommendations) ? rawBlock.recommendations : []),
+          ...(Array.isArray(rawBlock.reccomendations) ? rawBlock.reccomendations : []),
         ]
           .map((item) => mapRecommendationValue(item))
           .filter((item): item is z.infer<typeof recommendationSchema> => Boolean(item)),
@@ -1992,26 +1975,23 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
       return;
     }
 
-    if (category === "insight_recommendation") {
+    if (category === 'insight_recommendation') {
       const candidate = insightRecommendationBlockSchema.safeParse({
         ...blockBase,
         category,
         items: [
-          ...toRecommendationItems(
-            rawBlock.items,
-            "insight"
-          ),
-          ...toRecommendationItems(rawBlock.recommendations, "recommendation"),
-          ...toRecommendationItems(rawBlock.reccomendations, "recommendation"),
-          ...toRecommendationItems(rawBlock.questions, "question"),
-          ...toRecommendationItems(rawBlock.follow_up_questions, "question"),
+          ...toRecommendationItems(rawBlock.items, 'insight'),
+          ...toRecommendationItems(rawBlock.recommendations, 'recommendation'),
+          ...toRecommendationItems(rawBlock.reccomendations, 'recommendation'),
+          ...toRecommendationItems(rawBlock.questions, 'question'),
+          ...toRecommendationItems(rawBlock.follow_up_questions, 'question'),
         ],
       });
       if (candidate.success) normalizedBlocks.push(candidate.data);
       return;
     }
 
-    if (category === "data") {
+    if (category === 'data') {
       const rows =
         toRecordArray(rawBlock.rows).length > 0
           ? toRecordArray(rawBlock.rows)
@@ -2034,7 +2014,7 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
     ].flatMap((graph) => parseGraphsFromInput(graph));
     const candidate = graphBlockSchema.safeParse({
       ...blockBase,
-      category: "graph",
+      category: 'graph',
       graphs: graphCandidates,
     });
     if (candidate.success) normalizedBlocks.push(candidate.data);
@@ -2053,15 +2033,13 @@ function createTableFromRows(rows: Record<string, unknown>[], title?: string) {
   };
 }
 
-export function deriveLegacyFieldsFromBlocks(
-  blocksInput: unknown
-): LegacyFieldsFromBlocks {
+export function deriveLegacyFieldsFromBlocks(blocksInput: unknown): LegacyFieldsFromBlocks {
   const blocks = normalizeIncomingBlocks(blocksInput);
-  const performanceSnapshot: FrontendCheckpointReport["performance_snapshot"] = [];
-  const sections: FrontendCheckpointReport["sections"] = [];
-  const strategicRecommendations: FrontendCheckpointReport["strategic_recommendations"] = [];
-  const followUpQuestions: FrontendCheckpointReport["follow_up_questions"] = [];
-  const graphs: FrontendCheckpointReport["graphs"] = [];
+  const performanceSnapshot: FrontendCheckpointReport['performance_snapshot'] = [];
+  const sections: FrontendCheckpointReport['sections'] = [];
+  const strategicRecommendations: FrontendCheckpointReport['strategic_recommendations'] = [];
+  const followUpQuestions: FrontendCheckpointReport['follow_up_questions'] = [];
+  const graphs: FrontendCheckpointReport['graphs'] = [];
   const cachedSources = new Set<string>();
 
   blocks.forEach((block) => {
@@ -2069,7 +2047,7 @@ export function deriveLegacyFieldsFromBlocks(
       if (source) cachedSources.add(source);
     });
 
-    if (block.category === "summary_breakdown") {
+    if (block.category === 'summary_breakdown') {
       sections.push({
         heading: block.title,
         scope: block.scope,
@@ -2084,15 +2062,15 @@ export function deriveLegacyFieldsFromBlocks(
       return;
     }
 
-    if (block.category === "insight_recommendation") {
+    if (block.category === 'insight_recommendation') {
       const insightHighlights: InsightItem[] = [];
       block.items.forEach((item) => {
         const normalizedType = item.item_type.toLowerCase().trim();
-        if (normalizedType === "question") {
+        if (normalizedType === 'question') {
           followUpQuestions.push(item.summary);
           return;
         }
-        if (normalizedType === "recommendation") {
+        if (normalizedType === 'recommendation') {
           const mappedRecommendation = mapRecommendationValue({
             title: item.title,
             rationale: item.summary,
@@ -2129,12 +2107,9 @@ export function deriveLegacyFieldsFromBlocks(
       return;
     }
 
-    if (block.category === "data") {
+    if (block.category === 'data') {
       const rowTable = createTableFromRows(block.rows, block.title);
-      const sectionTables = [
-        ...(rowTable ? [rowTable] : []),
-        ...block.tables,
-      ];
+      const sectionTables = [...(rowTable ? [rowTable] : []), ...block.tables];
       if (sectionTables.length > 0) {
         sections.push({
           heading: block.title,
@@ -2151,26 +2126,21 @@ export function deriveLegacyFieldsFromBlocks(
 
       block.rows.forEach((row) => {
         const metricLabel =
-          toNonEmptyString(row.metric) ||
-          toNonEmptyString(row.label) ||
-          toNonEmptyString(row.name);
+          toNonEmptyString(row.metric) || toNonEmptyString(row.label) || toNonEmptyString(row.name);
         if (!metricLabel) return;
         if (row.value === undefined || row.value === null) return;
         performanceSnapshot.push({
           metric: metricLabel,
           value:
-            typeof row.value === "number" || typeof row.value === "string"
+            typeof row.value === 'number' || typeof row.value === 'string'
               ? row.value
               : toDisplayString(row.value),
           change:
-            typeof row.change === "number" || typeof row.change === "string"
+            typeof row.change === 'number' || typeof row.change === 'string'
               ? row.change
               : undefined,
           direction: toNonEmptyString(row.direction) || undefined,
-          context:
-            toNonEmptyString(row.context) ||
-            toNonEmptyString(row.sub_label) ||
-            undefined,
+          context: toNonEmptyString(row.context) || toNonEmptyString(row.sub_label) || undefined,
           sub_label: toNonEmptyString(row.sub_label) || undefined,
           prefix: toNonEmptyString(row.prefix) || undefined,
           suffix: toNonEmptyString(row.suffix) || undefined,
@@ -2195,26 +2165,24 @@ export function deriveLegacyFieldsFromBlocks(
 }
 
 function buildBlocksFromLegacyFields(input: {
-  performance_snapshot: FrontendCheckpointReport["performance_snapshot"];
-  sections: FrontendCheckpointReport["sections"];
-  strategic_recommendations: FrontendCheckpointReport["strategic_recommendations"];
-  follow_up_questions: FrontendCheckpointReport["follow_up_questions"];
-  graphs: FrontendCheckpointReport["graphs"];
-  cached_sources: FrontendCheckpointReport["cached_sources"];
-}): FrontendCheckpointReport["blocks"] {
-  const blocks: FrontendCheckpointReport["blocks"] = [];
+  performance_snapshot: FrontendCheckpointReport['performance_snapshot'];
+  sections: FrontendCheckpointReport['sections'];
+  strategic_recommendations: FrontendCheckpointReport['strategic_recommendations'];
+  follow_up_questions: FrontendCheckpointReport['follow_up_questions'];
+  graphs: FrontendCheckpointReport['graphs'];
+  cached_sources: FrontendCheckpointReport['cached_sources'];
+}): FrontendCheckpointReport['blocks'] {
+  const blocks: FrontendCheckpointReport['blocks'] = [];
   let blockIndex = 1;
 
   input.sections.forEach((section) => {
     const candidate = summaryBreakdownBlockSchema.safeParse({
       block_id: `summary_breakdown_${blockIndex}`,
-      category: "summary_breakdown",
-      scope: section.scope || "account",
+      category: 'summary_breakdown',
+      scope: section.scope || 'account',
       title: section.heading || `Section ${blockIndex}`,
-      summary: section.summary || "Summary unavailable.",
-      cached_sources: Array.isArray(section.cached_sources)
-        ? section.cached_sources
-        : [],
+      summary: section.summary || 'Summary unavailable.',
+      cached_sources: Array.isArray(section.cached_sources) ? section.cached_sources : [],
       highlights: Array.isArray(section.highlights) ? section.highlights : [],
       actions: Array.isArray(section.actions) ? section.actions : [],
       tables: Array.isArray(section.tables) ? section.tables : [],
@@ -2226,10 +2194,10 @@ function buildBlocksFromLegacyFields(input: {
   if (input.performance_snapshot.length > 0) {
     const candidate = dataBlockSchema.safeParse({
       block_id: `data_${blockIndex}`,
-      category: "data",
-      scope: "account",
-      title: "Performance Snapshot",
-      summary: "Primary account metrics for this report.",
+      category: 'data',
+      scope: 'account',
+      title: 'Performance Snapshot',
+      summary: 'Primary account metrics for this report.',
       cached_sources: input.cached_sources,
       rows: input.performance_snapshot.map((metric) => ({
         ...metric,
@@ -2242,27 +2210,27 @@ function buildBlocksFromLegacyFields(input: {
   }
 
   const recommendationItems = input.strategic_recommendations.map((item) => ({
-    item_type: "recommendation",
-    title: item.title || "Recommendation",
-    summary: item.rationale || item.title || "Recommendation details unavailable.",
+    item_type: 'recommendation',
+    title: item.title || 'Recommendation',
+    summary: item.rationale || item.title || 'Recommendation details unavailable.',
     payload: {
       priority: item.priority,
       expected_impact: item.expected_impact,
     },
   }));
   const questionItems = input.follow_up_questions.map((question) => ({
-    item_type: "question",
-    title: "Question",
+    item_type: 'question',
+    title: 'Question',
     summary: question,
     payload: {},
   }));
   if (recommendationItems.length > 0 || questionItems.length > 0) {
     const candidate = insightRecommendationBlockSchema.safeParse({
       block_id: `insight_recommendation_${blockIndex}`,
-      category: "insight_recommendation",
-      scope: "account",
-      title: "Insights and Recommendations",
-      summary: "Actionable recommendations and follow-up questions.",
+      category: 'insight_recommendation',
+      scope: 'account',
+      title: 'Insights and Recommendations',
+      summary: 'Actionable recommendations and follow-up questions.',
       cached_sources: input.cached_sources,
       items: [...recommendationItems, ...questionItems],
     });
@@ -2273,10 +2241,10 @@ function buildBlocksFromLegacyFields(input: {
   if (input.graphs.length > 0) {
     const candidate = graphBlockSchema.safeParse({
       block_id: `graph_${blockIndex}`,
-      category: "graph",
-      scope: "account",
-      title: "Graph Analysis",
-      summary: "Visual breakdown of key trends.",
+      category: 'graph',
+      scope: 'account',
+      title: 'Graph Analysis',
+      summary: 'Visual breakdown of key trends.',
       cached_sources: input.cached_sources,
       graphs: input.graphs,
     });
@@ -2288,7 +2256,7 @@ function buildBlocksFromLegacyFields(input: {
 
 function parseWideChartsFromRows(graph: any): any[] {
   const rows = Array.isArray(graph?.data)
-    ? graph.data.filter((row: unknown) => row && typeof row === "object")
+    ? graph.data.filter((row: unknown) => row && typeof row === 'object')
     : [];
   if (rows.length === 0) return [];
 
@@ -2296,17 +2264,25 @@ function parseWideChartsFromRows(graph: any): any[] {
   const keys = Object.keys(firstRow);
   if (keys.length === 0) return [];
 
-  const candidateLabelKeys = ["label", "name", "x", "category", "campaign", "ad_set", "ad_set_name"];
+  const candidateLabelKeys = [
+    'label',
+    'name',
+    'x',
+    'category',
+    'campaign',
+    'ad_set',
+    'ad_set_name',
+  ];
   const labelKey =
     candidateLabelKeys.find((key) => key in firstRow) ??
-    keys.find((key) => typeof firstRow[key] === "string") ??
+    keys.find((key) => typeof firstRow[key] === 'string') ??
     keys[0];
 
   const numericKeys = keys.filter((key) => {
     if (key === labelKey) return false;
     const value = firstRow[key];
-    if (typeof value === "number") return true;
-    if (typeof value === "string") {
+    if (typeof value === 'number') return true;
+    if (typeof value === 'string') {
       const parsed = Number.parseFloat(value);
       return Number.isFinite(parsed);
     }
@@ -2315,8 +2291,8 @@ function parseWideChartsFromRows(graph: any): any[] {
 
   if (numericKeys.length === 0) return [];
 
-  const baseTitle = toDisplayString(graph?.title || graph?.graph_name || "Chart");
-  const chartType = normalizeChartType(graph?.type || graph?.graph_type || "bar");
+  const baseTitle = toDisplayString(graph?.title || graph?.graph_name || 'Chart');
+  const chartType = normalizeChartType(graph?.type || graph?.graph_type || 'bar');
   const xAxisLabel = graph?.x_axis_label || formatEnumLabel(labelKey);
   const description = graph?.description || graph?.graph_description;
 
@@ -2333,34 +2309,32 @@ function parseWideChartsFromRows(graph: any): any[] {
   }));
 }
 
-function resolveFrontendParserHint(value: unknown): "series" | "chartjs" | "" {
-  if (typeof value !== "string") return "";
+function resolveFrontendParserHint(value: unknown): 'series' | 'chartjs' | '' {
+  if (typeof value !== 'string') return '';
   const normalized = value.trim().toLowerCase();
-  if (!normalized) return "";
-  if (normalized.startsWith("series")) return "series";
-  if (normalized.startsWith("chartjs")) return "chartjs";
-  return "";
+  if (!normalized) return '';
+  if (normalized.startsWith('series')) return 'series';
+  if (normalized.startsWith('chartjs')) return 'chartjs';
+  return '';
 }
 
 function parseGraph(graph: any): any {
   if (!graph) return null;
 
-  const parserHint = resolveFrontendParserHint(
-    graph.frontend_parser ?? graph.data_format
-  );
+  const parserHint = resolveFrontendParserHint(graph.frontend_parser ?? graph.data_format);
 
   const baseChart = {
-    title: graph.title || graph.graph_name || "Chart",
-    type: normalizeChartType(graph.type || graph.graph_type || "bar"),
+    title: graph.title || graph.graph_name || 'Chart',
+    type: normalizeChartType(graph.type || graph.graph_type || 'bar'),
     description: graph.description || graph.graph_description,
     frontend_parser: parserHint || undefined,
   };
 
-  if (parserHint === "series" && Array.isArray(graph.series)) {
+  if (parserHint === 'series' && Array.isArray(graph.series)) {
     return {
       ...baseChart,
       series: graph.series.map((s: any) => ({
-        name: s.name || "Series",
+        name: s.name || 'Series',
         data: (s.data || []).map((d: any, index: number) => ({
           x: d.x || d.label || d.name || d.category || String(index + 1),
           y: toFiniteNumber(d.y ?? d.value),
@@ -2371,8 +2345,8 @@ function parseGraph(graph: any): any {
     };
   }
 
-  if (parserHint === "chartjs" && Array.isArray(graph.labels) && Array.isArray(graph.datasets)) {
-    const labels = graph.labels.map((label: unknown) => String(label ?? ""));
+  if (parserHint === 'chartjs' && Array.isArray(graph.labels) && Array.isArray(graph.datasets)) {
+    const labels = graph.labels.map((label: unknown) => String(label ?? ''));
     const datasets = graph.datasets;
 
     if (datasets.length === 1) {
@@ -2405,7 +2379,7 @@ function parseGraph(graph: any): any {
     return {
       ...baseChart,
       series: graph.series.map((s: any) => ({
-        name: s.name || "Series",
+        name: s.name || 'Series',
         data: (s.data || []).map((d: any, index: number) => ({
           x: d.x || d.label || d.name || d.category || String(index + 1),
           y: toFiniteNumber(d.y ?? d.value),
@@ -2417,7 +2391,7 @@ function parseGraph(graph: any): any {
   }
 
   if (Array.isArray(graph.labels) && Array.isArray(graph.datasets)) {
-    const labels = graph.labels.map((label: unknown) => String(label ?? ""));
+    const labels = graph.labels.map((label: unknown) => String(label ?? ''));
     const datasets = graph.datasets;
 
     if (datasets.length === 1) {
@@ -2445,11 +2419,11 @@ function parseGraph(graph: any): any {
       y_axis_label: graph.y_axis_label,
     };
   }
-  
+
   return {
     ...baseChart,
     data: (graph.data || []).map((d: any) => ({
-      label: d.label || d.name || d.x || d.category || "",
+      label: d.label || d.name || d.x || d.category || '',
       value: toFiniteNumber(d.value ?? d.y),
       fill: d.fill,
     })),
@@ -2458,11 +2432,9 @@ function parseGraph(graph: any): any {
 
 function parseGraphsFromInput(graph: any): any[] {
   if (!graph) return [];
-  const parserHint = resolveFrontendParserHint(
-    graph.frontend_parser ?? graph.data_format
-  );
+  const parserHint = resolveFrontendParserHint(graph.frontend_parser ?? graph.data_format);
 
-  if (parserHint === "series" || parserHint === "chartjs") {
+  if (parserHint === 'series' || parserHint === 'chartjs') {
     const parsedWithHint = parseGraph(graph);
     return parsedWithHint ? [parsedWithHint] : [];
   }
@@ -2475,9 +2447,9 @@ function parseGraphsFromInput(graph: any): any[] {
   return parsed ? [parsed] : [];
 }
 
-function parseReportData(reportData: any): { 
-  metrics: any[]; 
-  graphs: any[]; 
+function parseReportData(reportData: any): {
+  metrics: any[];
+  graphs: any[];
   table: any | null;
   title: string;
   summary: string;
@@ -2487,19 +2459,16 @@ function parseReportData(reportData: any): {
     metrics: [] as any[],
     graphs: [] as any[],
     table: null as any | null,
-    title: reportData.title || "",
-    summary: reportData.summary || "",
-    sectionSummary:
-      reportData.section_summary ||
-      reportData.analysis_summary ||
-      "",
+    title: reportData.title || '',
+    summary: reportData.summary || '',
+    sectionSummary: reportData.section_summary || reportData.analysis_summary || '',
   };
-  
+
   // Support key_metrics (Lead Strategist format)
   if (Array.isArray(reportData.key_metrics)) {
     result.metrics = reportData.key_metrics.map((m: any) => ({
-      metric: m.label || m.metric || "Metric",
-      value: m.value ?? "0",
+      metric: m.label || m.metric || 'Metric',
+      value: m.value ?? '0',
       change: m.change,
       status: toMetricStatus(m),
       direction: m.direction,
@@ -2509,12 +2478,12 @@ function parseReportData(reportData: any): {
       suffix: m.suffix,
     }));
   }
-  
+
   // Support performance_snapshot (SoT format)
   if (Array.isArray(reportData.performance_snapshot)) {
     result.metrics = reportData.performance_snapshot.map((m: any) => ({
-      metric: m.label || m.metric || "Metric",
-      value: m.value ?? "0",
+      metric: m.label || m.metric || 'Metric',
+      value: m.value ?? '0',
       change: m.change,
       status: toMetricStatus(m),
       direction: m.direction,
@@ -2524,16 +2493,12 @@ function parseReportData(reportData: any): {
       suffix: m.suffix,
     }));
   }
-  
+
   if (Array.isArray(reportData.graphs)) {
-    result.graphs = reportData.graphs.flatMap((graph: any) =>
-      parseGraphsFromInput(graph)
-    );
+    result.graphs = reportData.graphs.flatMap((graph: any) => parseGraphsFromInput(graph));
   }
   if (Array.isArray(reportData.charts)) {
-    result.graphs.push(
-      ...reportData.charts.flatMap((graph: any) => parseGraphsFromInput(graph))
-    );
+    result.graphs.push(...reportData.charts.flatMap((graph: any) => parseGraphsFromInput(graph)));
   }
   if (reportData.main_graph) {
     result.graphs.push(...parseGraphsFromInput(reportData.main_graph));
@@ -2541,7 +2506,7 @@ function parseReportData(reportData: any): {
   if (reportData.primary_performance_graph) {
     result.graphs.push(...parseGraphsFromInput(reportData.primary_performance_graph));
   }
-  
+
   if (reportData.table) {
     result.table = {
       headers: reportData.table.headers || [],
@@ -2550,11 +2515,14 @@ function parseReportData(reportData: any): {
   } else if (Array.isArray(reportData.campaign_table) && reportData.campaign_table.length > 0) {
     const table = toTableFromRows(reportData.campaign_table);
     if (table) result.table = table;
-  } else if (Array.isArray(reportData.performance_table) && reportData.performance_table.length > 0) {
+  } else if (
+    Array.isArray(reportData.performance_table) &&
+    reportData.performance_table.length > 0
+  ) {
     const table = toTableFromRows(reportData.performance_table);
     if (table) result.table = table;
   }
-  
+
   return result;
 }
 
@@ -2564,120 +2532,120 @@ function parseReportData(reportData: any): {
 
 export const reportPayloadSchema = z.union([
   // specialist_insights format (JSON wrapped in strings) - ONLY match if specialist_insights exists
-  z.object({
-    specialist_insights: z.array(z.string()),
-  }).transform((data) => {
-    const insights = data.specialist_insights || [];
-    
-    let executiveSummary = "";
-    let performanceSnapshot: any[] = [];
-    let sections: any[] = [];
-    let strategicRecommendations: any[] = [];
-    let allGraphs: any[] = [];
-    
-    for (const insightStr of insights) {
-      const items = extractJsonArrayFromString(insightStr);
-      
-      for (const item of items) {
-        if (!item) continue;
-        
-        if (item.report_data) {
-          const reportData = item.report_data;
-          const parsed = parseReportData(reportData);
-          
-          if (parsed.summary && !executiveSummary) {
-            executiveSummary = parsed.summary;
+  z
+    .object({
+      specialist_insights: z.array(z.string()),
+    })
+    .transform((data) => {
+      const insights = data.specialist_insights || [];
+
+      let executiveSummary = '';
+      let performanceSnapshot: any[] = [];
+      const sections: any[] = [];
+      const strategicRecommendations: any[] = [];
+      const allGraphs: any[] = [];
+
+      for (const insightStr of insights) {
+        const items = extractJsonArrayFromString(insightStr);
+
+        for (const item of items) {
+          if (!item) continue;
+
+          if (item.report_data) {
+            const reportData = item.report_data;
+            const parsed = parseReportData(reportData);
+
+            if (parsed.summary && !executiveSummary) {
+              executiveSummary = parsed.summary;
+            }
+
+            if (parsed.metrics.length > 0 && performanceSnapshot.length === 0) {
+              performanceSnapshot = parsed.metrics;
+            }
+
+            if (parsed.graphs.length > 0) {
+              allGraphs.push(...parsed.graphs);
+            }
+
+            const sectionTables = parsed.table ? [parsed.table] : [];
+            const sectionGraphs = parsed.graphs;
+
+            if (sectionTables.length > 0 || sectionGraphs.length > 0 || parsed.sectionSummary) {
+              sections.push({
+                heading: parsed.title || 'Analysis',
+                scope: 'account',
+                summary: parsed.sectionSummary,
+                highlights: [],
+                tables: sectionTables,
+                actions: [],
+                confidence: null,
+                cached_sources: [],
+                graphs: sectionGraphs,
+              });
+            }
           }
-          
-          if (parsed.metrics.length > 0 && performanceSnapshot.length === 0) {
-            performanceSnapshot = parsed.metrics;
+
+          const itemRecommendations = item.recommendations || item.reccomendations;
+          if (Array.isArray(itemRecommendations)) {
+            strategicRecommendations.push(
+              ...itemRecommendations
+                .map((item: unknown) => mapRecommendationValue(item))
+                .filter(
+                  (recommendation): recommendation is z.infer<typeof recommendationSchema> =>
+                    recommendation !== null,
+                ),
+            );
           }
-          
-          if (parsed.graphs.length > 0) {
-            allGraphs.push(...parsed.graphs);
-          }
-          
-          const sectionTables = parsed.table ? [parsed.table] : [];
-          const sectionGraphs = parsed.graphs;
-          
-          if (sectionTables.length > 0 || sectionGraphs.length > 0 || parsed.sectionSummary) {
-            sections.push({
-              heading: parsed.title || "Analysis",
-              scope: "account",
-              summary: parsed.sectionSummary,
-              highlights: [],
-              tables: sectionTables,
-              actions: [],
-              confidence: null,
-              cached_sources: [],
-              graphs: sectionGraphs,
-            });
-          }
-        }
-        
-        const itemRecommendations = item.recommendations || item.reccomendations;
-        if (Array.isArray(itemRecommendations)) {
-          strategicRecommendations.push(
-            ...itemRecommendations
-              .map((item: unknown) => mapRecommendationValue(item))
-              .filter(
-                (
-                  recommendation
-                ): recommendation is z.infer<typeof recommendationSchema> =>
-                  recommendation !== null
-              )
-          );
         }
       }
-    }
 
-    const blocks = buildBlocksFromLegacyFields({
-      performance_snapshot: performanceSnapshot,
-      sections,
-      strategic_recommendations: strategicRecommendations,
-      follow_up_questions: [],
-      graphs: allGraphs,
-      cached_sources: [],
-    });
-    
-    return {
-      language: "en",
-      report_title: "",
-      executive_summary: executiveSummary || "Analysis complete.",
-      budget: null,
-      performance_snapshot: performanceSnapshot,
-      blocks,
-      sections,
-      strategic_recommendations: strategicRecommendations,
-      follow_up_questions: [],
-      handoff_trace: [],
-      execution_objectives: [],
-      cached_sources: [],
-      graphs: allGraphs,
-    };
-  }),
+      const blocks = buildBlocksFromLegacyFields({
+        performance_snapshot: performanceSnapshot,
+        sections,
+        strategic_recommendations: strategicRecommendations,
+        follow_up_questions: [],
+        graphs: allGraphs,
+        cached_sources: [],
+      });
+
+      return {
+        language: 'en',
+        report_title: '',
+        executive_summary: executiveSummary || 'Analysis complete.',
+        budget: null,
+        performance_snapshot: performanceSnapshot,
+        blocks,
+        sections,
+        strategic_recommendations: strategicRecommendations,
+        follow_up_questions: [],
+        handoff_trace: [],
+        execution_objectives: [],
+        cached_sources: [],
+        graphs: allGraphs,
+      };
+    }),
   // Catch-all for flexible/streaming JSON formats - try this BEFORE strict frontendCheckpointReportSchema
   z.record(z.string(), z.unknown()).transform((data) => {
     const anyData = data as Record<string, unknown>;
     const nestedCheckpointReport =
       anyData.checkpoint_report &&
-      typeof anyData.checkpoint_report === "object" &&
+      typeof anyData.checkpoint_report === 'object' &&
       !Array.isArray(anyData.checkpoint_report)
         ? (anyData.checkpoint_report as Record<string, unknown>)
         : null;
     const nestedReport =
-      anyData.report && typeof anyData.report === "object" && !Array.isArray(anyData.report)
+      anyData.report && typeof anyData.report === 'object' && !Array.isArray(anyData.report)
         ? (anyData.report as Record<string, unknown>)
         : null;
     const source = nestedCheckpointReport ?? nestedReport ?? anyData;
     const reportMetadata =
       source.report_metadata &&
-      typeof source.report_metadata === "object" &&
+      typeof source.report_metadata === 'object' &&
       !Array.isArray(source.report_metadata)
         ? (source.report_metadata as Record<string, unknown>)
         : null;
     const summaryObject =
-      source.summary && typeof source.summary === "object" && !Array.isArray(source.summary)
+      source.summary && typeof source.summary === 'object' && !Array.isArray(source.summary)
         ? (source.summary as Record<string, unknown>)
         : null;
 
@@ -2695,48 +2663,48 @@ export const reportPayloadSchema = z.union([
     if (Array.isArray(metricsSource)) {
       performanceSnapshot.push(
         ...metricsSource.map((m: any) => ({
-          metric: m.label || m.metric || m.name || "Metric",
-          value: m.value ?? "0",
+          metric: m.label || m.metric || m.name || 'Metric',
+          value: m.value ?? '0',
           change: m.change,
           direction: m.direction,
           context: m.context,
           sub_label: m.sub_label,
           status: toMetricStatus(m),
-          prefix: m.prefix || (m.unit === "currency" ? "$" : undefined),
-          suffix: m.suffix || (m.unit === "%" ? "%" : undefined),
-          format: m.format || (m.unit === "currency" ? "currency" : undefined),
-        }))
+          prefix: m.prefix || (m.unit === 'currency' ? '$' : undefined),
+          suffix: m.suffix || (m.unit === '%' ? '%' : undefined),
+          format: m.format || (m.unit === 'currency' ? 'currency' : undefined),
+        })),
       );
     }
 
     if (Array.isArray(source.kpis)) {
       performanceSnapshot.push(
         ...source.kpis.map((kpi: any) => ({
-          metric: kpi.name || kpi.metric || kpi.label || "KPI",
-          value: kpi.value ?? "0",
+          metric: kpi.name || kpi.metric || kpi.label || 'KPI',
+          value: kpi.value ?? '0',
           status: toMetricStatus(kpi),
-          prefix: kpi.unit === "currency" ? "$" : undefined,
-          suffix: kpi.unit === "x" || kpi.unit === "%" ? String(kpi.unit) : undefined,
-          format: kpi.unit === "currency" ? "currency" : undefined,
-          context: typeof kpi.description === "string" ? kpi.description : undefined,
-        }))
+          prefix: kpi.unit === 'currency' ? '$' : undefined,
+          suffix: kpi.unit === 'x' || kpi.unit === '%' ? String(kpi.unit) : undefined,
+          format: kpi.unit === 'currency' ? 'currency' : undefined,
+          context: typeof kpi.description === 'string' ? kpi.description : undefined,
+        })),
       );
     }
 
     const budget =
-      source.budget && typeof source.budget === "object" && !Array.isArray(source.budget)
+      source.budget && typeof source.budget === 'object' && !Array.isArray(source.budget)
         ? (source.budget as Record<string, unknown>)
         : null;
     if (budget && budget.total_spend !== undefined && budget.total_spend !== null) {
       performanceSnapshot.push({
-        metric: "Total Spend",
+        metric: 'Total Spend',
         value:
-          typeof budget.total_spend === "number" || typeof budget.total_spend === "string"
+          typeof budget.total_spend === 'number' || typeof budget.total_spend === 'string'
             ? budget.total_spend
             : String(budget.total_spend),
-        prefix: budget.currency === "USD" ? "$" : undefined,
-        format: budget.currency === "USD" ? "currency" : undefined,
-        status: "neutral",
+        prefix: budget.currency === 'USD' ? '$' : undefined,
+        format: budget.currency === 'USD' ? 'currency' : undefined,
+        status: 'neutral',
       });
     }
 
@@ -2747,7 +2715,7 @@ export const reportPayloadSchema = z.union([
 
     if (Array.isArray(source.sections)) {
       for (const rawSection of source.sections) {
-        if (!rawSection || typeof rawSection !== "object" || Array.isArray(rawSection)) {
+        if (!rawSection || typeof rawSection !== 'object' || Array.isArray(rawSection)) {
           continue;
         }
         const section = rawSection as Record<string, unknown>;
@@ -2763,20 +2731,15 @@ export const reportPayloadSchema = z.union([
           ? highlightsSource
               .map((item) => mapHighlightValue(item))
               .filter(
-                (
-                  item
-                ): item is NonNullable<ReturnType<typeof mapHighlightValue>> =>
-                  item !== null
+                (item): item is NonNullable<ReturnType<typeof mapHighlightValue>> => item !== null,
               )
           : [];
         const sectionActions = Array.isArray(actionsSource)
           ? actionsSource
               .map((item) => mapRecommendationValue(item))
               .filter(
-                (
-                  item
-                ): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
-                  item !== null
+                (item): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
+                  item !== null,
               )
           : [];
         const rawTables = Array.isArray(section.tables)
@@ -2791,22 +2754,20 @@ export const reportPayloadSchema = z.union([
 
         sections.push({
           heading:
-            (typeof section.heading === "string" && section.heading) ||
-            (typeof section.title === "string" && section.title) ||
-            "Analysis",
-          scope:
-            (typeof section.scope === "string" && section.scope) || "account",
+            (typeof section.heading === 'string' && section.heading) ||
+            (typeof section.title === 'string' && section.title) ||
+            'Analysis',
+          scope: (typeof section.scope === 'string' && section.scope) || 'account',
           summary:
-            (typeof section.summary === "string" && section.summary) ||
-            (typeof section.content === "string" && section.content) ||
-            (typeof section.section_summary === "string" && section.section_summary) ||
-            (typeof section.analysis_summary === "string" && section.analysis_summary) ||
-            "",
+            (typeof section.summary === 'string' && section.summary) ||
+            (typeof section.content === 'string' && section.content) ||
+            (typeof section.section_summary === 'string' && section.section_summary) ||
+            (typeof section.analysis_summary === 'string' && section.analysis_summary) ||
+            '',
           highlights: sectionHighlights,
           tables: rawTables,
           actions: sectionActions,
-          confidence:
-            (typeof section.confidence === "string" && section.confidence) || null,
+          confidence: (typeof section.confidence === 'string' && section.confidence) || null,
           cached_sources: Array.isArray(section.cached_sources)
             ? section.cached_sources.map((item) => toDisplayString(item))
             : [],
@@ -2815,12 +2776,9 @@ export const reportPayloadSchema = z.union([
       }
     }
 
-    if (
-      sections.length === 0 &&
-      Array.isArray(source.blocks)
-    ) {
+    if (sections.length === 0 && Array.isArray(source.blocks)) {
       for (const rawBlock of source.blocks) {
-        if (!rawBlock || typeof rawBlock !== "object" || Array.isArray(rawBlock)) {
+        if (!rawBlock || typeof rawBlock !== 'object' || Array.isArray(rawBlock)) {
           continue;
         }
         const block = rawBlock as Record<string, unknown>;
@@ -2828,32 +2786,27 @@ export const reportPayloadSchema = z.union([
           ? block.highlights
               .map((item) => mapHighlightValue(item))
               .filter(
-                (
-                  item
-                ): item is NonNullable<ReturnType<typeof mapHighlightValue>> =>
-                  item !== null
+                (item): item is NonNullable<ReturnType<typeof mapHighlightValue>> => item !== null,
               )
           : [];
         const blockActions = Array.isArray(block.actions)
           ? block.actions
               .map((item) => mapRecommendationValue(item))
               .filter(
-                (
-                  item
-                ): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
-                  item !== null
+                (item): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
+                  item !== null,
               )
           : [];
 
         const insightRecommendation =
           block.insight_recommendation &&
-          typeof block.insight_recommendation === "object" &&
+          typeof block.insight_recommendation === 'object' &&
           !Array.isArray(block.insight_recommendation)
             ? (block.insight_recommendation as Record<string, unknown>)
             : null;
         if (insightRecommendation && Array.isArray(insightRecommendation.items)) {
           for (const rawItem of insightRecommendation.items) {
-            if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
+            if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
               continue;
             }
             const item = rawItem as Record<string, unknown>;
@@ -2865,7 +2818,7 @@ export const reportPayloadSchema = z.union([
               toNonEmptyString(item.text);
             if (!itemSummary) continue;
 
-            if (itemType === "question") {
+            if (itemType === 'question') {
               blockDerivedQuestions.push(itemSummary);
               continue;
             }
@@ -2873,17 +2826,15 @@ export const reportPayloadSchema = z.union([
             const mappedRecommendation = mapRecommendationValue({
               ...item,
               title:
-                toNonEmptyString(item.title) ||
-                toNonEmptyString(item.action) ||
-                "Recommendation",
+                toNonEmptyString(item.title) || toNonEmptyString(item.action) || 'Recommendation',
               rationale: itemSummary,
             });
             if (
               mappedRecommendation &&
-              (itemType === "recommendation" ||
-                itemType === "action" ||
-                itemType === "opportunity" ||
-                itemType === "risk")
+              (itemType === 'recommendation' ||
+                itemType === 'action' ||
+                itemType === 'opportunity' ||
+                itemType === 'risk')
             ) {
               blockActions.push(mappedRecommendation);
               blockDerivedRecommendations.push(mappedRecommendation);
@@ -2902,7 +2853,7 @@ export const reportPayloadSchema = z.union([
         }
 
         const blockData =
-          block.data && typeof block.data === "object" && !Array.isArray(block.data)
+          block.data && typeof block.data === 'object' && !Array.isArray(block.data)
             ? (block.data as Record<string, unknown>)
             : null;
         const blockTable =
@@ -2911,21 +2862,20 @@ export const reportPayloadSchema = z.union([
             (Array.isArray(blockData.columns) && Array.isArray(blockData.rows)))
             ? {
                 title:
-                  (typeof block.title === "string" && block.title) ||
-                  (typeof blockData.title === "string" ? blockData.title : undefined),
-                headers: (
-                  Array.isArray(blockData.headers)
-                    ? blockData.headers
-                    : Array.isArray(blockData.columns)
-                      ? blockData.columns
-                      : []
+                  (typeof block.title === 'string' && block.title) ||
+                  (typeof blockData.title === 'string' ? blockData.title : undefined),
+                headers: (Array.isArray(blockData.headers)
+                  ? blockData.headers
+                  : Array.isArray(blockData.columns)
+                    ? blockData.columns
+                    : []
                 ).map((header) => toDisplayString(header)),
                 rows: (blockData.rows as unknown[]).map((row) =>
                   Array.isArray(row)
                     ? row.map((cell) => toDisplayString(cell))
-                    : row && typeof row === "object"
+                    : row && typeof row === 'object'
                       ? row
-                      : [toDisplayString(row)]
+                      : [toDisplayString(row)],
                 ),
               }
             : null;
@@ -2937,19 +2887,16 @@ export const reportPayloadSchema = z.union([
         ].flatMap((graph) => parseGraphsFromInput(graph));
 
         sections.push({
-          heading:
-            (typeof block.title === "string" && block.title) || "Analysis",
-          scope:
-            (typeof block.scope === "string" && block.scope) || "account",
+          heading: (typeof block.title === 'string' && block.title) || 'Analysis',
+          scope: (typeof block.scope === 'string' && block.scope) || 'account',
           summary:
-            (typeof block.summary === "string" && block.summary) ||
-            (typeof block.content === "string" && block.content) ||
-            "",
+            (typeof block.summary === 'string' && block.summary) ||
+            (typeof block.content === 'string' && block.content) ||
+            '',
           highlights: blockHighlights,
           tables: blockTable ? [blockTable] : [],
           actions: blockActions,
-          confidence:
-            (typeof block.confidence === "string" && block.confidence) || null,
+          confidence: (typeof block.confidence === 'string' && block.confidence) || null,
           cached_sources: Array.isArray(block.cached_sources)
             ? block.cached_sources.map((item) => toDisplayString(item))
             : [],
@@ -2960,20 +2907,20 @@ export const reportPayloadSchema = z.union([
 
     const sectionTables: any[] = [];
     const campaignTable = toTableFromRows(
-      Array.isArray(source.campaign_table) ? source.campaign_table : undefined
+      Array.isArray(source.campaign_table) ? source.campaign_table : undefined,
     );
     if (campaignTable) {
       sectionTables.push(campaignTable);
     }
     const performanceTable = toTableFromRows(
-      Array.isArray(source.performance_table) ? source.performance_table : undefined
+      Array.isArray(source.performance_table) ? source.performance_table : undefined,
     );
     if (performanceTable) {
       sectionTables.push(performanceTable);
     }
     if (
       source.table &&
-      typeof source.table === "object" &&
+      typeof source.table === 'object' &&
       !Array.isArray(source.table) &&
       Array.isArray((source.table as Record<string, unknown>).headers) &&
       Array.isArray((source.table as Record<string, unknown>).rows)
@@ -2982,7 +2929,7 @@ export const reportPayloadSchema = z.union([
       sectionTables.push({
         headers: (table.headers as unknown[]).map((header) => toDisplayString(header)),
         rows: (table.rows as unknown[]).map((row) =>
-          Array.isArray(row) ? row.map((cell) => toDisplayString(cell)) : []
+          Array.isArray(row) ? row.map((cell) => toDisplayString(cell)) : [],
         ),
       });
     }
@@ -3001,11 +2948,8 @@ export const reportPayloadSchema = z.union([
         ...sourceInsights
           .map((item) => mapHighlightValue(item))
           .filter(
-            (
-              item
-            ): item is NonNullable<ReturnType<typeof mapHighlightValue>> =>
-              item !== null
-          )
+            (item): item is NonNullable<ReturnType<typeof mapHighlightValue>> => item !== null,
+          ),
       );
     }
 
@@ -3017,10 +2961,10 @@ export const reportPayloadSchema = z.union([
     }
 
     const sectionSummary =
-      (typeof source.section_summary === "string" && source.section_summary) ||
-      (typeof source.analysis_summary === "string" && source.analysis_summary) ||
-      (typeof source.section_overview === "string" && source.section_overview) ||
-      "";
+      (typeof source.section_summary === 'string' && source.section_summary) ||
+      (typeof source.analysis_summary === 'string' && source.analysis_summary) ||
+      (typeof source.section_overview === 'string' && source.section_overview) ||
+      '';
     if (
       sections.length === 0 &&
       (sectionTables.length > 0 ||
@@ -3030,10 +2974,10 @@ export const reportPayloadSchema = z.union([
     ) {
       sections.push({
         heading:
-          (typeof source.section_title === "string" && source.section_title) ||
-          (typeof source.analysis_title === "string" && source.analysis_title) ||
-          "Analysis",
-        scope: "account",
+          (typeof source.section_title === 'string' && source.section_title) ||
+          (typeof source.analysis_title === 'string' && source.analysis_title) ||
+          'Analysis',
+        scope: 'account',
         summary: sectionSummary,
         highlights: topLevelHighlights,
         tables: sectionTables,
@@ -3054,7 +2998,7 @@ export const reportPayloadSchema = z.union([
       source.reccomendations,
       source.priority_recommendations,
       source.priority_reccomendations,
-      source["priority reccomendations"],
+      source['priority reccomendations'],
     ];
     for (const recommendationSource of recommendationSources) {
       if (!Array.isArray(recommendationSource)) continue;
@@ -3062,11 +3006,8 @@ export const reportPayloadSchema = z.union([
         ...recommendationSource
           .map((item) => mapRecommendationValue(item))
           .filter(
-            (
-              item
-            ): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
-              item !== null
-          )
+            (item): item is NonNullable<ReturnType<typeof mapRecommendationValue>> => item !== null,
+          ),
       );
     }
     if (blockDerivedRecommendations.length > 0) {
@@ -3081,32 +3022,28 @@ export const reportPayloadSchema = z.union([
     }
 
     const executiveSummary =
-      (typeof source.executive_summary === "string" && source.executive_summary) ||
-      (typeof summaryObject?.overview === "string" && summaryObject.overview) ||
-      (typeof source.summary === "string" && source.summary) ||
+      (typeof source.executive_summary === 'string' && source.executive_summary) ||
+      (typeof summaryObject?.overview === 'string' && summaryObject.overview) ||
+      (typeof source.summary === 'string' && source.summary) ||
       (Array.isArray(source.blocks) &&
       source.blocks[0] &&
-      typeof source.blocks[0] === "object" &&
+      typeof source.blocks[0] === 'object' &&
       !Array.isArray(source.blocks[0]) &&
-      typeof (source.blocks[0] as Record<string, unknown>).summary === "string"
+      typeof (source.blocks[0] as Record<string, unknown>).summary === 'string'
         ? ((source.blocks[0] as Record<string, unknown>).summary as string)
-        : "") ||
-      (typeof source.title === "string" && source.title) ||
-      "";
+        : '') ||
+      (typeof source.title === 'string' && source.title) ||
+      '';
     const reportTitle =
-      (typeof reportMetadata?.title === "string" && reportMetadata.title) ||
-      (typeof summaryObject?.title === "string" && summaryObject.title) ||
-      (typeof source.title === "string" && source.title) ||
-      "";
+      (typeof reportMetadata?.title === 'string' && reportMetadata.title) ||
+      (typeof summaryObject?.title === 'string' && summaryObject.title) ||
+      (typeof source.title === 'string' && source.title) ||
+      '';
     const followUpQuestions = [
-      ...(Array.isArray(source.follow_up_questions)
-        ? source.follow_up_questions
-        : []),
+      ...(Array.isArray(source.follow_up_questions) ? source.follow_up_questions : []),
       ...blockDerivedQuestions,
     ].map((question) => toDisplayString(question));
-    const explicitCachedSources = Array.isArray(source.cached_sources)
-      ? source.cached_sources
-      : [];
+    const explicitCachedSources = Array.isArray(source.cached_sources) ? source.cached_sources : [];
     const incomingBlocks = normalizeIncomingBlocks(source.blocks);
     const resolvedBlocks =
       incomingBlocks.length > 0
@@ -3132,13 +3069,11 @@ export const reportPayloadSchema = z.union([
         ? legacyFromIncomingBlocks.sections
         : sections;
     const resolvedStrategicRecommendations =
-      legacyFromIncomingBlocks &&
-      legacyFromIncomingBlocks.strategic_recommendations.length > 0
+      legacyFromIncomingBlocks && legacyFromIncomingBlocks.strategic_recommendations.length > 0
         ? legacyFromIncomingBlocks.strategic_recommendations
         : strategicRecommendations;
     const resolvedFollowUpQuestions =
-      legacyFromIncomingBlocks &&
-      legacyFromIncomingBlocks.follow_up_questions.length > 0
+      legacyFromIncomingBlocks && legacyFromIncomingBlocks.follow_up_questions.length > 0
         ? legacyFromIncomingBlocks.follow_up_questions
         : followUpQuestions;
     const resolvedGraphs =
@@ -3146,15 +3081,11 @@ export const reportPayloadSchema = z.union([
         ? legacyFromIncomingBlocks.graphs
         : allGraphs;
     const resolvedCachedSources = Array.from(
-      new Set([
-        ...explicitCachedSources,
-        ...(legacyFromIncomingBlocks?.cached_sources ?? []),
-      ])
+      new Set([...explicitCachedSources, ...(legacyFromIncomingBlocks?.cached_sources ?? [])]),
     );
 
     return {
-      language:
-        (typeof source.language === "string" && source.language) || "en",
+      language: (typeof source.language === 'string' && source.language) || 'en',
       report_title: reportTitle,
       executive_summary: executiveSummary,
       budget,
@@ -3173,15 +3104,15 @@ export const reportPayloadSchema = z.union([
       charts: resolvedGraphs,
       priority_recommendations: resolvedStrategicRecommendations,
       strategic_insights: topLevelHighlights,
-      title: (typeof source.title === "string" && source.title) || "",
+      title: (typeof source.title === 'string' && source.title) || '',
       data_integrity_notes: [
-        "Date Range",
+        'Date Range',
         `Date Range: ${
-          typeof source.date_range === "string"
+          typeof source.date_range === 'string'
             ? source.date_range
-            : typeof reportMetadata?.date_range === "string"
+            : typeof reportMetadata?.date_range === 'string'
               ? reportMetadata.date_range
-              : "N/A"
+              : 'N/A'
         }`,
       ],
     };
@@ -3198,12 +3129,10 @@ export type ReportPayload = FrontendCheckpointReport | DirectAnswerPayload;
 // Helper to check if report has content
 // ============================================================================
 
-export function hasReportContent(
-  report: ReportPayload | null
-): boolean {
+export function hasReportContent(report: ReportPayload | null): boolean {
   if (!report) return false;
-  if ("type" in report && report.type === "direct_answer") return true;
-  
+  if ('type' in report && report.type === 'direct_answer') return true;
+
   const r = report as FrontendCheckpointReport;
   return !!(
     r.executive_summary ||

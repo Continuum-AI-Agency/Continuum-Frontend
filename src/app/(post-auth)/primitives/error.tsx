@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
 export default function PrimitivesError({
   error,
@@ -10,7 +10,7 @@ export default function PrimitivesError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[primitives] route error:", error);
+    console.error('[primitives] route error:', error);
   }, [error]);
 
   return (

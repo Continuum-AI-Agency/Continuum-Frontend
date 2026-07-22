@@ -7,11 +7,11 @@
 export {
   buildCampaignInsightDataPoints,
   buildGeneratedCampaignInsights,
-  primaryMetricFor,
-  primaryStatusFor,
-  computeInsightFingerprint,
+  type CampaignInsightDataPoint,
   type CampaignInsightMetric,
   type CampaignInsightStatus,
-  type CampaignInsightDataPoint,
+  computeInsightFingerprint,
   type GeneratedCampaignInsight,
-} from "@continuum/contracts";
+  primaryMetricFor,
+  primaryStatusFor,
+} from '@continuum/contracts';

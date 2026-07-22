@@ -10,7 +10,7 @@ export async function readServerSentEvents({
   signal?: AbortSignal;
 }): Promise<void> {
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
   let pendingEvent: string | null = null;
   let pendingData: string[] = [];
 
@@ -19,7 +19,7 @@ export async function readServerSentEvents({
       pendingData = [];
       return;
     }
-    onEvent(pendingEvent, pendingData.join("\n"));
+    onEvent(pendingEvent, pendingData.join('\n'));
     pendingEvent = null;
     pendingData = [];
   };
@@ -45,31 +45,31 @@ export async function readServerSentEvents({
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() ?? "";
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (line.startsWith("event:")) {
+        if (line.startsWith('event:')) {
           flushPendingEvent();
           pendingEvent = line.slice(6).trim() || null;
           continue;
         }
 
-        if (line.startsWith("data:")) {
-          if (!pendingEvent) pendingEvent = "message";
+        if (line.startsWith('data:')) {
+          if (!pendingEvent) pendingEvent = 'message';
           pendingData.push(line.slice(5));
           continue;
         }
 
-        if (line.trim() === "") {
+        if (line.trim() === '') {
           flushPendingEvent();
           continue;
         }
 
-        if (line.startsWith(":")) {
+        if (line.startsWith(':')) {
           continue;
         }
 
-        if (!pendingEvent) pendingEvent = "message";
+        if (!pendingEvent) pendingEvent = 'message';
         pendingData.push(line);
       }
     }
@@ -81,4 +81,3 @@ export async function readServerSentEvents({
     }
   }
 }
-

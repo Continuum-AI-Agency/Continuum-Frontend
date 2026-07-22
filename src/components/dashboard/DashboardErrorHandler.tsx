@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import React from "react";
-import { useToast } from "@/components/ui/ToastProvider";
+import React from 'react';
+import { useToast } from '@/components/ui/ToastProvider';
 
 type DashboardErrorHandlerProps = {
   error?: string;
@@ -14,17 +14,17 @@ export function DashboardErrorHandler({ error }: DashboardErrorHandlerProps) {
   React.useEffect(() => {
     if (error && !errorShown) {
       showToast({
-        title: "Access Restricted",
+        title: 'Access Restricted',
         description: error,
-        variant: "warning",
+        variant: 'warning',
         durationMs: 6000,
       });
       setErrorShown(true);
       // Clear the error from URL without triggering a navigation
-      if (typeof window !== "undefined") {
+      if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
-        url.searchParams.delete("error");
-        window.history.replaceState({}, "", url.toString());
+        url.searchParams.delete('error');
+        window.history.replaceState({}, '', url.toString());
       }
     }
   }, [error, showToast, errorShown]);

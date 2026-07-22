@@ -1,20 +1,15 @@
-"use client";
+'use client';
 
-import { type ReactNode, useCallback, useMemo } from "react";
-import { clipRevealTransition } from "./animation";
-import {
-  defaultScatterColors,
-  useChartHover,
-  useChartStable,
-  useYScale,
-} from "./chart-context";
-import { useChartLegendHover } from "./chart-legend-hover";
+import { type ReactNode, useCallback, useMemo } from 'react';
+import { clipRevealTransition } from './animation';
+import { defaultScatterColors, useChartHover, useChartStable, useYScale } from './chart-context';
+import { useChartLegendHover } from './chart-legend-hover';
 import {
   getSeriesMarkerVisualExtent,
   SeriesPointMarker,
   type SeriesPointMarkerStyle,
   StaticSeriesPointMarker,
-} from "./series-point-marker";
+} from './series-point-marker';
 
 export interface SeriesMarkersProps extends SeriesPointMarkerStyle {
   dataKey: string;
@@ -80,8 +75,7 @@ export function SeriesMarkers({
   const seriesConfig = lines[seriesIndex];
   const yScale = useYScale(seriesConfig?.yAxisId);
   const seriesColor =
-    defaultScatterColors[seriesIndex % defaultScatterColors.length] ??
-    defaultScatterColors[0];
+    defaultScatterColors[seriesIndex % defaultScatterColors.length] ?? defaultScatterColors[0];
 
   const resolvedFill = fill ?? seriesConfig?.stroke ?? seriesColor;
   const resolvedStroke = stroke ?? resolvedFill;
@@ -95,7 +89,7 @@ export function SeriesMarkers({
         outlineWidth,
         showActiveHighlight,
       }),
-    [radius, strokeWidth, ringGap, outlineWidth, showActiveHighlight]
+    [radius, strokeWidth, ringGap, outlineWidth, showActiveHighlight],
   );
 
   const revealDurationSec =
@@ -106,9 +100,9 @@ export function SeriesMarkers({
   const getY = useCallback(
     (d: Record<string, unknown>) => {
       const value = d[dataKey];
-      return typeof value === "number" ? (yScale(value) ?? 0) : null;
+      return typeof value === 'number' ? (yScale(value) ?? 0) : null;
     },
-    [dataKey, yScale]
+    [dataKey, yScale],
   );
 
   const points = useMemo<PointAt[]>(
@@ -121,22 +115,11 @@ export function SeriesMarkers({
         const cx = xScale(xAccessor(d)) ?? 0;
         const leadingEdge = Math.max(0, cx - visualExtent);
         const revealDelay =
-          innerWidth > 0 && isRevealing
-            ? (leadingEdge / innerWidth) * revealDurationSec
-            : 0;
+          innerWidth > 0 && isRevealing ? (leadingEdge / innerWidth) * revealDurationSec : 0;
 
         return [{ index, cx, cy, revealDelay }];
       }),
-    [
-      data,
-      getY,
-      xScale,
-      xAccessor,
-      innerWidth,
-      isRevealing,
-      revealDurationSec,
-      visualExtent,
-    ]
+    [data, getY, xScale, xAccessor, innerWidth, isRevealing, revealDurationSec, visualExtent],
   );
 
   // Memo so the inner <SeriesMarkersActiveHighlight> sees a stable prop and
@@ -151,15 +134,7 @@ export function SeriesMarkers({
       outlineColor,
       radius,
     }),
-    [
-      resolvedFill,
-      resolvedStroke,
-      strokeWidth,
-      ringGap,
-      outlineWidth,
-      outlineColor,
-      radius,
-    ]
+    [resolvedFill, resolvedStroke, strokeWidth, ringGap, outlineWidth, outlineColor, radius],
   );
 
   if (isRevealing) {
@@ -215,7 +190,7 @@ export function SeriesMarkers({
   );
 }
 
-SeriesMarkers.displayName = "SeriesMarkers";
+SeriesMarkers.displayName = 'SeriesMarkers';
 
 interface SeriesMarkersDimWrapperProps {
   enabled: boolean;
@@ -239,16 +214,14 @@ function SeriesMarkersDimWrapper({
 }: SeriesMarkersDimWrapperProps) {
   const { tooltipData } = useChartHover();
   const { hoveredIndex: legendHoveredIndex } = useChartLegendHover();
-  const isLegendDimmed =
-    legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
+  const isLegendDimmed = legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
   const dimBase = enabled && (tooltipData !== null || isLegendDimmed);
   return (
     <g
       opacity={dimBase ? inactiveOpacity : 1}
       style={{
-        transition: "opacity 0.15s ease-in-out, filter 0.15s ease-in-out",
-        filter:
-          dimBase && inactiveBlur > 0 ? `blur(${inactiveBlur}px)` : "none",
+        transition: 'opacity 0.15s ease-in-out, filter 0.15s ease-in-out',
+        filter: dimBase && inactiveBlur > 0 ? `blur(${inactiveBlur}px)` : 'none',
       }}
     >
       {children}

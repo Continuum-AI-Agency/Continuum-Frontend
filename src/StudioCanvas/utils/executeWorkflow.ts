@@ -27,10 +27,7 @@ import {
 import { compositeImages } from './compositeImages';
 import { buildDataUrl, parseDataUrl } from './dataUrl';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
-import {
-  hasHydratableMediaReference,
-  rehydrateWorkflowMediaNodes,
-} from './rehydrateWorkflowMedia';
+import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
 import { resolveClipSources } from './splice/resolveClipSources';
 import { checkSpliceSupport } from './splice/webcodecsSupport';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
@@ -690,7 +687,8 @@ const surfacePreflightIssue = (
 
   const blockedNode = nodes.find((node) => node.id === issue.blockedNodeId);
   const isMissingImageReference =
-    blockedNode?.type === 'image' && issue.reason.startsWith('Missing connected input for ref-image');
+    blockedNode?.type === 'image' &&
+    issue.reason.startsWith('Missing connected input for ref-image');
   controls.show?.({
     title: isMissingImageReference ? 'Reference image required' : 'Flow needs input',
     description: isMissingImageReference
@@ -1020,9 +1018,23 @@ export async function executeWorkflow(
     }
 
     if (node.type === 'video') {
-      const parsed = parseDataUrl((node.data as any).video as string | undefined);
+      const videoData = node.data as {
+        video?: string;
+        sourceUrl?: string;
+        sourcePath?: string;
+        bucket?: string;
+      };
+      const rawVideo = videoData.video ?? videoData.sourceUrl;
+      const parsed = parseDataUrl(rawVideo);
       if (parsed?.base64) {
-        resolvedOutputs.set(node.id, { type: 'video', url: (node.data as any).video });
+        resolvedOutputs.set(node.id, { type: 'video', url: rawVideo! });
+      } else if (isHttpUrl(rawVideo)) {
+        resolvedOutputs.set(node.id, {
+          type: 'video',
+          url: rawVideo,
+          storagePath: videoData.sourcePath,
+          storageBucket: videoData.bucket,
+        });
       }
     }
 
@@ -1032,6 +1044,7 @@ export async function executeWorkflow(
       if (node.type === 'nanoGen') {
         const genImage = (node.data as any).generatedImage as string | undefined;
         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
+        const durableImageUrl = isHttpUrl(genImage) ? genImage : genImageUrl;
         if (genImage) {
           const parsed = parseDataUrl(genImage);
           if (parsed?.base64) {
@@ -1041,13 +1054,24 @@ export async function executeWorkflow(
               mimeType: parsed.mimeType,
               url: genImageUrl,
             });
+          } else if (durableImageUrl) {
+            resolvedOutputs.set(node.id, {
+              type: 'image',
+              base64: '',
+              mimeType: 'image/png',
+              url: durableImageUrl,
+              storagePath: (node.data as any).generatedImageStoragePath,
+              storageBucket: (node.data as any).generatedImageBucket,
+            });
           }
-        } else if (genImageUrl) {
+        } else if (durableImageUrl) {
           resolvedOutputs.set(node.id, {
             type: 'image',
             base64: '',
             mimeType: 'image/png',
-            url: genImageUrl,
+            url: durableImageUrl,
+            storagePath: (node.data as any).generatedImageStoragePath,
+            storageBucket: (node.data as any).generatedImageBucket,
           });
         }
       } else if (
@@ -1082,6 +1106,17 @@ export async function executeWorkflow(
     status: 'running' | 'awaiting' | 'completed' | 'failed',
     error?: string,
   ) => {
+    const current = useStudioStore.getState().nodes.find((node) => node.id === nodeId)?.data as
+      | Record<string, unknown>
+      | undefined;
+    if (
+      status === 'completed' &&
+      current?.isComplete === true &&
+      current?.isExecuting === false &&
+      !error
+    ) {
+      return;
+    }
     useStudioStore.getState().updateNodeData(nodeId, {
       isExecuting: status === 'running',
       isComplete: status === 'completed',
@@ -1185,14 +1220,16 @@ export async function executeWorkflow(
             ? (updatedNode?.data as any).generatedImage.slice(0, 48)
             : undefined,
       });
-      registerCanvasIfDurable(nodeId, {
-        kind: 'image',
-        bucket: output.storageBucket,
-        storagePath: output.storagePath,
-        url: persistentUrl,
-        mimeType,
-        sizeBytes: output.sizeBytes,
-      });
+      if (!output.assetId) {
+        registerCanvasIfDurable(nodeId, {
+          kind: 'image',
+          bucket: output.storageBucket,
+          storagePath: output.storagePath,
+          url: persistentUrl,
+          mimeType,
+          sizeBytes: output.sizeBytes,
+        });
+      }
     } else if (output.type === 'video') {
       const persistentUrl = output.url && !output.url.startsWith('data:') ? output.url : undefined;
       useStudioStore.getState().updateNodeData(nodeId, {
@@ -1593,7 +1630,26 @@ export async function executeWorkflow(
       }
 
       const backendPayload = toBackendPayload(payload);
-      const result = await executeGeneration(nodeId, backendPayload);
+      const result = await executeGeneration(nodeId, backendPayload, (preview) => {
+        if (preview.type !== 'image') return;
+        const rawBase64 = preview.base64 ?? '';
+        const parsed = rawBase64.startsWith('data:') ? parseDataUrl(rawBase64) : null;
+        const base64 = (parsed?.base64 ?? rawBase64).replace(/\s+/g, '');
+        const previewUrl =
+          preview.url && !preview.url.startsWith('data:')
+            ? preview.url
+            : base64
+              ? buildDataUrl(parsed?.mimeType ?? preview.mimeType, base64)
+              : undefined;
+        if (!previewUrl) return;
+        useStudioStore.getState().updateNodeData(nodeId, {
+          generatedImage: previewUrl,
+          generatedImageUrl:
+            preview.url && !preview.url.startsWith('data:') ? preview.url : undefined,
+          isExecuting: true,
+          isComplete: false,
+        });
+      });
       console.info('[studio] executeGeneration result', {
         nodeId,
         success: result.success,

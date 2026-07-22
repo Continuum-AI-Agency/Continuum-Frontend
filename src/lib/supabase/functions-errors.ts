@@ -4,13 +4,20 @@ type ResponseLike = {
 
 type FunctionsInvokeError = {
   message?: string;
-  context?: {
-    body?: string;
-  } | ResponseLike;
+  context?:
+    | {
+        body?: string;
+      }
+    | ResponseLike;
 };
 
 function isResponseLike(value: unknown): value is ResponseLike {
-  return typeof value === "object" && value !== null && "text" in value && typeof (value as ResponseLike).text === "function";
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'text' in value &&
+    typeof (value as ResponseLike).text === 'function'
+  );
 }
 
 function parseErrorBody(body: string | null): string | null {
@@ -24,7 +31,7 @@ function parseErrorBody(body: string | null): string | null {
 }
 
 export async function getFunctionsInvokeErrorMessage(error: unknown): Promise<string | null> {
-  if (!error || typeof error !== "object") {
+  if (!error || typeof error !== 'object') {
     return null;
   }
 
@@ -32,8 +39,8 @@ export async function getFunctionsInvokeErrorMessage(error: unknown): Promise<st
   const message = candidate.message ?? null;
   const context = candidate.context;
 
-  if (context && typeof context === "object") {
-    if ("body" in context && typeof context.body === "string") {
+  if (context && typeof context === 'object') {
+    if ('body' in context && typeof context.body === 'string') {
       return parseErrorBody(context.body) ?? message;
     }
     if (isResponseLike(context)) {

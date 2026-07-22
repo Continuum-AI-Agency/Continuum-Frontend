@@ -23,6 +23,7 @@
     "test": "bun run tests",
     "test:e2e": "playwright test",
     "optimizer:viz:bench": "bun run src/components/paid-media/optimizer/charts/optimizer-viz.bench.ts",
+    "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
     "trends:render:e2e:bench": "bun run src/lib/brand-insights/trends-render.bench.ts",
@@ -30,6 +31,7 @@
     "organic:trends:header:e2e": "playwright test e2e/organic-trends-header-module.spec.ts",
     "library:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/library-poster-transcript.spec.ts e2e/library-range-comments-editor.spec.ts",
     "library:creative-operations:e2e:bench": "set -a; . ./.env.local; set +a; PORT=3104 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3104 NEXT_DIST_DIR=.next/library-creative-operations-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/library-creative-operations.spec.ts --workers=1",
+    "library:poster:select:e2e:bench": "set -a; . ./.env.local; set +a; PORT=3106 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3106 NEXT_DIST_DIR=.next/library-poster-select-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/library-poster-select.spec.ts --workers=1",
     "supabase:gen:types": "node scripts/generate-supabase-types.mjs",
     "generate:types": "node scripts/generate-supabase-types.mjs",
     "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.mjs",
@@ -45,9 +47,11 @@
     "prompts:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/prompt-library.spec.ts --workers=1",
     "agent:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/agent-runs.bench.ts",
     "ai-studio:image:bench": "set -a; . ./.env.local; set +a; bun run e2e/ai-studio-image.bench.ts",
+    "ai-studio:sniper:e2e:bench": "set -a; . ./.env.local; set +a; bun run e2e/ai-studio-image.bench.ts",
     "jaina:runs:bench": "set -a; . ./.env.local; set +a; bun run e2e/jaina-runs.bench.ts",
     "videoeditor:e2e:bench": "playwright test e2e/video-editor-playback.spec.ts --workers=1",
-    "planner:status:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/organic-planner-status.spec.ts --workers=1"
+    "planner:status:e2e:bench": "set -a; . ./.env.local; set +a; playwright test e2e/organic-planner-status.spec.ts --workers=1",
+    "changelog:e2e:bench": "bun test src/components/changelog/WhatsNewBell.bench.test.tsx"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.17",

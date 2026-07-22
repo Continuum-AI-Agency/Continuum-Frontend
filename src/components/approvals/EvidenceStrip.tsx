@@ -1,27 +1,34 @@
-"use client";
+'use client';
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import { formatMetric, metricLabel } from "./formatters";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { formatMetric, metricLabel } from './formatters';
 
-const PRIMARY_ORDER = ["roas", "account_avg_roas", "spend", "impressions", "ctr", "cpc", "cpm", "clicks"];
+const PRIMARY_ORDER = [
+  'roas',
+  'account_avg_roas',
+  'spend',
+  'impressions',
+  'ctr',
+  'cpc',
+  'cpm',
+  'clicks',
+];
 
 const METRIC_HINTS: Record<string, string> = {
-  roas: "Return on ad spend — revenue divided by spend.",
+  roas: 'Return on ad spend — revenue divided by spend.',
   account_avg_roas: "Mean ROAS across the parent ad account over the rule's evaluation window.",
   spend: "Total amount spent during the rule's evaluation window.",
-  impressions: "How many times the ad was rendered.",
-  clicks: "Number of clicks recorded during the evaluation window.",
-  ctr: "Click-through rate — clicks divided by impressions.",
-  cpc: "Cost per click.",
-  cpm: "Cost per thousand impressions.",
+  impressions: 'How many times the ad was rendered.',
+  clicks: 'Number of clicks recorded during the evaluation window.',
+  ctr: 'Click-through rate — clicks divided by impressions.',
+  cpc: 'Cost per click.',
+  cpm: 'Cost per thousand impressions.',
 };
 
 // Pairs of [actual, threshold] — for each pair we render a delta chip on the threshold tile
 // so the reviewer can read "value vs benchmark" without doing math.
-const DELTA_PAIRS: Array<[actual: string, benchmark: string]> = [
-  ["roas", "account_avg_roas"],
-];
+const DELTA_PAIRS: Array<[actual: string, benchmark: string]> = [['roas', 'account_avg_roas']];
 
 type Props = {
   facts: Record<string, unknown> | null | undefined;
@@ -33,7 +40,12 @@ export function EvidenceStrip({ facts, className }: Props) {
 
   if (Object.keys(numericFacts).length === 0) {
     return (
-      <div className={cn("rounded-md border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground", className)}>
+      <div
+        className={cn(
+          'rounded-md border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground',
+          className,
+        )}
+      >
         No evidence metrics for this action.
       </div>
     );
@@ -46,7 +58,7 @@ export function EvidenceStrip({ facts, className }: Props) {
     <TooltipProvider delayDuration={200}>
       <div
         className={cn(
-          "grid grid-flow-col auto-cols-[minmax(7rem,1fr)] gap-px overflow-x-auto rounded-md border border-border bg-border",
+          'grid grid-flow-col auto-cols-[minmax(7rem,1fr)] gap-px overflow-x-auto rounded-md border border-border bg-border',
           className,
         )}
       >
@@ -61,10 +73,11 @@ export function EvidenceStrip({ facts, className }: Props) {
                     {delta ? (
                       <span
                         className={cn(
-                          "rounded-sm px-1 py-px font-data text-3xs tabular-nums",
-                          delta.direction === "down" && "bg-destructive/10 text-destructive",
-                          delta.direction === "up" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-                          delta.direction === "flat" && "text-muted-foreground",
+                          'rounded-sm px-1 py-px font-data text-3xs tabular-nums',
+                          delta.direction === 'down' && 'bg-destructive/10 text-destructive',
+                          delta.direction === 'up' &&
+                            'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                          delta.direction === 'flat' && 'text-muted-foreground',
                         )}
                       >
                         {delta.label}
@@ -93,9 +106,9 @@ function toNumericFacts(facts: Record<string, unknown> | null | undefined): Reco
   if (!facts) return {};
   const out: Record<string, number> = {};
   for (const [key, value] of Object.entries(facts)) {
-    if (typeof value === "number" && Number.isFinite(value)) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
       out[key] = value;
-    } else if (typeof value === "string" && value.trim() !== "") {
+    } else if (typeof value === 'string' && value.trim() !== '') {
       const parsed = Number(value);
       if (Number.isFinite(parsed)) out[key] = parsed;
     }
@@ -104,12 +117,14 @@ function toNumericFacts(facts: Record<string, unknown> | null | undefined): Reco
 }
 
 function orderEntries(facts: Record<string, number>): Array<[string, number]> {
-  const known = PRIMARY_ORDER.filter((key) => key in facts).map((key) => [key, facts[key]] as [string, number]);
+  const known = PRIMARY_ORDER.filter((key) => key in facts).map(
+    (key) => [key, facts[key]] as [string, number],
+  );
   const extras = Object.entries(facts).filter(([key]) => !PRIMARY_ORDER.includes(key));
   return [...known, ...extras];
 }
 
-type Delta = { label: string; direction: "up" | "down" | "flat" };
+type Delta = { label: string; direction: 'up' | 'down' | 'flat' };
 
 function computeDeltas(facts: Record<string, number>): Record<string, Delta> {
   const out: Record<string, Delta> = {};
@@ -121,12 +136,12 @@ function computeDeltas(facts: Record<string, number>): Record<string, Delta> {
     const pct = Math.round(ratio * 100);
     if (pct === 0) {
       // Annotate the actual tile so the reviewer sees the comparison immediately.
-      out[actualKey] = { label: "≈ avg", direction: "flat" };
+      out[actualKey] = { label: '≈ avg', direction: 'flat' };
       continue;
     }
     out[actualKey] = {
-      label: `${pct > 0 ? "+" : ""}${pct}% vs avg`,
-      direction: pct < 0 ? "down" : "up",
+      label: `${pct > 0 ? '+' : ''}${pct}% vs avg`,
+      direction: pct < 0 ? 'down' : 'up',
     };
   }
   return out;

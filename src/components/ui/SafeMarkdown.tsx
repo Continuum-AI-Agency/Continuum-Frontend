@@ -1,31 +1,31 @@
-import React from "react";
-import { Streamdown } from "streamdown";
-import { harden } from "rehype-harden";
-import { math } from "@streamdown/math";
-import { code } from "@streamdown/code";
-import { mermaid } from "@streamdown/mermaid";
-import { cjk } from "@streamdown/cjk";
-import "katex/dist/katex.min.css";
+import { cjk } from '@streamdown/cjk';
+import { code } from '@streamdown/code';
+import { math } from '@streamdown/math';
+import { mermaid } from '@streamdown/mermaid';
+import React from 'react';
+import { harden } from 'rehype-harden';
+import { Streamdown } from 'streamdown';
+import 'katex/dist/katex.min.css';
 
 type SafeMarkdownProps = {
   content: string;
   className?: string;
   isAnimating?: boolean;
-  mode?: "streaming" | "static";
+  mode?: 'streaming' | 'static';
 };
 
 const getDefaultOrigin = () => {
-  if (typeof window !== "undefined" && window.location?.origin) {
+  if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
   }
-  return "https://example.com";
+  return 'https://example.com';
 };
 
 export function SafeMarkdown({
   content,
   className,
   isAnimating,
-  mode = "streaming",
+  mode = 'streaming',
 }: SafeMarkdownProps) {
   if (!content || !content.trim()) return null;
 
@@ -47,8 +47,8 @@ export function SafeMarkdown({
           harden,
           {
             defaultOrigin,
-            allowedProtocols: ["https"],
-            allowedLinkPrefixes: ["*"],
+            allowedProtocols: ['https'],
+            allowedLinkPrefixes: ['*'],
             allowedImagePrefixes: [],
             allowDataImages: false,
           },

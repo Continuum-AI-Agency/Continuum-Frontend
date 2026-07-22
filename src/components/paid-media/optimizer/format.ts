@@ -85,3 +85,36 @@ export function humanize(value: string | null | undefined): string {
 export function portfolioLevelLabel(level: string | null | undefined): string {
   return level === 'campaign' ? 'Campaigns' : 'Ad sets';
 }
+
+/** When the next scheduled cycle lands, in words. "After the next optimization
+ *  cycle" tells a user nothing they can plan around; the schedule is already on
+ *  the portfolio row, so say it. Returns null when there is no schedule to state
+ *  — the caller must not invent one. */
+export function nextCycleLabel(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+
+  const minutes = Math.round((at.getTime() - now.getTime()) / 60_000);
+  if (minutes <= 1) return 'shortly';
+  if (minutes < 60) return `in ${minutes} minutes`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+
+  const days = Math.round(hours / 24);
+  return `in about ${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/** The soonest scheduled cycle across a set of portfolios, as an ISO string. */
+export function soonestNextCycle(portfolios: { next_realloc_at: string | null }[]): string | null {
+  const times = portfolios
+    .map((portfolio) => portfolio.next_realloc_at)
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => !Number.isNaN(new Date(value).getTime()))
+    .sort();
+  return times[0] ?? null;
+}

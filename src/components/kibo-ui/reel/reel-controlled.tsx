@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 import {
   Reel,
   ReelContent,
@@ -12,43 +12,43 @@ import {
   ReelNavigation,
   ReelProgress,
   ReelVideo,
-} from "./index";
+} from './index';
 
 // Example data for the reel
 const reelItems: ReelItem[] = [
   {
-    id: "video-1",
-    type: "video",
-    src: "/videos/sample-video-1.mp4",
+    id: 'video-1',
+    type: 'video',
+    src: '/videos/sample-video-1.mp4',
     duration: 10, // 10 seconds
-    title: "First Video",
-    description: "This is the first video in the reel",
+    title: 'First Video',
+    description: 'This is the first video in the reel',
   },
   {
-    id: "image-1",
-    type: "image",
-    src: "/images/sample-landscape.jpg",
+    id: 'image-1',
+    type: 'image',
+    src: '/images/sample-landscape.jpg',
     duration: 5, // 5 seconds
-    alt: "Beautiful landscape",
-    title: "Nature Photo",
-    description: "A stunning landscape photograph",
+    alt: 'Beautiful landscape',
+    title: 'Nature Photo',
+    description: 'A stunning landscape photograph',
   },
   {
-    id: "video-2",
-    type: "video",
-    src: "/videos/sample-video-2.mp4",
+    id: 'video-2',
+    type: 'video',
+    src: '/videos/sample-video-2.mp4',
     duration: 15, // 15 seconds
-    title: "Second Video",
-    description: "Another exciting video",
+    title: 'Second Video',
+    description: 'Another exciting video',
   },
   {
-    id: "image-2",
-    type: "image",
-    src: "/images/sample-cityscape.jpg",
+    id: 'image-2',
+    type: 'image',
+    src: '/images/sample-cityscape.jpg',
     duration: 7, // 7 seconds
-    alt: "City skyline",
-    title: "Urban Photography",
-    description: "Modern city architecture",
+    alt: 'City skyline',
+    title: 'Urban Photography',
+    description: 'Modern city architecture',
   },
 ];
 
@@ -108,7 +108,7 @@ export function ReelControlledExample() {
             onClick={handlePlayPause}
             type="button"
           >
-            {isPlaying ? "Pause" : "Play"}
+            {isPlaying ? 'Pause' : 'Play'}
           </button>
           <button
             className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
@@ -122,7 +122,7 @@ export function ReelControlledExample() {
             onClick={handleToggleMute}
             type="button"
           >
-            {isMuted ? "Unmute" : "Mute"}
+            {isMuted ? 'Unmute' : 'Mute'}
           </button>
         </div>
 
@@ -130,9 +130,7 @@ export function ReelControlledExample() {
           {reelItems.map((item, index) => (
             <button
               className={`rounded px-3 py-1 ${
-                index === currentIndex
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 hover:bg-gray-300"
+                index === currentIndex ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
               }`}
               key={item.id}
               onClick={() => handleJumpToItem(index)}
@@ -145,8 +143,8 @@ export function ReelControlledExample() {
 
         <div className="text-gray-600 text-sm">
           <p>Current Index: {currentIndex}</p>
-          <p>Playing: {isPlaying ? "Yes" : "No"}</p>
-          <p>Muted: {isMuted ? "Yes" : "No"}</p>
+          <p>Playing: {isPlaying ? 'Yes' : 'No'}</p>
+          <p>Muted: {isMuted ? 'Yes' : 'No'}</p>
           <p>Current Item: {currentItem.title}</p>
         </div>
       </div>
@@ -176,14 +174,10 @@ export function ReelControlledExample() {
           <ReelContent>
             {(item) => (
               <>
-                {item.type === "video" ? (
+                {item.type === 'video' ? (
                   <ReelVideo src={item.src} />
                 ) : (
-                  <ReelImage
-                    alt={item.alt || ""}
-                    duration={item.duration}
-                    src={item.src}
-                  />
+                  <ReelImage alt={item.alt || ''} duration={item.duration} src={item.src} />
                 )}
               </>
             )}
@@ -195,9 +189,7 @@ export function ReelControlledExample() {
             <div className="text-white">
               <h3 className="font-semibold text-lg">{currentItem.title}</h3>
               {currentItem.description && (
-                <p className="mt-1 text-sm opacity-90">
-                  {currentItem.description}
-                </p>
+                <p className="mt-1 text-sm opacity-90">{currentItem.description}</p>
               )}
             </div>
           </ReelFooter>
@@ -210,8 +202,8 @@ export function ReelControlledExample() {
       <div className="flex flex-col gap-4 rounded-lg border p-4">
         <h3 className="font-semibold text-lg">Advanced Controlled Example</h3>
         <p className="text-gray-600 text-sm">
-          This example shows how you can build a completely custom UI while
-          controlling the Reel state from outside.
+          This example shows how you can build a completely custom UI while controlling the Reel
+          state from outside.
         </p>
 
         <div className="flex gap-4">
@@ -229,14 +221,10 @@ export function ReelControlledExample() {
               <ReelContent>
                 {(item) => (
                   <>
-                    {item.type === "video" ? (
+                    {item.type === 'video' ? (
                       <ReelVideo src={item.src} />
                     ) : (
-                      <ReelImage
-                        alt={item.alt || ""}
-                        duration={item.duration}
-                        src={item.src}
-                      />
+                      <ReelImage alt={item.alt || ''} duration={item.duration} src={item.src} />
                     )}
                   </>
                 )}
@@ -296,8 +284,8 @@ export function ReelControlledExample() {
                 <button
                   className={`rounded p-2 text-xs ${
                     index === currentIndex
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-100 hover:bg-gray-200"
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200'
                   }`}
                   key={item.id}
                   onClick={() => setCurrentIndex(index)}
@@ -318,9 +306,7 @@ export function ReelControlledExample() {
 export default function ControlledReelPage() {
   return (
     <div className="container mx-auto py-8">
-      <h1 className="mb-8 text-center font-bold text-3xl">
-        Controlled Reel Examples
-      </h1>
+      <h1 className="mb-8 text-center font-bold text-3xl">Controlled Reel Examples</h1>
       <ReelControlledExample />
     </div>
   );

@@ -35,6 +35,7 @@ import { ImageAnnotationLayer } from './ImageAnnotationLayer';
 import { OlderFileStage } from './OlderFileStage';
 import { OpenInCanvasButton } from './OpenInCanvasButton';
 import { PerformancePanel } from './PerformancePanel';
+import { PosterFramePicker } from './PosterFramePicker';
 import { createPlaybackClock } from './playbackClock';
 import { QuickLookButton } from './QuickLookButton';
 import { RequestReviewButton } from './RequestReviewButton';
@@ -48,6 +49,7 @@ import { preferredSidebarTab, type SidebarTab } from './transcriptSegments';
 import { useAssetComments } from './useAssetComments';
 import { useAssetTranscript } from './useAssetTranscript';
 import { useAssetVersions } from './useAssetVersions';
+import { useOpportunisticPoster } from './useOpportunisticPoster';
 import { VersionRail } from './VersionRail';
 import { VideoAnnotationPlayer } from './VideoAnnotationPlayer';
 import { VideoInsightsPanel } from './VideoInsightsPanel';
@@ -218,6 +220,10 @@ function AssetDetailDialog({
   useEffect(() => {
     enrichOnOpen(brandId, asset.id);
   }, [brandId, asset.id]);
+  // Heal a blank video card the same way — an AI-generated or legacy video that
+  // never got a poster gets one decoded now that its bytes are loaded for
+  // playback. Fire-and-forget, once per asset per session, video-only.
+  useOpportunisticPoster(brandId, asset, onAssetChanged);
   const [sidebarTab, setSidebarTab] = useState<DetailSidebarTab>('comments');
   const autoSelectedTab = useRef(false);
 
@@ -416,9 +422,7 @@ function AssetDetailDialog({
                     aria-label="Next carousel slide"
                     className="flex size-7 items-center justify-center rounded-full hover:bg-muted"
                     onClick={() =>
-                      setCarouselSlideIndex(
-                        (index) => (index + 1) % asset.carousel!.slides.length,
-                      )
+                      setCarouselSlideIndex((index) => (index + 1) % asset.carousel!.slides.length)
                     }
                   >
                     <ChevronRight className="size-4" />
@@ -459,6 +463,14 @@ function AssetDetailDialog({
                       asset={asset}
                       onAssetChanged={onAssetChanged}
                     />
+                    {stage.kind === 'video' && stage.src ? (
+                      <PosterFramePicker
+                        brandId={brandId}
+                        asset={asset}
+                        src={stage.src}
+                        onPosterChanged={onAssetChanged}
+                      />
+                    ) : null}
                   </div>
                 </div>
               ) : null}

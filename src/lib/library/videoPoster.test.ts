@@ -4,6 +4,7 @@ import {
   isVideoMimeType,
   persistVideoPoster,
   posterTimestampSec,
+  resolvePosterTimestamp,
   seekVideoPreviewFrame,
   type VideoPoster,
 } from './videoPoster';
@@ -41,6 +42,34 @@ describe('posterTimestampSec', () => {
     expect(posterTimestampSec(Number.POSITIVE_INFINITY)).toBe(1);
     expect(posterTimestampSec(0)).toBe(1);
     expect(posterTimestampSec(-4)).toBe(1);
+  });
+});
+
+describe('resolvePosterTimestamp', () => {
+  it('passes a valid requested time straight through', () => {
+    expect(resolvePosterTimestamp(30, 12)).toBe(12);
+    expect(resolvePosterTimestamp(30, 0)).toBe(0);
+  });
+
+  it('clamps a negative request up to 0', () => {
+    expect(resolvePosterTimestamp(30, -4)).toBe(0);
+  });
+
+  it('clamps a request past the end down to the duration', () => {
+    expect(resolvePosterTimestamp(30, 45)).toBe(30);
+  });
+
+  it('falls back to the automatic offset when no time is requested', () => {
+    expect(resolvePosterTimestamp(30)).toBe(posterTimestampSec(30));
+    expect(resolvePosterTimestamp(30, undefined)).toBe(posterTimestampSec(30));
+    expect(resolvePosterTimestamp(30, null)).toBe(posterTimestampSec(30));
+    expect(resolvePosterTimestamp(0.6)).toBeCloseTo(posterTimestampSec(0.6), 5);
+  });
+
+  it('keeps a requested time when the duration is unknown (decoder clamps)', () => {
+    expect(resolvePosterTimestamp(null, 5)).toBe(5);
+    expect(resolvePosterTimestamp(Number.POSITIVE_INFINITY, 5)).toBe(5);
+    expect(resolvePosterTimestamp(null, -2)).toBe(0);
   });
 });
 

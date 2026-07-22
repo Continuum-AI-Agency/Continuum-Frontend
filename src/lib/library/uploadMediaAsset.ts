@@ -19,9 +19,9 @@ import {
 } from '@continuum/contracts';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
-import { attachVideoPoster } from './videoPoster';
 import { attachAssetPreview } from './assetPreview';
+import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
+import type { attachVideoPoster } from './videoPoster';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -213,21 +213,18 @@ export async function uploadMediaAsset(
     // kind — decode, encode, network, an unexpected throw from an injected dep —
     // must never surface as a failed upload.
     let thumbnailPath: string | null = null;
-    const previewState = await (
-      deps.attachPoster
-        ? deps
-            .attachPoster({ file, mimeType, brandId, assetId: ok.data.assetId })
-            .then((path) => {
-              thumbnailPath = path;
-              return (path ? 'ready' : 'failed') as AssetPreviewState;
-            })
-        : (deps.attachPreview ?? attachAssetPreview)({
-            file,
-            brandId,
-            assetId: ok.data.assetId,
-            assetVersionId: ok.data.versionId,
-            client: supabase,
-          })
+    const previewState = await (deps.attachPoster
+      ? deps.attachPoster({ file, mimeType, brandId, assetId: ok.data.assetId }).then((path) => {
+          thumbnailPath = path;
+          return (path ? 'ready' : 'failed') as AssetPreviewState;
+        })
+      : (deps.attachPreview ?? attachAssetPreview)({
+          file,
+          brandId,
+          assetId: ok.data.assetId,
+          assetVersionId: ok.data.versionId,
+          client: supabase,
+        })
     ).catch((error: unknown) => {
       console.warn('[library/uploadMediaAsset] preview step failed', error);
       return 'failed' as const;

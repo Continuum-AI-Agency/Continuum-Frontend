@@ -1,7 +1,10 @@
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
-import { OrganicDashboardView } from "@/components/dashboard/views/OrganicDashboardView";
-import type { BrandInsightsTrendsAndEvents, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import { OrganicDashboardView } from '@/components/dashboard/views/OrganicDashboardView';
+import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
+import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import type {
+  BrandInsightsQuestionsByNiche,
+  BrandInsightsTrendsAndEvents,
+} from '@/lib/schemas/brandInsights';
 
 export async function OrganicDashboardDataWrapper({ brandId }: { brandId: string }) {
   const revalidate = 300;
@@ -26,27 +29,25 @@ export async function OrganicDashboardDataWrapper({ brandId }: { brandId: string
   }));
 
   let insights = null;
-  if (!("error" in insightsResult)) {
+  if (!('error' in insightsResult)) {
     insights = insightsResult.data;
   }
 
-  const trendsAndEvents: BrandInsightsTrendsAndEvents =
-    insights?.data.trendsAndEvents ?? {
-      trends: [],
-      events: [],
-      country: undefined,
-      status: undefined,
-      generatedAt: undefined,
-      weekAnalyzed: undefined,
-    };
+  const trendsAndEvents: BrandInsightsTrendsAndEvents = insights?.data.trendsAndEvents ?? {
+    trends: [],
+    events: [],
+    country: undefined,
+    status: undefined,
+    generatedAt: undefined,
+    weekAnalyzed: undefined,
+  };
 
-  const questionsByNiche: BrandInsightsQuestionsByNiche =
-    insights?.data.questionsByNiche ?? {
-      questionsByNiche: {},
-      summary: undefined,
-      status: undefined,
-      generatedAt: undefined,
-    };
+  const questionsByNiche: BrandInsightsQuestionsByNiche = insights?.data.questionsByNiche ?? {
+    questionsByNiche: {},
+    summary: undefined,
+    status: undefined,
+    generatedAt: undefined,
+  };
 
   return (
     <OrganicDashboardView

@@ -1,14 +1,13 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { getApiUrl } from '@/lib/api/config';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getApiUrl } from "@/lib/api/config";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function resolveBrandProfileId(payload: unknown): string | undefined {
@@ -16,7 +15,7 @@ function resolveBrandProfileId(payload: unknown): string | undefined {
   const input = payload.input;
   if (!isRecord(input)) return undefined;
   const brandProfileId = input.brandProfileId;
-  if (typeof brandProfileId !== "string") return undefined;
+  if (typeof brandProfileId !== 'string') return undefined;
   const trimmed = brandProfileId.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -26,7 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
   const supabase = await createSupabaseServerClient();
@@ -36,25 +35,25 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (sessionError || !session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const token = session.access_token.trim();
-  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
   const brandProfileId = resolveBrandProfileId(payload);
 
   const fetchHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/x-ndjson",
+    'Content-Type': 'application/json',
+    Accept: 'application/x-ndjson',
     Authorization: `Bearer ${token}`,
     apikey: anonKey,
-    "x-supabase-auth": token,
-    "x-auth-token": token,
-    ...(brandProfileId ? { "X-Brand-Profile-Id": brandProfileId } : {}),
+    'x-supabase-auth': token,
+    'x-auth-token': token,
+    ...(brandProfileId ? { 'X-Brand-Profile-Id': brandProfileId } : {}),
   };
 
-  const upstreamResponse = await fetch(getApiUrl("/api/organic/runs"), {
-    method: "POST",
+  const upstreamResponse = await fetch(getApiUrl('/api/organic/runs'), {
+    method: 'POST',
     headers: fetchHeaders,
     body: JSON.stringify(payload),
   });
@@ -71,8 +70,8 @@ export async function POST(request: NextRequest) {
       }
     }
     return NextResponse.json(
-      { error: "Failed to start organic generation run", detail },
-      { status: upstreamResponse.status || 502 }
+      { error: 'Failed to start organic generation run', detail },
+      { status: upstreamResponse.status || 502 },
     );
   }
 
@@ -83,7 +82,7 @@ export async function POST(request: NextRequest) {
     start(controller) {
       const cleanup = () => {
         if (abortHandler) {
-          request.signal.removeEventListener("abort", abortHandler);
+          request.signal.removeEventListener('abort', abortHandler);
           abortHandler = null;
         }
       };
@@ -114,12 +113,12 @@ export async function POST(request: NextRequest) {
           });
       };
 
-      request.signal.addEventListener("abort", abortHandler);
+      request.signal.addEventListener('abort', abortHandler);
       forward();
     },
     cancel() {
       if (abortHandler) {
-        request.signal.removeEventListener("abort", abortHandler);
+        request.signal.removeEventListener('abort', abortHandler);
         abortHandler = null;
       }
       void reader.cancel();
@@ -128,10 +127,10 @@ export async function POST(request: NextRequest) {
 
   return new NextResponse(stream, {
     headers: {
-      "Content-Type": "application/x-ndjson",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }

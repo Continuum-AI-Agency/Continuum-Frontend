@@ -1,5 +1,6 @@
-"use client";
-import React, { useState, useRef, useEffect } from 'react';
+'use client';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 
 interface EditableLabelProps {

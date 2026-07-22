@@ -1,15 +1,15 @@
-import { expect, test } from "bun:test";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { expect, test } from 'bun:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import { createDefaultOnboardingState } from "@/lib/onboarding/state";
-import "../mocks/radixThemes";
+import { createDefaultOnboardingState } from '@/lib/onboarding/state';
+import '../mocks/radixThemes';
 
 const noop = () => undefined;
 
-test("IntegrationsStep renders header and refresh", async () => {
+test('IntegrationsStep renders header and refresh', async () => {
   const state = createDefaultOnboardingState();
-  const { IntegrationsStep } = await import("@/components/onboarding/steps/IntegrationsStep");
+  const { IntegrationsStep } = await import('@/components/onboarding/steps/IntegrationsStep');
 
   const html = renderToStaticMarkup(
     <IntegrationsStep
@@ -40,9 +40,9 @@ test("IntegrationsStep renders header and refresh", async () => {
       onBack={noop}
       onNext={noop}
       canContinue={false}
-    />
+    />,
   );
 
-  expect(html).toContain("Connect your channels");
-  expect(html).toContain("Refresh");
+  expect(html).toContain('Connect your channels');
+  expect(html).toContain('Refresh');
 });

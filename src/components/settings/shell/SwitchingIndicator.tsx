@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 
 export function SwitchingIndicator() {
   const { isSwitching } = useActiveBrandContext();
@@ -15,7 +15,7 @@ export function SwitchingIndicator() {
         className="h-full origin-left bg-primary transition-transform duration-300 ease-out data-[active=false]:scale-x-0 data-[active=true]:animate-pulse"
         data-active={isSwitching}
         style={{
-          transform: isSwitching ? "scaleX(1)" : "scaleX(0)",
+          transform: isSwitching ? 'scaleX(1)' : 'scaleX(0)',
         }}
       />
     </div>

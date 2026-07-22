@@ -1,4 +1,4 @@
-export type CreativeAssetKind = "file" | "folder";
+export type CreativeAssetKind = 'file' | 'folder';
 
 export type CreativeAsset = {
   id: string;

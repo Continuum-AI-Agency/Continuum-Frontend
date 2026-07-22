@@ -1,13 +1,13 @@
 import {
+  type FigmaFile,
+  type FigmaFrame,
+  type FigmaImportedAsset,
+  type FigmaProject,
   figmaFilesResponseSchema,
   figmaFramesResponseSchema,
   figmaProjectsResponseSchema,
   importFigmaFramesRequestSchema,
   importFigmaFramesResponseSchema,
-  type FigmaFile,
-  type FigmaFrame,
-  type FigmaImportedAsset,
-  type FigmaProject,
 } from '@continuum/contracts';
 
 import { getApiUrl } from '@/lib/api/config';
@@ -73,10 +73,7 @@ export async function listFigmaProjects(
   ).projects;
 }
 
-export async function listFigmaFiles(
-  brandId: string,
-  projectId: string,
-): Promise<FigmaFile[]> {
+export async function listFigmaFiles(brandId: string, projectId: string): Promise<FigmaFile[]> {
   const query = new URLSearchParams({ brandId, projectId });
   return figmaFilesResponseSchema.parse(await requestJson(`/files?${query}`)).files;
 }

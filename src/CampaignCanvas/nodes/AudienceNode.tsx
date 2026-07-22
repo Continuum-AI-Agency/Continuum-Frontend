@@ -1,49 +1,101 @@
-"use client";
+'use client';
+import { Copy, Layout, Settings, Trash2, Users } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
-import { type CampaignNodeProps, type AudienceData } from '../types';
-import { 
-  Node, 
-  NodeHeader, 
-  NodeTitle, 
+import {
+  Node,
   NodeContent,
-  NodeDescription 
+  NodeDescription,
+  NodeHeader,
+  NodeTitle,
 } from '@/components/ai-elements/node';
-import { Users, Copy, Trash2, Layout, Settings } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
-  ContextMenuLabel,
   ContextMenuGroup,
   ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuShortcut,
+  ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-  ContextMenuCheckboxItem,
-} from "@/components/ui/context-menu";
-import { useCampaignStore } from '../stores/useCampaignStore';
-import { EditableLabel } from '../components/EditableLabel';
-import { Badge } from '@/components/ui/badge';
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
-
 import { Separator } from '@/components/ui/separator';
+import { EditableLabel } from '../components/EditableLabel';
+import { useCampaignStore } from '../stores/useCampaignStore';
+import type { AudienceData, CampaignNodeProps } from '../types';
 
 const LOCATIONS = [
-  { value: 'MX', label: 'Mexico', description: 'Mexico targeting restricts delivery to users located in Mexico.' },
-  { value: 'BR', label: 'Brazil', description: 'Brazil targeting restricts delivery to users located in Brazil.' },
-  { value: 'AR', label: 'Argentina', description: 'Argentina targeting restricts delivery to users located in Argentina.' },
-  { value: 'CO', label: 'Colombia', description: 'Colombia targeting restricts delivery to users located in Colombia.' },
-  { value: 'CL', label: 'Chile', description: 'Chile targeting restricts delivery to users located in Chile.' },
-  { value: 'PE', label: 'Peru', description: 'Peru targeting restricts delivery to users located in Peru.' },
-  { value: 'EC', label: 'Ecuador', description: 'Ecuador targeting restricts delivery to users located in Ecuador.' },
-  { value: 'UY', label: 'Uruguay', description: 'Uruguay targeting restricts delivery to users located in Uruguay.' },
-  { value: 'PY', label: 'Paraguay', description: 'Paraguay targeting restricts delivery to users located in Paraguay.' },
-  { value: 'BO', label: 'Bolivia', description: 'Bolivia targeting restricts delivery to users located in Bolivia.' },
-  { value: 'CR', label: 'Costa Rica', description: 'Costa Rica targeting restricts delivery to users located in Costa Rica.' },
-  { value: 'PA', label: 'Panama', description: 'Panama targeting restricts delivery to users located in Panama.' },
-  { value: 'DO', label: 'Dominican Republic', description: 'Dominican Republic targeting restricts delivery to users located in the Dominican Republic.' },
+  {
+    value: 'MX',
+    label: 'Mexico',
+    description: 'Mexico targeting restricts delivery to users located in Mexico.',
+  },
+  {
+    value: 'BR',
+    label: 'Brazil',
+    description: 'Brazil targeting restricts delivery to users located in Brazil.',
+  },
+  {
+    value: 'AR',
+    label: 'Argentina',
+    description: 'Argentina targeting restricts delivery to users located in Argentina.',
+  },
+  {
+    value: 'CO',
+    label: 'Colombia',
+    description: 'Colombia targeting restricts delivery to users located in Colombia.',
+  },
+  {
+    value: 'CL',
+    label: 'Chile',
+    description: 'Chile targeting restricts delivery to users located in Chile.',
+  },
+  {
+    value: 'PE',
+    label: 'Peru',
+    description: 'Peru targeting restricts delivery to users located in Peru.',
+  },
+  {
+    value: 'EC',
+    label: 'Ecuador',
+    description: 'Ecuador targeting restricts delivery to users located in Ecuador.',
+  },
+  {
+    value: 'UY',
+    label: 'Uruguay',
+    description: 'Uruguay targeting restricts delivery to users located in Uruguay.',
+  },
+  {
+    value: 'PY',
+    label: 'Paraguay',
+    description: 'Paraguay targeting restricts delivery to users located in Paraguay.',
+  },
+  {
+    value: 'BO',
+    label: 'Bolivia',
+    description: 'Bolivia targeting restricts delivery to users located in Bolivia.',
+  },
+  {
+    value: 'CR',
+    label: 'Costa Rica',
+    description: 'Costa Rica targeting restricts delivery to users located in Costa Rica.',
+  },
+  {
+    value: 'PA',
+    label: 'Panama',
+    description: 'Panama targeting restricts delivery to users located in Panama.',
+  },
+  {
+    value: 'DO',
+    label: 'Dominican Republic',
+    description:
+      'Dominican Republic targeting restricts delivery to users located in the Dominican Republic.',
+  },
 ];
 
 const AGE_RANGES = [
@@ -60,34 +112,46 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
-  const handleLabelSave = useCallback((newLabel: string) => {
-    updateNodeData(id, { label: newLabel });
-  }, [id, updateNodeData]);
+  const handleLabelSave = useCallback(
+    (newLabel: string) => {
+      updateNodeData(id, { label: newLabel });
+    },
+    [id, updateNodeData],
+  );
 
-  const handleGenderToggle = useCallback((gender: number) => {
-    const currentGenders = data.genders || [];
-    const nextGenders = currentGenders.includes(gender)
-      ? currentGenders.filter(g => g !== gender)
-      : [...currentGenders, gender];
-    updateNodeData(id, { genders: nextGenders });
-  }, [id, data.genders, updateNodeData]);
+  const handleGenderToggle = useCallback(
+    (gender: number) => {
+      const currentGenders = data.genders || [];
+      const nextGenders = currentGenders.includes(gender)
+        ? currentGenders.filter((g) => g !== gender)
+        : [...currentGenders, gender];
+      updateNodeData(id, { genders: nextGenders });
+    },
+    [id, data.genders, updateNodeData],
+  );
 
-  const handleLocationToggle = useCallback((location: string) => {
-    const current = data.locations || [];
-    const next = current.includes(location)
-      ? current.filter(l => l !== location)
-      : [...current, location];
-    updateNodeData(id, { locations: next });
-  }, [id, data.locations, updateNodeData]);
+  const handleLocationToggle = useCallback(
+    (location: string) => {
+      const current = data.locations || [];
+      const next = current.includes(location)
+        ? current.filter((l) => l !== location)
+        : [...current, location];
+      updateNodeData(id, { locations: next });
+    },
+    [id, data.locations, updateNodeData],
+  );
 
-  const handleAgeChange = useCallback((min: number, max: number) => {
-    updateNodeData(id, { ageMin: min, ageMax: max });
-  }, [id, updateNodeData]);
+  const handleAgeChange = useCallback(
+    (min: number, max: number) => {
+      updateNodeData(id, { ageMin: min, ageMax: max });
+    },
+    [id, updateNodeData],
+  );
 
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <Node 
+        <Node
           handles={{ target: true, source: false }}
           selected={selected}
           className="hover:shadow-md transition-shadow cursor-pointer"
@@ -110,14 +174,14 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
             <Separator className="my-1.5 opacity-50" />
             <div className="flex flex-col gap-1">
               <NodeDescription className="text-xs text-muted-foreground">
-                {data.locations?.length 
-                  ? `${data.locations.length} locations` 
-                  : 'Global targeting'}
+                {data.locations?.length ? `${data.locations.length} locations` : 'Global targeting'}
               </NodeDescription>
               <div className="flex flex-wrap items-center gap-1 mt-1">
                 <Badge variant="secondary" className="text-3xs px-1 py-0 opacity-80 h-4">
-                  {data.genders?.length === 1 
-                    ? (data.genders[0] === 1 ? 'MEN' : 'WOMEN') 
+                  {data.genders?.length === 1
+                    ? data.genders[0] === 1
+                      ? 'MEN'
+                      : 'WOMEN'
                     : 'ALL GENDERS'}
                 </Badge>
                 {data.ageMin && (
@@ -137,18 +201,21 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
             <ContextMenuSubTrigger>
               <Users className="mr-2 h-4 w-4" />
               Genders
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Gender targeting narrows delivery to selected gender groups." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Gender targeting narrows delivery to selected gender groups."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-              <ContextMenuCheckboxItem 
-                checked={data.genders?.includes(1)} 
+              <ContextMenuCheckboxItem
+                checked={data.genders?.includes(1)}
                 onClick={() => handleGenderToggle(1)}
               >
                 Men
                 <ContextMenuItemInfo description="Men targeting includes users categorized as male." />
               </ContextMenuCheckboxItem>
-              <ContextMenuCheckboxItem 
-                checked={data.genders?.includes(2)} 
+              <ContextMenuCheckboxItem
+                checked={data.genders?.includes(2)}
                 onClick={() => handleGenderToggle(2)}
               >
                 Women
@@ -161,7 +228,10 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
             <ContextMenuSubTrigger>
               <Layout className="mr-2 h-4 w-4" />
               Locations
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Location targeting limits delivery to specific geographies." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Location targeting limits delivery to specific geographies."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {LOCATIONS.map((loc) => (
@@ -181,7 +251,10 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
             <ContextMenuSubTrigger>
               <Settings className="mr-2 h-4 w-4" />
               Age Range
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Age range sets the eligible age band for delivery." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Age range sets the eligible age band for delivery."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {AGE_RANGES.map((range) => (
@@ -199,21 +272,27 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
-        
+
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-            <ContextMenuItemInfo className="ml-2" description="A duplicate copies this audience setup for quick experimentation." />
+            <ContextMenuItemInfo
+              className="ml-2"
+              description="A duplicate copies this audience setup for quick experimentation."
+            />
           </ContextMenuItem>
         </ContextMenuGroup>
-        
+
         <ContextMenuSeparator />
-        
+
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
-          <ContextMenuItemInfo className="ml-2" description="Delete removes this audience object from the current graph." />
+          <ContextMenuItemInfo
+            className="ml-2"
+            description="Delete removes this audience object from the current graph."
+          />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

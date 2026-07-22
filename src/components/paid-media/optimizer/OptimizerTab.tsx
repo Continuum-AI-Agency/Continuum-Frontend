@@ -32,6 +32,7 @@ import { OptimizerOtherAccountNotice } from './sections/OptimizerOtherAccountNot
 import { OptimizerOverview } from './sections/OptimizerOverview';
 import { OptimizerPortfolioBrowser } from './sections/OptimizerPortfolioBrowser';
 import { OptimizerPortfolios } from './sections/OptimizerPortfolios';
+import { PortfolioCreateView } from './sections/PortfolioCreateView';
 import { PortfolioDetailWorkspace } from './sections/PortfolioDetailWorkspace';
 import {
   groupPortfoliosByAccount,
@@ -45,6 +46,8 @@ import {
   useOptimizerAdAccounts,
   useOptimizerPortfolios,
   useOptimizerRenewals,
+  usePrefetchPortfolioDetail,
+  useWarmActionsQueue,
 } from './useOptimizerData';
 import { useOptimizerUrlState } from './useOptimizerUrlState';
 
@@ -86,10 +89,13 @@ export function OptimizerTab({
     portfolioId,
     adsetId,
     metric,
+    section,
     openPortfolio,
     closePortfolio,
+    openCreate,
     setAdset,
     setMetric,
+    setSection,
     setView,
   } = useOptimizerUrlState();
 
@@ -97,6 +103,8 @@ export function OptimizerTab({
   const renewalsQuery = useOptimizerRenewals(brandId);
   const accountsQuery = useOptimizerAdAccounts(brandId);
   const currency = useAdAccountCurrency(brandId, adAccountId);
+  const prefetchPortfolioDetail = usePrefetchPortfolioDetail(brandId);
+  const warmActionsQueue = useWarmActionsQueue(brandId);
 
   const portfolios = portfoliosQuery.data;
   const pendingCount = totalPending(portfolios);
@@ -237,6 +245,22 @@ export function OptimizerTab({
     );
   }
 
+  // The create view is its own full-height page state, not a sheet — and it wins over
+  // an open portfolio so a deep-linked `?optimizerView=create` always lands here.
+  if (view === 'create') {
+    return (
+      <section className="grid h-full min-h-0 overflow-hidden rounded-lg border border-border/70 bg-background">
+        <PortfolioCreateView
+          adAccountId={adAccountId}
+          brandId={brandId}
+          currency={currency}
+          onBack={() => setView('portfolios')}
+          onCreated={handlePortfolioCreated}
+        />
+      </section>
+    );
+  }
+
   // A portfolio opened for full-screen detail replaces the tab body with its own
   // command-center workspace (hero timeline + drill-ins). Guarded by find() so a
   // stale id (e.g. after an account switch) falls back to the tabbed view.
@@ -253,8 +277,10 @@ export function OptimizerTab({
           chartMetric={metric}
           onClose={closePortfolio}
           onMetricChange={setMetric}
+          onSectionChange={setSection}
           onSelectAdset={setAdset}
           portfolio={detailPortfolio}
+          section={section}
           selectedAdsetId={adsetId}
         />
       </section>
@@ -286,7 +312,12 @@ export function OptimizerTab({
                 <RefreshCwIcon className="size-3.5" />
                 Portfolios
               </TabsTrigger>
-              <TabsTrigger value="actions" className="gap-1.5 px-3 text-xs">
+              <TabsTrigger
+                value="actions"
+                className="gap-1.5 px-3 text-xs"
+                onMouseEnter={() => warmActionsQueue(portfolios)}
+                onFocus={() => warmActionsQueue(portfolios)}
+              >
                 <ListChecksIcon className="size-3.5" />
                 Actions
                 {pendingCount + renewalCount > 0 ? (
@@ -303,30 +334,27 @@ export function OptimizerTab({
           }
         />
 
-        <TabsContent
-          value="overview"
-          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
-        >
+        <TabsContent value="overview" className="min-h-0 overflow-y-auto p-2">
           <OptimizerOverview
             portfolios={portfolios}
             pendingCount={pendingCount}
             currency={currency}
             onOpenActions={() => setView('actions')}
             onSelectPortfolio={handleSelectPortfolio}
+            onCreatePortfolio={openCreate}
+            onPrefetchPortfolio={prefetchPortfolioDetail}
           />
         </TabsContent>
 
-        <TabsContent
-          value="portfolios"
-          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
-        >
+        <TabsContent value="portfolios" className="min-h-0 overflow-y-auto p-2">
           <OptimizerPortfolios
             brandId={brandId}
             adAccountId={adAccountId}
             portfolios={portfolios}
             currency={currency}
-            onCreated={handlePortfolioCreated}
+            onCreate={openCreate}
             onOpenDetail={openPortfolio}
+            onPrefetchPortfolio={prefetchPortfolioDetail}
             brandGroups={brandGroups}
             brandPortfolioCount={portfoliosQuery.brandPortfolioCount}
             planOpen={planOpen}
@@ -334,22 +362,17 @@ export function OptimizerTab({
           />
         </TabsContent>
 
-        <TabsContent
-          value="actions"
-          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
-        >
+        <TabsContent value="actions" className="min-h-0 overflow-y-auto p-2">
           <OptimizerActions
             brandId={brandId}
             adAccountId={adAccountId}
             portfolios={portfolios}
             renewals={renewalsQuery.data}
+            onBrowsePortfolios={() => setView('portfolios')}
           />
         </TabsContent>
 
-        <TabsContent
-          value="logs"
-          className="min-h-0 animate-in fade-in-0 overflow-y-auto p-2 duration-200 motion-reduce:animate-none"
-        >
+        <TabsContent value="logs" className="min-h-0 overflow-y-auto p-2">
           <OptimizerLogs brandId={brandId} />
         </TabsContent>
       </Tabs>

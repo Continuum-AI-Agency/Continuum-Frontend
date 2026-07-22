@@ -1,21 +1,24 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 
-import type { ActionLog, CreativeSwitchExternalPayload, ProductSwapProduct } from "@/lib/types/dco";
+import type { ActionLog, CreativeSwitchExternalPayload, ProductSwapProduct } from '@/lib/types/dco';
 
 import {
   CREATIVE_SWAP_ACTION_TYPES,
   type RotationEvent,
   type RotationSummary,
   type UniqueCreative,
-} from "./types";
+} from './types';
 
-type CurrentCreative = {
-  id?: string;
-  imageUrl?: string | null;
-  thumbnailUrl?: string | null;
-} | null | undefined;
+type CurrentCreative =
+  | {
+      id?: string;
+      imageUrl?: string | null;
+      thumbnailUrl?: string | null;
+    }
+  | null
+  | undefined;
 
 type UseCreativeRotationsInput = {
   adId: string | null | undefined;
@@ -23,19 +26,19 @@ type UseCreativeRotationsInput = {
   currentCreative?: CurrentCreative;
 };
 
-function isCreativeSwapActionType(actionType: ActionLog["actionType"]): boolean {
+function isCreativeSwapActionType(actionType: ActionLog['actionType']): boolean {
   return CREATIVE_SWAP_ACTION_TYPES.includes(actionType);
 }
 
 function castPayload(actionPayload: unknown): CreativeSwitchExternalPayload | null {
-  if (!actionPayload || typeof actionPayload !== "object") return null;
+  if (!actionPayload || typeof actionPayload !== 'object') return null;
   return actionPayload as CreativeSwitchExternalPayload;
 }
 
 function toProduct(value: unknown): ProductSwapProduct | null {
-  if (!value || typeof value !== "object") return null;
+  if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<ProductSwapProduct>;
-  if (typeof candidate.name !== "string" || typeof candidate.brand !== "string") return null;
+  if (typeof candidate.name !== 'string' || typeof candidate.brand !== 'string') return null;
   return candidate as ProductSwapProduct;
 }
 
@@ -136,6 +139,6 @@ export function useCreativeRotations({
 }: UseCreativeRotationsInput): RotationSummary {
   return React.useMemo(
     () => summarizeCreativeRotations({ adId, logs, currentCreative }),
-    [adId, logs, currentCreative]
+    [adId, logs, currentCreative],
   );
 }

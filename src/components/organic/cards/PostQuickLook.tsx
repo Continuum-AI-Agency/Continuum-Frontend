@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // Rich hover quick-look shown in the gallery HoverCard. Surfaces the adaptive
 // metric set for the post's media type, a 7-day per-post trend sparkline (with a
@@ -8,44 +8,50 @@
 // history exist). The full deep dive still lives in the side panel that opens
 // on click.
 
-import * as React from "react";
-import { ExternalLink } from "lucide-react";
-
-import type { OrganicPost } from "@/lib/schemas/organicMetrics";
-import { Skeleton } from "@/components/ui/skeleton";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import { buildPostMetricSeries, postPeriodComparisons, type PostMetricKey } from "../organic-metrics-utils";
-import { deltaTone, formatDateTime } from "../organic-format";
-import { getCardMetricSet, resolveCardMediaKind } from "./cardMetricSet";
-import { StatTile } from "./StatTile";
-import { Sparkline } from "./Sparkline";
+import { ExternalLink } from 'lucide-react';
+import * as React from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
+import { cn } from '@/lib/utils';
+import { deltaTone, formatDateTime } from '../organic-format';
+import {
+  buildPostMetricSeries,
+  type PostMetricKey,
+  postPeriodComparisons,
+} from '../organic-metrics-utils';
+import { getCardMetricSet, resolveCardMediaKind } from './cardMetricSet';
+import { Sparkline } from './Sparkline';
+import { StatTile } from './StatTile';
 
 const MEDIA_KIND_LABEL = {
-  reel: "Reel",
-  image: "Post",
-  carousel: "Carousel",
+  reel: 'Reel',
+  image: 'Post',
+  carousel: 'Carousel',
 } as const;
 
-const SERIES_KEYS: PostMetricKey[] = ["views", "reach", "engagement", "comments"];
+const SERIES_KEYS: PostMetricKey[] = ['views', 'reach', 'engagement', 'comments'];
 
 // Picks the chartable metric to sparkline: the first primary metric that has a
 // per-day series, defaulting to views.
 export function resolveSeriesKey(descriptorKeys: Array<string | undefined>): PostMetricKey {
   const match = descriptorKeys.find(
-    (key): key is PostMetricKey => key !== undefined && SERIES_KEYS.includes(key as PostMetricKey)
+    (key): key is PostMetricKey => key !== undefined && SERIES_KEYS.includes(key as PostMetricKey),
   );
-  return match ?? "views";
+  return match ?? 'views';
 }
 
-export type QuickLookTrendState = "post" | "account" | "empty";
+export type QuickLookTrendState = 'post' | 'account' | 'empty';
 
 // Chooses which trend to show: the per-post series when it has enough points,
 // otherwise the account trend as context, otherwise an empty hint.
-export function resolveTrendState(seriesLength: number, accountSeriesLength: number): QuickLookTrendState {
-  if (seriesLength > 1) return "post";
-  if (accountSeriesLength > 1) return "account";
-  return "empty";
+export function resolveTrendState(
+  seriesLength: number,
+  accountSeriesLength: number,
+): QuickLookTrendState {
+  if (seriesLength > 1) return 'post';
+  if (accountSeriesLength > 1) return 'account';
+  return 'empty';
 }
 
 export function PostQuickLook({
@@ -61,19 +67,19 @@ export function PostQuickLook({
   const descriptors = React.useMemo(() => getCardMetricSet(post), [post]);
   const comparisons = React.useMemo(() => postPeriodComparisons(post), [post]);
 
-  const primary = descriptors.filter((d) => d.emphasis === "primary");
-  const secondary = descriptors.filter((d) => d.emphasis === "secondary");
-  const hasAnyValue = descriptors.some((d) => typeof d.value === "number");
+  const primary = descriptors.filter((d) => d.emphasis === 'primary');
+  const secondary = descriptors.filter((d) => d.emphasis === 'secondary');
+  const hasAnyValue = descriptors.some((d) => typeof d.value === 'number');
 
   const seriesKey = resolveSeriesKey(primary.map((d) => d.comparisonKey));
   const series = React.useMemo(
     () => buildPostMetricSeries({ post, metricKey: seriesKey }),
-    [post, seriesKey]
+    [post, seriesKey],
   );
   const trendDays = post.breakdown7d?.length ?? 0;
   // Reach is lifetime-only and never carries a comparison (see PostComparisonKey),
   // so it can't index the comparisons map — fall back to a flat tone for it.
-  const comparisonKey = seriesKey === "reach" ? undefined : seriesKey;
+  const comparisonKey = seriesKey === 'reach' ? undefined : seriesKey;
   const tone = deltaTone(comparisonKey ? comparisons[comparisonKey]?.percentageChange : undefined);
   const trendState = resolveTrendState(series.length, accountSeries?.length ?? 0);
 
@@ -116,12 +122,14 @@ export function PostQuickLook({
         ) : (
           <>
             <p className="text-2xs leading-snug text-muted-foreground">
-              All-time totals{" "}
+              All-time totals{' '}
               {Object.keys(comparisons).length > 0
-                ? "· deltas vs prior 7d"
-                : "· deltas unlock after 14 days of history"}
+                ? '· deltas vs prior 7d'
+                : '· deltas unlock after 14 days of history'}
             </p>
-            <div className={cn("grid gap-1.5", primary.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
+            <div
+              className={cn('grid gap-1.5', primary.length >= 3 ? 'grid-cols-3' : 'grid-cols-2')}
+            >
               {primary.map((d) => (
                 <StatTile
                   key={d.key}
@@ -160,7 +168,7 @@ export function PostQuickLook({
         )}
 
         <div className="border-t border-subtle pt-2">
-          {trendState === "post" ? (
+          {trendState === 'post' ? (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">7-day trend</span>
@@ -180,10 +188,11 @@ export function PostQuickLook({
                 </p>
               ) : null}
             </div>
-          ) : trendState === "account" ? (
+          ) : trendState === 'account' ? (
             <div className="space-y-1">
               <p className="text-xs leading-snug text-muted-foreground">
-                Per-post trend builds over time ({trendDays}/7 days). Showing the account trend meanwhile.
+                Per-post trend builds over time ({trendDays}/7 days). Showing the account trend
+                meanwhile.
               </p>
               <Sparkline
                 values={(accountSeries ?? []).map((point) => point.value)}
@@ -202,7 +211,9 @@ export function PostQuickLook({
         </div>
 
         {post.caption?.trim().length ? (
-          <p className="line-clamp-3 text-pretty text-xs leading-snug text-secondary">{post.caption}</p>
+          <p className="line-clamp-3 text-pretty text-xs leading-snug text-secondary">
+            {post.caption}
+          </p>
         ) : null}
       </div>
     </TooltipProvider>

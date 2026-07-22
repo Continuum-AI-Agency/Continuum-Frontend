@@ -41,10 +41,7 @@ function getBoxesFromNodes(nodes: Node[], margin: number = 0): Box[] {
   return boxes;
 }
 
-export const resolveCollisions: CollisionAlgorithm = (
-  nodes,
-  options = {},
-) => {
+export const resolveCollisions: CollisionAlgorithm = (nodes, options = {}) => {
   const { maxIterations = 50, overlapThreshold = 0.5, margin = 20 } = options;
   const boxes = getBoxesFromNodes(nodes, margin);
 

@@ -1,7 +1,7 @@
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { ScoreBadge } from "./ScoreBadge";
-import { DIMENSION_LABELS, scoreFor } from "./utils";
-import type { ReadinessAnalysis, ReadinessDimension } from "@/lib/onboarding/agentClient";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
+import { ScoreBadge } from './ScoreBadge';
+import { DIMENSION_LABELS, scoreFor } from './utils';
 
 type Props = {
   dim: ReadinessDimension;

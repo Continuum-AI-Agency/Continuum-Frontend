@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { motion } from "motion/react";
-import type { ToolResultEventData } from "@/lib/jaina/schemas";
+import { motion } from 'motion/react';
+import type { ToolResultEventData } from '@/lib/jaina/schemas';
 
 type SpawnWorkerOutput = {
   agent_id?: string;
@@ -46,13 +46,13 @@ type WorkerInsightsPanelProps = {
 export function WorkerInsightsPanel({ results }: WorkerInsightsPanelProps) {
   const workers = results
     .map((r) => r.output as SpawnWorkerOutput | undefined)
-    .filter((o): o is SpawnWorkerOutput => !!o && typeof o === "object");
+    .filter((o): o is SpawnWorkerOutput => !!o && typeof o === 'object');
 
   const hasContent = workers.some(
     (w) =>
       (w.evidence?.length ?? 0) > 0 ||
       (w.insights?.length ?? 0) > 0 ||
-      (w.recommendations?.length ?? 0) > 0
+      (w.recommendations?.length ?? 0) > 0,
   );
 
   if (!hasContent) return null;
@@ -66,9 +66,24 @@ export function WorkerInsightsPanel({ results }: WorkerInsightsPanelProps) {
     >
       {workers.map((worker, i) => {
         const sections = [
-          { label: "Evidence", items: worker.evidence ?? [], labelClass: "text-muted-foreground/70", bulletClass: "text-muted-foreground/40" },
-          { label: "Insights", items: worker.insights ?? [], labelClass: "text-amber-500/80", bulletClass: "text-amber-500/60" },
-          { label: "Recommendations", items: worker.recommendations ?? [], labelClass: "text-[#5A48F9]/80", bulletClass: "text-[#5A48F9]/60" },
+          {
+            label: 'Evidence',
+            items: worker.evidence ?? [],
+            labelClass: 'text-muted-foreground/70',
+            bulletClass: 'text-muted-foreground/40',
+          },
+          {
+            label: 'Insights',
+            items: worker.insights ?? [],
+            labelClass: 'text-amber-500/80',
+            bulletClass: 'text-amber-500/60',
+          },
+          {
+            label: 'Recommendations',
+            items: worker.recommendations ?? [],
+            labelClass: 'text-[#5A48F9]/80',
+            bulletClass: 'text-[#5A48F9]/60',
+          },
         ].filter((s) => s.items.length > 0);
 
         if (!sections.length) return null;
@@ -78,7 +93,7 @@ export function WorkerInsightsPanel({ results }: WorkerInsightsPanelProps) {
             {worker.agent_id && (
               <p className="text-2xs text-muted-foreground/50 font-mono">
                 {worker.agent_id}
-                {worker.task_id ? ` · ${worker.task_id}` : ""}
+                {worker.task_id ? ` · ${worker.task_id}` : ''}
               </p>
             )}
             {sections.map((s) => (

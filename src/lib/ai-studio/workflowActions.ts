@@ -1,24 +1,23 @@
-"use server";
+'use server';
 
-import { z } from "zod";
-
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { z } from 'zod';
 import {
-  aiStudioWorkflowRowSchema,
-  mapAiStudioWorkflowRow,
   type AiStudioWorkflow,
   type AiStudioWorkflowRow,
-} from "@/lib/schemas/aiStudio";
+  aiStudioWorkflowRowSchema,
+  mapAiStudioWorkflowRow,
+} from '@/lib/schemas/aiStudio';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const FUNCTION_NAME = "ai_studio_workflows";
+const FUNCTION_NAME = 'ai_studio_workflows';
 
 const listSchema = z.object({
-  brandProfileId: z.string().uuid("brandProfileId must be a valid UUID"),
+  brandProfileId: z.string().uuid('brandProfileId must be a valid UUID'),
 });
 
 const createSchema = z.object({
-  brandProfileId: z.string().uuid("brandProfileId must be a valid UUID"),
-  name: z.string().min(1, "Workflow name is required"),
+  brandProfileId: z.string().uuid('brandProfileId must be a valid UUID'),
+  name: z.string().min(1, 'Workflow name is required'),
   description: z.string().optional(),
   nodes: z.array(z.unknown()).optional().default([]),
   edges: z.array(z.unknown()).optional().default([]),
@@ -26,9 +25,9 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
-  brandProfileId: z.string().uuid("brandProfileId must be a valid UUID"),
-  workflowId: z.string().uuid("workflowId must be a valid UUID"),
-  name: z.string().min(1, "Workflow name is required").optional(),
+  brandProfileId: z.string().uuid('brandProfileId must be a valid UUID'),
+  workflowId: z.string().uuid('workflowId must be a valid UUID'),
+  name: z.string().min(1, 'Workflow name is required').optional(),
   description: z.string().optional(),
   nodes: z.array(z.unknown()).optional(),
   edges: z.array(z.unknown()).optional(),
@@ -36,17 +35,17 @@ const updateSchema = z.object({
 });
 
 const deleteSchema = z.object({
-  brandProfileId: z.string().uuid("brandProfileId must be a valid UUID"),
-  workflowId: z.string().uuid("workflowId must be a valid UUID"),
+  brandProfileId: z.string().uuid('brandProfileId must be a valid UUID'),
+  workflowId: z.string().uuid('workflowId must be a valid UUID'),
 });
 
 type WorkflowAction =
   | {
-      action: "list";
+      action: 'list';
       brandProfileId: string;
     }
   | {
-      action: "create";
+      action: 'create';
       brandProfileId: string;
       name: string;
       description?: string;
@@ -55,7 +54,7 @@ type WorkflowAction =
       metadata?: Record<string, unknown>;
     }
   | {
-      action: "update";
+      action: 'update';
       brandProfileId: string;
       workflowId: string;
       name?: string;
@@ -65,7 +64,7 @@ type WorkflowAction =
       metadata?: Record<string, unknown>;
     }
   | {
-      action: "delete";
+      action: 'delete';
       brandProfileId: string;
       workflowId: string;
     };
@@ -82,7 +81,7 @@ async function invokeWorkflows<T>(body: WorkflowAction): Promise<T> {
 
   const accessToken = session?.access_token;
   if (!accessToken) {
-    throw new Error("Missing session access token");
+    throw new Error('Missing session access token');
   }
 
   const { data, error } = await supabase.functions.invoke<T>(FUNCTION_NAME, {
@@ -91,20 +90,22 @@ async function invokeWorkflows<T>(body: WorkflowAction): Promise<T> {
   });
 
   if (error) {
-    throw new Error(error.message || "Workflow request failed");
+    throw new Error(error.message || 'Workflow request failed');
   }
 
   if (!data) {
-    throw new Error("Workflow request returned no data");
+    throw new Error('Workflow request returned no data');
   }
 
   return data;
 }
 
-export async function listAiStudioWorkflowsAction(brandProfileId: string): Promise<AiStudioWorkflow[]> {
+export async function listAiStudioWorkflowsAction(
+  brandProfileId: string,
+): Promise<AiStudioWorkflow[]> {
   const parsed = listSchema.parse({ brandProfileId });
   const data = await invokeWorkflows<ListResponse>({
-    action: "list",
+    action: 'list',
     brandProfileId: parsed.brandProfileId,
   });
 
@@ -112,11 +113,11 @@ export async function listAiStudioWorkflowsAction(brandProfileId: string): Promi
 }
 
 export async function createAiStudioWorkflowAction(
-  input: z.infer<typeof createSchema>
+  input: z.infer<typeof createSchema>,
 ): Promise<AiStudioWorkflow> {
   const parsed = createSchema.parse(input);
   const data = await invokeWorkflows<SingleResponse>({
-    action: "create",
+    action: 'create',
     brandProfileId: parsed.brandProfileId,
     name: parsed.name,
     description: parsed.description,
@@ -129,11 +130,11 @@ export async function createAiStudioWorkflowAction(
 }
 
 export async function updateAiStudioWorkflowAction(
-  input: z.infer<typeof updateSchema>
+  input: z.infer<typeof updateSchema>,
 ): Promise<AiStudioWorkflow> {
   const parsed = updateSchema.parse(input);
   const data = await invokeWorkflows<SingleResponse>({
-    action: "update",
+    action: 'update',
     brandProfileId: parsed.brandProfileId,
     workflowId: parsed.workflowId,
     name: parsed.name,
@@ -147,11 +148,11 @@ export async function updateAiStudioWorkflowAction(
 }
 
 export async function deleteAiStudioWorkflowAction(
-  input: z.infer<typeof deleteSchema>
+  input: z.infer<typeof deleteSchema>,
 ): Promise<void> {
   const parsed = deleteSchema.parse(input);
   await invokeWorkflows<{ deleted: boolean }>({
-    action: "delete",
+    action: 'delete',
     brandProfileId: parsed.brandProfileId,
     workflowId: parsed.workflowId,
   });

@@ -1,10 +1,10 @@
-import { http } from "@/lib/api/http";
+import { http } from '@/lib/api/http';
 
 type HyperframeSignResponse = { signedUrl: string; expiresAt: string };
 
 const SIGN_BUCKETS = {
-  composition: "hyperframes-compositions",
-  mp4: "hyperframes-mp4",
+  composition: 'hyperframes-compositions',
+  mp4: 'hyperframes-mp4',
 } as const;
 
 /**
@@ -19,13 +19,13 @@ export async function signHyperframeAsset(params: {
 }): Promise<string | null> {
   try {
     const res = await http.request<HyperframeSignResponse>({
-      path: "/api/organic/agent/hyperframes/sign",
-      method: "POST",
+      path: '/api/organic/agent/hyperframes/sign',
+      method: 'POST',
       body: params,
     });
     return res.signedUrl ?? null;
   } catch (err) {
-    console.warn("[hyperframe-sign] failed", err);
+    console.warn('[hyperframe-sign] failed', err);
     return null;
   }
 }
@@ -48,16 +48,16 @@ export async function signMediaAsset(params: {
   assetId: string;
 }): Promise<string | null> {
   try {
-    const res = await fetch("/api/library/sign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch('/api/library/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { signedUrl?: string };
     return data.signedUrl ?? null;
   } catch (err) {
-    console.warn("[media-sign] failed", err);
+    console.warn('[media-sign] failed', err);
     return null;
   }
 }

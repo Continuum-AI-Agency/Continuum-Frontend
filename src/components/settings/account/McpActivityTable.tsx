@@ -1,6 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import {
+  type McpToolCall,
+  type McpToolCallStatus,
+  type McpToolCallsResponse,
+  mcpToolCallsResponseSchema,
+} from '@continuum/contracts';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import {
   type ColumnDef,
   flexRender,
@@ -8,67 +14,68 @@ import {
   getSortedRowModel,
   type SortingState,
   useReactTable,
-} from "@tanstack/react-table";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { ArrowUpDown } from "lucide-react";
-import {
-  mcpToolCallsResponseSchema,
-  type McpToolCall,
-  type McpToolCallStatus,
-  type McpToolCallsResponse,
-} from "@continuum/contracts";
-import { http } from "@/lib/api/http";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+} from '@tanstack/react-table';
+import { ArrowUpDown } from 'lucide-react';
+import * as React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { http } from '@/lib/api/http';
 
 const PAGE_SIZE = 50;
 
-type StatusFilter = "all" | McpToolCallStatus;
+type StatusFilter = 'all' | McpToolCallStatus;
 
 const STATUS_STYLE: Record<McpToolCallStatus, { label: string; className: string }> = {
-  ok: { label: "ok", className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  error: { label: "error", className: "bg-red-500/15 text-red-600 dark:text-red-400" },
-  denied: { label: "denied", className: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  ok: { label: 'ok', className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
+  error: { label: 'error', className: 'bg-red-500/15 text-red-600 dark:text-red-400' },
+  denied: { label: 'denied', className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
   rate_limited: {
-    label: "rate limited",
-    className: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    label: 'rate limited',
+    className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
 };
 
 function formatTimestamp(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
 }
 
 function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms)) return "—";
+  if (!Number.isFinite(ms)) return '—';
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
 }
 
 function buildPath(cursor: string | null, status: StatusFilter): string {
   const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
-  if (cursor) params.set("before", cursor);
-  if (status !== "all") params.set("status", status);
+  if (cursor) params.set('before', cursor);
+  if (status !== 'all') params.set('status', status);
   return `/mcp/tool-calls?${params.toString()}`;
 }
 
 export function McpActivityTable() {
-  const [status, setStatus] = React.useState<StatusFilter>("all");
-  const [toolFilter, setToolFilter] = React.useState("");
-  const [sorting, setSorting] = React.useState<SortingState>([{ id: "created_at", desc: true }]);
+  const [status, setStatus] = React.useState<StatusFilter>('all');
+  const [toolFilter, setToolFilter] = React.useState('');
+  const [sorting, setSorting] = React.useState<SortingState>([{ id: 'created_at', desc: true }]);
 
   const query = useInfiniteQuery({
-    queryKey: ["mcp-tool-calls", status],
+    queryKey: ['mcp-tool-calls', status],
     queryFn: ({ pageParam }) =>
       http.request<McpToolCallsResponse>({
         path: buildPath(pageParam, status),
@@ -91,66 +98,69 @@ export function McpActivityTable() {
   const columns = React.useMemo<ColumnDef<McpToolCall>[]>(
     () => [
       {
-        accessorKey: "created_at",
+        accessorKey: 'created_at',
         header: ({ column }) => <SortHeader column={column} label="When" />,
         cell: ({ row }) => (
           <span className="font-data text-xs tabular-nums text-muted-foreground">
             {formatTimestamp(row.original.created_at)}
           </span>
         ),
-        sortingFn: "datetime",
+        sortingFn: 'datetime',
       },
       {
-        accessorKey: "email",
-        header: "User",
+        accessorKey: 'email',
+        header: 'User',
         cell: ({ row }) => (
-          <span className="text-xs text-foreground">{row.original.email ?? "—"}</span>
+          <span className="text-xs text-foreground">{row.original.email ?? '—'}</span>
         ),
       },
       {
-        accessorKey: "client_name",
-        header: "MCP client",
+        accessorKey: 'client_name',
+        header: 'MCP client',
         cell: ({ row }) => (
           <span className="text-xs text-foreground">
-            {row.original.client_name ?? row.original.client_id ?? "—"}
+            {row.original.client_name ?? row.original.client_id ?? '—'}
           </span>
         ),
       },
       {
-        accessorKey: "tool",
-        header: "Tool",
+        accessorKey: 'tool',
+        header: 'Tool',
         cell: ({ row }) => (
           <span className="font-data text-xs text-foreground">{row.original.tool}</span>
         ),
       },
       {
-        accessorKey: "status",
-        header: "Status",
+        accessorKey: 'status',
+        header: 'Status',
         cell: ({ row }) => {
           const style = STATUS_STYLE[row.original.status];
           return (
-            <Badge variant="outline" className={`gap-1 border-transparent text-2xs ${style.className}`}>
+            <Badge
+              variant="outline"
+              className={`gap-1 border-transparent text-2xs ${style.className}`}
+            >
               {style.label}
             </Badge>
           );
         },
       },
       {
-        accessorKey: "duration_ms",
+        accessorKey: 'duration_ms',
         header: ({ column }) => <SortHeader column={column} label="Duration" />,
         cell: ({ row }) => (
           <span className="font-data text-xs tabular-nums text-muted-foreground">
             {formatDuration(row.original.duration_ms)}
           </span>
         ),
-        sortingFn: "basic",
+        sortingFn: 'basic',
       },
       {
-        accessorKey: "error_code",
-        header: "Error",
+        accessorKey: 'error_code',
+        header: 'Error',
         cell: ({ row }) => (
           <span className="font-data text-xs text-muted-foreground">
-            {row.original.error_code ?? "—"}
+            {row.original.error_code ?? '—'}
           </span>
         ),
       },
@@ -211,8 +221,11 @@ export function McpActivityTable() {
                 <LoadingRows columns={columns.length} />
               ) : query.isError ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
-                    Could not load activity.{" "}
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center text-sm text-muted-foreground"
+                  >
+                    Could not load activity.{' '}
                     <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
                       Retry
                     </Button>
@@ -220,7 +233,10 @@ export function McpActivityTable() {
                 </TableRow>
               ) : table.getRowModel().rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center text-sm text-muted-foreground"
+                  >
                     No tool calls yet.
                   </TableCell>
                 </TableRow>
@@ -248,7 +264,7 @@ export function McpActivityTable() {
             disabled={query.isFetchingNextPage}
             onClick={() => void query.fetchNextPage()}
           >
-            {query.isFetchingNextPage ? "Loading…" : "Load more"}
+            {query.isFetchingNextPage ? 'Loading…' : 'Load more'}
           </Button>
         </div>
       ) : null}
@@ -276,7 +292,7 @@ function SortHeader({
   column,
   label,
 }: {
-  column: { toggleSorting: (asc?: boolean) => void; getIsSorted: () => false | "asc" | "desc" };
+  column: { toggleSorting: (asc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' };
   label: string;
 }) {
   return (
@@ -285,7 +301,7 @@ function SortHeader({
       variant="ghost"
       size="sm"
       className="-ml-2 h-7 px-2 text-2xs uppercase tracking-wider text-muted-foreground"
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
     >
       {label}
       <ArrowUpDown className="ml-1 h-3 w-3" />

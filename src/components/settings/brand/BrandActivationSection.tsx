@@ -1,16 +1,16 @@
-import Link from "next/link"
 import {
   ArrowUpRight,
   BookOpen,
   Library,
   Link2,
+  type LucideIcon,
   Plug,
   Target,
-  type LucideIcon,
-} from "lucide-react"
-import type { ReactNode } from "react"
+} from 'lucide-react';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-import { GlossaryTooltip } from "@/components/shared/glossary"
+import { GlossaryTooltip } from '@/components/shared/glossary';
 
 // Activation launcher (IMP-017). Pulls the setup actions that are otherwise
 // scattered across dense settings tabs — Brand Book, Knowledge, Integrations,
@@ -18,43 +18,44 @@ import { GlossaryTooltip } from "@/components/shared/glossary"
 // the existing section; nothing here duplicates those surfaces or their data.
 
 type ActivationTarget = {
-  icon: LucideIcon
-  title: string
-  description: ReactNode
-  href: string
-  cta: string
-}
+  icon: LucideIcon;
+  title: string;
+  description: ReactNode;
+  href: string;
+  cta: string;
+};
 
 const ACTIVATION_TARGETS: readonly ActivationTarget[] = [
   {
     icon: Library,
-    title: "Brand Book",
-    description: "Teach Continuum your identity, voice, and guidelines so every output sounds like you.",
-    href: "/settings?section=brand-book",
-    cta: "Open Brand Book",
+    title: 'Brand Book',
+    description:
+      'Teach Continuum your identity, voice, and guidelines so every output sounds like you.',
+    href: '/settings?section=brand-book',
+    cta: 'Open Brand Book',
   },
   {
     icon: BookOpen,
-    title: "Knowledge",
-    description: "Upload the documents Jaina reads for app-wide brand intelligence.",
-    href: "/settings?section=knowledge",
-    cta: "Add knowledge",
+    title: 'Knowledge',
+    description: 'Upload the documents Jaina reads for app-wide brand intelligence.',
+    href: '/settings?section=knowledge',
+    cta: 'Add knowledge',
   },
   {
     icon: Plug,
-    title: "Integrations",
-    description: "Assign the ad, social, and analytics accounts this brand runs on.",
-    href: "/settings?section=integrations",
-    cta: "Assign accounts",
+    title: 'Integrations',
+    description: 'Assign the ad, social, and analytics accounts this brand runs on.',
+    href: '/settings?section=integrations',
+    cta: 'Assign accounts',
   },
   {
     icon: Target,
-    title: "Competitors",
-    description: "Track competitor posts and ads in Brand Spy to benchmark and find white space.",
-    href: "/competitor-spy?tab=competitors",
-    cta: "Track competitors",
+    title: 'Competitors',
+    description: 'Track competitor posts and ads in Brand Spy to benchmark and find white space.',
+    href: '/competitor-spy?tab=competitors',
+    cta: 'Track competitors',
   },
-]
+];
 
 function ConnectionsCard() {
   return (
@@ -63,15 +64,14 @@ function ConnectionsCard() {
       title="Connections"
       description={
         <>
-          Link your own OAuth providers and the{" "}
-          <GlossaryTooltip termKey="mcp">MCP</GlossaryTooltip> connectors (like Claude)
-          you authorize with your login.
+          Link your own OAuth providers and the <GlossaryTooltip termKey="mcp">MCP</GlossaryTooltip>{' '}
+          connectors (like Claude) you authorize with your login.
         </>
       }
       href="/settings?section=connections"
       cta="Manage connections"
     />
-  )
+  );
 }
 
 function ActivationCard({ icon: Icon, title, description, href, cta }: ActivationTarget) {
@@ -92,7 +92,7 @@ function ActivationCard({ icon: Icon, title, description, href, cta }: Activatio
         <ArrowUpRight className="size-3" aria-hidden />
       </span>
     </Link>
-  )
+  );
 }
 
 export function BrandActivationSection() {
@@ -103,5 +103,5 @@ export function BrandActivationSection() {
       ))}
       <ConnectionsCard />
     </div>
-  )
+  );
 }

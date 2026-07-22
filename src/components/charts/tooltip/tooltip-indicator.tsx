@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import { motion, useSpring } from "motion/react";
-import { useEffect } from "react";
-import { type SpringConfig, useChartConfig } from "../chart-config-context";
-import { chartCssVars } from "../chart-context";
+import { motion, useSpring } from 'motion/react';
+import { useEffect } from 'react';
+import { type SpringConfig, useChartConfig } from '../chart-config-context';
+import { chartCssVars } from '../chart-context';
 import {
   type IndicatorFadeEdges,
   indicatorFadeGradientStops,
   resolveVerticalFadeSides,
-} from "../indicator-fade";
+} from '../indicator-fade';
 
 export type IndicatorWidth =
   | number // Pixel width
-  | "line" // 1px line (default)
-  | "thin" // 2px
-  | "medium" // 4px
-  | "thick"; // 8px
+  | 'line' // 1px line (default)
+  | 'thin' // 2px
+  | 'medium' // 4px
+  | 'thick'; // 8px
 
 export interface TooltipIndicatorProps {
   /** X position in pixels (center of the indicator) */
@@ -55,17 +55,17 @@ export interface TooltipIndicatorProps {
 }
 
 function resolveWidth(width: IndicatorWidth): number {
-  if (typeof width === "number") {
+  if (typeof width === 'number') {
     return width;
   }
   switch (width) {
-    case "line":
+    case 'line':
       return 1;
-    case "thin":
+    case 'thin':
       return 2;
-    case "medium":
+    case 'medium':
       return 4;
-    case "thick":
+    case 'thick':
       return 8;
     default:
       return 1;
@@ -85,15 +85,15 @@ function TooltipIndicatorInner({
   x,
   visible,
   height,
-  width = "line",
+  width = 'line',
   span,
   columnWidth,
   colorEdge = chartCssVars.crosshair,
   colorMid = chartCssVars.crosshair,
-  fadeEdges = "both",
+  fadeEdges = 'both',
   fadeLength = 10,
   animate = true,
-  gradientId = "tooltip-indicator-gradient",
+  gradientId = 'tooltip-indicator-gradient',
   springConfig,
   strokeDasharray,
 }: TooltipIndicatorProps) {
@@ -101,9 +101,7 @@ function TooltipIndicatorInner({
   const effectiveSpring = springConfig ?? tooltipSpring;
 
   const pixelWidth =
-    span !== undefined && columnWidth !== undefined
-      ? span * columnWidth
-      : resolveWidth(width);
+    span !== undefined && columnWidth !== undefined ? span * columnWidth : resolveWidth(width);
 
   const rectX = x - pixelWidth / 2;
   const lineX = x;
@@ -152,21 +150,9 @@ function TooltipIndicatorInner({
 
   if (!fadeSides.any) {
     return animate ? (
-      <motion.rect
-        fill={indicatorFill}
-        height={height}
-        width={pixelWidth}
-        x={animatedX}
-        y={0}
-      />
+      <motion.rect fill={indicatorFill} height={height} width={pixelWidth} x={animatedX} y={0} />
     ) : (
-      <rect
-        fill={indicatorFill}
-        height={height}
-        width={pixelWidth}
-        x={rectX}
-        y={0}
-      />
+      <rect fill={indicatorFill} height={height} width={pixelWidth} x={rectX} y={0} />
     );
   }
 
@@ -194,18 +180,12 @@ function TooltipIndicatorInner({
           y={0}
         />
       ) : (
-        <rect
-          fill={`url(#${gradientId})`}
-          height={height}
-          width={pixelWidth}
-          x={rectX}
-          y={0}
-        />
+        <rect fill={`url(#${gradientId})`} height={height} width={pixelWidth} x={rectX} y={0} />
       )}
     </g>
   );
 }
 
-TooltipIndicator.displayName = "TooltipIndicator";
+TooltipIndicator.displayName = 'TooltipIndicator';
 
 export default TooltipIndicator;

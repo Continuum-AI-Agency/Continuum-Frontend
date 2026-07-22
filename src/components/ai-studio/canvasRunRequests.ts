@@ -1,4 +1,4 @@
-import type { CanvasRunResult, CanvasRunOutputKind } from "@continuum/contracts";
+import type { CanvasRunOutputKind, CanvasRunResult } from '@continuum/contracts';
 
 // Pure + dependency-injected core for the collaborative run path. The MCP
 // `studio_workflow run` tool inserts a canvas_run_requests row; the open canvas
@@ -16,35 +16,43 @@ export interface RunNode {
 // Generation/transform node types whose run we summarize. Used to approximate the
 // executed set for a full-graph run (node_ids omitted).
 const RUNNABLE_NODE_TYPES = new Set([
-  "nanoGen",
-  "videoGen",
-  "veoDirector",
-  "veoFast",
-  "extendVideo",
-  "videoEditor",
-  "timelineEditor",
-  "string",
-  "videoDecode",
+  'nanoGen',
+  'videoGen',
+  'veoDirector',
+  'veoFast',
+  'extendVideo',
+  'videoEditor',
+  'timelineEditor',
+  'string',
+  'videoDecode',
 ]);
 
 function nodeData(node: RunNode): Record<string, unknown> {
-  return node.data && typeof node.data === "object" ? (node.data as Record<string, unknown>) : {};
+  return node.data && typeof node.data === 'object' ? (node.data as Record<string, unknown>) : {};
 }
 
 function nonEmptyString(value: unknown): boolean {
-  return typeof value === "string" && value.length > 0;
+  return typeof value === 'string' && value.length > 0;
 }
 
 export function classifyNodeKind(node: RunNode): CanvasRunOutputKind | null {
   const d = nodeData(node);
-  if (nonEmptyString(d.generatedVideo) || nonEmptyString(d.generatedVideoUrl) || nonEmptyString(d.generatedVideoStoragePath)) {
-    return "video";
+  if (
+    nonEmptyString(d.generatedVideo) ||
+    nonEmptyString(d.generatedVideoUrl) ||
+    nonEmptyString(d.generatedVideoStoragePath)
+  ) {
+    return 'video';
   }
-  if (nonEmptyString(d.generatedImage) || nonEmptyString(d.generatedImageUrl) || nonEmptyString(d.generatedImageStoragePath)) {
-    return "image";
+  if (
+    nonEmptyString(d.generatedImage) ||
+    nonEmptyString(d.generatedImageUrl) ||
+    nonEmptyString(d.generatedImageStoragePath)
+  ) {
+    return 'image';
   }
   if (nonEmptyString(d.value)) {
-    return "text";
+    return 'text';
   }
   return null;
 }
@@ -56,15 +64,15 @@ export function resolveRunNodeIds(nodes: RunNode[], requestedNodeIds: string[] |
     const present = new Set(nodes.map((n) => n.id));
     return requestedNodeIds.filter((id) => present.has(id));
   }
-  return nodes.filter((n) => RUNNABLE_NODE_TYPES.has(n.type ?? "")).map((n) => n.id);
+  return nodes.filter((n) => RUNNABLE_NODE_TYPES.has(n.type ?? '')).map((n) => n.id);
 }
 
 export function buildCanvasRunResult(nodes: RunNode[], executedIds: string[]): CanvasRunResult {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const executed_node_ids = executedIds.filter((id) => byId.has(id));
 
-  const outputs: CanvasRunResult["outputs"] = [];
-  const failed: NonNullable<CanvasRunResult["failed"]> = [];
+  const outputs: CanvasRunResult['outputs'] = [];
+  const failed: NonNullable<CanvasRunResult['failed']> = [];
 
   for (const id of executed_node_ids) {
     const node = byId.get(id)!;
@@ -77,7 +85,9 @@ export function buildCanvasRunResult(nodes: RunNode[], executedIds: string[]): C
     if (kind) outputs.push({ node_id: id, kind });
   }
 
-  return failed.length > 0 ? { executed_node_ids, outputs, failed } : { executed_node_ids, outputs };
+  return failed.length > 0
+    ? { executed_node_ids, outputs, failed }
+    : { executed_node_ids, outputs };
 }
 
 // DB boundary for a run request, kept behind an interface so the orchestration is

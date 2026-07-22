@@ -14,10 +14,10 @@
 // Streaming: SSE with `text` delta events + `complete` event so
 // useWorkflowExecution can stream the enriched prompt token-by-token.
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,7 +98,9 @@ async function fetchSignedUrlText(signedUrl: string): Promise<string | null> {
   try {
     const response = await fetch(signedUrl, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
-      console.warn(`[enrich] signed URL fetch returned ${response.status}: ${signedUrl.slice(0, 80)}`);
+      console.warn(
+        `[enrich] signed URL fetch returned ${response.status}: ${signedUrl.slice(0, 80)}`,
+      );
       return null;
     }
     const contentType = response.headers.get('content-type') ?? '';
@@ -106,7 +108,9 @@ async function fetchSignedUrlText(signedUrl: string): Promise<string | null> {
       // PDFs uploaded via the canvas reach this route with a sourceDocumentId
       // (embed_document has already extracted the text). A signed-URL PDF here
       // means a legacy entry without chunk data; skip it gracefully.
-      console.info('[enrich] PDF at storage URL skipped — use sourceDocumentId path for PDF content');
+      console.info(
+        '[enrich] PDF at storage URL skipped — use sourceDocumentId path for PDF content',
+      );
       return null;
     }
     return await response.text();
@@ -116,9 +120,7 @@ async function fetchSignedUrlText(signedUrl: string): Promise<string | null> {
   }
 }
 
-async function fetchBrandDocumentChunks(
-  documentId: string,
-): Promise<string | null> {
+async function fetchBrandDocumentChunks(documentId: string): Promise<string | null> {
   try {
     // Use admin client: chunk rows are server-side only (service role bypasses RLS).
     const admin = createSupabaseAdminClient();
@@ -143,9 +145,7 @@ async function fetchBrandDocumentChunks(
   }
 }
 
-async function extractDocumentText(
-  doc: z.infer<typeof documentSchema>,
-): Promise<string | null> {
+async function extractDocumentText(doc: z.infer<typeof documentSchema>): Promise<string | null> {
   // Path 1: caller already has the text.
   if (doc.extractedText?.trim()) return doc.extractedText.trim();
 
@@ -166,7 +166,9 @@ async function extractDocumentText(
   // canvas uploads now go through embed_document and arrive with a sourceDocumentId.
   if (doc.content) {
     if (doc.type === 'pdf') {
-      console.info(`[enrich] skipping PDF "${doc.name}" — no sourceDocumentId; upload through canvas to extract via embed_document`);
+      console.info(
+        `[enrich] skipping PDF "${doc.name}" — no sourceDocumentId; upload through canvas to extract via embed_document`,
+      );
       return null;
     }
     return base64ToText(doc.content);
@@ -243,7 +245,10 @@ function sseComplete(): string {
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

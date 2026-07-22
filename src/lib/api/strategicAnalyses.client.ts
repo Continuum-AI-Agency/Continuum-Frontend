@@ -1,11 +1,11 @@
- "use client";
+'use client';
 
-import { z } from "zod";
+import { z } from 'zod';
 
-import { http } from "@/lib/api/http";
+import { http } from '@/lib/api/http';
 
 const runRequestSchema = z.object({
-  brandId: z.string().min(1, "brandId is required"),
+  brandId: z.string().min(1, 'brandId is required'),
 });
 
 const runResponseSchema = z
@@ -26,10 +26,10 @@ export async function runStrategicAnalysis(brandId: string): Promise<StrategicAn
   const { brandId: parsedBrandId } = runRequestSchema.parse({ brandId });
 
   const response = await http.request({
-    path: "/onboarding/strategic-analyses/run",
-    method: "POST",
+    path: '/onboarding/strategic-analyses/run',
+    method: 'POST',
     body: { brand_id: parsedBrandId },
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   const parsed = runResponseSchema.optional().parse(response);

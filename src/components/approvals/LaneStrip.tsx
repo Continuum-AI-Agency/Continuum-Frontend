@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
+import * as React from 'react';
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useApprovalsStore } from "@/lib/approvals/store";
-import type { RuleAction } from "@/lib/approvals/types";
-import { actionTypeLabel, formatRelativeTime, scopeLabel } from "./formatters";
-import { getActionIcon } from "./actionIcons";
+import { Button } from '@/components/ui/button';
+import { useApprovalsStore } from '@/lib/approvals/store';
+import type { RuleAction } from '@/lib/approvals/types';
+import { cn } from '@/lib/utils';
+import { getActionIcon } from './actionIcons';
+import { actionTypeLabel, formatRelativeTime, scopeLabel } from './formatters';
 
 type Props = {
   actions: RuleAction[];
@@ -18,7 +18,7 @@ type Props = {
   bindGlobalKeys?: boolean;
 };
 
-const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
+const SPRING = { type: 'spring' as const, stiffness: 300, damping: 30 };
 
 export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }: Props) {
   const pendingDecisions = useApprovalsStore((s) => s.pendingDecisions);
@@ -43,19 +43,23 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
     if (!bindGlobalKeys) return;
     function handler(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      )
+        return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
-      if (key === "j" || event.key === "ArrowRight") {
+      if (key === 'j' || event.key === 'ArrowRight') {
         event.preventDefault();
         advance(1);
-      } else if (key === "k" || event.key === "ArrowLeft") {
+      } else if (key === 'k' || event.key === 'ArrowLeft') {
         event.preventDefault();
         advance(-1);
       }
     }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [advance, bindGlobalKeys]);
 
   if (!actions.length) return null;
@@ -80,8 +84,8 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
         variant="ghost"
         size="icon"
         className={cn(
-          "h-7 w-7 shrink-0 transition-opacity duration-150",
-          "opacity-0 group-hover/lane:opacity-100 focus-visible:opacity-100",
+          'h-7 w-7 shrink-0 transition-opacity duration-150',
+          'opacity-0 group-hover/lane:opacity-100 focus-visible:opacity-100',
         )}
         onClick={() => advance(-1)}
         disabled={focusedIndex <= 0}
@@ -109,7 +113,11 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
                   key={action.id}
                   layout={!reduceMotion}
                   variants={itemVariants}
-                  exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+                  exit={
+                    reduceMotion
+                      ? undefined
+                      : { opacity: 0, scale: 0.96, transition: { duration: 0.15 } }
+                  }
                   transition={SPRING}
                   className="shrink-0"
                 >
@@ -117,13 +125,13 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
                     type="button"
                     onClick={() => onFocus(action.id)}
                     className={cn(
-                      "flex h-14 w-44 flex-col items-start justify-between rounded-md border bg-card px-2.5 py-1.5 text-left",
-                      "transition-colors duration-150",
-                      "hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      isFocused && "border-primary bg-accent/40",
-                      optimistic && "opacity-40",
+                      'flex h-14 w-44 flex-col items-start justify-between rounded-md border bg-card px-2.5 py-1.5 text-left',
+                      'transition-colors duration-150',
+                      'hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isFocused && 'border-primary bg-accent/40',
+                      optimistic && 'opacity-40',
                     )}
-                    aria-current={isFocused ? "true" : undefined}
+                    aria-current={isFocused ? 'true' : undefined}
                     aria-label={`${actionTypeLabel(action.action_type)} · ${scopeLabel(action)}`}
                   >
                     <div className="flex w-full items-center justify-between gap-1">
@@ -151,8 +159,8 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
         variant="ghost"
         size="icon"
         className={cn(
-          "h-7 w-7 shrink-0 transition-opacity duration-150",
-          "opacity-0 group-hover/lane:opacity-100 focus-visible:opacity-100",
+          'h-7 w-7 shrink-0 transition-opacity duration-150',
+          'opacity-0 group-hover/lane:opacity-100 focus-visible:opacity-100',
         )}
         onClick={() => advance(1)}
         disabled={focusedIndex >= actions.length - 1}

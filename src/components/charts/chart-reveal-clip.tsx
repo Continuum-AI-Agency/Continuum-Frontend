@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import type { Transition } from "motion/react";
-import { motion } from "motion/react";
-import { clipRevealTransition } from "./animation";
+import type { Transition } from 'motion/react';
+import { motion } from 'motion/react';
+import { clipRevealTransition } from './animation';
 
-export type ChartRevealClipMode = "reveal" | "conceal";
+export type ChartRevealClipMode = 'reveal' | 'conceal';
 
 export interface ChartRevealClipProps {
   clipPathId: string;
@@ -35,7 +35,7 @@ export function ChartRevealClip({
   revealEpoch,
   padding = 0,
   animating = true,
-  mode = "reveal",
+  mode = 'reveal',
   onComplete,
 }: ChartRevealClipProps) {
   const transition = clipRevealTransition(enterTransition);
@@ -45,17 +45,12 @@ export function ChartRevealClip({
   if (!animating) {
     return (
       <clipPath id={clipPathId}>
-        <rect
-          height={paddedHeight}
-          width={paddedWidth}
-          x={-padding}
-          y={-padding}
-        />
+        <rect height={paddedHeight} width={paddedWidth} x={-padding} y={-padding} />
       </clipPath>
     );
   }
 
-  if (mode === "conceal") {
+  if (mode === 'conceal') {
     // Mirror the LTR reveal: advance the clip's left edge rightward while width
     // shrinks (same geometry as `LineLoadingPulseStroke` exit half-cycle).
     const rightEdge = -padding + paddedWidth;

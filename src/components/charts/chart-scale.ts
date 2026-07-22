@@ -1,9 +1,9 @@
 export const CHART_SCALE_VARS = [
-  "var(--chart-scale-01)",
-  "var(--chart-scale-02)",
-  "var(--chart-scale-03)",
-  "var(--chart-scale-04)",
-  "var(--chart-scale-05)",
+  'var(--chart-scale-01)',
+  'var(--chart-scale-02)',
+  'var(--chart-scale-03)',
+  'var(--chart-scale-04)',
+  'var(--chart-scale-05)',
 ] as const;
 
 export type ChartScaleVars = typeof CHART_SCALE_VARS;
@@ -14,5 +14,5 @@ export const chartScaleCssVars = {
   scale03: CHART_SCALE_VARS[2],
   scale04: CHART_SCALE_VARS[3],
   scale05: CHART_SCALE_VARS[4],
-  patternColor: "var(--chart-scale-pattern-color)",
+  patternColor: 'var(--chart-scale-pattern-color)',
 } as const;

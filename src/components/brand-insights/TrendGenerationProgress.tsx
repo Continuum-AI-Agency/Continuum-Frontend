@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion } from 'motion/react';
 
 const RING_SIZE = 28;
 const STROKE_WIDTH = 2.5;
@@ -34,7 +34,7 @@ type TrendGenerationProgressProps = {
 };
 
 function formatEta(seconds: number): string {
-  if (seconds <= 0) return "almost done";
+  if (seconds <= 0) return 'almost done';
   if (seconds < 60) return `~${seconds}s left`;
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
@@ -49,7 +49,7 @@ export function TrendGenerationProgress({
   etaSeconds,
 }: TrendGenerationProgressProps) {
   const pct = clampPercent(progressPercent);
-  const showEta = !isError && typeof etaSeconds === "number" && pct < 100;
+  const showEta = !isError && typeof etaSeconds === 'number' && pct < 100;
   const offset = CIRCUMFERENCE * (1 - pct / 100);
   const center = RING_SIZE / 2;
 
@@ -81,8 +81,8 @@ export function TrendGenerationProgress({
           strokeDashoffset={offset}
           transform={`rotate(-90 ${center} ${center})`}
           style={{
-            stroke: isError ? "var(--destructive)" : "var(--primary)",
-            transition: "stroke-dashoffset 600ms ease, stroke 300ms ease",
+            stroke: isError ? 'var(--destructive)' : 'var(--primary)',
+            transition: 'stroke-dashoffset 600ms ease, stroke 300ms ease',
           }}
         />
       </svg>
@@ -90,20 +90,18 @@ export function TrendGenerationProgress({
       <div className="flex min-w-0 flex-1 items-center overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
-            key={isError ? "__error__" : currentLabel}
+            key={isError ? '__error__' : currentLabel}
             variants={labelVariants}
             initial="enter"
             animate="center"
             exit="exit"
             className="truncate text-xs font-medium text-foreground"
           >
-            {isError ? "Generation failed" : currentLabel}
+            {isError ? 'Generation failed' : currentLabel}
           </motion.span>
         </AnimatePresence>
         {isError && errorMessage && (
-          <span className="ml-2 truncate text-xs text-muted-foreground">
-            {errorMessage}
-          </span>
+          <span className="ml-2 truncate text-xs text-muted-foreground">{errorMessage}</span>
         )}
       </div>
 

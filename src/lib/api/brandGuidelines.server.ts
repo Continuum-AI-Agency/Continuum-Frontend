@@ -1,18 +1,18 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  type BrandGuidelineDetail,
+  type BrandGuidelineDraft,
+  type BrandGuidelineStatus,
+  type BrandGuidelineSummary,
+  type BrandGuidelineTagsBySection,
   brandGuidelineApprovalSchema,
   brandGuidelineDraftSchema,
   brandGuidelineStatusSchema,
   brandGuidelineTagSectionSchema,
-  type BrandGuidelineStatus,
-  type BrandGuidelineDetail,
-  type BrandGuidelineDraft,
-  type BrandGuidelineSummary,
-  type BrandGuidelineTagsBySection,
-} from "@/lib/schemas/brandGuidelines";
+} from '@/lib/schemas/brandGuidelines';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const GUIDELINE_TABLE = "brand_guidelines";
-const TAG_TABLE = "brand_guideline_tags";
+const GUIDELINE_TABLE = 'brand_guidelines';
+const TAG_TABLE = 'brand_guideline_tags';
 
 const TAG_SECTION_ORDER = brandGuidelineTagSectionSchema.options;
 
@@ -64,8 +64,11 @@ function normalizeTags(tags?: TagRow[]): BrandGuidelineTagsBySection {
   return grouped;
 }
 
-function buildTagRows(guidelineId: string, tags: BrandGuidelineTagsBySection): Omit<TagRow, "id">[] {
-  const rows: Omit<TagRow, "id">[] = [];
+function buildTagRows(
+  guidelineId: string,
+  tags: BrandGuidelineTagsBySection,
+): Omit<TagRow, 'id'>[] {
+  const rows: Omit<TagRow, 'id'>[] = [];
 
   TAG_SECTION_ORDER.forEach((section) => {
     const sectionTags = tags[section as keyof BrandGuidelineTagsBySection] ?? [];
@@ -85,7 +88,7 @@ function buildTagRows(guidelineId: string, tags: BrandGuidelineTagsBySection): O
 function mapGuidelineRow(row: GuidelineRow, tags: TagRow[] | null): BrandGuidelineDetail {
   const draft = brandGuidelineDraftSchema.parse({
     purpose: row.purpose,
-    notes: row.notes ?? "",
+    notes: row.notes ?? '',
     status: row.status,
     colors: row.colors ?? {},
     logo: row.logo ?? {},
@@ -99,7 +102,7 @@ function mapGuidelineRow(row: GuidelineRow, tags: TagRow[] | null): BrandGuideli
   return {
     id: row.id,
     brandId: row.brand_id,
-    status: draft.status ?? "draft",
+    status: draft.status ?? 'draft',
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -117,11 +120,11 @@ function stripEmpty(value: string | undefined): string | null {
 export async function listBrandGuidelines(brandId: string): Promise<BrandGuidelineSummary[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(GUIDELINE_TABLE)
-    .select("id, purpose, status, version, updated_at")
-    .eq("brand_id", brandId)
-    .order("updated_at", { ascending: false });
+    .select('id, purpose, status, version, updated_at')
+    .eq('brand_id', brandId)
+    .order('updated_at', { ascending: false });
 
   if (error) {
     throw new Error(`Unable to list brand guidelines: ${error.message}`);
@@ -138,17 +141,17 @@ export async function listBrandGuidelines(brandId: string): Promise<BrandGuideli
 
 export async function fetchBrandGuideline(
   brandId: string,
-  guidelineId: string
+  guidelineId: string,
 ): Promise<BrandGuidelineDetail | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(GUIDELINE_TABLE)
     .select(
-      "id, brand_id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, created_at, updated_at, approved_at"
+      'id, brand_id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, created_at, updated_at, approved_at',
     )
-    .eq("brand_id", brandId)
-    .eq("id", guidelineId)
+    .eq('brand_id', brandId)
+    .eq('id', guidelineId)
     .maybeSingle();
 
   if (error) {
@@ -160,11 +163,11 @@ export async function fetchBrandGuideline(
   }
 
   const { data: tags, error: tagsError } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(TAG_TABLE)
-    .select("id, guideline_id, section, label, description")
-    .eq("guideline_id", guidelineId)
-    .order("created_at", { ascending: true });
+    .select('id, guideline_id, section, label, description')
+    .eq('guideline_id', guidelineId)
+    .order('created_at', { ascending: true });
 
   if (tagsError) {
     throw new Error(`Unable to fetch brand guideline tags: ${tagsError.message}`);
@@ -176,12 +179,12 @@ export async function fetchBrandGuideline(
 async function computeNextVersion(brandId: string, purpose: string): Promise<number> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(GUIDELINE_TABLE)
-    .select("version")
-    .eq("brand_id", brandId)
-    .eq("purpose", purpose)
-    .order("version", { ascending: false })
+    .select('version')
+    .eq('brand_id', brandId)
+    .eq('purpose', purpose)
+    .order('version', { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -195,14 +198,14 @@ async function computeNextVersion(brandId: string, purpose: string): Promise<num
 
 async function replaceGuidelineTags(
   guidelineId: string,
-  tags: BrandGuidelineTagsBySection
+  tags: BrandGuidelineTagsBySection,
 ): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const { error: deleteError } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(TAG_TABLE)
     .delete()
-    .eq("guideline_id", guidelineId);
+    .eq('guideline_id', guidelineId);
 
   if (deleteError) {
     throw new Error(`Unable to clear guideline tags: ${deleteError.message}`);
@@ -214,7 +217,7 @@ async function replaceGuidelineTags(
   }
 
   const { error: insertError } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(TAG_TABLE)
     .insert(rows);
 
@@ -226,12 +229,12 @@ async function replaceGuidelineTags(
 export async function createBrandGuideline(
   brandId: string,
   payload: BrandGuidelineDraft,
-  statusOverride?: BrandGuidelineStatus
+  statusOverride?: BrandGuidelineStatus,
 ): Promise<BrandGuidelineDetail> {
   const parsed = brandGuidelineDraftSchema.parse(payload);
-  const status = statusOverride ?? parsed.status ?? "draft";
+  const status = statusOverride ?? parsed.status ?? 'draft';
 
-  if (status === "approved") {
+  if (status === 'approved') {
     brandGuidelineApprovalSchema.parse(payload);
   }
 
@@ -240,7 +243,7 @@ export async function createBrandGuideline(
   const now = new Date().toISOString();
 
   const { data, error } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(GUIDELINE_TABLE)
     .insert({
       brand_id: brandId,
@@ -256,10 +259,10 @@ export async function createBrandGuideline(
       verbal_identity: parsed.verbalIdentity,
       created_at: now,
       updated_at: now,
-      approved_at: status === "approved" ? now : null,
+      approved_at: status === 'approved' ? now : null,
     })
     .select(
-      "id, brand_id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, created_at, updated_at, approved_at"
+      'id, brand_id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, created_at, updated_at, approved_at',
     )
     .single();
 
@@ -275,19 +278,19 @@ export async function updateBrandGuideline(
   brandId: string,
   guidelineId: string,
   payload: BrandGuidelineDraft,
-  statusOverride?: BrandGuidelineStatus
+  statusOverride?: BrandGuidelineStatus,
 ): Promise<BrandGuidelineDetail> {
   const parsed = brandGuidelineDraftSchema.parse(payload);
-  const status = statusOverride ?? parsed.status ?? "draft";
+  const status = statusOverride ?? parsed.status ?? 'draft';
 
-  if (status === "approved") {
+  if (status === 'approved') {
     brandGuidelineApprovalSchema.parse(payload);
   }
 
   const now = new Date().toISOString();
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(GUIDELINE_TABLE)
     .update({
       purpose: parsed.purpose.trim(),
@@ -300,12 +303,12 @@ export async function updateBrandGuideline(
       style_design: parsed.styleDesign,
       verbal_identity: parsed.verbalIdentity,
       updated_at: now,
-      approved_at: status === "approved" ? now : null,
+      approved_at: status === 'approved' ? now : null,
     })
-    .eq("brand_id", brandId)
-    .eq("id", guidelineId)
+    .eq('brand_id', brandId)
+    .eq('id', guidelineId)
     .select(
-      "id, brand_id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, created_at, updated_at, approved_at"
+      'id, brand_id, purpose, notes, status, version, colors, logo, typography, stationery, style_design, verbal_identity, created_at, updated_at, approved_at',
     )
     .single();
 
@@ -320,20 +323,20 @@ export async function updateBrandGuideline(
 export async function setBrandGuidelineStatus(
   brandId: string,
   guidelineId: string,
-  status: BrandGuidelineStatus
+  status: BrandGuidelineStatus,
 ): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
   const { error } = await supabase
-    .schema("brand_profiles")
+    .schema('brand_profiles')
     .from(GUIDELINE_TABLE)
     .update({
       status,
       updated_at: now,
-      approved_at: status === "approved" ? now : null,
+      approved_at: status === 'approved' ? now : null,
     })
-    .eq("brand_id", brandId)
-    .eq("id", guidelineId);
+    .eq('brand_id', brandId)
+    .eq('id', guidelineId);
 
   if (error) {
     throw new Error(`Unable to update guideline status: ${error.message}`);

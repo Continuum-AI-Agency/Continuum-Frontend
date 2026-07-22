@@ -12,11 +12,11 @@
 // (publishingAssets[].bucket+storagePath), stamped `mediaStatus: 'user_supplied'`
 // so every downstream attach-wins guard preserves it.
 
-import { shapeUserSuppliedMedia, type CreativeRef } from "@continuum/contracts";
+import { type CreativeRef, shapeUserSuppliedMedia } from '@continuum/contracts';
 
 export type PersistedApplyAsset = {
   role: string;
-  kind: "image" | "video";
+  kind: 'image' | 'video';
   slideIndex?: number;
   storagePath: string;
   storageUrl: string;
@@ -31,20 +31,20 @@ export type PersistedApplyAsset = {
 // creative. They are dropped on apply so a kind switch (e.g. agent carousel →
 // applied single image) cannot leave conflicting assets/reel/storyboard behind.
 const MEDIA_OUTPUT_KEYS: ReadonlySet<string> = new Set([
-  "kind",
-  "mediaStatus",
-  "url",
-  "bucket",
-  "assetUrl",
-  "signedUrl",
-  "assetBase64",
-  "mimeType",
-  "width",
-  "height",
-  "assets",
-  "reel",
-  "hyperframe",
-  "storyboard",
+  'kind',
+  'mediaStatus',
+  'url',
+  'bucket',
+  'assetUrl',
+  'signedUrl',
+  'assetBase64',
+  'mimeType',
+  'width',
+  'height',
+  'assets',
+  'reel',
+  'hyperframe',
+  'storyboard',
 ]);
 
 export function buildUserSuppliedContentJson(params: {
@@ -54,12 +54,13 @@ export function buildUserSuppliedContentJson(params: {
 }): Record<string, unknown> {
   const { existingContentJson, assets, bucket } = params;
   if (assets.length === 0) {
-    throw new Error("buildUserSuppliedContentJson: at least one applied asset is required");
+    throw new Error('buildUserSuppliedContentJson: at least one applied asset is required');
   }
 
   const existing = (existingContentJson ?? {}) as Record<string, unknown>;
   const existingCreative = (existing.creative as Record<string, unknown> | undefined) ?? {};
-  const existingMs = (existingCreative.mediaSuggestion as Record<string, unknown> | undefined) ?? {};
+  const existingMs =
+    (existingCreative.mediaSuggestion as Record<string, unknown> | undefined) ?? {};
 
   // The durable re-sign (backend resignDraftMediaUrls, FE useDraftWithFreshMedia)
   // keys off bucket+storagePath, so the synthetic assetId is just a stable handle.

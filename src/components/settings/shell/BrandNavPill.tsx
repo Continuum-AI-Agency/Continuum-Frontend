@@ -1,4 +1,4 @@
-import { BrandAvatar } from "@/components/brand/BrandAvatar";
+import { BrandAvatar } from '@/components/brand/BrandAvatar';
 
 type BrandNavPillProps = {
   name: string;

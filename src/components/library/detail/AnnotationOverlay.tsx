@@ -6,8 +6,8 @@
 // All geometry is normalized 0..1 against the object-contain content rect so
 // pins land on the pixels regardless of letterboxing.
 
-import { useCallback, useRef, useState } from 'react';
 import type { CommentAnnotation } from '@continuum/contracts';
+import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
   type CssRect,

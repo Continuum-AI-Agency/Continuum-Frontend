@@ -1,44 +1,44 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { Check, CircleNotch, Envelope, Sparkle, Users, X } from "@phosphor-icons/react";
+import { Check, CircleNotch, Envelope, Sparkle, Users, X } from '@phosphor-icons/react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useMemo, useState } from 'react';
 
-import { createMagicLinkAction } from "@/app/(post-auth)/settings/actions";
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/ToastProvider";
-import { trackOnboardingEvent } from "@/lib/onboarding/telemetry";
-import type { BrandInvite, BrandRole } from "@/lib/onboarding/state";
-import { cn } from "@/lib/utils";
+import { createMagicLinkAction } from '@/app/(post-auth)/settings/actions';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/components/ui/ToastProvider';
+import type { BrandInvite, BrandRole } from '@/lib/onboarding/state';
+import { trackOnboardingEvent } from '@/lib/onboarding/telemetry';
+import { cn } from '@/lib/utils';
 
-type AssignableRole = Exclude<BrandRole, "owner">;
+type AssignableRole = Exclude<BrandRole, 'owner'>;
 
-const ASSIGNABLE_ROLES: AssignableRole[] = ["admin", "operator", "viewer"];
+const ASSIGNABLE_ROLES: AssignableRole[] = ['admin', 'operator', 'viewer'];
 
 const ROLE_LABEL: Record<AssignableRole, string> = {
-  admin: "Admin",
-  operator: "Operator",
-  viewer: "Viewer",
+  admin: 'Admin',
+  operator: 'Operator',
+  viewer: 'Viewer',
 };
 
 const ROLE_BLURB: Record<AssignableRole, string> = {
-  admin: "Full access + billing",
-  operator: "Plan and launch campaigns",
-  viewer: "Read-only access",
+  admin: 'Full access + billing',
+  operator: 'Plan and launch campaigns',
+  viewer: 'Read-only access',
 };
 
 const ENTER_EASE = [0.16, 1, 0.3, 1] as const;
 
 function initialsFor(email: string): string {
   const trimmed = email.trim();
-  if (!trimmed) return "?";
-  const local = trimmed.split("@")[0] ?? "";
+  if (!trimmed) return '?';
+  const local = trimmed.split('@')[0] ?? '';
   const parts = local.split(/[._-]+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return (local.slice(0, 2) || "?").toUpperCase();
+  return (local.slice(0, 2) || '?').toUpperCase();
 }
 
 function gradientFor(email: string): string {
@@ -63,8 +63,8 @@ const chipVariants = {
 export function TeamInviteSection() {
   const { brandId, state, updateState } = useOnboarding();
   const { show } = useToast();
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<AssignableRole>("operator");
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<AssignableRole>('operator');
   const [submitting, setSubmitting] = useState(false);
   const [justSent, setJustSent] = useState(false);
   const sentInvites: BrandInvite[] = state.invites ?? [];
@@ -72,21 +72,21 @@ export function TeamInviteSection() {
   const trimmed = email.trim();
   const emailValid = trimmed.length > 0 && isValidEmail(trimmed);
   const previewInitials = useMemo(() => initialsFor(trimmed), [trimmed]);
-  const previewGradient = useMemo(() => gradientFor(trimmed || "preview"), [trimmed]);
+  const previewGradient = useMemo(() => gradientFor(trimmed || 'preview'), [trimmed]);
 
   const handleInvite = async () => {
     if (!emailValid) {
       show({
-        title: "Invalid email",
-        description: "Please enter a valid email address.",
-        variant: "error",
+        title: 'Invalid email',
+        description: 'Please enter a valid email address.',
+        variant: 'error',
       });
       return;
     }
     setSubmitting(true);
     try {
       const result = await createMagicLinkAction(brandId, trimmed, role);
-      trackOnboardingEvent("onboarding_member_invited", {
+      trackOnboardingEvent('onboarding_member_invited', {
         role,
         email_sent: result.emailSent,
         existing_user: result.existingUser ?? false,
@@ -97,7 +97,7 @@ export function TeamInviteSection() {
           id: result.inviteId,
           email: trimmed,
           role,
-          token: result.link.split("/").pop() ?? result.inviteId,
+          token: result.link.split('/').pop() ?? result.inviteId,
           createdAt: new Date().toISOString(),
           expiresAt: null,
         };
@@ -105,20 +105,20 @@ export function TeamInviteSection() {
       }
 
       show({
-        title: result.emailSent ? "Invite sent" : "Invite link created",
+        title: result.emailSent ? 'Invite sent' : 'Invite link created',
         description: result.emailSent
           ? `We emailed ${trimmed}.`
           : `Share the link with ${trimmed} to grant access.`,
-        variant: "success",
+        variant: 'success',
       });
-      setEmail("");
+      setEmail('');
       setJustSent(true);
       window.setTimeout(() => setJustSent(false), 1200);
     } catch (error) {
       show({
         title: "Couldn't send invite",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "error",
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'error',
       });
     } finally {
       setSubmitting(false);
@@ -167,15 +167,15 @@ export function TeamInviteSection() {
             <motion.div
               aria-hidden
               animate={{
-                background: emailValid ? previewGradient : "transparent",
-                color: emailValid ? "#ffffff" : "var(--muted-foreground)",
+                background: emailValid ? previewGradient : 'transparent',
+                color: emailValid ? '#ffffff' : 'var(--muted-foreground)',
                 borderColor: emailValid
-                  ? "transparent"
-                  : "color-mix(in srgb, var(--cs-violet,#5a39ff) 18%, var(--border))",
+                  ? 'transparent'
+                  : 'color-mix(in srgb, var(--cs-violet,#5a39ff) 18%, var(--border))',
               }}
               transition={{ duration: 0.18, ease: ENTER_EASE }}
               className={cn(
-                "pointer-events-none absolute left-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed text-2xs font-semibold",
+                'pointer-events-none absolute left-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed text-2xs font-semibold',
               )}
             >
               {emailValid ? previewInitials : <Envelope className="h-3.5 w-3.5" aria-hidden />}
@@ -187,7 +187,7 @@ export function TeamInviteSection() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
+                if (event.key === 'Enter') {
                   event.preventDefault();
                   void handleInvite();
                 }
@@ -214,16 +214,16 @@ export function TeamInviteSection() {
                   onClick={() => setRole(option)}
                   disabled={submitting}
                   className={cn(
-                    "relative flex-1 rounded-full px-3 py-1.5 text-sm font-medium",
-                    "motion-safe:transition-colors motion-safe:duration-150",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-violet,#5a39ff)] focus-visible:ring-offset-1",
-                    selected ? "text-white" : "text-muted-foreground hover:text-foreground",
+                    'relative flex-1 rounded-full px-3 py-1.5 text-sm font-medium',
+                    'motion-safe:transition-colors motion-safe:duration-150',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-violet,#5a39ff)] focus-visible:ring-offset-1',
+                    selected ? 'text-white' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {selected ? (
                     <motion.span
                       layoutId="role-pill-active"
-                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                       className="absolute inset-0 -z-0 rounded-full bg-[var(--cs-violet,#5a39ff)] shadow-[0_1px_2px_oklch(0%_0_0/0.18),inset_0_1px_0_oklch(100%_0_0/0.22)]"
                     />
                   ) : null}
@@ -245,8 +245,8 @@ export function TeamInviteSection() {
             onClick={handleInvite}
             disabled={submitting || !emailValid}
             className={cn(
-              "h-11 w-full text-sm",
-              "motion-safe:transition-transform motion-safe:duration-150 active:translate-y-px",
+              'h-11 w-full text-sm',
+              'motion-safe:transition-transform motion-safe:duration-150 active:translate-y-px',
             )}
           >
             <AnimatePresence mode="wait" initial={false}>

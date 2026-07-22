@@ -1,9 +1,9 @@
-import type { ActionLog, ActionStatus } from "@/lib/types/dco";
-import { CREATIVE_SWAP_ACTION_TYPES } from "./creatives/types";
+import type { ActionLog, ActionStatus } from '@/lib/types/dco';
+import { CREATIVE_SWAP_ACTION_TYPES } from './creatives/types';
 import type {
   ObservabilityChartMarker,
   ObservabilityChartPoint,
-} from "./ObservabilityLightweightChart";
+} from './ObservabilityLightweightChart';
 
 export function isCreativeSwapAction(log: ActionLog): boolean {
   return CREATIVE_SWAP_ACTION_TYPES.includes(log.actionType);
@@ -17,8 +17,8 @@ function pickCreativeSwapLog(logs: ActionLog[]): ActionLog | null {
   return null;
 }
 
-export type MarkerResolution = "daily" | "hourly";
-export type MarkerViewLayer = "campaign" | "adset" | "ad";
+export type MarkerResolution = 'daily' | 'hourly';
+export type MarkerViewLayer = 'campaign' | 'adset' | 'ad';
 
 type MarkerMappingOptions = {
   maxMarkers?: number;
@@ -26,7 +26,7 @@ type MarkerMappingOptions = {
 };
 
 function toBucket(timestamp: string, resolution: MarkerResolution): string {
-  if (resolution === "daily") {
+  if (resolution === 'daily') {
     return timestamp.slice(0, 10);
   }
 
@@ -37,12 +37,12 @@ function toBucket(timestamp: string, resolution: MarkerResolution): string {
 }
 
 const ACTION_STATUS_COLOR: Record<ActionStatus, string> = {
-  APPROVED: "#0ea5e9",
-  FAILED: "#ef4444",
-  PENDING: "#f59e0b",
-  SUCCESS: "#10b981",
-  EXECUTED: "#0ea5e9",
-  REJECTED: "#ef4444",
+  APPROVED: '#0ea5e9',
+  FAILED: '#ef4444',
+  PENDING: '#f59e0b',
+  SUCCESS: '#10b981',
+  EXECUTED: '#0ea5e9',
+  REJECTED: '#ef4444',
 };
 
 const ACTION_STATUS_WEIGHT: Record<ActionStatus, number> = {
@@ -81,7 +81,7 @@ function describeActionLog(log: ActionLog): string {
 function normalizeMarkerTime(
   log: ActionLog,
   points: ObservabilityChartPoint[],
-  resolution: MarkerResolution
+  resolution: MarkerResolution,
 ): number | null {
   if (points.length === 0) return null;
 
@@ -89,7 +89,9 @@ function normalizeMarkerTime(
   if (!actionTimestamp) return null;
 
   const targetBucket = toBucket(log.occurredAt, resolution);
-  const bucketPoints = points.filter((point) => pointBucket(point.time, resolution) === targetBucket);
+  const bucketPoints = points.filter(
+    (point) => pointBucket(point.time, resolution) === targetBucket,
+  );
   const candidates = bucketPoints.length > 0 ? bucketPoints : points;
 
   let nearest: ObservabilityChartPoint | undefined;
@@ -106,46 +108,50 @@ function normalizeMarkerTime(
 }
 
 function strongestStatus(logs: ActionLog[]): ActionStatus {
-  return [...logs].sort((left, right) => {
-    return ACTION_STATUS_WEIGHT[right.status] - ACTION_STATUS_WEIGHT[left.status];
-  })[0]?.status ?? "SUCCESS";
+  return (
+    [...logs].sort((left, right) => {
+      return ACTION_STATUS_WEIGHT[right.status] - ACTION_STATUS_WEIGHT[left.status];
+    })[0]?.status ?? 'SUCCESS'
+  );
 }
 
-function matchesViewLayer(scopeType: ActionLog["scopeType"], viewLayer: MarkerViewLayer): boolean {
-  if (viewLayer === "campaign") return scopeType === "CAMPAIGN";
-  if (viewLayer === "adset") return scopeType === "ADSET";
-  return scopeType === "AD";
+function matchesViewLayer(scopeType: ActionLog['scopeType'], viewLayer: MarkerViewLayer): boolean {
+  if (viewLayer === 'campaign') return scopeType === 'CAMPAIGN';
+  if (viewLayer === 'adset') return scopeType === 'ADSET';
+  return scopeType === 'AD';
 }
 
 export function mapActionLogsToTimelineMarkers(
   logs: ActionLog[],
   points: ObservabilityChartPoint[],
   resolution: MarkerResolution,
-  options: number | MarkerMappingOptions = {}
+  options: number | MarkerMappingOptions = {},
 ): ObservabilityChartMarker[] {
   if (logs.length === 0 || points.length === 0) return [];
 
-  const normalizedOptions = typeof options === "number" ? { maxMarkers: options } : options;
+  const normalizedOptions = typeof options === 'number' ? { maxMarkers: options } : options;
   const maxMarkers = normalizedOptions.maxMarkers ?? 36;
-  const viewLayer = normalizedOptions.viewLayer ?? "campaign";
+  const viewLayer = normalizedOptions.viewLayer ?? 'campaign';
 
   const grouped = new Map<
     string,
     {
       time: number;
-      scopeType: ActionLog["scopeType"];
-      position: ObservabilityChartMarker["position"];
+      scopeType: ActionLog['scopeType'];
+      position: ObservabilityChartMarker['position'];
       logs: ActionLog[];
     }
   >();
 
   logs
     .slice()
-    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .sort(
+      (left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime(),
+    )
     .forEach((log) => {
       const markerTime = normalizeMarkerTime(log, points, resolution);
       if (!markerTime) return;
-      const position = matchesViewLayer(log.scopeType, viewLayer) ? "aboveBar" : "belowBar";
+      const position = matchesViewLayer(log.scopeType, viewLayer) ? 'aboveBar' : 'belowBar';
 
       const key = `${markerTime}:${log.scopeType}:${position}`;
       const existing = grouped.get(key);
@@ -173,32 +179,31 @@ export function mapActionLogsToTimelineMarkers(
       const uniqueActions = Array.from(new Set(group.logs.map((item) => item.actionType)));
       const creativeSwapLog = pickCreativeSwapLog(group.logs);
       const scopeRef =
-        latest.scopeType === "CAMPAIGN"
-          ? latest.metaCampaignId ?? latest.scopeId
-          : latest.scopeType === "ADSET"
-            ? latest.metaAdsetId ?? latest.scopeId
-            : latest.scopeType === "AD"
-              ? latest.metaAdId ?? latest.scopeId
-            : latest.scopeId;
+        latest.scopeType === 'CAMPAIGN'
+          ? (latest.metaCampaignId ?? latest.scopeId)
+          : latest.scopeType === 'ADSET'
+            ? (latest.metaAdsetId ?? latest.scopeId)
+            : latest.scopeType === 'AD'
+              ? (latest.metaAdId ?? latest.scopeId)
+              : latest.scopeId;
       const campaignId =
         latest.metaCampaignId ??
-        (latest.scopeType === "CAMPAIGN" && latest.scopeId ? latest.scopeId : null);
+        (latest.scopeType === 'CAMPAIGN' && latest.scopeId ? latest.scopeId : null);
       const adSetId =
         latest.metaAdsetId ??
-        (latest.scopeType === "ADSET" && latest.scopeId ? latest.scopeId : null);
+        (latest.scopeType === 'ADSET' && latest.scopeId ? latest.scopeId : null);
       const adId =
-        latest.metaAdId ??
-        (latest.scopeType === "AD" && latest.scopeId ? latest.scopeId : null);
+        latest.metaAdId ?? (latest.scopeType === 'AD' && latest.scopeId ? latest.scopeId : null);
 
       return {
         id: `marker:${group.scopeType}:${group.time}`,
-        time: group.time as ObservabilityChartMarker["time"],
-        label: `${latest.scopeType} · ${count} action${count > 1 ? "s" : ""} · ${status}`,
-        detail: `${new Date(latest.occurredAt).toLocaleString("en-US")} · ${scopeRef}\n${uniqueActions
+        time: group.time as ObservabilityChartMarker['time'],
+        label: `${latest.scopeType} · ${count} action${count > 1 ? 's' : ''} · ${status}`,
+        detail: `${new Date(latest.occurredAt).toLocaleString('en-US')} · ${scopeRef}\n${uniqueActions
           .slice(0, 3)
-          .join(", ")}\n${describeActionLog(latest)}`,
+          .join(', ')}\n${describeActionLog(latest)}`,
         color,
-        shape: "square",
+        shape: 'square',
         position: group.position,
         scopeType: latest.scopeType,
         scopeId: latest.scopeId,
@@ -216,7 +221,7 @@ export function mapActionLogsToTimelineMarkers(
 export function calculateImmediateKpiShiftPct(
   rows: Array<{ timestamp: string; value: number }>,
   resolution: MarkerResolution,
-  bucket: string
+  bucket: string,
 ): number | null {
   if (rows.length < 2) return null;
 

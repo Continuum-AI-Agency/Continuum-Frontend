@@ -1,133 +1,132 @@
-import { describe, it, expect } from "bun:test";
-
+import { describe, expect, it } from 'bun:test';
+import type { StudioNode } from '@/lib/ai-studio/nodeTypes';
 import {
-  getPortColor,
   arePortsCompatible,
-  getTargetPortType,
   getNodeOutputPortType,
-} from "@/lib/ai-studio/portTypes";
-import type { StudioNode } from "@/lib/ai-studio/nodeTypes";
+  getPortColor,
+  getTargetPortType,
+} from '@/lib/ai-studio/portTypes';
 
-describe("getPortColor", () => {
-  it("returns blue for text type", () => {
+describe('getPortColor', () => {
+  it('returns blue for text type', () => {
     expect(getPortColor('text')).toBe('#3b82f6');
   });
 
-  it("returns purple for image type", () => {
+  it('returns purple for image type', () => {
     expect(getPortColor('image')).toBe('#a855f7');
   });
 
-  it("returns purple for video type", () => {
+  it('returns purple for video type', () => {
     expect(getPortColor('video')).toBe('#a855f7');
   });
 
-  it("returns green for aspect type", () => {
+  it('returns green for aspect type', () => {
     expect(getPortColor('aspect')).toBe('#22c55e');
   });
 
-  it("returns amber for provider type", () => {
+  it('returns amber for provider type', () => {
     expect(getPortColor('provider')).toBe('#f59e0b');
   });
 });
 
-describe("arePortsCompatible", () => {
-  it("allows text to prompt connection", () => {
+describe('arePortsCompatible', () => {
+  it('allows text to prompt connection', () => {
     expect(arePortsCompatible('text', 'prompt')).toBe(true);
   });
 
-  it("allows text to negative connection", () => {
+  it('allows text to negative connection', () => {
     expect(arePortsCompatible('text', 'negative')).toBe(true);
   });
 
-  it("blocks text to ref connection", () => {
+  it('blocks text to ref connection', () => {
     expect(arePortsCompatible('text', 'ref')).toBe(false);
   });
 
-  it("allows image to ref connection", () => {
+  it('allows image to ref connection', () => {
     expect(arePortsCompatible('image', 'ref')).toBe(true);
   });
 
-  it("allows image to firstFrame connection", () => {
+  it('allows image to firstFrame connection', () => {
     expect(arePortsCompatible('image', 'firstFrame')).toBe(true);
   });
 
-  it("allows image to lastFrame connection", () => {
+  it('allows image to lastFrame connection', () => {
     expect(arePortsCompatible('image', 'lastFrame')).toBe(true);
   });
 
-  it("blocks image to prompt connection", () => {
+  it('blocks image to prompt connection', () => {
     expect(arePortsCompatible('image', 'prompt')).toBe(false);
   });
 
-  it("allows video to referenceVideo connection", () => {
+  it('allows video to referenceVideo connection', () => {
     expect(arePortsCompatible('video', 'referenceVideo')).toBe(true);
   });
 
-  it("blocks video to ref connection", () => {
+  it('blocks video to ref connection', () => {
     expect(arePortsCompatible('video', 'ref')).toBe(false);
   });
 
-  it("allows aspect to aspect connection", () => {
+  it('allows aspect to aspect connection', () => {
     expect(arePortsCompatible('aspect', 'aspect')).toBe(true);
   });
 
-  it("blocks aspect to provider connection", () => {
+  it('blocks aspect to provider connection', () => {
     expect(arePortsCompatible('aspect', 'provider')).toBe(false);
   });
 
-  it("allows provider to provider connection", () => {
+  it('allows provider to provider connection', () => {
     expect(arePortsCompatible('provider', 'provider')).toBe(true);
   });
 
-  it("blocks provider to aspect connection", () => {
+  it('blocks provider to aspect connection', () => {
     expect(arePortsCompatible('provider', 'aspect')).toBe(false);
   });
 });
 
-describe("getTargetPortType", () => {
-  it("returns text for prompt handle", () => {
+describe('getTargetPortType', () => {
+  it('returns text for prompt handle', () => {
     expect(getTargetPortType('prompt')).toBe('text');
   });
 
-  it("returns text for negative handle", () => {
+  it('returns text for negative handle', () => {
     expect(getTargetPortType('negative')).toBe('text');
   });
 
-  it("returns image for ref handle", () => {
+  it('returns image for ref handle', () => {
     expect(getTargetPortType('ref')).toBe('image');
   });
 
-  it("returns image for firstFrame handle", () => {
+  it('returns image for firstFrame handle', () => {
     expect(getTargetPortType('firstFrame')).toBe('image');
   });
 
-  it("returns image for lastFrame handle", () => {
+  it('returns image for lastFrame handle', () => {
     expect(getTargetPortType('lastFrame')).toBe('image');
   });
 
-  it("returns video for referenceVideo handle", () => {
+  it('returns video for referenceVideo handle', () => {
     expect(getTargetPortType('referenceVideo')).toBe('video');
   });
 
-  it("returns aspect for aspect handle", () => {
+  it('returns aspect for aspect handle', () => {
     expect(getTargetPortType('aspect')).toBe('aspect');
   });
 
-  it("returns provider for provider handle", () => {
+  it('returns provider for provider handle', () => {
     expect(getTargetPortType('provider')).toBe('provider');
   });
 
-  it("returns undefined for unknown handle", () => {
+  it('returns undefined for unknown handle', () => {
     expect(getTargetPortType('unknown')).toBeUndefined();
   });
 
-  it("returns undefined for undefined handle", () => {
+  it('returns undefined for undefined handle', () => {
     expect(getTargetPortType(undefined)).toBeUndefined();
   });
 });
 
-describe("getNodeOutputPortType", () => {
-  it("returns text for prompt node", () => {
+describe('getNodeOutputPortType', () => {
+  it('returns text for prompt node', () => {
     const node: StudioNode = {
       id: '1',
       type: 'prompt',
@@ -137,7 +136,7 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('text');
   });
 
-  it("returns text for negative node", () => {
+  it('returns text for negative node', () => {
     const node: StudioNode = {
       id: '1',
       type: 'negative',
@@ -147,7 +146,7 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('text');
   });
 
-  it("returns image for attachment node with image MIME", () => {
+  it('returns image for attachment node with image MIME', () => {
     const node: StudioNode = {
       id: '1',
       type: 'attachment',
@@ -157,7 +156,7 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('image');
   });
 
-  it("returns video for attachment node with video MIME", () => {
+  it('returns video for attachment node with video MIME', () => {
     const node: StudioNode = {
       id: '1',
       type: 'attachment',
@@ -167,7 +166,7 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('video');
   });
 
-  it("returns provider for model node", () => {
+  it('returns provider for model node', () => {
     const node: StudioNode = {
       id: '1',
       type: 'model',
@@ -177,7 +176,7 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('provider');
   });
 
-  it("returns image for generator node without outputType", () => {
+  it('returns image for generator node without outputType', () => {
     const node: StudioNode = {
       id: '1',
       type: 'generator',
@@ -187,15 +186,15 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('image');
   });
 
-  it("returns video for generator node with video outputType", () => {
+  it('returns video for generator node with video outputType', () => {
     const node: StudioNode = {
       id: '1',
       type: 'generator',
       position: { x: 0, y: 0 },
-      data: { 
-        provider: 'veo-3-1', 
-        medium: 'video', 
-        prompt: '', 
+      data: {
+        provider: 'veo-3-1',
+        medium: 'video',
+        prompt: '',
         aspectRatio: '16:9',
         outputType: 'video',
       },
@@ -203,7 +202,7 @@ describe("getNodeOutputPortType", () => {
     expect(getNodeOutputPortType(node)).toBe('video');
   });
 
-  it("returns undefined for preview node", () => {
+  it('returns undefined for preview node', () => {
     const node: StudioNode = {
       id: '1',
       type: 'preview',

@@ -1,34 +1,34 @@
-import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { cache } from "react";
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { redirect } from 'next/navigation';
+import { cache } from 'react';
+import type { PlatformKey } from '@/components/onboarding/platforms';
+import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import type { Database, Json } from '@/lib/supabase/types';
+import { canPersistBrandRecord } from './brandRecordGuard';
+import {
+  findMatchingActiveBrandId,
+  findPendingInviteBrandId,
+  findReusableBrandId,
+} from './reusableBrand';
 import {
   BRAND_ROLES,
   type BrandInvite,
   type BrandMember,
   type BrandRole,
+  createBrandId,
+  createDefaultMetadata,
+  createDefaultOnboardingState,
   type DocumentCategory,
+  ensureBrandExists,
+  mergeOnboardingState,
+  normalizeOnboardingState,
   type OnboardingDocument,
   type OnboardingMetadata,
   type OnboardingPatch,
   type OnboardingState,
-  createBrandId,
-  createDefaultMetadata,
-  createDefaultOnboardingState,
-  ensureBrandExists,
-  mergeOnboardingState,
-  normalizeOnboardingState,
   parseOnboardingMetadata,
-} from "./state";
-import {
-  findMatchingActiveBrandId,
-  findPendingInviteBrandId,
-  findReusableBrandId,
-} from "./reusableBrand";
-import { canPersistBrandRecord } from "./brandRecordGuard";
-import type { PlatformKey } from "@/components/onboarding/platforms";
-import type { Database, Json } from "@/lib/supabase/types";
+} from './state';
 
 type SupabaseOnboardingClient = SupabaseClient<Database>;
 
@@ -52,7 +52,7 @@ function getOwnerMember(user: User): BrandMember {
   return {
     id: user.id,
     email,
-    role: "owner",
+    role: 'owner',
   };
 }
 
@@ -63,21 +63,21 @@ async function getAuthContext(): Promise<AuthContext> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    redirect('/login');
   }
 
   return { supabase, user, owner: getOwnerMember(user) };
 }
 
-const ONBOARDING_SCHEMA = "brand_profiles";
-const ONBOARDING_TABLE = "user_onboarding_states";
+const ONBOARDING_SCHEMA = 'brand_profiles';
+const ONBOARDING_TABLE = 'user_onboarding_states';
 
 function resolveBrandProfileName(state?: OnboardingState): string {
   const candidate = state?.brand?.name?.trim();
   if (candidate && candidate.length > 0) {
     return candidate;
   }
-  return "Untitled Brand";
+  return 'Untitled Brand';
 }
 
 /**
@@ -94,13 +94,13 @@ async function ensureBrandProfileRecord(
   supabase: SupabaseOnboardingClient,
   brandId: string,
   owner: BrandMember,
-  state?: OnboardingState
+  state?: OnboardingState,
 ): Promise<string> {
   const { data: rawData, error } = await supabase
-    .schema("brand_profiles")
-    .from("brand_profiles")
-    .select("id, brand_name, logo_path, completed_at, created_by, email_report_opt_in")
-    .eq("id", brandId)
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('id, brand_name, logo_path, completed_at, created_by, email_report_opt_in')
+    .eq('id', brandId)
     .maybeSingle();
 
   const data = rawData as {
@@ -112,7 +112,7 @@ async function ensureBrandProfileRecord(
     email_report_opt_in: boolean | null;
   } | null;
 
-  if (error && error.code !== "PGRST116") {
+  if (error && error.code !== 'PGRST116') {
     throw error;
   }
 
@@ -142,8 +142,8 @@ async function ensureBrandProfileRecord(
     }
 
     const { error: insertError } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profiles")
+      .schema('brand_profiles')
+      .from('brand_profiles')
       .insert({
         id: brandId,
         brand_name: brandName,
@@ -159,7 +159,7 @@ async function ensureBrandProfileRecord(
       // creation, so do NOT re-seed permissions here. That redundant upsert can
       // trip a self-referential RLS check (Postgres 54001) and 500 routine writes
       // such as a logo update. Treat the row as present and stop.
-      if (insertError.code === "23505") {
+      if (insertError.code === '23505') {
         return brandId;
       }
       throw insertError;
@@ -167,13 +167,16 @@ async function ensureBrandProfileRecord(
 
     // Genuine first-time creation — seed the owner permission once.
     await supabase
-      .schema("brand_profiles")
-      .from("permissions")
-      .upsert({
-        brand_profile_id: brandId,
-        user_id: owner.id,
-        role: "owner",
-      }, { onConflict: "brand_profile_id,user_id" } as any);
+      .schema('brand_profiles')
+      .from('permissions')
+      .upsert(
+        {
+          brand_profile_id: brandId,
+          user_id: owner.id,
+          role: 'owner',
+        },
+        { onConflict: 'brand_profile_id,user_id' } as any,
+      );
 
     return brandId;
   }
@@ -185,8 +188,8 @@ async function ensureBrandProfileRecord(
     (data.email_report_opt_in ?? true) !== emailReportOptIn
   ) {
     const { error: updateError } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profiles")
+      .schema('brand_profiles')
+      .from('brand_profiles')
       .update({
         brand_name: brandName,
         logo_path: logoPath,
@@ -194,11 +197,14 @@ async function ensureBrandProfileRecord(
         email_report_opt_in: emailReportOptIn,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", brandId);
+      .eq('id', brandId);
 
     if (updateError) {
-      if (updateError.code === "42501") {
-        console.warn(`[ensureBrandExists] User ${owner.id} lacks permission to update brand ${brandId}`, updateError);
+      if (updateError.code === '42501') {
+        console.warn(
+          `[ensureBrandExists] User ${owner.id} lacks permission to update brand ${brandId}`,
+          updateError,
+        );
       } else {
         throw updateError;
       }
@@ -208,14 +214,14 @@ async function ensureBrandProfileRecord(
   return brandId;
 }
 
-const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument["source"]>([
-  "upload",
-  "canva",
-  "figma",
-  "google-drive",
-  "sharepoint",
-  "notion",
-  "website",
+const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument['source']>([
+  'upload',
+  'canva',
+  'figma',
+  'google-drive',
+  'sharepoint',
+  'notion',
+  'website',
 ]);
 
 type BrandDocumentRow = {
@@ -233,19 +239,19 @@ type BrandDocumentRow = {
   external_url?: string | null;
 };
 
-function normalizeDocumentStatus(status: string | null): OnboardingDocument["status"] {
-  if (status === "ready" || status === "error") {
+function normalizeDocumentStatus(status: string | null): OnboardingDocument['status'] {
+  if (status === 'ready' || status === 'error') {
     return status;
   }
-  return "processing";
+  return 'processing';
 }
 
 function normalizeDocumentSource(
   source: string | null,
-  fallback: OnboardingDocument["source"]
-): OnboardingDocument["source"] {
-  if (source && DOCUMENT_SOURCE_VALUES.has(source as OnboardingDocument["source"])) {
-    return source as OnboardingDocument["source"];
+  fallback: OnboardingDocument['source'],
+): OnboardingDocument['source'] {
+  if (source && DOCUMENT_SOURCE_VALUES.has(source as OnboardingDocument['source'])) {
+    return source as OnboardingDocument['source'];
   }
   return fallback;
 }
@@ -267,35 +273,36 @@ function documentsEqual(a: OnboardingDocument, b: OnboardingDocument): boolean {
 
 function mergeDocumentFromRow(
   existing: OnboardingDocument | undefined,
-  row: BrandDocumentRow
+  row: BrandDocumentRow,
 ): OnboardingDocument {
-  const sourceFallback = existing?.source ?? "upload";
+  const sourceFallback = existing?.source ?? 'upload';
   const status = normalizeDocumentStatus(row.status);
-  const createdAt = existing?.createdAt ?? row.created_at ?? row.updated_at ?? new Date().toISOString();
+  const createdAt =
+    existing?.createdAt ?? row.created_at ?? row.updated_at ?? new Date().toISOString();
 
   const merged: OnboardingDocument = {
     id: row.id,
     name:
-      typeof row.name === "string" && row.name.trim().length > 0
+      typeof row.name === 'string' && row.name.trim().length > 0
         ? row.name
-        : existing?.name ?? "Document",
+        : (existing?.name ?? 'Document'),
     source: normalizeDocumentSource(row.source, sourceFallback),
     createdAt,
     status,
   };
 
-  const size = typeof row.size === "number" ? row.size : existing?.size;
-  if (typeof size === "number" && Number.isFinite(size) && size >= 0) {
+  const size = typeof row.size === 'number' ? row.size : existing?.size;
+  if (typeof size === 'number' && Number.isFinite(size) && size >= 0) {
     merged.size = size;
   }
 
   const externalUrl = row.external_url ?? existing?.externalUrl;
-  if (typeof externalUrl === "string" && externalUrl.length > 0) {
+  if (typeof externalUrl === 'string' && externalUrl.length > 0) {
     merged.externalUrl = externalUrl;
   }
 
   const storagePath = row.storage_path ?? existing?.storagePath;
-  if (typeof storagePath === "string" && storagePath.length > 0) {
+  if (typeof storagePath === 'string' && storagePath.length > 0) {
     merged.storagePath = storagePath;
   }
 
@@ -303,7 +310,7 @@ function mergeDocumentFromRow(
     merged.jobId = existing.jobId;
   }
 
-  if (status === "error") {
+  if (status === 'error') {
     const errorMessage = row.error_message?.trim() || existing?.errorMessage;
     if (errorMessage) {
       merged.errorMessage = errorMessage;
@@ -316,30 +323,33 @@ function mergeDocumentFromRow(
 async function syncBrandDocuments(
   supabase: SupabaseOnboardingClient,
   metadata: OnboardingMetadata,
-  brandId: string
+  brandId: string,
 ): Promise<boolean> {
   const state = metadata.brands[brandId];
   if (!state) {
     return false;
   }
 
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("brand_documents")
+  const { data, error } = (await supabase
+    .schema('brand_profiles')
+    .from('brand_documents')
     .select(
-      "id, name, source, status, size, storage_path, external_url, error_message, created_at, updated_at"
+      'id, name, source, status, size, storage_path, external_url, error_message, created_at, updated_at',
     )
-    .eq("brand_id", brandId)
-    .order("created_at", { ascending: true }) as { data: BrandDocumentRow[] | null; error: unknown };
+    .eq('brand_id', brandId)
+    .order('created_at', { ascending: true })) as {
+    data: BrandDocumentRow[] | null;
+    error: unknown;
+  };
 
   if (error) {
-    const message = (error as { message?: string })?.message ?? "Unknown error";
-    console.warn("Failed to sync brand documents", message);
+    const message = (error as { message?: string })?.message ?? 'Unknown error';
+    console.warn('Failed to sync brand documents', message);
     return false;
   }
 
   const rows = data ?? [];
-  const rowsById = new Map(rows.map(row => [row.id, row]));
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
   const updatedDocuments: OnboardingDocument[] = [];
   let dirty = false;
 
@@ -383,13 +393,13 @@ function ensureActiveSelection(metadata: OnboardingMetadata): OnboardingMetadata
 
 async function fetchMetadataFromTable(
   supabase: SupabaseOnboardingClient,
-  userId: string
+  userId: string,
 ): Promise<OnboardingMetadata> {
   const { data, error } = await supabase
     .schema(ONBOARDING_SCHEMA)
     .from(ONBOARDING_TABLE)
-    .select("brand_id, state, is_active")
-    .eq("user_id", userId);
+    .select('brand_id, state, is_active')
+    .eq('user_id', userId);
 
   if (error) {
     throw error;
@@ -415,7 +425,7 @@ async function fetchMetadataFromTable(
 
 async function updateUserOnboardingMetadata(
   supabase: SupabaseOnboardingClient,
-  activeBrandId: string | null
+  activeBrandId: string | null,
 ): Promise<void> {
   const onboardingPayload = activeBrandId ? { activeBrandId } : null;
   const { error } = await supabase.auth.updateUser({
@@ -429,18 +439,18 @@ async function updateUserOnboardingMetadata(
 async function upsertUserBrandPreference(
   supabase: SupabaseOnboardingClient,
   userId: string,
-  brandId: string
+  brandId: string,
 ): Promise<void> {
   const { error } = await supabase
-    .schema("brand_profiles")
-    .from("user_brand_preferences" as any)
+    .schema('brand_profiles')
+    .from('user_brand_preferences' as any)
     .upsert(
       {
         user_id: userId,
         active_brand_id: brandId,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" } as any
+      { onConflict: 'user_id' } as any,
     );
 
   if (error) {
@@ -451,7 +461,7 @@ async function upsertUserBrandPreference(
 async function upsertMetadataRows(
   supabase: SupabaseOnboardingClient,
   userId: string,
-  metadata: OnboardingMetadata
+  metadata: OnboardingMetadata,
 ): Promise<void> {
   const entries = Object.entries(metadata.brands);
   const now = new Date().toISOString();
@@ -461,7 +471,7 @@ async function upsertMetadataRows(
       .schema(ONBOARDING_SCHEMA)
       .from(ONBOARDING_TABLE)
       .delete()
-      .eq("user_id", userId);
+      .eq('user_id', userId);
     if (deleteError) {
       throw deleteError;
     }
@@ -479,7 +489,7 @@ async function upsertMetadataRows(
   const { error: upsertError } = await supabase
     .schema(ONBOARDING_SCHEMA)
     .from(ONBOARDING_TABLE)
-    .upsert(rows, { onConflict: "user_id,brand_id" });
+    .upsert(rows, { onConflict: 'user_id,brand_id' });
   if (upsertError) {
     throw upsertError;
   }
@@ -487,24 +497,24 @@ async function upsertMetadataRows(
   const { data: existing, error: selectError } = await supabase
     .schema(ONBOARDING_SCHEMA)
     .from(ONBOARDING_TABLE)
-    .select("brand_id")
-    .eq("user_id", userId);
+    .select('brand_id')
+    .eq('user_id', userId);
   if (selectError) {
     throw selectError;
   }
 
-  const currentIds = new Set(rows.map(row => row.brand_id));
+  const currentIds = new Set(rows.map((row) => row.brand_id));
   const toRemove = (existing ?? [])
-    .map(record => record.brand_id)
-    .filter(brandId => !currentIds.has(brandId));
+    .map((record) => record.brand_id)
+    .filter((brandId) => !currentIds.has(brandId));
 
   if (toRemove.length > 0) {
     const { error: cleanupError } = await supabase
       .schema(ONBOARDING_SCHEMA)
       .from(ONBOARDING_TABLE)
       .delete()
-      .eq("user_id", userId)
-      .in("brand_id", toRemove);
+      .eq('user_id', userId)
+      .in('brand_id', toRemove);
     if (cleanupError) {
       throw cleanupError;
     }
@@ -514,17 +524,17 @@ async function upsertMetadataRows(
 async function deactivateActiveBrand(
   supabase: SupabaseOnboardingClient,
   userId: string,
-  excludeBrandId?: string
+  excludeBrandId?: string,
 ): Promise<void> {
   const { error } = await supabase
     .schema(ONBOARDING_SCHEMA)
     .from(ONBOARDING_TABLE)
     .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .neq("brand_id", excludeBrandId ?? "");
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .neq('brand_id', excludeBrandId ?? '');
 
-  if (error && error.code !== "PGRST116") {
+  if (error && error.code !== 'PGRST116') {
     throw error;
   }
 }
@@ -533,7 +543,7 @@ async function upsertActiveBrand(
   supabase: SupabaseOnboardingClient,
   userId: string,
   brandId: string,
-  state: OnboardingState
+  state: OnboardingState,
 ): Promise<void> {
   const now = new Date().toISOString();
   const { error } = await supabase
@@ -549,7 +559,7 @@ async function upsertActiveBrand(
           updated_at: now,
         },
       ],
-      { onConflict: "user_id,brand_id" }
+      { onConflict: 'user_id,brand_id' },
     );
 
   if (error) {
@@ -560,7 +570,7 @@ async function upsertActiveBrand(
 async function persistMetadata(
   supabase: SupabaseOnboardingClient,
   user: User,
-  metadata: OnboardingMetadata
+  metadata: OnboardingMetadata,
 ): Promise<void> {
   ensureActiveSelection(metadata);
   await upsertMetadataRows(supabase, user.id, metadata);
@@ -590,7 +600,7 @@ function parseLegacyMetadata(raw: unknown): OnboardingMetadata | null {
 function ensureActiveBrand(
   metadata: OnboardingMetadata,
   owner: BrandMember,
-  preferredBrandId?: string
+  preferredBrandId?: string,
 ): { metadata: OnboardingMetadata; brandId: string; dirty: boolean } {
   let dirty = false;
   let brandId = preferredBrandId ?? metadata.activeBrandId ?? null;
@@ -623,9 +633,7 @@ function ensureActiveBrand(
   return { metadata, brandId, dirty };
 }
 
-async function loadOnboardingContext(
-  requestedBrandId?: string
-): Promise<OnboardingContext> {
+async function loadOnboardingContext(requestedBrandId?: string): Promise<OnboardingContext> {
   const { supabase, user, owner } = await getAuthContext();
 
   let metadata = await fetchMetadataFromTable(supabase, user.id);
@@ -636,7 +644,10 @@ async function loadOnboardingContext(
       metadata = legacy;
       await persistMetadata(supabase, user, metadata);
     } else {
-      await updateUserOnboardingMetadata(supabase, metadata.activeBrandId ?? legacy.activeBrandId ?? null);
+      await updateUserOnboardingMetadata(
+        supabase,
+        metadata.activeBrandId ?? legacy.activeBrandId ?? null,
+      );
     }
   }
 
@@ -654,11 +665,11 @@ async function loadOnboardingContext(
     await persistMetadata(supabase, user, metadata);
   }
 
-  let { metadata: normalizedMetadata, brandId, dirty } = ensureActiveBrand(
-    metadata,
-    owner,
-    requestedBrandId
-  );
+  let {
+    metadata: normalizedMetadata,
+    brandId,
+    dirty,
+  } = ensureActiveBrand(metadata, owner, requestedBrandId);
 
   if (dirty) {
     await persistMetadata(supabase, user, normalizedMetadata);
@@ -674,7 +685,7 @@ async function loadOnboardingContext(
     supabase,
     brandId,
     owner,
-    normalizedMetadata.brands[brandId]
+    normalizedMetadata.brands[brandId],
   );
 
   if (resolvedBrandId !== brandId) {
@@ -715,76 +726,74 @@ export async function fetchOnboardingMetadata(): Promise<OnboardingMetadata> {
 }
 
 export async function ensureOnboardingState(
-  brandId?: string
+  brandId?: string,
 ): Promise<{ brandId: string; state: OnboardingState }> {
   const context = await fetchOnboardingContext(brandId);
   return { brandId: context.brandId, state: context.state };
 }
 
-export async function fetchOnboardingState(
-  brandId: string
-): Promise<OnboardingState> {
+export async function fetchOnboardingState(brandId: string): Promise<OnboardingState> {
   const context = await fetchOnboardingContext(brandId);
   return context.state;
 }
 
 // cache() deduplicates within a single server request — multiple pages/components
 // calling ensureOnboardingState() with the same brandId only run once.
-export const fetchOnboardingContext = cache(async (
-  brandId?: string
-): Promise<{ metadata: OnboardingMetadata; state: OnboardingState; brandId: string }> => {
-  const context = await loadOnboardingContext(brandId);
-  return { metadata: context.metadata, state: context.state, brandId: context.brandId };
-});
+export const fetchOnboardingContext = cache(
+  async (
+    brandId?: string,
+  ): Promise<{ metadata: OnboardingMetadata; state: OnboardingState; brandId: string }> => {
+    const context = await loadOnboardingContext(brandId);
+    return { metadata: context.metadata, state: context.state, brandId: context.brandId };
+  },
+);
 
 async function updateBrandState(
   brandId: string,
-  mutate: (state: OnboardingState) => OnboardingState
+  mutate: (state: OnboardingState) => OnboardingState,
 ): Promise<OnboardingState> {
   const context = await loadOnboardingContext(brandId);
   const nextState = mutate(context.state);
   context.metadata.brands[context.brandId] = nextState;
   await persistMetadata(context.supabase, context.user, context.metadata);
-  await ensureBrandProfileRecord(
-    context.supabase,
-    context.brandId,
-    context.owner,
-    nextState
-  );
+  await ensureBrandProfileRecord(context.supabase, context.brandId, context.owner, nextState);
   return nextState;
 }
 
 export async function applyOnboardingPatch(
   brandId: string,
-  patch: OnboardingPatch
+  patch: OnboardingPatch,
 ): Promise<OnboardingState> {
-  return updateBrandState(brandId, state => mergeOnboardingState(state, patch));
+  return updateBrandState(brandId, (state) => mergeOnboardingState(state, patch));
 }
 
 export async function appendDocument(
   brandId: string,
-  document: OnboardingDocument
+  document: OnboardingDocument,
 ): Promise<OnboardingState> {
-  return updateBrandState(brandId, state => {
-    const nextDocuments = [...state.documents.filter((doc: OnboardingDocument) => doc.id !== document.id), document];
+  return updateBrandState(brandId, (state) => {
+    const nextDocuments = [
+      ...state.documents.filter((doc: OnboardingDocument) => doc.id !== document.id),
+      document,
+    ];
     return mergeOnboardingState(state, { documents: nextDocuments });
   });
 }
 
 export async function removeDocument(
   brandId: string,
-  documentId: string
+  documentId: string,
 ): Promise<OnboardingState> {
   const { supabase } = await getAuthContext();
 
   await supabase
-    .schema("brand_profiles")
-    .from("brand_documents")
+    .schema('brand_profiles')
+    .from('brand_documents')
     .delete()
-    .eq("id", documentId)
-    .eq("brand_id", brandId);
+    .eq('id', documentId)
+    .eq('brand_id', brandId);
 
-  return updateBrandState(brandId, state => {
+  return updateBrandState(brandId, (state) => {
     const documents = state.documents.filter((doc: OnboardingDocument) => doc.id !== documentId);
     return mergeOnboardingState(state, { documents });
   });
@@ -793,18 +802,18 @@ export async function removeDocument(
 export async function updateDocumentCategory(
   brandId: string,
   documentId: string,
-  category: DocumentCategory
+  category: DocumentCategory,
 ): Promise<OnboardingState> {
   const { supabase } = await getAuthContext();
 
   await supabase
-    .schema("brand_profiles")
-    .from("brand_documents")
+    .schema('brand_profiles')
+    .from('brand_documents')
     .update({ category, updated_at: new Date().toISOString() })
-    .eq("id", documentId)
-    .eq("brand_id", brandId);
+    .eq('id', documentId)
+    .eq('brand_id', brandId);
 
-  return updateBrandState(brandId, state => {
+  return updateBrandState(brandId, (state) => {
     const documents = state.documents.map((doc: OnboardingDocument) =>
       doc.id === documentId ? { ...doc, category } : doc,
     );
@@ -816,13 +825,13 @@ export async function resetOnboardingState(brandId: string): Promise<OnboardingS
   const context = await loadOnboardingContext(brandId);
 
   await (context.supabase as SupabaseClient)
-    .schema("brand_profiles")
-    .from("brand_profile_integration_accounts")
+    .schema('brand_profiles')
+    .from('brand_profile_integration_accounts')
     .delete()
-    .eq("brand_profile_id", context.brandId);
+    .eq('brand_profile_id', context.brandId);
 
   const resetState = createDefaultOnboardingState(context.owner);
-  resetState.brand.name = "";
+  resetState.brand.name = '';
   resetState.members = [];
   resetState.invites = [];
   context.metadata.brands[context.brandId] = resetState;
@@ -836,12 +845,12 @@ export async function updateConnectionAccounts(
   details: {
     connected?: boolean;
     accountId?: string | null;
-    accounts?: OnboardingState["connections"][PlatformKey]["accounts"];
-    integrationIds?: OnboardingState["connections"][PlatformKey]["integrationIds"];
+    accounts?: OnboardingState['connections'][PlatformKey]['accounts'];
+    integrationIds?: OnboardingState['connections'][PlatformKey]['integrationIds'];
     lastSyncedAt?: string | null;
-  }
+  },
 ): Promise<OnboardingState> {
-  return updateBrandState(brandId, state =>
+  return updateBrandState(brandId, (state) =>
     mergeOnboardingState(state, {
       connections: {
         [provider]: {
@@ -853,7 +862,7 @@ export async function updateConnectionAccounts(
             details.lastSyncedAt !== undefined ? details.lastSyncedAt : new Date().toISOString(),
         },
       },
-    })
+    }),
   );
 }
 
@@ -861,7 +870,7 @@ export async function setActiveBrand(brandId: string): Promise<OnboardingState> 
   const context = await loadOnboardingContext(brandId);
   const targetState = context.metadata.brands[brandId];
   if (!targetState) {
-    throw new Error("Brand not found");
+    throw new Error('Brand not found');
   }
 
   if (context.metadata.activeBrandId === brandId) {
@@ -879,7 +888,7 @@ export async function setActiveBrand(brandId: string): Promise<OnboardingState> 
 }
 
 export async function createBrandProfile(
-  name?: string
+  name?: string,
 ): Promise<{ brandId: string; state: OnboardingState }> {
   const { supabase, owner, metadata, user } = await loadOnboardingContext();
   const brandId = createBrandId();
@@ -911,7 +920,7 @@ export async function createBrandProfile(
 }
 
 export async function deleteBrandFromMetadata(
-  brandId: string
+  brandId: string,
 ): Promise<{ nextActiveBrandId: string | null }> {
   const { supabase, user } = await getAuthContext();
   const metadata = await fetchMetadataFromTable(supabase, user.id);
@@ -931,8 +940,8 @@ export async function deleteBrandFromMetadata(
     .schema(ONBOARDING_SCHEMA)
     .from(ONBOARDING_TABLE)
     .delete()
-    .eq("user_id", user.id)
-    .eq("brand_id", brandId);
+    .eq('user_id', user.id)
+    .eq('brand_id', brandId);
 
   if (deleteStateError) {
     throw deleteStateError;
@@ -943,36 +952,33 @@ export async function deleteBrandFromMetadata(
   return { nextActiveBrandId: metadata.activeBrandId ?? null };
 }
 
-export async function renameBrandProfile(
-  brandId: string,
-  name: string
-): Promise<OnboardingState> {
-  return updateBrandState(brandId, state =>
+export async function renameBrandProfile(brandId: string, name: string): Promise<OnboardingState> {
+  return updateBrandState(brandId, (state) =>
     mergeOnboardingState(state, {
       brand: { name },
-    })
+    }),
   );
 }
 
 export async function updateBrandLogo(
   brandId: string,
-  logoPath: string | null
+  logoPath: string | null,
 ): Promise<OnboardingState> {
-  return updateBrandState(brandId, state =>
+  return updateBrandState(brandId, (state) =>
     mergeOnboardingState(state, {
       brand: { logoPath },
-    })
+    }),
   );
 }
 
 export async function removeMemberFromBrand(
   brandId: string,
-  member: { userId?: string; email?: string }
+  member: { userId?: string; email?: string },
 ): Promise<OnboardingState> {
   const { supabase } = await getAuthContext();
 
   if (!member.userId && !member.email) {
-    throw new Error("Member identifier is required");
+    throw new Error('Member identifier is required');
   }
 
   const {
@@ -981,12 +987,12 @@ export async function removeMemberFromBrand(
   } = await supabase.auth.getSession();
 
   if (sessionError || !session?.access_token) {
-    throw new Error("Missing session access token");
+    throw new Error('Missing session access token');
   }
 
-  const { error } = await supabase.functions.invoke("brand_invite", {
+  const { error } = await supabase.functions.invoke('brand_invite', {
     body: {
-      action: "remove_member",
+      action: 'remove_member',
       brandId,
       userId: member.userId,
       email: member.email,
@@ -996,10 +1002,10 @@ export async function removeMemberFromBrand(
 
   if (error) {
     const message = await getFunctionsInvokeErrorMessage(error);
-    throw new Error(message ?? error.message ?? "Unable to remove member");
+    throw new Error(message ?? error.message ?? 'Unable to remove member');
   }
 
-  return updateBrandState(brandId, state => {
+  return updateBrandState(brandId, (state) => {
     const members = state.members.filter((memberEntry: BrandMember) => {
       if (member.userId && memberEntry.id === member.userId) {
         return false;
@@ -1017,39 +1023,42 @@ export async function createMagicLinkInvite(
   brandId: string,
   email: string,
   role: BrandRole,
-  siteUrl: string
+  siteUrl: string,
 ): Promise<{ link: string; state: OnboardingState }> {
   if (!BRAND_ROLES.includes(role)) {
-    throw new Error("Invalid role");
+    throw new Error('Invalid role');
   }
 
   const { supabase, user } = await getAuthContext();
   const token = `${createBrandId()}${createBrandId()}`;
   const tokenHash = await (async (t: string) => {
     const data = new TextEncoder().encode(t);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     return Array.from(new Uint8Array(hashBuffer))
-      .map((value) => value.toString(16).padStart(2, "0"))
-      .join("");
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('');
   })(token);
 
   await supabase
-    .schema("brand_profiles")
-    .from("invites")
-    .upsert({
-      brand_profile_id: brandId,
-      email,
-      role,
-      token_hash: tokenHash,
-      created_by: user.id,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      accepted_at: null,
-      revoked_at: null,
-    }, { onConflict: "brand_profile_id,email" } as any);
+    .schema('brand_profiles')
+    .from('invites')
+    .upsert(
+      {
+        brand_profile_id: brandId,
+        email,
+        role,
+        token_hash: tokenHash,
+        created_by: user.id,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        accepted_at: null,
+        revoked_at: null,
+      },
+      { onConflict: 'brand_profile_id,email' } as any,
+    );
 
-  const link = `${siteUrl.replace(/\/$/, "")}/invite/callback?token=${token}&brand=${brandId}`;
-  
-  const state = await updateBrandState(brandId, current => {
+  const link = `${siteUrl.replace(/\/$/, '')}/invite/callback?token=${token}&brand=${brandId}`;
+
+  const state = await updateBrandState(brandId, (current) => {
     const invites = current.invites.filter((item: BrandInvite) => item.email !== email);
     return mergeOnboardingState(current, { invites });
   });
@@ -1057,19 +1066,16 @@ export async function createMagicLinkInvite(
   return { link, state };
 }
 
-export async function revokeInvite(
-  brandId: string,
-  inviteId: string
-): Promise<OnboardingState> {
+export async function revokeInvite(brandId: string, inviteId: string): Promise<OnboardingState> {
   const { supabase } = await getAuthContext();
-  
-  await supabase
-    .schema("brand_profiles")
-    .from("invites")
-    .update({ revoked_at: new Date().toISOString() } as any)
-    .eq("id", inviteId);
 
-  return updateBrandState(brandId, state => {
+  await supabase
+    .schema('brand_profiles')
+    .from('invites')
+    .update({ revoked_at: new Date().toISOString() } as any)
+    .eq('id', inviteId);
+
+  return updateBrandState(brandId, (state) => {
     const invites = state.invites.filter((invite: BrandInvite) => invite.id !== inviteId);
     return mergeOnboardingState(state, { invites });
   });

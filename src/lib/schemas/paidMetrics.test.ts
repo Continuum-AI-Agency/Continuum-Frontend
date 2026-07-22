@@ -161,24 +161,24 @@ describe('PaidMetricsResponseSchema', () => {
   });
 });
 
-describe("PaidCampaignDailyTrendsResponseSchema", () => {
+describe('PaidCampaignDailyTrendsResponseSchema', () => {
   const batchPayload = {
-    scope: "campaign_daily_trends",
-    range: { since: "2026-07-02", until: "2026-07-09", preset: "last_7d" },
-    previous_range: { since: "2026-06-24", until: "2026-07-01" },
+    scope: 'campaign_daily_trends',
+    range: { since: '2026-07-02', until: '2026-07-09', preset: 'last_7d' },
+    previous_range: { since: '2026-06-24', until: '2026-07-01' },
     campaigns: [
       {
-        id: "23861",
+        id: '23861',
         metrics: { spend: 100, roas: 1.5, impressions: 1000, clicks: 100, ctr: 10, cpc: 1 },
         comparison: {
           spend: { current: 100, previous: 80, percentageChange: 25 },
         },
-        trends: [{ date: "2026-07-02", spend: 100, roas: 1.5 }],
+        trends: [{ date: '2026-07-02', spend: 100, roas: 1.5 }],
       },
     ],
   };
 
-  it("accepts a well-formed batch and defaults the ga* fields the chart never reads", () => {
+  it('accepts a well-formed batch and defaults the ga* fields the chart never reads', () => {
     const parsed = PaidCampaignDailyTrendsResponseSchema.parse(batchPayload);
 
     expect(parsed.campaigns).toHaveLength(1);
@@ -188,14 +188,14 @@ describe("PaidCampaignDailyTrendsResponseSchema", () => {
     expect(parsed.campaigns[0].comparison?.spend.percentageChange).toBe(25);
   });
 
-  it("rejects an account_overview-shaped payload — the deploy-order guard", () => {
+  it('rejects an account_overview-shaped payload — the deploy-order guard', () => {
     // An edge that predates the scope normalizes it away and falls through to an inferred
     // account_overview: top-level metrics/trends, no campaigns[]. Rendering that would paint
     // account totals onto every campaign row. It must fail here instead (route returns 502).
     const accountOverview = {
       metrics: { spend: 100, roas: 1.5, impressions: 1000, clicks: 100, ctr: 10, cpc: 1 },
-      trends: [{ date: "2026-07-02", spend: 100, roas: 1.5 }],
-      range: { since: "2026-07-02", until: "2026-07-09", preset: "last_7d" },
+      trends: [{ date: '2026-07-02', spend: 100, roas: 1.5 }],
+      range: { since: '2026-07-02', until: '2026-07-09', preset: 'last_7d' },
     };
 
     expect(PaidCampaignDailyTrendsResponseSchema.safeParse(accountOverview).success).toBe(false);
@@ -203,8 +203,8 @@ describe("PaidCampaignDailyTrendsResponseSchema", () => {
     expect(PaidMetricsResponseSchema.safeParse(accountOverview).success).toBe(true);
   });
 
-  it("rejects a batch whose scope literal does not match", () => {
-    const wrongScope = { ...batchPayload, scope: "account_overview" };
+  it('rejects a batch whose scope literal does not match', () => {
+    const wrongScope = { ...batchPayload, scope: 'account_overview' };
     expect(PaidCampaignDailyTrendsResponseSchema.safeParse(wrongScope).success).toBe(false);
   });
 });

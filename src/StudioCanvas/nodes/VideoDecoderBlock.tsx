@@ -1,16 +1,16 @@
-import React, { useCallback } from 'react';
-import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, useEdges } from '@xyflow/react';
-import { Textarea } from '@/components/ui/textarea';
-import { useStudioStore } from '../stores/useStudioStore';
-import { VideoDecodeNodeData } from '../types';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Clapperboard } from 'lucide-react';
-import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
-import { executeWorkflow } from '../utils/executeWorkflow';
-import { useNodeSelection } from '../contexts/PresenceContext';
-import { useDebouncedSave } from '../hooks/useDebouncedSave';
+import {
+  Handle,
+  type NodeProps,
+  NodeResizer,
+  Position,
+  type Node as ReactFlowNode,
+  useEdges,
+} from '@xyflow/react';
+import { Clapperboard, Copy, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { useCallback } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,9 +20,20 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Copy, Trash2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { useDebouncedSave } from '../hooks/useDebouncedSave';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { useStudioStore } from '../stores/useStudioStore';
+import type { VideoDecodeNodeData } from '../types';
+import { executeWorkflow } from '../utils/executeWorkflow';
 
-export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNode<VideoDecodeNodeData>>) {
+export function VideoDecoderBlock({
+  id,
+  data,
+  selected,
+}: NodeProps<ReactFlowNode<VideoDecodeNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -34,36 +45,42 @@ export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNod
 
   const hasVideoInput = edges.some((edge) => edge.target === id && edge.targetHandle === 'video');
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    updateNodeData(id, { value: e.target.value });
-    debouncedSave();
-  }, [id, updateNodeData, debouncedSave]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      updateNodeData(id, { value: e.target.value });
+      debouncedSave();
+    },
+    [id, updateNodeData, debouncedSave],
+  );
 
-  const handleDecode = useCallback(async (e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    if (data.isExecuting) return;
+  const handleDecode = useCallback(
+    async (e?: React.MouseEvent) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (data.isExecuting) return;
 
-    try {
-      await executeWorkflow(executionControls, {
-        targetNodeId: id,
-        clearDownstream: false,
-        brandId,
-      });
-    } catch (err) {
-      console.error('Video decode trigger failed', err);
-    }
-  }, [id, executionControls, data.isExecuting, brandId]);
+      try {
+        await executeWorkflow(executionControls, {
+          targetNodeId: id,
+          clearDownstream: false,
+          brandId,
+        });
+      } catch (err) {
+        console.error('Video decode trigger failed', err);
+      }
+    },
+    [id, executionControls, data.isExecuting, brandId],
+  );
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            "relative min-w-[300px] min-h-[220px] w-full h-full max-w-[440px] rounded-lg transition-shadow",
-            isSelectedByOther && "selected-by-other"
+            'relative min-w-[300px] min-h-[220px] w-full h-full max-w-[440px] rounded-lg transition-shadow',
+            isSelectedByOther && 'selected-by-other',
           )}
           style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
         >
@@ -80,9 +97,9 @@ export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNod
             handles={{ target: false, source: false }}
             selected={selected}
             className={cn(
-              "border bg-background rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col min-h-[inherit] shadow-sm hover:shadow-md",
-              "border-border/60",
-              hasVideoInput && "ring-1 ring-brand-primary/30"
+              'border bg-background rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col min-h-[inherit] shadow-sm hover:shadow-md',
+              'border-border/60',
+              hasVideoInput && 'ring-1 ring-brand-primary/30',
             )}
           >
             <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/60 bg-muted/40 text-xs font-semibold tracking-wide text-muted-foreground shrink-0">
@@ -166,7 +183,10 @@ export function VideoDecoderBlock({ id, data, selected }: NodeProps<ReactFlowNod
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+        <ContextMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => deleteNode(id)}
+        >
           <Trash2 className="mr-2 h-4 w-4" />
           Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>

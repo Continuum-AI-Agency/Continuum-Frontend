@@ -1,9 +1,9 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-const templateSourceSchema = z.enum(["custom", "preset"]);
+const templateSourceSchema = z.enum(['custom', 'preset']);
 
 const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
-  message: "Invalid ISO timestamp",
+  message: 'Invalid ISO timestamp',
 });
 
 export const promptTemplateRowSchema = z.object({
@@ -50,8 +50,8 @@ export const promptTemplateListSchema = z.object({
 
 export const promptTemplateCreateSchema = z.object({
   brandProfileId: z.string().uuid(),
-  name: z.string().trim().min(1, "Template name is required").max(120, "Name is too long"),
-  prompt: z.string().trim().min(1, "Prompt is required").max(5000, "Prompt is too long"),
+  name: z.string().trim().min(1, 'Template name is required').max(120, 'Name is too long'),
+  prompt: z.string().trim().min(1, 'Prompt is required').max(5000, 'Prompt is too long'),
   category: z.string().trim().min(1).max(80).optional(),
 });
 
@@ -63,7 +63,7 @@ export const promptTemplateUpdateSchema = z
     category: z.string().trim().min(1).max(80).optional(),
   })
   .refine((value) => Boolean(value.name || value.prompt || value.category), {
-    message: "At least one field is required",
+    message: 'At least one field is required',
   });
 
 export type PromptTemplateListInput = z.infer<typeof promptTemplateListSchema>;

@@ -5,7 +5,7 @@ type ReadNdjsonStreamOptions = {
 
 function splitConcatenatedJsonPayloads(rawLine: string): string[] | null {
   const line = rawLine.trim();
-  if (!line || (line[0] !== "{" && line[0] !== "[")) {
+  if (!line || (line[0] !== '{' && line[0] !== '[')) {
     return null;
   }
 
@@ -19,7 +19,7 @@ function splitConcatenatedJsonPayloads(rawLine: string): string[] | null {
     if (cursor >= line.length) break;
 
     const start = line[cursor];
-    if (start !== "{" && start !== "[") {
+    if (start !== '{' && start !== '[') {
       return null;
     }
 
@@ -36,28 +36,27 @@ function splitConcatenatedJsonPayloads(rawLine: string): string[] | null {
           escaped = false;
           continue;
         }
-        if (char === "\\") {
+        if (char === '\\') {
           escaped = true;
           continue;
         }
-        if (char === "\"") {
+        if (char === '"') {
           inString = false;
         }
         continue;
       }
 
-      if (char === "\"") {
+      if (char === '"') {
         inString = true;
         continue;
       }
-      if (char === "{" || char === "[") {
+      if (char === '{' || char === '[') {
         stack.push(char);
         continue;
       }
-      if (char === "}" || char === "]") {
+      if (char === '}' || char === ']') {
         const opener = stack.pop();
-        const matchesPair =
-          (opener === "{" && char === "}") || (opener === "[" && char === "]");
+        const matchesPair = (opener === '{' && char === '}') || (opener === '[' && char === ']');
         if (!matchesPair) {
           return null;
         }
@@ -81,7 +80,7 @@ function splitConcatenatedJsonPayloads(rawLine: string): string[] | null {
 
 export async function readNdjsonStream({ reader, onLine }: ReadNdjsonStreamOptions): Promise<void> {
   const decoder = new TextDecoder();
-  let buffer = "";
+  let buffer = '';
   const emitLine = (rawLine: string) => {
     const line = rawLine.trim();
     if (!line) return;
@@ -101,12 +100,12 @@ export async function readNdjsonStream({ reader, onLine }: ReadNdjsonStreamOptio
 
     buffer += decoder.decode(value, { stream: true });
 
-    let newlineIndex = buffer.indexOf("\n");
+    let newlineIndex = buffer.indexOf('\n');
     while (newlineIndex >= 0) {
       const line = buffer.slice(0, newlineIndex);
       buffer = buffer.slice(newlineIndex + 1);
       emitLine(line);
-      newlineIndex = buffer.indexOf("\n");
+      newlineIndex = buffer.indexOf('\n');
     }
   }
 

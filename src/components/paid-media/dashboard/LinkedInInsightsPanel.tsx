@@ -1,15 +1,14 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { ReloadIcon } from "@radix-ui/react-icons";
-import { BarChart3Icon, MousePointerClickIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
-
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { SectionHeader } from "@/components/shared/SectionHeader";
-import type { PaidMetricsComparison } from "./PerformanceDetails";
-import { toMetricsRange, type PaidMediaTimeRange } from "./timeRange";
+import { ReloadIcon } from '@radix-ui/react-icons';
+import { BarChart3Icon, MousePointerClickIcon, TrendingUpIcon, WalletIcon } from 'lucide-react';
+import * as React from 'react';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { PaidMetricsComparison } from './PerformanceDetails';
+import { type PaidMediaTimeRange, toMetricsRange } from './timeRange';
 
 type LinkedInInsightsPanelProps = {
   brandId: string;
@@ -36,20 +35,20 @@ type PaidMetricsPayload = {
 };
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat('en-US').format(value);
 }
 
 function formatDelta(value: number | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "no prior-window baseline";
-  const sign = value > 0 ? "+" : "";
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'no prior-window baseline';
+  const sign = value > 0 ? '+' : '';
   return `${sign}${value.toFixed(1)}% vs prior window`;
 }
 
@@ -60,7 +59,7 @@ function chooseEfficiencyLine(metrics: Metrics, comparison?: PaidMetricsComparis
   if (metrics.cpc > 0) {
     return `Average CPC is ${formatCurrency(metrics.cpc)} with ${formatDelta(comparison?.cpc?.percentageChange)}.`;
   }
-  return "Efficiency is waiting on enough click or conversion volume to calculate a stable read.";
+  return 'Efficiency is waiting on enough click or conversion volume to calculate a stable read.';
 }
 
 function chooseVolumeLine(metrics: Metrics, comparison?: PaidMetricsComparison): string {
@@ -71,16 +70,16 @@ function chooseSpendLine(metrics: Metrics, comparison?: PaidMetricsComparison): 
   return `${formatCurrency(metrics.spend)} spent in this window, ${formatDelta(comparison?.spend?.percentageChange)}.`;
 }
 
-function trendLine(trends: PaidMetricsPayload["trends"]): string {
+function trendLine(trends: PaidMetricsPayload['trends']): string {
   if (!trends || trends.length < 2) {
-    return "Trend hydration is active; more daily rows are needed before a directional read is useful.";
+    return 'Trend hydration is active; more daily rows are needed before a directional read is useful.';
   }
   const first = trends[0];
   const last = trends[trends.length - 1];
   const clickDelta = (last.clicks ?? 0) - (first.clicks ?? 0);
-  if (clickDelta > 0) return "Daily click volume is rising across the selected window.";
-  if (clickDelta < 0) return "Daily click volume is softening across the selected window.";
-  return "Daily click volume is flat across the selected window.";
+  if (clickDelta > 0) return 'Daily click volume is rising across the selected window.';
+  if (clickDelta < 0) return 'Daily click volume is softening across the selected window.';
+  return 'Daily click volume is flat across the selected window.';
 }
 
 export function LinkedInInsightsPanel({
@@ -99,12 +98,12 @@ export function LinkedInInsightsPanel({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/paid-metrics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/paid-metrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          platform: "linkedin",
-          scope: campaignId ? "campaign" : "account_overview",
+          platform: 'linkedin',
+          scope: campaignId ? 'campaign' : 'account_overview',
           brandId,
           accountId: adAccountId,
           campaignId,
@@ -113,11 +112,13 @@ export function LinkedInInsightsPanel({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.error === "string" ? body.error : "Failed to load LinkedIn insights");
+        throw new Error(
+          typeof body.error === 'string' ? body.error : 'Failed to load LinkedIn insights',
+        );
       }
-      setPayload(await response.json() as PaidMetricsPayload);
+      setPayload((await response.json()) as PaidMetricsPayload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load LinkedIn insights");
+      setError(err instanceof Error ? err.message : 'Failed to load LinkedIn insights');
       setPayload(null);
     } finally {
       setIsLoading(false);
@@ -128,31 +129,31 @@ export function LinkedInInsightsPanel({
     void load();
   }, [load]);
 
-  const title = campaignId ? "LinkedIn Campaign Insights" : "LinkedIn Account Insights";
-  const context = campaignId && campaignName ? campaignName : "Account overview";
+  const title = campaignId ? 'LinkedIn Campaign Insights' : 'LinkedIn Account Insights';
+  const context = campaignId && campaignName ? campaignName : 'Account overview';
   const cards = payload
     ? [
-      {
-        title: "Spend",
-        icon: WalletIcon,
-        body: chooseSpendLine(payload.metrics, payload.comparison),
-      },
-      {
-        title: "Traffic",
-        icon: MousePointerClickIcon,
-        body: chooseVolumeLine(payload.metrics, payload.comparison),
-      },
-      {
-        title: "Efficiency",
-        icon: TrendingUpIcon,
-        body: chooseEfficiencyLine(payload.metrics, payload.comparison),
-      },
-      {
-        title: "Trend",
-        icon: BarChart3Icon,
-        body: trendLine(payload.trends),
-      },
-    ]
+        {
+          title: 'Spend',
+          icon: WalletIcon,
+          body: chooseSpendLine(payload.metrics, payload.comparison),
+        },
+        {
+          title: 'Traffic',
+          icon: MousePointerClickIcon,
+          body: chooseVolumeLine(payload.metrics, payload.comparison),
+        },
+        {
+          title: 'Efficiency',
+          icon: TrendingUpIcon,
+          body: chooseEfficiencyLine(payload.metrics, payload.comparison),
+        },
+        {
+          title: 'Trend',
+          icon: BarChart3Icon,
+          body: trendLine(payload.trends),
+        },
+      ]
     : [];
 
   return (
@@ -164,10 +165,20 @@ export function LinkedInInsightsPanel({
             {title}
           </span>
         }
-        meta={<span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">{context}</span>}
+        meta={
+          <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground/60">
+            {context}
+          </span>
+        }
         action={
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={load} disabled={isLoading}>
-            <ReloadIcon className={isLoading ? "size-3.5 animate-spin" : "size-3.5"} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={load}
+            disabled={isLoading}
+          >
+            <ReloadIcon className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
           </Button>
         }
       />

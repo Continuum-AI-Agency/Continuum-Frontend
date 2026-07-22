@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { GrantToBrandDialog } from "@/app/(post-auth)/integrations/_components/GrantToBrandDialog";
+import { Share2 } from 'lucide-react';
+import * as React from 'react';
+import { GrantToBrandDialog } from '@/app/(post-auth)/integrations/_components/GrantToBrandDialog';
+import { Button } from '@/components/ui/button';
 
 type ShareConnectionButtonProps = {
   integrationId: string;

@@ -1,16 +1,26 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { TrashIcon, MixerHorizontalIcon, Cross2Icon, CheckIcon, VideoIcon } from "@radix-ui/react-icons";
-import { Image, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import {
+  CheckIcon,
+  Cross2Icon,
+  MixerHorizontalIcon,
+  TrashIcon,
+  VideoIcon,
+} from '@radix-ui/react-icons';
+import { format } from 'date-fns';
+import { Image, Sparkles } from 'lucide-react';
+import * as React from 'react';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface BulkActionToolbarProps {
   selectedCount: number;
   onClear: () => void;
   onDelete: () => void;
-  onMove: () => void;
+  /** Move every selected draft to the picked day (YYYY-MM-DD). */
+  onMove: (dayId: string) => void;
   onApprove?: () => void;
   /** Number of selected reel drafts eligible for video generation. */
   reelCount?: number;
@@ -38,13 +48,15 @@ export function BulkActionToolbar({
   isGeneratingMedia = false,
   className,
 }: BulkActionToolbarProps) {
+  const [moveOpen, setMoveOpen] = React.useState(false);
+
   if (selectedCount === 0) return null;
 
   return (
     <div
       className={cn(
-        "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300",
-        className
+        'fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300',
+        className,
       )}
     >
       <div className="flex items-center gap-4 px-4 py-2 bg-surface/80 backdrop-blur-md border border-brand-primary/30 rounded-full shadow-2xl shadow-brand-primary/20">
@@ -54,6 +66,7 @@ export function BulkActionToolbar({
           </span>
           <span className="text-sm font-medium text-primary">Selected</span>
           <button
+            type="button"
             onClick={onClear}
             aria-label="Clear selection"
             className="p-1 hover:bg-subtle rounded-full transition-colors"
@@ -83,7 +96,7 @@ export function BulkActionToolbar({
               className="h-8 gap-2 text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary"
             >
               <Sparkles className="w-4 h-4" />
-              {isGeneratingMedia ? "Generating…" : "Generate media"}
+              {isGeneratingMedia ? 'Generating…' : 'Generate media'}
             </Button>
           ) : null}
           {onGenerateReels && reelCount > 0 ? (
@@ -95,7 +108,9 @@ export function BulkActionToolbar({
               className="h-8 gap-2 text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary"
             >
               <VideoIcon className="w-4 h-4" />
-              {isGeneratingReels ? "Generating…" : `Generate ${reelCount} video${reelCount === 1 ? "" : "s"}`}
+              {isGeneratingReels
+                ? 'Generating…'
+                : `Generate ${reelCount} video${reelCount === 1 ? '' : 's'}`}
             </Button>
           ) : null}
           {onApprove ? (
@@ -109,15 +124,29 @@ export function BulkActionToolbar({
               Approve
             </Button>
           ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onMove}
-            className="h-8 gap-2 text-secondary hover:text-primary"
-          >
-            <MixerHorizontalIcon className="w-4 h-4" />
-            Move
-          </Button>
+          <Popover open={moveOpen} onOpenChange={setMoveOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-2 text-secondary hover:text-primary"
+              >
+                <MixerHorizontalIcon className="w-4 h-4" />
+                Move
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="center" className="w-auto p-0">
+              <Calendar
+                mode="single"
+                autoFocus
+                onSelect={(date) => {
+                  if (!date) return;
+                  onMove(format(date, 'yyyy-MM-dd'));
+                  setMoveOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
           <Button
             variant="ghost"
             size="sm"

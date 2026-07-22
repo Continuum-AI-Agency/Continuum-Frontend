@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
-import { streamGeneration } from "@/lib/onboarding/inspirationsClient";
 import type {
   GenerationDirection,
   OnboardingGeneratedImage,
   OnboardingGenerationStreamFrame,
-} from "@continuum/contracts";
-import { useBackgroundJobs } from "../state/BackgroundJobsProvider";
+} from '@continuum/contracts';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { streamGeneration } from '@/lib/onboarding/inspirationsClient';
+import { cn } from '@/lib/utils';
+import { useBackgroundJobs } from '../state/BackgroundJobsProvider';
 
 const DIRECTION_LABEL: Record<GenerationDirection, string> = {
-  brand_awareness: "Brand values",
-  product: "Promo",
-  hybrid: "Social proof",
+  brand_awareness: 'Brand values',
+  product: 'Promo',
+  hybrid: 'Social proof',
 };
 
-type Phase = "generating" | "done" | "error";
+type Phase = 'generating' | 'done' | 'error';
 
 type Props = {
   brandId: string;
@@ -44,11 +44,12 @@ export function InspirationGenerationScreen({
 }: Props) {
   const { jobs } = useBackgroundJobs();
   const prewarm = jobs.creativePrewarm;
-  const prewarmImages = (prewarm.data as { images?: OnboardingGeneratedImage[] } | null)?.images ?? [];
+  const prewarmImages =
+    (prewarm.data as { images?: OnboardingGeneratedImage[] } | null)?.images ?? [];
 
   const [total, setTotal] = useState(3);
   const [images, setImages] = useState<OnboardingGeneratedImage[]>([]);
-  const [phase, setPhase] = useState<Phase>("generating");
+  const [phase, setPhase] = useState<Phase>('generating');
   const selfStartedRef = useRef(false);
   const erroredRef = useRef(false);
   const controllerRef = useRef<AbortController | null>(null);
@@ -60,20 +61,20 @@ export function InspirationGenerationScreen({
     selfStartedRef.current = true;
     erroredRef.current = false;
     setImages([]);
-    setPhase("generating");
+    setPhase('generating');
 
     const handleFrame = (frame: OnboardingGenerationStreamFrame) => {
       switch (frame.type) {
-        case "generation_started":
+        case 'generation_started':
           setTotal(frame.data.total);
           break;
-        case "image_ready":
+        case 'image_ready':
           setImages((prev) => [...prev, frame.data]);
           break;
-        case "generation_complete":
-          setPhase("done");
+        case 'generation_complete':
+          setPhase('done');
           break;
-        case "error":
+        case 'error':
           erroredRef.current = true;
           break;
       }
@@ -81,10 +82,10 @@ export function InspirationGenerationScreen({
 
     void streamGeneration({ brandId, signal: controller.signal, onFrame: handleFrame })
       .then(() =>
-        setPhase((p) => (p === "generating" ? (erroredRef.current ? "error" : "done") : p)),
+        setPhase((p) => (p === 'generating' ? (erroredRef.current ? 'error' : 'done') : p)),
       )
       .catch(() => {
-        if (!controller.signal.aborted) setPhase("error");
+        if (!controller.signal.aborted) setPhase('error');
       });
   }, [brandId]);
 
@@ -95,19 +96,19 @@ export function InspirationGenerationScreen({
   // otherwise generate locally exactly once.
   useEffect(() => {
     if (selfStartedRef.current) return;
-    if (prewarm.status === "running") return;
-    if (prewarm.status === "done" && prewarmImages.length > 0) return;
+    if (prewarm.status === 'running') return;
+    if (prewarm.status === 'done' && prewarmImages.length > 0) return;
     runGeneration();
   }, [prewarm.status, prewarmImages.length, runGeneration]);
 
   const usingPrewarm =
     !selfStartedRef.current &&
-    (prewarm.status === "running" || (prewarm.status === "done" && prewarmImages.length > 0));
+    (prewarm.status === 'running' || (prewarm.status === 'done' && prewarmImages.length > 0));
   const displayImages = usingPrewarm ? prewarmImages : images;
   const displayPhase: Phase = usingPrewarm
-    ? prewarm.status === "done"
-      ? "done"
-      : "generating"
+    ? prewarm.status === 'done'
+      ? 'done'
+      : 'generating'
     : phase;
 
   const slots = Array.from({ length: Math.max(total, displayImages.length) });
@@ -128,8 +129,8 @@ export function InspirationGenerationScreen({
             <div
               key={image?.assetId ?? `slot-${index}`}
               className={cn(
-                "flex flex-col overflow-hidden rounded-xl border border-border bg-card",
-                !image && "animate-pulse",
+                'flex flex-col overflow-hidden rounded-xl border border-border bg-card',
+                !image && 'animate-pulse',
               )}
             >
               {image ? (
@@ -137,21 +138,22 @@ export function InspirationGenerationScreen({
                 <img src={image.signedUrl} alt="" className="aspect-square w-full object-cover" />
               ) : (
                 <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-                  {displayPhase === "error" ? "Generation failed" : "Generating…"}
+                  {displayPhase === 'error' ? 'Generation failed' : 'Generating…'}
                 </div>
               )}
               <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {image ? DIRECTION_LABEL[image.direction] : " "}
+                {image ? DIRECTION_LABEL[image.direction] : ' '}
               </div>
             </div>
           );
         })}
       </div>
 
-      {displayPhase === "error" ? (
+      {displayPhase === 'error' ? (
         <div className="mt-6 flex flex-col items-center gap-3">
           <p className="text-center text-sm text-muted-foreground">
-            We couldn&apos;t generate previews right now — try again, or continue and create them later in the studio.
+            We couldn&apos;t generate previews right now — try again, or continue and create them
+            later in the studio.
           </p>
           <Button variant="default" size="sm" onClick={runGeneration} disabled={finishing}>
             Try again
@@ -164,7 +166,7 @@ export function InspirationGenerationScreen({
           ← Back
         </Button>
         <div className="flex items-center gap-3">
-          {displayPhase === "generating" ? (
+          {displayPhase === 'generating' ? (
             <span className="hidden text-xs text-muted-foreground sm:inline">
               Still creating — they&apos;ll keep saving to your library.
             </span>
@@ -186,7 +188,7 @@ export function InspirationGenerationScreen({
           {/* Never block the finale: creatives persist to the library server-side,
               so the user can head to the dashboard even while generation runs. */}
           <Button variant="success" size="sm" onClick={onFinish} disabled={finishing}>
-            {finishing ? "Finishing…" : "Go to dashboard ✦"}
+            {finishing ? 'Finishing…' : 'Go to dashboard ✦'}
           </Button>
         </div>
       </footer>

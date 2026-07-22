@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // Two coordinated Radix primitives drive the preview:
 // - HoverCard renders a lightweight peek on mouseover/focus.
@@ -6,19 +6,23 @@
 //   peek is suppressed so only one surface is ever visible.
 // Both share a single trigger element (passed in as children).
 
-import { useState } from "react";
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Loader2, Trash2, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from 'lucide-react';
 import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import { describeStep, formatBytes, kindLabel } from "./types";
-import type { DocumentView, ProgressLabel } from "./types";
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Loader2,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { useState } from 'react';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+import type { DocumentView, ProgressLabel } from './types';
+import { describeStep, formatBytes, kindLabel } from './types';
 
 type DocumentPreviewCardProps = {
   doc: DocumentView;
@@ -85,15 +89,15 @@ export function DocumentPreviewCard({
 
 function metaLine(doc: DocumentView): string {
   const parts: string[] = [];
-  if (typeof doc.size === "number") parts.push(formatBytes(doc.size));
+  if (typeof doc.size === 'number') parts.push(formatBytes(doc.size));
   if (doc.pageCount) parts.push(`${doc.pageCount} pp`);
   parts.push(sourceLabel(doc.source));
-  return parts.join(" · ");
+  return parts.join(' · ');
 }
 
-function sourceLabel(source: DocumentView["source"]): string {
-  if (source === "upload") return "Uploaded";
-  if (source === "google-drive") return "Google Drive";
+function sourceLabel(source: DocumentView['source']): string {
+  if (source === 'upload') return 'Uploaded';
+  if (source === 'google-drive') return 'Google Drive';
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
@@ -107,17 +111,17 @@ function KindBadge({ doc }: { doc: DocumentView }) {
 
 function StatusChip({ label }: { label: ProgressLabel }) {
   const Icon: LucideIcon =
-    label.tone === "success" ? CheckCircle2 : label.tone === "error" ? AlertCircle : Loader2;
+    label.tone === 'success' ? CheckCircle2 : label.tone === 'error' ? AlertCircle : Loader2;
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 text-xs",
-        label.tone === "success" && "text-emerald-600 dark:text-emerald-400",
-        label.tone === "error" && "text-rose-600",
-        (label.tone === "progress" || label.tone === "neutral") && "text-muted-foreground",
+        'inline-flex items-center gap-1 text-xs',
+        label.tone === 'success' && 'text-emerald-600 dark:text-emerald-400',
+        label.tone === 'error' && 'text-rose-600',
+        (label.tone === 'progress' || label.tone === 'neutral') && 'text-muted-foreground',
       )}
     >
-      <Icon className={cn("h-3 w-3", label.tone === "progress" && "animate-spin")} aria-hidden />
+      <Icon className={cn('h-3 w-3', label.tone === 'progress' && 'animate-spin')} aria-hidden />
       {label.text}
     </span>
   );
@@ -219,11 +223,11 @@ function PinnedBody({
 
 function MetaGrid({ doc }: { doc: DocumentView }) {
   const rows: Array<[string, string]> = [
-    ["Type", kindLabel(doc)],
-    ["Size", typeof doc.size === "number" ? formatBytes(doc.size) : "—"],
-    ["Pages", doc.pageCount ? String(doc.pageCount) : "—"],
-    ["Source", sourceLabel(doc.source)],
-    ["Added", formatDate(doc.createdAt)],
+    ['Type', kindLabel(doc)],
+    ['Size', typeof doc.size === 'number' ? formatBytes(doc.size) : '—'],
+    ['Pages', doc.pageCount ? String(doc.pageCount) : '—'],
+    ['Source', sourceLabel(doc.source)],
+    ['Added', formatDate(doc.createdAt)],
   ];
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
@@ -269,7 +273,7 @@ function ActionButton({
 }: {
   icon: LucideIcon;
   label: string;
-  tone: "primary" | "ghost" | "danger";
+  tone: 'primary' | 'ghost' | 'danger';
   onClick: () => void;
   className?: string;
 }) {
@@ -278,10 +282,10 @@ function ActionButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-        tone === "primary" && "bg-primary text-primary-foreground hover:bg-primary/90",
-        tone === "ghost" && "border border-border/70 bg-background text-foreground hover:bg-muted",
-        tone === "danger" && "text-rose-600 hover:bg-rose-500/10",
+        'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+        tone === 'primary' && 'bg-primary text-primary-foreground hover:bg-primary/90',
+        tone === 'ghost' && 'border border-border/70 bg-background text-foreground hover:bg-muted',
+        tone === 'danger' && 'text-rose-600 hover:bg-rose-500/10',
         className,
       )}
     >
@@ -293,6 +297,6 @@ function ActionButton({
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }

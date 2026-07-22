@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
 // Lightweight inline trend line for dense cards. Generalized from the paid-media
 // MetricSparkline so it works on any numeric series without paid-media types.
 // Renders a flat baseline when there are fewer than two points.
 
-import * as React from "react";
+import * as React from 'react';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
-export type SparklineTone = "positive" | "negative" | "flat";
+export type SparklineTone = 'positive' | 'negative' | 'flat';
 
 const TONE_STROKE: Record<SparklineTone, string> = {
-  positive: "oklch(72% 0.16 154)",
-  negative: "oklch(64% 0.20 28)",
-  flat: "oklch(60% 0.02 250)",
+  positive: 'oklch(72% 0.16 154)',
+  negative: 'oklch(64% 0.20 28)',
+  flat: 'oklch(60% 0.02 250)',
 };
 
 // Pure geometry for the polyline. Returns null when there are fewer than two
@@ -22,9 +22,11 @@ const TONE_STROKE: Record<SparklineTone, string> = {
 export function sparklinePoints(
   values: number[],
   width: number,
-  height: number
+  height: number,
 ): { points: string; lastX: number; lastY: number } | null {
-  const clean = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const clean = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  );
   if (clean.length < 2) return null;
 
   const min = Math.min(...clean);
@@ -33,7 +35,9 @@ export function sparklinePoints(
   const stepX = width / (clean.length - 1);
   const yFor = (value: number) => height - ((value - min) / span) * (height - 3) - 1.5;
 
-  const points = clean.map((value, index) => `${(index * stepX).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ");
+  const points = clean
+    .map((value, index) => `${(index * stepX).toFixed(2)},${yFor(value).toFixed(2)}`)
+    .join(' ');
   return { points, lastX: (clean.length - 1) * stepX, lastY: yFor(clean[clean.length - 1]) };
 }
 
@@ -48,18 +52,21 @@ type SparklineProps = {
 
 export function Sparkline({
   values,
-  tone = "flat",
+  tone = 'flat',
   width = 120,
   height = 28,
   className,
-  ariaLabel = "trend",
+  ariaLabel = 'trend',
 }: SparklineProps) {
-  const geometry = React.useMemo(() => sparklinePoints(values, width, height), [values, width, height]);
+  const geometry = React.useMemo(
+    () => sparklinePoints(values, width, height),
+    [values, width, height],
+  );
 
   if (!geometry) {
     return (
       <div
-        className={cn("inline-flex items-center text-muted-foreground/50", className)}
+        className={cn('inline-flex items-center text-muted-foreground/50', className)}
         style={{ width, height }}
         aria-hidden
       >
@@ -73,7 +80,7 @@ export function Sparkline({
 
   return (
     <svg
-      className={cn("inline-block align-middle", className)}
+      className={cn('inline-block align-middle', className)}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}

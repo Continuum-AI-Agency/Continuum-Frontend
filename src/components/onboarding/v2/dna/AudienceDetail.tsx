@@ -1,19 +1,19 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
 
 type Props = {
-  audience: NonNullable<AgentPreviewBuckets["audience"]>;
+  audience: NonNullable<AgentPreviewBuckets['audience']>;
 };
 
 export function AudienceDetail({ audience }: Props) {
   const sections: { label: string; items?: string[] | null }[] = [
-    { label: "Demographics", items: audience.demographics },
-    { label: "Psychographics", items: audience.psychographics },
-    { label: "Pain points", items: audience.pain_points },
-    { label: "Goals", items: audience.goals },
-    { label: "Buying criteria", items: audience.buying_criteria },
-    { label: "Interests", items: audience.interests },
+    { label: 'Demographics', items: audience.demographics },
+    { label: 'Psychographics', items: audience.psychographics },
+    { label: 'Pain points', items: audience.pain_points },
+    { label: 'Goals', items: audience.goals },
+    { label: 'Buying criteria', items: audience.buying_criteria },
+    { label: 'Interests', items: audience.interests },
   ].filter((s) => s.items && s.items.length > 0);
 
   if (sections.length === 0) return null;

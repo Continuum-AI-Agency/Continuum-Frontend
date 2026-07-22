@@ -1,6 +1,5 @@
-"use client"
+'use client';
 
-import * as React from "react"
 import {
   CalendarCheck,
   Hash,
@@ -10,7 +9,8 @@ import {
   Trash2,
   Undo2,
   Wand2,
-} from "lucide-react"
+} from 'lucide-react';
+import * as React from 'react';
 
 import {
   DropdownMenu,
@@ -19,8 +19,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 /**
  * The ⋯ command menu for the previewer: global post actions that don't earn a
@@ -41,17 +41,17 @@ export function PostCommandMenu({
   onOpenInStudio,
   onDelete,
 }: {
-  onEditCreativeDirection: () => void
-  onEditHashtags: () => void
-  onApproveSchedule?: () => void
-  canSchedule?: boolean
-  isScheduled?: boolean
-  onMoveBackToDraft?: () => void
-  onPublish?: () => void
-  canPublish?: boolean
-  isPublishing?: boolean
-  onOpenInStudio?: () => void
-  onDelete: () => void
+  onEditCreativeDirection: () => void;
+  onEditHashtags: () => void;
+  onApproveSchedule?: () => void;
+  canSchedule?: boolean;
+  isScheduled?: boolean;
+  onMoveBackToDraft?: () => void;
+  onPublish?: () => void;
+  canPublish?: boolean;
+  isPublishing?: boolean;
+  onOpenInStudio?: () => void;
+  onDelete: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -93,7 +93,7 @@ export function PostCommandMenu({
         {canPublish && onPublish && (
           <DropdownMenuItem onSelect={onPublish} disabled={isPublishing}>
             <Send className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-            {isPublishing ? "Publishing…" : "Publish to Instagram"}
+            {isPublishing ? 'Publishing…' : 'Publish to Instagram'}
           </DropdownMenuItem>
         )}
         {onOpenInStudio && (
@@ -107,12 +107,12 @@ export function PostCommandMenu({
 
         <DropdownMenuItem
           onSelect={onDelete}
-          className={cn("text-destructive focus:text-destructive")}
+          className={cn('text-destructive focus:text-destructive')}
         >
           <Trash2 className="mr-2 h-3.5 w-3.5" />
           Delete draft
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { WarningCircle, CircleNotch, Sparkle } from "@phosphor-icons/react";
+import { CircleNotch, Sparkle, WarningCircle } from '@phosphor-icons/react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type UrlScreenProps = {
   defaultUrl?: string | null;
@@ -31,13 +31,16 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
               onSubmit={(event) => {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
-                const value = String(data.get("url") ?? "").trim();
+                const value = String(data.get('url') ?? '').trim();
                 if (value) onSubmit(value);
               }}
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="onboarding-url" className="text-sm font-medium text-muted-foreground">
+                <Label
+                  htmlFor="onboarding-url"
+                  className="text-sm font-medium text-muted-foreground"
+                >
                   Website URL
                 </Label>
                 <div className="relative">
@@ -48,7 +51,7 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
                     id="onboarding-url"
                     name="url"
                     autoFocus
-                    defaultValue={defaultUrl ?? ""}
+                    defaultValue={defaultUrl ?? ''}
                     placeholder="yourdomain.com"
                     className="h-12 rounded-lg border-input bg-background pl-[68px] text-base text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                   />
@@ -62,7 +65,9 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
                 >
                   <WarningCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-destructive">Couldn&apos;t scan that URL</p>
+                    <p className="text-sm font-medium text-destructive">
+                      Couldn&apos;t scan that URL
+                    </p>
                     <p className="mt-0.5 text-sm leading-snug text-destructive/80">{error}</p>
                     {onRetry ? (
                       <button
@@ -72,15 +77,21 @@ export function UrlScreen({ defaultUrl, onSubmit, error, retrying, onRetry }: Ur
                         className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline disabled:cursor-wait disabled:opacity-60"
                       >
                         {retrying ? <CircleNotch className="h-3 w-3 animate-spin" /> : null}
-                        {retrying ? "Retrying…" : "Try again"}
+                        {retrying ? 'Retrying…' : 'Try again'}
                       </button>
                     ) : null}
                   </div>
                 </div>
               ) : null}
 
-              <Button type="submit" variant="default" size="lg" className="w-full" disabled={retrying}>
-                {retrying ? "Analyzing…" : "Analyze my brand"}
+              <Button
+                type="submit"
+                variant="default"
+                size="lg"
+                className="w-full"
+                disabled={retrying}
+              >
+                {retrying ? 'Analyzing…' : 'Analyze my brand'}
               </Button>
             </form>
           </CardContent>

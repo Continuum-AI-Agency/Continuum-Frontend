@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
-export type JobStatus = "idle" | "running" | "done" | "error";
+export type JobStatus = 'idle' | 'running' | 'done' | 'error';
 
 export type JobState<T> = {
   status: JobStatus;
@@ -11,12 +11,17 @@ export type JobState<T> = {
   startedAt: number | null;
 };
 
-export type JobKey = "scrape" | "agentPreview" | "trendsPrewarm" | "strategicPrewarm" | "creativePrewarm";
+export type JobKey =
+  | 'scrape'
+  | 'agentPreview'
+  | 'trendsPrewarm'
+  | 'strategicPrewarm'
+  | 'creativePrewarm';
 
 type JobsState = Record<JobKey, JobState<unknown>>;
 
 const initialJob = <T,>(): JobState<T> => ({
-  status: "idle",
+  status: 'idle',
   data: null,
   error: null,
   startedAt: null,
@@ -49,15 +54,24 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
     controllers.current[key]?.abort();
     const ctrl = new AbortController();
     controllers.current[key] = ctrl;
-    setJobs((prev) => ({ ...prev, [key]: { status: "running", data: null, error: null, startedAt: Date.now() } }));
+    setJobs((prev) => ({
+      ...prev,
+      [key]: { status: 'running', data: null, error: null, startedAt: Date.now() },
+    }));
     try {
       const data = await runner(ctrl.signal);
-      setJobs((prev) => ({ ...prev, [key]: { status: "done", data, error: null, startedAt: prev[key].startedAt } }));
+      setJobs((prev) => ({
+        ...prev,
+        [key]: { status: 'done', data, error: null, startedAt: prev[key].startedAt },
+      }));
       return data;
     } catch (error) {
       if (ctrl.signal.aborted) return null;
-      const message = error instanceof Error ? error.message : "Unknown error";
-      setJobs((prev) => ({ ...prev, [key]: { status: "error", data: null, error: message, startedAt: prev[key].startedAt } }));
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setJobs((prev) => ({
+        ...prev,
+        [key]: { status: 'error', data: null, error: message, startedAt: prev[key].startedAt },
+      }));
       return null;
     }
   }, []);
@@ -79,6 +93,6 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
 
 export function useBackgroundJobs() {
   const ctx = useContext(BackgroundJobsContext);
-  if (!ctx) throw new Error("useBackgroundJobs must be used within BackgroundJobsProvider");
+  if (!ctx) throw new Error('useBackgroundJobs must be used within BackgroundJobsProvider');
   return ctx;
 }

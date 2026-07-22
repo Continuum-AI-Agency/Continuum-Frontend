@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { BrandAvatar } from "@/components/brand/BrandAvatar";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useInfiniteUserBrands, type UserBrandListItem } from "@/hooks/useInfiniteUserBrands";
-import { useSwitchBrand } from "@/hooks/useSwitchBrand";
-import type { BrandPermission, BrandSummary } from "@/components/DashboardLayoutShell";
+import { Check, Loader2, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrandAvatar } from '@/components/brand/BrandAvatar';
+import type { BrandPermission, BrandSummary } from '@/components/DashboardLayoutShell';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { type UserBrandListItem, useInfiniteUserBrands } from '@/hooks/useInfiniteUserBrands';
+import { useSwitchBrand } from '@/hooks/useSwitchBrand';
 
 type UserBrandsPanelProps = {
   permissions: BrandPermission[];
@@ -20,17 +20,17 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
     useActiveBrandContext();
   const switchBrand = useSwitchBrand();
   const [pendingBrandId, setPendingBrandId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const roleByBrandId = useMemo(
     () => new Map(permissions.map((p) => [p.brand_profile_id, p.role])),
-    [permissions]
+    [permissions],
   );
   const fallbackBrands = useMemo(
     () => brandSummaries.map((brand) => ({ ...brand, role: roleByBrandId.get(brand.id) ?? null })),
-    [brandSummaries, roleByBrandId]
+    [brandSummaries, roleByBrandId],
   );
   const {
     brands: loadedBrands,
@@ -43,7 +43,7 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
   const brands = loadedBrands.length > 0 ? loadedBrands : fallbackBrands;
   const visibleBrands = useMemo(
     () => brands.filter((brand) => matchesBrandSearch(brand, searchQuery)),
-    [brands, searchQuery]
+    [brands, searchQuery],
   );
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
           void fetchNextPage();
         }
       },
-      { root, rootMargin: "96px" }
+      { root, rootMargin: '96px' },
     );
 
     observer.observe(sentinel);
@@ -94,7 +94,10 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
   return (
     <div className="space-y-3">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
         <Input
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
@@ -191,12 +194,12 @@ function BrandRow({
             </Badge>
           ) : null}
           {isPending ? (
-            <Badge variant="outline" className="text-2xs">Invite pending</Badge>
+            <Badge variant="outline" className="text-2xs">
+              Invite pending
+            </Badge>
           ) : null}
         </div>
-        {role ? (
-          <p className="text-xs capitalize text-muted-foreground">{role}</p>
-        ) : null}
+        {role ? <p className="text-xs capitalize text-muted-foreground">{role}</p> : null}
       </div>
       {isActive ? (
         <span className="text-xs text-muted-foreground">Current</span>
@@ -214,7 +217,7 @@ function BrandRow({
               Switching…
             </>
           ) : (
-            "Switch"
+            'Switch'
           )}
         </Button>
       )}
@@ -228,17 +231,15 @@ export function matchesBrandSearch(brand: UserBrandListItem, query: string): boo
     return true;
   }
 
-  const searchable = [
-    brand.name,
-    brand.role,
-    brand.id,
-  ].filter((value): value is string => Boolean(value));
+  const searchable = [brand.name, brand.role, brand.id].filter((value): value is string =>
+    Boolean(value),
+  );
 
   return searchable.some((value) => fuzzyIncludes(normalizeSearchText(value), normalizedQuery));
 }
 
 function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function fuzzyIncludes(value: string, query: string): boolean {

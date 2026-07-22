@@ -1,7 +1,7 @@
-import { OnboardingStepper, type StepperState } from "./OnboardingStepper";
-import { StartOverButton } from "./StartOverButton";
+import { OnboardingStepper, type StepperState } from './OnboardingStepper';
+import { StartOverButton } from './StartOverButton';
 
-export type ShellPillId = "website" | "documents" | "integrations" | "invites" | "dna";
+export type ShellPillId = 'website' | 'documents' | 'integrations' | 'invites' | 'dna';
 
 type StepDef = { id: ShellPillId; label: string; description: string; state: StepperState };
 
@@ -46,8 +46,12 @@ export function OnboardingShell({
       <footer className="border-t border-border bg-white dark:bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            {onStartOver ? <StartOverButton onConfirm={onStartOver} disabled={startOverDisabled} /> : null}
-            <span className="truncate text-sm leading-snug text-muted-foreground">{bottomHint}</span>
+            {onStartOver ? (
+              <StartOverButton onConfirm={onStartOver} disabled={startOverDisabled} />
+            ) : null}
+            <span className="truncate text-sm leading-snug text-muted-foreground">
+              {bottomHint}
+            </span>
           </div>
           <div className="flex items-center gap-2.5">{bottomActions}</div>
         </div>

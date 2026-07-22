@@ -7,6 +7,7 @@ import {
   CyclePreviewResponseSchema,
   CycleRunReportSchema,
   EnrollRequestSchema,
+  EnrollResultSchema,
   getOptimizationMetricDefinition,
   OptimizerStatusSchema,
   ParsedCycleRunReportSchema,
@@ -141,6 +142,45 @@ describe('EnrollRequestSchema — exactly one of adset_ids | campaign_id', () =>
   });
   test('rejects neither', () => {
     expect(() => EnrollRequestSchema.parse({ portfolio_id: UUID })).toThrow();
+  });
+});
+
+describe('EnrollResultSchema — expansion distinguishes empty-match from read failure', () => {
+  test('the adset_ids path carries no expansion', () => {
+    expect(EnrollResultSchema.parse({ enrolled: 2, first_cycle: 'queued' })).toMatchObject({
+      enrolled: 2,
+    });
+  });
+  test('a campaign that genuinely matched nothing says so', () => {
+    const parsed = EnrollResultSchema.parse({
+      enrolled: 0,
+      first_cycle: 'queued',
+      expansion: {
+        campaign_id: 'c1',
+        snapshots_read: 64,
+        matched: 0,
+        outcome: 'no_adsets_matched',
+      },
+    });
+    expect(parsed.expansion?.outcome).toBe('no_adsets_matched');
+    expect(parsed.expansion?.snapshots_read).toBe(64);
+  });
+  test('a successful expansion reports the matched count', () => {
+    const parsed = EnrollResultSchema.parse({
+      enrolled: 7,
+      first_cycle: 'queued',
+      expansion: { campaign_id: 'c1', snapshots_read: 64, matched: 7, outcome: 'expanded' },
+    });
+    expect(parsed.expansion?.matched).toBe(7);
+  });
+  test('rejects an unknown expansion outcome', () => {
+    expect(() =>
+      EnrollResultSchema.parse({
+        enrolled: 0,
+        first_cycle: 'queued',
+        expansion: { campaign_id: 'c1', snapshots_read: 0, matched: 0, outcome: 'read_failed' },
+      }),
+    ).toThrow();
   });
 });
 
@@ -315,6 +355,38 @@ describe('loose DB-derived read models', () => {
     });
     expect(item.diagnostics?.ci?.events).toBe(41);
     expect((item as Record<string, unknown>).run_id).toBe(UUID);
+  });
+  test('row schemas carry the merged adset_name and tolerate its absence', () => {
+    const named = CycleItemRowSchema.parse({
+      adset_id: 'a1',
+      adset_name: 'ITESO // ANUALIDAD 2026',
+      current_budget: 100,
+      final_budget: 120,
+      change_abs: 20,
+      change_pct: 0.2,
+    });
+    expect(named.adset_name).toBe('ITESO // ANUALIDAD 2026');
+    // Rows recorded before the RPC gained the join (or never-enrolled ad sets) have no name.
+    const unnamed = CycleItemRowSchema.parse({
+      adset_id: 'a2',
+      current_budget: 100,
+      final_budget: 100,
+      change_abs: 0,
+      change_pct: 0,
+      adset_name: null,
+    });
+    expect(unnamed.adset_name).toBeNull();
+    const rec = RecommendationRowSchema.parse({
+      id: UUID,
+      adset_id: 'a1',
+      adset_name: 'AV CAMACHO // 333',
+      kind: 'pause',
+      trigger: 'P1',
+      severity: null,
+      reason: null,
+      status: 'pending',
+    });
+    expect(rec.adset_name).toBe('AV CAMACHO // 333');
   });
   test('RecommendationRowSchema rejects a row missing its id', () => {
     expect(() =>

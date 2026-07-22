@@ -1,8 +1,8 @@
-import * as React from "react";
-import { useShallow } from "zustand/react/shallow";
-import { useCalendarStore } from "@/lib/organic/store";
+import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useCalendarStore } from '@/lib/organic/store';
 import { useDraftDeletionConfirmation } from '../primitives/DraftDeletionConfirmation';
-import type { OrganicCalendarDay } from "../primitives/types";
+import type { OrganicCalendarDay } from '../primitives/types';
 
 export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
@@ -21,12 +21,12 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
       toggleDraftSelection: state.toggleDraftSelection,
       clearDraftSelection: state.clearDraftSelection,
       bulkDeleteDrafts: state.bulkDeleteDrafts,
-    }))
+    })),
   );
 
   const orderedDraftIds = React.useMemo(
     () => days.flatMap((day) => day.slots.map((slot) => slot.id)),
-    [days]
+    [days],
   );
 
   const orderedDraftIndexById = React.useMemo(() => {
@@ -46,7 +46,7 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
         clearDraftSelection();
       }
     },
-    [toggleDraftSelection, setSelectedDraftId, clearDraftSelection]
+    [toggleDraftSelection, setSelectedDraftId, clearDraftSelection],
   );
 
   const clearAll = React.useCallback(() => {
@@ -66,7 +66,7 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         handleDelete();
         e.preventDefault();
         return;
@@ -79,19 +79,19 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
 
       if (currentIndex === -1) return;
 
-      if (e.key === "ArrowDown") {
+      if (e.key === 'ArrowDown') {
         const nextId = orderedDraftIds[currentIndex + 1];
         if (nextId) {
           handleSelect(nextId, e.shiftKey);
           e.preventDefault();
         }
-      } else if (e.key === "ArrowUp") {
+      } else if (e.key === 'ArrowUp') {
         const prevId = orderedDraftIds[currentIndex - 1];
         if (prevId) {
           handleSelect(prevId, e.shiftKey);
           e.preventDefault();
         }
-      } else if (e.key === "Escape") {
+      } else if (e.key === 'Escape') {
         clearAll();
       }
     },
@@ -103,7 +103,7 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
       orderedDraftIndexById,
       selectedDraftId,
       selectedDraftIds,
-    ]
+    ],
   );
 
   return {

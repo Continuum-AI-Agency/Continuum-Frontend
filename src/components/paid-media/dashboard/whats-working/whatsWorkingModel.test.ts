@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'bun:test';
-import { type PaidCreativeReport, paidCreativeReportSchema } from '@continuum/contracts';
+import {
+  creativeWinRateFlagSchema,
+  type PaidCreativeReport,
+  paidCreativeReportSchema,
+} from '@continuum/contracts';
 import {
   cohortMultipleLabel,
+  FLAG_LABEL,
+  FLAG_TOOLTIP,
   hasThinEvidence,
   isHttpUrl,
   money,
@@ -9,6 +15,20 @@ import {
   selectVerdictsByKind,
   selectWinRateRows,
 } from './whatsWorkingModel';
+
+describe('flag vocabulary', () => {
+  it('labels every win-rate flag the contract can emit', () => {
+    // A total map: a flag added to the contract with no label here is a compile
+    // error at the Record type, and this asserts the runtime coverage too.
+    for (const flag of creativeWinRateFlagSchema.options) {
+      expect(FLAG_LABEL[flag]).toBeTruthy();
+    }
+  });
+
+  it('explains the thumbnail-derived flag, since its meaning is not self-evident', () => {
+    expect(FLAG_TOOLTIP.thumbnail_derived).toContain('64×64');
+  });
+});
 
 const REPORT: PaidCreativeReport = paidCreativeReportSchema.parse({
   brandId: 'brand_1',

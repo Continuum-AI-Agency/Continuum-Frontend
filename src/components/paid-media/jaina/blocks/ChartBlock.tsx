@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import { EvidenceTooltip } from './EvidenceTooltip';
 import {
   Area,
   AreaChart,
@@ -26,6 +25,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import type { ChartBlockV2 } from '@/lib/jaina/schemas';
+import { EvidenceTooltip } from './EvidenceTooltip';
 
 type ChartBlockProps = { block: ChartBlockV2; isStreaming: boolean };
 

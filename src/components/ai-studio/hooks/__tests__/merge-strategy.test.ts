@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
-import { mergeNodes, mergeEdges } from '../merge-strategy';
-import type { StudioNode } from '@/StudioCanvas/types';
+import { describe, expect, it } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '@/StudioCanvas/types';
+import { mergeEdges, mergeNodes } from '../merge-strategy';
 
 describe('mergeNodes', () => {
   it('returns empty array when both local and remote are empty', () => {
@@ -45,8 +45,8 @@ describe('mergeNodes', () => {
 
     const result = mergeNodes(local, remote, []);
     expect(result).toHaveLength(2);
-    expect(result.find(n => n.id === 'node-local')).toBeDefined();
-    expect(result.find(n => n.id === 'node-remote')).toBeDefined();
+    expect(result.find((n) => n.id === 'node-local')).toBeDefined();
+    expect(result.find((n) => n.id === 'node-remote')).toBeDefined();
   });
 
   it('removes node from local via deletedIds', () => {
@@ -77,7 +77,7 @@ describe('mergeNodes', () => {
     const result = mergeNodes(local, remote, ['node2']);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('node1');
-    expect(result.find(n => n.id === 'node2')).toBeUndefined();
+    expect(result.find((n) => n.id === 'node2')).toBeUndefined();
   });
 
   it('preserves selected state from local node during merge', () => {
@@ -483,7 +483,7 @@ describe('mergeNodes', () => {
 
     const result = mergeNodes(local, remote, []);
     expect((result[0].data as any).positivePrompt).toBe(
-      'cinematic product shot with shallow depth of field'
+      'cinematic product shot with shallow depth of field',
     );
     expect(result[0].position).toEqual({ x: 10, y: 10 });
   });
@@ -556,8 +556,8 @@ describe('mergeEdges', () => {
 
     const result = mergeEdges(local, remote, []);
     expect(result).toHaveLength(2);
-    expect(result.find(e => e.id === 'edge-local')).toBeDefined();
-    expect(result.find(e => e.id === 'edge-remote')).toBeDefined();
+    expect(result.find((e) => e.id === 'edge-local')).toBeDefined();
+    expect(result.find((e) => e.id === 'edge-remote')).toBeDefined();
   });
 
   it('removes edge from local via deletedIds', () => {
@@ -566,9 +566,7 @@ describe('mergeEdges', () => {
       { id: 'edge2', source: 'node3', target: 'node4' },
     ];
 
-    const remote: Edge[] = [
-      { id: 'edge1', source: 'node1', target: 'node2' },
-    ];
+    const remote: Edge[] = [{ id: 'edge1', source: 'node1', target: 'node2' }];
 
     const result = mergeEdges(local, remote, ['edge2']);
     expect(result).toHaveLength(1);

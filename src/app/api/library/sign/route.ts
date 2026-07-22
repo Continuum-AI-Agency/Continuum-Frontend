@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { callerHasBrandAccess } from "@/lib/media/brand-access.server";
-import { mediaSchema } from "@/lib/media/supabase-media";
-import { mintSignedUrl } from "@/lib/media/signed-urls";
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
+import { mintSignedUrl } from '@/lib/media/signed-urls';
+import { mediaSchema } from '@/lib/media/supabase-media';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 const bodySchema = z.object({
   brandId: z.string().uuid(),
@@ -22,14 +22,14 @@ export async function POST(request: Request) {
     error: authError,
   } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
   const parsed = bodySchema.safeParse(body);
@@ -39,27 +39,27 @@ export async function POST(request: Request) {
   const { brandId, assetId } = parsed.data;
 
   if (!(await callerHasBrandAccess(supabase, brandId))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // User-scoped read: media.assets RLS (has_brand_access) already restricts to
   // the caller's brand, so no service-role bypass is needed.
   const { data, error } = await mediaSchema(supabase)
-    .from("assets")
-    .select("storage_path, bucket")
-    .eq("id", assetId)
-    .eq("brand_id", brandId)
-    .is("deleted_at", null)
+    .from('assets')
+    .select('storage_path, bucket')
+    .eq('id', assetId)
+    .eq('brand_id', brandId)
+    .is('deleted_at', null)
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+    return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
   }
 
   const row = data as { storage_path: string; bucket: string };
   const signedUrl = await mintSignedUrl(row.storage_path, row.bucket);
   if (!signedUrl) {
-    return NextResponse.json({ error: "Sign failed" }, { status: 500 });
+    return NextResponse.json({ error: 'Sign failed' }, { status: 500 });
   }
 
   return NextResponse.json({ signedUrl });

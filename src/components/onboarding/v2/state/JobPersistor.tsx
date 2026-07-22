@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import { useBackgroundJobs, type JobKey } from "./BackgroundJobsProvider";
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { scrapeSchema, type ScrapeResult } from "@/lib/onboarding/scrape";
-import type { AgentPreviewBuckets } from "./agentPreview";
-import type { OnboardingPatch } from "@/lib/onboarding/state";
-import { internalizeLogo } from "@/lib/onboarding/internalizeLogo";
+import { useEffect, useRef } from 'react';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { internalizeLogo } from '@/lib/onboarding/internalizeLogo';
+import { type ScrapeResult, scrapeSchema } from '@/lib/onboarding/scrape';
+import type { OnboardingPatch } from '@/lib/onboarding/state';
+import type { AgentPreviewBuckets } from './agentPreview';
+import { type JobKey, useBackgroundJobs } from './BackgroundJobsProvider';
 
 function parseScrape(data: unknown): ScrapeResult | null {
   if (data == null) return null;
@@ -22,13 +22,13 @@ export function JobPersistor() {
 
   useEffect(() => {
     (Object.keys(jobs) as JobKey[]).forEach((key) => {
-      if (jobs[key].status !== "done" || persisted.current.has(key)) return;
+      if (jobs[key].status !== 'done' || persisted.current.has(key)) return;
       const patch = patchFor(key, jobs[key].data);
       if (!patch) return;
       persisted.current.add(key);
       void updateState(patch);
 
-      if (key === "scrape") {
+      if (key === 'scrape') {
         const scrape = parseScrape(jobs[key].data);
         const logoUrl = scrape?.logoUrl;
         if (logoUrl && /^https?:\/\//i.test(logoUrl) && !logoInternalized.current.has(logoUrl)) {
@@ -66,20 +66,19 @@ export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
 }
 
 function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
-  if (key === "scrape") {
+  if (key === 'scrape') {
     const scrape = parseScrape(data);
     return scrape ? scrapeToBrandPatch(scrape) : null;
   }
-  if (key === "agentPreview") {
+  if (key === 'agentPreview') {
     const raw = data as AgentPreviewBuckets | { buckets: AgentPreviewBuckets } | null;
     if (!raw) return null;
-    const b: AgentPreviewBuckets =
-      typeof raw === "object" && "buckets" in raw ? raw.buckets : raw;
+    const b: AgentPreviewBuckets = typeof raw === 'object' && 'buckets' in raw ? raw.buckets : raw;
     const brandPatch = {
       brandVoice: voiceText(b),
       targetAudience: audienceText(b),
       overview: (b.business?.business_description ?? b.businessStream) || undefined,
-      tagline: (b.website?.hero_statement ?? b.business?.business_cta) ?? undefined,
+      tagline: b.website?.hero_statement ?? b.business?.business_cta ?? undefined,
       values: b.voice?.core_values ?? undefined,
       readiness: b.readiness ?? undefined,
       understanding: b.result?.understanding ?? undefined,
@@ -88,7 +87,7 @@ function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
     const hasAnyValue = Object.values(brandPatch).some((v) => {
       if (v === undefined || v === null) return false;
       if (Array.isArray(v)) return v.length > 0;
-      if (typeof v === "string") return v.length > 0;
+      if (typeof v === 'string') return v.length > 0;
       return true;
     });
     if (!hasAnyValue) return null;
@@ -100,7 +99,7 @@ function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
 function voiceText(b: AgentPreviewBuckets): string | undefined {
   if (b.voice) {
     const parts = [b.voice.voice_style, b.voice.tone, b.voice.mission].filter(Boolean);
-    if (parts.length > 0) return parts.join(" — ");
+    if (parts.length > 0) return parts.join(' — ');
   }
   return b.voiceStream || undefined;
 }

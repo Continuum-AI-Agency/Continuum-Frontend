@@ -1,21 +1,25 @@
-import { hasReportContent, type ReportPayload, type FrontendCheckpointReport } from "@/lib/jaina/schemas";
-import type { JainaChatMessage } from "./types";
-import { parsePersistedReportValue } from "./persistedReport";
+import {
+  type FrontendCheckpointReport,
+  hasReportContent,
+  type ReportPayload,
+} from '@/lib/jaina/schemas';
+import { parsePersistedReportValue } from './persistedReport';
+import type { JainaChatMessage } from './types';
 
 const reportSignalKeys = [
-  "render_as",
-  "renderAs",
-  "render_mode",
-  "render_as_report",
-  "renderAsReport",
-  "output_format",
-  "report_view",
+  'render_as',
+  'renderAs',
+  'render_mode',
+  'render_as_report',
+  'renderAsReport',
+  'output_format',
+  'report_view',
 ];
 
 const isReportSignalValue = (value: unknown) => {
   if (value === true) return true;
-  if (typeof value === "string") {
-    return value.toLowerCase() === "report";
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'report';
   }
   return false;
 };
@@ -24,8 +28,8 @@ const hasReportSignal = (record: Record<string, unknown>) =>
   reportSignalKeys.some((key) => isReportSignalValue(record[key]));
 
 export const resolveReportSignal = (
-  progress: JainaChatMessage["reasoning"] = [],
-  deltas: Array<{ delta: Record<string, unknown> }> = []
+  progress: JainaChatMessage['reasoning'] = [],
+  deltas: Array<{ delta: Record<string, unknown> }> = [],
 ) => {
   for (const entry of deltas) {
     if (hasReportSignal(entry.delta)) return true;
@@ -37,12 +41,10 @@ export const resolveReportSignal = (
   return false;
 };
 
-export const getFinalThought = (
-  progress: JainaChatMessage["reasoning"] = []
-) => {
+export const getFinalThought = (progress: JainaChatMessage['reasoning'] = []) => {
   for (let i = progress.length - 1; i >= 0; i -= 1) {
     const entry = progress[i];
-    if (entry?.stage === "thinking" && typeof entry.detail === "string") {
+    if (entry?.stage === 'thinking' && typeof entry.detail === 'string') {
       const trimmed = entry.detail.trim();
       if (trimmed.length > 0) {
         return trimmed;
@@ -53,25 +55,25 @@ export const getFinalThought = (
 };
 
 export const getReportSummary = (report: ReportPayload | null) => {
-  if (!report) return "";
-  if ("type" in report && report.type === "direct_answer") {
+  if (!report) return '';
+  if ('type' in report && report.type === 'direct_answer') {
     return report.content;
   }
   const r = report as FrontendCheckpointReport;
-  return r.executive_summary || "";
+  return r.executive_summary || '';
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
 function toNonEmptyString(value: unknown): string | null {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
   return null;
@@ -91,25 +93,25 @@ function collectBalancedJsonObjectCandidates(value: string): string[] {
         isEscaped = false;
         continue;
       }
-      if (char === "\\") {
+      if (char === '\\') {
         isEscaped = true;
         continue;
       }
-      if (char === "\"") {
+      if (char === '"') {
         inString = false;
       }
       continue;
     }
-    if (char === "\"") {
+    if (char === '"') {
       inString = true;
       continue;
     }
-    if (char === "{") {
+    if (char === '{') {
       if (depth === 0) start = index;
       depth += 1;
       continue;
     }
-    if (char === "}" && depth > 0) {
+    if (char === '}' && depth > 0) {
       depth -= 1;
       if (depth === 0 && start >= 0) {
         candidates.push(value.slice(start, index + 1));
@@ -133,8 +135,8 @@ function extractJsonObjectCandidates(value: string): unknown[] {
   const trimmed = value.trim();
   if (!trimmed) return [];
   const rawCandidates = [trimmed];
-  const firstBraceIndex = trimmed.indexOf("{");
-  const lastBraceIndex = trimmed.lastIndexOf("}");
+  const firstBraceIndex = trimmed.indexOf('{');
+  const lastBraceIndex = trimmed.lastIndexOf('}');
   if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
     const sliced = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
     if (sliced !== trimmed) rawCandidates.push(sliced);
@@ -213,9 +215,9 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
     (() => {
       const summaryRecord = asRecord(record.summary);
       return summaryRecord
-        ? toNonEmptyString(summaryRecord.narrative) ??
+        ? (toNonEmptyString(summaryRecord.narrative) ??
             toNonEmptyString(summaryRecord.overview) ??
-            toNonEmptyString(summaryRecord.summary)
+            toNonEmptyString(summaryRecord.summary))
         : null;
     })();
   if (summary) pushUniqueLine(lines, summary);
@@ -229,7 +231,7 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
     .filter((candidate): candidate is string => Boolean(candidate))
     .slice(0, 4);
   if (metricCandidates.length > 0) {
-    pushUniqueLine(lines, "**Performance snapshot**");
+    pushUniqueLine(lines, '**Performance snapshot**');
     for (const metric of metricCandidates) {
       pushUniqueLine(lines, `- ${metric}`);
     }
@@ -240,9 +242,7 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
     const sectionRecord = asRecord(sectionValue);
     if (!sectionRecord) continue;
     const heading =
-      toNonEmptyString(sectionRecord.heading) ??
-      toNonEmptyString(sectionRecord.title) ??
-      "Section";
+      toNonEmptyString(sectionRecord.heading) ?? toNonEmptyString(sectionRecord.title) ?? 'Section';
     const sectionSummary =
       toNonEmptyString(sectionRecord.summary) ??
       toNonEmptyString(sectionRecord.content) ??
@@ -250,9 +250,7 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
     pushUniqueLine(lines, `**${heading}**`);
     if (sectionSummary) pushUniqueLine(lines, sectionSummary);
 
-    const highlights = Array.isArray(sectionRecord.highlights)
-      ? sectionRecord.highlights
-      : [];
+    const highlights = Array.isArray(sectionRecord.highlights) ? sectionRecord.highlights : [];
     for (const highlight of highlights.slice(0, 2)) {
       const text = extractHighlightText(highlight);
       if (text) pushUniqueLine(lines, `- ${text}`);
@@ -260,9 +258,7 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
   }
 
   const recommendationCandidates = [
-    ...(Array.isArray(record.strategic_recommendations)
-      ? record.strategic_recommendations
-      : []),
+    ...(Array.isArray(record.strategic_recommendations) ? record.strategic_recommendations : []),
     ...(Array.isArray(record.recommendations) ? record.recommendations : []),
     ...(Array.isArray(record.actions) ? record.actions : []),
   ]
@@ -270,20 +266,20 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
     .filter((candidate): candidate is string => Boolean(candidate))
     .slice(0, 4);
   if (recommendationCandidates.length > 0) {
-    pushUniqueLine(lines, "**Recommended actions**");
+    pushUniqueLine(lines, '**Recommended actions**');
     for (const recommendation of recommendationCandidates) {
       pushUniqueLine(lines, `- ${recommendation}`);
     }
   }
 
-  const followUpQuestions = (Array.isArray(record.follow_up_questions)
-    ? record.follow_up_questions
-    : [])
+  const followUpQuestions = (
+    Array.isArray(record.follow_up_questions) ? record.follow_up_questions : []
+  )
     .map((candidate) => toNonEmptyString(candidate))
     .filter((candidate): candidate is string => Boolean(candidate))
     .slice(0, 3);
   if (followUpQuestions.length > 0) {
-    pushUniqueLine(lines, "**Follow-up questions**");
+    pushUniqueLine(lines, '**Follow-up questions**');
     for (const question of followUpQuestions) {
       pushUniqueLine(lines, `- ${question}`);
     }
@@ -293,37 +289,35 @@ function extractRenderableLinesFromRecord(record: Record<string, unknown>): stri
 }
 
 export function extractRenderableFallbackFromReport(
-  report: ReportPayload | null | undefined
+  report: ReportPayload | null | undefined,
 ): string | null {
   if (!report) return null;
-  if ("type" in report && report.type === "direct_answer") {
+  if ('type' in report && report.type === 'direct_answer') {
     return toNonEmptyString(report.content);
   }
   const lines = extractRenderableLinesFromRecord(report as unknown as Record<string, unknown>);
-  return lines.length > 0 ? lines.join("\n") : null;
+  return lines.length > 0 ? lines.join('\n') : null;
 }
 
 export function isLikelyStructuredJsonContent(content: string): boolean {
   const trimmed = content.trim();
   if (!trimmed) return false;
   if (
-    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
   ) {
     return true;
   }
   return (
-    trimmed.includes("\"executive_summary\"") ||
-    trimmed.includes("\"performance_snapshot\"") ||
-    trimmed.includes("\"sections\"") ||
-    trimmed.includes("\"strategic_recommendations\"") ||
-    trimmed.includes("\"checkpoint_report\"")
+    trimmed.includes('"executive_summary"') ||
+    trimmed.includes('"performance_snapshot"') ||
+    trimmed.includes('"sections"') ||
+    trimmed.includes('"strategic_recommendations"') ||
+    trimmed.includes('"checkpoint_report"')
   );
 }
 
-export function extractRenderableFallbackFromStructuredContent(
-  content: string
-): string | null {
+export function extractRenderableFallbackFromStructuredContent(content: string): string | null {
   const parsedReport = parsePersistedReportValue({
     report: undefined,
     content,
@@ -339,7 +333,7 @@ export function extractRenderableFallbackFromStructuredContent(
     if (!record) continue;
     const lines = extractRenderableLinesFromRecord(record);
     if (lines.length === 0) continue;
-    const fallback = lines.join("\n");
+    const fallback = lines.join('\n');
     const score = fallback.length;
     if (score > bestScore) {
       bestFallback = fallback;
@@ -351,29 +345,27 @@ export function extractRenderableFallbackFromStructuredContent(
 }
 
 export const formatStageLabel = (stage: string) => {
-  if (stage === "router" || stage === "routing") {
-    return "Consulting the Council";
+  if (stage === 'router' || stage === 'routing') {
+    return 'Consulting the Council';
   }
-  if (stage === "thinking") {
-    return "Thinking";
+  if (stage === 'thinking') {
+    return 'Thinking';
   }
-  return stage.replace(/_/g, " ");
+  return stage.replace(/_/g, ' ');
 };
 
 export const formatToolLabel = (toolName: string) =>
-  toolName === "router"
-    ? "Consulting the Council"
-    : toolName.replace(/_/g, " ");
+  toolName === 'router' ? 'Consulting the Council' : toolName.replace(/_/g, ' ');
 
 export function isStreamingPlaceholderMessage(content: string): boolean {
   const normalized = content.trim().toLowerCase();
   if (!normalized) return false;
   return (
-    normalized === "thinking through your request…" ||
-    normalized === "processing your clarification…" ||
-    normalized === "building checkpoint report…" ||
-    normalized === "generating analysis..." ||
-    normalized === "working through objectives…"
+    normalized === 'thinking through your request…' ||
+    normalized === 'processing your clarification…' ||
+    normalized === 'building checkpoint report…' ||
+    normalized === 'generating analysis...' ||
+    normalized === 'working through objectives…'
   );
 }
 
@@ -387,7 +379,7 @@ export function normalizeJainaMarkdownTables(content: string): string {
   // GFM tables require the header row on its own line, so split it out.
   out = out
     .split('\n')
-    .map(line => {
+    .map((line) => {
       const m = line.match(/^([^|]+)(\|.+\|)\s*$/);
       return m ? `${m[1].trimEnd()}\n\n${m[2]}` : line;
     })

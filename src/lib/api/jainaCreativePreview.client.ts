@@ -1,9 +1,9 @@
-import { http } from "@/lib/api/http";
 import {
-  jainaCreativePreviewResponseSchema,
   type DatasetCreativeRef,
   type JainaCreativePreviewResponse,
-} from "@continuum/contracts";
+  jainaCreativePreviewResponseSchema,
+} from '@continuum/contracts';
+import { http } from '@/lib/api/http';
 
 // A `format:"creative"` table cell can only resolve a preview when the ref
 // carries the brand + account context and at least one creative/ad id.
@@ -17,8 +17,8 @@ export async function fetchJainaCreativePreview(
   signal?: AbortSignal,
 ): Promise<JainaCreativePreviewResponse> {
   return http.request<JainaCreativePreviewResponse>({
-    path: "/api/agents/jaina/creative-preview",
-    method: "POST",
+    path: '/api/agents/jaina/creative-preview',
+    method: 'POST',
     body: {
       brand_id: ref.brand_id,
       ad_account_id: ref.ad_account_id,
@@ -26,7 +26,7 @@ export async function fetchJainaCreativePreview(
       ad_id: ref.ad_id,
     },
     schema: jainaCreativePreviewResponseSchema,
-    cache: "no-store",
+    cache: 'no-store',
     signal,
   });
 }

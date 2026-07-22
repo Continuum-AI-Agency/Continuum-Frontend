@@ -1,7 +1,7 @@
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { BRAND_VOICE_TAGS, type BrandVoiceTag } from "@/lib/onboarding/state";
-import { EditablePopover } from "./EditablePopover";
-import { Plus, X } from "@phosphor-icons/react";
+import { Plus, X } from '@phosphor-icons/react';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { BRAND_VOICE_TAGS, type BrandVoiceTag } from '@/lib/onboarding/state';
+import { EditablePopover } from './EditablePopover';
 
 export function TonePicker() {
   const { state, updateState } = useOnboarding();
@@ -42,7 +42,9 @@ export function TonePicker() {
         }
         content={(close) => (
           <div className="space-y-1">
-            <p className="px-1 pb-1 text-2xs font-bold uppercase tracking-wide text-muted-foreground">Tone of voice</p>
+            <p className="px-1 pb-1 text-2xs font-bold uppercase tracking-wide text-muted-foreground">
+              Tone of voice
+            </p>
             {BRAND_VOICE_TAGS.map((tag) => {
               const active = tags.includes(tag);
               return (
@@ -54,7 +56,9 @@ export function TonePicker() {
                     if (!active) close();
                   }}
                   className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors ${
-                    active ? "bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] text-[var(--cs-violet,#5a39ff)]" : "hover:bg-muted text-foreground"
+                    active
+                      ? 'bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] text-[var(--cs-violet,#5a39ff)]'
+                      : 'hover:bg-muted text-foreground'
                   }`}
                 >
                   {tag}

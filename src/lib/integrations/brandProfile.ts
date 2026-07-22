@@ -2,14 +2,14 @@
 // `brand_profile_integration_accounts` (BPIA) and joined to an active
 // `brand_integration_grants` row. It MUST NOT surface a user's full set of
 // connected assets. Personal-asset reads live in `userIntegrations.ts`.
-import "server-only";
+import 'server-only';
 
-import { cache } from "react";
-import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getClaimsIdentity } from "@/lib/auth/claims";
-import { cachedRead } from "@/lib/cache/redis.server";
-import { appCacheKeys } from "@/lib/cache/keys";
+import { cache } from 'react';
+import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
+import { getClaimsIdentity } from '@/lib/auth/claims';
+import { appCacheKeys } from '@/lib/cache/keys';
+import { cachedRead } from '@/lib/cache/redis.server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type BrandIntegrationAccountSummary = {
   assignmentId: string;
@@ -45,8 +45,8 @@ async function loadBrandIntegrationSummaryFromDb(
   const supabase = await createSupabaseServerClient();
 
   const { data: rows, error: rpcError } = await supabase
-    .schema("brand_profiles")
-    .rpc("get_brand_integration_summary", {
+    .schema('brand_profiles')
+    .rpc('get_brand_integration_summary', {
       p_brand_profile_id: brandProfileId,
     });
 
@@ -66,7 +66,7 @@ async function loadBrandIntegrationSummaryFromDb(
       assignmentId: row.assignment_id as string,
       integrationAccountId: row.integration_account_id as string,
       alias: (row.alias as string | null) ?? null,
-      name: (row.account_name as string) ?? "Account",
+      name: (row.account_name as string) ?? 'Account',
       externalAccountId: (row.external_account_id as string | null) ?? null,
       status: (row.account_status as string | null) ?? null,
       linkedAt: (row.linked_at as string | null) ?? null,
@@ -99,7 +99,7 @@ export const fetchBrandIntegrationSummary = cache(
         load: () => loadBrandIntegrationSummaryFromDb(brandProfileId),
       });
     } catch (error) {
-      console.error("[fetchBrandIntegrationSummary] failed", error);
+      console.error('[fetchBrandIntegrationSummary] failed', error);
       return createEmptySummary();
     }
   },

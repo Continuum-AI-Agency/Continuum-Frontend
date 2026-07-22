@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { streamInspirations } from "@/lib/onboarding/inspirationsClient";
 import type {
   InspirationAd,
   InspirationPost,
   OnboardingInspirationsStreamFrame,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { streamInspirations } from '@/lib/onboarding/inspirationsClient';
+import { cn } from '@/lib/utils';
 
 export type SelectedInspiration = {
   competitorName: string;
@@ -23,7 +23,7 @@ type CompetitorCard = {
   done: boolean;
 };
 
-type Phase = "loading" | "streaming" | "done" | "empty" | "error";
+type Phase = 'loading' | 'streaming' | 'done' | 'empty' | 'error';
 
 type Props = {
   brandId: string;
@@ -42,7 +42,7 @@ export function CompetitorInspirationsScreen({
 }: Props) {
   const [order, setOrder] = useState<string[]>([]);
   const [cards, setCards] = useState<Record<string, CompetitorCard>>({});
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>('loading');
   const startedRef = useRef(false);
   const discoveredRef = useRef(0);
 
@@ -53,34 +53,40 @@ export function CompetitorInspirationsScreen({
 
     const upsert = (name: string, mutate: (card: CompetitorCard) => CompetitorCard) => {
       setCards((prev) => {
-        const existing = prev[name] ?? { name, website: null, organicPosts: [], paidAds: [], done: false };
+        const existing = prev[name] ?? {
+          name,
+          website: null,
+          organicPosts: [],
+          paidAds: [],
+          done: false,
+        };
         return { ...prev, [name]: mutate(existing) };
       });
     };
 
     const handleFrame = (frame: OnboardingInspirationsStreamFrame) => {
-      setPhase((p) => (p === "loading" ? "streaming" : p));
+      setPhase((p) => (p === 'loading' ? 'streaming' : p));
       switch (frame.type) {
-        case "competitor_discovered": {
+        case 'competitor_discovered': {
           const { competitorName, website } = frame.data;
           discoveredRef.current += 1;
           setOrder((prev) => (prev.includes(competitorName) ? prev : [...prev, competitorName]));
           upsert(competitorName, (card) => ({ ...card, website: website ?? card.website }));
           break;
         }
-        case "post_pulled":
+        case 'post_pulled':
           upsert(frame.data.competitorName, (card) => ({
             ...card,
             organicPosts: [...card.organicPosts, frame.data.post],
           }));
           break;
-        case "ad_pulled":
+        case 'ad_pulled':
           upsert(frame.data.competitorName, (card) => ({
             ...card,
             paidAds: [...card.paidAds, frame.data.ad],
           }));
           break;
-        case "competitor_done":
+        case 'competitor_done':
           upsert(frame.data.competitorName, () => ({
             name: frame.data.competitorName,
             website: frame.data.website ?? null,
@@ -89,10 +95,10 @@ export function CompetitorInspirationsScreen({
             done: true,
           }));
           break;
-        case "complete":
-          setPhase(frame.data.competitorCount > 0 ? "done" : "empty");
+        case 'complete':
+          setPhase(frame.data.competitorCount > 0 ? 'done' : 'empty');
           break;
-        case "error":
+        case 'error':
           break;
       }
     };
@@ -103,14 +109,10 @@ export function CompetitorInspirationsScreen({
       // "Finding more inspirations…" spinner running without a `complete` frame.
       .then(() =>
         setPhase((p) =>
-          p === "loading" || p === "streaming"
-            ? discoveredRef.current > 0
-              ? "done"
-              : "empty"
-            : p,
+          p === 'loading' || p === 'streaming' ? (discoveredRef.current > 0 ? 'done' : 'empty') : p,
         ),
       )
-      .catch(() => setPhase((p) => (p === "loading" ? "error" : p)));
+      .catch(() => setPhase((p) => (p === 'loading' ? 'error' : p)));
 
     return () => controller.abort();
   }, [brandId]);
@@ -120,18 +122,20 @@ export function CompetitorInspirationsScreen({
   return (
     <div className="mx-auto flex w-full max-w-[1700px] flex-1 flex-col px-4 pb-28 md:px-8">
       <header className="py-6">
-        <h1 className="text-2xl font-semibold text-foreground">Inspirations from competitor success</h1>
+        <h1 className="text-2xl font-semibold text-foreground">
+          Inspirations from competitor success
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Top organic posts and paid ads from the competitors we found in your brand profile. Pick one
-          to guide your first generations — or just continue.
+          Top organic posts and paid ads from the competitors we found in your brand profile. Pick
+          one to guide your first generations — or just continue.
         </p>
       </header>
 
-      {phase === "loading" ? (
+      {phase === 'loading' ? (
         <LoadingState />
-      ) : phase === "empty" ? (
+      ) : phase === 'empty' ? (
         <EmptyState />
-      ) : phase === "error" ? (
+      ) : phase === 'error' ? (
         <ErrorState />
       ) : (
         <div className="flex flex-col gap-10">
@@ -143,7 +147,7 @@ export function CompetitorInspirationsScreen({
               onSelect={onSelect}
             />
           ))}
-          {phase === "streaming" ? <LoadingRow label="Finding more inspirations…" /> : null}
+          {phase === 'streaming' ? <LoadingRow label="Finding more inspirations…" /> : null}
         </div>
       )}
 
@@ -223,7 +227,9 @@ function CompetitorSection({
 function InspirationRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{children}</div>
     </div>
   );
@@ -256,23 +262,30 @@ function PostCard({
       disabled={!selectable}
       onClick={() => post.imageUrl && onSelect({ competitorName, imageUrl: post.imageUrl })}
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-lg border bg-card text-left transition",
-        isSelected ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-        !selectable && "cursor-default opacity-80",
+        'group relative flex flex-col overflow-hidden rounded-lg border bg-card text-left transition',
+        isSelected ? 'border-primary ring-2 ring-primary' : 'border-border hover:border-primary/50',
+        !selectable && 'cursor-default opacity-80',
       )}
     >
       <InspirationTag />
       {post.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={post.imageUrl} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+        <img
+          src={post.imageUrl}
+          alt=""
+          className="aspect-square w-full object-cover"
+          loading="lazy"
+        />
       ) : (
         <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
           No image
         </div>
       )}
       <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
-        {typeof post.metrics?.likes === "number" ? <span>♥ {post.metrics.likes}</span> : null}
-        {typeof post.metrics?.comments === "number" ? <span>💬 {post.metrics.comments}</span> : null}
+        {typeof post.metrics?.likes === 'number' ? <span>♥ {post.metrics.likes}</span> : null}
+        {typeof post.metrics?.comments === 'number' ? (
+          <span>💬 {post.metrics.comments}</span>
+        ) : null}
       </div>
     </button>
   );
@@ -297,14 +310,16 @@ function AdCard({
       disabled={!selectable}
       onClick={() => ad.imageUrl && onSelect({ competitorName, imageUrl: ad.imageUrl })}
       className={cn(
-        "group relative flex aspect-square flex-col justify-between overflow-hidden rounded-lg border bg-card p-3 text-left transition",
-        isSelected ? "border-primary ring-2 ring-primary" : "border-border",
-        !selectable && "cursor-default",
+        'group relative flex aspect-square flex-col justify-between overflow-hidden rounded-lg border bg-card p-3 text-left transition',
+        isSelected ? 'border-primary ring-2 ring-primary' : 'border-border',
+        !selectable && 'cursor-default',
       )}
     >
       <InspirationTag />
-      <p className="mt-5 line-clamp-3 text-xs font-medium text-foreground">{ad.headline ?? "Untitled ad"}</p>
-      <p className="line-clamp-4 text-xs text-muted-foreground">{ad.bodyText ?? ""}</p>
+      <p className="mt-5 line-clamp-3 text-xs font-medium text-foreground">
+        {ad.headline ?? 'Untitled ad'}
+      </p>
+      <p className="line-clamp-4 text-xs text-muted-foreground">{ad.bodyText ?? ''}</p>
       {ad.permalink ? (
         <a
           href={ad.permalink}
@@ -332,7 +347,9 @@ function LoadingState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-center">
       <div className="h-10 w-10 animate-spin rounded-full border-2 border-muted border-t-primary" />
-      <p className="text-sm text-muted-foreground">Analyzing your competitors and pulling their best work…</p>
+      <p className="text-sm text-muted-foreground">
+        Analyzing your competitors and pulling their best work…
+      </p>
     </div>
   );
 }
@@ -341,8 +358,8 @@ function EmptyState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-20 text-center">
       <p className="text-sm text-muted-foreground">
-        We couldn&apos;t surface competitor inspirations yet. You can continue and explore them later
-        from the dashboard.
+        We couldn&apos;t surface competitor inspirations yet. You can continue and explore them
+        later from the dashboard.
       </p>
     </div>
   );
@@ -352,7 +369,8 @@ function ErrorState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-20 text-center">
       <p className="text-sm text-muted-foreground">
-        Something interrupted the inspirations pull. You can continue — your generations will still work.
+        Something interrupted the inspirations pull. You can continue — your generations will still
+        work.
       </p>
     </div>
   );

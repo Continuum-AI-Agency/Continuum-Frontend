@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ColorSwatch } from "./ColorSwatch";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ColorSwatch } from './ColorSwatch';
 
 type Props = {
   colors: string[];

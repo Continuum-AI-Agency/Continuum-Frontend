@@ -1,18 +1,19 @@
-"use client";
+'use client';
 
-import React, { memo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
+  type EdgeProps,
   getBezierPath,
   getSmoothStepPath,
   getStraightPath,
-  type EdgeProps,
 } from '@xyflow/react';
+import type React from 'react';
+import { memo } from 'react';
 
 /**
  * DataTypeEdge - An edge colored and styled based on the data type it carries
- * 
+ *
  * Provides visual differentiation between:
  * - text: Gray/slate colored edges
  * - image: Indigo/purple colored edges
@@ -57,90 +58,90 @@ export function getDataTypeMarkerColor(dataType?: string): string {
   return 'var(--edge-text)';
 }
 
-export const DataTypeEdge = memo(({ 
-  style, 
-  sourceX, 
-  sourceY, 
-  targetX, 
-  targetY, 
-  sourcePosition, 
-  targetPosition,
-  data,
-  markerEnd,
-}: EdgeProps) => {
-  const edgeData = data as DataTypeEdgeData | undefined;
-  
-  const dataType = edgeData?.dataType || 'text';
-  const isActive = edgeData?.isActive ?? false;
-  const isDotted = edgeData?.isDotted ?? false;
-  const pathType = edgeData?.pathType || 'bezier';
+export const DataTypeEdge = memo(
+  ({
+    style,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    data,
+    markerEnd,
+  }: EdgeProps) => {
+    const edgeData = data as DataTypeEdgeData | undefined;
 
-  const getPath = () => {
-    const params = {
-      sourceX,
-      sourceY,
-      sourcePosition,
-      targetX,
-      targetY,
-      targetPosition,
+    const dataType = edgeData?.dataType || 'text';
+    const isActive = edgeData?.isActive ?? false;
+    const isDotted = edgeData?.isDotted ?? false;
+    const pathType = edgeData?.pathType || 'bezier';
+
+    const getPath = () => {
+      const params = {
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+      };
+
+      if (pathType === 'straight') return getStraightPath(params);
+      if (pathType === 'step' || pathType === 'smoothstep') return getSmoothStepPath(params);
+      return getBezierPath(params);
     };
 
-    if (pathType === 'straight') return getStraightPath(params);
-    if (pathType === 'step' || pathType === 'smoothstep') return getSmoothStepPath(params);
-    return getBezierPath(params);
-  };
+    const [edgePath, labelX, labelY] = getPath();
 
-  const [edgePath, labelX, labelY] = getPath();
+    // Merge custom style with data type style
+    const dataTypeStyle = getDataTypeEdgeStyle(edgeData?.dataType);
+    const mergedStyle = {
+      ...dataTypeStyle,
+      ...style,
+    };
 
-  // Merge custom style with data type style
-  const dataTypeStyle = getDataTypeEdgeStyle(edgeData?.dataType);
-  const mergedStyle = {
-    ...dataTypeStyle,
-    ...style,
-  };
-
-  return (
-    <>
-      <BaseEdge
-        path={edgePath}
-        markerEnd={markerEnd}
-        style={mergedStyle}
-        className={
-          [
+    return (
+      <>
+        <BaseEdge
+          path={edgePath}
+          markerEnd={markerEnd}
+          style={mergedStyle}
+          className={[
             'studio-edge-path',
             isDotted ? 'studio-edge-path--inactive' : '',
             isActive ? 'studio-edge-path--active-base' : '',
           ]
             .filter(Boolean)
-            .join(' ')
-        }
-      />
-      {isActive && (
-        <path
-          className="studio-edge-path studio-edge-path--flow"
-          d={edgePath}
-          fill="none"
-          style={mergedStyle}
+            .join(' ')}
         />
-      )}
-      {edgeData?.label && (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              pointerEvents: 'all',
-              ...getDataTypeEdgeStyle(edgeData?.dataType),
-            }}
-          >
-            <div className="studio-handle-pill rounded-md px-2 py-1 text-2xs font-medium uppercase tracking-tight shadow-sm">
-              {edgeData.label}
+        {isActive && (
+          <path
+            className="studio-edge-path studio-edge-path--flow"
+            d={edgePath}
+            fill="none"
+            style={mergedStyle}
+          />
+        )}
+        {edgeData?.label && (
+          <EdgeLabelRenderer>
+            <div
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                pointerEvents: 'all',
+                ...getDataTypeEdgeStyle(edgeData?.dataType),
+              }}
+            >
+              <div className="studio-handle-pill rounded-md px-2 py-1 text-2xs font-medium uppercase tracking-tight shadow-sm">
+                {edgeData.label}
+              </div>
             </div>
-          </div>
-        </EdgeLabelRenderer>
-      )}
-    </>
-  );
-});
+          </EdgeLabelRenderer>
+        )}
+      </>
+    );
+  },
+);
 
 DataTypeEdge.displayName = 'DataTypeEdge';

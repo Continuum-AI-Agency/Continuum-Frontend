@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
-import { renderHook, act, cleanup } from "@testing-library/react";
-import { useAIStudioChatRealtime } from "./useAIStudioChatRealtime";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { useAIStudioChatRealtime } from './useAIStudioChatRealtime';
 
 type RealtimePayload = { new: any };
 
@@ -11,7 +11,7 @@ let insertResponse: any = null;
 
 const mockChannel = {
   on: mock((event: string, _filter: any, callback: (payload: RealtimePayload) => void) => {
-    if (event === "postgres_changes") {
+    if (event === 'postgres_changes') {
       realtimeInsertHandler = callback;
     }
     return mockChannel;
@@ -34,9 +34,7 @@ const queryBuilder: any = {
   eq: mock(() => queryBuilder),
   gte: mock(() => queryBuilder),
   order: mock(() => queryBuilder),
-  limit: mock(() =>
-    Promise.resolve({ data: messageLoadResponses.shift() ?? [], error: null })
-  ),
+  limit: mock(() => Promise.resolve({ data: messageLoadResponses.shift() ?? [], error: null })),
   insert: mock(() => insertQueryBuilder),
 };
 
@@ -49,27 +47,27 @@ const mockSupabase: any = {
 
 const mockToastError = mock(() => {});
 
-mock.module("@/lib/supabase/client", () => ({
+mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => mockSupabase,
 }));
 
-mock.module("@/hooks/useSession", () => ({
+mock.module('@/hooks/useSession', () => ({
   useSession: () => ({
     user: {
-      id: "user-1",
-      email: "test@example.com",
-      user_metadata: { full_name: "Test User", avatar_url: "avatar.png" },
+      id: 'user-1',
+      email: 'test@example.com',
+      user_metadata: { full_name: 'Test User', avatar_url: 'avatar.png' },
     },
   }),
 }));
 
-mock.module("sonner", () => ({
+mock.module('sonner', () => ({
   toast: {
     error: mockToastError,
   },
 }));
 
-describe("useAIStudioChatRealtime", () => {
+describe('useAIStudioChatRealtime', () => {
   beforeEach(() => {
     subscribeStatuses = [];
     realtimeInsertHandler = null;
@@ -98,51 +96,51 @@ describe("useAIStudioChatRealtime", () => {
     cleanup();
   });
 
-  it("keeps a sent message when channel is still connecting", async () => {
+  it('keeps a sent message when channel is still connecting', async () => {
     insertResponse = {
-      id: "msg-1",
-      brand_profile_id: "brand-1",
-      user_id: "user-1",
-      room_id: "room-1",
-      content: "hello",
-      created_at: "2026-02-18T10:00:00.000Z",
+      id: 'msg-1',
+      brand_profile_id: 'brand-1',
+      user_id: 'user-1',
+      room_id: 'room-1',
+      content: 'hello',
+      created_at: '2026-02-18T10:00:00.000Z',
     };
     messageLoadResponses = [[], [insertResponse]];
 
-    const { result } = renderHook(() => useAIStudioChatRealtime("brand-1", "room-1"));
+    const { result } = renderHook(() => useAIStudioChatRealtime('brand-1', 'room-1'));
 
     await act(async () => {
       await Promise.resolve();
     });
 
     await act(async () => {
-      await result.current.sendMessage("hello");
+      await result.current.sendMessage('hello');
     });
 
     expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0]?.id).toBe("msg-1");
+    expect(result.current.messages[0]?.id).toBe('msg-1');
   });
 
-  it("dedupes local insert and realtime insert events", async () => {
-    subscribeStatuses = ["SUBSCRIBED"];
+  it('dedupes local insert and realtime insert events', async () => {
+    subscribeStatuses = ['SUBSCRIBED'];
     insertResponse = {
-      id: "msg-2",
-      brand_profile_id: "brand-1",
-      user_id: "user-1",
-      room_id: "room-1",
-      content: "dedupe",
-      created_at: "2026-02-18T10:01:00.000Z",
+      id: 'msg-2',
+      brand_profile_id: 'brand-1',
+      user_id: 'user-1',
+      room_id: 'room-1',
+      content: 'dedupe',
+      created_at: '2026-02-18T10:01:00.000Z',
     };
     messageLoadResponses = [[], []];
 
-    const { result } = renderHook(() => useAIStudioChatRealtime("brand-1", "room-1"));
+    const { result } = renderHook(() => useAIStudioChatRealtime('brand-1', 'room-1'));
 
     await act(async () => {
       await Promise.resolve();
     });
 
     await act(async () => {
-      await result.current.sendMessage("dedupe");
+      await result.current.sendMessage('dedupe');
     });
 
     await act(async () => {
@@ -150,62 +148,62 @@ describe("useAIStudioChatRealtime", () => {
     });
 
     expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0]?.id).toBe("msg-2");
+    expect(result.current.messages[0]?.id).toBe('msg-2');
   });
 
-  it("runs a catch-up load when channel subscribes", async () => {
-    subscribeStatuses = ["SUBSCRIBED"];
+  it('runs a catch-up load when channel subscribes', async () => {
+    subscribeStatuses = ['SUBSCRIBED'];
     messageLoadResponses = [
       [],
       [
         {
-          id: "msg-3",
-          brand_profile_id: "brand-1",
-          user_id: "user-2",
-          room_id: "room-1",
-          content: "missed while connecting",
-          created_at: "2026-02-18T10:02:00.000Z",
+          id: 'msg-3',
+          brand_profile_id: 'brand-1',
+          user_id: 'user-2',
+          room_id: 'room-1',
+          content: 'missed while connecting',
+          created_at: '2026-02-18T10:02:00.000Z',
         },
       ],
     ];
 
-    const { result } = renderHook(() => useAIStudioChatRealtime("brand-1", "room-1"));
+    const { result } = renderHook(() => useAIStudioChatRealtime('brand-1', 'room-1'));
 
     await act(async () => {
       await Promise.resolve();
     });
 
     expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0]?.id).toBe("msg-3");
+    expect(result.current.messages[0]?.id).toBe('msg-3');
   });
 
-  it("replaces chat state when room changes", async () => {
+  it('replaces chat state when room changes', async () => {
     messageLoadResponses = [
       [
         {
-          id: "room-1-msg",
-          brand_profile_id: "brand-1",
-          user_id: "user-1",
-          room_id: "room-1",
-          content: "room 1",
-          created_at: "2026-02-18T10:00:00.000Z",
+          id: 'room-1-msg',
+          brand_profile_id: 'brand-1',
+          user_id: 'user-1',
+          room_id: 'room-1',
+          content: 'room 1',
+          created_at: '2026-02-18T10:00:00.000Z',
         },
       ],
       [
         {
-          id: "room-2-msg",
-          brand_profile_id: "brand-1",
-          user_id: "user-1",
-          room_id: "room-2",
-          content: "room 2",
-          created_at: "2026-02-18T10:01:00.000Z",
+          id: 'room-2-msg',
+          brand_profile_id: 'brand-1',
+          user_id: 'user-1',
+          room_id: 'room-2',
+          content: 'room 2',
+          created_at: '2026-02-18T10:01:00.000Z',
         },
       ],
     ];
 
     const { result, rerender } = renderHook(
-      ({ roomId }) => useAIStudioChatRealtime("brand-1", roomId),
-      { initialProps: { roomId: "room-1" } }
+      ({ roomId }) => useAIStudioChatRealtime('brand-1', roomId),
+      { initialProps: { roomId: 'room-1' } },
     );
 
     await act(async () => {
@@ -213,30 +211,27 @@ describe("useAIStudioChatRealtime", () => {
     });
 
     expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0]?.id).toBe("room-1-msg");
+    expect(result.current.messages[0]?.id).toBe('room-1-msg');
 
-    rerender({ roomId: "room-2" });
+    rerender({ roomId: 'room-2' });
 
     await act(async () => {
       await Promise.resolve();
     });
 
     expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0]?.id).toBe("room-2-msg");
+    expect(result.current.messages[0]?.id).toBe('room-2-msg');
   });
 
-  it("loads only messages from the last 24 hours", async () => {
+  it('loads only messages from the last 24 hours', async () => {
     messageLoadResponses = [[]];
 
-    renderHook(() => useAIStudioChatRealtime("brand-1", "room-1"));
+    renderHook(() => useAIStudioChatRealtime('brand-1', 'room-1'));
 
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(queryBuilder.gte).toHaveBeenCalledWith(
-      "created_at",
-      expect.any(String)
-    );
+    expect(queryBuilder.gte).toHaveBeenCalledWith('created_at', expect.any(String));
   });
 });

@@ -1,10 +1,10 @@
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import * as storeRegistry from "@/lib/storage/storeRegistry";
-import type { ActionStatus } from "./types";
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import * as storeRegistry from '@/lib/storage/storeRegistry';
+import type { ActionStatus } from './types';
 
-type ViewMode = "focus" | "table";
-type OptimisticDecision = "approve" | "reject";
+type ViewMode = 'focus' | 'table';
+type OptimisticDecision = 'approve' | 'reject';
 
 type ApprovalsState = {
   focusedActionId: string | null;
@@ -24,7 +24,7 @@ type ApprovalsState = {
 
 type PersistedApprovalsState = Pick<
   ApprovalsState,
-  "statusFilter" | "actionTypeFilter" | "viewMode"
+  'statusFilter' | 'actionTypeFilter' | 'viewMode'
 >;
 
 function partialize(state: ApprovalsState): PersistedApprovalsState {
@@ -39,9 +39,9 @@ export const useApprovalsStore = create<ApprovalsState>()(
   persist(
     (set) => ({
       focusedActionId: null,
-      statusFilter: "PENDING",
+      statusFilter: 'PENDING',
       actionTypeFilter: null,
-      viewMode: "focus",
+      viewMode: 'focus',
       pendingDecisions: {},
 
       setFocusedActionId: (id) => set({ focusedActionId: id }),
@@ -61,31 +61,31 @@ export const useApprovalsStore = create<ApprovalsState>()(
       resetForBrandSwitch: () =>
         set({
           focusedActionId: null,
-          statusFilter: "PENDING",
+          statusFilter: 'PENDING',
           actionTypeFilter: null,
           pendingDecisions: {},
         }),
     }),
     {
-      name: "approvals-storage",
+      name: 'approvals-storage',
       storage: createJSONStorage(() =>
-        typeof window !== "undefined" ? window.sessionStorage : localStorage,
+        typeof window !== 'undefined' ? window.sessionStorage : localStorage,
       ),
       partialize,
     },
   ),
 );
 
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   storeRegistry.register({
-    name: "approvals",
+    name: 'approvals',
     teardown: () => {
       try {
         useApprovalsStore.getState().resetForBrandSwitch();
-        window.sessionStorage.removeItem("approvals-storage");
+        window.sessionStorage.removeItem('approvals-storage');
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[approvals] teardown failed", error);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[approvals] teardown failed', error);
         }
       }
     },

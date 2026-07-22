@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FontSample } from "./FontSample";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FontSample } from './FontSample';
 
 type Props = {
   primary: string | null;

@@ -1,11 +1,16 @@
-"use client";
+'use client';
 
-import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from "recharts";
-import type { BaseTickContentProps } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { BAND_STYLES, bandFor } from "./ScoreBadge";
-import { DIMENSION_DISPLAY_ORDER, DIMENSION_LABELS } from "./utils";
-import type { ReadinessAnalysis, ReadinessDimension } from "@/lib/onboarding/agentClient";
+import type { BaseTickContentProps } from 'recharts';
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from 'recharts';
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
+import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
+import { BAND_STYLES, bandFor } from './ScoreBadge';
+import { DIMENSION_DISPLAY_ORDER, DIMENSION_LABELS } from './utils';
 
 type Props = {
   readiness: ReadinessAnalysis;
@@ -23,9 +28,15 @@ function renderDimensionTick(scoreByLabel: Map<string, number>) {
     const label = String(payload.value);
     const score = scoreByLabel.get(label);
     return (
-      <text x={x} y={y} textAnchor={textAnchor} dy={4} className="fill-muted-foreground text-[10px]">
+      <text
+        x={x}
+        y={y}
+        textAnchor={textAnchor}
+        dy={4}
+        className="fill-muted-foreground text-[10px]"
+      >
         {label}
-        {score != null ? ` · ${Math.round(score)}` : ""}
+        {score != null ? ` · ${Math.round(score)}` : ''}
       </text>
     );
   };
@@ -43,7 +54,7 @@ export function ReadinessRadarChart({ readiness }: Props) {
   const seriesColor = BAND_STYLES[band].pip;
 
   const chartConfig: ChartConfig = {
-    score: { label: "Score", color: seriesColor },
+    score: { label: 'Score', color: seriesColor },
   };
 
   return (
@@ -77,7 +88,7 @@ export function ReadinessRadarChart({ readiness }: Props) {
           strokeWidth={2}
           fill="var(--color-score)"
           fillOpacity={0.18}
-          dot={{ r: 5, fill: "var(--color-score)", stroke: "var(--background)", strokeWidth: 2 }}
+          dot={{ r: 5, fill: 'var(--color-score)', stroke: 'var(--background)', strokeWidth: 2 }}
         />
       </RadarChart>
     </ChartContainer>

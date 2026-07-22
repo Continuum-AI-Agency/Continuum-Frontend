@@ -1,44 +1,44 @@
-"use server";
+'use server';
 
-import { z } from "zod";
+import { z } from 'zod';
 
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import {
   computeInsightFingerprint,
+  type GeneratedCampaignInsight,
   primaryMetricFor,
   primaryStatusFor,
-  type GeneratedCampaignInsight,
-} from "@/lib/paid-media/insight-data-points";
+} from '@/lib/paid-media/insight-data-points';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const dataPointSchema = z.object({
   campaignId: z.string(),
   campaignName: z.string(),
-  metric: z.enum(["spend", "roas", "impressions", "clicks", "ctr", "cpc", "cpa", "pace"]),
+  metric: z.enum(['spend', 'roas', 'impressions', 'clicks', 'ctr', 'cpc', 'cpa', 'pace']),
   currentValue: z.number(),
   previousValue: z.number().optional(),
   deltaPct: z.number().optional(),
   percentileRank: z.number(),
-  direction: z.enum(["higher_is_better", "lower_is_better", "neutral"]),
-  status: z.enum(["strong", "watch", "risk", "unknown"]),
+  direction: z.enum(['higher_is_better', 'lower_is_better', 'neutral']),
+  status: z.enum(['strong', 'watch', 'risk', 'unknown']),
   evidenceWindow: z.string(),
 });
 
 const insightSchema = z.object({
   id: z.string(),
-  scope: z.enum(["account", "campaign", "index"]),
-  severity: z.enum(["info", "opportunity", "warning", "critical"]),
+  scope: z.enum(['account', 'campaign', 'index']),
+  severity: z.enum(['info', 'opportunity', 'warning', 'critical']),
   title: z.string(),
   summary: z.string(),
   recommendation: z.string().optional(),
   evidence: z.array(dataPointSchema).min(1),
-  source: z.enum(["matrix", "budget_pacing", "timeline", "action_logs"]),
+  source: z.enum(['matrix', 'budget_pacing', 'timeline', 'action_logs']),
 });
 
 const inputSchema = z.object({
   brandId: z.uuid(),
   adAccountId: z.string().min(1),
-  platform: z.string().default("meta"),
+  platform: z.string().default('meta'),
   rangePreset: z.string().min(1),
   rangeSince: z.string().optional(),
   rangeUntil: z.string().optional(),
@@ -53,38 +53,46 @@ export type PersistCampaignInsightsResult =
   | { ok: false; error: string };
 
 export async function persistCampaignInsightsSnapshot(
-  input: PersistCampaignInsightsInput
+  input: PersistCampaignInsightsInput,
 ): Promise<PersistCampaignInsightsResult> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: `Invalid input: ${parsed.error.message}` };
   }
-  const { brandId, adAccountId, platform, rangePreset, rangeSince, rangeUntil, peerSetSize, insights } =
-    parsed.data;
+  const {
+    brandId,
+    adAccountId,
+    platform,
+    rangePreset,
+    rangeSince,
+    rangeUntil,
+    peerSetSize,
+    insights,
+  } = parsed.data;
 
   if (insights.length === 0) {
-    return { ok: false, error: "No insights to persist." };
+    return { ok: false, error: 'No insights to persist.' };
   }
 
   const ctx = await getActiveBrandContext();
   if (!ctx.user) {
-    return { ok: false, error: "Not authenticated." };
+    return { ok: false, error: 'Not authenticated.' };
   }
 
   const hasAccess = ctx.permissions.some((p) => p.brand_profile_id === brandId);
   if (!hasAccess) {
-    return { ok: false, error: "No access to brand." };
+    return { ok: false, error: 'No access to brand.' };
   }
 
   const supabase = await createSupabaseServerClient();
 
   const { data: snapshot, error: snapshotError } = await supabase
-    .schema("brand_profiles")
-    .from("media_insight_snapshots")
+    .schema('brand_profiles')
+    .from('media_insight_snapshots')
     .insert({
       brand_id: brandId,
       account_id: adAccountId,
-      channel: "paid",
+      channel: 'paid',
       platform,
       range_preset: rangePreset,
       range_since: rangeSince ?? null,
@@ -92,15 +100,15 @@ export async function persistCampaignInsightsSnapshot(
       peer_set_size: peerSetSize,
       insight_count: insights.length,
       computed_by: ctx.user.id,
-      source: "client",
+      source: 'client',
     })
-    .select("id")
+    .select('id')
     .single();
 
   if (snapshotError || !snapshot) {
     return {
       ok: false,
-      error: snapshotError?.message ?? "Failed to insert insight snapshot.",
+      error: snapshotError?.message ?? 'Failed to insert insight snapshot.',
     };
   }
 
@@ -109,17 +117,17 @@ export async function persistCampaignInsightsSnapshot(
   );
 
   const { error: insightsError } = await supabase
-    .schema("brand_profiles")
-    .from("media_insights")
+    .schema('brand_profiles')
+    .from('media_insights')
     .insert(rows);
 
   if (insightsError) {
     // Roll back the snapshot so we don't keep an empty parent row.
     await supabase
-      .schema("brand_profiles")
-      .from("media_insight_snapshots")
+      .schema('brand_profiles')
+      .from('media_insight_snapshots')
       .delete()
-      .eq("id", snapshot.id);
+      .eq('id', snapshot.id);
     return { ok: false, error: insightsError.message };
   }
 
@@ -131,14 +139,14 @@ function buildInsightRow(
   snapshotId: string,
   brandId: string,
   adAccountId: string,
-  platform: string
+  platform: string,
 ) {
   const primaryMetric = primaryMetricFor(insight);
   const status = primaryStatusFor(insight);
   const campaignId =
-    insight.scope === "campaign" ? insight.evidence[0]?.campaignId ?? null : null;
+    insight.scope === 'campaign' ? (insight.evidence[0]?.campaignId ?? null) : null;
   const campaignName =
-    insight.scope === "campaign" ? insight.evidence[0]?.campaignName ?? null : null;
+    insight.scope === 'campaign' ? (insight.evidence[0]?.campaignName ?? null) : null;
 
   // Fingerprint is also a generated column on the DB; we compute it here only
   // for callers that want it returned eagerly (e.g., streak lookups).
@@ -148,7 +156,7 @@ function buildInsightRow(
     snapshot_id: snapshotId,
     brand_id: brandId,
     account_id: adAccountId,
-    channel: "paid",
+    channel: 'paid',
     platform,
     entity_id: campaignId,
     entity_name: campaignName,

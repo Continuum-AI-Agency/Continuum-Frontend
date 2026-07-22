@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import type { OnboardingDocument } from "@/lib/onboarding/state";
-import { DocumentManager } from "@/components/documents";
+import { useRouter } from 'next/navigation';
+import { DocumentManager } from '@/components/documents';
+import type { OnboardingDocument } from '@/lib/onboarding/state';
 
 interface BrandDocumentsSectionProps {
   brandId: string;

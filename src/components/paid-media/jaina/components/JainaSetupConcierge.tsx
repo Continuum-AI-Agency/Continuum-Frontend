@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // Jaina Setup Concierge (FEAT-004) — GUIDED UI ONLY. When Jaina has no ad
 // account it can't run (the chat contract hard-requires adAccountId), so instead
@@ -7,17 +7,17 @@
 // checklist; it does NOT change the Jaina chat contract and never runs Jaina
 // without an ad account.
 
-import { RocketIcon } from "@radix-ui/react-icons";
+import { RocketIcon } from '@radix-ui/react-icons';
 
-import { PaidSetupDiagnostics } from "@/components/paid-media/PaidSetupDiagnostics";
-import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
+import { PaidSetupDiagnostics } from '@/components/paid-media/PaidSetupDiagnostics';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 
 type JainaSetupConciergeProps = {
   brandId: string;
   platform?: PaidMediaPlatform;
 };
 
-export function JainaSetupConcierge({ brandId, platform = "meta" }: JainaSetupConciergeProps) {
+export function JainaSetupConcierge({ brandId, platform = 'meta' }: JainaSetupConciergeProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center overflow-y-auto p-4">
       <div className="w-full max-w-xl space-y-4">

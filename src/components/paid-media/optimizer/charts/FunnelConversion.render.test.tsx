@@ -35,4 +35,19 @@ describe('FunnelConversion', () => {
     );
     expect(getByTestId('funnel').getAttribute('data-stages')).toBe('4');
   });
+
+  it('shows the step conversion % per downstream stage and names the terminal goal', () => {
+    const { container } = render(
+      <FunnelConversion
+        objective="lead"
+        window={{ impressions: 10_000, clicks: 1000, leads: 100 }}
+      />,
+    );
+    // Clicks 1000/10000 = 10%, Leads 100/1000 = 10%.
+    expect(container.textContent).toContain('Clicks 10%');
+    expect(container.textContent).toContain('Leads 10%');
+    // Heat legend + terminal-stage caption via metric.resultLabel.
+    expect(container.textContent).toContain('drop-off');
+    expect(container.textContent).toContain('goal: leads');
+  });
 });

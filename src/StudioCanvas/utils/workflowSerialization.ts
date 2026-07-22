@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react';
-import type { StudioNode, StudioNodeData } from '../types';
 import type { EdgeType } from '../stores/useStudioStore';
+import type { StudioNode, StudioNodeData } from '../types';
 
 export type WorkflowSnapshot = {
   nodes: StudioNode[];
@@ -34,7 +34,11 @@ function isEncodedPayload(value: string): boolean {
   return base64LikePattern.test(trimmed);
 }
 
-function stripEncodedString(value: unknown, path: string, droppedPaths: string[]): string | undefined {
+function stripEncodedString(
+  value: unknown,
+  path: string,
+  droppedPaths: string[],
+): string | undefined {
   if (typeof value !== 'string') return undefined;
   if (isEncodedPayload(value)) {
     droppedPaths.push(`${path} (${value.length}b)`);
@@ -43,11 +47,7 @@ function stripEncodedString(value: unknown, path: string, droppedPaths: string[]
   return value;
 }
 
-function deepStripEncoded(
-  value: unknown,
-  path: string,
-  droppedPaths: string[]
-): unknown {
+function deepStripEncoded(value: unknown, path: string, droppedPaths: string[]): unknown {
   if (typeof value === 'string') {
     if (isEncodedPayload(value)) {
       droppedPaths.push(`${path} (${value.length}b)`);
@@ -87,7 +87,7 @@ const expiringOutputKeys = [
 
 function stripRuntimeNodeData(
   data: StudioNodeData,
-  options: SerializeWorkflowSnapshotOptions = {}
+  options: SerializeWorkflowSnapshotOptions = {},
 ): StudioNodeData {
   const mode: SerializeMode = options.mode ?? 'persist';
   const next = { ...data } as Record<string, unknown>;
@@ -124,7 +124,11 @@ function stripRuntimeNodeData(
       .map((frame, index) => {
         if (!frame || typeof frame !== 'object') return null;
         const record = frame as Record<string, unknown>;
-        const sanitizedSrc = stripEncodedString(record.src, `frameList[${index}].src`, droppedPaths);
+        const sanitizedSrc = stripEncodedString(
+          record.src,
+          `frameList[${index}].src`,
+          droppedPaths,
+        );
         const nextFrame: Record<string, unknown> = { ...record };
         if (sanitizedSrc === undefined && typeof record.src === 'string') {
           delete nextFrame.src;
@@ -141,7 +145,11 @@ function stripRuntimeNodeData(
       .map((doc, index) => {
         if (!doc || typeof doc !== 'object') return null;
         const record = doc as Record<string, unknown>;
-        const sanitizedContent = stripEncodedString(record.content, `documents[${index}].content`, droppedPaths);
+        const sanitizedContent = stripEncodedString(
+          record.content,
+          `documents[${index}].content`,
+          droppedPaths,
+        );
         return {
           ...record,
           content: sanitizedContent ?? (typeof record.content === 'string' ? '' : ''),
@@ -173,7 +181,10 @@ function stripRuntimeNodeData(
   return next as StudioNodeData;
 }
 
-function sanitizeNode(node: StudioNode, options: SerializeWorkflowSnapshotOptions = {}): StudioNode {
+function sanitizeNode(
+  node: StudioNode,
+  options: SerializeWorkflowSnapshotOptions = {},
+): StudioNode {
   const width = node.width ?? node.measured?.width;
   const height = node.height ?? node.measured?.height;
 
@@ -198,8 +209,10 @@ function inferDataType(handleId?: string | null): string {
 }
 
 function sanitizeEdge(edge: Edge, defaultEdgeType: EdgeType): Edge {
-  const rawData = edge.data && typeof edge.data === 'object' ? (edge.data as Record<string, unknown>) : {};
-  const dataType = typeof rawData.dataType === 'string' ? rawData.dataType : inferDataType(edge.sourceHandle);
+  const rawData =
+    edge.data && typeof edge.data === 'object' ? (edge.data as Record<string, unknown>) : {};
+  const dataType =
+    typeof rawData.dataType === 'string' ? rawData.dataType : inferDataType(edge.sourceHandle);
   const pathType = typeof rawData.pathType === 'string' ? rawData.pathType : defaultEdgeType;
 
   return {

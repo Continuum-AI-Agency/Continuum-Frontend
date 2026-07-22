@@ -1,33 +1,33 @@
-import { expect, test } from "bun:test";
+import { expect, test } from 'bun:test';
 
-import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
+import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors';
 
-test("getFunctionsInvokeErrorMessage returns message from error body", async () => {
+test('getFunctionsInvokeErrorMessage returns message from error body', async () => {
   const error = {
-    message: "Function failed",
+    message: 'Function failed',
     context: {
-      body: JSON.stringify({ error: "Invite expired" }),
+      body: JSON.stringify({ error: 'Invite expired' }),
     },
   };
 
   const result = await getFunctionsInvokeErrorMessage(error);
-  expect(result).toBe("Invite expired");
+  expect(result).toBe('Invite expired');
 });
 
-test("getFunctionsInvokeErrorMessage returns message when body is plain text", async () => {
+test('getFunctionsInvokeErrorMessage returns message when body is plain text', async () => {
   const error = {
-    message: "Function failed",
+    message: 'Function failed',
     context: {
-      body: "Request rejected",
+      body: 'Request rejected',
     },
   };
 
   const result = await getFunctionsInvokeErrorMessage(error);
-  expect(result).toBe("Request rejected");
+  expect(result).toBe('Request rejected');
 });
 
-test("getFunctionsInvokeErrorMessage falls back to error message", async () => {
-  const error = { message: "Function failed" };
+test('getFunctionsInvokeErrorMessage falls back to error message', async () => {
+  const error = { message: 'Function failed' };
   const result = await getFunctionsInvokeErrorMessage(error);
-  expect(result).toBe("Function failed");
+  expect(result).toBe('Function failed');
 });

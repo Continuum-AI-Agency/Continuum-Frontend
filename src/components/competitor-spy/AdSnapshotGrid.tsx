@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useAdTimeline } from "@/lib/api/competitorSpy";
-import { AdSnapshotCard } from "./AdSnapshotCard";
+import { useAdTimeline } from '@/lib/api/competitorSpy';
+import { AdSnapshotCard } from './AdSnapshotCard';
 
 export function AdSnapshotGrid({
   brandId,
@@ -13,7 +13,7 @@ export function AdSnapshotGrid({
 }: {
   brandId: string;
   competitorId?: string;
-  status?: "active" | "paused";
+  status?: 'active' | 'paused';
   q?: string;
   limit?: number;
   inspiration?: boolean;
@@ -39,11 +39,13 @@ export function AdSnapshotGrid({
     const searching = Boolean(q && q.trim());
     return (
       <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-10 text-center">
-        <p className="text-sm font-medium">{searching ? "No matching inspiration" : "No competitor ads yet"}</p>
+        <p className="text-sm font-medium">
+          {searching ? 'No matching inspiration' : 'No competitor ads yet'}
+        </p>
         <p className="text-xs text-muted-foreground">
           {searching
-            ? "Try a different keyword, or clear the search."
-            : "Tag competitors and run a sync to pull their Meta Ad Library creatives."}
+            ? 'Try a different keyword, or clear the search.'
+            : 'Tag competitors and run a sync to pull their Meta Ad Library creatives.'}
         </p>
       </div>
     );
@@ -52,7 +54,12 @@ export function AdSnapshotGrid({
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {items.map((entry) => (
-        <AdSnapshotCard key={entry.snapshotId} entry={entry} inspiration={inspiration} brandId={brandId} />
+        <AdSnapshotCard
+          key={entry.snapshotId}
+          entry={entry}
+          inspiration={inspiration}
+          brandId={brandId}
+        />
       ))}
     </div>
   );

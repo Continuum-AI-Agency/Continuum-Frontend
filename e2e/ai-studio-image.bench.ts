@@ -32,8 +32,8 @@
  *
  * Prerequisites:
  *   bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
- *   bun run dev:be                      # backend on :4000, with a real GEMINI_API_KEY
- * Run with: bun run ai-studio:image:bench          (add -- --full for the 2K/4K tiers)
+ *   cd Continuum-Backend && bun run ai-studio:image:bench:server
+ * Run with: bun run ai-studio:sniper:e2e:bench     (add -- --full for the full matrix)
  */
 
 import { coerceImageSize, createNodeData, IMAGE_SIZE_PIXELS } from '@continuum/contracts';
@@ -45,8 +45,9 @@ import { mintAccessTokenForEmail } from './support/auth';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const OWNER_EMAIL = process.env.BENCH_OWNER_EMAIL ?? 'local@continuum.test';
-const BRAND_ID = process.env.BENCH_BRAND_ID ?? '00000000-0000-0000-0000-0000000000b1';
+const BRAND_ID = process.env.BENCH_BRAND_ID ?? '00000000-0000-4000-8000-0000000000b2';
 const FULL = process.argv.includes('--full');
+const LATENCY = process.argv.includes('--latency');
 
 let failures = 0;
 const notes: string[] = [];
@@ -102,14 +103,25 @@ interface GenerationOutcome {
   error?: string;
   bytes?: Uint8Array;
   mimeType?: string;
+  timings?: {
+    headersMs: number;
+    durableMs?: number;
+    completeMs?: number;
+    totalMs: number;
+    downloadMs?: number;
+  };
+  wireBytes?: number;
+  assetId?: string;
 }
 
 async function generate(body: Record<string, unknown>, token: string): Promise<GenerationOutcome> {
+  const startedAt = performance.now();
   const res = await fetch(`${API}/ai-studio/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
+  const headersAt = performance.now();
 
   if (res.status !== 200 || !res.body) {
     return { status: res.status, error: (await res.text()).slice(0, 300) };
@@ -119,6 +131,10 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
   let base64: string | undefined;
   let mimeType: string | undefined;
   let streamError: string | undefined;
+  let durableAt: number | undefined;
+  let completeAt: number | undefined;
+  let assetId: string | undefined;
+  let wireBytes = 0;
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -127,6 +143,7 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    wireBytes += value.byteLength;
     buffer += decoder.decode(value, { stream: true });
 
     const chunks = buffer.split('\n\n');
@@ -139,9 +156,18 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
       const data = JSON.parse(raw) as Record<string, unknown>;
 
       if (event === 'image') {
-        if (typeof data.signed_url === 'string') signedUrl = data.signed_url;
-        if (typeof data.base64 === 'string') base64 = data.base64;
+        if (typeof data.signed_url === 'string') {
+          signedUrl = data.signed_url;
+          durableAt ??= performance.now();
+        }
+        if (typeof data.base64 === 'string') {
+          base64 = data.base64;
+        }
         if (typeof data.mime_type === 'string') mimeType = data.mime_type;
+      }
+      if (event === 'complete') {
+        completeAt = performance.now();
+        if (typeof data.asset_id === 'string') assetId = data.asset_id;
       }
       if (event === 'error') streamError = String(data.message ?? 'unknown');
     }
@@ -149,13 +175,29 @@ async function generate(body: Record<string, unknown>, token: string): Promise<G
 
   if (streamError) return { status: 200, error: streamError };
 
+  const timingBase = {
+    headersMs: headersAt - startedAt,
+    durableMs: durableAt ? durableAt - startedAt : undefined,
+    completeMs: completeAt ? completeAt - startedAt : undefined,
+    totalMs: performance.now() - startedAt,
+  };
   if (base64) {
-    return { status: 200, bytes: Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)), mimeType };
+    return { status: 200, error: 'successful stream leaked inline base64 instead of URL only' };
   }
+
+  // Download the durable object separately for the final pixel-integrity check.
   if (signedUrl) {
+    const downloadStartedAt = performance.now();
     const image = await fetch(signedUrl);
     if (!image.ok) return { status: 200, error: `signed url ${image.status}` };
-    return { status: 200, bytes: new Uint8Array(await image.arrayBuffer()), mimeType };
+    return {
+      status: 200,
+      bytes: new Uint8Array(await image.arrayBuffer()),
+      mimeType,
+      timings: { ...timingBase, downloadMs: performance.now() - downloadStartedAt },
+      wireBytes,
+      assetId,
+    };
   }
   return { status: 200, error: 'stream carried no image' };
 }
@@ -233,6 +275,24 @@ async function runCase(
     `sent image_size=${body.image_size ?? '(none)'} aspect=${body.aspect_ratio} → ${dims.width}x${dims.height} ` +
       `(${(tierPixels / 1).toFixed(0)}px tier, expected ~${expected}; ratio ${renderedRatio.toFixed(2)} vs ${requestedRatio.toFixed(2)})`,
   );
+  const timings = outcome.timings;
+  if (timings) {
+    console.log(
+      `         headers=${timings.headersMs.toFixed(0)}ms durable=${timings.durableMs?.toFixed(0) ?? '-'}ms ` +
+        `complete=${timings.completeMs?.toFixed(0) ?? '-'}ms total=${timings.totalMs.toFixed(0)}ms ` +
+        `download=${timings.downloadMs?.toFixed(0) ?? '-'}ms wire=${outcome.wireBytes ?? 0}B`,
+    );
+  }
+  check(
+    `${label}: response stream stays URL-only`,
+    (outcome.wireBytes ?? Number.POSITIVE_INFINITY) < 128_000,
+    `wire=${outcome.wireBytes ?? 0}B`,
+  );
+  check(
+    `${label}: backend registered one durable asset`,
+    Boolean(outcome.assetId),
+    outcome.assetId,
+  );
 }
 
 async function main(): Promise<void> {
@@ -248,15 +308,17 @@ async function main(): Promise<void> {
 
   // gemini-2.5-flash-image takes no size parameter at all: it always renders 1024px.
   // The node no longer offers a size for it, and no longer implies one.
-  await runCase(
-    'nano-banana (no size) 16:9',
-    genNode({
-      model: 'nano-banana',
-      positivePrompt: 'a red sneaker on wet concrete',
-      aspectRatio: '16:9',
-    }),
-    token,
-  );
+  if (FULL) {
+    await runCase(
+      'nano-banana (no size) 16:9',
+      genNode({
+        model: 'nano-banana',
+        positivePrompt: 'a red sneaker on wet concrete',
+        aspectRatio: '16:9',
+      }),
+      token,
+    );
+  }
 
   await runCase(
     'nano-banana-2 @ 512px 1:1',
@@ -269,29 +331,42 @@ async function main(): Promise<void> {
     token,
   );
 
-  await runCase(
-    'nano-banana-2 @ 1K 9:16',
-    genNode({
-      model: 'nano-banana-2',
-      imageSize: '1K',
-      positivePrompt: 'a red sneaker on wet concrete',
-      aspectRatio: '9:16',
-    }),
-    token,
-  );
-
-  await runCase(
-    'nano-banana-pro @ 1K 16:9',
-    genNode({
-      model: 'nano-banana-pro',
-      imageSize: '1K',
-      positivePrompt: 'a red sneaker on wet concrete',
-      aspectRatio: '16:9',
-    }),
-    token,
-  );
+  if (LATENCY) {
+    for (let run = 2; run <= 3; run += 1) {
+      await runCase(
+        `nano-banana-2 @ 512px latency run ${run}/3`,
+        genNode({
+          model: 'nano-banana-2',
+          imageSize: '512px',
+          positivePrompt: 'a red sneaker on wet concrete',
+          aspectRatio: '1:1',
+        }),
+        token,
+      );
+    }
+  }
 
   if (FULL) {
+    await runCase(
+      'nano-banana-2 @ 1K 9:16',
+      genNode({
+        model: 'nano-banana-2',
+        imageSize: '1K',
+        positivePrompt: 'a red sneaker on wet concrete',
+        aspectRatio: '9:16',
+      }),
+      token,
+    );
+    await runCase(
+      'nano-banana-pro @ 1K 16:9',
+      genNode({
+        model: 'nano-banana-pro',
+        imageSize: '1K',
+        positivePrompt: 'a red sneaker on wet concrete',
+        aspectRatio: '16:9',
+      }),
+      token,
+    );
     await runCase(
       'nano-banana-2 @ 2K 1:1',
       genNode({
@@ -313,7 +388,7 @@ async function main(): Promise<void> {
       token,
     );
   } else {
-    skip('2K / 4K tiers', 'slow + costly; run with -- --full');
+    skip('full model/size matrix', 'slow + costly; run with -- --full');
   }
 
   console.log('');
@@ -338,7 +413,11 @@ async function main(): Promise<void> {
     payloadFor(agentNode).image_size === '1K',
     `image_size=${payloadFor(agentNode).image_size}`,
   );
-  await runCase('agent-authored node generates (was: 400 on every run)', agentNode, token);
+  if (FULL) {
+    await runCase('agent-authored node generates (was: 400 on every run)', agentNode, token);
+  } else {
+    skip('agent-authored node paid generation', 'payload legality is checked above; use -- --full');
+  }
 
   console.log('');
   console.log('negative prompt — wired from a text node into the `negative` handle');
@@ -369,10 +448,14 @@ async function main(): Promise<void> {
     negPayload.negative_prompt === 'text, watermarks, logos, hands',
     `negative_prompt=${negPayload.negative_prompt ?? '(absent)'}`,
   );
-  await runCase('generation with a negative prompt returns an image', negNode, token, {
-    nodes: [avoid],
-    edges: [negativeEdge],
-  });
+  if (FULL) {
+    await runCase('generation with a negative prompt returns an image', negNode, token, {
+      nodes: [avoid],
+      edges: [negativeEdge],
+    });
+  } else {
+    skip('negative-prompt paid generation', 'wire contract is checked above; use -- --full');
+  }
 
   note(
     'NOT covered by this run: the exact bytes of the Vertex request body. That the negative ' +
@@ -387,7 +470,7 @@ async function main(): Promise<void> {
   console.log('');
   console.log(
     failures === 0
-      ? `PASS — ai-studio:image: every model x size generated, at the size it claimed.`
+      ? `PASS — ai-studio:image sniper path generated, persisted, returned URL-only, and registered.`
       : `FAIL — ai-studio:image: ${failures} check(s) failed.`,
   );
   process.exit(failures === 0 ? 0 : 1);

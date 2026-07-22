@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import type { AgentPreviewBuckets } from "@/components/onboarding/v2/state/agentPreview";
-import type { ScrapeResult } from "@/lib/onboarding/scrape";
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import type { AgentPreviewBuckets } from '@/components/onboarding/v2/state/agentPreview';
+import type { ScrapeResult } from '@/lib/onboarding/scrape';
 
 export const REVEAL_PROMPT_VERSION = 3;
 
@@ -27,7 +27,12 @@ type RevealCacheActions = {
   write: (
     brandId: string,
     websiteUrl: string,
-    entry: { buckets: AgentPreviewBuckets; scrape: ScrapeResult | null; runId?: string | null; inputHash?: string | null }
+    entry: {
+      buckets: AgentPreviewBuckets;
+      scrape: ScrapeResult | null;
+      runId?: string | null;
+      inputHash?: string | null;
+    },
   ) => void;
   invalidateBrand: (brandId: string) => void;
   invalidateUrl: (brandId: string, websiteUrl: string) => void;
@@ -40,10 +45,10 @@ export function makeRevealCacheKey(brandId: string, websiteUrl: string): string 
 
 function normalizeUrl(input: string): string {
   const trimmed = input.trim().toLowerCase();
-  if (!trimmed) return "";
+  if (!trimmed) return '';
   try {
     const url = new URL(/^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`);
-    return `${url.hostname}${url.pathname.replace(/\/$/, "")}`;
+    return `${url.hostname}${url.pathname.replace(/\/$/, '')}`;
   } catch {
     return trimmed;
   }
@@ -105,13 +110,13 @@ export const useBrandProfileRevealCache = create<RevealCacheState & RevealCacheA
       clear: () => set({ entries: {} }),
     }),
     {
-      name: "continuum:onboarding:reveal-cache:v1",
+      name: 'continuum:onboarding:reveal-cache:v1',
       storage: createJSONStorage(() =>
-        typeof window === "undefined" ? noopStorage : window.sessionStorage
+        typeof window === 'undefined' ? noopStorage : window.sessionStorage,
       ),
       partialize: (state) => ({ entries: state.entries }),
-    }
-  )
+    },
+  ),
 );
 
 const noopStorage: Storage = {

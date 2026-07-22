@@ -1,12 +1,13 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import OnboardingLoading from "@/components/loader-animations/OnboardingLoading";
-import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import OnboardingLoading from '@/components/loader-animations/OnboardingLoading';
 import {
   DASHBOARD_LOADER_TOTAL_DURATION_MS,
   getDashboardLoaderCycleDurationMs,
-} from "@/lib/ui/dashboardLoaderTiming";
+} from '@/lib/ui/dashboardLoaderTiming';
+import { DEFAULT_LOADING_PHRASES } from '@/lib/ui/loadingPhrases';
 
 const LOADER_PHRASES = DEFAULT_LOADING_PHRASES;
 const LOADER_CYCLE_DURATION_MS = getDashboardLoaderCycleDurationMs(LOADER_PHRASES.length);
@@ -18,12 +19,12 @@ const DashboardLoader: React.FC = () => {
 
   useEffect(() => {
     // Check if coming from onboarding
-    const fromOnboarding = sessionStorage.getItem("from_onboarding");
+    const fromOnboarding = sessionStorage.getItem('from_onboarding');
     if (!fromOnboarding) {
       return;
     }
 
-    sessionStorage.removeItem("from_onboarding");
+    sessionStorage.removeItem('from_onboarding');
     setShouldRender(true);
     setIsVisible(true);
 

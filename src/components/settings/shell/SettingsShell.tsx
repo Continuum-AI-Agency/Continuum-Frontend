@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import * as Tabs from "@radix-ui/react-tabs";
-import { Menu } from "lucide-react";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { resolveSection, type SectionKey } from "./sections";
-import { SettingsNav } from "./SettingsNav";
-import { SwitchingIndicator } from "./SwitchingIndicator";
+import * as Tabs from '@radix-ui/react-tabs';
+import { Menu } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SettingsNav } from './SettingsNav';
+import { SwitchingIndicator } from './SwitchingIndicator';
+import { resolveSection, type SectionKey } from './sections';
 
 type SettingsShellProps = {
   activeSection: SectionKey;
@@ -39,16 +39,16 @@ export function SettingsShell({
       if (next === section) return;
       setSection(next);
       setMobileOpen(false);
-      const search = new URLSearchParams(params?.toString() ?? "");
-      if (next === "general") {
-        search.delete("section");
+      const search = new URLSearchParams(params?.toString() ?? '');
+      if (next === 'general') {
+        search.delete('section');
       } else {
-        search.set("section", next);
+        search.set('section', next);
       }
       const qs = search.toString();
       router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false });
     },
-    [params, router, section]
+    [params, router, section],
   );
 
   return (
@@ -68,7 +68,10 @@ export function SettingsShell({
                 Sections
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[min(var(--shell-secondary-w),calc(100vw-1rem))] px-3 py-6">
+            <SheetContent
+              side="left"
+              className="w-[min(var(--shell-secondary-w),calc(100vw-1rem))] px-3 py-6"
+            >
               <SheetTitle className="sr-only">Settings sections</SheetTitle>
               <SettingsNav brandPill={brandPill} accountPill={accountPill} />
             </SheetContent>

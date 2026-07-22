@@ -21,7 +21,16 @@ export const PORT_COLORS: Record<PortType, string> = {
   provider: '#f59e0b',
 };
 
-export type TargetHandleId = 'prompt' | 'negative' | 'ref' | 'firstFrame' | 'lastFrame' | 'referenceVideo' | 'aspect' | 'provider' | 'input';
+export type TargetHandleId =
+  | 'prompt'
+  | 'negative'
+  | 'ref'
+  | 'firstFrame'
+  | 'lastFrame'
+  | 'referenceVideo'
+  | 'aspect'
+  | 'provider'
+  | 'input';
 
 export const HANDLE_ID_TO_PORT_TYPE: Record<TargetHandleId, PortType> = {
   prompt: 'text',
@@ -52,23 +61,27 @@ export function getTargetPortType(handleId: string | undefined): PortType | unde
   return HANDLE_ID_TO_PORT_TYPE[handleId as TargetHandleId];
 }
 
-export function arePortsCompatible(sourceType: PortType, targetHandleId: string | undefined): boolean {
+export function arePortsCompatible(
+  sourceType: PortType,
+  targetHandleId: string | undefined,
+): boolean {
   if (!targetHandleId) return false;
   const targetHandle = targetHandleId as TargetHandleId;
   const allowedTargets = PORT_COMPATIBILITY[sourceType] ?? [];
   return allowedTargets.includes(targetHandle);
 }
 
-import type { StudioNode, AttachmentNodeData, GeneratorNodeData } from './nodeTypes';
+import type { AttachmentNodeData, GeneratorNodeData, StudioNode } from './nodeTypes';
 
 export function getNodeOutputPortType(node: StudioNode): PortType | undefined {
   switch (node.type) {
     case 'prompt':
     case 'negative':
       return 'text';
-    case 'attachment':
+    case 'attachment': {
       const attData = node.data as AttachmentNodeData;
       return attData.mimeType?.startsWith('video/') ? 'video' : 'image';
+    }
     case 'model':
       return 'provider';
     case 'array':
@@ -81,9 +94,10 @@ export function getNodeOutputPortType(node: StudioNode): PortType | undefined {
       return 'text'; // LLM outputs generated text
     case 'composite':
       return 'image'; // Composite outputs combined image
-    case 'generator':
+    case 'generator': {
       const genData = node.data as GeneratorNodeData;
       return genData.outputType ?? 'image';
+    }
     default:
       return undefined;
   }

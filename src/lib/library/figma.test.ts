@@ -28,6 +28,8 @@ describe('Figma Library client', () => {
     expect(requestedUrl).toBe(
       'https://api.example.com/integrations/figma/projects?brandId=11111111-1111-4111-8111-111111111111&teamId=team+1',
     );
-    expect((requestedInit?.headers as Record<string, string>).Authorization).toBe('Bearer user-jwt');
+    expect((requestedInit?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer user-jwt',
+    );
   });
 });

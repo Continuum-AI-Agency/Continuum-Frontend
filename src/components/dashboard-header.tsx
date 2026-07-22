@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import React, { Suspense } from 'react';
+import { WhatsNewBell } from '@/components/changelog/WhatsNewBell';
 import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -53,6 +54,7 @@ function DashboardHeaderInner() {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        <WhatsNewBell />
         <NotificationsBell />
       </div>
     </header>

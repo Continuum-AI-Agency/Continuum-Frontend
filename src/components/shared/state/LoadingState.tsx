@@ -3,20 +3,20 @@
 // Renders shimmer Skeleton bars by default; pass children to shape the skeleton
 // to the real layout it stands in for.
 
-import type { ReactNode } from "react"
+import type { ReactNode } from 'react';
 
-import { Skeleton } from "@/components/ui/skeleton"
-import { cn } from "@/lib/utils"
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 type LoadingStateProps = {
-  label?: string
-  lines?: number
-  children?: ReactNode
-  className?: string
-}
+  label?: string;
+  lines?: number;
+  children?: ReactNode;
+  className?: string;
+};
 
 export function LoadingState({
-  label = "Loading",
+  label = 'Loading',
   lines = 3,
   children,
   className,
@@ -26,17 +26,14 @@ export function LoadingState({
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className={cn("w-full space-y-2", className)}
+      className={cn('w-full space-y-2', className)}
     >
       <span className="sr-only">{label}</span>
       {children !== undefined
         ? children
         : Array.from({ length: lines }, (_, index) => (
-            <Skeleton
-              key={index}
-              className={cn("h-4 w-full", index === lines - 1 && "w-2/3")}
-            />
+            <Skeleton key={index} className={cn('h-4 w-full', index === lines - 1 && 'w-2/3')} />
           ))}
     </div>
-  )
+  );
 }

@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useQuery } from '@tanstack/react-query';
 import {
   mapWorkflowLibraryRow,
-  workflowLibraryRowSchema,
   type WorkflowLibraryItem,
-} from "@/lib/schemas/workflowLibrary";
+  workflowLibraryRowSchema,
+} from '@/lib/schemas/workflowLibrary';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type WorkflowLibraryQueryResult = {
   data: unknown[] | null;
@@ -20,20 +20,20 @@ type WorkflowLibraryQuery = PromiseLike<WorkflowLibraryQueryResult> & {
 
 async function fetchGlobalWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
   const supabase = createSupabaseBrowserClient();
-  const brandSchema = supabase.schema("brand_profiles") as unknown as {
-    from: (table: "workflow_library") => {
+  const brandSchema = supabase.schema('brand_profiles') as unknown as {
+    from: (table: 'workflow_library') => {
       select: (columns: string) => WorkflowLibraryQuery;
     };
   };
   const { data, error } = await brandSchema
-    .from("workflow_library")
-    .select("id, name, description, content, tags, created_at, updated_at")
-    .eq("visibility", "global")
-    .order("name", { ascending: true });
+    .from('workflow_library')
+    .select('id, name, description, content, tags, created_at, updated_at')
+    .eq('visibility', 'global')
+    .order('name', { ascending: true });
 
-  if (error) throw new Error(error.message ?? "Failed to load workflow library");
+  if (error) throw new Error(error.message ?? 'Failed to load workflow library');
   return (data ?? []).map((row: unknown) =>
-    mapWorkflowLibraryRow(workflowLibraryRowSchema.parse(row))
+    mapWorkflowLibraryRow(workflowLibraryRowSchema.parse(row)),
   );
 }
 
@@ -43,7 +43,7 @@ async function fetchWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
 
 export function useWorkflowLibrary(options?: { enabled?: boolean }) {
   const query = useQuery({
-    queryKey: ["workflow-library", "global"],
+    queryKey: ['workflow-library', 'global'],
     queryFn: fetchWorkflowLibrary,
     enabled: options?.enabled ?? true,
     staleTime: 30 * 60 * 1000,

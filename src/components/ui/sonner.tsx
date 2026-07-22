@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 import {
   CircleCheckIcon,
@@ -6,16 +6,16 @@ import {
   Loader2Icon,
   OctagonXIcon,
   TriangleAlertIcon,
-} from "lucide-react"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { useTheme } from "@/components/theme-provider"
+} from 'lucide-react';
+import { Toaster as Sonner, type ToasterProps } from 'sonner';
+import { useTheme } from '@/components/theme-provider';
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { appearance } = useTheme()
+  const { appearance } = useTheme();
 
   return (
     <Sonner
-      theme={appearance as ToasterProps["theme"]}
+      theme={appearance as ToasterProps['theme']}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -26,15 +26,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          '--normal-bg': 'var(--popover)',
+          '--normal-text': 'var(--popover-foreground)',
+          '--normal-border': 'var(--border)',
+          '--border-radius': 'var(--radius)',
         } as React.CSSProperties
       }
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

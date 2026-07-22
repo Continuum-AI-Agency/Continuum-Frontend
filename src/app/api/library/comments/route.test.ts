@@ -181,7 +181,9 @@ describe('POST /api/library/comments — every comment is pinned to a version', 
     const db = seed({
       edgeEnsure: async (database) => {
         const headVersionId = 'b1c2d3e4-5f60-4789-8abc-1234567890de';
-        database.rows('media.asset_versions').push(versionRow({ id: headVersionId, version_number: 1 }));
+        database
+          .rows('media.asset_versions')
+          .push(versionRow({ id: headVersionId, version_number: 1 }));
         return { headVersionId, maxVersionNumber: 1 };
       },
     });

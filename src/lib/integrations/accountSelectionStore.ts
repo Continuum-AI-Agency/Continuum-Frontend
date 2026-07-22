@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 type State = {
   selections: Record<string, string>;
@@ -15,12 +15,11 @@ export const useAccountSelectionStore = create<State>()(
         set((s) => ({
           selections: { ...s.selections, [`${brandId}:${platform}`]: accountId },
         })),
-      getSelection: (brandId, platform) =>
-        get().selections[`${brandId}:${platform}`] ?? null,
+      getSelection: (brandId, platform) => get().selections[`${brandId}:${platform}`] ?? null,
     }),
     {
-      name: "continuum-account-selection",
+      name: 'continuum-account-selection',
       storage: createJSONStorage(() => localStorage),
-    }
-  )
+    },
+  ),
 );

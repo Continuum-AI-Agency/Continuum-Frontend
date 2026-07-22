@@ -9,7 +9,7 @@
 // there's no single wire schema to share. If Meta's task vocabulary changes,
 // update both.
 
-export type MetaAccountRole = "admin" | "advertiser" | "analyst" | "unknown";
+export type MetaAccountRole = 'admin' | 'advertiser' | 'analyst' | 'unknown';
 
 const ROLE_RANK: Record<MetaAccountRole, number> = {
   admin: 3,
@@ -22,16 +22,19 @@ export function deriveMetaAccountRole(rawPermissions: unknown): MetaAccountRole 
   const values = Array.isArray(rawPermissions)
     ? rawPermissions.map((value) => String(value).toUpperCase())
     : [];
-  if (values.some((value) => value === "ADMIN" || value === "MANAGE")) return "admin";
-  if (values.includes("ADVERTISE")) return "advertiser";
-  if (values.includes("ANALYZE")) return "analyst";
-  return "unknown";
+  if (values.some((value) => value === 'ADMIN' || value === 'MANAGE')) return 'admin';
+  if (values.includes('ADVERTISE')) return 'advertiser';
+  if (values.includes('ANALYZE')) return 'analyst';
+  return 'unknown';
 }
 
-export function isHigherPrivilegeRole(candidate: MetaAccountRole, current: MetaAccountRole): boolean {
+export function isHigherPrivilegeRole(
+  candidate: MetaAccountRole,
+  current: MetaAccountRole,
+): boolean {
   return ROLE_RANK[candidate] > ROLE_RANK[current];
 }
 
 export function isReadOnlyMetaRole(role: MetaAccountRole | null | undefined): boolean {
-  return role === "analyst";
+  return role === 'analyst';
 }

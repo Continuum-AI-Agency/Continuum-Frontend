@@ -4,12 +4,12 @@
 // keeps the user's media exactly as the backend discards any late generated
 // result, so clicking "Generate" can never clobber a creative the user assigned.
 
-import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
+import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 
 type UpdateDraft = (
   draftId: string,
   updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
-) => void
+) => void;
 
 export function patchUnlessUserSupplied(
   updateDraft: UpdateDraft,
@@ -17,6 +17,6 @@ export function patchUnlessUserSupplied(
   patch: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
 ): void {
   updateDraft(draftId, (draft) =>
-    draft.mediaSuggestion?.mediaStatus === "user_supplied" ? draft : patch(draft),
-  )
+    draft.mediaSuggestion?.mediaStatus === 'user_supplied' ? draft : patch(draft),
+  );
 }

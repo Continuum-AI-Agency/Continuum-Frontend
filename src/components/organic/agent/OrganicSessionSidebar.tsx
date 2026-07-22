@@ -3,6 +3,10 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AutomationsSidebarPanel } from '@/components/automations/AutomationsSidebarPanel';
+import {
+  CollapseConversationsButton,
+  CollapsedConversationsRail,
+} from '@/components/chat/collapsibleConversations';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -21,10 +25,15 @@ type OrganicSessionSidebarProps = {
   isLoading: boolean;
   isInteractionDisabled: boolean;
   brandId?: string | null;
+  isCollapsed?: boolean;
+  onToggleCollapsed?: () => void;
   onNewSession: () => void;
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
 };
+
+const SIDEBAR_BASE_CLASS =
+  '@container/agent-sidebar flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:border-b-0 md:border-r';
 
 function formatSessionTime(value: string | null): string {
   if (!value) return 'No activity';
@@ -44,6 +53,8 @@ export function OrganicSessionSidebar({
   isLoading,
   isInteractionDisabled,
   brandId,
+  isCollapsed = false,
+  onToggleCollapsed,
   onNewSession,
   onSelectSession,
   onDeleteSession,
@@ -52,43 +63,63 @@ export function OrganicSessionSidebar({
   const sessionTitles = useMemo(() => presentSessionTitles(sessions), [sessions]);
   const openAutomationBuilder = useAutomationSheetStore((state) => state.openBuilder);
 
+  if (isCollapsed && onToggleCollapsed) {
+    return (
+      <aside className={cn(SIDEBAR_BASE_CLASS, 'md:w-14')}>
+        <CollapsedConversationsRail
+          onExpand={onToggleCollapsed}
+          onNewSession={onNewSession}
+          isInteractionDisabled={isInteractionDisabled}
+        />
+      </aside>
+    );
+  }
+
   return (
-    <aside className="@container/agent-sidebar flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-[var(--shell-secondary-w)] md:max-w-[22rem] md:min-w-[var(--shell-secondary-w-min)] md:border-b-0 md:border-r">
+    <aside
+      className={cn(
+        SIDEBAR_BASE_CLASS,
+        'md:w-[var(--shell-secondary-w)] md:max-w-[22rem] md:min-w-[var(--shell-secondary-w-min)]',
+      )}
+    >
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-        <ToggleGroup
-          type="single"
-          value={mode}
-          onValueChange={(value) => value && setMode(value as SidebarMode)}
-          aria-label="Sidebar view"
-        >
-          <ToggleGroupItem value="chats" className="h-6 px-2 text-xs">
-            Chats
-          </ToggleGroupItem>
-          {AUTOMATIONS_AVAILABLE ? (
-            <ToggleGroupItem value="automations" className="h-6 px-2 text-xs">
-              Automations
+        <div className="flex items-center gap-1">
+          {onToggleCollapsed ? <CollapseConversationsButton onToggle={onToggleCollapsed} /> : null}
+          <ToggleGroup
+            type="single"
+            value={mode}
+            onValueChange={(value) => value && setMode(value as SidebarMode)}
+            aria-label="Sidebar view"
+          >
+            <ToggleGroupItem value="chats" className="h-6 px-2 text-xs">
+              Chats
             </ToggleGroupItem>
-          ) : (
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                {/* Disabled buttons swallow pointer events; the span carries the tooltip. */}
-                <TooltipTrigger asChild>
-                  <span className="cursor-not-allowed">
-                    <ToggleGroupItem
-                      value="automations"
-                      disabled
-                      aria-disabled="true"
-                      className="pointer-events-none h-6 px-2 text-xs"
-                    >
-                      Automations
-                    </ToggleGroupItem>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Coming soon</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </ToggleGroup>
+            {AUTOMATIONS_AVAILABLE ? (
+              <ToggleGroupItem value="automations" className="h-6 px-2 text-xs">
+                Automations
+              </ToggleGroupItem>
+            ) : (
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  {/* Disabled buttons swallow pointer events; the span carries the tooltip. */}
+                  <TooltipTrigger asChild>
+                    <span className="cursor-not-allowed">
+                      <ToggleGroupItem
+                        value="automations"
+                        disabled
+                        aria-disabled="true"
+                        className="pointer-events-none h-6 px-2 text-xs"
+                      >
+                        Automations
+                      </ToggleGroupItem>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Coming soon</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </ToggleGroup>
+        </div>
         {mode === 'chats' ? (
           <Button
             type="button"

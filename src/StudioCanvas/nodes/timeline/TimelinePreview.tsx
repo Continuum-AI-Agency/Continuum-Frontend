@@ -4,7 +4,7 @@ import { VideoIcon } from '@radix-ui/react-icons';
 import { Pause, Play } from 'lucide-react';
 import type React from 'react';
 import { Button } from '@/components/ui/button';
-import { resolveCaptionStyle, type CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { type CaptionStyle, resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import type { CaptionCue } from '../../utils/splice/captionCues';
 
@@ -139,7 +139,11 @@ export function TimelinePreview({
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
-              if (!onCaptionPositionChange || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              if (
+                !onCaptionPositionChange ||
+                !event.currentTarget.hasPointerCapture(event.pointerId)
+              )
+                return;
               const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
               if (!bounds) return;
               onCaptionPositionChange({

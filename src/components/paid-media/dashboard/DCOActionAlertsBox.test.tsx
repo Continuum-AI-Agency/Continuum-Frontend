@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, render } from '@testing-library/react';
+import type { ReactNode } from 'react';
 
-import type { ActionLog } from "@/lib/types/dco";
-import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
+import type { ActionLog } from '@/lib/types/dco';
+import { DCOActionAlertsBox } from './DCOActionAlertsBox';
 
 const mockRefresh = mock();
 const mockSetFilters = mock();
@@ -12,17 +12,17 @@ const mockGoToPage = mock();
 
 const logs: ActionLog[] = [
   {
-    id: "log_1",
-    brandId: "brand_1",
-    metaAccountId: "act_1",
-    metaCampaignId: "cmp_1",
-    metaAdsetId: "adset_1",
-    metaAdId: "ad_1",
-    actionType: "ADJUST_BUDGET",
-    status: "SUCCESS",
-    scopeType: "CAMPAIGN",
-    scopeId: "cmp_1",
-    occurredAt: "2026-03-01T10:00:00.000Z",
+    id: 'log_1',
+    brandId: 'brand_1',
+    metaAccountId: 'act_1',
+    metaCampaignId: 'cmp_1',
+    metaAdsetId: 'adset_1',
+    metaAdId: 'ad_1',
+    actionType: 'ADJUST_BUDGET',
+    status: 'SUCCESS',
+    scopeType: 'CAMPAIGN',
+    scopeId: 'cmp_1',
+    occurredAt: '2026-03-01T10:00:00.000Z',
     actionPayload: {},
     paramsChanged: {},
     result: {},
@@ -30,24 +30,24 @@ const logs: ActionLog[] = [
     error: null,
   },
   {
-    id: "log_2",
-    brandId: "brand_1",
-    metaAccountId: "act_1",
-    metaCampaignId: "cmp_1",
-    metaAdsetId: "adset_2",
-    metaAdId: "ad_2",
-    actionType: "CREATIVE_SWITCH_EXTERNAL",
-    status: "EXECUTED",
-    scopeType: "AD",
-    scopeId: "ad_2",
-    occurredAt: "2026-03-01T12:00:00.000Z",
+    id: 'log_2',
+    brandId: 'brand_1',
+    metaAccountId: 'act_1',
+    metaCampaignId: 'cmp_1',
+    metaAdsetId: 'adset_2',
+    metaAdId: 'ad_2',
+    actionType: 'CREATIVE_SWITCH_EXTERNAL',
+    status: 'EXECUTED',
+    scopeType: 'AD',
+    scopeId: 'ad_2',
+    occurredAt: '2026-03-01T12:00:00.000Z',
     actionPayload: {
-      original_creative_url: "https://cdn.example.com/original.mp4",
-      new_creative_url: "https://cdn.example.com/new.mp4",
+      original_creative_url: 'https://cdn.example.com/original.mp4',
+      new_creative_url: 'https://cdn.example.com/new.mp4',
     },
     paramsChanged: {},
     result: {},
-    decisionNote: "Creative swap applied",
+    decisionNote: 'Creative swap applied',
     error: null,
   },
 ];
@@ -55,7 +55,7 @@ const logs: ActionLog[] = [
 let mockLogs: ActionLog[] = logs;
 let mockError: string | null = null;
 
-mock.module("@/hooks/useDCOActionLogs", () => ({
+mock.module('@/hooks/useDCOActionLogs', () => ({
   useDCOActionLogs: () => ({
     logs: mockLogs,
     isLoading: false,
@@ -69,7 +69,7 @@ mock.module("@/hooks/useDCOActionLogs", () => ({
       hasPrevPage: false,
     },
     filters: {},
-    sort: { sortBy: "occurred_at", sortOrder: "desc" },
+    sort: { sortBy: 'occurred_at', sortOrder: 'desc' },
     campaigns: [],
     adAccounts: [],
     isLoadingCampaigns: false,
@@ -81,7 +81,7 @@ mock.module("@/hooks/useDCOActionLogs", () => ({
   }),
 }));
 
-mock.module("@/components/ui/command", () => ({
+mock.module('@/components/ui/command', () => ({
   Command: ({ children, className }: { children: ReactNode; className?: string }) => (
     <div className={className}>{children}</div>
   ),
@@ -97,7 +97,7 @@ mock.module("@/components/ui/command", () => ({
   CommandSeparator: () => <hr />,
 }));
 
-mock.module("@/components/ui/select", () => ({
+mock.module('@/components/ui/select', () => ({
   Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectItem: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -105,7 +105,7 @@ mock.module("@/components/ui/select", () => ({
   SelectValue: () => <span />,
 }));
 
-describe("DCOActionAlertsBox", () => {
+describe('DCOActionAlertsBox', () => {
   beforeEach(() => {
     mockRefresh.mockClear();
     mockSetFilters.mockClear();
@@ -119,7 +119,7 @@ describe("DCOActionAlertsBox", () => {
     cleanup();
   });
 
-  it("refreshes alerts and notifies parent refresh listeners", () => {
+  it('refreshes alerts and notifies parent refresh listeners', () => {
     const onRefresh = mock();
 
     const { container } = render(
@@ -128,11 +128,11 @@ describe("DCOActionAlertsBox", () => {
         metaAccountId="act_1"
         campaignId="cmp_1"
         onRefresh={onRefresh}
-      />
+      />,
     );
 
-    const refreshButton = Array.from(container.getElementsByTagName("button")).find(
-      (button) => button.getAttribute("aria-label") === "Refresh alerts"
+    const refreshButton = Array.from(container.getElementsByTagName('button')).find(
+      (button) => button.getAttribute('aria-label') === 'Refresh alerts',
     );
     expect(refreshButton).toBeTruthy();
     fireEvent.click(refreshButton as HTMLButtonElement);
@@ -141,52 +141,46 @@ describe("DCOActionAlertsBox", () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("reveals the before/after creative comparison on hover for creative switch rows", () => {
+  it('reveals the before/after creative comparison on hover for creative switch rows', () => {
     const { container, getByText } = render(
-      <DCOActionAlertsBox
-        brandId="brand_1"
-        metaAccountId="act_1"
-        campaignId="cmp_1"
-      />
+      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />,
     );
 
-    expect(getByText("Hover to view creative comparison")).toBeTruthy();
+    expect(getByText('Hover to view creative comparison')).toBeTruthy();
 
-    const creativeRow = Array.from(container.getElementsByTagName("tr")).find((row) =>
-      row.textContent?.includes("CREATIVE_SWITCH_EXTERNAL")
+    const creativeRow = Array.from(container.getElementsByTagName('tr')).find((row) =>
+      row.textContent?.includes('CREATIVE_SWITCH_EXTERNAL'),
     );
     expect(creativeRow).toBeTruthy();
     fireEvent.mouseEnter(creativeRow as HTMLTableRowElement);
 
     expect(
-      container.querySelector('video[src="https://cdn.example.com/original.mp4"]')
+      container.querySelector('video[src="https://cdn.example.com/original.mp4"]'),
     ).toBeTruthy();
-    expect(
-      container.querySelector('video[src="https://cdn.example.com/new.mp4"]')
-    ).toBeTruthy();
+    expect(container.querySelector('video[src="https://cdn.example.com/new.mp4"]')).toBeTruthy();
   });
 
-  it("shows an error state with a retry that refreshes the alerts", () => {
-    mockError = "Meta API request failed";
+  it('shows an error state with a retry that refreshes the alerts', () => {
+    mockError = 'Meta API request failed';
 
     const { getByRole, getByText } = render(
-      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />
+      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />,
     );
 
-    expect(getByRole("alert")).toBeTruthy();
-    expect(getByText("Meta API request failed")).toBeTruthy();
+    expect(getByRole('alert')).toBeTruthy();
+    expect(getByText('Meta API request failed')).toBeTruthy();
 
-    fireEvent.click(getByRole("button", { name: /retry/i }));
+    fireEvent.click(getByRole('button', { name: /retry/i }));
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("shows an outcome-first empty state when there are no actions at all", () => {
+  it('shows an outcome-first empty state when there are no actions at all', () => {
     mockLogs = [];
 
     const { getByText } = render(
-      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />
+      <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />,
     );
 
-    expect(getByText("DCO actions will appear here")).toBeTruthy();
+    expect(getByText('DCO actions will appear here')).toBeTruthy();
   });
 });

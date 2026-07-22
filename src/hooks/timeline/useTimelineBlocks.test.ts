@@ -1,19 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { renderHook, waitFor } from '@testing-library/react';
 
-import { useTimelineBlocks } from "./useTimelineBlocks";
+import { useTimelineBlocks } from './useTimelineBlocks';
 
-const baseStart = "2026-03-01T00:00:00.000Z";
-const baseEnd = "2026-03-02T00:00:00.000Z";
+const baseStart = '2026-03-01T00:00:00.000Z';
+const baseEnd = '2026-03-02T00:00:00.000Z';
 
 function buildBlock(id: string, campaignId: string) {
   return {
     id,
-    brand_id: "brand-1",
-    account_id: "act_1",
+    brand_id: 'brand-1',
+    account_id: 'act_1',
     block_start: baseStart,
     block_end: baseEnd,
-    resolution: "daily",
+    resolution: 'daily',
     version: 1,
     built_at: baseEnd,
     summary: {},
@@ -27,11 +27,11 @@ function buildBlock(id: string, campaignId: string) {
     ],
     events: [],
     deltas: {},
-    content_hash: "",
+    content_hash: '',
   };
 }
 
-describe("useTimelineBlocks", () => {
+describe('useTimelineBlocks', () => {
   let originalFetch: typeof global.fetch;
   let originalConsoleError: typeof console.error;
   let originalConsoleWarn: typeof console.warn;
@@ -54,57 +54,64 @@ describe("useTimelineBlocks", () => {
     console.warn = originalConsoleWarn;
   });
 
-  it("keeps timeline data when non-primary resolution prefetch fails", async () => {
+  it('keeps timeline data when non-primary resolution prefetch fails', async () => {
     const fetchMock = mock((_input: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { resolution?: string };
-      if (body.resolution === "daily") {
+      if (body.resolution === 'daily') {
         return Promise.resolve(
-          new Response(JSON.stringify({ blocks: [buildBlock("block-primary", "campaign-primary")] }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          })
+          new Response(
+            JSON.stringify({ blocks: [buildBlock('block-primary', 'campaign-primary')] }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
         );
       }
 
-      return Promise.resolve(new Response("<html>upstream failure</html>", { status: 546 }));
+      return Promise.resolve(new Response('<html>upstream failure</html>', { status: 546 }));
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { result } = renderHook(() =>
       useTimelineBlocks({
-        brandId: "brand-success",
-        accountId: "act-success",
+        brandId: 'brand-success',
+        accountId: 'act-success',
         startDate: baseStart,
         endDate: baseEnd,
-        resolution: "daily",
-      })
+        resolution: 'daily',
+      }),
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    await waitFor(() => expect((global.fetch as unknown as ReturnType<typeof mock>).mock.calls.length).toBe(2));
+    await waitFor(() =>
+      expect((global.fetch as unknown as ReturnType<typeof mock>).mock.calls.length).toBe(2),
+    );
 
     expect(result.current.error).toBeNull();
     expect(result.current.blocks).toHaveLength(1);
-    expect(result.current.campaigns.map((campaign) => campaign.id)).toEqual(["campaign-primary"]);
+    expect(result.current.campaigns.map((campaign) => campaign.id)).toEqual(['campaign-primary']);
     expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
-    expect(consoleWarnSpy.mock.calls[0]?.[0]).toContain("Failed to prefetch hourly timeline blocks");
+    expect(consoleWarnSpy.mock.calls[0]?.[0]).toContain(
+      'Failed to prefetch hourly timeline blocks',
+    );
   });
 
-  it("sets error when primary resolution request fails", async () => {
+  it('sets error when primary resolution request fails', async () => {
     const fetchMock = mock(() =>
-      Promise.resolve(new Response("<html>upstream failure</html>", { status: 546 }))
+      Promise.resolve(new Response('<html>upstream failure</html>', { status: 546 })),
     );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { result } = renderHook(() =>
       useTimelineBlocks({
-        brandId: "brand-error",
-        accountId: "act-error",
+        brandId: 'brand-error',
+        accountId: 'act-error',
         startDate: baseStart,
         endDate: baseEnd,
-        resolution: "daily",
-      })
+        resolution: 'daily',
+      }),
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -112,7 +119,7 @@ describe("useTimelineBlocks", () => {
 
     expect(result.current.blocks).toHaveLength(0);
     expect(result.current.campaigns).toHaveLength(0);
-    expect(result.current.error?.message).toBe("Failed to fetch timeline blocks");
+    expect(result.current.error?.message).toBe('Failed to fetch timeline blocks');
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
   });
 });

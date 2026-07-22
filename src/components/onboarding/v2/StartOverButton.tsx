@@ -1,4 +1,4 @@
-import { Trash } from "@phosphor-icons/react";
+import { Trash } from '@phosphor-icons/react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,8 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 type StartOverButtonProps = {
   onConfirm: () => void;

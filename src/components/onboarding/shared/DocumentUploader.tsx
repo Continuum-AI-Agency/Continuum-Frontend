@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { DocumentManager } from "@/components/documents";
+import { DocumentManager } from '@/components/documents';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 
 export function DocumentUploader() {
   const { brandId, state, updateState } = useOnboarding();

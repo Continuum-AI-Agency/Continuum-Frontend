@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/types";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/supabase/types';
 
 // When onboarding metadata is empty, reuse an existing brand the user already
 // has ACCESS to — as owner OR as an invited member (admin/operator/viewer) —
@@ -16,36 +16,31 @@ type Client = SupabaseClient<Database>;
  * Every `brand_profiles.permissions` row for this user, regardless of role.
  * Returns null (not []) on a lookup error so callers can fail safe/closed.
  */
-async function listAccessibleBrandIds(
-  supabase: Client,
-  userId: string
-): Promise<string[] | null> {
+async function listAccessibleBrandIds(supabase: Client, userId: string): Promise<string[] | null> {
   const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .select("brand_profile_id")
-    .eq("user_id", userId);
+    .schema('brand_profiles')
+    .from('permissions')
+    .select('brand_profile_id')
+    .eq('user_id', userId);
   if (error) return null;
-  return ((data ?? []) as Array<{ brand_profile_id: string }>).map(
-    (p) => p.brand_profile_id
-  );
+  return ((data ?? []) as Array<{ brand_profile_id: string }>).map((p) => p.brand_profile_id);
 }
 
 export async function findReusableBrandId(
   supabase: Client,
-  userId: string
+  userId: string,
 ): Promise<string | null> {
   try {
     const ids = await listAccessibleBrandIds(supabase, userId);
     if (!ids || ids.length === 0) return null;
 
     const { data: brands, error: brandErr } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profiles")
-      .select("id, created_at")
-      .in("id", ids)
-      .eq("active", true)
-      .order("created_at", { ascending: true });
+      .schema('brand_profiles')
+      .from('brand_profiles')
+      .select('id, created_at')
+      .in('id', ids)
+      .eq('active', true)
+      .order('created_at', { ascending: true });
     if (brandErr) return null;
 
     const first = ((brands ?? []) as Array<{ id: string }>)[0];
@@ -69,20 +64,20 @@ export async function findReusableBrandId(
  */
 export async function findPendingInviteBrandId(
   supabase: Client,
-  email: string | null | undefined
+  email: string | null | undefined,
 ): Promise<string | null> {
   const normalized = email?.trim();
   if (!normalized) return null;
   try {
     const { data, error } = await supabase
-      .schema("brand_profiles")
-      .from("invites")
-      .select("brand_profile_id, created_at")
-      .ilike("email", normalized)
-      .is("accepted_at", null)
-      .is("revoked_at", null)
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: true })
+      .schema('brand_profiles')
+      .from('invites')
+      .select('brand_profile_id, created_at')
+      .ilike('email', normalized)
+      .is('accepted_at', null)
+      .is('revoked_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: true })
       .limit(1);
     if (error) return null;
     const first = ((data ?? []) as Array<{ brand_profile_id: string }>)[0];
@@ -105,9 +100,9 @@ function normalizeWebsiteUrl(url: string): string {
   return url
     .trim()
     .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/+$/, "");
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
 }
 
 /**
@@ -121,7 +116,7 @@ function normalizeWebsiteUrl(url: string): string {
 export async function findMatchingActiveBrandId(
   supabase: Client,
   userId: string,
-  candidate: BrandIdentityCandidate
+  candidate: BrandIdentityCandidate,
 ): Promise<string | null> {
   try {
     const normalizedName = normalizeBrandName(candidate.brandName);
@@ -134,11 +129,11 @@ export async function findMatchingActiveBrandId(
     if (!ids || ids.length === 0) return null;
 
     const { data: brands, error: brandErr } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profiles")
-      .select("id, brand_name, context")
-      .in("id", ids)
-      .eq("active", true);
+      .schema('brand_profiles')
+      .from('brand_profiles')
+      .select('id, brand_name, context')
+      .in('id', ids)
+      .eq('active', true);
     if (brandErr) return null;
 
     const match = (
@@ -150,16 +145,16 @@ export async function findMatchingActiveBrandId(
     ).find((brand) => {
       const nameMatches =
         normalizedName.length > 0 &&
-        typeof brand.brand_name === "string" &&
+        typeof brand.brand_name === 'string' &&
         normalizeBrandName(brand.brand_name) === normalizedName;
 
       const brandWebsite =
-        brand.context && typeof brand.context === "object"
+        brand.context && typeof brand.context === 'object'
           ? (brand.context as { website_url?: unknown }).website_url
           : null;
       const websiteMatches =
         normalizedWebsite !== null &&
-        typeof brandWebsite === "string" &&
+        typeof brandWebsite === 'string' &&
         normalizeWebsiteUrl(brandWebsite) === normalizedWebsite;
 
       return nameMatches || websiteMatches;

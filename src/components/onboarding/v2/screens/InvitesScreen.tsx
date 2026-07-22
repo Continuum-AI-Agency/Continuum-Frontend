@@ -1,7 +1,7 @@
-import { Users } from "@phosphor-icons/react";
+import { Users } from '@phosphor-icons/react';
 
-import { TeamInviteSection } from "../dna/TeamInviteSection";
-import { HelpPopover } from "../HelpPopover";
+import { TeamInviteSection } from '../dna/TeamInviteSection';
+import { HelpPopover } from '../HelpPopover';
 
 type InvitesScreenProps = {
   totalSteps: number;
@@ -24,23 +24,22 @@ export function InvitesScreen({ totalSteps }: InvitesScreenProps) {
               <p className="font-semibold text-foreground">Roles</p>
               <ul className="space-y-1.5 text-muted-foreground">
                 <li>
-                  <span className="font-medium text-foreground">Admin</span> —
-                  full access plus billing and team management.
+                  <span className="font-medium text-foreground">Admin</span> — full access plus
+                  billing and team management.
                 </li>
                 <li>
-                  <span className="font-medium text-foreground">Operator</span>{" "}
-                  — can plan, launch, and analyze campaigns.
+                  <span className="font-medium text-foreground">Operator</span> — can plan, launch,
+                  and analyze campaigns.
                 </li>
                 <li>
-                  <span className="font-medium text-foreground">Viewer</span> —
-                  read-only access to dashboards.
+                  <span className="font-medium text-foreground">Viewer</span> — read-only access to
+                  dashboards.
                 </li>
               </ul>
             </HelpPopover>
           </div>
           <p className="mx-auto mt-3 max-w-md text-[0.875rem] leading-relaxed text-muted-foreground">
-            Optional. Send magic-link invites now or add teammates from Settings
-            later.
+            Optional. Send magic-link invites now or add teammates from Settings later.
           </p>
         </div>
 

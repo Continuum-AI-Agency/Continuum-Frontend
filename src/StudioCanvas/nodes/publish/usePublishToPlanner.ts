@@ -80,7 +80,8 @@ export function usePublishToPlanner(nodeId: string): UsePublishToPlannerResult {
   const hasSource = useMemo(() => {
     const edge = edges.find(
       (candidate) =>
-        candidate.target === nodeId && (candidate.targetHandle ?? '') === PUBLISH_VIDEO_INPUT_HANDLE,
+        candidate.target === nodeId &&
+        (candidate.targetHandle ?? '') === PUBLISH_VIDEO_INPUT_HANDLE,
     );
     if (!edge) return false;
     const sourceNode = (nodes as StudioNode[]).find((candidate) => candidate.id === edge.source);

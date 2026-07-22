@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import * as THREE from "three";
+import * as React from 'react';
+import * as THREE from 'three';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
 type AnimatedShaderBackgroundProps = {
   className?: string;
@@ -28,7 +28,7 @@ export function AnimatedShaderBackground({
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
-      powerPreference: "high-performance",
+      powerPreference: 'high-performance',
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
@@ -46,7 +46,7 @@ export function AnimatedShaderBackground({
           gl_Position = vec4(position, 1.0);
         }
       `,
-       fragmentShader: `
+      fragmentShader: `
          uniform float iTime;
          uniform vec2 iResolution;
          uniform float iIntensity;
@@ -155,7 +155,7 @@ export function AnimatedShaderBackground({
     <div
       ref={containerRef}
       aria-hidden
-      className={cn("absolute inset-0 overflow-hidden", className)}
+      className={cn('absolute inset-0 overflow-hidden', className)}
     />
   );
 }

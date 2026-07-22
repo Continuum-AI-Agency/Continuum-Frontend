@@ -28,7 +28,11 @@ describe('workflowList', () => {
     ];
 
     const sorted = sortWorkflowsByRecency(workflows);
-    expect(sorted.map((workflow) => workflow.id)).toEqual(['wf-created-only', 'wf-newer', 'wf-older']);
+    expect(sorted.map((workflow) => workflow.id)).toEqual([
+      'wf-created-only',
+      'wf-newer',
+      'wf-older',
+    ]);
   });
 
   it('filters workflows by name and description', () => {
@@ -38,8 +42,16 @@ describe('workflowList', () => {
       buildWorkflow({ id: 'wf-3', name: 'Retargeting', description: 'Paid social setup' }),
     ];
 
-    expect(filterWorkflowsByQuery(workflows, 'planner').map((workflow) => workflow.id)).toEqual(['wf-2']);
-    expect(filterWorkflowsByQuery(workflows, 'hero').map((workflow) => workflow.id)).toEqual(['wf-1']);
-    expect(filterWorkflowsByQuery(workflows, '').map((workflow) => workflow.id)).toEqual(['wf-1', 'wf-2', 'wf-3']);
+    expect(filterWorkflowsByQuery(workflows, 'planner').map((workflow) => workflow.id)).toEqual([
+      'wf-2',
+    ]);
+    expect(filterWorkflowsByQuery(workflows, 'hero').map((workflow) => workflow.id)).toEqual([
+      'wf-1',
+    ]);
+    expect(filterWorkflowsByQuery(workflows, '').map((workflow) => workflow.id)).toEqual([
+      'wf-1',
+      'wf-2',
+      'wf-3',
+    ]);
   });
 });

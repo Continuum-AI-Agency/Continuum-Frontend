@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Button } from "@/components/ui/button";
-import type { JainaPlan } from "../types";
+import { AnimatePresence, motion } from 'motion/react';
+import * as React from 'react';
+import { Button } from '@/components/ui/button';
+import type { JainaPlan } from '../types';
 
 export type PlanFeedbackPayload =
-  | { type: "approve"; planId: string }
-  | { type: "abandon"; planId: string }
-  | { type: "refine"; planId: string; edits: string };
+  | { type: 'approve'; planId: string }
+  | { type: 'abandon'; planId: string }
+  | { type: 'refine'; planId: string; edits: string };
 
 type PlanSectionProps = {
   plan: JainaPlan;
@@ -18,14 +18,14 @@ type PlanSectionProps = {
 
 export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionProps) {
   const [refineOpen, setRefineOpen] = React.useState(false);
-  const [edits, setEdits] = React.useState("");
+  const [edits, setEdits] = React.useState('');
 
-  if (plan.status !== "awaiting_approval") return null;
+  if (plan.status !== 'awaiting_approval') return null;
 
   const handleRefineSubmit = () => {
     if (!edits.trim()) return;
-    onPlanFeedback?.({ type: "refine", planId: plan.id, edits: edits.trim() });
-    setEdits("");
+    onPlanFeedback?.({ type: 'refine', planId: plan.id, edits: edits.trim() });
+    setEdits('');
     setRefineOpen(false);
   };
 
@@ -53,14 +53,14 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
             size="sm"
             variant="secondary"
             disabled={isStreaming}
-            onClick={() => onPlanFeedback?.({ type: "abandon", planId: plan.id })}
+            onClick={() => onPlanFeedback?.({ type: 'abandon', planId: plan.id })}
           >
             Abandon
           </Button>
           <Button
             size="sm"
             disabled={isStreaming}
-            onClick={() => onPlanFeedback?.({ type: "approve", planId: plan.id })}
+            onClick={() => onPlanFeedback?.({ type: 'approve', planId: plan.id })}
           >
             Approve
           </Button>
@@ -71,7 +71,7 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
         {refineOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
+            animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
@@ -84,7 +84,7 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
                 value={edits}
                 onChange={(e) => setEdits(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRefineSubmit();
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleRefineSubmit();
                 }}
               />
               <div className="flex justify-end">

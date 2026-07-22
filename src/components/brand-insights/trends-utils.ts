@@ -1,4 +1,4 @@
-import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
+import type { BrandInsightsTrend } from '@/lib/schemas/brandInsights';
 
 type FilterOptions = {
   query?: string;
@@ -7,7 +7,7 @@ type FilterOptions = {
 };
 
 function normalizeFilterValue(value?: string): string {
-  return (value ?? "").trim().toLowerCase();
+  return (value ?? '').trim().toLowerCase();
 }
 
 export function getUniqueSources(trends: BrandInsightsTrend[]): string[] {
@@ -31,7 +31,8 @@ export function getUniqueSources(trends: BrandInsightsTrend[]): string[] {
 export function filterAndSortTrends(trends: BrandInsightsTrend[], options: FilterOptions) {
   const normalizedQuery = normalizeFilterValue(options.query);
   const normalizedSourceFilter = normalizeFilterValue(options.sourceFilter);
-  const shouldFilterBySource = normalizedSourceFilter.length > 0 && normalizedSourceFilter !== "all";
+  const shouldFilterBySource =
+    normalizedSourceFilter.length > 0 && normalizedSourceFilter !== 'all';
 
   return trends
     .filter((trend) => {
@@ -44,7 +45,7 @@ export function filterAndSortTrends(trends: BrandInsightsTrend[], options: Filte
     })
     .filter((trend) => {
       if (!shouldFilterBySource) return true;
-      return (trend.source ?? "").trim().toLowerCase() === normalizedSourceFilter;
+      return (trend.source ?? '').trim().toLowerCase() === normalizedSourceFilter;
     })
     .filter((trend) => (options.onlySelected ? trend.isSelected : true))
     .sort((a, b) => {

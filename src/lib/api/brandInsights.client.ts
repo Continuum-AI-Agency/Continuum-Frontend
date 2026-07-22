@@ -3,7 +3,9 @@
 import {
   currentWeekStartUtc,
   parseFrame,
+  type TrendsInsightReadyPayload,
   type TrendsReadFrame,
+  trendsInsightReadyPayloadSchema,
   trendsReadFrameSchema,
   trendsSseMessageDataSchema,
   trendsSseSnapshotDataSchema,
@@ -212,6 +214,12 @@ type BrandInsightsJobTrackerOptions = {
   maxReconnectAttempts?: number;
   onStatus: (status: BrandInsightsStatusResponse) => void;
   onMessage?: (message: BrandInsightsStatusMessage) => void;
+  /**
+   * A lane's synthesized items streamed the moment it settles (~a lane before
+   * completion). Provisional preview — the authoritative persisted set arrives
+   * via the post-completion read stream.
+   */
+  onInsightPreview?: (preview: TrendsInsightReadyPayload) => void;
   onError?: (error: Error) => void;
 };
 
@@ -341,11 +349,24 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
         return;
       }
 
+      if (typeof validated.data.message_id === 'number') {
+        lastMessageId = validated.data.message_id;
+      }
+
+      // Progressive preview: surface a lane's provisional items and keep streaming
+      // (this is not a status transition, so it never reaches onMessage).
+      if (validated.data.event_type === 'insight_ready') {
+        const preview = trendsInsightReadyPayloadSchema.safeParse(validated.data.payload);
+        if (preview.success) {
+          options.onInsightPreview?.(preview.data);
+        } else {
+          warnContractDrift('insight_ready', preview.error.issues);
+        }
+        return;
+      }
+
       try {
         const message = mapBackendStatusMessage(validated.data);
-        if (typeof message.messageId === 'number') {
-          lastMessageId = message.messageId;
-        }
         options.onMessage?.(message);
       } catch {
         // Mapping failed on an otherwise valid frame; skip and keep streaming.

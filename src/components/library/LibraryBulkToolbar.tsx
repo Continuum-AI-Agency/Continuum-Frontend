@@ -47,7 +47,11 @@ export function LibraryBulkToolbar({
   const client = () => createSupabaseBrowserClient();
   const selectedField = customFields.find((field) => field.id === fieldId) ?? null;
   const fieldPayload: CustomFieldValue =
-    selectedField?.type === 'multi_select' ? (fieldValue ? [fieldValue] : null) : fieldValue || null;
+    selectedField?.type === 'multi_select'
+      ? fieldValue
+        ? [fieldValue]
+        : null
+      : fieldValue || null;
 
   async function run(label: string, operation: () => Promise<unknown>) {
     setBusy(label);
@@ -153,7 +157,11 @@ export function LibraryBulkToolbar({
       <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
         <Workflow className="size-3.5 text-muted-foreground" aria-hidden />
         <Select value={reviewStatus} onValueChange={setReviewStatus}>
-          <SelectTrigger size="sm" className="h-7 w-32 border-0 shadow-none" aria-label="Review status">
+          <SelectTrigger
+            size="sm"
+            className="h-7 w-32 border-0 shadow-none"
+            aria-label="Review status"
+          >
             <SelectValue placeholder="Review status" />
           </SelectTrigger>
           <SelectContent>
@@ -192,7 +200,11 @@ export function LibraryBulkToolbar({
               setFieldValue('');
             }}
           >
-            <SelectTrigger size="sm" className="h-7 w-28 border-0 shadow-none" aria-label="Custom field">
+            <SelectTrigger
+              size="sm"
+              className="h-7 w-28 border-0 shadow-none"
+              aria-label="Custom field"
+            >
               <SelectValue placeholder="Field" />
             </SelectTrigger>
             <SelectContent>
@@ -205,7 +217,11 @@ export function LibraryBulkToolbar({
           </Select>
           {selectedField?.type === 'single_select' || selectedField?.type === 'multi_select' ? (
             <Select value={fieldValue} onValueChange={setFieldValue}>
-              <SelectTrigger size="sm" className="h-7 w-28 border-0 shadow-none" aria-label="Field value">
+              <SelectTrigger
+                size="sm"
+                className="h-7 w-28 border-0 shadow-none"
+                aria-label="Field value"
+              >
                 <SelectValue placeholder="Value" />
               </SelectTrigger>
               <SelectContent>
@@ -274,10 +290,20 @@ export function LibraryBulkToolbar({
         <Link2 className="size-3.5" />
         Share
       </Button>
-      <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground" role="status">
+      <span
+        className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground"
+        role="status"
+      >
         {busy ? <Loader2 className="ml-auto size-3.5 animate-spin" /> : message}
       </span>
-      <Button type="button" size="icon" variant="ghost" className="size-7" onClick={onClear} aria-label="Clear selection">
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="size-7"
+        onClick={onClear}
+        aria-label="Clear selection"
+      >
         <X className="size-3.5" />
       </Button>
     </div>

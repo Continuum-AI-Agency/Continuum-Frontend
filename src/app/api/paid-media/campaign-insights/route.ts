@@ -1,42 +1,39 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { CampaignInsightsResponseSchema } from '@/lib/paid-media/account-insights.types';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { CampaignInsightsResponseSchema } from "@/lib/paid-media/account-insights.types";
-
-const isoDaySchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must use YYYY-MM-DD format.");
+const isoDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Dates must use YYYY-MM-DD format.');
 
 const rangeSchema = z
-  .discriminatedUnion("preset", [
+  .discriminatedUnion('preset', [
     z.object({
-      preset: z.enum(["last_7d", "last_14d", "last_30d"]),
+      preset: z.enum(['last_7d', 'last_14d', 'last_30d']),
     }),
     z.object({
-      preset: z.literal("custom"),
+      preset: z.literal('custom'),
       since: isoDaySchema,
       until: isoDaySchema,
     }),
   ])
   .superRefine((range, ctx) => {
-    if (range.preset === "custom" && range.since > range.until) {
+    if (range.preset === 'custom' && range.since > range.until) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["since"],
-        message: "Custom range start date must be on or before end date.",
+        path: ['since'],
+        message: 'Custom range start date must be on or before end date.',
       });
     }
   });
 
 const budgetPacingContextSchema = z.object({
   pacePct: z.number(),
-  paceStatus: z.enum(["on_pace", "underspending", "overspending"]),
+  paceStatus: z.enum(['on_pace', 'underspending', 'overspending']),
   totalBudget: z.number(),
   spendToDate: z.number(),
   budgetRemaining: z.number(),
   daysRemaining: z.number().nullable(),
-  budgetType: z.enum(["daily", "lifetime"]),
+  budgetType: z.enum(['daily', 'lifetime']),
   projectedEndSpend: z.number(),
 });
 
@@ -56,7 +53,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = requestSchema.safeParse(body);
@@ -68,36 +65,30 @@ export async function POST(request: Request) {
 
   try {
     const { data, error } = await supabase.functions.invoke(
-      "paid-media-reporting/campaign-insights",
-      { body: parsed.data }
+      'paid-media-reporting/campaign-insights',
+      { body: parsed.data },
     );
 
     if (error) {
-      console.error("Error invoking paid-media-reporting/campaign-insights:", error);
+      console.error('Error invoking paid-media-reporting/campaign-insights:', error);
       return NextResponse.json(
-        { error: "Failed to fetch campaign insights from edge function" },
-        { status: 500 }
+        { error: 'Failed to fetch campaign insights from edge function' },
+        { status: 500 },
       );
     }
 
     const validated = CampaignInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
       console.error(
-        "Invalid response from paid-media-reporting/campaign-insights:",
-        validated.error
+        'Invalid response from paid-media-reporting/campaign-insights:',
+        validated.error,
       );
-      return NextResponse.json(
-        { error: "Invalid response format from backend" },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: 'Invalid response format from backend' }, { status: 502 });
     }
 
     return NextResponse.json(validated.data);
   } catch (error) {
-    console.error("Unexpected error in campaign-insights proxy:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error('Unexpected error in campaign-insights proxy:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

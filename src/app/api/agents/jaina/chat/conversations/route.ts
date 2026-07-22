@@ -1,23 +1,21 @@
-import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getApiBaseUrl } from "@/lib/api/config";
+import { NextResponse } from 'next/server';
+import { getApiBaseUrl } from '@/lib/api/config';
 import {
   backendConversationMessagesResponseSchema,
   backendConversationsListResponseSchema,
   createConversationSessionRequestSchema,
   createConversationSessionResponseSchema,
+  type JainaConversationListQuery,
   jainaConversationListQuerySchema,
   jainaConversationListResponseSchema,
   mapConversationMessageRow,
   mapConversationSessionRow,
-  type JainaConversationListQuery,
-} from "@/lib/jaina/conversations";
+} from '@/lib/jaina/conversations';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-type AuthResult =
-  | { ok: true; accessToken: string }
-  | { ok: false; response: NextResponse };
+type AuthResult = { ok: true; accessToken: string } | { ok: false; response: NextResponse };
 
 async function authorizeConversationRequest(): Promise<AuthResult> {
   const supabase = await createSupabaseServerClient();
@@ -25,7 +23,7 @@ async function authorizeConversationRequest(): Promise<AuthResult> {
   if (userError || !userData?.user) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };
   }
 
@@ -34,7 +32,7 @@ async function authorizeConversationRequest(): Promise<AuthResult> {
   if (!accessToken) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };
   }
 
@@ -45,8 +43,8 @@ function buildConversationListPaths() {
   const configuredPath = process.env.JAINA_CONVERSATIONS_API_PATH?.trim();
   const candidatePaths = [
     configuredPath && configuredPath.length > 0 ? configuredPath : null,
-    "/api/agents/jaina/chat/conversations",
-    "/api/agents/jaina/conversations",
+    '/api/agents/jaina/chat/conversations',
+    '/api/agents/jaina/conversations',
   ].filter((path): path is string => Boolean(path));
   return Array.from(new Set(candidatePaths));
 }
@@ -60,7 +58,7 @@ function buildConversationMessagesPaths(sessionId: string) {
 }
 
 function normalizePath(path: string) {
-  return path.startsWith("/") ? path : `/${path}`;
+  return path.startsWith('/') ? path : `/${path}`;
 }
 
 async function readErrorMessage(response: Response, fallback: string) {
@@ -68,9 +66,9 @@ async function readErrorMessage(response: Response, fallback: string) {
   if (!detail) return fallback;
   try {
     const parsed = JSON.parse(detail);
-    if (parsed && typeof parsed === "object" && "error" in parsed) {
+    if (parsed && typeof parsed === 'object' && 'error' in parsed) {
       const errorMessage = (parsed as { error?: unknown }).error;
-      if (typeof errorMessage === "string" && errorMessage.length > 0) {
+      if (typeof errorMessage === 'string' && errorMessage.length > 0) {
         return errorMessage;
       }
     }
@@ -86,7 +84,7 @@ type BackendFetchResult =
 
 async function fetchBackendWithFallback(input: {
   accessToken: string;
-  method: "GET" | "POST";
+  method: 'GET' | 'POST';
   paths: string[];
   query?: string;
   body?: string;
@@ -105,12 +103,12 @@ async function fetchBackendWithFallback(input: {
     const backendResponse = await fetch(url, {
       method: input.method,
       headers: {
-        ...(input.method === "POST" ? { "Content-Type": "application/json" } : {}),
-        Accept: "application/json",
+        ...(input.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+        Accept: 'application/json',
         Authorization: `Bearer ${input.accessToken}`,
       },
       ...(input.body ? { body: input.body } : {}),
-      cache: "no-store",
+      cache: 'no-store',
     });
 
     if (backendResponse.status === 404) {
@@ -123,7 +121,7 @@ async function fetchBackendWithFallback(input: {
         ok: false,
         errorResponse: NextResponse.json(
           { error: message },
-          { status: backendResponse.status || 500 }
+          { status: backendResponse.status || 500 },
         ),
       } satisfies BackendFetchResult;
     }
@@ -135,10 +133,10 @@ async function fetchBackendWithFallback(input: {
     ok: false,
     errorResponse: NextResponse.json(
       {
-        error: "Conversation endpoint not available on backend.",
+        error: 'Conversation endpoint not available on backend.',
         attempted,
       },
-      { status: 502 }
+      { status: 502 },
     ),
   } satisfies BackendFetchResult;
 }
@@ -149,7 +147,7 @@ function buildListQueryString(query: JainaConversationListQuery) {
     limit: String(query.limit),
   });
   if (query.adAccountId) {
-    params.set("ad_account_id", query.adAccountId);
+    params.set('ad_account_id', query.adAccountId);
   }
   return params.toString();
 }
@@ -160,10 +158,10 @@ function buildMessagesQueryString(query: JainaConversationListQuery) {
     limit: String(query.messagesLimit),
   });
   if (query.adAccountId) {
-    params.set("ad_account_id", query.adAccountId);
+    params.set('ad_account_id', query.adAccountId);
   }
   if (query.before) {
-    params.set("before", query.before);
+    params.set('before', query.before);
   }
   return params.toString();
 }
@@ -174,80 +172,65 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const parsedQuery = jainaConversationListQuerySchema.safeParse({
-    brandId:
-      searchParams.get("brandId") ??
-      searchParams.get("brand_id") ??
-      undefined,
-    adAccountId:
-      searchParams.get("adAccountId") ??
-      searchParams.get("ad_account_id") ??
-      undefined,
-    sessionId:
-      searchParams.get("sessionId") ??
-      searchParams.get("session_id") ??
-      undefined,
+    brandId: searchParams.get('brandId') ?? searchParams.get('brand_id') ?? undefined,
+    adAccountId: searchParams.get('adAccountId') ?? searchParams.get('ad_account_id') ?? undefined,
+    sessionId: searchParams.get('sessionId') ?? searchParams.get('session_id') ?? undefined,
     limit:
-      searchParams.get("limit") ??
-      searchParams.get("sessionsLimit") ??
-      searchParams.get("sessions_limit") ??
+      searchParams.get('limit') ??
+      searchParams.get('sessionsLimit') ??
+      searchParams.get('sessions_limit') ??
       undefined,
     messagesLimit:
-      searchParams.get("messagesLimit") ??
-      searchParams.get("messages_limit") ??
-      undefined,
+      searchParams.get('messagesLimit') ?? searchParams.get('messages_limit') ?? undefined,
   });
 
   if (!parsedQuery.success) {
     return NextResponse.json(
-      { error: "Invalid query parameters.", details: parsedQuery.error.flatten() },
-      { status: 400 }
+      { error: 'Invalid query parameters.', details: parsedQuery.error.flatten() },
+      { status: 400 },
     );
   }
 
   try {
     const sessionsResult = await fetchBackendWithFallback({
       accessToken: auth.accessToken,
-      method: "GET",
+      method: 'GET',
       paths: buildConversationListPaths(),
       query: buildListQueryString(parsedQuery.data),
-      failureMessage: "Failed to load conversations.",
+      failureMessage: 'Failed to load conversations.',
     });
     if (!sessionsResult.ok) return sessionsResult.errorResponse;
 
     const sessionsPayload = await sessionsResult.response.json().catch(() => null);
-    const parsedSessions =
-      backendConversationsListResponseSchema.safeParse(sessionsPayload);
+    const parsedSessions = backendConversationsListResponseSchema.safeParse(sessionsPayload);
     if (!parsedSessions.success) {
       return NextResponse.json(
-        { error: "Invalid conversations response from backend." },
-        { status: 502 }
+        { error: 'Invalid conversations response from backend.' },
+        { status: 502 },
       );
     }
 
     const sessions = parsedSessions.data.sessions.map(mapConversationSessionRow);
 
     if (!parsedQuery.data.sessionId) {
-      return NextResponse.json(
-        jainaConversationListResponseSchema.parse({ sessions })
-      );
+      return NextResponse.json(jainaConversationListResponseSchema.parse({ sessions }));
     }
 
     const messagesResult = await fetchBackendWithFallback({
       accessToken: auth.accessToken,
-      method: "GET",
+      method: 'GET',
       paths: buildConversationMessagesPaths(parsedQuery.data.sessionId),
       query: buildMessagesQueryString(parsedQuery.data),
-      failureMessage: "Failed to load conversation messages.",
+      failureMessage: 'Failed to load conversation messages.',
     });
     if (!messagesResult.ok) return messagesResult.errorResponse;
 
     const messagesPayload = await messagesResult.response.json().catch(() => null);
-    const parsedMessages =
-      backendConversationMessagesResponseSchema.safeParse(messagesPayload);
+    const parsedMessages = backendConversationMessagesResponseSchema.safeParse(messagesPayload);
     if (!parsedMessages.success) {
       return NextResponse.json(
-        { error: "Invalid messages response from backend." },
-        { status: 502 }
+        { error: 'Invalid messages response from backend.' },
+        { status: 502 },
       );
     }
 
@@ -257,11 +240,11 @@ export async function GET(request: Request) {
         sessions,
         messages,
         nextCursor: parsedMessages.data.nextCursor ?? null,
-      })
+      }),
     );
   } catch (error) {
-    console.error("Error loading Jaina conversations:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('Error loading Jaina conversations:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -273,24 +256,24 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsedBody = createConversationSessionRequestSchema.safeParse(body);
   if (!parsedBody.success) {
     return NextResponse.json(
-      { error: "Invalid conversation create payload.", details: parsedBody.error.flatten() },
-      { status: 400 }
+      { error: 'Invalid conversation create payload.', details: parsedBody.error.flatten() },
+      { status: 400 },
     );
   }
 
   try {
     const createResult = await fetchBackendWithFallback({
       accessToken: auth.accessToken,
-      method: "POST",
+      method: 'POST',
       paths: buildConversationListPaths(),
       body: JSON.stringify(parsedBody.data),
-      failureMessage: "Failed to create conversation session.",
+      failureMessage: 'Failed to create conversation session.',
     });
     if (!createResult.ok) return createResult.errorResponse;
 
@@ -298,14 +281,14 @@ export async function POST(request: Request) {
     const parsed = createConversationSessionResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid create-session response from backend." },
-        { status: 502 }
+        { error: 'Invalid create-session response from backend.' },
+        { status: 502 },
       );
     }
 
     return NextResponse.json(parsed.data, { status: 201 });
   } catch (error) {
-    console.error("Error creating Jaina conversation session:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('Error creating Jaina conversation session:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

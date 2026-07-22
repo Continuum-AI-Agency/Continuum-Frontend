@@ -2,6 +2,7 @@
 
 import { type Edge, type Node, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type React from 'react';
+import { STUDIO_FIT_VIEW_OPTIONS } from '@/StudioCanvas/utils/fitViewOptions';
 
 type CanvasWrapperProps = {
   children: React.ReactNode;
@@ -36,7 +37,7 @@ export function CanvasWrapper({ children, nodes, edges }: CanvasWrapperProps) {
             </button>
             <button
               type="button"
-              onClick={() => fitView({ padding: 0.1, duration: 300 })}
+              onClick={() => fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 })}
               className="flex items-center justify-center w-8 h-8 rounded-md bg-slate-800 hover:bg-slate-700 text-white transition-colors"
               aria-label="Fit view"
             >

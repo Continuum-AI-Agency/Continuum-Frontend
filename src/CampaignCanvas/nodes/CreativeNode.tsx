@@ -1,32 +1,37 @@
-"use client";
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+'use client';
+import { Copy, Image as ImageIcon, Trash2 } from 'lucide-react';
 import Image from 'next/image';
-import { type CampaignNodeProps, type CampaignCanvasNodeMap, type AdFormat, type CreativeAssetType, type CreativeData } from '../types';
-import { 
-  Node,
-} from '@/components/ai-elements/node';
+import type React from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Node } from '@/components/ai-elements/node';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
-import { Image as ImageIcon, Copy, Trash2 } from 'lucide-react';
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
-  ContextMenuLabel,
   ContextMenuGroup,
   ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuShortcut,
+  ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-  ContextMenuCheckboxItem,
-} from "@/components/ui/context-menu";
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 import { useCampaignStore } from '../stores/useCampaignStore';
+import type {
+  AdFormat,
+  CampaignCanvasNodeMap,
+  CampaignNodeProps,
+  CreativeAssetType,
+  CreativeData,
+} from '../types';
 import {
   DEFAULT_CREATIVE_ASSET_TYPE,
   getAllowedAdFormatsForCreativeType,
 } from '../types/adCreativeCompatibility';
-import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 
 const FALLBACK_PREVIEW_RATIO_BY_TYPE: Record<CreativeAssetType, number> = {
   image: 1,
@@ -35,7 +40,7 @@ const FALLBACK_PREVIEW_RATIO_BY_TYPE: Record<CreativeAssetType, number> = {
 
 export function resolveCreativePreviewRatio(
   ratioValue: string | undefined,
-  assetType: CreativeAssetType
+  assetType: CreativeAssetType,
 ): number {
   if (!ratioValue) {
     return FALLBACK_PREVIEW_RATIO_BY_TYPE[assetType];
@@ -49,7 +54,12 @@ export function resolveCreativePreviewRatio(
   }
 
   const [widthPart, heightPart] = normalized.split(delimiter).map((value) => Number(value.trim()));
-  if (!Number.isFinite(widthPart) || !Number.isFinite(heightPart) || widthPart <= 0 || heightPart <= 0) {
+  if (
+    !Number.isFinite(widthPart) ||
+    !Number.isFinite(heightPart) ||
+    widthPart <= 0 ||
+    heightPart <= 0
+  ) {
     return FALLBACK_PREVIEW_RATIO_BY_TYPE[assetType];
   }
 
@@ -63,9 +73,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
 
   const connectedAdFormats = useMemo<AdFormat[]>(() => {
-    const adNodeIds = edges
-      .filter((edge) => edge.target === id)
-      .map((edge) => edge.source);
+    const adNodeIds = edges.filter((edge) => edge.target === id).map((edge) => edge.source);
 
     return adNodeIds
       .map((adNodeId) => nodes.find((node) => node.id === adNodeId))
@@ -73,21 +81,27 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
       .map((node) => node.data.adFormat ?? 'IMAGE');
   }, [edges, id, nodes]);
 
-  const isAssetTypeCompatibleWithConnectedAds = useCallback((assetType: 'image' | 'video') => {
-    const allowedAdFormats = getAllowedAdFormatsForCreativeType(assetType);
-    return connectedAdFormats.every((adFormat) => allowedAdFormats.includes(adFormat));
-  }, [connectedAdFormats]);
+  const isAssetTypeCompatibleWithConnectedAds = useCallback(
+    (assetType: 'image' | 'video') => {
+      const allowedAdFormats = getAllowedAdFormatsForCreativeType(assetType);
+      return connectedAdFormats.every((adFormat) => allowedAdFormats.includes(adFormat));
+    },
+    [connectedAdFormats],
+  );
 
-  const handleTypeChange = useCallback((assetType: 'image' | 'video') => {
-    if (!isAssetTypeCompatibleWithConnectedAds(assetType)) {
-      return;
-    }
-    updateNodeData(id, { assetType });
-  }, [id, isAssetTypeCompatibleWithConnectedAds, updateNodeData]);
+  const handleTypeChange = useCallback(
+    (assetType: 'image' | 'video') => {
+      if (!isAssetTypeCompatibleWithConnectedAds(assetType)) {
+        return;
+      }
+      updateNodeData(id, { assetType });
+    },
+    [id, isAssetTypeCompatibleWithConnectedAds, updateNodeData],
+  );
 
   const selectedAssetType = data.assetType ?? DEFAULT_CREATIVE_ASSET_TYPE;
   const [previewRatio, setPreviewRatio] = useState(() =>
-    resolveCreativePreviewRatio(data.aspectRatio, selectedAssetType)
+    resolveCreativePreviewRatio(data.aspectRatio, selectedAssetType),
   );
 
   useEffect(() => {
@@ -107,7 +121,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <Node 
+        <Node
           handles={{ target: true, source: false }}
           selected={selected}
           className="overflow-hidden border-border/60 p-0 transition-shadow hover:shadow-sm cursor-grab active:cursor-grabbing"
@@ -140,10 +154,13 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
             <ContextMenuSubTrigger>
               <ImageIcon className="mr-2 h-4 w-4" />
               Asset Type
-              <ContextMenuItemInfo className="ml-2 mr-4" description="Asset type defines whether creative is rendered as image or video." />
+              <ContextMenuItemInfo
+                className="ml-2 mr-4"
+                description="Asset type defines whether creative is rendered as image or video."
+              />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-              <ContextMenuCheckboxItem 
+              <ContextMenuCheckboxItem
                 checked={selectedAssetType === 'image'}
                 disabled={!isAssetTypeCompatibleWithConnectedAds('image')}
                 onClick={() => handleTypeChange('image')}
@@ -151,7 +168,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 Image
                 <ContextMenuItemInfo description="Image assets are single-frame visuals for static placements." />
               </ContextMenuCheckboxItem>
-              <ContextMenuCheckboxItem 
+              <ContextMenuCheckboxItem
                 checked={selectedAssetType === 'video'}
                 disabled={!isAssetTypeCompatibleWithConnectedAds('video')}
                 onClick={() => handleTypeChange('video')}
@@ -162,23 +179,29 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
             </ContextMenuSubContent>
           </ContextMenuSub>
         </ContextMenuGroup>
-        
+
         <ContextMenuSeparator />
-        
+
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-            <ContextMenuItemInfo className="ml-2" description="A duplicate keeps the same creative settings as a starting variant." />
+            <ContextMenuItemInfo
+              className="ml-2"
+              description="A duplicate keeps the same creative settings as a starting variant."
+            />
           </ContextMenuItem>
         </ContextMenuGroup>
-        
+
         <ContextMenuSeparator />
-        
+
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
-          <ContextMenuItemInfo className="ml-2" description="Delete removes this creative object from the current graph." />
+          <ContextMenuItemInfo
+            className="ml-2"
+            description="Delete removes this creative object from the current graph."
+          />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

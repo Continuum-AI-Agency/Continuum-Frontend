@@ -1,10 +1,10 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Accept Supabase/Postgres timestamps that include offsets (e.g., "+00:00") and normalize to ISO with trailing Z.
 const isoDateString = z.string().transform((value, ctx) => {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid datetime" });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid datetime' });
     return z.NEVER;
   }
   return new Date(timestamp).toISOString();
@@ -69,7 +69,7 @@ export type MetaResyncResponse = z.infer<typeof metaResyncResponseSchema>;
 // (ADVERTISE vs ANALYZE-only). Mirrors the backend union in
 // Continuum-Backend/App/integrations-ts/src/metaRole.ts. `analyst` renders the
 // "Read-only" badge (#155).
-export const metaAccountRoleSchema = z.enum(["admin", "advertiser", "analyst", "unknown"]);
+export const metaAccountRoleSchema = z.enum(['admin', 'advertiser', 'analyst', 'unknown']);
 export type MetaAccountRole = z.infer<typeof metaAccountRoleSchema>;
 
 // One alternate login through which the same underlying account is reachable —

@@ -1,13 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from 'react';
 
-import type {
-  ContinuumEvent,
-  ContinuumEventMap,
-  ContinuumEventName,
-} from "@/lib/events/schema";
-import { CONTINUUM_EVENT_TYPES } from "@/lib/events/schema";
+import type { ContinuumEvent, ContinuumEventMap, ContinuumEventName } from '@/lib/events/schema';
+import { CONTINUUM_EVENT_TYPES } from '@/lib/events/schema';
 
 type ContinuumEventHandlers = {
   [K in ContinuumEventName]?: (event: ContinuumEvent<K>) => void;
@@ -22,7 +18,7 @@ type UseContinuumServerEventsOptions = {
 
 function parseEventPayload<K extends ContinuumEventName>(
   eventName: K,
-  message: MessageEvent<string>
+  message: MessageEvent<string>,
 ): ContinuumEvent<K> | null {
   try {
     const parsed = JSON.parse(message.data) as ContinuumEventMap[K] & {
@@ -44,11 +40,11 @@ function parseEventPayload<K extends ContinuumEventName>(
 
 export function useContinuumServerEvents(
   handlers: ContinuumEventHandlers,
-  options?: UseContinuumServerEventsOptions
+  options?: UseContinuumServerEventsOptions,
 ) {
   const handlersRef = useRef(handlers);
   const optionsRef = useRef(options);
-  const url = options?.url ?? "/api/events";
+  const url = options?.url ?? '/api/events';
   const withCredentials = options?.withCredentials ?? true;
 
   useEffect(() => {
@@ -72,13 +68,15 @@ export function useContinuumServerEvents(
 
     const onKeepAlive = () => undefined;
 
-    eventSource.addEventListener("continuum.connected", onConnected);
-    eventSource.addEventListener("continuum.keepalive", onKeepAlive);
+    eventSource.addEventListener('continuum.connected', onConnected);
+    eventSource.addEventListener('continuum.keepalive', onKeepAlive);
     eventSource.onerror = onError;
 
     const listeners = CONTINUUM_EVENT_TYPES.map(<K extends ContinuumEventName>(eventName: K) => {
       const listener = (message: MessageEvent<string>) => {
-        const handler = handlersRef.current[eventName] as ((event: ContinuumEvent<K>) => void) | undefined;
+        const handler = handlersRef.current[eventName] as
+          | ((event: ContinuumEvent<K>) => void)
+          | undefined;
         if (!handler) return;
 
         const payload = parseEventPayload(eventName, message);
@@ -95,8 +93,8 @@ export function useContinuumServerEvents(
       listeners.forEach(({ eventName, listener }) => {
         eventSource.removeEventListener(eventName, listener as EventListener);
       });
-      eventSource.removeEventListener("continuum.connected", onConnected);
-      eventSource.removeEventListener("continuum.keepalive", onKeepAlive);
+      eventSource.removeEventListener('continuum.connected', onConnected);
+      eventSource.removeEventListener('continuum.keepalive', onKeepAlive);
       eventSource.close();
     };
   }, [url, withCredentials]);

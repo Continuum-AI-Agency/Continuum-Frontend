@@ -8,17 +8,17 @@
 // the workspace list" are first-class states distinct from realtime "connecting", so
 // the spinner only shows during a genuine connection attempt against a real room.
 
-export type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
+export type RealtimeStatus = 'INITIALIZING' | 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'ERROR';
 
 export type CanvasConnectionState =
-  | "workspace-loading"
-  | "idle"
-  | "connecting"
-  | "saving"
-  | "connected"
-  | "saved-locally"
-  | "sync-error"
-  | "live-disconnected";
+  | 'workspace-loading'
+  | 'idle'
+  | 'connecting'
+  | 'saving'
+  | 'connected'
+  | 'saved-locally'
+  | 'sync-error'
+  | 'live-disconnected';
 
 export interface CanvasConnectionInputs {
   roomsLoading: boolean;
@@ -35,23 +35,23 @@ export function deriveCanvasConnectionState(inputs: CanvasConnectionInputs): Can
   // No active workspace: never a realtime "connecting" — there is nothing to connect
   // to. Distinguish "rooms list still loading" from a settled "no workspace" idle.
   if (!hasRoom) {
-    return roomsLoading ? "workspace-loading" : "idle";
+    return roomsLoading ? 'workspace-loading' : 'idle';
   }
 
-  const dbDegraded = dbStatus === "ERROR" || dbStatus === "TIMED_OUT" || dbStatus === "CLOSED";
-  const presenceDegraded = status === "ERROR";
+  const dbDegraded = dbStatus === 'ERROR' || dbStatus === 'TIMED_OUT' || dbStatus === 'CLOSED';
+  const presenceDegraded = status === 'ERROR';
 
   // Only alarm when collaborating: a dropped channel means peers may diverge.
-  if (isCollaborative && dbDegraded) return "sync-error";
-  if (isCollaborative && presenceDegraded) return "live-disconnected";
+  if (isCollaborative && dbDegraded) return 'sync-error';
+  if (isCollaborative && presenceDegraded) return 'live-disconnected';
 
-  if (isSaving) return "saving";
+  if (isSaving) return 'saving';
 
   // Solo with a degraded channel is harmless: edits are local-authoritative and
   // still persist. Calm offline state instead of an alarming error.
-  if (!isCollaborative && (dbDegraded || presenceDegraded)) return "saved-locally";
+  if (!isCollaborative && (dbDegraded || presenceDegraded)) return 'saved-locally';
 
-  if (dbStatus === "INITIALIZING" || status === "INITIALIZING") return "connecting";
+  if (dbStatus === 'INITIALIZING' || status === 'INITIALIZING') return 'connecting';
 
-  return "connected";
+  return 'connected';
 }

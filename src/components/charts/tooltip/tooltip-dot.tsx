@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { motion, useSpring, useTransform } from "motion/react";
-import { type SpringConfig, useChartConfig } from "../chart-config-context";
-import { chartCssVars } from "../chart-context";
+import { motion, useSpring, useTransform } from 'motion/react';
+import { type SpringConfig, useChartConfig } from '../chart-config-context';
+import { chartCssVars } from '../chart-context';
 
 export interface TooltipDotProps {
   x: number;
@@ -14,7 +14,7 @@ export interface TooltipDotProps {
   strokeColor?: string;
   strokeWidth?: number;
   /** Dot fill or transparent ring around the hovered mark. Default: "dot" */
-  variant?: "dot" | "ring";
+  variant?: 'dot' | 'ring';
   /**
    * Ring corner radius as a fraction of side length (0 = square, 0.5 = circle).
    * Same semantics as bar square radius.
@@ -26,10 +26,7 @@ export interface TooltipDotProps {
   animate?: boolean;
 }
 
-function ringCornerRadius(
-  halfExtent: number,
-  cornerRadiusFraction: number
-): number {
+function ringCornerRadius(halfExtent: number, cornerRadiusFraction: number): number {
   const side = halfExtent * 2;
   return side * Math.max(0, Math.min(0.5, cornerRadiusFraction));
 }
@@ -88,7 +85,7 @@ export function TooltipDot({
   size = 5,
   strokeColor = chartCssVars.background,
   strokeWidth = 2,
-  variant = "dot",
+  variant = 'dot',
   cornerRadiusFraction = 0.25,
   springConfig,
   animate = true,
@@ -98,8 +95,8 @@ export function TooltipDot({
   const animatedX = useSpring(x, effectiveSpring);
   const animatedY = useSpring(y, effectiveSpring);
 
-  const isRing = variant === "ring";
-  const fill = isRing ? "transparent" : color;
+  const isRing = variant === 'ring';
+  const fill = isRing ? 'transparent' : color;
   const stroke = isRing ? color : strokeColor;
   const effectiveStrokeWidth = isRing ? (strokeWidth ?? 1.5) : strokeWidth;
 
@@ -171,6 +168,6 @@ export function TooltipDot({
   );
 }
 
-TooltipDot.displayName = "TooltipDot";
+TooltipDot.displayName = 'TooltipDot';
 
 export default TooltipDot;

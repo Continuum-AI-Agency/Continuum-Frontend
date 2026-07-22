@@ -3,8 +3,8 @@ import type {
   OrganicPost,
   OrganicPostBreakdownPoint,
   OrganicTrendPoint,
-} from "@/lib/schemas/organicMetrics";
-import { formatWatchTime } from "./organic-metrics-utils";
+} from '@/lib/schemas/organicMetrics';
+import { formatWatchTime } from './organic-metrics-utils';
 
 export type PostWindowTotals = {
   views: number;
@@ -21,7 +21,7 @@ type PostWindowBreakdown = {
 };
 
 function toNumber(value: number | undefined) {
-  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  if (typeof value !== 'number' || Number.isNaN(value)) return 0;
   return value;
 }
 
@@ -38,14 +38,14 @@ function sumBreakdownPoints(points: OrganicPostBreakdownPoint[]) {
       reach: 0,
       engagement: 0,
       comments: 0,
-    }
+    },
   );
 }
 
 function normalizeDailyPoints(points: OrganicPostBreakdownPoint[] | undefined) {
   return (points ?? [])
     .map((point) => ({
-      date: point.date ?? (point.timestamp ? point.timestamp.slice(0, 10) : ""),
+      date: point.date ?? (point.timestamp ? point.timestamp.slice(0, 10) : ''),
       views: toNumber(point.views),
       reach: toNumber(point.reach),
       engagement: toNumber(point.engagement),
@@ -94,7 +94,7 @@ export function summarizePostWindowBreakdown(post: OrganicPost): PostWindowBreak
 
   const window24h = hasTotals(first24hFromHourly)
     ? first24hFromHourly
-    : first24hFromDaily ?? ZERO_WINDOW_TOTALS;
+    : (first24hFromDaily ?? ZERO_WINDOW_TOTALS);
   const window7d = sumBreakdownPoints(first7d);
   const window30d = sumBreakdownPoints(first30d);
 
@@ -107,14 +107,14 @@ export function summarizePostWindowBreakdown(post: OrganicPost): PostWindowBreak
 }
 
 function isReelPost(post: OrganicPost): boolean {
-  const mediaType = (post.mediaType ?? "").toUpperCase();
-  const productType = (post.mediaProductType ?? "").toUpperCase();
-  return mediaType === "VIDEO" || productType === "REELS" || productType === "REEL";
+  const mediaType = (post.mediaType ?? '').toUpperCase();
+  const productType = (post.mediaProductType ?? '').toUpperCase();
+  return mediaType === 'VIDEO' || productType === 'REELS' || productType === 'REEL';
 }
 
 // CSV uses raw seconds (analysis-friendly); HTML uses formatWatchTime for display.
 function watchSecondsCell(ms: number | undefined): string | number {
-  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return '';
   return Math.round(ms / 1000);
 }
 
@@ -129,7 +129,7 @@ export function summarizeReelsWatchTime(posts: OrganicPost[], now = new Date()):
   const reels = posts.filter(
     (post) =>
       isReelPost(post) &&
-      typeof post.timestamp === "string" &&
+      typeof post.timestamp === 'string' &&
       Date.parse(post.timestamp) >= sevenDaysAgoMs,
   );
 
@@ -139,7 +139,7 @@ export function summarizeReelsWatchTime(posts: OrganicPost[], now = new Date()):
   );
   const avgValues = reels
     .map((post) => post.metrics?.reelsAvgWatchTime)
-    .filter((value): value is number => typeof value === "number" && value > 0);
+    .filter((value): value is number => typeof value === 'number' && value > 0);
   const avgWatchMs =
     avgValues.length > 0 ? avgValues.reduce((sum, value) => sum + value, 0) / avgValues.length : 0;
 
@@ -160,10 +160,10 @@ export function countPostsWithoutInsights(posts: OrganicPost[]): number {
 }
 
 const TREND_BREAKDOWN_ROWS: Array<{ label: string; key: keyof OrganicTrendPoint }> = [
-  { label: "Reach", key: "reach" },
-  { label: "Views", key: "views" },
-  { label: "Reels Views", key: "reelsViews" },
-  { label: "Comments", key: "comments" },
+  { label: 'Reach', key: 'reach' },
+  { label: 'Views', key: 'views' },
+  { label: 'Reels Views', key: 'reelsViews' },
+  { label: 'Comments', key: 'comments' },
 ];
 
 function last7Trends(trends: OrganicTrendPoint[] | undefined): OrganicTrendPoint[] {
@@ -176,33 +176,33 @@ function last7Trends(trends: OrganicTrendPoint[] | undefined): OrganicTrendPoint
 function csvCell(value: string | number) {
   const rendered = String(value);
   if (!/[",\n]/.test(rendered)) return rendered;
-  return `"${rendered.replace(/"/g, "\"\"")}"`;
+  return `"${rendered.replace(/"/g, '""')}"`;
 }
 
 function csvRows(rows: Array<Array<string | number>>) {
-  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
 }
 
 const ACCOUNT_METRIC_ROWS: Array<{ label: string; key: keyof OrganicMetrics }> = [
-  { label: "Engaged Accounts", key: "accountsEngaged" },
-  { label: "Reach", key: "reach" },
-  { label: "Views", key: "views" },
-  { label: "Reels Views", key: "reelsViews" },
-  { label: "Post Views", key: "postViews" },
-  { label: "Stories Views", key: "storiesViews" },
-  { label: "New Followers", key: "newFollowers" },
-  { label: "Profile Visits 24h", key: "profileVisits24h" },
-  { label: "Follower Reach", key: "followerReach" },
-  { label: "Non-follower Reach", key: "nonFollowerReach" },
-  { label: "Likes", key: "likes" },
-  { label: "Comments", key: "comments" },
-  { label: "Shares", key: "shares" },
-  { label: "Saved", key: "saved" },
-  { label: "Total Interactions", key: "totalInteractions" },
+  { label: 'Engaged Accounts', key: 'accountsEngaged' },
+  { label: 'Reach', key: 'reach' },
+  { label: 'Views', key: 'views' },
+  { label: 'Reels Views', key: 'reelsViews' },
+  { label: 'Post Views', key: 'postViews' },
+  { label: 'Stories Views', key: 'storiesViews' },
+  { label: 'New Followers', key: 'newFollowers' },
+  { label: 'Profile Visits 24h', key: 'profileVisits24h' },
+  { label: 'Follower Reach', key: 'followerReach' },
+  { label: 'Non-follower Reach', key: 'nonFollowerReach' },
+  { label: 'Likes', key: 'likes' },
+  { label: 'Comments', key: 'comments' },
+  { label: 'Shares', key: 'shares' },
+  { label: 'Saved', key: 'saved' },
+  { label: 'Total Interactions', key: 'totalInteractions' },
 ];
 
 export function buildOrganicReportCsv(params: {
-  platform: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin";
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
   accountName: string;
   generatedAt: string;
   accountRangeSince: string;
@@ -213,14 +213,14 @@ export function buildOrganicReportCsv(params: {
 }) {
   const rows: Array<Array<string | number>> = [];
 
-  rows.push(["Continuum Organic Analytics Report"]);
-  rows.push(["Platform", params.platform]);
-  rows.push(["Account", params.accountName]);
-  rows.push(["Generated At", params.generatedAt]);
-  rows.push(["Account Range", `${params.accountRangeSince} to ${params.accountRangeUntil}`]);
+  rows.push(['Continuum Organic Analytics Report']);
+  rows.push(['Platform', params.platform]);
+  rows.push(['Account', params.accountName]);
+  rows.push(['Generated At', params.generatedAt]);
+  rows.push(['Account Range', `${params.accountRangeSince} to ${params.accountRangeUntil}`]);
   rows.push([]);
-  rows.push(["Account Overview"]);
-  rows.push(["Metric", "Value"]);
+  rows.push(['Account Overview']);
+  rows.push(['Metric', 'Value']);
   ACCOUNT_METRIC_ROWS.forEach((metric) => {
     rows.push([metric.label, toNumber(params.accountMetrics[metric.key])]);
   });
@@ -228,8 +228,8 @@ export function buildOrganicReportCsv(params: {
   const dailyTrends = last7Trends(params.trends);
   if (dailyTrends.length > 0) {
     rows.push([]);
-    rows.push(["Account 7-Day Daily Breakdown"]);
-    rows.push(["Date", ...TREND_BREAKDOWN_ROWS.map((row) => row.label)]);
+    rows.push(['Account 7-Day Daily Breakdown']);
+    rows.push(['Date', ...TREND_BREAKDOWN_ROWS.map((row) => row.label)]);
     dailyTrends.forEach((point) => {
       rows.push([
         point.date,
@@ -240,43 +240,43 @@ export function buildOrganicReportCsv(params: {
 
   const reelsWatch = summarizeReelsWatchTime(params.posts);
   rows.push([]);
-  rows.push(["Reels Watch Time (last 7 days)"]);
-  rows.push(["Reels Counted", reelsWatch.count]);
-  rows.push(["Total Watch Time (s)", watchSecondsCell(reelsWatch.totalWatchMs)]);
-  rows.push(["Avg Watch Time (s)", watchSecondsCell(reelsWatch.avgWatchMs)]);
-  rows.push(["Note", "Meta provides watch time per reel, not as an account daily series."]);
+  rows.push(['Reels Watch Time (last 7 days)']);
+  rows.push(['Reels Counted', reelsWatch.count]);
+  rows.push(['Total Watch Time (s)', watchSecondsCell(reelsWatch.totalWatchMs)]);
+  rows.push(['Avg Watch Time (s)', watchSecondsCell(reelsWatch.avgWatchMs)]);
+  rows.push(['Note', 'Meta provides watch time per reel, not as an account daily series.']);
 
   rows.push([]);
-  rows.push(["Posts Published in Last 30 Days"]);
+  rows.push(['Posts Published in Last 30 Days']);
   // No windowed (24h/7d/30d) Reach column: Reach is a unique-viewer count, and
   // summing daily reach deltas across a window overcounts it. Only the lifetime
   // total is a valid Reach figure.
   rows.push([
-    "Post ID",
-    "Published At",
-    "Title",
-    "Permalink",
-    "Media Type",
-    "Product Type",
-    "Lifetime Reach",
-    "Lifetime Views",
-    "Lifetime Engagement",
-    "Lifetime Comments",
-    "Lifetime Likes",
-    "Lifetime Shares",
-    "Lifetime Saved",
-    "Avg Watch Time (s)",
-    "Total Watch Time (s)",
-    "24h Views",
-    "24h Engagement",
-    "24h Comments",
-    "7d Views",
-    "7d Engagement",
-    "7d Comments",
-    "30d Views",
-    "30d Engagement",
-    "30d Comments",
-    "Breakdown Days",
+    'Post ID',
+    'Published At',
+    'Title',
+    'Permalink',
+    'Media Type',
+    'Product Type',
+    'Lifetime Reach',
+    'Lifetime Views',
+    'Lifetime Engagement',
+    'Lifetime Comments',
+    'Lifetime Likes',
+    'Lifetime Shares',
+    'Lifetime Saved',
+    'Avg Watch Time (s)',
+    'Total Watch Time (s)',
+    '24h Views',
+    '24h Engagement',
+    '24h Comments',
+    '7d Views',
+    '7d Engagement',
+    '7d Comments',
+    '30d Views',
+    '30d Engagement',
+    '30d Comments',
+    'Breakdown Days',
   ]);
 
   params.posts
@@ -291,11 +291,11 @@ export function buildOrganicReportCsv(params: {
       const lifetime = totalsFromPostLifetime(post);
       rows.push([
         post.id,
-        post.timestamp ?? "",
-        post.title ?? "",
-        post.permalink ?? "",
-        post.mediaType ?? "",
-        post.mediaProductType ?? "",
+        post.timestamp ?? '',
+        post.title ?? '',
+        post.permalink ?? '',
+        post.mediaType ?? '',
+        post.mediaProductType ?? '',
         lifetime.reach,
         lifetime.views,
         lifetime.engagement,
@@ -320,26 +320,26 @@ export function buildOrganicReportCsv(params: {
 
   const missingInsights = countPostsWithoutInsights(params.posts);
   rows.push([]);
-  rows.push(["Posts with no insights available", missingInsights]);
+  rows.push(['Posts with no insights available', missingInsights]);
 
   return csvRows(rows);
 }
 
 function htmlCell(value: string | number) {
   return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function fmtNumber(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat('en-US').format(value);
 }
 
 export function buildOrganicReportHtml(params: {
-  platform: "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin";
+  platform: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
   accountName: string;
   generatedAt: string;
   accountRangeSince: string;
@@ -351,25 +351,26 @@ export function buildOrganicReportHtml(params: {
   const accountRows = ACCOUNT_METRIC_ROWS.map((metric) => {
     const value = toNumber(params.accountMetrics[metric.key]);
     return `<tr><th>${htmlCell(metric.label)}</th><td>${htmlCell(fmtNumber(value))}</td></tr>`;
-  }).join("");
+  }).join('');
 
   const dailyTrends = last7Trends(params.trends);
   const trendSection =
     dailyTrends.length === 0
-      ? ""
+      ? ''
       : `
     <h2>Account 7-Day Daily Breakdown</h2>
     <div class="card">
       <table>
-        <thead><tr><th>Date</th>${TREND_BREAKDOWN_ROWS.map((row) => `<th>${htmlCell(row.label)}</th>`).join("")}</tr></thead>
+        <thead><tr><th>Date</th>${TREND_BREAKDOWN_ROWS.map((row) => `<th>${htmlCell(row.label)}</th>`).join('')}</tr></thead>
         <tbody>${dailyTrends
           .map(
             (point) =>
               `<tr><td>${htmlCell(point.date)}</td>${TREND_BREAKDOWN_ROWS.map(
-                (row) => `<td>${htmlCell(fmtNumber(toNumber(point[row.key] as number | undefined)))}</td>`,
-              ).join("")}</tr>`,
+                (row) =>
+                  `<td>${htmlCell(fmtNumber(toNumber(point[row.key] as number | undefined)))}</td>`,
+              ).join('')}</tr>`,
           )
-          .join("")}</tbody>
+          .join('')}</tbody>
       </table>
     </div>`;
 
@@ -402,17 +403,17 @@ export function buildOrganicReportHtml(params: {
 
       return `<tr>
         <td>${htmlCell(post.id)}</td>
-        <td>${htmlCell(post.timestamp ?? "")}</td>
-        <td>${htmlCell(post.title ?? "")}</td>
-        <td><a href="${htmlCell(post.permalink ?? "")}" target="_blank" rel="noopener noreferrer">Open</a></td>
-        <td>${htmlCell(post.mediaType ?? "")}</td>
-        <td>${htmlCell(post.mediaProductType ?? "")}</td>
+        <td>${htmlCell(post.timestamp ?? '')}</td>
+        <td>${htmlCell(post.title ?? '')}</td>
+        <td><a href="${htmlCell(post.permalink ?? '')}" target="_blank" rel="noopener noreferrer">Open</a></td>
+        <td>${htmlCell(post.mediaType ?? '')}</td>
+        <td>${htmlCell(post.mediaProductType ?? '')}</td>
         <td>${htmlCell(fmtNumber(lifetime.reach))}</td>
         <td>${htmlCell(fmtNumber(lifetime.views))}</td>
         <td>${htmlCell(fmtNumber(lifetime.engagement))}</td>
         <td>${htmlCell(fmtNumber(lifetime.comments))}</td>
-        <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsAvgWatchTime) : "-")}</td>
-        <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsVideoViewTotalTime) : "-")}</td>
+        <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsAvgWatchTime) : '-')}</td>
+        <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsVideoViewTotalTime) : '-')}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.views))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.engagement))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.comments))}</td>
@@ -425,7 +426,7 @@ export function buildOrganicReportHtml(params: {
         <td>${htmlCell(fmtNumber(windows.coverageDays))}</td>
       </tr>`;
     })
-    .join("");
+    .join('');
 
   return `<!doctype html>
 <html lang="en">

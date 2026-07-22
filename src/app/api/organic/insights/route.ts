@@ -1,22 +1,21 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { OrganicInsightsResponseSchema } from "@/lib/organic/organic-insights.types";
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { OrganicInsightsResponseSchema } from '@/lib/organic/organic-insights.types';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const requestSchema = z.object({
   brandId: z.string(),
   integrationAccountId: z.string(),
-  platform: z.enum(["instagram", "facebook", "tiktok"]),
+  platform: z.enum(['instagram', 'facebook', 'tiktok']),
   range: z.object({
     preset: z.enum([
-      "today",
-      "yesterday",
-      "previous_day",
-      "last_7d",
-      "last_14d",
-      "last_30d",
-      "last_month",
+      'today',
+      'yesterday',
+      'previous_day',
+      'last_7d',
+      'last_14d',
+      'last_30d',
+      'last_month',
     ]),
   }),
   forceRefresh: z.boolean().optional(),
@@ -27,7 +26,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = requestSchema.safeParse(body);
@@ -38,34 +37,27 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
 
   try {
-    const { data, error } = await supabase.functions.invoke(
-      "organic-reporting/insights",
-      { body: parsed.data }
-    );
+    const { data, error } = await supabase.functions.invoke('organic-reporting/insights', {
+      body: parsed.data,
+    });
 
     if (error) {
-      console.error("Error invoking organic-reporting/insights:", error);
+      console.error('Error invoking organic-reporting/insights:', error);
       return NextResponse.json(
-        { error: "Failed to fetch organic insights from edge function" },
-        { status: 500 }
+        { error: 'Failed to fetch organic insights from edge function' },
+        { status: 500 },
       );
     }
 
     const validated = OrganicInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
-      console.error("Invalid response from organic-reporting/insights:", validated.error);
-      return NextResponse.json(
-        { error: "Invalid response format from backend" },
-        { status: 502 }
-      );
+      console.error('Invalid response from organic-reporting/insights:', validated.error);
+      return NextResponse.json({ error: 'Invalid response format from backend' }, { status: 502 });
     }
 
     return NextResponse.json(validated.data);
   } catch (error) {
-    console.error("Unexpected error in organic insights proxy:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error('Unexpected error in organic insights proxy:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

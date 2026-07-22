@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
-import { getApiUrl } from "@/lib/api/config";
-import { ApiError, assertOk } from "@/lib/api/errors";
-import { normalizeInstagramOrganicMetricsResponse } from "@/lib/organic-metrics/normalize";
-import { organicDateRangePresetSchema } from "@/lib/schemas/organicMetrics";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getApiUrl } from '@/lib/api/config';
+import { ApiError, assertOk } from '@/lib/api/errors';
+import { normalizeInstagramOrganicMetricsResponse } from '@/lib/organic-metrics/normalize';
+import { organicDateRangePresetSchema } from '@/lib/schemas/organicMetrics';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const insightsRequestSchema = z.object({
   metrics: z.array(z.string()),
-  metric_type: z.enum(["total_value", "time_series"]).optional(),
-  period: z.enum(["day", "lifetime"]).optional(),
+  metric_type: z.enum(['total_value', 'time_series']).optional(),
+  period: z.enum(['day', 'lifetime']).optional(),
   breakdown: z.union([z.string(), z.array(z.string())]).optional(),
   timeframe: z.string().optional(),
   since: z.string().optional(),
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = requestSchema.safeParse(body);
@@ -58,14 +58,14 @@ export async function POST(request: Request) {
 
   const token = await getServerAccessToken();
   if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const response = await fetch(getApiUrl("/reporting/organic/metrics"), {
-      method: "POST",
+    const response = await fetch(getApiUrl('/reporting/organic/metrics'), {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
         ...(parsed.data.insightsRequests && { insightsRequests: parsed.data.insightsRequests }),
         ...(parsed.data.forceRefresh && { forceRefresh: parsed.data.forceRefresh }),
       }),
-      cache: "no-store",
+      cache: 'no-store',
     });
 
     await assertOk(response);
@@ -86,10 +86,10 @@ export async function POST(request: Request) {
     if (error instanceof ApiError) {
       return NextResponse.json(
         { error: error.message, ...(error.code ? { errorCode: error.code } : {}) },
-        { status: error.status }
+        { status: error.status },
       );
     }
-    const message = error instanceof Error ? error.message : "Failed to load organic metrics";
+    const message = error instanceof Error ? error.message : 'Failed to load organic metrics';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

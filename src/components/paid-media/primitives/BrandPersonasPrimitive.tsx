@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { PersonIcon } from "@radix-ui/react-icons";
+import { PersonIcon } from '@radix-ui/react-icons';
 
-import { ComingSoonPrimitive } from "./ComingSoonPrimitive";
+import { ComingSoonPrimitive } from './ComingSoonPrimitive';
 
 export function BrandPersonasPrimitive() {
   return (
@@ -13,4 +13,3 @@ export function BrandPersonasPrimitive() {
     />
   );
 }
-

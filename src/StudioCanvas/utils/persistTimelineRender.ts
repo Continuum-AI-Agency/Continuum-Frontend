@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { uploadMediaAsset, MEDIA_LIBRARY_BUCKET } from "@/lib/library/uploadMediaAsset";
+import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 
 // Save a finalized, browser-rendered Video Editor clip into the media library.
 // The render is an in-browser Blob with no storage path yet, so this uses the
@@ -24,7 +24,7 @@ export async function persistTimelineRender(params: {
 }): Promise<PersistedTimelineRender> {
   const { blob, brandId, nodeId } = params;
   const fileName = `video-edit-${nodeId}.mp4`;
-  const file = new File([blob], fileName, { type: blob.type || "video/mp4" });
+  const file = new File([blob], fileName, { type: blob.type || 'video/mp4' });
 
   const result = await uploadMediaAsset({ file, brandId });
 

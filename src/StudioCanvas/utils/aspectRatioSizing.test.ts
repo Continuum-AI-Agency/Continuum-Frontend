@@ -1,6 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 
-import { getAspectRatioValue, simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from './aspectRatioSizing';
+import {
+  getAspectRatioValue,
+  simplifyAspectRatio,
+  snapNodeDimensionsToAspectRatio,
+} from './aspectRatioSizing';
 
 describe('aspectRatioSizing', () => {
   it('parses string aspect ratios into numeric values', () => {

@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { Home } from "lucide-react";
-import { BackButton } from "./BackButton";
+import { Home } from 'lucide-react';
+import Link from 'next/link';
+import { BackButton } from './BackButton';
 
 export function BrandedNotFound() {
   return (
@@ -20,9 +20,7 @@ export function BrandedNotFound() {
           <span>Continuum AI</span>
         </div>
 
-        <p className="mb-8 font-mono text-xs uppercase text-zinc-400">
-          Status / 404
-        </p>
+        <p className="mb-8 font-mono text-xs uppercase text-zinc-400">Status / 404</p>
 
         <h1
           className="select-none bg-[linear-gradient(180deg,#f7f7f7_0%,#cfcfcf_28%,#7a7a7a_62%,#2f3030_100%)] bg-clip-text text-8xl font-black leading-none text-transparent drop-shadow-[0_24px_24px_rgba(0,0,0,0.5)] sm:text-[10rem] lg:text-[13rem]"
@@ -35,15 +33,15 @@ export function BrandedNotFound() {
           <h2
             className="text-3xl font-semibold"
             style={{
-              color: "#f8fafc",
-              textShadow: "0 2px 18px rgba(0,0,0,0.72)",
+              color: '#f8fafc',
+              textShadow: '0 2px 18px rgba(0,0,0,0.72)',
             }}
           >
             We can&apos;t find that page.
           </h2>
           <p className="mt-4 font-mono text-sm leading-6 text-zinc-400">
-            The link may be old, or the page may have moved. Check the URL or
-            head back to somewhere you know.
+            The link may be old, or the page may have moved. Check the URL or head back to somewhere
+            you know.
           </p>
         </div>
 

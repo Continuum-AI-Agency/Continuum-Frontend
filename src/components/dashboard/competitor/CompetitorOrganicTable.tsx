@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { SectionHeader } from "@/components/shared/SectionHeader";
-import { InspirationBrowser } from "@/components/competitors/InspirationBrowser";
-import { CompetitorSpyLink } from "./CompetitorSpyLink";
+import { InspirationBrowser } from '@/components/competitors/InspirationBrowser';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { CompetitorSpyLink } from './CompetitorSpyLink';
 
 // What the watched competitors are posting organically, as a compact thumbnail
 // grid that expands on hover. The shared InspirationBrowser adds an inline source
@@ -11,7 +11,10 @@ import { CompetitorSpyLink } from "./CompetitorSpyLink";
 export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border/70 bg-card">
-      <SectionHeader title="Competitor organic" action={<CompetitorSpyLink href="/competitor-spy?tab=inspiration" />} />
+      <SectionHeader
+        title="Competitor organic"
+        action={<CompetitorSpyLink href="/competitor-spy?tab=inspiration" />}
+      />
       <div className="p-3">
         <InspirationBrowser
           brandId={brandId}

@@ -1,5 +1,5 @@
-export type { TransformMatrix } from "@visx/zoom";
-export { ChoroplethChart, type ChoroplethChartProps } from "./choropleth-chart";
+export type { TransformMatrix } from '@visx/zoom';
+export { ChoroplethChart, type ChoroplethChartProps } from './choropleth-chart';
 export {
   type ChoroplethContextValue,
   type ChoroplethFeature,
@@ -11,16 +11,16 @@ export {
   type Margin,
   useChoropleth,
   useChoroplethZoom,
-} from "./choropleth-context";
+} from './choropleth-context';
 export {
   ChoroplethFeature as ChoroplethFeatureComponent,
   type ChoroplethFeatureProps,
-} from "./choropleth-feature";
+} from './choropleth-feature';
 export {
   ChoroplethGraticule,
   type ChoroplethGraticuleProps,
-} from "./choropleth-graticule";
+} from './choropleth-graticule';
 export {
   ChoroplethTooltip,
   type ChoroplethTooltipProps,
-} from "./choropleth-tooltip";
+} from './choropleth-tooltip';

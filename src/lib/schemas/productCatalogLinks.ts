@@ -1,10 +1,15 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const paidMediaPlatformSchema = z.enum(["meta"]);
+export const paidMediaPlatformSchema = z.enum(['meta']);
 
-export const paidMediaObjectTypeSchema = z.enum(["campaign", "adset", "ad"]);
+export const paidMediaObjectTypeSchema = z.enum(['campaign', 'adset', 'ad']);
 
-export const catalogProductAvailabilitySchema = z.enum(["in_stock", "out_of_stock", "preorder", "unknown"]);
+export const catalogProductAvailabilitySchema = z.enum([
+  'in_stock',
+  'out_of_stock',
+  'preorder',
+  'unknown',
+]);
 
 export const catalogProductRecordSchema = z.object({
   id: z.string().uuid(),
@@ -63,20 +68,20 @@ export const productCatalogLinkRecordSchema = z.object({
 
 export type ProductCatalogLinkRecord = z.infer<typeof productCatalogLinkRecordSchema>;
 
-const optionalNullableStringSchema = z.string().trim().optional().or(z.literal(""));
+const optionalNullableStringSchema = z.string().trim().optional().or(z.literal(''));
 
 export const upsertProductCatalogLinkSchema = z.object({
   brandId: z.string().uuid(),
   product: z.object({
     externalProductId: z.string().trim().min(1).max(150),
     title: optionalNullableStringSchema,
-    availability: catalogProductAvailabilitySchema.default("unknown"),
-    imageUrl: z.string().url().optional().or(z.literal("")),
-    productUrl: z.string().url().optional().or(z.literal("")),
-    currency: z.string().trim().length(3).optional().or(z.literal("")),
+    availability: catalogProductAvailabilitySchema.default('unknown'),
+    imageUrl: z.string().url().optional().or(z.literal('')),
+    productUrl: z.string().url().optional().or(z.literal('')),
+    currency: z.string().trim().length(3).optional().or(z.literal('')),
   }),
   adObject: z.object({
-    platform: paidMediaPlatformSchema.default("meta"),
+    platform: paidMediaPlatformSchema.default('meta'),
     objectType: paidMediaObjectTypeSchema,
     externalObjectId: z.string().trim().min(1).max(120),
     name: optionalNullableStringSchema,
@@ -87,7 +92,7 @@ export const upsertProductCatalogLinkSchema = z.object({
     seenAt: z.string().datetime({ offset: true }).optional(),
     activeFrom: z.string().datetime({ offset: true }).optional().nullable(),
     activeTo: z.string().datetime({ offset: true }).optional().nullable(),
-    source: z.string().trim().min(1).max(64).default("sync"),
+    source: z.string().trim().min(1).max(64).default('sync'),
     syncJobId: z.string().uuid().optional().nullable(),
   }),
 });

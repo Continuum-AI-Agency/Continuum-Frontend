@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useRef } from 'react';
 import { useReactFlow } from '@xyflow/react';
-import { useStudioStore } from '../stores/useStudioStore';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
+import { useStudioStore } from '../stores/useStudioStore';
 
 interface ContextMenuProps {
   id: string;

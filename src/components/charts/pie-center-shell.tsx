@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { pie as d3Pie } from "d3-shape";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PieCenter, type PieCenterProps } from "./pie-center";
+import { pie as d3Pie } from 'd3-shape';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PieCenter, type PieCenterProps } from './pie-center';
 import {
   defaultPieColors,
   type PieArcData,
   type PieContextValue,
   type PieData,
   PieProvider,
-} from "./pie-context";
+} from './pie-context';
 
 const SHELL_HOVER_OFFSET = 10;
 
-export type PieCenterShellProps = Omit<PieCenterProps, "children"> & {
+export type PieCenterShellProps = Omit<PieCenterProps, 'children'> & {
   /** Value shown with NumberFlow (same role as pie total when not hovering) */
   centerValue: number;
   /** Square reference size for pie context (matches `PieChart` `size`) */
@@ -42,9 +42,7 @@ export function PieCenterShell({
   const containerRef = useRef<HTMLDivElement>(null);
   const introStartedRef = useRef(false);
 
-  const [flowTotal, setFlowTotal] = useState(() =>
-    animateEntrance ? 0 : centerValue
-  );
+  const [flowTotal, setFlowTotal] = useState(() => (animateEntrance ? 0 : centerValue));
 
   useEffect(() => {
     if (!animateEntrance) {
@@ -70,8 +68,8 @@ export function PieCenterShell({
   }, [animateEntrance, centerValue]);
 
   const data: PieData[] = useMemo(
-    () => [{ label: "_pieCenterShell", value: Math.max(flowTotal, 0) }],
-    [flowTotal]
+    () => [{ label: '_pieCenterShell', value: Math.max(flowTotal, 0) }],
+    [flowTotal],
   );
 
   const totalValue = flowTotal;
@@ -123,7 +121,7 @@ export function PieCenterShell({
       }
       return getColor(index);
     },
-    [data, getColor]
+    [data, getColor],
   );
 
   const center = contextSize / 2;
@@ -152,17 +150,7 @@ export function PieCenterShell({
       geometryScrubbing: false,
       scrubSlicePaths: null,
     }),
-    [
-      data,
-      arcs,
-      contextSize,
-      center,
-      outerRadius,
-      innerRadiusPx,
-      totalValue,
-      getColor,
-      getFill,
-    ]
+    [data, arcs, contextSize, center, outerRadius, innerRadiusPx, totalValue, getColor, getFill],
   );
 
   return (
@@ -172,4 +160,4 @@ export function PieCenterShell({
   );
 }
 
-PieCenterShell.displayName = "PieCenterShell";
+PieCenterShell.displayName = 'PieCenterShell';

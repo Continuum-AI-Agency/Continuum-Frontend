@@ -1,38 +1,30 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Loader2, Plug, Search, TriangleAlert, X } from "lucide-react";
-import {
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-import { type PlatformKey } from "@/components/onboarding/platforms";
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import {
-  useUserIntegrationAssets,
-  type UserIntegrationAssetRow,
-} from "@/lib/api/integrations";
-import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
-import type { BrandMember } from "@/lib/onboarding/state";
-import { getMemberDisplayName } from "@/lib/brands/memberDisplay";
-import type { SelectableAsset } from "@/lib/schemas/integrations";
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Loader2, Plug, Search, TriangleAlert, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { AssignmentAccountList } from '@/components/integrations/internal/AssignmentAccountList';
+import type { PlatformKey } from '@/components/onboarding/platforms';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useMetaAutoResync } from '@/hooks/useMetaAutoResync';
+import { type UserIntegrationAssetRow, useUserIntegrationAssets } from '@/lib/api/integrations';
+import { getMemberDisplayName } from '@/lib/brands/memberDisplay';
+import { buildAssignmentSections } from '@/lib/integrations/assignmentGroups';
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   getMetaSelectableAdAccountBundles,
   getSelectableAssetsFlatList,
   mergeSelectableAssetsWithBrandSummary,
-} from "@/lib/integrations/selectableAssets";
-import { buildAssignmentSections } from "@/lib/integrations/assignmentGroups";
-import { AssignmentAccountList } from "@/components/integrations/internal/AssignmentAccountList";
-import { useToast } from "@/components/ui/ToastProvider";
-import { useMetaAutoResync } from "@/hooks/useMetaAutoResync";
+} from '@/lib/integrations/selectableAssets';
+import type { BrandMember } from '@/lib/onboarding/state';
+import type { SelectableAsset } from '@/lib/schemas/integrations';
 
 export type AssignmentsDialogProps = {
   open: boolean;
@@ -58,14 +50,14 @@ export function AssignmentsDialog({
   summary,
   assignedIds,
   members = [],
-  currentUserId = "",
+  currentUserId = '',
   onSaved,
 }: AssignmentsDialogProps) {
   const { show } = useToast();
   const router = useRouter();
   const userAssetsQuery = useUserIntegrationAssets();
   const [isSaving, setIsSaving] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
 
   const selectableAssetsData = useMemo(() => {
     if (!userAssetsQuery.data) return null;
@@ -74,13 +66,13 @@ export function AssignmentsDialog({
         asset_pk: row.id,
         integration_account_id: row.id,
         external_id: row.external_account_id ?? row.id,
-        type: row.type ?? "unknown",
+        type: row.type ?? 'unknown',
         name: row.name,
         business_id: null,
         ad_account_id: row.ad_account_id ?? null,
         role: row.role,
         also_accessible_via: null,
-      })
+      }),
     );
 
     const response = {
@@ -94,17 +86,17 @@ export function AssignmentsDialog({
 
   const selectableAssets = useMemo(
     () => (selectableAssetsData ? getSelectableAssetsFlatList(selectableAssetsData) : []),
-    [selectableAssetsData]
+    [selectableAssetsData],
   );
 
   const metaBundles = useMemo(
     () => (selectableAssetsData ? getMetaSelectableAdAccountBundles(selectableAssetsData) : null),
-    [selectableAssetsData]
+    [selectableAssetsData],
   );
 
   const sections = useMemo(
     () => buildAssignmentSections(selectableAssetsData, metaBundles),
-    [selectableAssetsData, metaBundles]
+    [selectableAssetsData, metaBundles],
   );
 
   const totalSelectable = useMemo(() => {
@@ -142,7 +134,7 @@ export function AssignmentsDialog({
   // biome-ignore lint/correctness/useExhaustiveDependencies: isLockedForCaller is a stable closure over ownerByAccountId + currentUserId, which are the listed deps; adding the function itself would re-run every render.
   const teammateAssignedIds = useMemo(
     () => assignedIds.filter((id) => isLockedForCaller(id)),
-    [assignedIds, ownerByAccountId, currentUserId]
+    [assignedIds, ownerByAccountId, currentUserId],
   );
 
   // #154 fingerprint: Meta connected (some Meta asset synced) but no ad account.
@@ -151,9 +143,9 @@ export function AssignmentsDialog({
     let hasMetaAsset = false;
     let hasMetaAdAccount = false;
     for (const row of rows) {
-      if ((row.type ?? "").startsWith("meta_")) {
+      if ((row.type ?? '').startsWith('meta_')) {
         hasMetaAsset = true;
-        if ((row.type ?? "").includes("ad_account")) hasMetaAdAccount = true;
+        if ((row.type ?? '').includes('ad_account')) hasMetaAdAccount = true;
       }
     }
     return hasMetaAsset && !hasMetaAdAccount;
@@ -183,7 +175,7 @@ export function AssignmentsDialog({
       }
     });
     setSelectedById(defaults);
-    setQuery("");
+    setQuery('');
   }, [open, assignedIds, selectableAssets]);
 
   const [mounted, setMounted] = useState(false);
@@ -193,7 +185,7 @@ export function AssignmentsDialog({
   }, []);
 
   const formatDate = (dateString: string) => {
-    if (!mounted) return "—";
+    if (!mounted) return '—';
     return new Date(dateString).toLocaleString();
   };
 
@@ -233,13 +225,13 @@ export function AssignmentsDialog({
       router.refresh();
       await onSaved?.();
       show({
-        title: "Assignments updated",
+        title: 'Assignments updated',
         description: `Linked ${result.linked} account(s).`,
-        variant: "success",
+        variant: 'success',
       });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to update assignments.";
-      show({ title: "Update failed", description: message, variant: "error" });
+      const message = error instanceof Error ? error.message : 'Failed to update assignments.';
+      show({ title: 'Update failed', description: message, variant: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -255,22 +247,24 @@ export function AssignmentsDialog({
         {/* Transparent overlay: keeps the workspace visible behind the drawer
             (no dimming) while still closing on outside click / Escape. */}
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content
-          className="fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l bg-background shadow-2xl transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md"
-        >
+        <DialogPrimitive.Content className="fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l bg-background shadow-2xl transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md">
           <SheetHeader className="gap-2 border-b border-border/60 px-5 py-4">
             <SheetTitle>Assign accounts</SheetTitle>
             <SheetDescription>Choose which connected accounts this brand can use.</SheetDescription>
 
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground tabular-nums">{desiredAssetIds.length}</span>
-                {" of "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {desiredAssetIds.length}
+                </span>
+                {' of '}
                 <span className="tabular-nums">{totalSelectable}</span>
-                {" selected"}
+                {' selected'}
               </span>
               {syncedAt ? (
-                <span className="text-2xs text-muted-foreground">Synced {formatDate(syncedAt)}</span>
+                <span className="text-2xs text-muted-foreground">
+                  Synced {formatDate(syncedAt)}
+                </span>
               ) : null}
             </div>
 
@@ -306,7 +300,7 @@ export function AssignmentsDialog({
               <Alert variant="destructive" className="py-2">
                 <TriangleAlert />
                 <AlertDescription>
-                  Couldn&apos;t refresh Meta accounts. {resyncError}{" "}
+                  Couldn&apos;t refresh Meta accounts. {resyncError}{' '}
                   <button
                     type="button"
                     className="font-medium underline underline-offset-2"
@@ -320,7 +314,7 @@ export function AssignmentsDialog({
               <Alert className="py-2">
                 <TriangleAlert />
                 <AlertDescription>
-                  Meta is connected but no ad accounts were found.{" "}
+                  Meta is connected but no ad accounts were found.{' '}
                   <button
                     type="button"
                     className="font-medium underline underline-offset-2"
@@ -389,7 +383,7 @@ export function AssignmentsDialog({
                   Saving
                 </>
               ) : (
-                "Save"
+                'Save'
               )}
             </Button>
           </SheetFooter>

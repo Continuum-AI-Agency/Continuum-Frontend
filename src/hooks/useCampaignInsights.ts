@@ -1,13 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-
+import * as React from 'react';
+import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
 import type {
   CampaignInsightsResponse,
   ComputedInsight,
-} from "@/lib/paid-media/account-insights.types";
-import type { BudgetPacingEntry } from "@/lib/schemas/budgetPacing";
-import type { PaidMediaTimeRange } from "@/components/paid-media/dashboard/timeRange";
+} from '@/lib/paid-media/account-insights.types';
+import type { BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
 
 type UseCampaignInsightsParams = {
   brandId: string;
@@ -31,9 +30,9 @@ type UseCampaignInsightsReturn = {
 
 function buildRequestBody(params: UseCampaignInsightsParams) {
   const range =
-    params.timeRange.preset === "custom"
+    params.timeRange.preset === 'custom'
       ? {
-          preset: "custom" as const,
+          preset: 'custom' as const,
           since: params.timeRange.since,
           until: params.timeRange.until,
         }
@@ -50,58 +49,56 @@ function buildRequestBody(params: UseCampaignInsightsParams) {
 }
 
 function fmt(n: number): string {
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function deriveBudgetInsights(pacing: BudgetPacingEntry): ComputedInsight[] {
   const insights: ComputedInsight[] = [];
-  const budgetLabel = pacing.budgetType === "daily" ? "daily budget" : "lifetime budget";
+  const budgetLabel = pacing.budgetType === 'daily' ? 'daily budget' : 'lifetime budget';
 
-  if (pacing.paceStatus === "overspending") {
+  if (pacing.paceStatus === 'overspending') {
     insights.push({
-      category: "budget",
+      category: 'budget',
       text: `Campaign is overspending at ${pacing.pacePct.toFixed(0)}% of target pace`,
-      severity: "negative",
-      source: "computed",
-      metric: "pace",
+      severity: 'negative',
+      source: 'computed',
+      metric: 'pace',
       value: pacing.pacePct,
-      recommendation:
-        "Consider reducing daily budget or pausing underperforming ad sets",
+      recommendation: 'Consider reducing daily budget or pausing underperforming ad sets',
     });
 
     const overspendAmt = pacing.projectedEndSpend - pacing.totalBudget;
     if (overspendAmt > 0) {
       insights.push({
-        category: "budget",
+        category: 'budget',
         text: `Projected to overspend by ${fmt(overspendAmt)} at current pace`,
-        severity: "negative",
-        source: "computed",
-        metric: "spend",
+        severity: 'negative',
+        source: 'computed',
+        metric: 'spend',
         value: overspendAmt,
       });
     }
-  } else if (pacing.paceStatus === "underspending") {
+  } else if (pacing.paceStatus === 'underspending') {
     const daysMsg =
       pacing.daysRemaining !== null
-        ? ` with ${pacing.daysRemaining} day${pacing.daysRemaining !== 1 ? "s" : ""} remaining`
-        : "";
+        ? ` with ${pacing.daysRemaining} day${pacing.daysRemaining !== 1 ? 's' : ''} remaining`
+        : '';
     insights.push({
-      category: "budget",
+      category: 'budget',
       text: `Campaign is underspending at ${pacing.pacePct.toFixed(0)}% of target pace — ${fmt(pacing.budgetRemaining)} of ${budgetLabel} unspent${daysMsg}`,
-      severity: "neutral",
-      source: "computed",
-      metric: "pace",
+      severity: 'neutral',
+      source: 'computed',
+      metric: 'pace',
       value: pacing.pacePct,
-      recommendation:
-        "Consider increasing bids or expanding targeting to improve delivery",
+      recommendation: 'Consider increasing bids or expanding targeting to improve delivery',
     });
   } else {
     insights.push({
-      category: "budget",
+      category: 'budget',
       text: `Campaign is on pace at ${pacing.pacePct.toFixed(0)}% — ${fmt(pacing.budgetRemaining)} ${budgetLabel} remaining`,
-      severity: "positive",
-      source: "computed",
-      metric: "pace",
+      severity: 'positive',
+      source: 'computed',
+      metric: 'pace',
       value: pacing.pacePct,
     });
   }
@@ -109,9 +106,7 @@ function deriveBudgetInsights(pacing: BudgetPacingEntry): ComputedInsight[] {
   return insights;
 }
 
-export function useCampaignInsights(
-  params: UseCampaignInsightsParams
-): UseCampaignInsightsReturn {
+export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampaignInsightsReturn {
   const { brandId, adAccountId, campaignId, timeRange, enabled = true } = params;
 
   const [data, setData] = React.useState<CampaignInsightsResponse | null>(null);
@@ -123,7 +118,7 @@ export function useCampaignInsights(
   const requestIdRef = React.useRef(0);
 
   const timeRangeKey =
-    timeRange.preset === "custom"
+    timeRange.preset === 'custom'
       ? `custom:${timeRange.since}:${timeRange.until}`
       : timeRange.preset;
 
@@ -143,27 +138,24 @@ export function useCampaignInsights(
     const insightsController = new AbortController();
     const pacingController = new AbortController();
 
-    const insightsFetch = fetch("/api/paid-media/campaign-insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        buildRequestBody({ brandId, adAccountId, campaignId, timeRange })
-      ),
+    const insightsFetch = fetch('/api/paid-media/campaign-insights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildRequestBody({ brandId, adAccountId, campaignId, timeRange })),
       signal: insightsController.signal,
     }).then(async (response) => {
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(
-          (body as Record<string, string>).error ??
-            `Request failed with status ${response.status}`
+          (body as Record<string, string>).error ?? `Request failed with status ${response.status}`,
         );
       }
       return response.json() as Promise<CampaignInsightsResponse>;
     });
 
-    const pacingFetch = fetch("/api/paid-media/budget-pacing", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const pacingFetch = fetch('/api/paid-media/budget-pacing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, adAccountId }),
       signal: pacingController.signal,
     })
@@ -179,10 +171,13 @@ export function useCampaignInsights(
       .then(([insightsResp, pacingEntry]) => {
         if (requestId !== requestIdRef.current) return;
         const budgetInsights = pacingEntry
-          ? deriveBudgetInsights(pacingEntry).map((i) => ({ ...i, campaign_id: campaignId ?? undefined }))
+          ? deriveBudgetInsights(pacingEntry).map((i) => ({
+              ...i,
+              campaign_id: campaignId ?? undefined,
+            }))
           : [];
         const stampedInsights = insightsResp.insights.map((i) =>
-          i.campaign_id ? i : { ...i, campaign_id: campaignId ?? undefined }
+          i.campaign_id ? i : { ...i, campaign_id: campaignId ?? undefined },
         );
         setData({
           ...insightsResp,
@@ -193,12 +188,8 @@ export function useCampaignInsights(
       })
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load campaign insights"
-        );
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setError(err instanceof Error ? err.message : 'Failed to load campaign insights');
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {

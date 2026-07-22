@@ -1,7 +1,7 @@
-import "server-only";
+import 'server-only';
 
-import { cache } from "react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { cache } from 'react';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type BrandIntegrationGrant = {
   grantId: string;
@@ -25,11 +25,11 @@ export const fetchBrandIntegrationGrants = cache(
     const supabase = await createSupabaseServerClient();
 
     const { data, error } = await supabase
-      .schema("brand_profiles")
-      .rpc("list_brand_integrations", { p_brand_profile_id: brandProfileId });
+      .schema('brand_profiles')
+      .rpc('list_brand_integrations', { p_brand_profile_id: brandProfileId });
 
     if (error) {
-      console.error("[fetchBrandIntegrationGrants] RPC failed", error);
+      console.error('[fetchBrandIntegrationGrants] RPC failed', error);
       return [];
     }
 
@@ -50,17 +50,17 @@ export async function grantIntegrationToBrand(
 ): Promise<string> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
-    .schema("brand_profiles")
-    .rpc("grant_integration_to_brand", {
+    .schema('brand_profiles')
+    .rpc('grant_integration_to_brand', {
       p_brand_profile_id: brandProfileId,
       p_integration_id: integrationId,
     });
 
   if (error) {
-    throw new Error(error.message ?? "Failed to grant integration to brand");
+    throw new Error(error.message ?? 'Failed to grant integration to brand');
   }
-  if (typeof data !== "string") {
-    throw new Error("grant_integration_to_brand returned no grant id");
+  if (typeof data !== 'string') {
+    throw new Error('grant_integration_to_brand returned no grant id');
   }
   return data;
 }
@@ -81,12 +81,10 @@ type ListMyConnectionGrantsRow = {
 
 export const fetchMyConnectionGrants = cache(async (): Promise<ConnectionGrantRow[]> => {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .rpc("list_my_connection_grants");
+  const { data, error } = await supabase.schema('brand_profiles').rpc('list_my_connection_grants');
 
   if (error) {
-    console.error("[fetchMyConnectionGrants] RPC failed", error);
+    console.error('[fetchMyConnectionGrants] RPC failed', error);
     return [];
   }
 
@@ -102,10 +100,10 @@ export const fetchMyConnectionGrants = cache(async (): Promise<ConnectionGrantRo
 export async function revokeIntegrationFromBrand(grantId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
-    .schema("brand_profiles")
-    .rpc("revoke_integration_from_brand", { p_grant_id: grantId });
+    .schema('brand_profiles')
+    .rpc('revoke_integration_from_brand', { p_grant_id: grantId });
 
   if (error) {
-    throw new Error(error.message ?? "Failed to revoke grant");
+    throw new Error(error.message ?? 'Failed to revoke grant');
   }
 }

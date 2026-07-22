@@ -130,18 +130,22 @@ describe('cutAndPersistSection', () => {
       },
       { createClient: client, splice: spliceOn as never },
     );
-    expect((spliceOn.mock.calls[0][0] as { captionWords?: unknown[] }).captionWords).toBeUndefined();
-    expect((client as unknown as { functions: { invoke: ReturnType<typeof mock> } })().functions.invoke.mock.calls[1][1].body)
-      .toMatchObject({
-        captionCues: [
-          {
-            words: [
-              { text: 'hello', startSec: 0, endSec: 0.5 },
-              { text: 'world', startSec: 0.6, endSec: 1.0 },
-            ],
-          },
-        ],
-      });
+    expect(
+      (spliceOn.mock.calls[0][0] as { captionWords?: unknown[] }).captionWords,
+    ).toBeUndefined();
+    expect(
+      (client as unknown as { functions: { invoke: ReturnType<typeof mock> } })().functions.invoke
+        .mock.calls[1][1].body,
+    ).toMatchObject({
+      captionCues: [
+        {
+          words: [
+            { text: 'hello', startSec: 0, endSec: 0.5 },
+            { text: 'world', startSec: 0.6, endSec: 1.0 },
+          ],
+        },
+      ],
+    });
 
     const spliceOff = makeSplice();
     await cutAndPersistSection(

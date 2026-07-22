@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from 'next/server';
 
 import {
   normalizeNullableText,
-  productCatalogVerticalSchema,
+  type ProductCatalogRecord,
   productCatalogCreateSchema,
   productCatalogRecordSchema,
-  type ProductCatalogRecord,
-} from "@/lib/schemas/productCatalogs";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+  productCatalogVerticalSchema,
+} from '@/lib/schemas/productCatalogs';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-const PRODUCT_CATALOG_TABLE = "paid_media_product_catalogs" as never;
+const PRODUCT_CATALOG_TABLE = 'paid_media_product_catalogs' as never;
 
 type ProductCatalogRow = {
   id: string;
@@ -36,7 +36,7 @@ type ProductCatalogRow = {
   updated_at: string;
 };
 
-type ProductCatalogInsertPayload = Omit<ProductCatalogRow, "id" | "created_at" | "updated_at">;
+type ProductCatalogInsertPayload = Omit<ProductCatalogRow, 'id' | 'created_at' | 'updated_at'>;
 
 type MetaCatalogCreateResponse = {
   catalogId: string;
@@ -47,7 +47,7 @@ type MetaCatalogCreateResponse = {
 };
 
 function normalizeProductCatalogRow(input: unknown): ProductCatalogRecord | null {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
 
   const parsed = productCatalogRecordSchema.safeParse({
@@ -79,31 +79,35 @@ function normalizeProductCatalogRow(input: unknown): ProductCatalogRecord | null
 }
 
 const SELECT_COLUMNS =
-  "id, brand_id, external_catalog_id, name, business_id, catalog_store_id, vertical, feed_url, default_image_url, fallback_image_url, linked_ad_object_level, linked_ad_object_ids, data_feed_enabled, product_tagging_enabled, sync_status, product_count, feed_count, product_set_count, last_synced_at, notes, created_at, updated_at";
+  'id, brand_id, external_catalog_id, name, business_id, catalog_store_id, vertical, feed_url, default_image_url, fallback_image_url, linked_ad_object_level, linked_ad_object_ids, data_feed_enabled, product_tagging_enabled, sync_status, product_count, feed_count, product_set_count, last_synced_at, notes, created_at, updated_at';
 
 function normalizeMetaCatalogCreateResponse(input: unknown): MetaCatalogCreateResponse | null {
-  if (!input || typeof input !== "object") return null;
+  if (!input || typeof input !== 'object') return null;
   const row = input as Record<string, unknown>;
   const catalogId =
-    typeof row.catalogId === "string" && row.catalogId.trim().length > 0
+    typeof row.catalogId === 'string' && row.catalogId.trim().length > 0
       ? row.catalogId.trim()
-      : typeof row.id === "string" && row.id.trim().length > 0
+      : typeof row.id === 'string' && row.id.trim().length > 0
         ? row.id.trim()
         : null;
 
   if (!catalogId) return null;
 
   const vertical =
-    typeof row.vertical === "string" && row.vertical.trim().length > 0
-      ? row.vertical.trim()
-      : null;
+    typeof row.vertical === 'string' && row.vertical.trim().length > 0 ? row.vertical.trim() : null;
 
   const productCount =
-    typeof row.productCount === "number" && Number.isFinite(row.productCount) ? Math.max(0, Math.trunc(row.productCount)) : null;
+    typeof row.productCount === 'number' && Number.isFinite(row.productCount)
+      ? Math.max(0, Math.trunc(row.productCount))
+      : null;
   const feedCount =
-    typeof row.feedCount === "number" && Number.isFinite(row.feedCount) ? Math.max(0, Math.trunc(row.feedCount)) : null;
+    typeof row.feedCount === 'number' && Number.isFinite(row.feedCount)
+      ? Math.max(0, Math.trunc(row.feedCount))
+      : null;
   const productSetCount =
-    typeof row.productSetCount === "number" && Number.isFinite(row.productSetCount) ? Math.max(0, Math.trunc(row.productSetCount)) : null;
+    typeof row.productSetCount === 'number' && Number.isFinite(row.productSetCount)
+      ? Math.max(0, Math.trunc(row.productSetCount))
+      : null;
 
   return {
     catalogId,
@@ -114,12 +118,12 @@ function normalizeMetaCatalogCreateResponse(input: unknown): MetaCatalogCreateRe
   };
 }
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  const brandId = request.nextUrl.searchParams.get("brandId");
+  const brandId = request.nextUrl.searchParams.get('brandId');
   if (!brandId) {
-    return NextResponse.json({ error: "brandId is required" }, { status: 400 });
+    return NextResponse.json({ error: 'brandId is required' }, { status: 400 });
   }
 
   try {
@@ -130,15 +134,15 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data, error } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_CATALOG_TABLE)
       .select(SELECT_COLUMNS)
-      .eq("brand_id", brandId)
-      .order("updated_at", { ascending: false });
+      .eq('brand_id', brandId)
+      .order('updated_at', { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -150,8 +154,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ catalogs }, { status: 200 });
   } catch (error) {
-    console.error("Failed to list product catalogs", error);
-    return NextResponse.json({ error: "Failed to list product catalogs" }, { status: 500 });
+    console.error('Failed to list product catalogs', error);
+    return NextResponse.json({ error: 'Failed to list product catalogs' }, { status: 500 });
   }
 }
 
@@ -160,12 +164,12 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = productCatalogCreateSchema.safeParse(body);
   if (!parsed.success) {
-    console.error("[product-catalogs POST] 422 field errors:", parsed.error.flatten());
+    console.error('[product-catalogs POST] 422 field errors:', parsed.error.flatten());
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 
@@ -177,18 +181,18 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.access_token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!supabaseUrl) {
-      return NextResponse.json({ error: "Supabase URL is not configured" }, { status: 500 });
+      return NextResponse.json({ error: 'Supabase URL is not configured' }, { status: 500 });
     }
 
     const createResponse = await fetch(`${supabaseUrl}/functions/v1/catalog-create-meta`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
@@ -199,21 +203,23 @@ export async function POST(request: NextRequest) {
         metaAccountId: normalizeNullableText(parsed.data.metaAccountId) ?? undefined,
         vertical: parsed.data.vertical,
       }),
-      cache: "no-store",
+      cache: 'no-store',
     });
 
-    const createBody = await createResponse.json().catch(() => ({ error: "Invalid edge function response" }));
+    const createBody = await createResponse
+      .json()
+      .catch(() => ({ error: 'Invalid edge function response' }));
     if (!createResponse.ok) {
       const edgeError =
-        createBody && typeof createBody === "object" && "error" in createBody
-          ? String((createBody as { error?: unknown }).error ?? "Catalog create failed")
-          : "Catalog create failed";
+        createBody && typeof createBody === 'object' && 'error' in createBody
+          ? String((createBody as { error?: unknown }).error ?? 'Catalog create failed')
+          : 'Catalog create failed';
       return NextResponse.json({ error: edgeError }, { status: createResponse.status });
     }
 
     const metaCatalog = normalizeMetaCatalogCreateResponse(createBody);
     if (!metaCatalog) {
-      return NextResponse.json({ error: "Invalid catalog-create-meta response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid catalog-create-meta response' }, { status: 502 });
     }
 
     const payload: ProductCatalogInsertPayload = {
@@ -222,18 +228,17 @@ export async function POST(request: NextRequest) {
       name: parsed.data.name.trim(),
       business_id: parsed.data.businessId.trim(),
       catalog_store_id: parsed.data.catalogStoreId.trim(),
-      vertical:
-        productCatalogVerticalSchema.safeParse(metaCatalog.vertical ?? "").success
-          ? (metaCatalog.vertical as ProductCatalogInsertPayload["vertical"])
-          : parsed.data.vertical,
+      vertical: productCatalogVerticalSchema.safeParse(metaCatalog.vertical ?? '').success
+        ? (metaCatalog.vertical as ProductCatalogInsertPayload['vertical'])
+        : parsed.data.vertical,
       feed_url: null,
       default_image_url: null,
       fallback_image_url: null,
-      linked_ad_object_level: "adset",
+      linked_ad_object_level: 'adset',
       linked_ad_object_ids: [],
       data_feed_enabled: true,
       product_tagging_enabled: true,
-      sync_status: "draft",
+      sync_status: 'draft',
       product_count: metaCatalog.productCount ?? 0,
       feed_count: metaCatalog.feedCount ?? 0,
       product_set_count: metaCatalog.productSetCount ?? 0,
@@ -242,7 +247,7 @@ export async function POST(request: NextRequest) {
     };
 
     const { data, error } = await supabase
-      .schema("paid_media" as never)
+      .schema('paid_media' as never)
       .from(PRODUCT_CATALOG_TABLE)
       .insert(payload as never)
       .select(SELECT_COLUMNS)
@@ -254,12 +259,12 @@ export async function POST(request: NextRequest) {
 
     const catalog = normalizeProductCatalogRow(data as ProductCatalogRow);
     if (!catalog) {
-      return NextResponse.json({ error: "Invalid product catalog response" }, { status: 502 });
+      return NextResponse.json({ error: 'Invalid product catalog response' }, { status: 502 });
     }
 
     return NextResponse.json({ catalog }, { status: 201 });
   } catch (error) {
-    console.error("Failed to create product catalog", error);
-    return NextResponse.json({ error: "Failed to create product catalog" }, { status: 500 });
+    console.error('Failed to create product catalog', error);
+    return NextResponse.json({ error: 'Failed to create product catalog' }, { status: 500 });
   }
 }

@@ -134,7 +134,7 @@ export function GroundingChip({
           align="start"
           side="top"
           collisionPadding={16}
-          className="nodrag nopan w-80 p-2"
+          className="nodrag nopan z-[1100] w-80 bg-popover p-2"
         >
           <GroundingPopover
             brandId={brandId}

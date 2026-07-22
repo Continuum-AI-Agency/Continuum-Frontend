@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 // The combined "All" view: organic Instagram posts and paid ad snapshots in one
 // recency-ordered grid. Each item renders with its existing surface — the paid
@@ -6,16 +6,16 @@
 // for its kind, so the toggle's per-source affordances are preserved in the mix.
 // A source pill marks each card since the two are interleaved.
 
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { AdSnapshotCard } from "@/components/competitor-spy/AdSnapshotCard";
-import { SaveToBoardButton } from "@/components/competitor-spy/SaveToBoardButton";
-import { cn } from "@/lib/utils";
-import { CompetitorPostHoverTile } from "./CompetitorPostHoverTile";
-import type { InspirationFeedItem } from "./inspirationFeed";
+import { AdSnapshotCard } from '@/components/competitor-spy/AdSnapshotCard';
+import { SaveToBoardButton } from '@/components/competitor-spy/SaveToBoardButton';
+import { cn } from '@/lib/utils';
+import { CompetitorPostHoverTile } from './CompetitorPostHoverTile';
+import type { InspirationFeedItem } from './inspirationFeed';
 
 const DEFAULT_GRID_CLASS =
-  "grid grid-cols-2 items-start gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  'grid grid-cols-2 items-start gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 const SKELETON_COUNT = 10;
 
 function SourcePill({ label }: { label: string }) {
@@ -59,7 +59,11 @@ export function InspirationFeedGrid({
   }
 
   if (isError) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Inspiration is unavailable right now.</p>;
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        Inspiration is unavailable right now.
+      </p>
+    );
   }
 
   if (items.length === 0) {
@@ -75,7 +79,7 @@ export function InspirationFeedGrid({
   return (
     <div className={cn(gridClassName)}>
       {items.map((item) =>
-        item.source === "paid" ? (
+        item.source === 'paid' ? (
           <Cell key={item.key} label="Paid">
             <AdSnapshotCard entry={item.entry} brandId={brandId} />
           </Cell>
@@ -88,7 +92,7 @@ export function InspirationFeedGrid({
                   <SaveToBoardButton
                     brandId={brandId}
                     request={{
-                      kind: "organic",
+                      kind: 'organic',
                       competitorId: item.view.competitorId,
                       competitorName: item.view.competitorName,
                       instagramUsername: item.view.instagramUsername,

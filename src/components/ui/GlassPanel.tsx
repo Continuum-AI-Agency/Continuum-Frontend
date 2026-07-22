@@ -1,17 +1,16 @@
-import React from "react";
+import type React from 'react';
 
-export function GlassPanel({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function GlassPanel({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={"backdrop-blur-xl rounded-lg shadow-2xl " + className}
+      className={'backdrop-blur-xl rounded-lg shadow-2xl ' + className}
       style={{
-        backgroundColor: "var(--glass-bg)",
+        backgroundColor: 'var(--glass-bg)',
         border: `1px solid var(--glass-border)`,
-        color: "var(--foreground)",
+        color: 'var(--foreground)',
         ...(props.style || {}),
       }}
       {...props}
     />
   );
 }
-

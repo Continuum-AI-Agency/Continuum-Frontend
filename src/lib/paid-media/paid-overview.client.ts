@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { z } from "zod";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { PaidMetricsRange } from "@/lib/schemas/paidMetrics";
-import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
+import { z } from 'zod';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const metricComparisonSchema = z.object({
   current: z.number().nullable().optional(),
@@ -51,13 +51,13 @@ export async function fetchPaidAccountOverview(params: {
   range: PaidMetricsRange;
 }): Promise<PaidAccountOverview> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.functions.invoke("paid-media-reporting/metrics", {
-    method: "POST",
+  const { data, error } = await supabase.functions.invoke('paid-media-reporting/metrics', {
+    method: 'POST',
     body: {
       platform: params.platform,
       brandId: params.brandId,
       adAccountId: params.adAccountId,
-      scope: "account_overview",
+      scope: 'account_overview',
       range: params.range,
     },
   });

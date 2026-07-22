@@ -98,7 +98,9 @@ function collectReel(draft: OrganicCalendarDraft): ReusableMediaItem | null {
 function collectBlueprint(draft: OrganicCalendarDraft): ReusableMediaItem[] {
   return (draft.mediaSuggestion?.storyboard ?? []).flatMap((frame, index): ReusableMediaItem[] => {
     if (!isUsableUrl(frame.storageUrl)) return [];
-    return [{ id: `blueprint-${index}`, kind: 'image', url: frame.storageUrl, source: 'blueprint' }];
+    return [
+      { id: `blueprint-${index}`, kind: 'image', url: frame.storageUrl, source: 'blueprint' },
+    ];
   });
 }
 

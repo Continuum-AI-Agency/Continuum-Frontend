@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
-import * as Tabs from "@radix-ui/react-tabs";
-import { ACCOUNT_SECTIONS, BRAND_SECTIONS } from "./sections";
-import { SettingsNavItem } from "./SettingsNavItem";
+import * as Tabs from '@radix-ui/react-tabs';
+import type { ReactNode } from 'react';
+import { SettingsNavItem } from './SettingsNavItem';
+import { ACCOUNT_SECTIONS, BRAND_SECTIONS } from './sections';
 
 type SettingsNavProps = {
   brandPill: ReactNode;
@@ -12,10 +12,7 @@ type SettingsNavProps = {
 
 export function SettingsNav({ brandPill, accountPill }: SettingsNavProps) {
   return (
-    <Tabs.List
-      aria-label="Settings sections"
-      className="flex flex-col gap-6"
-    >
+    <Tabs.List aria-label="Settings sections" className="flex flex-col gap-6">
       <NavGroup label="Brand" pill={brandPill}>
         {BRAND_SECTIONS.map((section) => (
           <SettingsNavItem

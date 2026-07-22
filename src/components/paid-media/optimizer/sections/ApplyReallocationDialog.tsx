@@ -19,8 +19,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { resolveAdsetName } from '../adsetName';
+import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { formatCurrency } from '../format';
-import { useApplyRun } from '../useOptimizerData';
+import { useApplyRun, useOptimizerEnrolledAdsets } from '../useOptimizerData';
 
 type ApplyReallocationDialogProps = {
   portfolioId: string;
@@ -38,6 +40,11 @@ export function ApplyReallocationDialog({
   currency,
 }: ApplyReallocationDialogProps) {
   const apply = useApplyRun();
+  const enrolled = useOptimizerEnrolledAdsets(portfolioId);
+  const nameById = React.useMemo(
+    () => new Map(enrolled.data.map((adset) => [adset.adset_id, adset.adset_name ?? ''])),
+    [enrolled.data],
+  );
   const [open, setOpen] = React.useState(false);
   const [phase, setPhase] = React.useState<'preview' | 'applying' | 'done' | 'error'>('preview');
   const [resultNote, setResultNote] = React.useState<string | null>(null);
@@ -154,11 +161,12 @@ export function ApplyReallocationDialog({
           </p>
         ) : (
           <ApplyPreviewBody
-            isPending={apply.isPending}
+            currency={currency}
             isError={apply.isError}
+            isPending={apply.isPending}
+            nameById={nameById}
             preview={preview}
             would={would}
-            currency={currency}
           />
         )}
 
@@ -184,12 +192,14 @@ function ApplyPreviewBody({
   preview,
   would,
   currency,
+  nameById,
 }: {
   isPending: boolean;
   isError: boolean;
   preview: ReturnType<typeof useApplyRun>['data'];
   would: { adset_id: string; current: number; proposed: number }[];
   currency: string | null;
+  nameById: Map<string, string>;
 }) {
   if (isPending) {
     return (
@@ -233,7 +243,11 @@ function ApplyPreviewBody({
             key={move.adset_id}
             className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
           >
-            <span className="min-w-0 truncate font-mono text-xs">{move.adset_id}</span>
+            <AdSetIdLabel
+              className="min-w-0 flex-1 text-xs"
+              id={move.adset_id}
+              name={resolveAdsetName({ adset_id: move.adset_id }, nameById) ?? undefined}
+            />
             <span className="shrink-0 tabular-nums">
               {formatCurrency(move.current, currency)}{' '}
               <span className="text-muted-foreground">→</span>{' '}

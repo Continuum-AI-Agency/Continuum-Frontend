@@ -1,52 +1,40 @@
-"use client";
-import React, { useCallback, useRef, useState, useEffect, useMemo, type ComponentType } from 'react';
+'use client';
 import {
+  MarkerType,
   MiniMap,
-  useReactFlow,
+  type NodeTypes,
   type OnConnectEnd,
   type OnConnectStart,
   type OnConnectStartParams,
   type NodeProps as ReactFlowNodeProps,
-  type NodeTypes,
-  MarkerType,
+  useReactFlow,
 } from '@xyflow/react';
+import React, {
+  type ComponentType,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import '@xyflow/react/dist/style.css';
 
+import {
+  Download,
+  MousePointer2,
+  Plus,
+  Redo,
+  Send,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  Undo,
+} from 'lucide-react';
 import { Canvas } from '@/components/ai-elements/canvas';
-import { Controls } from '@/components/ai-elements/controls';
-import { Panel } from '@/components/ai-elements/panel';
 import { Connection } from '@/components/ai-elements/connection';
+import { Controls } from '@/components/ai-elements/controls';
 import { Edge } from '@/components/ai-elements/edge';
-
-import { useCampaignStore } from '../stores/useCampaignStore';
-import { CampaignNode } from '../nodes/CampaignNode';
-import { AdSetNode } from '../nodes/AdSetNode';
-import { AdNode } from '../nodes/AdNode';
-import { AudienceNode } from '../nodes/AudienceNode';
-import { CreativeNode } from '../nodes/CreativeNode';
-import { type CampaignNodeType } from '../types';
-import { getNodeTypeToCreateFromHandle } from '../types/hierarchyNavigation';
-import {
-  getExpectedSingleParentTypeForChild,
-  getSingleParentConstraintMessage,
-  hasExistingSingleParentAttachment,
-} from '../validation/hierarchyRelationships';
-import { Button } from '@/components/ui/button';
-import { Plus, Send, ShieldCheck, Download, Undo, Redo, Settings, MousePointer2, Trash2 } from 'lucide-react';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuLabel,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-  ContextMenuShortcut,
-  ContextMenuCheckboxItem,
-} from "@/components/ui/context-menu";
-import { useToast } from "@/components/ui/ToastProvider";
+import { Panel } from '@/components/ai-elements/panel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,9 +44,37 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { buildCampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { useToast } from '@/components/ui/ToastProvider';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import { AdNode } from '../nodes/AdNode';
+import { AdSetNode } from '../nodes/AdSetNode';
+import { AudienceNode } from '../nodes/AudienceNode';
+import { CampaignNode } from '../nodes/CampaignNode';
+import { CreativeNode } from '../nodes/CreativeNode';
+import { useCampaignStore } from '../stores/useCampaignStore';
+import type { CampaignNodeType } from '../types';
+import { getNodeTypeToCreateFromHandle } from '../types/hierarchyNavigation';
+import {
+  getExpectedSingleParentTypeForChild,
+  getSingleParentConstraintMessage,
+  hasExistingSingleParentAttachment,
+} from '../validation/hierarchyRelationships';
 
 const nodeTypes: NodeTypes = {
   campaign: CampaignNode as unknown as ComponentType<ReactFlowNodeProps>,
@@ -73,7 +89,7 @@ const edgeTypes = {
 };
 
 function getClientPositionFromPointerEvent(
-  event: MouseEvent | TouchEvent
+  event: MouseEvent | TouchEvent,
 ): { x: number; y: number } | null {
   if ('changedTouches' in event && event.changedTouches.length > 0) {
     return {
@@ -90,20 +106,20 @@ function getClientPositionFromPointerEvent(
 }
 
 export const CampaignCanvas = () => {
-  const { 
-    nodes, 
-    edges, 
-    onNodesChange, 
-    onEdgesChange, 
-    onConnect, 
-    addNode, 
+  const {
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    addNode,
     removeNode,
     duplicateNode,
     undo,
     redo,
     edgeStyle,
     setEdgeStyle,
-    validateGraph 
+    validateGraph,
   } = useCampaignStore();
 
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -117,96 +133,105 @@ export const CampaignCanvas = () => {
     lastMousePos.current = { x: event.clientX, y: event.clientY };
   }, []);
 
-  const handleAddNode = useCallback((type: CampaignNodeType) => {
-    const position = screenToFlowPosition({
-      x: lastMousePos.current.x,
-      y: lastMousePos.current.y,
-    });
-    addNode(type, {}, position);
-  }, [addNode, screenToFlowPosition]);
+  const handleAddNode = useCallback(
+    (type: CampaignNodeType) => {
+      const position = screenToFlowPosition({
+        x: lastMousePos.current.x,
+        y: lastMousePos.current.y,
+      });
+      addNode(type, {}, position);
+    },
+    [addNode, screenToFlowPosition],
+  );
 
   const handleConnectStart = useCallback<OnConnectStart>((_event, params) => {
     connectStartRef.current = params;
   }, []);
 
-  const handleConnectEnd = useCallback<OnConnectEnd>((event, connectionState) => {
-    const connectStart = connectStartRef.current;
-    connectStartRef.current = null;
+  const handleConnectEnd = useCallback<OnConnectEnd>(
+    (event, connectionState) => {
+      const connectStart = connectStartRef.current;
+      connectStartRef.current = null;
 
-    if (!connectStart?.nodeId || !connectStart.handleType) {
-      return;
-    }
+      if (!connectStart?.nodeId || !connectStart.handleType) {
+        return;
+      }
 
-    // A valid drop onto an existing node is handled by React Flow via onConnect.
-    if (connectionState.toNode) {
-      return;
-    }
+      // A valid drop onto an existing node is handled by React Flow via onConnect.
+      if (connectionState.toNode) {
+        return;
+      }
 
-    const startNode = nodes.find((node) => node.id === connectStart.nodeId);
-    if (!startNode) {
-      return;
-    }
+      const startNode = nodes.find((node) => node.id === connectStart.nodeId);
+      if (!startNode) {
+        return;
+      }
 
-    const nodeTypeToCreate = getNodeTypeToCreateFromHandle(startNode.type, connectStart.handleType);
-    if (!nodeTypeToCreate) {
-      return;
-    }
+      const nodeTypeToCreate = getNodeTypeToCreateFromHandle(
+        startNode.type,
+        connectStart.handleType,
+      );
+      if (!nodeTypeToCreate) {
+        return;
+      }
 
-    if (connectStart.handleType === 'target') {
-      const expectedParentType = getExpectedSingleParentTypeForChild(startNode.type);
-      if (
-        expectedParentType === nodeTypeToCreate &&
-        hasExistingSingleParentAttachment(startNode.id, expectedParentType, nodes, edges)
-      ) {
-        toast({
-          title: 'Connection blocked',
-          description: getSingleParentConstraintMessage(startNode.type, expectedParentType),
+      if (connectStart.handleType === 'target') {
+        const expectedParentType = getExpectedSingleParentTypeForChild(startNode.type);
+        if (
+          expectedParentType === nodeTypeToCreate &&
+          hasExistingSingleParentAttachment(startNode.id, expectedParentType, nodes, edges)
+        ) {
+          toast({
+            title: 'Connection blocked',
+            description: getSingleParentConstraintMessage(startNode.type, expectedParentType),
+          });
+          return;
+        }
+      }
+
+      const pointerPosition = getClientPositionFromPointerEvent(event);
+      if (!pointerPosition) {
+        return;
+      }
+
+      const nodePosition = screenToFlowPosition(pointerPosition);
+      const newNodeId = addNode(nodeTypeToCreate, {}, nodePosition);
+
+      if (connectStart.handleType === 'source') {
+        onConnect({
+          source: connectStart.nodeId,
+          sourceHandle: connectStart.handleId,
+          target: newNodeId,
+          targetHandle: null,
         });
         return;
       }
-    }
 
-    const pointerPosition = getClientPositionFromPointerEvent(event);
-    if (!pointerPosition) {
-      return;
-    }
-
-    const nodePosition = screenToFlowPosition(pointerPosition);
-    const newNodeId = addNode(nodeTypeToCreate, {}, nodePosition);
-
-    if (connectStart.handleType === 'source') {
       onConnect({
-        source: connectStart.nodeId,
-        sourceHandle: connectStart.handleId,
-        target: newNodeId,
-        targetHandle: null,
+        source: newNodeId,
+        sourceHandle: null,
+        target: connectStart.nodeId,
+        targetHandle: connectStart.handleId,
       });
-      return;
-    }
-
-    onConnect({
-      source: newNodeId,
-      sourceHandle: null,
-      target: connectStart.nodeId,
-      targetHandle: connectStart.handleId,
-    });
-  }, [addNode, edges, nodes, onConnect, screenToFlowPosition, toast]);
+    },
+    [addNode, edges, nodes, onConnect, screenToFlowPosition, toast],
+  );
 
   const confirmDelete = useCallback(() => {
     const selectedNodes = nodes.filter((n) => n.selected);
     if (selectedNodes.length === 0) return;
-    
+
     selectedNodes.forEach((n) => removeNode(n.id));
     toast({
-      title: "Nodes deleted",
+      title: 'Nodes deleted',
       description: `Removed ${selectedNodes.length} node(s) from the canvas.`,
     });
-    
+
     setShowDeleteDialog(false);
   }, [nodes, removeNode, toast]);
 
   const handleExport = useCallback(() => {
-    const payload = buildCampaignCanvasPayload(nodes, edges, { source: "export" });
+    const payload = buildCampaignCanvasPayload(nodes, edges, { source: 'export' });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -214,14 +239,14 @@ export const CampaignCanvas = () => {
     a.download = 'campaign-canvas-payload.json';
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: "Exported", description: "Canonical campaign payload downloaded as JSON." });
+    toast({ title: 'Exported', description: 'Canonical campaign payload downloaded as JSON.' });
   }, [nodes, edges, toast]);
 
   const handleDeploy = useCallback(() => {
-    const payload = buildCampaignCanvasPayload(nodes, edges, { source: "deploy" });
-    console.info("[campaign-canvas] deploy payload prepared", payload);
+    const payload = buildCampaignCanvasPayload(nodes, edges, { source: 'deploy' });
+    console.info('[campaign-canvas] deploy payload prepared', payload);
     toast({
-      title: "Deploy payload ready",
+      title: 'Deploy payload ready',
       description: `${payload.summary.nodeCount} nodes mapped for backend handoff.`,
     });
   }, [edges, nodes, toast]);
@@ -230,56 +255,59 @@ export const CampaignCanvas = () => {
     const validationResult = validateGraph();
     if (!validationResult.payloadValid) {
       toast({
-        title: "Validation failed",
-        description: validationResult.payloadError ?? "Payload schema check failed.",
+        title: 'Validation failed',
+        description: validationResult.payloadError ?? 'Payload schema check failed.',
       });
       return;
     }
 
     if (validationResult.invalidNodeCount > 0) {
       toast({
-        title: "Validation warnings",
+        title: 'Validation warnings',
         description: `Found ${validationResult.invalidNodeCount} node(s) with errors. Payload schema passed.`,
       });
       return;
     }
 
     toast({
-      title: "Structure valid",
-      description: "Graph rules and canonical payload schema both passed.",
+      title: 'Structure valid',
+      description: 'Graph rules and canonical payload schema both passed.',
     });
   }, [toast, validateGraph]);
 
-  const selectedCount = useMemo(() => nodes.filter(n => n.selected).length, [nodes]);
+  const selectedCount = useMemo(() => nodes.filter((n) => n.selected).length, [nodes]);
 
-  const defaultEdgeOptions = useMemo(() => ({
-    type: 'animated',
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      color: 'var(--ring)',
-    },
-  }), []);
+  const defaultEdgeOptions = useMemo(
+    () => ({
+      type: 'animated',
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: 'var(--ring)',
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isCmd = event.metaKey || event.ctrlKey;
-      
+
       if (isCmd && event.key === 'z') {
         if (event.shiftKey) {
           redo();
-          toast({ title: "Redo", durationMs: 1000 });
+          toast({ title: 'Redo', durationMs: 1000 });
         } else {
           undo();
-          toast({ title: "Undo", durationMs: 1000 });
+          toast({ title: 'Undo', durationMs: 1000 });
         }
       } else if (isCmd && event.key === 'd') {
         event.preventDefault();
-        const selected = nodes.find(n => n.selected);
+        const selected = nodes.find((n) => n.selected);
         if (selected) duplicateNode(selected.id);
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
         const activeElement = document.activeElement;
         if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
-          const selectedNodes = nodes.filter(n => n.selected);
+          const selectedNodes = nodes.filter((n) => n.selected);
           if (selectedNodes.length > 0) {
             setShowDeleteDialog(true);
           }
@@ -311,7 +339,7 @@ export const CampaignCanvas = () => {
           >
             <Controls />
             <MiniMap zoomable pannable className="!bg-background border shadow-sm" />
-            
+
             <Panel position="top-left" className="flex items-center gap-1">
               <Button variant="ghost" size="icon" onClick={undo} className="h-8 w-8">
                 <Undo className="h-4 w-4" />
@@ -325,16 +353,26 @@ export const CampaignCanvas = () => {
             </Panel>
 
             {selectedCount > 1 && (
-               <Panel position="top-right">
-                  <Badge variant="secondary" className="gap-2 px-3 py-1 text-xs font-medium border shadow-sm animate-in fade-in slide-in-from-top-2">
-                    <MousePointer2 className="h-3 w-3" />
-                    <span className="tabular-nums">{selectedCount}</span> nodes selected
-                  </Badge>
-               </Panel>
+              <Panel position="top-right">
+                <Badge
+                  variant="secondary"
+                  className="gap-2 px-3 py-1 text-xs font-medium border shadow-sm animate-in fade-in slide-in-from-top-2"
+                >
+                  <MousePointer2 className="h-3 w-3" />
+                  <span className="tabular-nums">{selectedCount}</span> nodes selected
+                </Badge>
+              </Panel>
             )}
 
-            <Panel position="bottom-right" className="flex flex-col gap-2 bg-transparent border-none shadow-none!">
-              <Button variant="outline" className="gap-2 bg-background shadow-lg" onClick={handleValidateStructure}>
+            <Panel
+              position="bottom-right"
+              className="flex flex-col gap-2 bg-transparent border-none shadow-none!"
+            >
+              <Button
+                variant="outline"
+                className="gap-2 bg-background shadow-lg"
+                onClick={handleValidateStructure}
+              >
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 Validate
               </Button>
@@ -345,20 +383,26 @@ export const CampaignCanvas = () => {
             </Panel>
           </Canvas>
         </ContextMenuTrigger>
-        
+
         <ContextMenuContent className="w-[clamp(13rem,17vw,17rem)]">
           <ContextMenuLabel>Workspace Actions</ContextMenuLabel>
-          <ContextMenuItem inset onClick={() => toast({ title: "Paste", description: "Functionality coming soon" })}>
+          <ContextMenuItem
+            inset
+            onClick={() => toast({ title: 'Paste', description: 'Functionality coming soon' })}
+          >
             Paste
             <ContextMenuShortcut>⌘V</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem inset onClick={() => toast({ title: "Select All", description: "Functionality coming soon" })}>
+          <ContextMenuItem
+            inset
+            onClick={() => toast({ title: 'Select All', description: 'Functionality coming soon' })}
+          >
             Select All
             <ContextMenuShortcut>⌘A</ContextMenuShortcut>
           </ContextMenuItem>
-          
+
           <ContextMenuSeparator />
-          
+
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
               <Plus className="mr-2 h-4 w-4" />
@@ -404,24 +448,30 @@ export const CampaignCanvas = () => {
           <ContextMenuLabel>Canvas & View</ContextMenuLabel>
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
-               <Settings className="mr-2 h-4 w-4" />
-               View Settings
+              <Settings className="mr-2 h-4 w-4" />
+              View Settings
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
-               <ContextMenuCheckboxItem checked={edgeStyle === 'curved'} onClick={() => setEdgeStyle('curved')}>
-                  Curved Connections
-               </ContextMenuCheckboxItem>
-               <ContextMenuCheckboxItem checked={edgeStyle === 'straight'} onClick={() => setEdgeStyle('straight')}>
-                  Straight Connections
-               </ContextMenuCheckboxItem>
-               <ContextMenuSeparator />
-               <ContextMenuItem onClick={() => fitView({ duration: 800 })}>
-                  Fit to Screen
-                  <ContextMenuShortcut>⇧F</ContextMenuShortcut>
-               </ContextMenuItem>
-               <ContextMenuItem onClick={() => fitView({ padding: 0.5, duration: 800 })}>
-                  Zoom to Content
-               </ContextMenuItem>
+              <ContextMenuCheckboxItem
+                checked={edgeStyle === 'curved'}
+                onClick={() => setEdgeStyle('curved')}
+              >
+                Curved Connections
+              </ContextMenuCheckboxItem>
+              <ContextMenuCheckboxItem
+                checked={edgeStyle === 'straight'}
+                onClick={() => setEdgeStyle('straight')}
+              >
+                Straight Connections
+              </ContextMenuCheckboxItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => fitView({ duration: 800 })}>
+                Fit to Screen
+                <ContextMenuShortcut>⇧F</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => fitView({ padding: 0.5, duration: 800 })}>
+                Zoom to Content
+              </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
 
@@ -436,10 +486,15 @@ export const CampaignCanvas = () => {
             <Download className="mr-2 h-4 w-4" />
             Export Schema (JSON)
           </ContextMenuItem>
-          
+
           <ContextMenuSeparator />
-          
-          <ContextMenuItem inset className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => setShowDeleteDialog(true)} disabled={selectedCount === 0}>
+
+          <ContextMenuItem
+            inset
+            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+            onClick={() => setShowDeleteDialog(true)}
+            disabled={selectedCount === 0}
+          >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Selected
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
@@ -453,13 +508,16 @@ export const CampaignCanvas = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the selected
-              node(s) and all their associated connections.
+              This action cannot be undone. This will permanently delete the selected node(s) and
+              all their associated connections.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

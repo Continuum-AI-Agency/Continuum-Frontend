@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { create } from "zustand";
+import { create } from 'zustand';
 
-import type { JainaConversationSession } from "@/lib/jaina/conversations";
+import type { JainaConversationSession } from '@/lib/jaina/conversations';
 
 export const JAINA_CONVERSATION_SIDEBAR_CACHE_TTL_MS = 60 * 1000;
 
@@ -15,14 +15,8 @@ type JainaConversationSidebarState = {
   sessionsByScope: Record<string, JainaConversationSession[]>;
   updatedAtByScope: Record<string, number>;
   getFreshSessions: (scope: ConversationScope) => JainaConversationSession[] | null;
-  setSessions: (
-    scope: ConversationScope,
-    sessions: JainaConversationSession[]
-  ) => void;
-  upsertSession: (
-    scope: ConversationScope,
-    session: JainaConversationSession
-  ) => void;
+  setSessions: (scope: ConversationScope, sessions: JainaConversationSession[]) => void;
+  upsertSession: (scope: ConversationScope, session: JainaConversationSession) => void;
   removeSession: (scope: ConversationScope, sessionId: string) => void;
   invalidateScope: (scope: ConversationScope) => void;
   clear: () => void;
@@ -33,7 +27,7 @@ export function makeJainaConversationScopeKey(scope: ConversationScope): string 
 }
 
 function sortConversationSessions(
-  sessions: JainaConversationSession[]
+  sessions: JainaConversationSession[],
 ): JainaConversationSession[] {
   const sorted = [...sessions];
   sorted.sort((a, b) => {
@@ -47,13 +41,13 @@ function sortConversationSessions(
 
 function isFresh(updatedAt: number | undefined): boolean {
   return (
-    typeof updatedAt === "number" &&
+    typeof updatedAt === 'number' &&
     Date.now() - updatedAt < JAINA_CONVERSATION_SIDEBAR_CACHE_TTL_MS
   );
 }
 
-export const useJainaConversationSidebarStore =
-  create<JainaConversationSidebarState>((set, get) => ({
+export const useJainaConversationSidebarStore = create<JainaConversationSidebarState>(
+  (set, get) => ({
     sessionsByScope: {},
     updatedAtByScope: {},
 
@@ -83,9 +77,7 @@ export const useJainaConversationSidebarStore =
     upsertSession: (scope, session) => {
       const key = makeJainaConversationScopeKey(scope);
       const sessions = get().sessionsByScope[key] ?? [];
-      const existingIndex = sessions.findIndex(
-        (item) => item.sessionId === session.sessionId
-      );
+      const existingIndex = sessions.findIndex((item) => item.sessionId === session.sessionId);
       const nextSessions =
         existingIndex === -1
           ? [session, ...sessions]
@@ -116,4 +108,5 @@ export const useJainaConversationSidebarStore =
         updatedAtByScope: {},
       });
     },
-  }));
+  }),
+);

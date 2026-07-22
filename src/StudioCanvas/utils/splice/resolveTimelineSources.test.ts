@@ -1,16 +1,26 @@
-import { describe, it, expect } from 'bun:test';
-import { resolveTimelineSources, resolveTimelineInputPool } from './resolveClipSources';
-import type { StudioNode, TimelineItem } from '../../types';
+import { describe, expect, it } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import type { StudioNode, TimelineItem } from '../../types';
 import type { NodeOutput } from '../../types/execution';
+import { resolveTimelineInputPool, resolveTimelineSources } from './resolveClipSources';
 
 const dataUrl = (mime: string, raw: string) => `data:${mime};base64,${btoa(raw)}`;
 
 describe('resolveTimelineSources', () => {
   it('resolves placements in track order and infers kind from the pool source', async () => {
     const nodes = [
-      { id: 'vid', type: 'video', position: { x: 0, y: 0 }, data: { video: dataUrl('video/mp4', 'VID') } },
-      { id: 'img', type: 'image', position: { x: 0, y: 0 }, data: { image: dataUrl('image/png', 'IMG') } },
+      {
+        id: 'vid',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: dataUrl('video/mp4', 'VID') },
+      },
+      {
+        id: 'img',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: { image: dataUrl('image/png', 'IMG') },
+      },
     ] as unknown as StudioNode[];
     const items: TimelineItem[] = [
       { id: 'i-img', order: 1, sourceNodeId: 'img' },
@@ -21,7 +31,13 @@ describe('resolveTimelineSources', () => {
       { id: 'e2', source: 'vid', target: 'edit', targetHandle: 'media-in' },
     ];
 
-    const resolved = await resolveTimelineSources(items, edges, nodes, new Map<string, NodeOutput>(), 'edit');
+    const resolved = await resolveTimelineSources(
+      items,
+      edges,
+      nodes,
+      new Map<string, NodeOutput>(),
+      'edit',
+    );
 
     expect(resolved.map((r) => r.itemId)).toEqual(['i-vid', 'i-img']);
     expect(resolved[0].kind).toBe('video');
@@ -32,7 +48,12 @@ describe('resolveTimelineSources', () => {
 
   it('shares one fetch when a source is placed more than once (split)', async () => {
     const nodes = [
-      { id: 'vid', type: 'video', position: { x: 0, y: 0 }, data: { video: dataUrl('video/mp4', 'VID') } },
+      {
+        id: 'vid',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: dataUrl('video/mp4', 'VID') },
+      },
     ] as unknown as StudioNode[];
     const items: TimelineItem[] = [
       { id: 'a', order: 0, sourceNodeId: 'vid', trimStartSec: 0, trimEndSec: 1 },
@@ -40,7 +61,13 @@ describe('resolveTimelineSources', () => {
     ];
     const edges: Edge[] = [{ id: 'e1', source: 'vid', target: 'edit', targetHandle: 'media-in' }];
 
-    const resolved = await resolveTimelineSources(items, edges, nodes, new Map<string, NodeOutput>(), 'edit');
+    const resolved = await resolveTimelineSources(
+      items,
+      edges,
+      nodes,
+      new Map<string, NodeOutput>(),
+      'edit',
+    );
 
     expect(resolved.map((r) => r.itemId)).toEqual(['a', 'b']);
     expect(resolved[0].kind).toBe('video');
@@ -49,10 +76,14 @@ describe('resolveTimelineSources', () => {
   });
 
   it('prefers a resolved upstream video output over static node data', async () => {
-    const nodes = [{ id: 'gen', type: 'veoDirector', position: { x: 0, y: 0 }, data: {} }] as unknown as StudioNode[];
+    const nodes = [
+      { id: 'gen', type: 'veoDirector', position: { x: 0, y: 0 }, data: {} },
+    ] as unknown as StudioNode[];
     const items: TimelineItem[] = [{ id: 'i1', order: 0, sourceNodeId: 'gen' }];
     const edges: Edge[] = [{ id: 'e1', source: 'gen', target: 'edit', targetHandle: 'media-in' }];
-    const outputs = new Map<string, NodeOutput>([['gen', { type: 'video', url: dataUrl('video/mp4', 'GEN') }]]);
+    const outputs = new Map<string, NodeOutput>([
+      ['gen', { type: 'video', url: dataUrl('video/mp4', 'GEN') }],
+    ]);
 
     const resolved = await resolveTimelineSources(items, edges, nodes, outputs, 'edit');
 
@@ -71,9 +102,24 @@ describe('resolveTimelineSources', () => {
 describe('resolveTimelineInputPool', () => {
   it('enumerates connected image/video sources with kind, de-duplicated', () => {
     const nodes = [
-      { id: 'vid', type: 'video', position: { x: 0, y: 0 }, data: { video: dataUrl('video/mp4', 'VID'), fileName: 'clip.mp4' } },
-      { id: 'img', type: 'image', position: { x: 0, y: 0 }, data: { image: dataUrl('image/png', 'IMG') } },
-      { id: 'nano', type: 'nanoGen', position: { x: 0, y: 0 }, data: { generatedImageUrl: 'https://x/y.png' } },
+      {
+        id: 'vid',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: { video: dataUrl('video/mp4', 'VID'), fileName: 'clip.mp4' },
+      },
+      {
+        id: 'img',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: { image: dataUrl('image/png', 'IMG') },
+      },
+      {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: { generatedImageUrl: 'https://x/y.png' },
+      },
       { id: 'other', type: 'string', position: { x: 0, y: 0 }, data: {} },
     ] as unknown as StudioNode[];
     const edges: Edge[] = [

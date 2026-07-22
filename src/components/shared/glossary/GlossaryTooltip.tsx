@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 // Wraps an advanced term in a tooltip carrying its plain-English definition
 // (IMP-018). Defaults its visible label to the canonical term name and marks the
@@ -6,32 +6,27 @@
 // definition is exposed to assistive tech via aria-describedby — not hover-only —
 // so keyboard and screen-reader users get the same explanation.
 
-import { useId, type ReactNode } from "react"
+import { type ReactNode, useId } from 'react';
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
-import { GLOSSARY_TERMS, type GlossaryTermKey } from "./terms"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { GLOSSARY_TERMS, type GlossaryTermKey } from './terms';
 
 type GlossaryTooltipProps = {
-  termKey: GlossaryTermKey
-  children?: ReactNode
-  side?: "top" | "right" | "bottom" | "left"
-  className?: string
-}
+  termKey: GlossaryTermKey;
+  children?: ReactNode;
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  className?: string;
+};
 
 export function GlossaryTooltip({
   termKey,
   children,
-  side = "top",
+  side = 'top',
   className,
 }: GlossaryTooltipProps) {
-  const entry = GLOSSARY_TERMS[termKey]
-  const descriptionId = useId()
+  const entry = GLOSSARY_TERMS[termKey];
+  const descriptionId = useId();
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -42,7 +37,7 @@ export function GlossaryTooltip({
             tabIndex={0}
             aria-describedby={descriptionId}
             className={cn(
-              "cursor-help underline decoration-dotted decoration-muted-foreground/60 underline-offset-2",
+              'cursor-help underline decoration-dotted decoration-muted-foreground/60 underline-offset-2',
               className,
             )}
           >
@@ -58,5 +53,5 @@ export function GlossaryTooltip({
         {`${entry.term}: ${entry.short}`}
       </span>
     </TooltipProvider>
-  )
+  );
 }

@@ -1,14 +1,21 @@
-"use client";
+'use client';
 
-import React, { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
-import type { BrandPermission, BrandSummary } from "@/components/DashboardLayoutShell";
-import { switchBrand } from "@/lib/brands/switch-brand";
-import * as storeRegistry from "@/lib/storage/storeRegistry";
-import { purgeAllForBrand } from "@/lib/storage/brandScopedStorage";
-import { useToastContext, type ToastOptions } from "@/components/ui/ToastProvider";
-import { useSession } from "@/hooks/useSession";
-import { useRouter } from "next/navigation";
-import type { AuthIdentity } from "@/lib/auth/identity";
+import { useRouter } from 'next/navigation';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from 'react';
+import type { BrandPermission, BrandSummary } from '@/components/DashboardLayoutShell';
+import { type ToastOptions, useToastContext } from '@/components/ui/ToastProvider';
+import { useSession } from '@/hooks/useSession';
+import type { AuthIdentity } from '@/lib/auth/identity';
+import { switchBrand } from '@/lib/brands/switch-brand';
+import { purgeAllForBrand } from '@/lib/storage/brandScopedStorage';
+import * as storeRegistry from '@/lib/storage/storeRegistry';
 
 export type SelectBrandResult = {
   switched: boolean;
@@ -61,11 +68,11 @@ export function ActiveBrandProvider({
         return;
       }
 
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("ToastProvider is missing; toast not shown.", options);
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('ToastProvider is missing; toast not shown.', options);
       }
     },
-    [toast]
+    [toast],
   );
 
   // Sync selectedBrandId only when the server-confirmed activeBrandId changes.
@@ -86,8 +93,8 @@ export function ActiveBrandProvider({
   }, [permissions]);
 
   const updateBrandName = React.useCallback((brandId: string, name: string) => {
-    setSummaries(prev =>
-      prev.map(brand => (brand.id === brandId ? { ...brand, name } : brand))
+    setSummaries((prev) =>
+      prev.map((brand) => (brand.id === brandId ? { ...brand, name } : brand)),
     );
   }, []);
 
@@ -106,27 +113,39 @@ export function ActiveBrandProvider({
   // router.refresh() to re-pull authoritative server state.
   const channelRef = React.useRef<BroadcastChannel | null>(null);
   useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
+    if (typeof BroadcastChannel === 'undefined') return;
     let channel: BroadcastChannel;
     try {
-      channel = new BroadcastChannel("continuum:brand");
+      channel = new BroadcastChannel('continuum:brand');
     } catch {
       return;
     }
     channelRef.current = channel;
     channel.onmessage = (event: MessageEvent) => {
       const data = event.data as { type?: string; brandId?: string } | undefined;
-      if (!data || data.type !== "brand-switched" || !data.brandId) return;
+      if (!data || data.type !== 'brand-switched' || !data.brandId) return;
       const { selectedBrandId: current, summaries: known, router: r } = stateRef.current;
       const nextBrandId = data.brandId;
       if (nextBrandId === current) return;
       if (!known.some((brand) => brand.id === nextBrandId && !brand.isPending)) return;
 
       setSelectedBrandId(nextBrandId);
-      const evt = { prevBrandId: current, nextBrandId, reason: "cross-tab-sync" as const };
-      try { storeRegistry.teardown(current, evt); } catch { /* swallowed by registry handlers */ }
-      try { purgeAllForBrand(current); } catch { /* never block sync */ }
-      try { storeRegistry.purge(current); } catch { /* swallowed by registry handlers */ }
+      const evt = { prevBrandId: current, nextBrandId, reason: 'cross-tab-sync' as const };
+      try {
+        storeRegistry.teardown(current, evt);
+      } catch {
+        /* swallowed by registry handlers */
+      }
+      try {
+        purgeAllForBrand(current);
+      } catch {
+        /* never block sync */
+      }
+      try {
+        storeRegistry.purge(current);
+      } catch {
+        /* swallowed by registry handlers */
+      }
       r.refresh();
     };
     return () => {
@@ -137,20 +156,25 @@ export function ActiveBrandProvider({
 
   const selectBrand = React.useCallback(
     async (brandId: string) =>
-      new Promise<SelectBrandResult>(resolve => {
+      new Promise<SelectBrandResult>((resolve) => {
         const requestId = `${brandId}-${Date.now()}`;
         switchRequestRef.current = requestId;
         setSwitchingToBrandId(brandId);
 
         startTransition(async () => {
-          const { activeBrandId: currentActive, selectedBrandId: previous, router: r, showToast: st } = stateRef.current;
+          const {
+            activeBrandId: currentActive,
+            selectedBrandId: previous,
+            router: r,
+            showToast: st,
+          } = stateRef.current;
           setSelectedBrandId(brandId);
           try {
-            if (typeof window !== "undefined") {
+            if (typeof window !== 'undefined') {
               window.dispatchEvent(
-                new CustomEvent("brand:switching", {
+                new CustomEvent('brand:switching', {
                   detail: { prevBrandId: currentActive, nextBrandId: brandId },
-                })
+                }),
               );
             }
             const switched = await switchBrand({
@@ -169,8 +193,10 @@ export function ActiveBrandProvider({
               setSelectedBrandId(previous);
             } else {
               try {
-                channelRef.current?.postMessage({ type: "brand-switched", brandId });
-              } catch { /* cross-tab notify is best-effort */ }
+                channelRef.current?.postMessage({ type: 'brand-switched', brandId });
+              } catch {
+                /* cross-tab notify is best-effort */
+              }
             }
             resolve({ switched, prevBrandId: previous });
             return;
@@ -178,9 +204,9 @@ export function ActiveBrandProvider({
             if (switchRequestRef.current === requestId) {
               setSelectedBrandId(previous);
               st({
-                title: "Switch failed",
-                description: error instanceof Error ? error.message : "Unable to switch brand.",
-                variant: "error",
+                title: 'Switch failed',
+                description: error instanceof Error ? error.message : 'Unable to switch brand.',
+                variant: 'error',
               });
             }
             resolve({ switched: false, prevBrandId: previous });
@@ -191,7 +217,7 @@ export function ActiveBrandProvider({
           }
         });
       }),
-    []
+    [],
   );
 
   const isSwitching = switchingToBrandId !== null;
@@ -207,7 +233,16 @@ export function ActiveBrandProvider({
       updateBrandName,
       user,
     }),
-    [isSwitching, perms, switchingToBrandId, selectBrand, selectedBrandId, summaries, updateBrandName, user]
+    [
+      isSwitching,
+      perms,
+      switchingToBrandId,
+      selectBrand,
+      selectedBrandId,
+      summaries,
+      updateBrandName,
+      user,
+    ],
   );
 
   return <ActiveBrandContext.Provider value={value}>{children}</ActiveBrandContext.Provider>;
@@ -216,7 +251,7 @@ export function ActiveBrandProvider({
 export function useActiveBrandContext(): ActiveBrandContextValue {
   const ctx = useContext(ActiveBrandContext);
   if (!ctx) {
-    throw new Error("useActiveBrandContext must be used within ActiveBrandProvider");
+    throw new Error('useActiveBrandContext must be used within ActiveBrandProvider');
   }
   return ctx;
 }

@@ -1,32 +1,35 @@
-import { AnimatePresence, motion } from "motion/react";
-import { Check, Loader2, Sparkles } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
-import { useProcessingChoreography } from "./useProcessingChoreography";
+import { Check, Loader2, Sparkles } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
+import { useProcessingChoreography } from './useProcessingChoreography';
 
 export function DnaProgressPill() {
   const { steps, progressPercent, allComplete, latestSparkLabel } = useProcessingChoreography();
-  const inFlight = steps.find((s) => s.status === "running");
+  const inFlight = steps.find((s) => s.status === 'running');
   const headlineLabel = allComplete
-    ? "Your Brand DNA is ready"
+    ? 'Your Brand DNA is ready'
     : latestSparkLabel
       ? latestSparkLabel
       : inFlight
         ? inFlight.label
-        : "Preparing your Brand DNA…";
+        : 'Preparing your Brand DNA…';
 
   return (
     <Card
       className={cn(
-        "flex w-full items-center gap-3 border-[#e5e7eb] px-4 py-3 shadow-sm transition-colors",
-        allComplete && "border-[color-mix(in_srgb,var(--ob-teal)_30%,transparent)] bg-[color-mix(in_srgb,var(--ob-teal)_4%,white)]"
+        'flex w-full items-center gap-3 border-[#e5e7eb] px-4 py-3 shadow-sm transition-colors',
+        allComplete &&
+          'border-[color-mix(in_srgb,var(--ob-teal)_30%,transparent)] bg-[color-mix(in_srgb,var(--ob-teal)_4%,white)]',
       )}
     >
       <span
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-          allComplete ? "bg-[var(--ob-teal)] text-white" : "bg-[color-mix(in_srgb,var(--ob-violet)_10%,transparent)] text-[var(--ob-violet)]"
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+          allComplete
+            ? 'bg-[var(--ob-teal)] text-white'
+            : 'bg-[color-mix(in_srgb,var(--ob-violet)_10%,transparent)] text-[var(--ob-violet)]',
         )}
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -35,7 +38,7 @@ export function DnaProgressPill() {
               key="check"
               initial={{ scale: 0, rotate: -90 }}
               animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 460, damping: 22 }}
+              transition={{ type: 'spring', stiffness: 460, damping: 22 }}
             >
               <Check className="h-4 w-4" />
             </motion.span>
@@ -47,7 +50,7 @@ export function DnaProgressPill() {
               exit={{ opacity: 0 }}
               transition={{
                 opacity: { duration: 0.2 },
-                rotate: { duration: 1.4, ease: "linear", repeat: Infinity },
+                rotate: { duration: 1.4, ease: 'linear', repeat: Infinity },
               }}
             >
               <Loader2 className="h-4 w-4" />
@@ -59,8 +62,8 @@ export function DnaProgressPill() {
         <div className="flex items-center justify-between gap-3">
           <p
             className={cn(
-              "truncate text-sm font-semibold",
-              allComplete ? "text-[var(--ob-teal)]" : "text-[#0b1220]"
+              'truncate text-sm font-semibold',
+              allComplete ? 'text-[var(--ob-teal)]' : 'text-[#0b1220]',
             )}
           >
             <AnimatePresence mode="wait" initial={false}>

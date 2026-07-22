@@ -6,17 +6,17 @@
 // data-agnostic so the presentational panel and the Jaina concierge share one
 // source of truth and it stays unit-testable.
 
-import type { FreshnessMeta } from "@continuum/contracts";
+import type { FreshnessMeta } from '@continuum/contracts';
 
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 
-export type PaidSetupStepStatus = "done" | "action_required" | "attention" | "pending";
-export type PaidSetupStepId = "connection" | "permission" | "assignment" | "sync";
+export type PaidSetupStepStatus = 'done' | 'action_required' | 'attention' | 'pending';
+export type PaidSetupStepId = 'connection' | 'permission' | 'assignment' | 'sync';
 
 export type PaidSetupCta =
-  | { kind: "link"; label: string; href: string }
-  | { kind: "retry"; label: string };
+  | { kind: 'link'; label: string; href: string }
+  | { kind: 'retry'; label: string };
 
 export interface PaidSetupStep {
   id: PaidSetupStepId;
@@ -38,20 +38,20 @@ export interface PaidSetupInput {
 }
 
 // Connections and brand assignment both live on the same Settings surface.
-export const PAID_SETUP_CONNECT_HREF = "/settings?section=integrations";
+export const PAID_SETUP_CONNECT_HREF = '/settings?section=integrations';
 
 function providerLabel(platform: PaidMediaPlatform): string {
-  if (platform === "google-ads") return "Google Ads";
-  if (platform === "dv360") return "DV360";
-  if (platform === "linkedin") return "LinkedIn Ads";
-  return "Meta Ads";
+  if (platform === 'google-ads') return 'Google Ads';
+  if (platform === 'dv360') return 'DV360';
+  if (platform === 'linkedin') return 'LinkedIn Ads';
+  return 'Meta Ads';
 }
 
 function platformSummaryKey(platform: PaidMediaPlatform): keyof BrandIntegrationSummary {
-  if (platform === "google-ads") return "googleAds";
-  if (platform === "dv360") return "dv360";
-  if (platform === "linkedin") return "linkedin";
-  return "facebook";
+  if (platform === 'google-ads') return 'googleAds';
+  if (platform === 'dv360') return 'dv360';
+  if (platform === 'linkedin') return 'linkedin';
+  return 'facebook';
 }
 
 // How many ad accounts are assigned to this brand for the given platform.
@@ -68,59 +68,60 @@ function deriveSyncStep(input: PaidSetupInput, hasAccounts: boolean): PaidSetupS
 
   if (freshness) {
     switch (freshness.status) {
-      case "error":
+      case 'error':
         return {
-          id: "sync",
-          label: "Last sync failed",
+          id: 'sync',
+          label: 'Last sync failed',
           description:
-            freshness.error ?? "The last data sync failed. Retry to pull the latest campaigns.",
-          status: "attention",
-          cta: { kind: "retry", label: "Retry sync" },
+            freshness.error ?? 'The last data sync failed. Retry to pull the latest campaigns.',
+          status: 'attention',
+          cta: { kind: 'retry', label: 'Retry sync' },
         };
-      case "stale":
+      case 'stale':
         return {
-          id: "sync",
-          label: "Data is stale",
-          description: "Campaign data is older than expected. Retry to refresh it.",
-          status: "attention",
-          cta: { kind: "retry", label: "Retry sync" },
+          id: 'sync',
+          label: 'Data is stale',
+          description: 'Campaign data is older than expected. Retry to refresh it.',
+          status: 'attention',
+          cta: { kind: 'retry', label: 'Retry sync' },
         };
-      case "syncing":
+      case 'syncing':
         return {
-          id: "sync",
-          label: "Syncing campaign data",
+          id: 'sync',
+          label: 'Syncing campaign data',
           description: "We're pulling the latest campaigns and spend now.",
-          status: "pending",
+          status: 'pending',
         };
-      case "never":
+      case 'never':
         return {
-          id: "sync",
-          label: "Sync campaign data",
-          description: "No sync has run yet. It starts automatically once an ad account is assigned.",
-          status: "pending",
+          id: 'sync',
+          label: 'Sync campaign data',
+          description:
+            'No sync has run yet. It starts automatically once an ad account is assigned.',
+          status: 'pending',
         };
-      case "fresh":
+      case 'fresh':
         return {
-          id: "sync",
-          label: "Data is up to date",
-          description: "Campaign data is fresh.",
-          status: "done",
+          id: 'sync',
+          label: 'Data is up to date',
+          description: 'Campaign data is fresh.',
+          status: 'done',
         };
     }
   }
 
   return hasAccounts
     ? {
-        id: "sync",
-        label: "Data is up to date",
-        description: "Campaign data is ready.",
-        status: "done",
+        id: 'sync',
+        label: 'Data is up to date',
+        description: 'Campaign data is ready.',
+        status: 'done',
       }
     : {
-        id: "sync",
-        label: "Sync campaign data",
-        description: "Sync starts automatically once an ad account is assigned.",
-        status: "pending",
+        id: 'sync',
+        label: 'Sync campaign data',
+        description: 'Sync starts automatically once an ad account is assigned.',
+        status: 'pending',
       };
 }
 
@@ -131,56 +132,56 @@ export function derivePaidSetupSteps(input: PaidSetupInput): PaidSetupStep[] {
 
   const connection: PaidSetupStep = hasAccounts
     ? {
-        id: "connection",
+        id: 'connection',
         label: `${provider} connected`,
         description: `A ${provider} account is linked to Continuum.`,
-        status: "done",
+        status: 'done',
       }
     : {
-        id: "connection",
+        id: 'connection',
         label: `Connect ${provider}`,
         description: `Link your ${provider} account so Continuum can read campaigns and spend.`,
-        status: "action_required",
-        cta: { kind: "link", label: `Connect ${provider}`, href: PAID_SETUP_CONNECT_HREF },
+        status: 'action_required',
+        cta: { kind: 'link', label: `Connect ${provider}`, href: PAID_SETUP_CONNECT_HREF },
       };
 
   const permission: PaidSetupStep = loadError
     ? {
-        id: "permission",
-        label: "Confirm ad account access",
+        id: 'permission',
+        label: 'Confirm ad account access',
         description:
           "We couldn't confirm ad account access — this is usually a permissions or session issue. Reconnect, then retry.",
-        status: "attention",
-        cta: { kind: "retry", label: "Retry" },
+        status: 'attention',
+        cta: { kind: 'retry', label: 'Retry' },
       }
     : hasAccounts
       ? {
-          id: "permission",
-          label: "Ad account access granted",
-          description: "Continuum has permission to read this ad account.",
-          status: "done",
+          id: 'permission',
+          label: 'Ad account access granted',
+          description: 'Continuum has permission to read this ad account.',
+          status: 'done',
         }
       : {
-          id: "permission",
-          label: "Grant ad account access",
+          id: 'permission',
+          label: 'Grant ad account access',
           description: `Approve ads read and manage permissions when connecting ${provider}.`,
-          status: "pending",
+          status: 'pending',
         };
 
   const assignment: PaidSetupStep = hasAccounts
     ? {
-        id: "assignment",
-        label: "Ad account assigned to brand",
-        description: "This ad account is assigned to the active brand.",
-        status: "done",
+        id: 'assignment',
+        label: 'Ad account assigned to brand',
+        description: 'This ad account is assigned to the active brand.',
+        status: 'done',
       }
     : {
-        id: "assignment",
-        label: "Assign an ad account to this brand",
+        id: 'assignment',
+        label: 'Assign an ad account to this brand',
         description:
-          "After connecting, assign the ad account to this brand so it appears in the selector.",
-        status: "pending",
-        cta: { kind: "link", label: "Assign account", href: PAID_SETUP_CONNECT_HREF },
+          'After connecting, assign the ad account to this brand so it appears in the selector.',
+        status: 'pending',
+        cta: { kind: 'link', label: 'Assign account', href: PAID_SETUP_CONNECT_HREF },
       };
 
   return [connection, permission, assignment, deriveSyncStep(input, hasAccounts)];
@@ -189,5 +190,5 @@ export function derivePaidSetupSteps(input: PaidSetupInput): PaidSetupStep[] {
 // True when any step still needs the user. The selector auto-picks an account
 // whenever one is available, so a blocked surface is exactly `some !== "done"`.
 export function isPaidSetupBlocked(steps: PaidSetupStep[]): boolean {
-  return steps.some((step) => step.status !== "done");
+  return steps.some((step) => step.status !== 'done');
 }

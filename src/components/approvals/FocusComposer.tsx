@@ -1,25 +1,24 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import type { RuleAction } from "@/lib/approvals/types";
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import * as React from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { RuleAction } from '@/lib/approvals/types';
+import { cn } from '@/lib/utils';
+import { getActionIcon } from './actionIcons';
+import { ComposerOverflowMenu } from './ComposerOverflowMenu';
+import { DecisionActions, type DecisionActionsHandle } from './DecisionActions';
+import { EvidenceStrip } from './EvidenceStrip';
 import {
   actionTypeLabel,
   formatRelativeTime,
   isExecutorUnsupported,
   scopeLabel,
   whyText,
-} from "./formatters";
-import { EvidenceStrip } from "./EvidenceStrip";
-import { DecisionActions, type DecisionActionsHandle } from "./DecisionActions";
-import { ComposerOverflowMenu } from "./ComposerOverflowMenu";
-import { PayloadSheet } from "./PayloadSheet";
-import { getActionIcon } from "./actionIcons";
+} from './formatters';
+import { PayloadSheet } from './PayloadSheet';
 
 type Props = {
   action: RuleAction | null;
@@ -29,7 +28,13 @@ type Props = {
   bindGlobalKeys?: boolean;
 };
 
-export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGlobalKeys = true }: Props) {
+export function FocusComposer({
+  action,
+  brandId,
+  isLoading,
+  onAdvance,
+  bindGlobalKeys = true,
+}: Props) {
   const reduceMotion = useReducedMotion();
   const [payloadOpen, setPayloadOpen] = React.useState(false);
   const decisionRef = React.useRef<DecisionActionsHandle>(null);
@@ -39,19 +44,23 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGloba
     if (!action || !bindGlobalKeys) return;
     function handler(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      )
+        return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
-      if (key === "p") {
+      if (key === 'p') {
         event.preventDefault();
         setPayloadOpen((current) => !current);
-      } else if (key === "s") {
+      } else if (key === 's') {
         event.preventDefault();
         onAdvance();
       }
     }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [action, bindGlobalKeys, onAdvance]);
 
   if (isLoading && !action) {
@@ -81,7 +90,11 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGloba
           key={action.id}
           initial={reduceMotion ? false : { opacity: 0, y: 6 }}
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          exit={reduceMotion ? undefined : { opacity: 0, transition: { duration: 0.15, ease: [0.4, 0, 1, 1] } }}
+          exit={
+            reduceMotion
+              ? undefined
+              : { opacity: 0, transition: { duration: 0.15, ease: [0.4, 0, 1, 1] } }
+          }
           transition={{ duration: 0.25, ease: [0, 0, 0.2, 1] }}
         >
           <Card className="border-border shadow-sm">
@@ -92,7 +105,11 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGloba
                     variant="secondary"
                     className="gap-1.5 font-data text-xs uppercase tracking-wide"
                   >
-                    <TypeIcon icon={Icon} unsupported={unsupported} typeLabel={actionTypeLabel(action.action_type)} />
+                    <TypeIcon
+                      icon={Icon}
+                      unsupported={unsupported}
+                      typeLabel={actionTypeLabel(action.action_type)}
+                    />
                     {actionTypeLabel(action.action_type)}
                   </Badge>
                   <Badge variant="outline" className="font-data text-xs">
@@ -121,7 +138,7 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGloba
               ) : null}
             </CardContent>
 
-            <CardFooter className={cn("border-t border-border pt-4", "justify-end")}>
+            <CardFooter className={cn('border-t border-border pt-4', 'justify-end')}>
               <DecisionActions
                 ref={decisionRef}
                 action={action}
@@ -183,9 +200,9 @@ function PayloadSummary({ payload }: { payload: Record<string, unknown> }) {
 }
 
 function renderValue(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);
 }
 
@@ -206,4 +223,3 @@ function ComposerSkeleton() {
     </Card>
   );
 }
-

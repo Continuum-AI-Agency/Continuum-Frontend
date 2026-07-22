@@ -64,6 +64,22 @@ export const isVisuallyGroundedLabelSource = (source: string | null | undefined)
   VISUALLY_GROUNDED_LABEL_SOURCES.includes(
     source as (typeof VISUALLY_GROUNDED_LABEL_SOURCES)[number],
   );
+
+/**
+ * Label sources read from the 64x64 thumbnail — the ones that raise the
+ * `thumbnail_derived` win-rate flag. Kept as the single source of truth for that
+ * set so the SQL `label_source in (...)` list in paid_media_get_creative_winrates
+ * and any client-side check agree on exactly which sources are suspect.
+ */
+export const THUMBNAIL_DERIVED_LABEL_SOURCES = [
+  'thumbnail_copy',
+  'thumbnail_transcript_copy',
+] as const;
+
+export const isThumbnailDerivedLabelSource = (source: string | null | undefined): boolean =>
+  THUMBNAIL_DERIVED_LABEL_SOURCES.includes(
+    source as (typeof THUMBNAIL_DERIVED_LABEL_SOURCES)[number],
+  );
 export type PaidCreativeLabelSource = z.infer<typeof paidCreativeLabelSourceSchema>;
 
 export const paidCreativeLabelsSchema = firstPartyCreativeAnalysisSchema.extend({
@@ -92,6 +108,11 @@ export const creativeWinRateFlagSchema = z.enum([
   'spend_concentrated',
   'warm_audience_skew',
   'confounded',
+  // At least one label feeding this category was read from Meta's 64x64 thumbnail
+  // (label_source thumbnail_copy / thumbnail_transcript_copy), where the visual
+  // attributes are barely more than a restatement of the ad copy. The win rate is
+  // still real; the visual DIMENSION it's bucketed under should be read as inferred.
+  'thumbnail_derived',
 ]);
 export type CreativeWinRateFlag = z.infer<typeof creativeWinRateFlagSchema>;
 

@@ -6,11 +6,7 @@
 import 'server-only';
 
 import type { PublicShareAsset, PublicSharePayload } from '@continuum/contracts';
-import {
-  rowToShareLink,
-  type ShareLinkRow,
-  shareLinkStatus,
-} from '@/lib/library/shareValidation';
+import { rowToShareLink, type ShareLinkRow, shareLinkStatus } from '@/lib/library/shareValidation';
 import { buildCarousel, carouselSignablePaths } from '@/lib/media/carousel';
 import { rowToSignedMediaAsset } from '@/lib/media/mapper';
 import {
@@ -232,9 +228,7 @@ export async function loadSharePayload(
   const status = shareLinkStatus({ revokedAt: link.revoked_at, expiresAt: link.expires_at });
   if (!status.active) return { ok: false, reason: status.reason };
 
-  const sessionHash = reviewerSessionToken
-    ? hashReviewerSessionToken(reviewerSessionToken)
-    : null;
+  const sessionHash = reviewerSessionToken ? hashReviewerSessionToken(reviewerSessionToken) : null;
   const { data: session } = sessionHash
     ? await mediaSchema(admin)
         .from('external_reviewer_sessions')

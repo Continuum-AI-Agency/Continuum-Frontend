@@ -1,9 +1,9 @@
-"use server";
+'use server';
 
-import { getServerSession } from "@/lib/supabase/server";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { getApiUrl } from "@/lib/api/config";
-import { resolveConfirmBrandId } from "./brandSelection";
+import { getApiUrl } from '@/lib/api/config';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { getServerSession } from '@/lib/supabase/server';
+import { resolveConfirmBrandId } from './brandSelection';
 
 export type ConfirmMcpRegistrationInput = {
   authorizationId: string;
@@ -53,15 +53,15 @@ export async function listConsentBrandsAction(): Promise<ListConsentBrandsResult
  * owns this exchange — only the code→token step stays client↔Supabase.
  */
 export async function confirmMcpRegistrationAction(
-  input: ConfirmMcpRegistrationInput
+  input: ConfirmMcpRegistrationInput,
 ): Promise<ConfirmMcpRegistrationResult> {
   const session = await getServerSession();
   const accessToken = session?.access_token;
   if (!accessToken) {
-    return { registered: false, brandId: null, error: "not_authenticated" };
+    return { registered: false, brandId: null, error: 'not_authenticated' };
   }
   if (!input.clientId || input.clientId.trim().length === 0) {
-    return { registered: false, brandId: null, error: "missing_client_id" };
+    return { registered: false, brandId: null, error: 'missing_client_id' };
   }
 
   let brandId: string | null = null;
@@ -70,7 +70,7 @@ export async function confirmMcpRegistrationAction(
     brandId = resolveConfirmBrandId(
       input.brandId,
       context.brandSummaries.map((brand) => brand.id),
-      context.activeBrandId
+      context.activeBrandId,
     );
   } catch {
     // The backend confirm endpoint re-verifies brand access, so a requested
@@ -79,10 +79,10 @@ export async function confirmMcpRegistrationAction(
   }
 
   try {
-    const response = await fetch(getApiUrl("/mcp/connections/confirm"), {
-      method: "POST",
+    const response = await fetch(getApiUrl('/mcp/connections/confirm'), {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
@@ -92,13 +92,13 @@ export async function confirmMcpRegistrationAction(
         scope: input.scope ?? null,
         brand_id: brandId,
       }),
-      cache: "no-store",
+      cache: 'no-store',
     });
     if (!response.ok) {
       return { registered: false, brandId, error: `backend_${response.status}` };
     }
     return { registered: true, brandId };
   } catch {
-    return { registered: false, brandId, error: "request_failed" };
+    return { registered: false, brandId, error: 'request_failed' };
   }
 }

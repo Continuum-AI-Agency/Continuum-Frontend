@@ -1,8 +1,7 @@
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
-import type { CSSProperties } from "react";
-import type { EdgeProps, InternalNode, Node } from "@xyflow/react";
 
+import type { EdgeProps, InternalNode, Node } from '@xyflow/react';
 import {
   BaseEdge,
   getBezierPath,
@@ -10,8 +9,9 @@ import {
   getStraightPath,
   Position,
   useInternalNode,
-} from "@xyflow/react";
-import { useCampaignStore } from "@/CampaignCanvas/stores/useCampaignStore";
+} from '@xyflow/react';
+import type { CSSProperties } from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 
 const Temporary = ({
   id,
@@ -23,22 +23,23 @@ const Temporary = ({
   targetPosition,
 }: EdgeProps) => {
   const edgeStyle = useCampaignStore((state) => state.edgeStyle);
-  
-  const [edgePath] = edgeStyle === 'straight' 
-    ? getStraightPath({
-        sourceX,
-        sourceY,
-        targetX,
-        targetY,
-      })
-    : getBezierPath({
-        sourcePosition,
-        sourceX,
-        sourceY,
-        targetPosition,
-        targetX,
-        targetY,
-      });
+
+  const [edgePath] =
+    edgeStyle === 'straight'
+      ? getStraightPath({
+          sourceX,
+          sourceY,
+          targetX,
+          targetY,
+        })
+      : getBezierPath({
+          sourcePosition,
+          sourceX,
+          sourceY,
+          targetPosition,
+          targetX,
+          targetY,
+        });
 
   return (
     <BaseEdge
@@ -46,20 +47,17 @@ const Temporary = ({
       id={id}
       path={edgePath}
       style={{
-        strokeDasharray: "5, 5",
+        strokeDasharray: '5, 5',
       }}
     />
   );
 };
 
-const getHandleCoordsByPosition = (
-  node: InternalNode<Node>,
-  handlePosition: Position
-) => {
-  const handleType = handlePosition === Position.Left ? "target" : "source";
+const getHandleCoordsByPosition = (node: InternalNode<Node>, handlePosition: Position) => {
+  const handleType = handlePosition === Position.Left ? 'target' : 'source';
 
   const handle = node.internals.handleBounds?.[handleType]?.find(
-    (h) => h.position === handlePosition
+    (h) => h.position === handlePosition,
   );
 
   if (!handle) {
@@ -97,10 +95,7 @@ const getHandleCoordsByPosition = (
   return [x, y] as const;
 };
 
-const getEdgeParams = (
-  source: InternalNode<Node>,
-  target: InternalNode<Node>
-) => {
+const getEdgeParams = (source: InternalNode<Node>, target: InternalNode<Node>) => {
   const sourcePos = Position.Right;
   const [sx, sy] = getHandleCoordsByPosition(source, sourcePos);
   const targetPos = Position.Left;
@@ -125,34 +120,32 @@ const Animated = ({ id, source, target, markerEnd, style }: EdgeProps) => {
     return null;
   }
 
-  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
-    sourceNode,
-    targetNode
-  );
+  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode);
 
-  const [edgePath] = edgeStyle === 'straight'
-    ? getStraightPath({
-        sourceX: sx,
-        sourceY: sy,
-        targetX: tx,
-        targetY: ty,
-      })
-    : getBezierPath({
-        sourcePosition: sourcePos,
-        sourceX: sx,
-        sourceY: sy,
-        targetPosition: targetPos,
-        targetX: tx,
-        targetY: ty,
-      });
+  const [edgePath] =
+    edgeStyle === 'straight'
+      ? getStraightPath({
+          sourceX: sx,
+          sourceY: sy,
+          targetX: tx,
+          targetY: ty,
+        })
+      : getBezierPath({
+          sourcePosition: sourcePos,
+          sourceX: sx,
+          sourceY: sy,
+          targetPosition: targetPos,
+          targetX: tx,
+          targetY: ty,
+        });
 
   return (
     <>
-      <BaseEdge 
-        id={id} 
-        markerEnd={markerEnd} 
-        path={edgePath} 
-        style={style} 
+      <BaseEdge
+        id={id}
+        markerEnd={markerEnd}
+        path={edgePath}
+        style={style}
         className="transition-all duration-300 hover:stroke-[3px] cursor-pointer"
       />
       <circle fill="var(--primary)" r="4">
@@ -162,22 +155,22 @@ const Animated = ({ id, source, target, markerEnd, style }: EdgeProps) => {
   );
 };
 
-type DataType = "text" | "image" | "video" | "audio" | "document";
+type DataType = 'text' | 'image' | 'video' | 'audio' | 'document';
 
 type DataTypeEdgeData = {
   dataType?: DataType;
   isActive?: boolean;
   isDotted?: boolean;
-  pathType?: "bezier" | "straight" | "step" | "smoothstep";
+  pathType?: 'bezier' | 'straight' | 'step' | 'smoothstep';
   label?: string;
 };
 
 const getDataTypeColorToken = (dataType?: DataType) => {
-  if (dataType === "image") return "var(--edge-image)";
-  if (dataType === "video") return "var(--edge-video)";
-  if (dataType === "audio") return "var(--edge-audio, #10b981)";
-  if (dataType === "document") return "var(--edge-document, #f59e0b)";
-  return "var(--edge-text)";
+  if (dataType === 'image') return 'var(--edge-image)';
+  if (dataType === 'video') return 'var(--edge-video)';
+  if (dataType === 'audio') return 'var(--edge-audio, #10b981)';
+  if (dataType === 'document') return 'var(--edge-document, #f59e0b)';
+  return 'var(--edge-text)';
 };
 
 const DataType = ({
@@ -192,7 +185,7 @@ const DataType = ({
   data,
 }: EdgeProps) => {
   const edgeData = data as DataTypeEdgeData | undefined;
-  const pathType = edgeData?.pathType ?? "bezier";
+  const pathType = edgeData?.pathType ?? 'bezier';
   const isActive = edgeData?.isActive ?? false;
   const isDotted = edgeData?.isDotted ?? false;
 
@@ -206,14 +199,14 @@ const DataType = ({
   };
 
   const [edgePath] =
-    pathType === "straight"
+    pathType === 'straight'
       ? getStraightPath(pathArgs)
-      : pathType === "step" || pathType === "smoothstep"
+      : pathType === 'step' || pathType === 'smoothstep'
         ? getSmoothStepPath(pathArgs)
         : getBezierPath(pathArgs);
 
   const mergedStyle: CSSProperties = {
-    ["--edge-color" as keyof CSSProperties]: getDataTypeColorToken(edgeData?.dataType),
+    ['--edge-color' as keyof CSSProperties]: getDataTypeColorToken(edgeData?.dataType),
     ...style,
   };
 
@@ -224,12 +217,12 @@ const DataType = ({
         markerEnd={markerEnd}
         style={mergedStyle}
         className={[
-          "studio-edge-path",
-          isDotted ? "studio-edge-path--inactive" : "",
-          isActive ? "studio-edge-path--active-base" : "",
+          'studio-edge-path',
+          isDotted ? 'studio-edge-path--inactive' : '',
+          isActive ? 'studio-edge-path--active-base' : '',
         ]
           .filter(Boolean)
-          .join(" ")}
+          .join(' ')}
       />
       {isActive && (
         <path

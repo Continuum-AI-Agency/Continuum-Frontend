@@ -1,7 +1,7 @@
-import * as React from "react";
+import * as React from 'react';
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 type CardOverlayDemoProps = {
   title: string;
@@ -13,7 +13,7 @@ type CardOverlayDemoProps = {
   className?: string;
 };
 
-const FALLBACK_ASPECT_RATIO = "16 / 9";
+const FALLBACK_ASPECT_RATIO = '16 / 9';
 
 const clampMaxWidth = (width: number): number => {
   return Math.max(260, Math.min(width, 620));
@@ -33,7 +33,7 @@ export function CardOverlayDemo({
   const dynamicStyle = React.useMemo(() => {
     if (!mediaSize || mediaSize.width <= 0 || mediaSize.height <= 0) {
       return {
-        maxWidth: "620px",
+        maxWidth: '620px',
         aspectRatio: FALLBACK_ASPECT_RATIO,
       };
     }
@@ -55,8 +55,8 @@ export function CardOverlayDemo({
   return (
     <Card
       className={cn(
-        "group relative w-full overflow-hidden border-white/10 bg-black py-0 text-white shadow-lg",
-        className
+        'group relative w-full overflow-hidden border-white/10 bg-black py-0 text-white shadow-lg',
+        className,
       )}
       style={{ maxWidth: dynamicStyle.maxWidth }}
     >
@@ -83,14 +83,26 @@ export function CardOverlayDemo({
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-end">
         <CardHeader className="pointer-events-auto translate-y-2 pb-2 pt-5 text-white opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
-          <CardTitle className="line-clamp-2 text-base tracking-tight text-white">{title}</CardTitle>
+          <CardTitle className="line-clamp-2 text-base tracking-tight text-white">
+            {title}
+          </CardTitle>
         </CardHeader>
 
         <CardContent className="pointer-events-auto translate-y-2 space-y-2 pb-5 text-sm text-white opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
-          {description ? <p className="line-clamp-4 select-text text-white">{description}</p> : null}
+          {description ? (
+            <p className="line-clamp-4 select-text text-white">{description}</p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 text-xs text-white">
-            {status ? <span className="select-text rounded-full bg-white/20 px-2 py-1 text-white">{status}</span> : null}
-            {callToAction ? <span className="select-text rounded-full bg-white/20 px-2 py-1 text-white">CTA: {callToAction}</span> : null}
+            {status ? (
+              <span className="select-text rounded-full bg-white/20 px-2 py-1 text-white">
+                {status}
+              </span>
+            ) : null}
+            {callToAction ? (
+              <span className="select-text rounded-full bg-white/20 px-2 py-1 text-white">
+                CTA: {callToAction}
+              </span>
+            ) : null}
           </div>
         </CardContent>
       </div>

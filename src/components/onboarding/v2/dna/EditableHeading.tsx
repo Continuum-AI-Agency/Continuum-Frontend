@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
 
 type EditableHeadingProps = {
   value: string;
@@ -21,7 +21,7 @@ export function EditableHeading({ value, placeholder, onCommit }: EditableHeadin
         }}
         className="text-left text-xl font-bold text-[#0b1220] transition-colors hover:text-[#5a39ff]"
       >
-        {value || <span className="text-[#94a3b8]">{placeholder ?? "Untitled"}</span>}
+        {value || <span className="text-[#94a3b8]">{placeholder ?? 'Untitled'}</span>}
       </button>
     );
   }
@@ -36,10 +36,10 @@ export function EditableHeading({ value, placeholder, onCommit }: EditableHeadin
         if (draft !== value) onCommit(draft);
       }}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        if (event.key === 'Escape') {
           setEditing(false);
           setDraft(value);
-        } else if (event.key === "Enter") {
+        } else if (event.key === 'Enter') {
           event.currentTarget.blur();
         }
       }}

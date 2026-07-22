@@ -1,21 +1,30 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { TrendsDataTable } from "@/components/organic/TrendsDataTable"
-import type { BrandInsightsTrend, BrandInsightsEvent, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
-import type { OrganicTrend, OrganicTrendType } from "@/components/organic/primitives/types"
+import * as React from 'react';
+import type { OrganicTrend, OrganicTrendType } from '@/components/organic/primitives/types';
+import { TrendsDataTable } from '@/components/organic/TrendsDataTable';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import type {
+  BrandInsightsEvent,
+  BrandInsightsQuestionsByNiche,
+  BrandInsightsTrend,
+} from '@/lib/schemas/brandInsights';
 
 type BrandInsightsCollapsibleSignalsProps = {
-  trends: BrandInsightsTrend[]
-  events?: BrandInsightsEvent[]
-  questionsByNiche?: BrandInsightsQuestionsByNiche
-  activePlatforms: OrganicPlatformKey[]
-  onToggleTrend: (id: string) => void
-  selectedTrendIds: string[]
-  maxTrendSelections?: number
-}
+  trends: BrandInsightsTrend[];
+  events?: BrandInsightsEvent[];
+  questionsByNiche?: BrandInsightsQuestionsByNiche;
+  activePlatforms: OrganicPlatformKey[];
+  onToggleTrend: (id: string) => void;
+  selectedTrendIds: string[];
+  maxTrendSelections?: number;
+};
 
 export function BrandInsightsCollapsibleSignals({
   trends,
@@ -26,55 +35,58 @@ export function BrandInsightsCollapsibleSignals({
   selectedTrendIds,
   maxTrendSelections,
 }: BrandInsightsCollapsibleSignalsProps) {
-  
-  const mappedTrends = React.useMemo<OrganicTrend[]>(() => 
-    trends.map(t => ({
-      id: t.id,
-      title: t.title,
-      summary: t.description ?? t.relevanceToBrand ?? "",
-      momentum: "rising", 
-      tags: t.source ? [t.source] : [],
-      platforms: activePlatforms as any,
-    }))
-  , [trends, activePlatforms]);
+  const mappedTrends = React.useMemo<OrganicTrend[]>(
+    () =>
+      trends.map((t) => ({
+        id: t.id,
+        title: t.title,
+        summary: t.description ?? t.relevanceToBrand ?? '',
+        momentum: 'rising',
+        tags: t.source ? [t.source] : [],
+        platforms: activePlatforms as any,
+      })),
+    [trends, activePlatforms],
+  );
 
   const mappedQuestions = React.useMemo<OrganicTrend[]>(() => {
     const nicheMap = questionsByNiche?.questionsByNiche || {};
-    return Object.entries(nicheMap).flatMap(([niche, data]) => 
-      data.questions.map(q => ({
+    return Object.entries(nicheMap).flatMap(([niche, data]) =>
+      data.questions.map((q) => ({
         id: q.id,
         title: q.question,
-        summary: q.whyRelevant ?? q.contentTypeSuggestion ?? "",
-        momentum: "stable" as const,
-        tags: ["question", niche],
+        summary: q.whyRelevant ?? q.contentTypeSuggestion ?? '',
+        momentum: 'stable' as const,
+        tags: ['question', niche],
         platforms: activePlatforms as any,
-      }))
+      })),
     );
   }, [questionsByNiche, activePlatforms]);
 
-  const mappedEvents = React.useMemo<OrganicTrend[]>(() => 
-    events.map(e => ({
-      id: e.id,
-      title: e.title,
-      summary: e.description ?? e.opportunity ?? "",
-      momentum: "rising" as const,
-      tags: ["event", e.date ?? ""],
-      platforms: activePlatforms as any,
-    }))
-  , [events, activePlatforms]);
+  const mappedEvents = React.useMemo<OrganicTrend[]>(
+    () =>
+      events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        summary: e.description ?? e.opportunity ?? '',
+        momentum: 'rising' as const,
+        tags: ['event', e.date ?? ''],
+        platforms: activePlatforms as any,
+      })),
+    [events, activePlatforms],
+  );
 
   const sections = [
-    { id: "trends", label: "Market Trends", data: mappedTrends, showMomentum: true },
-    { id: "events", label: "Key Events", data: mappedEvents, showMomentum: false },
-    { id: "questions", label: "Audience Questions", data: mappedQuestions, showMomentum: false },
-  ].filter(s => s.data.length > 0);
+    { id: 'trends', label: 'Market Trends', data: mappedTrends, showMomentum: true },
+    { id: 'events', label: 'Key Events', data: mappedEvents, showMomentum: false },
+    { id: 'questions', label: 'Audience Questions', data: mappedQuestions, showMomentum: false },
+  ].filter((s) => s.data.length > 0);
 
   return (
-    <Accordion type="multiple" defaultValue={sections.map(s => s.id)} className="space-y-4">
+    <Accordion type="multiple" defaultValue={sections.map((s) => s.id)} className="space-y-4">
       {sections.map((section) => (
-        <AccordionItem 
-          key={section.id} 
-          value={section.id} 
+        <AccordionItem
+          key={section.id}
+          value={section.id}
           className="border border-subtle rounded-md overflow-hidden bg-surface/30 px-0"
         >
           <AccordionTrigger className="hover:no-underline px-4 py-3 bg-surface/50 text-sm font-semibold tracking-wide">
@@ -99,5 +111,5 @@ export function BrandInsightsCollapsibleSignals({
         </AccordionItem>
       ))}
     </Accordion>
-  )
+  );
 }

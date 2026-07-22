@@ -1,32 +1,31 @@
-"use client";
+'use client';
 
-import { AtSign, ChevronLeft, ChevronRight } from "lucide-react";
-import Image from "next/image";
-
-import { Badge } from "@/components/ui/badge";
+import { AtSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import Image from 'next/image';
+import {
+  type MentionAnalyticsContext,
+  MentionSuggestionHover,
+} from '@/components/chat/mention-suggestion-hover';
+import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
   CommandGroup,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import {
-  MentionSuggestionHover,
-  type MentionAnalyticsContext,
-} from "@/components/chat/mention-suggestion-hover";
-import type { AgentMentionSuggestion } from "@/lib/agent-references";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import type { AgentMentionSuggestion } from '@/lib/agent-references';
+import { cn } from '@/lib/utils';
 
 export type MentionPlatformOption = {
   id: string;
@@ -51,11 +50,11 @@ type MentionPickerMenuProps = {
 };
 
 const PLATFORM_SHORT: Record<string, string> = {
-  instagram: "IG",
-  facebook: "FB",
-  tiktok: "TT",
-  youtube: "YT",
-  linkedin: "LI",
+  instagram: 'IG',
+  facebook: 'FB',
+  tiktok: 'TT',
+  youtube: 'YT',
+  linkedin: 'LI',
 };
 
 /** Only render a leading visual when there is real media (image/video URL). */
@@ -66,7 +65,7 @@ function hasMediaPreview(suggestion: AgentMentionSuggestion): boolean {
 function SuggestionThumb({ suggestion }: { suggestion: AgentMentionSuggestion }) {
   const preview = suggestion.preview;
   if (!preview?.url) return null;
-  if (preview.kind === "video") {
+  if (preview.kind === 'video') {
     return (
       <video
         aria-hidden
@@ -87,23 +86,24 @@ function SuggestionThumb({ suggestion }: { suggestion: AgentMentionSuggestion })
 
 /** Compact live KPI readout: `12.4k` + green/red Δ% — stays small in the list. */
 function MetricInlineStat({ suggestion }: { suggestion: AgentMentionSuggestion }) {
-  if (suggestion.type !== "kpi") return null;
-  if (suggestion.reference?.metadata?.isPack === true || suggestion.badge === "pack") return null;
+  if (suggestion.type !== 'kpi') return null;
+  if (suggestion.reference?.metadata?.isPack === true || suggestion.badge === 'pack') return null;
   const meta = (suggestion.reference?.metadata ?? {}) as Record<string, unknown>;
-  const value = typeof meta.value === "number" ? meta.value : null;
-  const delta = typeof meta.percentageChange === "number" ? meta.percentageChange : null;
-  const unit = typeof meta.unit === "string" ? meta.unit : null;
+  const value = typeof meta.value === 'number' ? meta.value : null;
+  const delta = typeof meta.percentageChange === 'number' ? meta.percentageChange : null;
+  const unit = typeof meta.unit === 'string' ? meta.unit : null;
   if (value == null && delta == null) return null;
 
   const valueLabel =
     value == null
       ? null
-      : unit === "percent" || unit === "%"
+      : unit === 'percent' || unit === '%'
         ? `${value.toFixed(1)}%`
         : value >= 1000
-          ? new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(
-              value,
-            )
+          ? new Intl.NumberFormat(undefined, {
+              notation: 'compact',
+              maximumFractionDigits: 1,
+            }).format(value)
           : value.toLocaleString();
 
   return (
@@ -114,11 +114,13 @@ function MetricInlineStat({ suggestion }: { suggestion: AgentMentionSuggestion }
       {delta != null ? (
         <span
           className={cn(
-            "text-2xs tabular-nums font-medium",
-            delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+            'text-2xs tabular-nums font-medium',
+            delta >= 0
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-rose-600 dark:text-rose-400',
           )}
         >
-          {delta >= 0 ? "+" : ""}
+          {delta >= 0 ? '+' : ''}
           {delta.toFixed(1)}%
         </span>
       ) : null}
@@ -147,7 +149,7 @@ export function MentionPickerMenu({
   const selectedKey =
     suggestions[highlightedIndex] != null
       ? `${suggestions[highlightedIndex].key}::${highlightedIndex}`
-      : "";
+      : '';
   const inFolder = parentStack.length > 0;
   const currentFolder = parentStack[parentStack.length - 1] ?? null;
   const showPlatformFilter = Boolean(platforms && platforms.length > 0 && onPlatformChange);
@@ -155,9 +157,9 @@ export function MentionPickerMenu({
   return (
     <div
       className={cn(
-        "absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-full max-w-[28rem]",
-        "overflow-hidden rounded-xl border border-border/70 bg-popover text-popover-foreground",
-        "shadow-[0_18px_50px_-24px_rgba(0,0,0,0.45)] ring-1 ring-black/5 dark:ring-white/10",
+        'absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-full max-w-[28rem]',
+        'overflow-hidden rounded-xl border border-border/70 bg-popover text-popover-foreground',
+        'shadow-[0_18px_50px_-24px_rgba(0,0,0,0.45)] ring-1 ring-black/5 dark:ring-white/10',
         className,
       )}
     >
@@ -166,7 +168,7 @@ export function MentionPickerMenu({
         value={selectedKey}
         onValueChange={(value) => {
           // Values are `${suggestion.key}::${index}` — recover the index first.
-          const sep = value.lastIndexOf("::");
+          const sep = value.lastIndexOf('::');
           if (sep >= 0) {
             const idx = Number.parseInt(value.slice(sep + 2), 10);
             if (Number.isFinite(idx) && idx >= 0 && idx < suggestions.length) {
@@ -233,7 +235,7 @@ export function MentionPickerMenu({
                 ? currentFolder.childrenLabel
                 : activeQuery
                   ? `Matching “${activeQuery}”`
-                  : "Browse families or keep typing to search"}
+                  : 'Browse families or keep typing to search'}
             </p>
           </div>
 
@@ -265,11 +267,11 @@ export function MentionPickerMenu({
                       onPlatformChange?.(platform.id);
                     }}
                     className={cn(
-                      "h-6 rounded-full border px-2 text-2xs font-medium transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                      'h-6 rounded-full border px-2 text-2xs font-medium transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
                       active
-                        ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border/70 bg-background/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'border-border/70 bg-background/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                     )}
                   >
                     {PLATFORM_SHORT[platform.id] ?? platform.label.slice(0, 2).toUpperCase()}
@@ -292,10 +294,7 @@ export function MentionPickerMenu({
                 // Always suffix with index so duplicate upstream ids (e.g. What's
                 // Working cluster slugs) never collide as React/cmdk identities.
                 const itemKey = `${suggestion.key}::${index}`;
-                const secondary =
-                  suggestion.description ??
-                  suggestion.childrenLabel ??
-                  null;
+                const secondary = suggestion.description ?? suggestion.childrenLabel ?? null;
                 return (
                   <MentionSuggestionHover
                     key={itemKey}
@@ -307,8 +306,8 @@ export function MentionPickerMenu({
                       onMouseEnter={() => onHighlight(index)}
                       onSelect={() => onSelect(suggestion)}
                       className={cn(
-                        "gap-2.5 rounded-lg px-2.5 py-2 aria-selected:bg-accent/80",
-                        index === highlightedIndex && "bg-accent/80 text-accent-foreground",
+                        'gap-2.5 rounded-lg px-2.5 py-2 aria-selected:bg-accent/80',
+                        index === highlightedIndex && 'bg-accent/80 text-accent-foreground',
                       )}
                     >
                       {showMedia ? <SuggestionThumb suggestion={suggestion} /> : null}
@@ -343,21 +342,27 @@ export function MentionPickerMenu({
         <Separator />
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-2xs text-muted-foreground">
           <span>
-            <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">↑↓</kbd>
-            {" "}navigate
+            <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">
+              ↑↓
+            </kbd>{' '}
+            navigate
             <span className="mx-1.5 text-border">·</span>
-            <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">↵</kbd>
-            {" "}select
+            <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">
+              ↵
+            </kbd>{' '}
+            select
             {inFolder ? (
               <>
                 <span className="mx-1.5 text-border">·</span>
-                <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">esc</kbd>
-                {" "}back
+                <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">
+                  esc
+                </kbd>{' '}
+                back
               </>
             ) : null}
           </span>
           <span className="tabular-nums">
-            {suggestions.length} {suggestions.length === 1 ? "item" : "items"}
+            {suggestions.length} {suggestions.length === 1 ? 'item' : 'items'}
           </span>
         </div>
       </Command>

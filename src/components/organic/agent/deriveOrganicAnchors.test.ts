@@ -37,9 +37,21 @@ describe('milestonesForMessage', () => {
     };
 
     expect(milestonesForMessage(message, pipeline)).toEqual([
-      { id: 'a1::copy', label: 'Copy ready' },
-      { id: 'a1::blueprint', label: 'Blueprint ready' },
+      { id: 'a1::content', label: 'Content ready' },
       { id: 'a1::media', label: 'Media ready' },
+    ]);
+  });
+
+  it('keeps a single copy marker when only text is ready', () => {
+    const message = assistant('a1', {
+      toolCalls: [{ toolCallId: 'tc-1', toolName: 'generateDraft' }],
+    });
+    const pipeline = {
+      'job-1': pipelineCard({ toolCallId: 'tc-1', checkpoint: { textReady: true } }),
+    };
+
+    expect(milestonesForMessage(message, pipeline)).toEqual([
+      { id: 'a1::copy', label: 'Copy ready' },
     ]);
   });
 

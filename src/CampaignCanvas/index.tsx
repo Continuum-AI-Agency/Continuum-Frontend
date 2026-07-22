@@ -1,11 +1,11 @@
-"use client";
-import React, { useMemo, useRef, useState } from 'react';
-import { CampaignCanvas } from './components/CampaignCanvas';
+'use client';
 import { ReactFlowProvider } from '@xyflow/react';
-import { motion, AnimatePresence, useDragControls } from 'motion/react';
+import { Bot, GripHorizontal, Maximize2, MessageSquareText, Minimize2, X } from 'lucide-react';
+import { AnimatePresence, motion, useDragControls } from 'motion/react';
+import React, { useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { Button } from '@/components/ui/button';
-import { Bot, X, GripHorizontal, MessageSquareText, Maximize2, Minimize2 } from 'lucide-react';
+import { CampaignCanvas } from './components/CampaignCanvas';
 
 const CampaignFlowCanvasPage = () => {
   const [isJainaOpen, setIsJainaOpen] = useState(false);
@@ -15,10 +15,10 @@ const CampaignFlowCanvasPage = () => {
 
   const chatDimensions = useMemo(
     () => ({
-      width: isMaximized ? "min(94vw, 980px)" : "min(92vw, 420px)",
-      height: isMaximized ? "min(88vh, 880px)" : "min(75vh, 620px)",
+      width: isMaximized ? 'min(94vw, 980px)' : 'min(92vw, 420px)',
+      height: isMaximized ? 'min(88vh, 880px)' : 'min(75vh, 620px)',
     }),
-    [isMaximized]
+    [isMaximized],
   );
 
   return (
@@ -41,7 +41,7 @@ const CampaignFlowCanvasPage = () => {
                   height: chatDimensions.height,
                 }}
                 exit={{ opacity: 0, scale: 0.98, y: 8 }}
-                transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+                transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
                 drag
                 dragControls={dragControls}
                 dragConstraints={canvasContainerRef}
@@ -60,7 +60,9 @@ const CampaignFlowCanvasPage = () => {
                     <GripHorizontal className="h-4 w-4 text-muted-foreground" />
                     <div className="flex items-center gap-1.5">
                       <Bot className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-bold uppercase tracking-widest opacity-80">Jaina Analyst</span>
+                      <span className="text-xs font-bold uppercase tracking-widest opacity-80">
+                        Jaina Analyst
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -70,7 +72,11 @@ const CampaignFlowCanvasPage = () => {
                       className="h-10 w-10"
                       onClick={() => setIsMaximized(!isMaximized)}
                     >
-                      {isMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                      {isMaximized ? (
+                        <Minimize2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <Maximize2 className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                     <Button
                       variant="ghost"
@@ -98,18 +104,18 @@ const CampaignFlowCanvasPage = () => {
           <div className="absolute bottom-4 right-4 z-50 md:bottom-8 md:right-8">
             <Button
               size="lg"
-              variant={isJainaOpen ? "outline" : "default"}
+              variant={isJainaOpen ? 'outline' : 'default'}
               className={`relative h-14 w-14 rounded-full shadow-2xl transition-transform transition-shadow duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${!isJainaOpen ? 'hover:scale-105' : ''}`}
               onClick={() => setIsJainaOpen(!isJainaOpen)}
             >
               <MessageSquareText
                 className={`absolute h-6 w-6 transition-[opacity,transform,filter] duration-200 ease-[cubic-bezier(0.2,0,0,1)] ${
-                  isJainaOpen ? "scale-[0.25] opacity-0 blur-[4px]" : "scale-100 opacity-100 blur-0"
+                  isJainaOpen ? 'scale-[0.25] opacity-0 blur-[4px]' : 'scale-100 opacity-100 blur-0'
                 }`}
               />
               <X
                 className={`absolute h-6 w-6 transition-[opacity,transform,filter] duration-200 ease-[cubic-bezier(0.2,0,0,1)] ${
-                  isJainaOpen ? "scale-100 opacity-100 blur-0" : "scale-[0.25] opacity-0 blur-[4px]"
+                  isJainaOpen ? 'scale-100 opacity-100 blur-0' : 'scale-[0.25] opacity-0 blur-[4px]'
                 }`}
               />
             </Button>

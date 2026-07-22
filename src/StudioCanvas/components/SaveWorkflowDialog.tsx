@@ -1,17 +1,17 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Cross2Icon, UploadIcon } from '@radix-ui/react-icons';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Cross2Icon, UploadIcon } from '@radix-ui/react-icons';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Textarea } from '@/components/ui/textarea';
 import { coerceToastOptions, throwToastError, useToast } from '@/components/ui/ToastProvider';
-import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
+import { Textarea } from '@/components/ui/textarea';
 import { formatMiB } from '@/lib/ai-studio/referenceDrop';
+import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
 import { useStudioStore } from '../stores/useStudioStore';
 import { serializeWorkflowSnapshot } from '../utils/workflowSerialization';
 
@@ -103,7 +103,9 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-primary">Save workflow</p>
-              <p className="text-xs text-muted-foreground">Store this canvas as a reusable template for your brand.</p>
+              <p className="text-xs text-muted-foreground">
+                Store this canvas as a reusable template for your brand.
+              </p>
             </div>
             <Button
               type="button"
@@ -119,13 +121,24 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
 
           <div className="grid gap-2">
             <Label htmlFor="workflow-name">Name</Label>
-            <Input id="workflow-name" placeholder="Launch creative flow" {...form.register('name')} />
-            {form.formState.errors.name?.message && <p className="text-xs text-danger">{form.formState.errors.name.message}</p>}
+            <Input
+              id="workflow-name"
+              placeholder="Launch creative flow"
+              {...form.register('name')}
+            />
+            {form.formState.errors.name?.message && (
+              <p className="text-xs text-danger">{form.formState.errors.name.message}</p>
+            )}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="workflow-description">Description</Label>
-            <Textarea id="workflow-description" placeholder="Optional notes for your team" rows={3} {...form.register('description')} />
+            <Textarea
+              id="workflow-description"
+              placeholder="Optional notes for your team"
+              rows={3}
+              {...form.register('description')}
+            />
           </div>
 
           <p className="text-xs text-muted-foreground">

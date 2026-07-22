@@ -1,13 +1,16 @@
-"use client";
+'use client';
 
-import { instagramOrganicMetricsResponseSchema, type OrganicPlatform } from "@/lib/schemas/organicMetrics";
-import type { OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
-import type { IntegrationErrorCode } from "@continuum/contracts";
+import type { IntegrationErrorCode } from '@continuum/contracts';
+import type { OrganicDateRangePreset } from '@/lib/schemas/organicMetrics';
+import {
+  instagramOrganicMetricsResponseSchema,
+  type OrganicPlatform,
+} from '@/lib/schemas/organicMetrics';
 
 export type InsightsRequest = {
   metrics: string[];
-  metric_type?: "total_value" | "time_series";
-  period?: "day" | "lifetime";
+  metric_type?: 'total_value' | 'time_series';
+  period?: 'day' | 'lifetime';
   breakdown?: string | string[];
   timeframe?: string;
   since?: string;
@@ -29,10 +32,10 @@ export type OrganicMetricsRequest = {
 export type InstagramOrganicMetricsRequest = OrganicMetricsRequest;
 
 export async function fetchOrganicMetrics(request: OrganicMetricsRequest) {
-  const platform = request.platform ?? "instagram";
+  const platform = request.platform ?? 'instagram';
   const response = await fetch(`/api/organic-metrics/${platform}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   });
 
@@ -41,7 +44,11 @@ export async function fetchOrganicMetrics(request: OrganicMetricsRequest) {
     let errorCode: IntegrationErrorCode | undefined;
     let retryAfter: number | undefined;
     try {
-      const payload = (await response.json()) as { error?: string; errorCode?: IntegrationErrorCode; retryAfter?: number };
+      const payload = (await response.json()) as {
+        error?: string;
+        errorCode?: IntegrationErrorCode;
+        retryAfter?: number;
+      };
       if (payload.error) message = payload.error;
       errorCode = payload.errorCode;
       retryAfter = payload.retryAfter;

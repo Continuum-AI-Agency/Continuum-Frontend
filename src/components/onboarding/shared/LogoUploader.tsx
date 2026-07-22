@@ -1,12 +1,13 @@
-"use client";
+'use client';
 
-import React, { useRef, useState, useEffect } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Upload, X } from "lucide-react";
-import { uploadCreativeAsset, createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { useToast } from "@/components/ui/ToastProvider";
+import { Upload, X } from 'lucide-react';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { createSignedAssetUrl, uploadCreativeAsset } from '@/lib/creative-assets/storageClient';
 
 export function LogoUploader() {
   const { brandId, state, updateState } = useOnboarding();
@@ -16,7 +17,7 @@ export function LogoUploader() {
   const [isUploading, setIsUploading] = useState(false);
 
   const logoPath = state.brand.logoPath;
-  const brandName = state.brand.name || "Brand";
+  const brandName = state.brand.name || 'Brand';
   const initials = brandName.slice(0, 2).toUpperCase();
 
   useEffect(() => {
@@ -25,12 +26,16 @@ export function LogoUploader() {
       return;
     }
     let isActive = true;
-    createSignedAssetUrl(logoPath, 3600).then((url) => {
-      if (isActive) setPreviewUrl(url);
-    }).catch(() => {
-      if (isActive) setPreviewUrl(null);
-    });
-    return () => { isActive = false; };
+    createSignedAssetUrl(logoPath, 3600)
+      .then((url) => {
+        if (isActive) setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (isActive) setPreviewUrl(null);
+      });
+    return () => {
+      isActive = false;
+    };
   }, [logoPath]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,30 +43,30 @@ export function LogoUploader() {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      show({ title: "File too large", description: "Logo must be under 2MB", variant: "error" });
+      show({ title: 'File too large', description: 'Logo must be under 2MB', variant: 'error' });
       return;
     }
 
     setIsUploading(true);
     try {
-      const extension = file.name.split(".").pop() || "png";
+      const extension = file.name.split('.').pop() || 'png';
       const namedFile = new File([file], `logo.${extension}`, { type: file.type });
-      const { asset } = await uploadCreativeAsset(brandId, "branding", namedFile);
-      
+      const { asset } = await uploadCreativeAsset(brandId, 'branding', namedFile);
+
       await updateState({
         brand: {
           logoPath: asset.fullPath,
         },
       });
-      show({ title: "Logo uploaded", description: "Brand logo updated.", variant: "success" });
+      show({ title: 'Logo uploaded', description: 'Brand logo updated.', variant: 'success' });
     } catch (error) {
       console.error(error);
       const description =
-        error instanceof Error && error.message ? error.message : "Could not upload logo.";
-      show({ title: "Upload failed", description, variant: "error" });
+        error instanceof Error && error.message ? error.message : 'Could not upload logo.';
+      show({ title: 'Upload failed', description, variant: 'error' });
     } finally {
       setIsUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
@@ -84,11 +89,14 @@ export function LogoUploader() {
         accept="image/png,image/jpeg,image/svg+xml"
         onChange={handleFileChange}
       />
-      
-      <Avatar className="w-32 h-32 cursor-pointer border-4 border-muted-foreground/10 hover:border-primary/50 transition-all shadow-sm" onClick={() => inputRef.current?.click()}>
+
+      <Avatar
+        className="w-32 h-32 cursor-pointer border-4 border-muted-foreground/10 hover:border-primary/50 transition-all shadow-sm"
+        onClick={() => inputRef.current?.click()}
+      >
         <AvatarImage src={previewUrl ?? undefined} alt="Brand Logo" className="object-cover" />
         <AvatarFallback className="text-3xl font-semibold bg-transparent text-muted-foreground">
-          {isUploading ? "..." : initials}
+          {isUploading ? '...' : initials}
         </AvatarFallback>
       </Avatar>
 

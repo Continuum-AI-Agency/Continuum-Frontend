@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
+import { ArrowDown } from 'lucide-react';
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
-import * as React from "react";
-import { ArrowDown } from "lucide-react";
+import * as React from 'react';
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 // Distance from the bottom (px) within which the view is considered "pinned".
 // While pinned, new content auto-follows; scrolling further up detaches the
 // view so streaming output never yanks the reader back down.
 const STICK_THRESHOLD_PX = 64;
 
-type ConversationProps = React.ComponentProps<"div">;
+type ConversationProps = React.ComponentProps<'div'>;
 
 export function Conversation({ children, className, ...props }: ConversationProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const stickRef = React.useRef(true);
   const [showScrollButton, setShowScrollButton] = React.useState(false);
 
-  const scrollToBottom = React.useCallback((behavior: ScrollBehavior = "smooth") => {
+  const scrollToBottom = React.useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior });
@@ -42,7 +42,7 @@ export function Conversation({ children, className, ...props }: ConversationProp
   // instant (not smooth) scrolling avoids a backlog of animated scrolls.
   React.useEffect(() => {
     const el = scrollRef.current;
-    if (!el || typeof MutationObserver === "undefined") return;
+    if (!el || typeof MutationObserver === 'undefined') return;
     const observer = new MutationObserver(() => {
       if (stickRef.current) el.scrollTop = el.scrollHeight;
     });
@@ -51,8 +51,12 @@ export function Conversation({ children, className, ...props }: ConversationProp
   }, []);
 
   return (
-    <div className={cn("relative h-full min-h-0 w-full overflow-hidden", className)} {...props}>
-      <div ref={scrollRef} onScroll={handleScroll} className="h-full min-h-0 w-full overflow-y-auto">
+    <div className={cn('relative h-full min-h-0 w-full overflow-hidden', className)} {...props}>
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="h-full min-h-0 w-full overflow-y-auto"
+      >
         {children}
       </div>
       {showScrollButton ? <ConversationScrollButton onClick={() => scrollToBottom()} /> : null}
@@ -60,12 +64,15 @@ export function Conversation({ children, className, ...props }: ConversationProp
   );
 }
 
-type ConversationContentProps = React.ComponentProps<"div">;
+type ConversationContentProps = React.ComponentProps<'div'>;
 
 export function ConversationContent({ children, className, ...props }: ConversationContentProps) {
   return (
     <div
-      className={cn("mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 md:px-6 lg:px-8", className)}
+      className={cn(
+        'mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 md:px-6 lg:px-8',
+        className,
+      )}
       {...props}
     >
       {children}
@@ -101,7 +108,12 @@ type ConversationEmptyStateProps = {
   children?: React.ReactNode;
 };
 
-export function ConversationEmptyState({ icon, title, description, children }: ConversationEmptyStateProps) {
+export function ConversationEmptyState({
+  icon,
+  title,
+  description,
+  children,
+}: ConversationEmptyStateProps) {
   return (
     <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 text-center">
       {icon ? <div className="text-muted-foreground/70">{icon}</div> : null}

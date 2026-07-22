@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useCallback } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type CanvasRoom = {
   id: string;
@@ -20,17 +20,17 @@ export function useCanvasRooms(brandProfileId: string) {
   const fetchRooms = useCallback(async () => {
     if (!brandProfileId) return;
     setIsLoading(true);
-    
+
     const { data, error } = await supabase
-      .schema("brand_profiles" as any)
-      .from("canvas_rooms" as any)
-      .select("*")
-      .eq("brand_profile_id", brandProfileId)
-      .order("created_at", { ascending: true });
+      .schema('brand_profiles' as any)
+      .from('canvas_rooms' as any)
+      .select('*')
+      .eq('brand_profile_id', brandProfileId)
+      .order('created_at', { ascending: true });
 
     if (error) {
-      console.error("[Canvas Rooms] Fetch failed", error);
-      toast.error("Failed to load workspaces");
+      console.error('[Canvas Rooms] Fetch failed', error);
+      toast.error('Failed to load workspaces');
     } else {
       setRooms((data as CanvasRoom[]) || []);
     }
@@ -43,13 +43,13 @@ export function useCanvasRooms(brandProfileId: string) {
 
   const createRoom = async (name: string) => {
     if (rooms.length >= 3) {
-      toast.error("Maximum 3 workspaces allowed");
+      toast.error('Maximum 3 workspaces allowed');
       return null;
     }
 
     const { data, error } = await supabase
-      .schema("brand_profiles" as any)
-      .from("canvas_rooms" as any)
+      .schema('brand_profiles' as any)
+      .from('canvas_rooms' as any)
       .insert({
         brand_profile_id: brandProfileId,
         name,
@@ -58,49 +58,49 @@ export function useCanvasRooms(brandProfileId: string) {
       .single();
 
     if (error) {
-      console.error("[Canvas Rooms] Create failed", error);
-      toast.error("Failed to create workspace");
+      console.error('[Canvas Rooms] Create failed', error);
+      toast.error('Failed to create workspace');
       return null;
     }
 
     setRooms((prev) => [...prev, data as CanvasRoom]);
-    toast.success("Workspace created");
+    toast.success('Workspace created');
     return data as CanvasRoom;
   };
 
   const deleteRoom = async (roomId: string) => {
     if (rooms.length <= 1) {
-      toast.error("Cannot delete the last workspace");
+      toast.error('Cannot delete the last workspace');
       return false;
     }
 
     const { error } = await supabase
-      .schema("brand_profiles" as any)
-      .from("canvas_rooms" as any)
+      .schema('brand_profiles' as any)
+      .from('canvas_rooms' as any)
       .delete()
-      .eq("id", roomId);
+      .eq('id', roomId);
 
     if (error) {
-      console.error("[Canvas Rooms] Delete failed", error);
-      toast.error("Failed to delete workspace");
+      console.error('[Canvas Rooms] Delete failed', error);
+      toast.error('Failed to delete workspace');
       return false;
     }
 
     setRooms((prev) => prev.filter((r) => r.id !== roomId));
-    toast.success("Workspace deleted");
+    toast.success('Workspace deleted');
     return true;
   };
 
   const updateRoomName = async (roomId: string, name: string) => {
     const { error } = await supabase
-      .schema("brand_profiles" as any)
-      .from("canvas_rooms" as any)
+      .schema('brand_profiles' as any)
+      .from('canvas_rooms' as any)
       .update({ name })
-      .eq("id", roomId);
+      .eq('id', roomId);
 
     if (error) {
-      console.error("[Canvas Rooms] Update failed", error);
-      toast.error("Failed to update workspace name");
+      console.error('[Canvas Rooms] Update failed', error);
+      toast.error('Failed to update workspace name');
       return false;
     }
 

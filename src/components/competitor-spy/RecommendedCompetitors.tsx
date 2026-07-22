@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import type { RecommendedCompetitor } from "@continuum/contracts";
+import type { RecommendedCompetitor } from '@continuum/contracts';
+import { useState } from 'react';
 import {
   useCreateCompetitor,
   useDismissRecommendation,
   useRecommendedCompetitors,
-} from "@/lib/api/competitorSpy";
-import { RecommendedCompetitorCard } from "./RecommendedCompetitorCard";
+} from '@/lib/api/competitorSpy';
+import { RecommendedCompetitorCard } from './RecommendedCompetitorCard';
 
-const GRID = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3";
+const GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3';
 
 export function RecommendedCompetitors({ brandId }: { brandId: string }) {
   const { data, isLoading, isError } = useRecommendedCompetitors(brandId);
@@ -18,7 +18,7 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
   const [trackingName, setTrackingName] = useState<string | null>(null);
 
   const limitReached =
-    create.error instanceof Error && create.error.message === "competitor_limit_reached";
+    create.error instanceof Error && create.error.message === 'competitor_limit_reached';
 
   const track = (rec: RecommendedCompetitor) => {
     setTrackingName(rec.name);
@@ -33,7 +33,9 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
     <div className="flex items-baseline justify-between">
       <h3 className="text-sm font-semibold">Recommended from onboarding</h3>
       {recommendations.length > 0 ? (
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">{recommendations.length}</span>
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {recommendations.length}
+        </span>
       ) : null}
     </div>
   );

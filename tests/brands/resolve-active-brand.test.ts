@@ -1,11 +1,11 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { resolveActiveBrandId } from "../../src/lib/brands/resolve-active-brand";
+import { resolveActiveBrandId } from '../../src/lib/brands/resolve-active-brand';
 
-test("resolveActiveBrandId returns null when no permitted brands", () => {
+test('resolveActiveBrandId returns null when no permitted brands', () => {
   const result = resolveActiveBrandId({
-    candidateBrandId: "brand-1",
+    candidateBrandId: 'brand-1',
     permittedBrandIds: [],
   });
 
@@ -13,32 +13,32 @@ test("resolveActiveBrandId returns null when no permitted brands", () => {
   assert.equal(result.shouldPersist, false);
 });
 
-test("resolveActiveBrandId accepts a valid candidate", () => {
+test('resolveActiveBrandId accepts a valid candidate', () => {
   const result = resolveActiveBrandId({
-    candidateBrandId: "brand-2",
-    permittedBrandIds: ["brand-1", "brand-2"],
+    candidateBrandId: 'brand-2',
+    permittedBrandIds: ['brand-1', 'brand-2'],
   });
 
-  assert.equal(result.activeBrandId, "brand-2");
+  assert.equal(result.activeBrandId, 'brand-2');
   assert.equal(result.shouldPersist, false);
 });
 
-test("resolveActiveBrandId falls back when candidate missing", () => {
+test('resolveActiveBrandId falls back when candidate missing', () => {
   const result = resolveActiveBrandId({
     candidateBrandId: null,
-    permittedBrandIds: ["brand-1", "brand-2"],
+    permittedBrandIds: ['brand-1', 'brand-2'],
   });
 
-  assert.equal(result.activeBrandId, "brand-1");
+  assert.equal(result.activeBrandId, 'brand-1');
   assert.equal(result.shouldPersist, true);
 });
 
-test("resolveActiveBrandId falls back when candidate not permitted", () => {
+test('resolveActiveBrandId falls back when candidate not permitted', () => {
   const result = resolveActiveBrandId({
-    candidateBrandId: "brand-3",
-    permittedBrandIds: ["brand-1", "brand-2"],
+    candidateBrandId: 'brand-3',
+    permittedBrandIds: ['brand-1', 'brand-2'],
   });
 
-  assert.equal(result.activeBrandId, "brand-1");
+  assert.equal(result.activeBrandId, 'brand-1');
   assert.equal(result.shouldPersist, true);
 });

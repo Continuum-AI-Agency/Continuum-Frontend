@@ -1,1 +1,1 @@
-export { POST } from "../../organic-analytics/youtube/route";
+export { POST } from '../../organic-analytics/youtube/route';

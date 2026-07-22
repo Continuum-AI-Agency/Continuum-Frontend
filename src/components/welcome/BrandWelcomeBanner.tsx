@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { X } from "lucide-react";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import { X } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import * as React from 'react';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 
-const WELCOME_PARAM = "welcome";
-const WELCOME_PREFIX = "brand:";
+const WELCOME_PARAM = 'welcome';
+const WELCOME_PREFIX = 'brand:';
 
 export function BrandWelcomeBanner() {
   const router = useRouter();
@@ -31,7 +31,7 @@ export function BrandWelcomeBanner() {
     setDismissed(true);
     const next = new URLSearchParams(searchParams);
     next.delete(WELCOME_PARAM);
-    next.delete("invite");
+    next.delete('invite');
     const query = next.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   };

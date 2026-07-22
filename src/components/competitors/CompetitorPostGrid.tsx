@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { cn } from "@/lib/utils";
-import { CompetitorPostHoverTile } from "./CompetitorPostHoverTile";
-import { competitorPostViewKey, type CompetitorPostView } from "./competitorPostView";
+import { cn } from '@/lib/utils';
+import { CompetitorPostHoverTile } from './CompetitorPostHoverTile';
+import { type CompetitorPostView, competitorPostViewKey } from './competitorPostView';
 
-const DEFAULT_GRID_CLASS = "grid grid-cols-3 sm:grid-cols-4 gap-2";
+const DEFAULT_GRID_CLASS = 'grid grid-cols-3 sm:grid-cols-4 gap-2';
 const SKELETON_COUNT = 12;
 
 export function CompetitorPostGrid({
@@ -14,7 +14,7 @@ export function CompetitorPostGrid({
   isLoading,
   isError,
   emptyText,
-  errorText = "Competitor posts are unavailable right now.",
+  errorText = 'Competitor posts are unavailable right now.',
   gridClassName = DEFAULT_GRID_CLASS,
   renderActions,
 }: {

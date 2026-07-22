@@ -1,9 +1,13 @@
 import type { Edge } from '@xyflow/react';
-import { StudioNode } from '../types';
-import { DependencyGraph } from '../types/execution';
+import type { StudioNode } from '../types';
+import type { DependencyGraph } from '../types/execution';
 
 function isExecutableNode(node: StudioNode, edges: Edge[]): boolean {
-  if (['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(node.type || '')) {
+  if (
+    ['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(
+      node.type || '',
+    )
+  ) {
     return true;
   }
 
@@ -14,7 +18,7 @@ function topologicalSort(
   nodes: StudioNode[],
   dependencies: Map<string, string[]>,
   dependents: Map<string, string[]>,
-  edges: Edge[]
+  edges: Edge[],
 ): string[] {
   const inDegree = new Map<string, number>();
   const queue: string[] = [];
@@ -47,14 +51,11 @@ function topologicalSort(
       }
     }
   }
-  
+
   return result;
 }
 
-export function buildDependencyGraph(
-  nodes: StudioNode[],
-  edges: Edge[]
-): DependencyGraph {
+export function buildDependencyGraph(nodes: StudioNode[], edges: Edge[]): DependencyGraph {
   const dependents = new Map<string, string[]>();
   const dependencies = new Map<string, string[]>();
   const nodeIds = new Set(nodes.map((n) => n.id));
@@ -66,7 +67,7 @@ export function buildDependencyGraph(
 
   for (const edge of edges) {
     const { source, target } = edge;
-    
+
     if (nodeIds.has(source) && nodeIds.has(target)) {
       const targetDeps = dependencies.get(target) || [];
       if (!targetDeps.includes(source)) {
@@ -110,15 +111,15 @@ export function buildDependencyGraph(
 export function getExecutableNodes(
   completedOutputs: Map<string, any>,
   dependencies: Map<string, string[]>,
-  candidateNodes: string[]
+  candidateNodes: string[],
 ): string[] {
   const executable: string[] = [];
 
   for (const nodeId of candidateNodes) {
     const deps = dependencies.get(nodeId) || [];
-    
+
     const allDepsSatisfied = deps.every((depId) => completedOutputs.has(depId));
-    
+
     if (allDepsSatisfied) {
       executable.push(nodeId);
     }

@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
-import { ToastProvider } from "@/components/ui/ToastProvider";
-import { ReactQueryProvider } from "@/lib/react-query/provider";
+import type { Metadata } from 'next';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ReactQueryProvider } from '@/lib/react-query/provider';
 
 export const metadata: Metadata = {
-  title: "Onboarding | Continuum AI",
+  title: 'Onboarding | Continuum AI',
 };
 
 export default function OnboardingLayout({

@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { InfoIcon } from "lucide-react";
+import { InfoIcon } from 'lucide-react';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 interface ContextMenuItemInfoProps {
   description: string;
@@ -28,8 +28,8 @@ export function ContextMenuItemInfo({ description, className }: ContextMenuItemI
             event.stopPropagation();
           }}
           className={cn(
-            "ml-auto inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-            className
+            'ml-auto inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            className,
           )}
         >
           <InfoIcon className="h-3 w-3" />

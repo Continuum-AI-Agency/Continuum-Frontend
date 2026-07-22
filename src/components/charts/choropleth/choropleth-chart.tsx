@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { Mercator } from "@visx/geo";
-import { ParentSize } from "@visx/responsive";
-import type { TransformMatrix } from "@visx/zoom";
-import { Zoom } from "@visx/zoom";
-import type { FeatureCollection, Geometry } from "geojson";
-import type { Transition } from "motion/react";
+import { Mercator } from '@visx/geo';
+import { ParentSize } from '@visx/responsive';
+import type { TransformMatrix } from '@visx/zoom';
+import { Zoom } from '@visx/zoom';
+import type { FeatureCollection, Geometry } from 'geojson';
+import type { Transition } from 'motion/react';
 import React, {
   memo,
   type ReactNode,
@@ -14,8 +14,8 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
-import { cn } from "@/lib/utils";
+} from 'react';
+import { cn } from '@/lib/utils';
 import {
   type ChoroplethFeature,
   type ChoroplethFeatureProperties,
@@ -25,10 +25,10 @@ import {
   type Margin,
   useChoroplethInteraction,
   type ZoomInstance,
-} from "./choropleth-context";
-import { ChoroplethFeature as ChoroplethFeatureLayer } from "./choropleth-feature";
-import { ChoroplethGraticule as ChoroplethGraticuleLayer } from "./choropleth-graticule";
-import { ChoroplethTooltip as ChoroplethTooltipLayer } from "./choropleth-tooltip";
+} from './choropleth-context';
+import { ChoroplethFeature as ChoroplethFeatureLayer } from './choropleth-feature';
+import { ChoroplethGraticule as ChoroplethGraticuleLayer } from './choropleth-graticule';
+import { ChoroplethTooltip as ChoroplethTooltipLayer } from './choropleth-tooltip';
 
 export interface ChoroplethChartProps {
   /** GeoJSON FeatureCollection data */
@@ -67,9 +67,9 @@ const DEFAULT_MARGIN: Margin = { top: 0, right: 0, bottom: 0, left: 0 };
 
 // Known SVG component displayNames
 const SVG_COMPONENT_NAMES = new Set([
-  "ChoroplethFeature",
-  "ChoroplethGraticule",
-  "ChoroplethTooltip",
+  'ChoroplethFeature',
+  'ChoroplethGraticule',
+  'ChoroplethTooltip',
 ]);
 
 const SVG_COMPONENT_TYPES = new Set([
@@ -80,9 +80,9 @@ const SVG_COMPONENT_TYPES = new Set([
 
 function resolveComponentType(type: unknown): unknown {
   if (
-    typeof type === "object" &&
+    typeof type === 'object' &&
     type !== null &&
-    "type" in type &&
+    'type' in type &&
     (type as { type?: unknown }).type
   ) {
     return (type as { type: unknown }).type;
@@ -91,11 +91,11 @@ function resolveComponentType(type: unknown): unknown {
 }
 
 function getComponentDisplayName(type: unknown): string | null {
-  if (typeof type === "function") {
+  if (typeof type === 'function') {
     const fn = type as { displayName?: string; name?: string };
     return fn.displayName ?? fn.name ?? null;
   }
-  if (typeof type === "object" && type !== null) {
+  if (typeof type === 'object' && type !== null) {
     const wrapped = type as {
       displayName?: string;
       type?: { displayName?: string; name?: string };
@@ -104,7 +104,7 @@ function getComponentDisplayName(type: unknown): string | null {
       return wrapped.displayName;
     }
     const inner = wrapped.type;
-    if (typeof inner === "function") {
+    if (typeof inner === 'function') {
       const innerFn = inner as { displayName?: string; name?: string };
       return innerFn.displayName ?? innerFn.name ?? null;
     }
@@ -125,7 +125,7 @@ function isChoroplethSvgChild(type: unknown): boolean {
 }
 
 // HTML elements that should render in overlay layer
-const HTML_ELEMENTS = new Set(["div", "span", "button", "p", "a"]);
+const HTML_ELEMENTS = new Set(['div', 'span', 'button', 'p', 'a']);
 
 // Separate children into SVG and overlay layers
 function separateChildren(children: ReactNode): {
@@ -144,7 +144,7 @@ function separateChildren(children: ReactNode): {
 
     if (isChoroplethSvgChild(child.type)) {
       svgChildren.push(child);
-    } else if (typeof child.type === "string") {
+    } else if (typeof child.type === 'string') {
       if (HTML_ELEMENTS.has(child.type)) {
         overlayChildren.push(child);
       } else {
@@ -216,15 +216,15 @@ const ChoroplethSvg = memo(function ChoroplethSvg({
       onMouseLeave={handleMouseLeave}
       ref={zoom?.containerRef}
       style={{
-        contain: "layout style paint",
-        cursor: zoom?.isDragging ? "grabbing" : "grab",
-        touchAction: "none",
+        contain: 'layout style paint',
+        cursor: zoom?.isDragging ? 'grabbing' : 'grab',
+        touchAction: 'none',
       }}
       width={width}
     >
       <g
         style={{
-          transition: zoom?.isDragging ? "none" : "transform 0.18s ease-out",
+          transition: zoom?.isDragging ? 'none' : 'transform 0.18s ease-out',
         }}
         transform={zoom ? zoom.toString() : undefined}
       >
@@ -251,19 +251,20 @@ const ChoroplethMercatorContent = memo(function ChoroplethMercatorContent({
   overlayChildren,
   zoom,
 }: ChoroplethMercatorContentProps) {
-  const featurePaths = data.features.map(
-    (feature) => mercator.path(feature) ?? null
-  ) as (string | null)[];
+  const featurePaths = data.features.map((feature) => mercator.path(feature) ?? null) as (
+    | string
+    | null
+  )[];
 
   const pathGenerator = useCallback(
     (feature: ChoroplethFeature) => mercator.path(feature) ?? undefined,
-    [mercator]
+    [mercator],
   );
 
   const rawPathGenerator = useCallback(
     // biome-ignore lint/suspicious/noExplicitAny: GeoJSON types are complex
     (geo: any) => mercator.path(geo),
-    [mercator]
+    [mercator],
   );
 
   const projectPoint = useCallback(
@@ -274,7 +275,7 @@ const ChoroplethMercatorContent = memo(function ChoroplethMercatorContent({
       }
       return projected as [number, number];
     },
-    [mercator]
+    [mercator],
   );
 
   const stableValue = useMemo(
@@ -312,7 +313,7 @@ const ChoroplethMercatorContent = memo(function ChoroplethMercatorContent({
       rawPathGenerator,
       revealEpoch,
       width,
-    ]
+    ],
   );
 
   return (
@@ -320,12 +321,7 @@ const ChoroplethMercatorContent = memo(function ChoroplethMercatorContent({
       <ChoroplethStableProvider value={stableValue}>
         <ChoroplethInteractionShell>
           <div className="relative h-full w-full" ref={containerRef}>
-            <ChoroplethSvg
-              height={height}
-              svgChildren={svgChildren}
-              width={width}
-              zoom={zoom}
-            />
+            <ChoroplethSvg height={height} svgChildren={svgChildren} width={width} zoom={zoom} />
             {overlayChildren}
           </div>
         </ChoroplethInteractionShell>
@@ -341,7 +337,7 @@ function ChoroplethChartInner({
   margin,
   animationDuration,
   enterTransition,
-  revealSignature = "",
+  revealSignature = '',
   scale: scaleProp,
   center,
   translate: translateProp,
@@ -381,10 +377,7 @@ function ChoroplethChartInner({
     innerHeight / 2 + margin.top + 50,
   ];
 
-  const { svgChildren, overlayChildren } = useMemo(
-    () => separateChildren(children),
-    [children]
-  );
+  const { svgChildren, overlayChildren } = useMemo(() => separateChildren(children), [children]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: revealSignature
   useEffect(() => {
@@ -425,11 +418,7 @@ function ChoroplethChartInner({
     >
       {(mercator) => {
         const content = (zoom?: ZoomInstance<SVGSVGElement>) => (
-          <ChoroplethMercatorContent
-            {...mercatorContentProps}
-            mercator={mercator}
-            zoom={zoom}
-          />
+          <ChoroplethMercatorContent {...mercatorContentProps} mercator={mercator} zoom={zoom} />
         );
 
         if (zoomEnabled) {
@@ -464,7 +453,7 @@ export function ChoroplethChart({
   animationDuration = 800,
   enterTransition,
   revealSignature,
-  aspectRatio = "16 / 9",
+  aspectRatio = '16 / 9',
   scale,
   center = [0, 20],
   translate,
@@ -472,13 +461,13 @@ export function ChoroplethChart({
   zoomMin = 0.5,
   zoomMax = 4,
   initialZoom = DEFAULT_INITIAL_ZOOM,
-  className = "",
+  className = '',
   children,
 }: ChoroplethChartProps) {
   const margin = { ...DEFAULT_MARGIN, ...marginProp };
 
   return (
-    <div className={cn("relative w-full", className)} style={{ aspectRatio }}>
+    <div className={cn('relative w-full', className)} style={{ aspectRatio }}>
       <ParentSize debounceTime={10}>
         {({ width, height }) =>
           width > 0 && height > 0 ? (
@@ -507,6 +496,6 @@ export function ChoroplethChart({
   );
 }
 
-ChoroplethChart.displayName = "ChoroplethChart";
+ChoroplethChart.displayName = 'ChoroplethChart';
 
 export default ChoroplethChart;

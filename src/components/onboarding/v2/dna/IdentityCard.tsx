@@ -1,9 +1,9 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
-import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
-import { EditableHeading } from "./EditableHeading";
+import { ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent } from '@/components/ui/card';
+import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
+import { EditableHeading } from './EditableHeading';
 
 type Props = {
   name: string;
@@ -39,9 +39,11 @@ export function IdentityCard({ name, host, heroStatement, logoPath, onRename }: 
       <CardContent className="space-y-3 p-5">
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9 shrink-0 rounded-lg bg-[#0b1220]">
-            {resolvedLogo ? <AvatarImage src={resolvedLogo} alt={`${name} logo`} className="object-cover" /> : null}
+            {resolvedLogo ? (
+              <AvatarImage src={resolvedLogo} alt={`${name} logo`} className="object-cover" />
+            ) : null}
             <AvatarFallback className="rounded-lg bg-[#0b1220] text-sm font-bold text-white">
-              {(name || "B").slice(0, 2).toUpperCase()}
+              {(name || 'B').slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <EditableHeading value={name} placeholder="Untitled brand" onCommit={onRename} />
@@ -53,7 +55,9 @@ export function IdentityCard({ name, host, heroStatement, logoPath, onRename }: 
           </div>
         ) : null}
         {heroStatement ? (
-          <p className="text-sm italic leading-relaxed text-[#374151]">&ldquo;{heroStatement}&rdquo;</p>
+          <p className="text-sm italic leading-relaxed text-[#374151]">
+            &ldquo;{heroStatement}&rdquo;
+          </p>
         ) : null}
       </CardContent>
     </Card>

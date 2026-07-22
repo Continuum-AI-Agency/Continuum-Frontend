@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import React from "react";
-import { AvatarStack } from "@/components/realtime/avatar-stack";
-import { useSession } from "@/hooks/useSession";
+import React from 'react';
+import { AvatarStack } from '@/components/realtime/avatar-stack';
+import { useSession } from '@/hooks/useSession';
 
 type PresenceUser = {
   user_id: string;
@@ -13,7 +13,7 @@ type PresenceUser = {
   color?: string;
 };
 
-type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
+type RealtimeStatus = 'INITIALIZING' | 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'ERROR';
 
 interface ActiveUsersStackProps {
   onlineUsers: PresenceUser[];
@@ -24,13 +24,13 @@ export function ActiveUsersStack({ onlineUsers, status }: ActiveUsersStackProps)
   const { user: currentUser } = useSession();
 
   const userMap = new Map(onlineUsers.map((u) => [u.user_id, u]));
-  
+
   if (currentUser && !userMap.has(currentUser.id)) {
     userMap.set(currentUser.id, {
       user_id: currentUser.id,
-      full_name: currentUser.user_metadata?.full_name || currentUser.email || "Anonymous",
-      avatar_url: currentUser.user_metadata?.avatar_url || "",
-      email: currentUser.email || "",
+      full_name: currentUser.user_metadata?.full_name || currentUser.email || 'Anonymous',
+      avatar_url: currentUser.user_metadata?.avatar_url || '',
+      email: currentUser.email || '',
       online_at: new Date().toISOString(),
     });
   }
@@ -51,8 +51,11 @@ export function ActiveUsersStack({ onlineUsers, status }: ActiveUsersStackProps)
 
   return (
     <div className="flex items-center gap-2">
-      {status !== "SUBSCRIBED" && (
-        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Connecting to realtime..." />
+      {status !== 'SUBSCRIBED' && (
+        <div
+          className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"
+          title="Connecting to realtime..."
+        />
       )}
       {avatars.length > 0 && <AvatarStack avatars={avatars} />}
     </div>

@@ -43,6 +43,7 @@ import { AutomationSheets } from '@/components/automations/AutomationSheets';
 import type { Attachment } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
+import { useCollapsibleConversations } from '@/components/chat/collapsibleConversations';
 import { PromptInput } from '@/components/chat/prompt-input';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
@@ -1101,6 +1102,8 @@ export function JainaChatSurface({
   const isStreaming = state.status === 'streaming' || state.status === 'starting';
 
   const [isJainaProMode, setIsJainaProMode] = React.useState(false);
+  const { isCollapsed: isSidebarCollapsed, toggle: toggleSidebarCollapsed } =
+    useCollapsibleConversations('jaina:conversations-collapsed');
   const [reportArtifactJob, setReportArtifactJob] = React.useState<ReportArtifactJobTracker | null>(
     null,
   );
@@ -2833,6 +2836,8 @@ export function JainaChatSurface({
           }
           deletingSessionId={deletingSessionId}
           brandId={brandProfileId}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={toggleSidebarCollapsed}
           onCreateConversation={handleClearConversation}
           onSelectConversation={handleSelectConversation}
           onDeleteConversation={handleDeleteConversation}

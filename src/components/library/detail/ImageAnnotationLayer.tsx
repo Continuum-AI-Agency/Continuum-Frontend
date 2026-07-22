@@ -9,8 +9,8 @@ import { BoxSelect, ImageOff, MousePointer2, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  type AnnotationTool,
   AnnotationOverlay,
+  type AnnotationTool,
   type OverlayPin,
   type SpatialAnnotation,
 } from './AnnotationOverlay';

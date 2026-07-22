@@ -41,7 +41,9 @@ export function DraftDeletionConfirmationProvider({ children }: { children: Reac
       <AlertDialog open={request !== null} onOpenChange={(open) => !open && setRequest(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {count === 1 ? 'this draft' : `${count} drafts`}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete {count === 1 ? 'this draft' : `${count} drafts`}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {count === 1
                 ? 'This removes the post from the planner. This action cannot be undone.'

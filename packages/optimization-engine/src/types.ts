@@ -30,12 +30,29 @@ export type AudienceType = 'prospecting' | 'retargeting' | 'remarketing' | 'unkn
  *                         would win on "efficiency" by definition and take the whole pool.
  *                         We refuse to compare them rather than produce a confident,
  *                         meaningless ranking — enroll it in a portfolio that prices what it
- *                         actually buys. */
+ *                         actually buys.
+ *   - no_own_budget:      the ad set has NO budget of its own (currentBudget <= 0) and no
+ *                         campaign-level explanation for it. Distinct from unsupported_budget,
+ *                         where the budget exists but lives on the campaign: here there is no
+ *                         budget anywhere the optimizer can see. Boosted posts arrive this way.
+ *                         Reallocation MOVES money between ad sets; an ad set with none to move
+ *                         can only RECEIVE, and a zero-budget item's solver box collapses onto
+ *                         the floor, so it would be handed the floor on no evidence at all.
+ *   - no_declared_objective: the ad set declares no optimization_goal and no kpiField, and has
+ *                         produced zero events in the currency the portfolio prices. Nothing —
+ *                         neither a declaration nor an observation — ties it to what this pool
+ *                         ranks on, so scoring it measures absence. kpi_mismatch catches an ad
+ *                         set declaring the WRONG currency; this catches one declaring none.
+ *                         An undeclared ad set that DOES produce the portfolio's events is
+ *                         still scored: observation establishes the currency that the missing
+ *                         declaration did not. */
 export type FreezeReason =
   | 'no_conversions'
   | 'unsupported_budget'
   | 'lifetime_budget'
-  | 'kpi_mismatch';
+  | 'kpi_mismatch'
+  | 'no_own_budget'
+  | 'no_declared_objective';
 
 /** Raw counts for one analysis window. Cost-per-event is DERIVED, never stored.
  * The KPI event used for scoring is chosen by the portfolio's objective profile

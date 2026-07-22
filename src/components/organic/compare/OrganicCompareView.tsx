@@ -18,19 +18,13 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { formatNumber, formatPercentChange, formatRate } from '@/components/organic/organic-format';
 import {
-  MetricsScopeSelector,
   type AccountsByPlatform,
+  MetricsScopeSelector,
 } from '@/components/organic/selection/MetricsScopeSelector';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   type ChartConfig,
   ChartContainer,
@@ -65,11 +59,11 @@ import {
   type SeriesMode,
 } from '@/lib/organic/blendAccounts';
 import {
+  type BrandOrganicSnapshot,
   flattenAccountsByPlatform,
   loadBrandOrganicSnapshot,
   metricDeltaForAccount,
   metricValueForAccount,
-  type BrandOrganicSnapshot,
   type SnapshotAccountResult,
 } from '@/lib/organic/brandOrganicSnapshot';
 import type { OrganicDateRangePreset } from '@/lib/schemas/organicMetrics';
@@ -186,9 +180,7 @@ export function OrganicCompareView({
       .catch((error) => {
         if (cancelled) return;
         setStatus('error');
-        setErrorMessage(
-          error instanceof Error ? error.message : 'Unable to load comparison data.',
-        );
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to load comparison data.');
       });
 
     return () => {

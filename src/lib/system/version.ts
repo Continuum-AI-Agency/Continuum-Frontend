@@ -1,6 +1,6 @@
-import { versionResponseSchema, type VersionResponse } from "@/lib/schemas/version";
+import { type VersionResponse, versionResponseSchema } from '@/lib/schemas/version';
 
-export const LOCAL_DEV_SHA = "local-dev";
+export const LOCAL_DEV_SHA = 'local-dev';
 
 type CommitEnv = {
   VERCEL_GIT_COMMIT_SHA?: string;
@@ -32,7 +32,7 @@ export function isVersionMismatch({
 export function parseVersionResponse(payload: unknown): VersionResponse {
   const parsed = versionResponseSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new Error("Invalid version response from server.");
+    throw new Error('Invalid version response from server.');
   }
   return parsed.data;
 }

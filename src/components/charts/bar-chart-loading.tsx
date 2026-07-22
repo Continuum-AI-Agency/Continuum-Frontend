@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { BarChart } from "./bar-chart";
-import type { Margin } from "./chart-context";
+import { BarChart } from './bar-chart';
+import type { Margin } from './chart-context';
 
 const EMPTY_DATA: Record<string, unknown>[] = [];
 
@@ -21,8 +21,8 @@ export interface BarChartLoadingProps {
  */
 export function BarChartLoading({
   margin,
-  aspectRatio = "2 / 1",
-  className = "",
+  aspectRatio = '2 / 1',
+  className = '',
 }: BarChartLoadingProps) {
   return (
     <BarChart

@@ -2,7 +2,7 @@
 
 import { ChatBubbleIcon, Cross2Icon, PaperPlaneIcon } from '@radix-ui/react-icons';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,16 +15,36 @@ type AIStudioChatProps = {
   brandProfileId: string;
   roomId?: string;
   className?: string;
+  /** Notifies the canvas when the panel opens/closes so overlapping overlays
+   *  (the AI composer bar) can reserve this panel's footprint. */
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function AIStudioChat({ brandProfileId, roomId = 'main', className }: AIStudioChatProps) {
+// This is a human-to-human collaboration channel for the people editing the
+// canvas together — deliberately NOT an AI assistant. It is labelled "Team chat"
+// so it is never mistaken for the AI composer that builds the workflow.
+export function AIStudioChat({
+  brandProfileId,
+  roomId = 'main',
+  className,
+  onOpenChange,
+}: AIStudioChatProps) {
   const { messages, sendMessage, isLoading } = useAIStudioChatRealtime(brandProfileId, roomId);
   const { user } = useSession();
   const [inputValue, setInputValue] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastViewedCountRef = useRef(0);
+
+  const setOpen = useCallback(
+    (open: boolean) => {
+      setIsOpen(open);
+      onOpenChange?.(open);
+    },
+    [onOpenChange],
+  );
 
   // Track unread messages when closed
   useEffect(() => {
@@ -44,9 +64,14 @@ export function AIStudioChat({ brandProfileId, roomId = 'main', className }: AIS
   }, [messages, isOpen]);
 
   const handleSend = async () => {
-    if (!inputValue.trim()) return;
-    await sendMessage(inputValue);
-    setInputValue('');
+    if (!inputValue.trim() || isSending) return;
+    setIsSending(true);
+    try {
+      await sendMessage(inputValue);
+      setInputValue('');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -62,8 +87,8 @@ export function AIStudioChat({ brandProfileId, roomId = 'main', className }: AIS
         <Button
           size="icon"
           variant="default"
-          onClick={() => setIsOpen(true)}
-          aria-label="Open studio chat"
+          onClick={() => setOpen(true)}
+          aria-label="Open team chat"
           className="size-12 rounded-full shadow-2xl hover:scale-105 transition-transform"
         >
           <ChatBubbleIcon width="24" height="24" />
@@ -83,22 +108,27 @@ export function AIStudioChat({ brandProfileId, roomId = 'main', className }: AIS
     <div
       className={cn(
         'flex flex-col shadow-2xl overflow-hidden transition-all duration-300 w-96 h-[500px] rounded-xl p-3',
+        'border border-border bg-popover text-popover-foreground',
         className,
       )}
-      style={{ border: '1px solid var(--gray-7)', backgroundColor: 'var(--gray-2)' }}
     >
       <div className="flex flex-col h-full">
         {/* Header */}
         <div className="flex justify-between items-center p-3 border-b border-border/10 bg-surface shadow-sm">
-          <div className="flex items-center gap-2">
-            <ChatBubbleIcon />
-            <span className="font-medium text-sm">Studio Chat</span>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <ChatBubbleIcon />
+              <span className="font-medium text-sm">Team chat</span>
+            </div>
+            <span className="text-2xs text-muted-foreground">
+              Talk to your teammates on this canvas
+            </span>
           </div>
           <Button
             size="icon-sm"
             variant="ghost"
-            onClick={() => setIsOpen(false)}
-            aria-label="Close chat"
+            onClick={() => setOpen(false)}
+            aria-label="Close team chat"
           >
             <Cross2Icon />
           </Button>
@@ -162,14 +192,15 @@ export function AIStudioChat({ brandProfileId, roomId = 'main', className }: AIS
             <Input
               className="flex-1 rounded-full"
               inputSize="md"
-              placeholder="Type a message..."
+              placeholder="Message your team…"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              disabled={isSending}
             />
             <Button
               onClick={handleSend}
-              disabled={!inputValue.trim()}
+              disabled={!inputValue.trim() || isSending}
               size="icon"
               variant="default"
               className="rounded-full"

@@ -1,6 +1,6 @@
+import { CursorArrowIcon, HandIcon } from '@radix-ui/react-icons';
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { HandIcon, CursorArrowIcon } from '@radix-ui/react-icons';
 import { useStudioStore } from '../stores/useStudioStore';
 
 export function InteractionModeToggle() {

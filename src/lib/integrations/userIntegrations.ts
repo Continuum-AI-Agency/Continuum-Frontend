@@ -1,8 +1,8 @@
-import "server-only";
+import 'server-only';
 
-import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
-import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
+import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type UserIntegrationAccount = {
   id: string;
@@ -33,8 +33,8 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
 
   // Primary path: single RPC call (replaces 2 sequential queries)
   const { data: rows, error: rpcError } = await supabase
-    .schema("brand_profiles")
-    .rpc("get_user_integration_summary", { p_user_id: userId });
+    .schema('brand_profiles')
+    .rpc('get_user_integration_summary', { p_user_id: userId });
 
   if (!rpcError && rows) {
     const summary = createEmptyUserIntegrationSummary();
@@ -44,7 +44,7 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
 
       summary[platformKey].accounts.push({
         id: row.asset_id as string,
-        name: (row.asset_name as string) ?? "Account",
+        name: (row.asset_name as string) ?? 'Account',
         status: (row.asset_status as string | null) ?? null,
         externalAccountId: (row.external_account_id as string | null) ?? null,
         provider: row.provider as string,
@@ -57,33 +57,33 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
 
   // Fallback: existing 2-query approach for graceful rollout
   console.warn(
-    "[fetchUserIntegrationSummary] RPC failed, falling back to sequential queries",
+    '[fetchUserIntegrationSummary] RPC failed, falling back to sequential queries',
     rpcError,
   );
 
   const { data: integrations, error: integrationsError } = await supabase
-    .schema("brand_profiles")
-    .from("user_integrations")
-    .select("id, provider, status, user_id, platform_email, platform_user_id, created_at")
-    .eq("user_id", userId);
+    .schema('brand_profiles')
+    .from('user_integrations')
+    .select('id, provider, status, user_id, platform_email, platform_user_id, created_at')
+    .eq('user_id', userId);
 
   if (integrationsError || !integrations || integrations.length === 0) {
     if (integrationsError) {
-      console.error("[fetchUserIntegrationSummary] fallback query failed", integrationsError);
+      console.error('[fetchUserIntegrationSummary] fallback query failed', integrationsError);
     }
     return createEmptyUserIntegrationSummary();
   }
 
-  const integrationIds = integrations.map(row => row.id);
+  const integrationIds = integrations.map((row) => row.id);
 
   const { data: assets, error: assetsError } = await supabase
-    .schema("brand_profiles")
-    .from("integration_accounts_assets")
-    .select("id, integration_id, type, name, status, external_account_id, created_at, updated_at")
-    .in("integration_id", integrationIds);
+    .schema('brand_profiles')
+    .from('integration_accounts_assets')
+    .select('id, integration_id, type, name, status, external_account_id, created_at, updated_at')
+    .in('integration_id', integrationIds);
 
   if (assetsError) {
-    console.error("[fetchUserIntegrationSummary] fallback assets query failed", assetsError);
+    console.error('[fetchUserIntegrationSummary] fallback assets query failed', assetsError);
     return createEmptyUserIntegrationSummary();
   }
 
@@ -104,7 +104,7 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
 
       summary[platformKey].accounts.push({
         id: asset.id,
-        name: asset.name ?? integration.provider ?? "Account",
+        name: asset.name ?? integration.provider ?? 'Account',
         status: asset.status ?? integration.status ?? null,
         externalAccountId: asset.external_account_id ?? null,
         provider: integration.provider,
@@ -114,7 +114,7 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
     }
   }
 
-  PLATFORM_KEYS.forEach(key => {
+  PLATFORM_KEYS.forEach((key) => {
     summary[key].accounts.sort((a, b) => a.name.localeCompare(b.name));
   });
 

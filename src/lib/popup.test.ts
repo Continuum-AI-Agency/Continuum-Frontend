@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from 'bun:test';
 
-import { OAUTH_BROADCAST_CHANNEL_NAME, waitForOAuthCompletion } from "./popup";
+import { OAUTH_BROADCAST_CHANNEL_NAME, waitForOAuthCompletion } from './popup';
 
 // waitForOAuthCompletion races a popup's completion signals (window
 // "message" + BroadcastChannel) against the popup being closed. It exists to
@@ -23,7 +23,7 @@ function fakePopup(): { closed: boolean } {
   return { closed: false };
 }
 
-describe("waitForOAuthCompletion", () => {
+describe('waitForOAuthCompletion', () => {
   const controllers: AbortController[] = [];
 
   afterEach(() => {
@@ -42,10 +42,10 @@ describe("waitForOAuthCompletion", () => {
     return controller;
   }
 
-  it("resolves with the success payload when a postMessage arrives before the popup closes", async () => {
+  it('resolves with the success payload when a postMessage arrives before the popup closes', async () => {
     const popup = fakePopup();
     const abortCtrl = trackedAbortController();
-    const predicate = (m: OAuthMsg) => m.provider === "google" && m.context === "settings";
+    const predicate = (m: OAuthMsg) => m.provider === 'google' && m.context === 'settings';
 
     const resultPromise = waitForOAuthCompletion<OAuthMsg>({
       popup: popup as unknown as Window,
@@ -56,19 +56,19 @@ describe("waitForOAuthCompletion", () => {
     });
 
     window.postMessage(
-      { type: "oauth:success", provider: "google", context: "settings" },
-      window.location.origin
+      { type: 'oauth:success', provider: 'google', context: 'settings' },
+      window.location.origin,
     );
 
     const result = await resultPromise;
-    expect(result.type).toBe("oauth:success");
-    expect(result.provider).toBe("google");
+    expect(result.type).toBe('oauth:success');
+    expect(result.provider).toBe('google');
   });
 
   it("does not immediately throw 'cancelled' when the popup closes with no completion signal", async () => {
     const popup = fakePopup();
     const abortCtrl = trackedAbortController();
-    const predicate = (m: OAuthMsg) => m.provider === "google";
+    const predicate = (m: OAuthMsg) => m.provider === 'google';
 
     const resultPromise = waitForOAuthCompletion<OAuthMsg>({
       popup: popup as unknown as Window,
@@ -94,7 +94,7 @@ describe("waitForOAuthCompletion", () => {
       },
       () => {
         settled = true;
-      }
+      },
     );
 
     // Popup closes ~10ms in; the grace period (60ms) should still be pending
@@ -104,14 +104,14 @@ describe("waitForOAuthCompletion", () => {
 
     // Once the full grace window elapses with no signal, it's a real
     // cancellation.
-    await expect(resultPromise).rejects.toThrow("Connection cancelled.");
+    await expect(resultPromise).rejects.toThrow('Connection cancelled.');
   });
 
-  it("resolves via BroadcastChannel even when window.opener is null (COOP-severed popup)", async () => {
+  it('resolves via BroadcastChannel even when window.opener is null (COOP-severed popup)', async () => {
     const popup = fakePopup();
     (popup as unknown as { opener: null }).opener = null;
     const abortCtrl = trackedAbortController();
-    const predicate = (m: OAuthMsg) => m.provider === "google" && m.state === "state-abc";
+    const predicate = (m: OAuthMsg) => m.provider === 'google' && m.state === 'state-abc';
 
     const resultPromise = waitForOAuthCompletion<OAuthMsg>({
       popup: popup as unknown as Window,
@@ -123,22 +123,22 @@ describe("waitForOAuthCompletion", () => {
 
     const channel = new BroadcastChannel(OAUTH_BROADCAST_CHANNEL_NAME);
     channel.postMessage({
-      type: "oauth:success",
-      provider: "google",
-      context: "settings",
-      state: "state-abc",
+      type: 'oauth:success',
+      provider: 'google',
+      context: 'settings',
+      state: 'state-abc',
     });
     channel.close();
 
     const result = await resultPromise;
-    expect(result.type).toBe("oauth:success");
-    expect(result.state).toBe("state-abc");
+    expect(result.type).toBe('oauth:success');
+    expect(result.state).toBe('state-abc');
   });
 
-  it("resolves with the error payload when an oauth:error signal wins the race", async () => {
+  it('resolves with the error payload when an oauth:error signal wins the race', async () => {
     const popup = fakePopup();
     const abortCtrl = trackedAbortController();
-    const predicate = (m: OAuthMsg) => m.provider === "google";
+    const predicate = (m: OAuthMsg) => m.provider === 'google';
 
     const resultPromise = waitForOAuthCompletion<OAuthMsg>({
       popup: popup as unknown as Window,
@@ -149,10 +149,10 @@ describe("waitForOAuthCompletion", () => {
     });
 
     window.postMessage(
-      { type: "oauth:error", provider: "google", context: "settings", message: "denied by user" },
-      window.location.origin
+      { type: 'oauth:error', provider: 'google', context: 'settings', message: 'denied by user' },
+      window.location.origin,
     );
 
-    await expect(resultPromise).rejects.toThrow("denied by user");
+    await expect(resultPromise).rejects.toThrow('denied by user');
   });
 });

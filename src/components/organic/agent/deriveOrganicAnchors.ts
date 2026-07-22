@@ -37,10 +37,16 @@ export function milestonesForMessage(
 
   const cards = cardsForMessage(message, pipeline);
 
-  if (cards.some((card) => card.checkpoint?.textReady)) {
+  // Copy and blueprint land back-to-back on the same turn, so two adjacent markers
+  // read as noise. Collapse them into a single "Content ready" once both are set;
+  // keep the individual marker only when just one side has landed.
+  const textReady = cards.some((card) => card.checkpoint?.textReady);
+  const blueprintReady = cards.some((card) => card.checkpoint?.blueprintReady);
+  if (textReady && blueprintReady) {
+    milestones.push({ id: `${message.id}::content`, label: 'Content ready' });
+  } else if (textReady) {
     milestones.push({ id: `${message.id}::copy`, label: 'Copy ready' });
-  }
-  if (cards.some((card) => card.checkpoint?.blueprintReady)) {
+  } else if (blueprintReady) {
     milestones.push({ id: `${message.id}::blueprint`, label: 'Blueprint ready' });
   }
   if (cards.some((card) => card.checkpoint?.awaitingMediaChoice)) {

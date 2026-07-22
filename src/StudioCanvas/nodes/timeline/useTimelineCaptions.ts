@@ -5,8 +5,8 @@ import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
 import { uploadCaptionAudio } from '@/lib/clips/clipClientCut';
 import { extractTimelineAudioWav } from '../../utils/clip/extractTimelineAudioWav';
-import type { TimelineEditorAdapter } from './adapter';
 import { groupWordsIntoCues } from '../../utils/splice/captionCues';
+import type { TimelineEditorAdapter } from './adapter';
 
 // Auto-captions extract the output-time timeline audio, upload the WAV through the
 // existing scoped media path, then use the Backend's Google STT v2 bridge. The
@@ -72,7 +72,9 @@ export function useTimelineCaptions(adapter: TimelineEditorAdapter): UseTimeline
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? `Transcription failed (${res.status}).`);
       }
-      const payload = (await res.json()) as { words?: { text: string; startSec: number; endSec: number }[] };
+      const payload = (await res.json()) as {
+        words?: { text: string; startSec: number; endSec: number }[];
+      };
       const words = payload.words ?? [];
       if (words.length === 0) {
         show({

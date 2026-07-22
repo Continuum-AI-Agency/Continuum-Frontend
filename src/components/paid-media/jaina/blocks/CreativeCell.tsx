@@ -1,16 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { datasetCreativeRefSchema } from "@continuum/contracts";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
+import { datasetCreativeRefSchema } from '@continuum/contracts';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
   fetchJainaCreativePreview,
   isResolvableCreativeRef,
-} from "@/lib/api/jainaCreativePreview.client";
+} from '@/lib/api/jainaCreativePreview.client';
 
 type CreativeCellProps = {
   // The rendered cell text (e.g. the ad name).
@@ -19,7 +15,7 @@ type CreativeCellProps = {
   creative: unknown;
 };
 
-type PreviewState = { status: "idle" | "loading" | "ready" | "error"; url: string | null };
+type PreviewState = { status: 'idle' | 'loading' | 'ready' | 'error'; url: string | null };
 
 // A creative table cell: shows its label, and on hover-open lazy-resolves a
 // fresh preview image (Meta CDN URLs expire) via the creative-preview endpoint.
@@ -31,7 +27,7 @@ export function CreativeCell({ label, creative }: CreativeCellProps) {
   }, [creative]);
 
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<PreviewState>({ status: "idle", url: null });
+  const [preview, setPreview] = useState<PreviewState>({ status: 'idle', url: null });
   const fetchedRef = useRef(false);
 
   const resolvable = ref !== null && isResolvableCreativeRef(ref);
@@ -40,15 +36,15 @@ export function CreativeCell({ label, creative }: CreativeCellProps) {
     if (!open || !ref || !resolvable || fetchedRef.current) return;
     fetchedRef.current = true;
     let active = true;
-    setPreview({ status: "loading", url: null });
+    setPreview({ status: 'loading', url: null });
     fetchJainaCreativePreview(ref)
       .then((res) => {
         if (!active) return;
         const url = res.thumbnail_url ?? res.image_url;
-        setPreview({ status: url ? "ready" : "error", url });
+        setPreview({ status: url ? 'ready' : 'error', url });
       })
       .catch(() => {
-        if (active) setPreview({ status: "error", url: null });
+        if (active) setPreview({ status: 'error', url: null });
       });
     return () => {
       active = false;
@@ -65,14 +61,14 @@ export function CreativeCell({ label, creative }: CreativeCellProps) {
         </span>
       </HoverCardTrigger>
       <HoverCardContent align="start" className="w-56 p-2">
-        {preview.status === "ready" && preview.url ? (
+        {preview.status === 'ready' && preview.url ? (
           <img
             src={preview.url}
             alt={label}
             className="block h-auto max-h-48 w-full rounded-md object-contain"
             loading="lazy"
           />
-        ) : preview.status === "error" ? (
+        ) : preview.status === 'error' ? (
           <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
             Preview unavailable
           </div>

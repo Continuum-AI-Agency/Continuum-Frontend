@@ -1,7 +1,10 @@
-"use client";
+'use client';
 
-import { http } from "@/lib/api/http";
-import { instagramTopMediaResponseSchema, type InstagramTopMediaResponse } from "@continuum/contracts";
+import {
+  type InstagramTopMediaResponse,
+  instagramTopMediaResponseSchema,
+} from '@continuum/contracts';
+import { http } from '@/lib/api/http';
 
 // Fetches Instagram top media via the Backend. With a `username`, searches that
 // public account (Graph business_discovery); without one, the Backend returns
@@ -21,11 +24,11 @@ export async function fetchInstagramTopMedia({
   signal,
 }: FetchInstagramTopMediaParams): Promise<InstagramTopMediaResponse> {
   return http.request<InstagramTopMediaResponse>({
-    path: "/api/ai-studio/instagram/top-media",
-    method: "POST",
+    path: '/api/ai-studio/instagram/top-media',
+    method: 'POST',
     body: username ? { brandId, username } : { brandId },
     schema: instagramTopMediaResponseSchema,
-    cache: "no-store",
+    cache: 'no-store',
     signal,
   });
 }

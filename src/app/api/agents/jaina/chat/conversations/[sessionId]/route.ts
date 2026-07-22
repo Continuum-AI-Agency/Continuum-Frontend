@@ -1,13 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { getApiBaseUrl } from "@/lib/api/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getApiBaseUrl } from '@/lib/api/config';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-type AuthResult =
-  | { ok: true; accessToken: string }
-  | { ok: false; response: NextResponse };
+type AuthResult = { ok: true; accessToken: string } | { ok: false; response: NextResponse };
 
 async function authorizeConversationRequest(): Promise<AuthResult> {
   const supabase = await createSupabaseServerClient();
@@ -15,7 +13,7 @@ async function authorizeConversationRequest(): Promise<AuthResult> {
   if (userError || !userData?.user) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };
   }
 
@@ -24,7 +22,7 @@ async function authorizeConversationRequest(): Promise<AuthResult> {
   if (!accessToken) {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };
   }
 
@@ -32,7 +30,7 @@ async function authorizeConversationRequest(): Promise<AuthResult> {
 }
 
 function normalizePath(path: string) {
-  return path.startsWith("/") ? path : `/${path}`;
+  return path.startsWith('/') ? path : `/${path}`;
 }
 
 async function readErrorMessage(response: Response, fallback: string) {
@@ -40,9 +38,9 @@ async function readErrorMessage(response: Response, fallback: string) {
   if (!detail) return fallback;
   try {
     const parsed = JSON.parse(detail);
-    if (parsed && typeof parsed === "object" && "error" in parsed) {
+    if (parsed && typeof parsed === 'object' && 'error' in parsed) {
       const errorMessage = (parsed as { error?: unknown }).error;
-      if (typeof errorMessage === "string" && errorMessage.length > 0) {
+      if (typeof errorMessage === 'string' && errorMessage.length > 0) {
         return errorMessage;
       }
     }
@@ -57,9 +55,7 @@ function buildDeleteConversationPaths(sessionId: string) {
   const configuredPath = process.env.JAINA_CONVERSATIONS_API_PATH?.trim();
 
   const candidatePaths = [
-    configuredPath && configuredPath.length > 0
-      ? `${configuredPath}/${encodedSessionId}`
-      : null,
+    configuredPath && configuredPath.length > 0 ? `${configuredPath}/${encodedSessionId}` : null,
     `/api/agents/jaina/chat/conversations/${encodedSessionId}`,
     `/api/agents/jaina/conversations/${encodedSessionId}`,
   ].filter((path): path is string => Boolean(path));
@@ -71,10 +67,7 @@ type BackendDeleteResult =
   | { ok: true; response: Response }
   | { ok: false; errorResponse: NextResponse };
 
-async function deleteBackendConversationWithFallback(
-  accessToken: string,
-  sessionId: string
-) {
+async function deleteBackendConversationWithFallback(accessToken: string, sessionId: string) {
   const baseUrl = getApiBaseUrl();
   const attempted: string[] = [];
   const paths = buildDeleteConversationPaths(sessionId);
@@ -85,12 +78,12 @@ async function deleteBackendConversationWithFallback(
     attempted.push(url);
 
     const backendResponse = await fetch(url, {
-      method: "DELETE",
+      method: 'DELETE',
       headers: {
-        Accept: "application/json",
+        Accept: 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      cache: "no-store",
+      cache: 'no-store',
     });
 
     if (backendResponse.status === 404) {
@@ -98,15 +91,12 @@ async function deleteBackendConversationWithFallback(
     }
 
     if (!backendResponse.ok) {
-      const message = await readErrorMessage(
-        backendResponse,
-        "Failed to delete conversation."
-      );
+      const message = await readErrorMessage(backendResponse, 'Failed to delete conversation.');
       return {
         ok: false,
         errorResponse: NextResponse.json(
           { error: message },
-          { status: backendResponse.status || 500 }
+          { status: backendResponse.status || 500 },
         ),
       } satisfies BackendDeleteResult;
     }
@@ -118,10 +108,10 @@ async function deleteBackendConversationWithFallback(
     ok: false,
     errorResponse: NextResponse.json(
       {
-        error: "Conversation delete endpoint not available on backend.",
+        error: 'Conversation delete endpoint not available on backend.',
         attempted,
       },
-      { status: 502 }
+      { status: 502 },
     ),
   } satisfies BackendDeleteResult;
 }
@@ -137,20 +127,17 @@ export async function DELETE(_: Request, context: DeleteRouteContext) {
   const { sessionId } = await context.params;
   const normalizedSessionId = sessionId.trim();
   if (!normalizedSessionId) {
-    return NextResponse.json(
-      { error: "Session id is required." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Session id is required.' }, { status: 400 });
   }
 
   try {
     const result = await deleteBackendConversationWithFallback(
       auth.accessToken,
-      normalizedSessionId
+      normalizedSessionId,
     );
     if (!result.ok) return result.errorResponse;
 
-    const text = await result.response.text().catch(() => "");
+    const text = await result.response.text().catch(() => '');
     if (!text) {
       return NextResponse.json({ deleted: true, sessionId: normalizedSessionId });
     }
@@ -162,8 +149,7 @@ export async function DELETE(_: Request, context: DeleteRouteContext) {
       return NextResponse.json({ deleted: true, sessionId: normalizedSessionId });
     }
   } catch (error) {
-    console.error("Error deleting Jaina conversation:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('Error deleting Jaina conversation:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
-

@@ -158,7 +158,7 @@ describe('buildCanvasAssetRow provenance', () => {
           sourceAssetId: SEED_ASSET_ID,
           preset: 'ig-story-reel',
           aspectRatio: '9:16',
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
         },
       },
       'user-1',

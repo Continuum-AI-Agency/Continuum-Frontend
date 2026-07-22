@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { motion } from "motion/react";
-import { cn } from "@/lib/utils";
+import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 
-const FRAMES = ["⡡⠊⢔⠡", "⠊⡰⡡⡘", "⢔⢅⠈⢢", "⡁⢂⠆⡍", "⢔⠨⢑⢐", "⠨⡑⡠⠊"];
+const FRAMES = ['⡡⠊⢔⠡', '⠊⡰⡡⡘', '⢔⢅⠈⢢', '⡁⢂⠆⡍', '⢔⠨⢑⢐', '⠨⡑⡠⠊'];
 
 type SparkleSpinnerProps = {
   isActive: boolean;
@@ -23,7 +23,7 @@ export function SparkleSpinner({ isActive, className }: SparkleSpinnerProps) {
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-flex items-center justify-center font-mono", className)}
+      className={cn('inline-flex items-center justify-center font-mono', className)}
     >
       <motion.span
         key={frame}

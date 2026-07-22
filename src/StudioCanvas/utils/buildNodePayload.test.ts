@@ -33,7 +33,7 @@ describe('buildNodePayload', () => {
       expect(payload?.model).toBe('gemini-2.5-flash-image');
     });
 
-    it('should map nano-banana-pro to gemini-3-pro-image-preview', () => {
+    it('should map nano-banana-pro to the stable gemini-3-pro-image model', () => {
       const node: StudioNode = {
         id: 'nano',
         type: 'nanoGen',
@@ -45,10 +45,10 @@ describe('buildNodePayload', () => {
       };
 
       const payload = buildNanoGenPayload(node, new Map(), [], []);
-      expect(payload?.model).toBe('gemini-3-pro-image-preview');
+      expect(payload?.model).toBe('gemini-3-pro-image');
     });
 
-    it('should map nano-banana-2 to gemini-3.1-flash-image-preview with selectable size options', () => {
+    it('should map nano-banana-2 to stable gemini-3.1-flash-image with selectable size options', () => {
       const node: StudioNode = {
         id: 'nano',
         type: 'nanoGen',
@@ -61,7 +61,7 @@ describe('buildNodePayload', () => {
       };
 
       const payload = buildNanoGenPayload(node, new Map(), [], []);
-      expect(payload?.model).toBe('gemini-3.1-flash-image-preview');
+      expect(payload?.model).toBe('gemini-3.1-flash-image');
       expect(payload?.resolution).toBe('2048x2048');
       expect(payload?.imageSize).toBe('2K');
     });
@@ -452,6 +452,38 @@ describe('buildNodePayload', () => {
       expect(payload?.referenceImages?.[0]?.data).toBe('pixverse_image');
     });
 
+    it('passes a durable generated video URL through the reference-video handle', () => {
+      const node: StudioNode = {
+        id: 'kling',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'kling-omni',
+          prompt: 'Restyle this clip',
+          referenceMode: 'video',
+          enhancePrompt: false,
+        } as any,
+      };
+      const durableUrl = 'https://storage.example.com/generated.mp4?token=fresh';
+      const resolvedData = new Map<string, NodeOutput>([
+        ['video-ref', { type: 'video', url: durableUrl }],
+      ]);
+      const edges: Edge[] = [
+        {
+          id: 'v1',
+          source: 'video-ref',
+          target: 'kling',
+          sourceHandle: 'video',
+          targetHandle: 'ref-video',
+        },
+      ];
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.referenceVideo?.data).toBeUndefined();
+      expect(payload?.referenceVideo?.videoUrl).toBe(durableUrl);
+      expect(toBackendPayload(payload!).reference_video?.video_url).toBe(durableUrl);
+    });
+
     it('should expose a single Pixverse ref-image target handle', () => {
       expect(getVideoGeneratorTargetHandles('pixverse-v6')).toEqual([
         'prompt-in',
@@ -573,6 +605,17 @@ describe('buildNodePayload', () => {
   });
 
   describe('buildEnrichPayload', () => {
+    it('skips a second model call for a Composer-authored literal prompt', async () => {
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'Final generation-ready prompt', promptMode: 'literal' },
+      };
+
+      expect(await buildEnrichPayload(node, new Map(), [node], [], 'brand-1')).toBeNull();
+    });
+
     it('should build payload with text, image, audio, and document inputs', async () => {
       const node: StudioNode = {
         id: 'string',

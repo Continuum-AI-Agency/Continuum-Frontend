@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, ReloadIcon } from '@radix-ui/react-icons';
+import * as React from 'react';
 
-import { CardOverlayDemo } from "@/components/shadcn-studio/card/card-07";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CardOverlayDemo } from '@/components/shadcn-studio/card/card-07';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -13,9 +13,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { PerformanceDetails, type PaidMetricsComparison, type PaidMetricsTrendPoint } from "./PerformanceDetails";
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+import {
+  type PaidMetricsComparison,
+  type PaidMetricsTrendPoint,
+  PerformanceDetails,
+} from './PerformanceDetails';
 
 export type AdSet = {
   id: string;
@@ -64,7 +68,7 @@ export type MetaAd = {
 };
 
 export type AdSetAdsLoadState = {
-  status: "idle" | "loading" | "success" | "error";
+  status: 'idle' | 'loading' | 'success' | 'error';
   ads: MetaAd[];
   errorMessage?: string;
 };
@@ -77,52 +81,58 @@ type AdSetTableProps = {
   onAdSetToggle?: (adSetId: string, expanded: boolean) => void;
 };
 
-type SortField = "name" | "spend" | "roas" | "ctr" | "impressions" | "clicks";
-type SortDirection = "asc" | "desc";
+type SortField = 'name' | 'spend' | 'roas' | 'ctr' | 'impressions' | 'clicks';
+type SortDirection = 'asc' | 'desc';
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     minimumFractionDigits: 2,
   }).format(value);
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat('en-US').format(value);
 }
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
-function getStatusColor(status: string): "default" | "secondary" | "destructive" | "outline" {
+function getStatusColor(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status.toUpperCase()) {
-    case "ACTIVE":
-      return "default";
-    case "PAUSED":
-      return "secondary";
-    case "ARCHIVED":
-    case "DELETED":
-      return "destructive";
+    case 'ACTIVE':
+      return 'default';
+    case 'PAUSED':
+      return 'secondary';
+    case 'ARCHIVED':
+    case 'DELETED':
+      return 'destructive';
     default:
-      return "outline";
+      return 'outline';
   }
 }
 
-export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByAdSet, onAdSetToggle }: AdSetTableProps) {
-  const [sortField, setSortField] = React.useState<SortField>("spend");
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc");
+export function AdSetTable({
+  adSets,
+  isLoading,
+  segmentLabel = 'ad sets',
+  adsByAdSet,
+  onAdSetToggle,
+}: AdSetTableProps) {
+  const [sortField, setSortField] = React.useState<SortField>('spend');
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
   const [expandedAdSetId, setExpandedAdSetId] = React.useState<string | null>(null);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
       return;
     }
 
     setSortField(field);
-    setSortDirection("desc");
+    setSortDirection('desc');
   };
 
   const handleAdSetRowClick = (adSetId: string) => {
@@ -138,19 +148,23 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
       let aValue: number | string = 0;
       let bValue: number | string = 0;
 
-      if (sortField === "name") {
-        aValue = a.name || "";
-        bValue = b.name || "";
+      if (sortField === 'name') {
+        aValue = a.name || '';
+        bValue = b.name || '';
       } else {
         aValue = a.metrics?.[sortField] ?? 0;
         bValue = b.metrics?.[sortField] ?? 0;
       }
 
-      if (typeof aValue === "string" && typeof bValue === "string") {
-        return sortDirection === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortDirection === 'asc'
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
       }
 
-      return sortDirection === "asc" ? Number(aValue) - Number(bValue) : Number(bValue) - Number(aValue);
+      return sortDirection === 'asc'
+        ? Number(aValue) - Number(bValue)
+        : Number(bValue) - Number(aValue);
     });
 
     return sorted;
@@ -159,7 +173,7 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return null;
 
-    return sortDirection === "asc" ? (
+    return sortDirection === 'asc' ? (
       <ArrowUpIcon className="ml-1 inline h-3 w-3" />
     ) : (
       <ArrowDownIcon className="ml-1 inline h-3 w-3" />
@@ -176,7 +190,10 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
         </div>
         <div className="space-y-2 p-3">
           {Array.from({ length: 4 }).map((_, rowIdx) => (
-            <div key={`adset-row-${rowIdx}`} className="grid grid-cols-[40px_minmax(180px,1.4fr)_120px_repeat(5,minmax(88px,1fr))] gap-2">
+            <div
+              key={`adset-row-${rowIdx}`}
+              className="grid grid-cols-[40px_minmax(180px,1.4fr)_120px_repeat(5,minmax(88px,1fr))] gap-2"
+            >
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full rounded-full" />
@@ -193,7 +210,11 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
   }
 
   if (adSets.length === 0) {
-    return <div className="py-8 text-center text-muted-foreground">No {segmentLabel} found for this campaign.</div>;
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        No {segmentLabel} found for this campaign.
+      </div>
+    );
   }
 
   return (
@@ -205,10 +226,10 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
             <TableHead>
               <button
                 type="button"
-                onClick={() => handleSort("name")}
+                onClick={() => handleSort('name')}
                 className="font-medium hover:underline focus:outline-none"
               >
-                {segmentLabel === "segments" ? "Segment Name" : "Ad Set Name"}
+                {segmentLabel === 'segments' ? 'Segment Name' : 'Ad Set Name'}
                 <SortIcon field="name" />
               </button>
             </TableHead>
@@ -216,7 +237,7 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
             <TableHead className="text-right">
               <button
                 type="button"
-                onClick={() => handleSort("spend")}
+                onClick={() => handleSort('spend')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
                 Spend
@@ -226,7 +247,7 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
             <TableHead className="text-right">
               <button
                 type="button"
-                onClick={() => handleSort("roas")}
+                onClick={() => handleSort('roas')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
                 ROAS
@@ -236,7 +257,7 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
             <TableHead className="text-right">
               <button
                 type="button"
-                onClick={() => handleSort("ctr")}
+                onClick={() => handleSort('ctr')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
                 CTR
@@ -246,7 +267,7 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
             <TableHead className="text-right">
               <button
                 type="button"
-                onClick={() => handleSort("impressions")}
+                onClick={() => handleSort('impressions')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
                 Impressions
@@ -256,7 +277,7 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
             <TableHead className="text-right">
               <button
                 type="button"
-                onClick={() => handleSort("clicks")}
+                onClick={() => handleSort('clicks')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
                 Clicks
@@ -274,23 +295,36 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
               <React.Fragment key={adSet.id}>
                 <TableRow
                   onClick={() => handleAdSetRowClick(adSet.id)}
-                  className={cn("cursor-pointer transition-colors hover:bg-muted/50", isExpanded && "bg-muted/40")}
+                  className={cn(
+                    'cursor-pointer transition-colors hover:bg-muted/50',
+                    isExpanded && 'bg-muted/40',
+                  )}
                   aria-expanded={isExpanded}
                 >
                   <TableCell>
-                    <ChevronDownIcon className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+                    <ChevronDownIcon
+                      className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-180')}
+                    />
                   </TableCell>
                   <TableCell className="font-medium">{adSet.name}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(adSet.status)}>{adSet.status}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">{adSet.metrics ? formatCurrency(adSet.metrics.spend) : "-"}</TableCell>
-                  <TableCell className="text-right">{adSet.metrics ? adSet.metrics.roas.toFixed(2) : "-"}</TableCell>
-                  <TableCell className="text-right">{adSet.metrics ? formatPercent(adSet.metrics.ctr) : "-"}</TableCell>
                   <TableCell className="text-right">
-                    {adSet.metrics ? formatNumber(adSet.metrics.impressions) : "-"}
+                    {adSet.metrics ? formatCurrency(adSet.metrics.spend) : '-'}
                   </TableCell>
-                  <TableCell className="text-right">{adSet.metrics ? formatNumber(adSet.metrics.clicks) : "-"}</TableCell>
+                  <TableCell className="text-right">
+                    {adSet.metrics ? adSet.metrics.roas.toFixed(2) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {adSet.metrics ? formatPercent(adSet.metrics.ctr) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {adSet.metrics ? formatNumber(adSet.metrics.impressions) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {adSet.metrics ? formatNumber(adSet.metrics.clicks) : '-'}
+                  </TableCell>
                 </TableRow>
 
                 {isExpanded ? (
@@ -302,29 +336,32 @@ export function AdSetTable({ adSets, isLoading, segmentLabel = "ad sets", adsByA
                         className="mb-3"
                       />
 
-                      {adsState?.status === "loading" ? (
+                      {adsState?.status === 'loading' ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <ReloadIcon className="h-4 w-4 animate-spin" />
                           Loading ads and creatives...
                         </div>
                       ) : null}
 
-                      {adsState?.status === "error" ? (
+                      {adsState?.status === 'error' ? (
                         <div className="text-sm text-destructive">
-                          {adsState.errorMessage || "Failed to load ads for this ad set."}
+                          {adsState.errorMessage || 'Failed to load ads for this ad set.'}
                         </div>
                       ) : null}
 
-                      {adsState?.status === "success" && adsState.ads.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">No ads returned for this ad set.</div>
+                      {adsState?.status === 'success' && adsState.ads.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">
+                          No ads returned for this ad set.
+                        </div>
                       ) : null}
 
-                      {adsState?.status === "success" && adsState.ads.length > 0 ? (
+                      {adsState?.status === 'success' && adsState.ads.length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-2">
                           {adsState.ads.map((ad) => {
-                            const imageUrl = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
-                            const title = ad.creative?.title || ad.name || "Untitled ad";
-                            const postCopy = ad.creative?.body || "No post copy available.";
+                            const imageUrl =
+                              ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
+                            const title = ad.creative?.title || ad.name || 'Untitled ad';
+                            const postCopy = ad.creative?.body || 'No post copy available.';
 
                             return (
                               <div key={ad.id} className="space-y-2">

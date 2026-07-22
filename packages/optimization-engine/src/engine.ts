@@ -81,11 +81,21 @@ export function reallocate(
   const frozenBudget = sum(snapshots.filter(isFrozen).map((s) => s.currentBudget));
   const pool = totalBudget - frozenBudget;
 
-  // Excel: floor uses AVERAGE over ALL rows (incl. frozen/flagged).
-  const avgAllBudget =
-    snapshots.length > 0 ? sum(snapshots.map((s) => s.currentBudget)) / snapshots.length : 0;
+  // The floor is the guaranteed minimum for an ad set we are ALLOCATING, so it averages over
+  // the ad sets it applies to — the eligible ones. The Excel sheet this engine mirrors
+  // averaged over ALL rows including frozen/flagged; that is deliberately no longer true, and
+  // the reason is arithmetic. A held ad set contributes its budget to the numerator only if it
+  // has one: a zero-budget boosted post contributes 0 to the sum and 1 to the count, which is
+  // pure dilution. On the 64-ad-set account that exposed this, four such rows pulled the
+  // average from 170.33 to 159.69 and so cut every legitimate ad set's floor from $25.55 to
+  // $23.95 — a real reduction in everyone's guaranteed minimum caused entirely by rows the
+  // engine does not fund. Frozen items are pinned at their current budget and flagged items go
+  // to 0 (see below); neither receives a floor, so neither should set one.
+  const eligibleBudgets = snapshots.filter(isEligible).map((s) => s.currentBudget);
+  const avgEligibleBudget =
+    eligibleBudgets.length > 0 ? sum(eligibleBudgets) / eligibleBudgets.length : 0;
   const floor = Math.max(
-    cfg.floorPortfolioPct * avgAllBudget,
+    cfg.floorPortfolioPct * avgEligibleBudget,
     (cfg.cpaTarget * cfg.floorMinSignals) / cfg.floorWindowDays,
   );
 

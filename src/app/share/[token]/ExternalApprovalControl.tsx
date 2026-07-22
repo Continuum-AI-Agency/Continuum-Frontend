@@ -34,19 +34,36 @@ export function ExternalApprovalControl({
           <Input name="displayName" placeholder="Your name" autoComplete="name" required />
           <Input name="email" type="email" placeholder="Email" autoComplete="email" required />
           {hasPasscode ? (
-            <Input name="passcode" type="password" placeholder="Passcode" required className="sm:col-span-2" />
+            <Input
+              name="passcode"
+              type="password"
+              placeholder="Passcode"
+              required
+              className="sm:col-span-2"
+            />
           ) : null}
         </div>
       ) : null}
       <Textarea name="note" placeholder="Optional note for the team…" maxLength={2000} />
-      {state.error ? <p className="text-xs text-destructive" role="alert">{state.error}</p> : null}
+      {state.error ? (
+        <p className="text-xs text-destructive" role="alert">
+          {state.error}
+        </p>
+      ) : null}
       {state.decision ? (
         <p className="text-xs text-muted-foreground" role="status">
           Decision saved: {state.decision === 'approved' ? 'Approved' : 'Needs changes'}.
         </p>
       ) : null}
       <div className="flex justify-end gap-2">
-        <Button type="submit" name="decision" value="needs_changes" variant="outline" size="sm" disabled={pending}>
+        <Button
+          type="submit"
+          name="decision"
+          value="needs_changes"
+          variant="outline"
+          size="sm"
+          disabled={pending}
+        >
           <RotateCcw className="size-3.5" aria-hidden />
           Needs changes
         </Button>

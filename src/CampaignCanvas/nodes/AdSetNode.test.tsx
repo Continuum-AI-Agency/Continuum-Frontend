@@ -1,36 +1,34 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import React from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { ReactFlowProvider } from "@xyflow/react";
-
-import { AdSetNode } from "./AdSetNode";
-import { type AdSetData } from "../types";
-import { useCampaignStore } from "../stores/useCampaignStore";
-import { type CampaignNodeProps } from "../types";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { ReactFlowProvider } from '@xyflow/react';
+import React from 'react';
+import { useCampaignStore } from '../stores/useCampaignStore';
+import type { AdSetData, CampaignNodeProps } from '../types';
+import { AdSetNode } from './AdSetNode';
 
 const updateNodeData = mock();
-let originalUpdateNodeData: ReturnType<typeof useCampaignStore.getState>["updateNodeData"];
+let originalUpdateNodeData: ReturnType<typeof useCampaignStore.getState>['updateNodeData'];
 
 const buildProps = (overrides: Partial<AdSetData> = {}) =>
   ({
-    id: "adset-1",
+    id: 'adset-1',
     data: {
-      label: "Prospecting Ad Set",
-      validationStatus: "valid",
-      optimizationGoal: "CONVERSIONS",
-      billingEvent: "IMPRESSIONS",
+      label: 'Prospecting Ad Set',
+      validationStatus: 'valid',
+      optimizationGoal: 'CONVERSIONS',
+      billingEvent: 'IMPRESSIONS',
       budgetAmount: 150,
-      budgetCurrency: "USD",
+      budgetCurrency: 'USD',
       ...overrides,
     },
     selected: false,
-    type: "ad-set",
+    type: 'ad-set',
     zIndex: 0,
     isConnectable: true,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
     dragging: false,
-    dragHandle: "",
+    dragHandle: '',
   }) as unknown as CampaignNodeProps<'ad-set'>;
 
 const renderNode = async (props: CampaignNodeProps<'ad-set'>) => {
@@ -38,12 +36,12 @@ const renderNode = async (props: CampaignNodeProps<'ad-set'>) => {
     render(
       <ReactFlowProvider>
         <AdSetNode {...props} />
-      </ReactFlowProvider>
+      </ReactFlowProvider>,
     );
   });
 };
 
-describe("AdSetNode budget controls", () => {
+describe('AdSetNode budget controls', () => {
   beforeEach(() => {
     originalUpdateNodeData = useCampaignStore.getState().updateNodeData;
     useCampaignStore.setState({ updateNodeData });
@@ -55,21 +53,23 @@ describe("AdSetNode budget controls", () => {
     cleanup();
   });
 
-  it("defaults budget type to daily", async () => {
+  it('defaults budget type to daily', async () => {
     await renderNode(buildProps());
 
-    expect(screen.getByRole("button", { name: "Daily" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Lifetime" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole('button', { name: 'Daily' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Lifetime' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
   });
 
-  it("updates budget type when lifetime is selected", async () => {
+  it('updates budget type when lifetime is selected', async () => {
     await renderNode(buildProps());
     updateNodeData.mockClear();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Lifetime" }));
+      fireEvent.click(screen.getByRole('button', { name: 'Lifetime' }));
     });
 
-    expect(updateNodeData).toHaveBeenCalledWith("adset-1", { budgetType: "LIFETIME" });
+    expect(updateNodeData).toHaveBeenCalledWith('adset-1', { budgetType: 'LIFETIME' });
   });
 });

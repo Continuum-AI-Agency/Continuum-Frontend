@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge';
 
 export function isVideoUrl(url: string): boolean {
   try {
     const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith(".mp4") || pathname.endsWith(".mov") || pathname.endsWith(".webm");
+    return pathname.endsWith('.mp4') || pathname.endsWith('.mov') || pathname.endsWith('.webm');
   } catch {
     return false;
   }

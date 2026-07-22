@@ -22,6 +22,7 @@ export type NodeOutput =
       storagePath?: string;
       storageBucket?: string;
       sizeBytes?: number;
+      assetId?: string;
     }
   | {
       type: 'video';
@@ -134,7 +135,8 @@ export interface GenerationPayload {
     filename?: string;
   };
   referenceVideo?: {
-    data: string;
+    data?: string;
+    videoUrl?: string;
     mimeType: string;
     filename?: string;
   };

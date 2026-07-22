@@ -80,10 +80,21 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
       setSeeding(template);
       setError(null);
       try {
-        await seedCanvasFromLibrary({ brandId, assetId: asset.id, template });
-        router.push(CANVAS_ROUTE);
+        const { roomId, seedId } = await seedCanvasFromLibrary({
+          brandId,
+          assetId: asset.id,
+          template,
+        });
+        // Carry the seeded room forward so the canvas opens the room the node was
+        // written into, rather than falling back to the first room in the list.
+        const params = new URLSearchParams({ roomId, seedId });
+        router.push(`${CANVAS_ROUTE}?${params.toString()}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not open the canvas');
+      } finally {
+        // Always clear the spinner. It previously only reset on failure, so a
+        // successful seed left the button stuck spinning until navigation
+        // unmounted it — and if navigation stalled, forever.
         setSeeding(null);
       }
     },

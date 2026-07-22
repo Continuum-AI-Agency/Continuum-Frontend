@@ -21,11 +21,14 @@ import {
   AdSetSnapshotSchema,
   AngleMatrixCellSchema,
   CpaSeriesPointSchema,
+  CycleItemRowSchema,
   getOptimizationMetricDefinition,
   ParsedCycleRunReportSchema,
   RunConfidenceSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
+import { resolveAdsetName } from '../adsetName';
+import { itemToRow, kpiColumns } from '../kpiColumns';
 import {
   adSetRoasSeries,
   buildConfidenceRadar,
@@ -271,8 +274,12 @@ assert(
   'funnel has 4 objective stages from the top count',
 );
 assert(
-  funnel[3].displayValue.endsWith('%') && Boolean(funnel[3].color),
-  'funnel tail stage shows step % + heat color',
+  funnel[0].displayValue === '12,000' && funnel[0].stepPct === null,
+  'funnel top stage shows an absolute count and no step rate',
+);
+assert(
+  funnel[3].stepPct != null && Boolean(funnel[3].color),
+  'funnel tail stage carries a step conversion rate + heat color',
 );
 
 // Confidence radar 0–100.
@@ -328,6 +335,92 @@ assert(
   'ROAS P&L crosses break-even day 1 → day 2',
 );
 
+// ── adset_name on the performance wire + resolver preference ──────────────────
+// The B0 join merges adset_name into cycle_items; the resolver prefers it over the
+// enrolled-roster map and falls back to null (raw id) when nothing is known.
+const namedItem = CycleItemRowSchema.parse({
+  adset_id: 'act_1::adset_gainer',
+  adset_name: 'Prospecting — Broad',
+  current_budget: 100,
+  final_budget: 140,
+  change_abs: 40,
+  change_pct: 0.4,
+});
+assert(
+  namedItem.adset_name === 'Prospecting — Broad',
+  'adset_name parses off the performance wire (CycleItemRowSchema)',
+);
+const roster = new Map([['act_1::adset_gainer', 'Roster fallback name']]);
+assert(
+  resolveAdsetName(namedItem, roster) === 'Prospecting — Broad',
+  'resolver prefers the wire adset_name over the enrolled map',
+);
+assert(
+  resolveAdsetName({ adset_id: 'act_1::adset_gainer' }, roster) === 'Roster fallback name',
+  'resolver falls back to the enrolled map when the wire name is absent',
+);
+assert(
+  resolveAdsetName({ adset_id: 'act_1::not_in_roster' }, roster) === null,
+  'resolver returns null when no name is known anywhere',
+);
+
+// ── pacing estimated fallback (never blanks on "no period budget") ────────────
+const estPace = pacingSnapshot({ actualSpendToDate: 1500, dailyTotal: 100, periodDays: 30 });
+assert(estPace.estimated === true, 'pacing estimates a period budget from the daily total');
+assert(
+  estPace.periodBudget === 3000 && Math.round(estPace.pctSpent ?? 0) === 50,
+  'estimated pacing = daily × periodDays (3000), 50% spent',
+);
+const realPace = pacingSnapshot({ periodBudget: 6000, dailyTotal: 100, actualSpendToDate: 1500 });
+assert(
+  realPace.estimated === false && realPace.periodBudget === 6000,
+  'a real period budget is preferred and not flagged estimated',
+);
+
+// ── kpiColumns headers switch by objective over contract-parsed reads ─────────
+const kpiSnap = AdSetSnapshotSchema.parse({
+  id: 'act_1::adset_gainer',
+  status: 'active',
+  currentBudget: 100,
+  ageDays: 30,
+  windows: {
+    d3: window7({}),
+    d7: window7({ spend: 200, impressions: 10_000, leads: 5, conversations: 4 }),
+    d14: window7({}),
+  },
+});
+for (const [objective, resultHeader, costHeader] of [
+  ['lead', 'Leads', 'CPL'],
+  ['awareness', 'Impressions', 'CPM'],
+  ['conversations', 'Conversations', 'Cost per conversation'],
+] as const) {
+  const cols = kpiColumns({ metric: getOptimizationMetricDefinition(objective) });
+  assert(
+    cols.find((c) => c.id === 'results')?.header === resultHeader,
+    `kpiColumns: ${objective} → results header "${resultHeader}"`,
+  );
+  assert(
+    cols.find((c) => c.id === 'cost')?.header === costHeader,
+    `kpiColumns: ${objective} → cost header "${costHeader}"`,
+  );
+}
+const leadRow = itemToRow(namedItem, {
+  metric: getOptimizationMetricDefinition('lead'),
+  snapshot: kpiSnap,
+});
+assert(
+  leadRow.results === 5 && leadRow.cost === 40,
+  'itemToRow: lead CPL = spend / leads (200 / 5) over the parsed snapshot',
+);
+const awarenessRow = itemToRow(namedItem, {
+  metric: getOptimizationMetricDefinition('awareness'),
+  snapshot: kpiSnap,
+});
+assert(
+  awarenessRow.results === 10_000 && awarenessRow.cost === 20,
+  'itemToRow: awareness applies the CPM ×1000 denominator ((200/10000)*1000)',
+);
+
 // ── Report ────────────────────────────────────────────────────────────────────
 if (failures.length > 0) {
   console.error(`optimizer:viz:bench — FAIL (${failures.length}/${checks})`);
@@ -339,6 +432,9 @@ console.log(
 );
 console.log(
   '  covered: cpa_series, cycle report, angle_matrix, adset_snapshots, ad_daily_trends → every new chart transform',
+);
+console.log(
+  '  + B: adset_name resolver preference, pacing estimated fallback, KPI-adaptive column headers (lead/awareness/conversations)',
 );
 console.log(
   '  NOT covered (undeployed): live optimizer service + ad_daily_trends edge network hop — fixtures are contract-valid stand-ins',

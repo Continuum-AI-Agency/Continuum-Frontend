@@ -1,7 +1,7 @@
-"use server";
+'use server';
 
-import { revalidatePath, updateTag } from "next/cache";
-import { tags } from "@/lib/cache/tags";
+import { revalidatePath, updateTag } from 'next/cache';
+import { tags } from '@/lib/cache/tags';
 
 /**
  * Force revalidation of Brand Insights surfaces.
@@ -11,10 +11,10 @@ import { tags } from "@/lib/cache/tags";
  * remains as belt-and-suspenders during the transition.
  */
 export async function revalidateBrandInsights(brandId: string) {
-  if (!brandId) throw new Error("brandId is required");
+  if (!brandId) throw new Error('brandId is required');
 
   updateTag(tags.brandInsights(brandId));
 
-  revalidatePath("/dashboard");
-  revalidatePath("/organic");
+  revalidatePath('/dashboard');
+  revalidatePath('/organic');
 }

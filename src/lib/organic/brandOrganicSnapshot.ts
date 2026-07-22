@@ -7,19 +7,13 @@ import type {
   OrganicMetricId,
   OrganicMetricPlatform,
   OrganicMetrics,
-} from "@continuum/contracts";
-import {
-  getOrganicMetric,
-  isMetricAvailableOnPlatform,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
+import { getOrganicMetric, isMetricAvailableOnPlatform } from '@continuum/contracts';
 import {
   fetchOrganicAnalytics,
   type OrganicAnalyticsRequest,
-} from "@/lib/api/organicAnalytics.client";
-import type {
-  OrganicDateRangePreset,
-  OrganicMetricsResponse,
-} from "@/lib/schemas/organicMetrics";
+} from '@/lib/api/organicAnalytics.client';
+import type { OrganicDateRangePreset, OrganicMetricsResponse } from '@/lib/schemas/organicMetrics';
 
 export type SnapshotAccountRef = {
   platform: OrganicMetricPlatform;
@@ -28,16 +22,16 @@ export type SnapshotAccountRef = {
 };
 
 export type SnapshotAccountResult = SnapshotAccountRef & {
-  status: "ok";
+  status: 'ok';
   metrics: OrganicMetrics;
   comparison: Record<string, MetricComparison> | null | undefined;
-  trends: OrganicMetricsResponse["trends"];
-  range: OrganicMetricsResponse["range"];
+  trends: OrganicMetricsResponse['trends'];
+  range: OrganicMetricsResponse['range'];
   fetchedAt?: string;
 };
 
 export type SnapshotAccountMissing = SnapshotAccountRef & {
-  status: "error";
+  status: 'error';
   message: string;
 };
 
@@ -100,12 +94,12 @@ export async function loadBrandOrganicSnapshot(
         integrationAccountId: account.integrationAccountId,
         platform: account.platform,
         range: { preset: rangePreset },
-        scope: "kpis",
+        scope: 'kpis',
         forceRefresh,
       });
       const ok: SnapshotAccountResult = {
         ...account,
-        status: "ok",
+        status: 'ok',
         metrics: data.metrics,
         comparison: data.comparison,
         trends: data.trends,
@@ -116,8 +110,8 @@ export async function loadBrandOrganicSnapshot(
     } catch (error) {
       const missing: SnapshotAccountMissing = {
         ...account,
-        status: "error",
-        message: error instanceof Error ? error.message : "Unable to load organic analytics.",
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unable to load organic analytics.',
       };
       return missing;
     }
@@ -126,7 +120,7 @@ export async function loadBrandOrganicSnapshot(
   const ok: SnapshotAccountResult[] = [];
   const missing: SnapshotAccountMissing[] = [];
   for (const row of rows) {
-    if (row.status === "ok") ok.push(row);
+    if (row.status === 'ok') ok.push(row);
     else missing.push(row);
   }
 
@@ -141,11 +135,11 @@ export function flattenAccountsByPlatform(accountsByPlatform: {
   linkedin: Array<{ integrationAccountId: string; name: string }>;
 }): SnapshotAccountRef[] {
   const platforms: OrganicMetricPlatform[] = [
-    "instagram",
-    "facebook",
-    "tiktok",
-    "youtube",
-    "linkedin",
+    'instagram',
+    'facebook',
+    'tiktok',
+    'youtube',
+    'linkedin',
   ];
   const out: SnapshotAccountRef[] = [];
   for (const platform of platforms) {
@@ -166,7 +160,7 @@ export function metricValueForAccount(
 ): number | undefined {
   if (!isMetricAvailableOnPlatform(metricId, account.platform)) return undefined;
   const value = account.metrics[metricId];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 export function metricDeltaForAccount(
@@ -175,7 +169,7 @@ export function metricDeltaForAccount(
 ): number | undefined {
   if (!isMetricAvailableOnPlatform(metricId, account.platform)) return undefined;
   const pct = account.comparison?.[metricId]?.percentageChange;
-  return typeof pct === "number" && Number.isFinite(pct) ? pct : undefined;
+  return typeof pct === 'number' && Number.isFinite(pct) ? pct : undefined;
 }
 
 export type RollupItem = {
@@ -224,7 +218,7 @@ export function trendSeriesForMetric(
   const points: TrendSeriesPoint[] = [];
   for (const trend of trends) {
     const raw = (trend as Record<string, unknown>)[metricId];
-    if (typeof raw === "number" && Number.isFinite(raw)) {
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
       points.push({ date: trend.date, value: raw });
     }
   }

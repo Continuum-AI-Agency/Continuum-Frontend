@@ -1,7 +1,7 @@
-import { z } from "zod";
+import type { z } from 'zod';
 
 export function isBrowser(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
 export function makeScopedKey(scope: string, name: string): string {
@@ -41,5 +41,3 @@ export function removeLocalStorage(key: string): void {
     // ignore
   }
 }
-
-

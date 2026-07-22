@@ -1,9 +1,9 @@
 export {
+  coerceToastOptions,
   TOAST_VARIANTS,
   ToastError,
-  coerceToastOptions,
+  type ToastOptions,
   throwToastError,
   useToast,
   useToastContext,
-  type ToastOptions,
-} from "@/components/ui/ToastProvider";
+} from '@/components/ui/ToastProvider';

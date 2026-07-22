@@ -43,8 +43,7 @@ function CardPreview({ asset }: { asset: MediaAsset }) {
   }
   if (
     previewUrl &&
-    (asset.kind === 'video' ||
-      (asset.preview?.state === 'ready' && asset.preview.kind === 'video'))
+    (asset.kind === 'video' || (asset.preview?.state === 'ready' && asset.preview.kind === 'video'))
   ) {
     return (
       // biome-ignore lint/a11y/useMediaCaption: silent board thumbnail of the user's own upload; no caption track exists
@@ -110,7 +109,11 @@ export function BoardCard({
       {onToggleSelected ? (
         <button
           type="button"
-          aria-label={selected ? `Deselect ${asset.title ?? asset.fileName}` : `Select ${asset.title ?? asset.fileName}`}
+          aria-label={
+            selected
+              ? `Deselect ${asset.title ?? asset.fileName}`
+              : `Select ${asset.title ?? asset.fileName}`
+          }
           aria-pressed={selected}
           onClick={(event) => {
             event.stopPropagation();

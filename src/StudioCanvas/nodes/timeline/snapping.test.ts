@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'bun:test';
-import type { TimelineLayout } from './useTimelineEditorModel';
 import { boundaryTimes, laneItemEdges, snapSec } from './snapping';
+import type { TimelineLayout } from './useTimelineEditorModel';
 
 const layout: TimelineLayout = {
   totalSec: 9,
   clips: [
-    { item: { id: 'a', order: 0, sourceNodeId: 'a', kind: 'video' }, startSec: 0, durationSec: 4, leftPx: 0, widthPx: 0 },
-    { item: { id: 'b', order: 1, sourceNodeId: 'b', kind: 'video' }, startSec: 4, durationSec: 5, leftPx: 0, widthPx: 0 },
+    {
+      item: { id: 'a', order: 0, sourceNodeId: 'a', kind: 'video' },
+      startSec: 0,
+      durationSec: 4,
+      leftPx: 0,
+      widthPx: 0,
+    },
+    {
+      item: { id: 'b', order: 1, sourceNodeId: 'b', kind: 'video' },
+      startSec: 4,
+      durationSec: 5,
+      leftPx: 0,
+      widthPx: 0,
+    },
   ],
 };
 

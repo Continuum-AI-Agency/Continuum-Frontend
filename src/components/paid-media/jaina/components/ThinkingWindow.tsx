@@ -1,63 +1,54 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { Badge } from "@/components/ui/badge";
 import {
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  ArrowRightLeftIcon,
+  BrainIcon,
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  CircleDotIcon,
+  WrenchIcon,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import * as React from 'react';
+import { Agent, AgentContent, AgentHeader } from '@/components/ai-elements/agent';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
   ChainOfThoughtStep,
-} from "@/components/ai-elements/chain-of-thought";
+} from '@/components/ai-elements/chain-of-thought';
+import { Shimmer } from '@/components/ai-elements/shimmer';
+import { Tool, ToolHeader } from '@/components/ai-elements/tool';
+import { Badge } from '@/components/ui/badge';
+import { CollapsibleTrigger } from '@/components/ui/collapsible';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import type { JainaProgressEntry, JainaStreamState } from '@/lib/jaina/stream';
+import { cn } from '@/lib/utils';
+import { SparkleSpinner } from './SparkleSpinner';
 import {
-  Tool,
-  ToolHeader,
-} from "@/components/ai-elements/tool";
-import {
-  Agent,
-  AgentHeader,
-  AgentContent,
-} from "@/components/ai-elements/agent";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
-import { SparkleSpinner } from "./SparkleSpinner";
-import {
+  type AgentLifecycleSegment,
   buildThinkingSegments,
   clusterToolEntries,
   formatAgentLabel,
+  formatThoughtDuration,
   formatToolLabel,
+  resolveToolCallFromRef,
   resolveToolEntries,
   resolveToolResultFromRef,
-  resolveToolCallFromRef,
-  toMarkdownDetail,
   STAGE_LABELS,
-  type AgentLifecycleSegment,
-} from "./thinkingUtils";
-import type { JainaProgressEntry, JainaStreamState } from "@/lib/jaina/stream";
-import {
-  BrainIcon,
-  ChevronDownIcon,
-  WrenchIcon,
-  ArrowRightLeftIcon,
-  CircleDotIcon,
-  CheckCircle2Icon,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "motion/react";
+  toMarkdownDetail,
+} from './thinkingUtils';
 
 type ThinkingWindowProps = {
   reasoning: JainaProgressEntry[];
-  toolCalls: JainaStreamState["toolCalls"];
-  toolResults: JainaStreamState["toolResults"];
+  toolCalls: JainaStreamState['toolCalls'];
+  toolResults: JainaStreamState['toolResults'];
   isStreaming: boolean;
 };
 
-export function getLatestStreamingThought(
-  reasoning: JainaProgressEntry[]
-): string | null {
+export function getLatestStreamingThought(reasoning: JainaProgressEntry[]): string | null {
   for (let i = reasoning.length - 1; i >= 0; i -= 1) {
     const entry = reasoning[i];
-    if (entry.stage !== "thinking") continue;
+    if (entry.stage !== 'thinking') continue;
     const detail = toMarkdownDetail(entry.detail);
     if (detail) return detail;
   }
@@ -69,13 +60,10 @@ type LatestJainaThoughtProps = {
   isStreaming: boolean;
 };
 
-export function LatestJainaThought({
-  reasoning,
-  isStreaming,
-}: LatestJainaThoughtProps) {
+export function LatestJainaThought({ reasoning, isStreaming }: LatestJainaThoughtProps) {
   const latestThought = React.useMemo(
     () => (isStreaming ? getLatestStreamingThought(reasoning) : null),
-    [isStreaming, reasoning]
+    [isStreaming, reasoning],
   );
 
   if (!latestThought) return null;
@@ -87,22 +75,19 @@ export function LatestJainaThought({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -3 }}
       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-lg border border-border/50 bg-muted/25 px-3 py-2.5"
+      className="-mt-1 px-3 pb-2.5"
     >
-      <SafeMarkdown
-        content={latestThought}
-        className="text-xs leading-relaxed text-foreground/80"
-        mode="streaming"
-        isAnimating
-      />
+      <div className="line-clamp-2 text-sm leading-relaxed text-foreground/80">
+        <SafeMarkdown content={latestThought} mode="streaming" isAnimating />
+      </div>
     </motion.div>
   );
 }
 
 type ActiveAgentsPanelProps = {
   agents: AgentLifecycleSegment[];
-  toolCalls: JainaStreamState["toolCalls"];
-  toolResults: JainaStreamState["toolResults"];
+  toolCalls: JainaStreamState['toolCalls'];
+  toolResults: JainaStreamState['toolResults'];
   isStreaming: boolean;
 };
 
@@ -114,8 +99,8 @@ function AgentStatusRow({
 }: {
   agent: AgentLifecycleSegment;
   isLast: boolean;
-  toolCalls: JainaStreamState["toolCalls"];
-  toolResults: JainaStreamState["toolResults"];
+  toolCalls: JainaStreamState['toolCalls'];
+  toolResults: JainaStreamState['toolResults'];
 }) {
   const safeToolCalls = toolCalls ?? [];
   const safeToolResults = toolResults ?? [];
@@ -127,12 +112,12 @@ function AgentStatusRow({
     const lastRef = agent.workerToolRefs[agent.workerToolRefs.length - 1];
     const result = resolveToolResultFromRef(lastRef, safeToolResults);
     const call = resolveToolCallFromRef(lastRef, safeToolCalls);
-    const name = call?.name ?? result?.name ?? lastRef.replace(/^name:/, "");
+    const name = call?.name ?? result?.name ?? lastRef.replace(/^name:/, '');
     if (result) return null;
     return name ? `${name}…` : null;
   }, [isDone, agent.workerToolRefs, safeToolCalls, safeToolResults]);
 
-  const treeChar = isLast ? "└─" : "├─";
+  const treeChar = isLast ? '└─' : '├─';
 
   return (
     <motion.div
@@ -147,7 +132,7 @@ function AgentStatusRow({
         <>
           <span className="text-muted-foreground/40">·</span>
           <span className="text-muted-foreground/60">
-            {toolCount} tool{toolCount !== 1 ? "s" : ""}
+            {toolCount} tool{toolCount !== 1 ? 's' : ''}
           </span>
         </>
       )}
@@ -155,19 +140,24 @@ function AgentStatusRow({
       {isDone ? (
         <span className="flex items-center gap-1 text-emerald-500/70">
           <CheckCircle2Icon className="size-3" />
-          {agent.durationMs !== undefined ? `${(agent.durationMs / 1000).toFixed(1)}s` : "done"}
+          {agent.durationMs !== undefined ? `${(agent.durationMs / 1000).toFixed(1)}s` : 'done'}
         </span>
       ) : (
         <span className="flex items-center gap-1 text-muted-foreground/50">
           <CircleDotIcon className="size-3 animate-pulse" />
-          {latestActivity ?? "running"}
+          {latestActivity ?? 'running'}
         </span>
       )}
     </motion.div>
   );
 }
 
-function ActiveAgentsPanel({ agents, toolCalls, toolResults, isStreaming }: ActiveAgentsPanelProps) {
+function ActiveAgentsPanel({
+  agents,
+  toolCalls,
+  toolResults,
+  isStreaming,
+}: ActiveAgentsPanelProps) {
   if (!isStreaming || agents.length === 0) return null;
 
   return (
@@ -191,45 +181,52 @@ export function ThinkingWindow({
   toolResults,
   isStreaming,
 }: ThinkingWindowProps) {
-  // Auto-expand the live timeline while streaming; collapse once the run ends.
-  // A manual toggle overrides both (sticks for this message's lifetime).
+  // ChatGPT-style: stay collapsed by default (both while streaming and after),
+  // surfacing only the header + the latest-thought ticker. The full trace is
+  // expand-on-demand. A manual toggle sticks for this message's lifetime.
   const [userOverride, setUserOverride] = React.useState<boolean | null>(null);
-  const isOpen = userOverride ?? isStreaming;
+  const isOpen = userOverride ?? false;
 
   const safeToolCalls = React.useMemo(() => toolCalls ?? [], [toolCalls]);
   const safeToolResults = React.useMemo(() => toolResults ?? [], [toolResults]);
 
   const segments = React.useMemo(
     () => buildThinkingSegments(reasoning, safeToolCalls),
-    [reasoning, safeToolCalls]
+    [reasoning, safeToolCalls],
   );
 
   const agentSegments = React.useMemo(
-    () => segments.filter((s): s is AgentLifecycleSegment => s.kind === "agent_lifecycle"),
-    [segments]
+    () => segments.filter((s): s is AgentLifecycleSegment => s.kind === 'agent_lifecycle'),
+    [segments],
   );
 
   const currentStage = React.useMemo(() => {
     if (!isStreaming) return null;
     for (let i = reasoning.length - 1; i >= 0; i--) {
       const stage = reasoning[i].stage;
-      if (stage && stage !== "thinking" && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
+      if (stage && stage !== 'thinking' && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
     }
     return null;
   }, [reasoning, isStreaming]);
 
   const thoughtCount = segments.reduce(
-    (count, segment) =>
-      segment.kind === "thought" ? count + segment.entries.length : count,
-    0
+    (count, segment) => (segment.kind === 'thought' ? count + segment.entries.length : count),
+    0,
   );
   const toolCount = segments.reduce(
-    (count, segment) =>
-      segment.kind === "tools" ? count + segment.toolRefs.length : count,
-    0
+    (count, segment) => (segment.kind === 'tools' ? count + segment.toolRefs.length : count),
+    0,
   );
 
-  if (segments.length === 0) return null;
+  const doneLabel = React.useMemo(
+    () => formatThoughtDuration(reasoning) ?? 'Reasoning trace',
+    [reasoning],
+  );
+
+  // While streaming, render the header from t=0 so "Thinking…" appears the instant
+  // the run starts (before any thought/tool segment lands). Only bail once the run
+  // is finished and produced nothing worth showing.
+  if (!isStreaming && segments.length === 0) return null;
 
   return (
     <ChainOfThought open={isOpen} onOpenChange={setUserOverride} className="space-y-0">
@@ -241,9 +238,11 @@ export function ThinkingWindow({
           <SparkleSpinner isActive={isStreaming} className="text-foreground/60" />
           <span className="flex-1 text-left">
             {isStreaming ? (
-              <span className="text-sm font-medium">Thinking...</span>
+              <Shimmer as="span" className="text-sm font-medium" duration={1.6}>
+                Thinking…
+              </Shimmer>
             ) : (
-              <span className="font-medium">Reasoning trace</span>
+              <span className="font-medium">{doneLabel}</span>
             )}
           </span>
           <AnimatePresence>
@@ -263,42 +262,48 @@ export function ThinkingWindow({
           <div className="flex items-center gap-1.5">
             {toolCount > 0 && (
               <Badge variant="secondary" className="text-2xs px-1.5">
-                {toolCount} tool{toolCount !== 1 ? "s" : ""}
+                {toolCount} tool{toolCount !== 1 ? 's' : ''}
               </Badge>
             )}
             {thoughtCount > 0 && (
               <Badge variant="outline" className="text-2xs px-1.5">
-                {thoughtCount} thought{thoughtCount !== 1 ? "s" : ""}
+                {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
               </Badge>
             )}
           </div>
           <ChevronDownIcon
             className={cn(
-              "size-4 shrink-0 transition-transform",
-              isOpen ? "rotate-180" : "rotate-0"
+              'size-4 shrink-0 transition-transform',
+              isOpen ? 'rotate-180' : 'rotate-0',
             )}
           />
         </button>
       </CollapsibleTrigger>
 
-      <ActiveAgentsPanel
-        agents={agentSegments}
-        toolCalls={toolCalls}
-        toolResults={toolResults}
-        isStreaming={isStreaming}
-      />
+      {isStreaming && !isOpen ? (
+        <AnimatePresence mode="wait">
+          <LatestJainaThought reasoning={reasoning} isStreaming />
+        </AnimatePresence>
+      ) : null}
 
       <ChainOfThoughtContent className="space-y-1 px-2 pb-3">
+        <ActiveAgentsPanel
+          agents={agentSegments}
+          toolCalls={toolCalls}
+          toolResults={toolResults}
+          isStreaming={isStreaming}
+        />
+
         {segments.map((segment, segmentIndex) => {
           const isLast = segmentIndex === segments.length - 1;
 
-          if (segment.kind === "thought") {
+          if (segment.kind === 'thought') {
             return (
               <ChainOfThoughtStep
                 key={segment.id}
                 icon={BrainIcon}
                 label="Reasoning"
-                status={isStreaming && isLast ? "active" : "complete"}
+                status={isStreaming && isLast ? 'active' : 'complete'}
               >
                 <div className="space-y-3 rounded-md bg-muted/30 p-3">
                   {segment.entries.map((entry, entryIndex) => {
@@ -309,7 +314,7 @@ export function ThinkingWindow({
                         key={`${entry.at}-${entryIndex}`}
                         content={detailMarkdown}
                         className="text-sm leading-relaxed text-foreground/85"
-                        mode={isStreaming ? "streaming" : "static"}
+                        mode={isStreaming ? 'streaming' : 'static'}
                       />
                     );
                   })}
@@ -318,25 +323,23 @@ export function ThinkingWindow({
             );
           }
 
-          if (segment.kind === "handoff") {
+          if (segment.kind === 'handoff') {
             return (
               <ChainOfThoughtStep
                 key={segment.id}
                 icon={ArrowRightLeftIcon}
                 label={
-                  segment.status === "started"
+                  segment.status === 'started'
                     ? `Delegating to ${formatAgentLabel(segment.to)}`
                     : `${formatAgentLabel(segment.to)} ${segment.status}`
                 }
-                status={segment.status === "started" ? "active" : "complete"}
+                status={segment.status === 'started' ? 'active' : 'complete'}
               >
                 <Agent className="mt-1">
                   <AgentHeader name={formatAgentLabel(segment.to)} />
                   {segment.objective ? (
                     <AgentContent>
-                      <p className="text-xs text-muted-foreground">
-                        {segment.objective}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{segment.objective}</p>
                     </AgentContent>
                   ) : null}
                 </Agent>
@@ -344,15 +347,16 @@ export function ThinkingWindow({
             );
           }
 
-          if (segment.kind === "agent_lifecycle") {
+          if (segment.kind === 'agent_lifecycle') {
             const isActive = isStreaming && isLast && !segment.completeStatus;
-            const statusColor = segment.completeStatus === "failed"
-              ? "text-destructive"
-              : segment.completeStatus === "partial"
-              ? "text-amber-500"
-              : segment.completeStatus === "completed"
-              ? "text-emerald-500"
-              : "text-muted-foreground";
+            const statusColor =
+              segment.completeStatus === 'failed'
+                ? 'text-destructive'
+                : segment.completeStatus === 'partial'
+                  ? 'text-amber-500'
+                  : segment.completeStatus === 'completed'
+                    ? 'text-emerald-500'
+                    : 'text-muted-foreground';
 
             const workerResolved = segment.workerToolRefs?.length
               ? resolveToolEntries(segment.workerToolRefs, safeToolCalls, safeToolResults)
@@ -362,11 +366,14 @@ export function ThinkingWindow({
             if (lastWorkerEntry) {
               const res = lastWorkerEntry.toolResult;
               if (res) {
-                if (!res.ok) workerStatusLine = `${lastWorkerEntry.name} failed${res.error ? ` — ${res.error}` : ""}`;
+                if (!res.ok)
+                  workerStatusLine = `${lastWorkerEntry.name} failed${res.error ? ` — ${res.error}` : ''}`;
                 else if (res.cached) workerStatusLine = `${lastWorkerEntry.name} (cached)`;
                 else {
                   const bytes = (res as { output_bytes?: number }).output_bytes;
-                  workerStatusLine = bytes ? `${lastWorkerEntry.name} returned (${bytes}B)` : `${lastWorkerEntry.name} returned`;
+                  workerStatusLine = bytes
+                    ? `${lastWorkerEntry.name} returned (${bytes}B)`
+                    : `${lastWorkerEntry.name} returned`;
                 }
               } else {
                 workerStatusLine = `calling ${lastWorkerEntry.name}…`;
@@ -378,7 +385,7 @@ export function ThinkingWindow({
                 key={segment.id}
                 icon={ArrowRightLeftIcon}
                 label={`Delegated to ${segment.agentLabel}`}
-                status={isActive ? "active" : "complete"}
+                status={isActive ? 'active' : 'complete'}
               >
                 <Agent className="mt-1">
                   <AgentHeader name={segment.agentLabel} />
@@ -387,11 +394,14 @@ export function ThinkingWindow({
                       <p className="text-xs text-foreground/70">{segment.taskDescription}</p>
                     )}
                     {isActive && workerStatusLine && (
-                      <p className="text-2xs text-muted-foreground/70 mt-0.5 truncate">{workerStatusLine}</p>
+                      <p className="text-2xs text-muted-foreground/70 mt-0.5 truncate">
+                        {workerStatusLine}
+                      </p>
                     )}
                     {segment.durationMs !== undefined && (
-                      <p className={cn("text-2xs mt-1", statusColor)}>
-                        {segment.completeStatus ?? "running"} · {(segment.durationMs / 1000).toFixed(1)}s
+                      <p className={cn('text-2xs mt-1', statusColor)}>
+                        {segment.completeStatus ?? 'running'} ·{' '}
+                        {(segment.durationMs / 1000).toFixed(1)}s
                       </p>
                     )}
                     {segment.error && (
@@ -400,11 +410,15 @@ export function ThinkingWindow({
                     {workerResolved.length > 0 && (
                       <div className="mt-2 space-y-1.5">
                         <p className="text-2xs text-muted-foreground/50">
-                          {workerResolved.filter(e => e.state !== "running").length}/{workerResolved.length} tools done
+                          {workerResolved.filter((e) => e.state !== 'running').length}/
+                          {workerResolved.length} tools done
                         </p>
                         {workerResolved.map((entry) => (
                           <Tool key={entry.id} type={entry.name} state={entry.state}>
-                            <ToolHeader title={formatToolLabel(entry.name)} showDisclosure={false} />
+                            <ToolHeader
+                              title={formatToolLabel(entry.name)}
+                              showDisclosure={false}
+                            />
                           </Tool>
                         ))}
                       </div>
@@ -416,20 +430,16 @@ export function ThinkingWindow({
           }
 
           // tools segment
-          const resolved = resolveToolEntries(
-            segment.toolRefs,
-            safeToolCalls,
-            safeToolResults
-          );
+          const resolved = resolveToolEntries(segment.toolRefs, safeToolCalls, safeToolResults);
           const clusters = clusterToolEntries(resolved);
-          const hasRunning = resolved.some((e) => e.state === "running");
+          const hasRunning = resolved.some((e) => e.state === 'running');
 
           return (
             <ChainOfThoughtStep
               key={segment.id}
               icon={WrenchIcon}
-              label={`${resolved.length} tool call${resolved.length !== 1 ? "s" : ""}`}
-              status={hasRunning ? "active" : "complete"}
+              label={`${resolved.length} tool call${resolved.length !== 1 ? 's' : ''}`}
+              status={hasRunning ? 'active' : 'complete'}
             >
               <div className="space-y-2">
                 {clusters.map((cluster) => {
@@ -443,14 +453,9 @@ export function ThinkingWindow({
                   }
 
                   return (
-                    <details
-                      key={cluster.key}
-                      className="rounded-md border border-border/40"
-                    >
+                    <details key={cluster.key} className="rounded-md border border-border/40">
                       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm">
-                        <span className="font-medium">
-                          {formatToolLabel(cluster.name)}
-                        </span>
+                        <span className="font-medium">{formatToolLabel(cluster.name)}</span>
                         <Badge variant="secondary" className="text-2xs">
                           {cluster.entries.length} calls
                         </Badge>
@@ -475,7 +480,10 @@ export function ThinkingWindow({
                       <div className="space-y-1.5 px-3 pb-3">
                         {cluster.entries.map((entry) => (
                           <Tool key={entry.id} type={entry.name} state={entry.state}>
-                            <ToolHeader title={formatToolLabel(entry.name)} showDisclosure={false} />
+                            <ToolHeader
+                              title={formatToolLabel(entry.name)}
+                              showDisclosure={false}
+                            />
                           </Tool>
                         ))}
                       </div>

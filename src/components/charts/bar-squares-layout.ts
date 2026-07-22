@@ -33,14 +33,9 @@ export function computeSquareColumn({
   }
 
   if (fit) {
-    const count = Math.max(
-      1,
-      Math.floor((barLengthPx + gap) / (squareSize + gap))
-    );
+    const count = Math.max(1, Math.floor((barLengthPx + gap) / (squareSize + gap)));
     const effectiveGap =
-      count > 1
-        ? Math.max(0, (barLengthPx - count * squareSize) / (count - 1))
-        : 0;
+      count > 1 ? Math.max(0, (barLengthPx - count * squareSize) / (count - 1)) : 0;
     const step = squareSize + effectiveGap;
     const columnHeight = barLengthPx;
     const positions: number[] = [];

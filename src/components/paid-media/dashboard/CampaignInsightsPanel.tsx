@@ -1,23 +1,16 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { ReloadIcon } from "@radix-ui/react-icons";
-import {
-  BarChart3Icon,
-  MapPinIcon,
-  PaletteIcon,
-  UsersIcon,
-  WalletIcon,
-} from "lucide-react";
-
-import { Card, CardContent } from "@/components/ui/card";
-import { SectionHeader } from "@/components/shared/SectionHeader";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useCampaignInsights } from "@/hooks/useCampaignInsights";
-import type { ComputedInsight, InsightCategory } from "@/lib/paid-media/account-insights.types";
-import type { PaidMediaTimeRange } from "./timeRange";
-import { InsightCategoryCard } from "./InsightCategoryCard";
+import { ReloadIcon } from '@radix-ui/react-icons';
+import { BarChart3Icon, MapPinIcon, PaletteIcon, UsersIcon, WalletIcon } from 'lucide-react';
+import * as React from 'react';
+import { SectionHeader } from '@/components/shared/SectionHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useCampaignInsights } from '@/hooks/useCampaignInsights';
+import type { ComputedInsight, InsightCategory } from '@/lib/paid-media/account-insights.types';
+import { InsightCategoryCard } from './InsightCategoryCard';
+import type { PaidMediaTimeRange } from './timeRange';
 
 type CampaignInsightsPanelProps = {
   brandId: string;
@@ -35,34 +28,32 @@ const CATEGORY_CONFIG: ReadonlyArray<{
   accent: string;
 }> = [
   {
-    key: "budget",
-    title: "Budget Pace",
+    key: 'budget',
+    title: 'Budget Pace',
     icon: WalletIcon,
-    accent: "bg-emerald-500/90",
+    accent: 'bg-emerald-500/90',
   },
   {
-    key: "placements",
-    title: "Placement / Platform",
+    key: 'placements',
+    title: 'Placement / Platform',
     icon: MapPinIcon,
-    accent: "bg-blue-500/90",
+    accent: 'bg-blue-500/90',
   },
   {
-    key: "audiences",
-    title: "Audiences",
+    key: 'audiences',
+    title: 'Audiences',
     icon: UsersIcon,
-    accent: "bg-amber-500/90",
+    accent: 'bg-amber-500/90',
   },
   {
-    key: "creative",
-    title: "Creative / Visual",
+    key: 'creative',
+    title: 'Creative / Visual',
     icon: PaletteIcon,
-    accent: "bg-rose-500/90",
+    accent: 'bg-rose-500/90',
   },
 ];
 
-function groupByCategory(
-  insights: ComputedInsight[]
-): Record<InsightCategory, ComputedInsight[]> {
+function groupByCategory(insights: ComputedInsight[]): Record<InsightCategory, ComputedInsight[]> {
   const grouped: Record<InsightCategory, ComputedInsight[]> = {
     budget: [],
     formats: [],
@@ -86,15 +77,14 @@ export function CampaignInsightsPanel({
   campaignObjective,
   timeRange,
 }: CampaignInsightsPanelProps) {
-  const { insights, expiresAt, isLoading, error, refresh } =
-    useCampaignInsights({
-      brandId,
-      adAccountId,
-      campaignId,
-      campaignName,
-      campaignObjective,
-      timeRange,
-    });
+  const { insights, expiresAt, isLoading, error, refresh } = useCampaignInsights({
+    brandId,
+    adAccountId,
+    campaignId,
+    campaignName,
+    campaignObjective,
+    timeRange,
+  });
 
   const grouped = React.useMemo(() => groupByCategory(insights), [insights]);
   const hasAnyInsights = insights.length > 0;
@@ -102,7 +92,7 @@ export function CampaignInsightsPanel({
   const stalenessLabel = React.useMemo(() => {
     if (!expiresAt) return null;
     const remaining = new Date(expiresAt).getTime() - Date.now();
-    if (remaining <= 0) return "Stale";
+    if (remaining <= 0) return 'Stale';
     const hours = Math.floor(remaining / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
     if (days > 0) return `Fresh for ${days}d ${hours % 24}h`;
@@ -135,9 +125,7 @@ export function CampaignInsightsPanel({
             onClick={refresh}
             disabled={isLoading}
           >
-            <ReloadIcon
-              className={isLoading ? "size-3.5 animate-spin" : "size-3.5"}
-            />
+            <ReloadIcon className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
           </Button>
         }
       />
@@ -147,10 +135,7 @@ export function CampaignInsightsPanel({
           {isLoading && !hasAnyInsights ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
               {CATEGORY_CONFIG.map((cat) => (
-                <div
-                  key={cat.key}
-                  className="rounded-lg border border-border/70 bg-card p-2.5"
-                >
+                <div key={cat.key} className="rounded-lg border border-border/70 bg-card p-2.5">
                   <div className="mb-2.5 flex items-center gap-2">
                     <Skeleton className="size-7 rounded-md" />
                     <Skeleton className="h-4 w-24" />
@@ -166,7 +151,9 @@ export function CampaignInsightsPanel({
           ) : error ? (
             <p className="py-4 text-center text-xs text-destructive">{error}</p>
           ) : !hasAnyInsights ? (
-            <p className="py-4 text-center text-xs text-muted-foreground">No insights for this range yet.</p>
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              No insights for this range yet.
+            </p>
           ) : (
             <div
               data-tour-id="paid-insights-panel"

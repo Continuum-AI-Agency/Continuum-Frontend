@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import {
   deleteOrganicSession,
-  fetchOrganicSessions,
   fetchOrganicSessionMessagePage,
+  fetchOrganicSessions,
   type OrganicMessagePage,
   type OrganicSession,
-} from "@/lib/organic/agent-sessions";
-import { useOrganicSessionStore } from "@/lib/organic/organic-session-store";
+} from '@/lib/organic/agent-sessions';
+import { useOrganicSessionStore } from '@/lib/organic/organic-session-store';
 
 export function useOrganicSessions(
   brandId: string,
-  userId: string | null
+  userId: string | null,
 ): {
   sessions: OrganicSession[];
   isLoadingSessions: boolean;
@@ -70,7 +70,7 @@ export function useOrganicSessions(
         setIsLoadingMessages(false);
       }
     },
-    [brandId]
+    [brandId],
   );
 
   const refreshSessions = useCallback(async (): Promise<void> => {
@@ -91,7 +91,7 @@ export function useOrganicSessions(
         return remaining;
       });
     },
-    [brandId]
+    [brandId],
   );
 
   return {

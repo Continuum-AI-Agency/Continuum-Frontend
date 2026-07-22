@@ -102,14 +102,18 @@ export function captionCueText(cue: CaptionCue): string {
 }
 
 export function wordsForCaptionText(text: string, startSec: number, endSec: number): CaptionWord[] {
-  const tokens = text.split(/\s+/).map((token) => token.trim()).filter(Boolean);
+  const tokens = text
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
   const span = Math.max(0.01, endSec - startSec);
   const totalWeight = tokens.reduce((sum, token) => sum + token.length, 0) || tokens.length;
   let cursor = startSec;
   return tokens.map((token, index) => {
-    const next = index === tokens.length - 1
-      ? endSec
-      : Math.min(endSec, cursor + span * (token.length / totalWeight));
+    const next =
+      index === tokens.length - 1
+        ? endSec
+        : Math.min(endSec, cursor + span * (token.length / totalWeight));
     const word = { text: token, startSec: cursor, endSec: next };
     cursor = next;
     return word;
@@ -122,10 +126,11 @@ export function updateCaptionCue(
 ): CaptionCue {
   const startSec = patch.startSec ?? cue.startSec;
   const endSec = Math.max(startSec + 0.01, patch.endSec ?? cue.endSec);
-  const words = patch.text === undefined
-    ? wordsForCaptionText(captionCueText(cue), startSec, endSec)
-    : wordsForCaptionText(patch.text, startSec, endSec);
-  const style = Object.prototype.hasOwnProperty.call(patch, 'style') ? patch.style : cue.style;
+  const words =
+    patch.text === undefined
+      ? wordsForCaptionText(captionCueText(cue), startSec, endSec)
+      : wordsForCaptionText(patch.text, startSec, endSec);
+  const style = Object.hasOwn(patch, 'style') ? patch.style : cue.style;
   return { ...cue, ...patch, startSec, endSec, words, style };
 }
 

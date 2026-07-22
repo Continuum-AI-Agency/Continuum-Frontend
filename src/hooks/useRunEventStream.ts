@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { getApiBaseUrl } from "@/lib/api/config";
-import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
+import { useEffect, useRef, useState } from 'react';
+import { getApiBaseUrl } from '@/lib/api/config';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type ParsedRunEvent = {
   seq: number;
@@ -14,9 +14,9 @@ export type ParsedRunEvent = {
   ts: string;
 };
 
-export type RunStreamStatus = "idle" | "connecting" | "live" | "completed" | "failed" | "timed_out";
+export type RunStreamStatus = 'idle' | 'connecting' | 'live' | 'completed' | 'failed' | 'timed_out';
 
-const TERMINAL_TYPES = new Set(["run_completed", "run_failed", "complete", "error"]);
+const TERMINAL_TYPES = new Set(['run_completed', 'run_failed', 'complete', 'error']);
 // 5 minutes — if no terminal event arrives, the watchdog fires and unsubscribes
 const STREAM_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -29,7 +29,7 @@ const STREAM_TIMEOUT_MS = 5 * 60 * 1000;
  * all is a genuine stall and stays `timed_out`.
  */
 export function resolveWatchdogStatus(receivedAnyEvent: boolean): RunStreamStatus {
-  return receivedAnyEvent ? "completed" : "timed_out";
+  return receivedAnyEvent ? 'completed' : 'timed_out';
 }
 
 /**
@@ -42,20 +42,20 @@ export function resolveWatchdogStatus(receivedAnyEvent: boolean): RunStreamStatu
  */
 export function useRunEventStream(
   runId: string | null,
-  onEvent: (event: ParsedRunEvent) => void
+  onEvent: (event: ParsedRunEvent) => void,
 ): { status: RunStreamStatus } {
-  const [status, setStatus] = useState<RunStreamStatus>("idle");
+  const [status, setStatus] = useState<RunStreamStatus>('idle');
   // Keep onEvent ref-stable so the effect doesn't re-run when the callback identity changes
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
   useEffect(() => {
     if (!runId) {
-      setStatus("idle");
+      setStatus('idle');
       return;
     }
 
-    setStatus("connecting");
+    setStatus('connecting');
     let cancelled = false;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     let highestSeq = -1;
@@ -83,40 +83,42 @@ export function useRunEventStream(
       onEventRef.current(event);
 
       if (TERMINAL_TYPES.has(event.type)) {
-        terminateWith(event.type === "run_failed" || event.type === "error" ? "failed" : "completed");
+        terminateWith(
+          event.type === 'run_failed' || event.type === 'error' ? 'failed' : 'completed',
+        );
       }
     };
 
     timeoutHandle = setTimeout(
       () => terminateWith(resolveWatchdogStatus(receivedAnyEvent)),
-      STREAM_TIMEOUT_MS
+      STREAM_TIMEOUT_MS,
     );
 
     // Subscribe first, then hydrate — ensures no events are lost in the window
     // between hydration completing and the subscription activating.
     channel
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "INSERT",
-          schema: "organic",
-          table: "organic_agent_run_events",
+          event: 'INSERT',
+          schema: 'organic',
+          table: 'organic_agent_run_events',
           filter: `run_id=eq.${runId}`,
         },
         (realtimePayload) => {
           if (cancelled) return;
           const row = realtimePayload.new as Record<string, unknown>;
           dispatchEvent({
-            seq: typeof row.seq === "number" ? row.seq : -1,
-            eventId: typeof row.event_id === "string" ? row.event_id : "",
-            type: typeof row.type === "string" ? row.type : "",
+            seq: typeof row.seq === 'number' ? row.seq : -1,
+            eventId: typeof row.event_id === 'string' ? row.event_id : '',
+            type: typeof row.type === 'string' ? row.type : '',
             data: (row.payload as Record<string, unknown>) ?? {},
-            ts: typeof row.created_at === "string" ? row.created_at : "",
+            ts: typeof row.created_at === 'string' ? row.created_at : '',
           });
-        }
+        },
       )
       .subscribe(async (channelStatus) => {
-        if (cancelled || channelStatus !== "SUBSCRIBED") return;
+        if (cancelled || channelStatus !== 'SUBSCRIBED') return;
 
         try {
           const token = await getBrowserAccessToken();
@@ -124,11 +126,11 @@ export function useRunEventStream(
 
           const url = `${getApiBaseUrl()}/api/organic/agent/runs/${runId}/events?after_seq=0`;
           const response = await fetch(url, {
-            headers: { Accept: "application/x-ndjson", Authorization: `Bearer ${token}` },
+            headers: { Accept: 'application/x-ndjson', Authorization: `Bearer ${token}` },
           });
 
           if (!response.ok || !response.body || cancelled) {
-            if (!cancelled) setStatus("live");
+            if (!cancelled) setStatus('live');
             return;
           }
 
@@ -139,11 +141,11 @@ export function useRunEventStream(
               try {
                 const parsed = JSON.parse(line) as Record<string, unknown>;
                 dispatchEvent({
-                  seq: typeof parsed.seq === "number" ? parsed.seq : -1,
-                  eventId: typeof parsed.eventId === "string" ? parsed.eventId : "",
-                  type: typeof parsed.type === "string" ? parsed.type : "",
+                  seq: typeof parsed.seq === 'number' ? parsed.seq : -1,
+                  eventId: typeof parsed.eventId === 'string' ? parsed.eventId : '',
+                  type: typeof parsed.type === 'string' ? parsed.type : '',
                   data: (parsed.data as Record<string, unknown>) ?? {},
-                  ts: typeof parsed.ts === "string" ? parsed.ts : "",
+                  ts: typeof parsed.ts === 'string' ? parsed.ts : '',
                 });
               } catch {
                 // skip malformed lines
@@ -151,10 +153,10 @@ export function useRunEventStream(
             },
           });
 
-          if (!cancelled) setStatus("live");
+          if (!cancelled) setStatus('live');
         } catch {
           // Hydration failure is non-fatal — Realtime will deliver new events
-          if (!cancelled) setStatus("live");
+          if (!cancelled) setStatus('live');
         }
       });
 

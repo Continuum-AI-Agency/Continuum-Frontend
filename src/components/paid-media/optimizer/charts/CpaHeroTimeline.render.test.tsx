@@ -30,8 +30,14 @@ describe('CpaHeroTimeline', () => {
       <CpaHeroTimeline confidenceBand="high" currency="USD" series={cpaSeriesTrend} />,
     );
     expect(getByTestId('hero-chart')).toBeTruthy();
-    expect(container.textContent).toContain('Projected CPA');
+    expect(container.textContent).toContain('Projected CPA next cycle');
     expect(container.textContent).toContain('$25'); // last actual CPA = 500 / 20
     expect(container.textContent?.toLowerCase()).toContain('confidence');
+  });
+
+  it('labels the y-axis with the objective cost label (CPM for awareness)', () => {
+    const { container } = render(<CpaHeroTimeline objective="awareness" series={cpaSeriesTrend} />);
+    // The rotated axis title names the cost — even with the chart body stubbed out.
+    expect(container.textContent).toContain('CPM');
   });
 });

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
 
-import { createSignedAssetUrl, getPublicAssetUrl } from "./storageClient";
-import type { CreativeAsset } from "./types";
+import { createSignedAssetUrl, getPublicAssetUrl } from './storageClient';
+import type { CreativeAsset } from './types';
 
 type PreviewOptions = {
   expiresInSeconds?: number;
@@ -15,9 +15,9 @@ export function useAssetPreviewUrl(asset: CreativeAsset | null, options: Preview
 
   const shouldPreview = useMemo(() => {
     if (!asset) return false;
-    if (asset.kind !== "file") return false;
-    const contentType = asset.contentType ?? "";
-    return contentType.startsWith("image/") || contentType.startsWith("video/");
+    if (asset.kind !== 'file') return false;
+    const contentType = asset.contentType ?? '';
+    return contentType.startsWith('image/') || contentType.startsWith('video/');
   }, [asset]);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export function useAssetPreviewUrl(asset: CreativeAsset | null, options: Preview
     const resolveUrl = async () => {
       setLoading(true);
       try {
-        if (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_PUBLIC === "true") {
+        if (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_PUBLIC === 'true') {
           const publicUrl = await getPublicAssetUrl(asset.fullPath);
           if (!cancelled) setUrl(publicUrl);
           return;
@@ -43,7 +43,7 @@ export function useAssetPreviewUrl(asset: CreativeAsset | null, options: Preview
           const fallback = await getPublicAssetUrl(asset.fullPath);
           if (!cancelled) setUrl(fallback);
         } catch (err) {
-          console.error("preview url resolution failed", error ?? err);
+          console.error('preview url resolution failed', error ?? err);
           if (!cancelled) setUrl(null);
         }
       } finally {

@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useCallback } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useToast } from "@/components/ui/ToastProvider";
-import * as storeRegistry from "@/lib/storage/storeRegistry";
-import { purgeAllForBrand } from "@/lib/storage/brandScopedStorage";
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback } from 'react';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { useToast } from '@/components/ui/ToastProvider';
+import { purgeAllForBrand } from '@/lib/storage/brandScopedStorage';
+import * as storeRegistry from '@/lib/storage/storeRegistry';
 
 export type SwitchBrandOutcome = {
   switched: boolean;
@@ -30,7 +30,7 @@ export function useSwitchBrand() {
       const event = {
         prevBrandId: result.prevBrandId,
         nextBrandId: brandId,
-        reason: "local-switch" as const,
+        reason: 'local-switch' as const,
       };
 
       try {
@@ -45,14 +45,10 @@ export function useSwitchBrand() {
         /* purge failures should never block a switch */
       }
 
-      const onboarding = pathname?.startsWith("/onboarding") ?? false;
+      const onboarding = pathname?.startsWith('/onboarding') ?? false;
       if (onboarding) {
         const targetBrand = brandSummaries.find((b) => b.id === brandId);
-        router.push(
-          targetBrand && !targetBrand.completed
-            ? `/onboarding?brand=${brandId}`
-            : "/"
-        );
+        router.push(targetBrand && !targetBrand.completed ? `/onboarding?brand=${brandId}` : '/');
       }
 
       try {
@@ -64,14 +60,14 @@ export function useSwitchBrand() {
       const next = brandSummaries.find((b) => b.id === brandId);
       if (next) {
         show({
-          title: "Switched brand",
+          title: 'Switched brand',
           description: `Now viewing ${next.name}.`,
-          variant: "success",
+          variant: 'success',
         });
       }
 
       return { switched: true, prevBrandId: result.prevBrandId, redirected: onboarding };
     },
-    [selectBrand, router, pathname, show, brandSummaries]
+    [selectBrand, router, pathname, show, brandSummaries],
   );
 }

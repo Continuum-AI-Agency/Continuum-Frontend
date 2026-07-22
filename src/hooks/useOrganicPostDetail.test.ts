@@ -1,8 +1,7 @@
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-
-import type { OrganicPost } from '@/lib/schemas/organicMetrics';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { usePostAnalyticsStore } from '@/lib/organic/post-analytics-store';
+import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 
 const fetchOrganicAnalytics = mock(async (_input: { forceRefresh?: boolean }) => ({
   posts: [
@@ -66,11 +65,12 @@ describe('useOrganicPostDetail media recovery', () => {
     usePostAnalyticsStore.getState().clearPostDetails();
     let resolveRecovery: ((value: { posts: OrganicPost[] }) => void) | undefined;
     let resolveOrdinary: ((value: { posts: OrganicPost[] }) => void) | undefined;
-    fetchOrganicAnalytics.mockImplementation((input) =>
-      new Promise((resolve) => {
-        if (input.forceRefresh) resolveRecovery = resolve;
-        else resolveOrdinary = resolve;
-      }),
+    fetchOrganicAnalytics.mockImplementation(
+      (input) =>
+        new Promise((resolve) => {
+          if (input.forceRefresh) resolveRecovery = resolve;
+          else resolveOrdinary = resolve;
+        }),
     );
 
     const { result } = renderHook(() =>
@@ -111,9 +111,11 @@ describe('useOrganicPostDetail media recovery', () => {
       await ordinary;
     });
 
-    expect(usePostAnalyticsStore.getState().getPostDetail({
-      integrationAccountId: 'account-1',
-      postId: 'post-1',
-    })?.mediaUrl).toBe('https://cdn.example/fresh.jpg');
+    expect(
+      usePostAnalyticsStore.getState().getPostDetail({
+        integrationAccountId: 'account-1',
+        postId: 'post-1',
+      })?.mediaUrl,
+    ).toBe('https://cdn.example/fresh.jpg');
   });
 });

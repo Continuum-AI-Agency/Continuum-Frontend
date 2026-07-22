@@ -1,9 +1,9 @@
-import "server-only";
+import 'server-only';
 
-import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { resolveCallbackContext } from "@/lib/auth/callback-context";
-import { resolveAuthRedirectPath } from "@/lib/auth/redirect";
+import { type NextRequest, NextResponse } from 'next/server';
+import { resolveCallbackContext } from '@/lib/auth/callback-context';
+import { resolveAuthRedirectPath } from '@/lib/auth/redirect';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 function renderPopupAwareResult(options: {
   success: boolean;
@@ -16,16 +16,16 @@ function renderPopupAwareResult(options: {
   const { success, message, fallbackRedirect, context, provider, isPopup } = options;
   const payload = success
     ? {
-        type: "oauth:success",
+        type: 'oauth:success',
         provider,
         context,
         accountId: null,
       }
     : {
-        type: "oauth:error",
+        type: 'oauth:error',
         provider,
         context,
-        message: message ?? "Authentication failed",
+        message: message ?? 'Authentication failed',
       };
 
   const html = `<!DOCTYPE html>
@@ -33,8 +33,8 @@ function renderPopupAwareResult(options: {
   <head><meta charset="utf-8" /><title>Authentication</title></head>
   <body style="font-family: sans-serif; display: grid; min-height: 100vh; place-items: center;">
     <div>
-      <p>${success ? "Authentication complete." : "Authentication failed."}</p>
-      ${isPopup ? "<p>You can close this window.</p>" : "<p>Redirecting...</p>"}
+      <p>${success ? 'Authentication complete.' : 'Authentication failed.'}</p>
+      ${isPopup ? '<p>You can close this window.</p>' : '<p>Redirecting...</p>'}
     </div>
     <script>
       (function () {
@@ -59,30 +59,30 @@ function renderPopupAwareResult(options: {
   return new NextResponse(html, {
     status: success ? 200 : 400,
     headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
   });
 }
 
 export async function handleAuthCallbackRequest(request: NextRequest): Promise<NextResponse> {
   const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const context = requestUrl.searchParams.get("context");
-  const provider = requestUrl.searchParams.get("provider");
-  const next = requestUrl.searchParams.get("next");
-  const isImpersonating = requestUrl.searchParams.get("impersonate") === "true";
-  const isPopup = requestUrl.searchParams.get("popup") === "true";
+  const code = requestUrl.searchParams.get('code');
+  const context = requestUrl.searchParams.get('context');
+  const provider = requestUrl.searchParams.get('provider');
+  const next = requestUrl.searchParams.get('next');
+  const isImpersonating = requestUrl.searchParams.get('impersonate') === 'true';
+  const isPopup = requestUrl.searchParams.get('popup') === 'true';
   const origin = requestUrl.origin;
-  const cookieContext = request.cookies.get("continuum_oauth_context")?.value;
-  const cookieProvider = request.cookies.get("continuum_oauth_provider")?.value;
+  const cookieContext = request.cookies.get('continuum_oauth_context')?.value;
+  const cookieProvider = request.cookies.get('continuum_oauth_provider')?.value;
 
   const resolved = resolveCallbackContext({
     queryContext: context,
     queryProvider: provider,
     cookieContext,
     cookieProvider,
-    defaultContext: "login",
+    defaultContext: 'login',
   });
 
   if (!code) {
@@ -90,12 +90,12 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
       success: false,
       context: resolved.context,
       provider: resolved.provider,
-      message: "Missing authorization code.",
+      message: 'Missing authorization code.',
       fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
       isPopup,
     });
-    response.cookies.delete("continuum_oauth_context");
-    response.cookies.delete("continuum_oauth_provider");
+    response.cookies.delete('continuum_oauth_context');
+    response.cookies.delete('continuum_oauth_provider');
     return response;
   }
 
@@ -104,7 +104,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
-      console.error("[AUTH_CALLBACK] Failed to exchange code for session:", {
+      console.error('[AUTH_CALLBACK] Failed to exchange code for session:', {
         error: error.message,
         timestamp: new Date().toISOString(),
       });
@@ -116,25 +116,25 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
         fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
         isPopup,
       });
-      response.cookies.delete("continuum_oauth_context");
-      response.cookies.delete("continuum_oauth_provider");
+      response.cookies.delete('continuum_oauth_context');
+      response.cookies.delete('continuum_oauth_provider');
       return response;
     }
   } catch (error) {
-    console.error("[AUTH_CALLBACK] Unexpected error during OAuth callback:", {
-      error: error instanceof Error ? error.message : "Unknown error",
+    console.error('[AUTH_CALLBACK] Unexpected error during OAuth callback:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
     });
     const response = renderPopupAwareResult({
       success: false,
       context: resolved.context,
       provider: resolved.provider,
-      message: "Unexpected error",
+      message: 'Unexpected error',
       fallbackRedirect: `${origin}/login?error=unexpected_error`,
       isPopup,
     });
-    response.cookies.delete("continuum_oauth_context");
-    response.cookies.delete("continuum_oauth_provider");
+    response.cookies.delete('continuum_oauth_context');
+    response.cookies.delete('continuum_oauth_provider');
     return response;
   }
 
@@ -150,14 +150,14 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
   });
 
   if (isImpersonating) {
-    response.cookies.set("is_impersonating", "true", {
-      path: "/",
+    response.cookies.set('is_impersonating', 'true', {
+      path: '/',
       maxAge: 3600,
-      sameSite: "lax",
+      sameSite: 'lax',
     });
   }
 
-  response.cookies.delete("continuum_oauth_context");
-  response.cookies.delete("continuum_oauth_provider");
+  response.cookies.delete('continuum_oauth_context');
+  response.cookies.delete('continuum_oauth_provider');
   return response;
 }

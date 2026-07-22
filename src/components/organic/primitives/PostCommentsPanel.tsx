@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Heart, MessageCircle } from "lucide-react";
+import { Heart, MessageCircle } from 'lucide-react';
+import React from 'react';
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import type { OrganicComment } from "@/lib/schemas/organicMetrics";
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import type { OrganicComment } from '@/lib/schemas/organicMetrics';
+import { cn } from '@/lib/utils';
 
-type SortMode = "recency" | "likes";
+type SortMode = 'recency' | 'likes';
 
 function formatCommentDate(timestamp: string | undefined) {
-  if (!timestamp) return "";
+  if (!timestamp) return '';
   const d = new Date(timestamp);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function userInitial(username: string | undefined) {
   const first = username?.trim()[0];
-  return first ? first.toUpperCase() : "?";
+  return first ? first.toUpperCase() : '?';
 }
 
 function CommentRow({ comment }: { comment: OrganicComment }) {
@@ -35,7 +35,7 @@ function CommentRow({ comment }: { comment: OrganicComment }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-1">
           <span className="text-2xs font-semibold truncate leading-none">
-            {comment.username ?? "unknown"}
+            {comment.username ?? 'unknown'}
           </span>
           <div className="flex items-center gap-1 shrink-0">
             {(comment.likeCount ?? 0) > 0 && (
@@ -56,23 +56,19 @@ function CommentRow({ comment }: { comment: OrganicComment }) {
           </div>
         </div>
         <p className="mt-0.5 line-clamp-2 text-2xs leading-snug text-muted-foreground">
-          {comment.text ?? ""}
+          {comment.text ?? ''}
         </p>
       </div>
     </div>
   );
 }
 
-export function PostCommentsPanel({
-  comments,
-}: {
-  comments: OrganicComment[] | undefined;
-}) {
-  const [sortBy, setSortBy] = React.useState<SortMode>("recency");
+export function PostCommentsPanel({ comments }: { comments: OrganicComment[] | undefined }) {
+  const [sortBy, setSortBy] = React.useState<SortMode>('recency');
 
   const sorted = React.useMemo(() => {
     const list = [...(comments ?? [])];
-    if (sortBy === "likes") {
+    if (sortBy === 'likes') {
       return list.sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0));
     }
     return list.sort((a, b) => {
@@ -91,16 +87,16 @@ export function PostCommentsPanel({
           Comments ({comments.length})
         </span>
         <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
-          {(["recency", "likes"] as SortMode[]).map((mode) => (
+          {(['recency', 'likes'] as SortMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
               className={cn(
-                "rounded px-2 py-0.5 text-2xs font-medium capitalize transition-colors",
-                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/60",
+                'rounded px-2 py-0.5 text-2xs font-medium capitalize transition-colors',
+                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500/60',
                 sortBy === mode
-                  ? "bg-accent/20 text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? 'bg-accent/20 text-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               onClick={() => setSortBy(mode)}
             >

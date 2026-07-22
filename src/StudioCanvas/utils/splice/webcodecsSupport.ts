@@ -1,6 +1,4 @@
-export type WebCodecsSupport =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type WebCodecsSupport = { ok: true } | { ok: false; reason: string };
 
 const H264_BASELINE_CONFIG = {
   codec: 'avc1.42E01F',
@@ -20,7 +18,9 @@ export async function checkSpliceSupport(): Promise<WebCodecsSupport> {
   if (cached) return cached;
 
   const globalScope = globalThis as unknown as {
-    VideoEncoder?: { isConfigSupported: (config: VideoEncoderConfig) => Promise<{ supported?: boolean }> };
+    VideoEncoder?: {
+      isConfigSupported: (config: VideoEncoderConfig) => Promise<{ supported?: boolean }>;
+    };
     VideoDecoder?: unknown;
     AudioEncoder?: unknown;
     AudioDecoder?: unknown;

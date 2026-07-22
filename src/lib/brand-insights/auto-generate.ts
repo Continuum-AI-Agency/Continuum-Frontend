@@ -1,4 +1,4 @@
-import type { BrandInsights, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import type { BrandInsights, BrandInsightsQuestionsByNiche } from '@/lib/schemas/brandInsights';
 
 type AutoGenerateInput = {
   insights: BrandInsights | null;
@@ -14,17 +14,17 @@ function countQuestions(questionsByNiche: BrandInsightsQuestionsByNiche) {
 function isProcessingStatus(value?: string | null) {
   if (!value) return false;
   const normalized = value.toLowerCase();
-  return normalized.includes("processing") || normalized.includes("running");
+  return normalized.includes('processing') || normalized.includes('running');
 }
 
 function isMissingInsightsError(message?: string | null) {
   if (!message) return true;
   const normalized = message.toLowerCase();
   return (
-    normalized.includes("unavailable") ||
-    normalized.includes("not found") ||
-    normalized.includes("no data") ||
-    normalized.includes("missing")
+    normalized.includes('unavailable') ||
+    normalized.includes('not found') ||
+    normalized.includes('no data') ||
+    normalized.includes('missing')
   );
 }
 
@@ -60,7 +60,7 @@ export function shouldAutoGenerateBrandInsights({
   const hasGeneratedAt = Boolean(
     insights.generatedAt ??
       insights.data.trendsAndEvents.generatedAt ??
-      insights.data.questionsByNiche.generatedAt
+      insights.data.questionsByNiche.generatedAt,
   );
 
   return !hasSignals && !hasGeneratedAt;

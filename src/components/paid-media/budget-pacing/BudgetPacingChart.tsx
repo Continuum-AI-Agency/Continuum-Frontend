@@ -1,22 +1,26 @@
-"use client";
+'use client';
 
-import type { UTCTimestamp } from "lightweight-charts";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import type { BudgetPacingEntry } from "@/lib/schemas/budgetPacing";
+import type { UTCTimestamp } from 'lightweight-charts';
 import {
-  ObservabilityLightweightChart,
   type ObservabilityChartSeries,
-} from "@/components/paid-media/dashboard/ObservabilityLightweightChart";
+  ObservabilityLightweightChart,
+} from '@/components/paid-media/dashboard/ObservabilityLightweightChart';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
+import { cn } from '@/lib/utils';
 
-export type RangeOption = "7d" | "14d" | "30d" | "all";
-export type BudgetPacingTrendMode = "spend" | "pace";
+export type RangeOption = '7d' | '14d' | '30d' | 'all';
+export type BudgetPacingTrendMode = 'spend' | 'pace';
 
-export const RANGE_OPTIONS: ReadonlyArray<{ value: RangeOption; label: string; seconds: number | null }> = [
-  { value: "7d", label: "7D", seconds: 7 * 86400 },
-  { value: "14d", label: "14D", seconds: 14 * 86400 },
-  { value: "30d", label: "30D", seconds: 30 * 86400 },
-  { value: "all", label: "All", seconds: null },
+export const RANGE_OPTIONS: ReadonlyArray<{
+  value: RangeOption;
+  label: string;
+  seconds: number | null;
+}> = [
+  { value: '7d', label: '7D', seconds: 7 * 86400 },
+  { value: '14d', label: '14D', seconds: 14 * 86400 },
+  { value: '30d', label: '30D', seconds: 30 * 86400 },
+  { value: 'all', label: 'All', seconds: null },
 ];
 
 type DailyPoint = { date: string; spend: number; target: number };
@@ -31,20 +35,20 @@ type Props = {
 };
 
 function toTimestamp(date: string): UTCTimestamp {
-  return Math.floor(new Date(date + "T12:00:00Z").getTime() / 1000) as UTCTimestamp;
+  return Math.floor(new Date(date + 'T12:00:00Z').getTime() / 1000) as UTCTimestamp;
 }
 
 function buildSeries(
   trend: DailyPoint[],
-  metricMode: BudgetPacingTrendMode
+  metricMode: BudgetPacingTrendMode,
 ): ObservabilityChartSeries[] {
   const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
-  if (metricMode === "pace") {
+  if (metricMode === 'pace') {
     return [
       {
-        id: "actual-pace",
-        label: "Pace",
-        color: "#3b82f6",
+        id: 'actual-pace',
+        label: 'Pace',
+        color: '#3b82f6',
         dashed: false,
         points: sorted.map((p) => ({
           time: toTimestamp(p.date),
@@ -52,9 +56,9 @@ function buildSeries(
         })),
       },
       {
-        id: "target-pace",
-        label: "Target Pace",
-        color: "#f59e0b",
+        id: 'target-pace',
+        label: 'Target Pace',
+        color: '#f59e0b',
         dashed: true,
         points: sorted.map((p) => ({ time: toTimestamp(p.date), value: 100 })),
       },
@@ -63,16 +67,16 @@ function buildSeries(
 
   return [
     {
-      id: "actual-spend",
-      label: "Spend",
-      color: "#3b82f6",
+      id: 'actual-spend',
+      label: 'Spend',
+      color: '#3b82f6',
       dashed: false,
       points: sorted.map((p) => ({ time: toTimestamp(p.date), value: p.spend })),
     },
     {
-      id: "target-pace",
-      label: "Target",
-      color: "#f59e0b",
+      id: 'target-pace',
+      label: 'Target',
+      color: '#f59e0b',
       dashed: true,
       points: sorted.map((p) => ({ time: toTimestamp(p.date), value: p.target })),
     },
@@ -97,12 +101,12 @@ function aggregateTrend(campaigns: BudgetPacingEntry[]): DailyPoint[] {
 }
 
 function resolveFocusLabel(campaigns: BudgetPacingEntry[], focusKey: string): string | null {
-  if (focusKey.startsWith("campaign:")) {
-    const id = focusKey.slice("campaign:".length);
+  if (focusKey.startsWith('campaign:')) {
+    const id = focusKey.slice('campaign:'.length);
     return campaigns.find((c) => c.campaignId === id)?.campaignName ?? null;
   }
-  if (focusKey.startsWith("adset:")) {
-    const id = focusKey.slice("adset:".length);
+  if (focusKey.startsWith('adset:')) {
+    const id = focusKey.slice('adset:'.length);
     for (const c of campaigns) {
       const found = c.adSets.find((a) => a.adSetId === id);
       if (found) return found.adSetName;
@@ -114,14 +118,14 @@ function resolveFocusLabel(campaigns: BudgetPacingEntry[], focusKey: string): st
 function resolveTrend(campaigns: BudgetPacingEntry[], focusKey: string | null): DailyPoint[] {
   if (!focusKey) return aggregateTrend(campaigns);
 
-  if (focusKey.startsWith("campaign:")) {
-    const id = focusKey.slice("campaign:".length);
+  if (focusKey.startsWith('campaign:')) {
+    const id = focusKey.slice('campaign:'.length);
     const campaign = campaigns.find((c) => c.campaignId === id);
     return campaign ? [...campaign.dailyTrend] : aggregateTrend(campaigns);
   }
 
-  if (focusKey.startsWith("adset:")) {
-    const id = focusKey.slice("adset:".length);
+  if (focusKey.startsWith('adset:')) {
+    const id = focusKey.slice('adset:'.length);
     for (const c of campaigns) {
       const adSet = c.adSets.find((a) => a.adSetId === id);
       if (adSet) return [...adSet.dailyTrend];
@@ -136,10 +140,12 @@ export function BudgetPacingChart({
   focusKey,
   selectedRange,
   onRangeChange,
-  metricMode = "spend",
+  metricMode = 'spend',
   title,
 }: Props) {
-  const hasTrendData = campaigns.some((c) => c.dailyTrend.length > 0 || c.adSets.some((a) => a.dailyTrend.length > 0));
+  const hasTrendData = campaigns.some(
+    (c) => c.dailyTrend.length > 0 || c.adSets.some((a) => a.dailyTrend.length > 0),
+  );
 
   if (!hasTrendData) {
     return <Skeleton className="h-56 rounded-lg" />;
@@ -166,10 +172,10 @@ export function BudgetPacingChart({
               type="button"
               onClick={() => onRangeChange(opt.value)}
               className={cn(
-                "rounded px-2 py-0.5 text-xs font-medium transition-[transform,background-color,color] active:scale-[0.96]",
+                'rounded px-2 py-0.5 text-xs font-medium transition-[transform,background-color,color] active:scale-[0.96]',
                 selectedRange === opt.value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {opt.label}

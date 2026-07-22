@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import {
   DIMENSION_LABEL,
   FLAG_LABEL,
+  FLAG_TOOLTIP,
   FUNNEL_TABS,
   type FunnelTab,
   hasThinEvidence,
@@ -42,6 +43,8 @@ import {
   selectWinRateRows,
 } from './whatsWorkingModel';
 
+const GENERIC_FLAG_TOOLTIP = 'Treat this win-rate with care — see the attribution note below.';
+
 function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
   if (flags.length === 0) return null;
   return (
@@ -50,7 +53,7 @@ function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
         <span
           className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-3xs text-amber-600 dark:text-amber-400"
           key={flag}
-          title="Treat this win-rate with care — see the attribution note below."
+          title={FLAG_TOOLTIP[flag] ?? GENERIC_FLAG_TOOLTIP}
         >
           {FLAG_LABEL[flag]}
         </span>

@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-mock.module("@/lib/supabase/server", () => ({
+mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: (...args: unknown[]) =>
     (
       globalThis as {
@@ -9,9 +9,9 @@ mock.module("@/lib/supabase/server", () => ({
     ).__testCreateSupabaseServerClient?.(...args),
 }));
 
-import { POST } from "./route";
+import { POST } from './route';
 
-describe("POST /api/paid-media/timeline", () => {
+describe('POST /api/paid-media/timeline', () => {
   let originalFetch: typeof globalThis.fetch;
   let originalSupabaseUrl: string | undefined;
   let originalAnonKey: string | undefined;
@@ -24,16 +24,16 @@ describe("POST /api/paid-media/timeline", () => {
     originalAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     originalPublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = "publishable-key";
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = 'publishable-key';
 
     globalThis.fetch = mock() as unknown as typeof fetch;
 
     const createSupabaseServerClientMock = mock().mockResolvedValue({
       auth: {
         getSession: mock().mockResolvedValue({
-          data: { session: { access_token: "session-token" } },
+          data: { session: { access_token: 'session-token' } },
           error: null,
         }),
       },
@@ -49,19 +49,19 @@ describe("POST /api/paid-media/timeline", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
 
-    if (typeof originalSupabaseUrl === "undefined") {
+    if (typeof originalSupabaseUrl === 'undefined') {
       delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     } else {
       process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
     }
 
-    if (typeof originalAnonKey === "undefined") {
+    if (typeof originalAnonKey === 'undefined') {
       delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     } else {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalAnonKey;
     }
 
-    if (typeof originalPublishableKey === "undefined") {
+    if (typeof originalPublishableKey === 'undefined') {
       delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     } else {
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = originalPublishableKey;
@@ -74,24 +74,24 @@ describe("POST /api/paid-media/timeline", () => {
     ).__testCreateSupabaseServerClient = undefined;
   });
 
-  it("forwards request to edge function and returns timeline blocks", async () => {
+  it('forwards request to edge function and returns timeline blocks', async () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ blocks: [{ id: "block-1" }] }), {
+      new Response(JSON.stringify({ blocks: [{ id: 'block-1' }] }), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
+        headers: { 'Content-Type': 'application/json' },
+      }),
     );
 
-    const request = new Request("http://localhost/api/paid-media/timeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const request = new Request('http://localhost/api/paid-media/timeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        brandId: "brand-1",
-        accountId: "act_123",
-        startDate: "2026-01-01T00:00:00.000Z",
-        endDate: "2026-01-31T23:59:59.999Z",
-        resolution: "daily",
+        brandId: 'brand-1',
+        accountId: 'act_123',
+        startDate: '2026-01-01T00:00:00.000Z',
+        endDate: '2026-01-31T23:59:59.999Z',
+        resolution: 'daily',
       }),
     });
 
@@ -100,23 +100,23 @@ describe("POST /api/paid-media/timeline", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    expect(url).toBe("https://example.supabase.co/functions/v1/fetch-timeline-blocks");
+    expect(url).toBe('https://example.supabase.co/functions/v1/fetch-timeline-blocks');
     expect(init.headers).toMatchObject({
-      "Content-Type": "application/json",
-      Authorization: "Bearer session-token",
-      apikey: "publishable-key",
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer session-token',
+      apikey: 'publishable-key',
     });
     expect(JSON.parse(String(init.body))).toMatchObject({
-      brandId: "brand-1",
-      accountId: "act_123",
-      resolution: "daily",
+      brandId: 'brand-1',
+      accountId: 'act_123',
+      resolution: 'daily',
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ blocks: [{ id: "block-1" }] });
+    await expect(response.json()).resolves.toEqual({ blocks: [{ id: 'block-1' }] });
   });
 
-  it("returns 401 when there is no session token", async () => {
+  it('returns 401 when there is no session token', async () => {
     (
       globalThis as {
         __testCreateSupabaseServerClient?: ReturnType<typeof mock>;
@@ -131,17 +131,17 @@ describe("POST /api/paid-media/timeline", () => {
     });
 
     const response = await POST(
-      new Request("http://localhost/api/paid-media/timeline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      new Request('http://localhost/api/paid-media/timeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          brandId: "brand-1",
-          accountId: "act_123",
+          brandId: 'brand-1',
+          accountId: 'act_123',
         }),
-      })
+      }),
     );
 
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' });
   });
 });

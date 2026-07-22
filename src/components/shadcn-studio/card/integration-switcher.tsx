@@ -1,6 +1,5 @@
-"use client";
+'use client';
 
-import * as React from "react";
 import {
   CheckIcon,
   CopyIcon,
@@ -9,25 +8,18 @@ import {
   MixIcon,
   Pencil1Icon,
   ReaderIcon,
-} from "@radix-ui/react-icons";
-import {
-  GitBranch,
-  GitMerge,
-  Loader2,
-  MessageSquare,
-  PenLine,
-  Plus,
-  Users,
-} from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+} from '@radix-ui/react-icons';
+import { GitBranch, GitMerge, Loader2, MessageSquare, PenLine, Plus, Users } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import * as React from 'react';
 
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
-export type IntegrationSwitcherItemStatus = "checked" | "copy";
+export type IntegrationSwitcherItemStatus = 'checked' | 'copy';
 
 export type IntegrationSwitcherItem = {
   id: string;
@@ -65,88 +57,88 @@ type IntegrationSwitcherProps = {
 };
 
 const defaultIntegrations: IntegrationSwitcherTab[] = [
-  { id: "github", name: "GitHub", icon: GitHubLogoIcon },
-  { id: "figma", name: "Figma", icon: FigmaLogoIcon },
-  { id: "slack", name: "Slack", icon: MessageSquare },
-  { id: "linear", name: "Linear", icon: MixIcon },
-  { id: "teams", name: "Teams", icon: Users },
+  { id: 'github', name: 'GitHub', icon: GitHubLogoIcon },
+  { id: 'figma', name: 'Figma', icon: FigmaLogoIcon },
+  { id: 'slack', name: 'Slack', icon: MessageSquare },
+  { id: 'linear', name: 'Linear', icon: MixIcon },
+  { id: 'teams', name: 'Teams', icon: Users },
 ];
 
 const defaultIntegrationData: IntegrationSwitcherData = {
   github: [
     {
-      id: "#380",
-      title: "fix-checkout-process",
+      id: '#380',
+      title: 'fix-checkout-process',
       icon: GitBranch,
-      status: "checked",
+      status: 'checked',
     },
-    { id: "#346", title: "update-api-docs", icon: GitMerge, status: "copy" },
+    { id: '#346', title: 'update-api-docs', icon: GitMerge, status: 'copy' },
     {
-      id: "#341",
-      title: "sync-release-notes",
+      id: '#341',
+      title: 'sync-release-notes',
       icon: ReaderIcon,
-      status: "copy",
+      status: 'copy',
     },
   ],
   figma: [
-    { id: "v2.1", title: "design-system-kit", icon: PenLine, status: "copy" },
+    { id: 'v2.1', title: 'design-system-kit', icon: PenLine, status: 'copy' },
     {
-      id: "v2.0",
-      title: "handoff-components",
+      id: 'v2.0',
+      title: 'handoff-components',
       icon: Pencil1Icon,
-      status: "checked",
+      status: 'checked',
     },
-    { id: "lib", title: "token-library", icon: ReaderIcon, status: "copy" },
+    { id: 'lib', title: 'token-library', icon: ReaderIcon, status: 'copy' },
   ],
   slack: [
     {
-      id: "ops",
-      title: "launch-war-room",
+      id: 'ops',
+      title: 'launch-war-room',
       icon: MessageSquare,
-      status: "checked",
+      status: 'checked',
     },
     {
-      id: "cs",
-      title: "customer-escalations",
+      id: 'cs',
+      title: 'customer-escalations',
       icon: MessageSquare,
-      status: "copy",
+      status: 'copy',
     },
     {
-      id: "rev",
-      title: "weekly-revenue-sync",
+      id: 'rev',
+      title: 'weekly-revenue-sync',
       icon: ReaderIcon,
-      status: "copy",
+      status: 'copy',
     },
   ],
   linear: [
     {
-      id: "LIN-184",
-      title: "audit-onboarding-flow",
+      id: 'LIN-184',
+      title: 'audit-onboarding-flow',
       icon: GitBranch,
-      status: "copy",
+      status: 'copy',
     },
     {
-      id: "LIN-172",
-      title: "ship-command-menu",
+      id: 'LIN-172',
+      title: 'ship-command-menu',
       icon: GitMerge,
-      status: "checked",
+      status: 'checked',
     },
     {
-      id: "LIN-151",
-      title: "triage-performance",
+      id: 'LIN-151',
+      title: 'triage-performance',
       icon: ReaderIcon,
-      status: "copy",
+      status: 'copy',
     },
   ],
   teams: [
-    { id: "MKT", title: "access-review", icon: Users, status: "checked" },
+    { id: 'MKT', title: 'access-review', icon: Users, status: 'checked' },
     {
-      id: "ENG",
-      title: "incident-followup",
+      id: 'ENG',
+      title: 'incident-followup',
       icon: MessageSquare,
-      status: "copy",
+      status: 'copy',
     },
-    { id: "CS", title: "renewal-readiness", icon: ReaderIcon, status: "copy" },
+    { id: 'CS', title: 'renewal-readiness', icon: ReaderIcon, status: 'copy' },
   ],
 };
 
@@ -166,9 +158,10 @@ function useControllableIntegration({
   defaultActiveIntegration?: string;
   onActiveIntegrationChange?: (integrationId: string) => void;
 }) {
-  const fallbackIntegration = integrations[0]?.id ?? "";
-  const [internalActiveIntegration, setInternalActiveIntegration] =
-    React.useState(defaultActiveIntegration ?? fallbackIntegration);
+  const fallbackIntegration = integrations[0]?.id ?? '';
+  const [internalActiveIntegration, setInternalActiveIntegration] = React.useState(
+    defaultActiveIntegration ?? fallbackIntegration,
+  );
   const selectedIntegration = activeIntegration ?? internalActiveIntegration;
 
   const setSelectedIntegration = React.useCallback(
@@ -216,19 +209,19 @@ function IntegrationTabBar({
             role="tab"
             aria-selected={isActive}
             aria-controls={`integration-switcher-panel-${integration.id}`}
-            data-active-tab={isActive ? "true" : undefined}
+            data-active-tab={isActive ? 'true' : undefined}
             onClick={() => onSelectIntegration(integration.id)}
             className={cn(
-              "relative inline-flex min-h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground outline-none transition-colors sm:flex-none",
-              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              isActive && "text-foreground",
+              'relative inline-flex min-h-8 flex-1 items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground outline-none transition-colors sm:flex-none',
+              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              isActive && 'text-foreground',
             )}
           >
             {isActive ? (
               <motion.span
                 layoutId={reduceMotion ? undefined : layoutId}
                 className="absolute inset-0 rounded-full bg-background shadow-sm"
-                transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 32 }}
               />
             ) : null}
             <span className="relative z-10 inline-flex items-center gap-2 whitespace-nowrap">
@@ -238,15 +231,13 @@ function IntegrationTabBar({
           </button>
         );
       })}
-      {trailing ? (
-        <div className="ml-auto flex items-center pl-1">{trailing}</div>
-      ) : null}
+      {trailing ? <div className="ml-auto flex items-center pl-1">{trailing}</div> : null}
     </div>
   );
 }
 
 function ActionIcon({ status }: { status: IntegrationSwitcherItemStatus }) {
-  if (status === "checked") {
+  if (status === 'checked') {
     return (
       <span
         aria-label="Already synced"
@@ -288,11 +279,11 @@ function ToggleAction({
       disabled={pending}
       onClick={() => onToggle(!checked)}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+        'inline-flex h-7 w-7 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
         checked
-          ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-          : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",
-        pending && "cursor-wait opacity-70",
+          ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400'
+          : 'bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+        pending && 'cursor-wait opacity-70',
       )}
     >
       {pending ? (
@@ -328,8 +319,8 @@ function IntegrationItemRow({
     <>
       <div
         className={cn(
-          "flex min-h-12 items-center justify-between gap-3 border-b border-border/70 py-2.5",
-          !hasChildren && "last:border-0",
+          'flex min-h-12 items-center justify-between gap-3 border-b border-border/70 py-2.5',
+          !hasChildren && 'last:border-0',
         )}
         style={{ paddingLeft: indentPx }}
       >
@@ -355,19 +346,15 @@ function IntegrationItemRow({
             {item.code ?? item.id}
           </span>
           <span className="min-w-0 flex-1 truncate">
-            <span className="block truncate text-sm font-medium text-primary">
-              {item.title}
-            </span>
+            <span className="block truncate text-sm font-medium text-primary">{item.title}</span>
             {item.subtitle ? (
-              <span className="block truncate text-xs text-muted-foreground">
-                {item.subtitle}
-              </span>
+              <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
             ) : null}
           </span>
         </div>
         {onItemToggle ? (
           <ToggleAction
-            checked={item.status === "checked"}
+            checked={item.status === 'checked'}
             pending={isPending}
             itemTitle={item.title}
             onToggle={(next) => onItemToggle(activeIntegration, item.id, next)}
@@ -407,20 +394,18 @@ function SyncBar({
 }) {
   const label =
     syncLabel?.(activeIntegration, hasItems) ??
-    (hasItems ? "Sync more accounts" : "Connect this provider");
+    (hasItems ? 'Sync more accounts' : 'Connect this provider');
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-muted/30 px-3 py-2">
-      <span className="text-xs text-muted-foreground">
-        Add accounts available to your user.
-      </span>
+      <span className="text-xs text-muted-foreground">Add accounts available to your user.</span>
       <button
         type="button"
         onClick={() => onSyncClick(activeIntegration)}
         disabled={syncing}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors",
-          "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
-          syncing && "cursor-wait opacity-70",
+          'inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors',
+          'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
+          syncing && 'cursor-wait opacity-70',
         )}
       >
         {syncing ? (
@@ -457,15 +442,11 @@ function IntegrationItemList({
 }) {
   const reduceMotion = useReducedMotion();
   const showEmpty = items.length === 0 && emptyState;
-  const heightStyle =
-    typeof maxHeight === "number" ? Math.max(164, maxHeight) : maxHeight;
+  const heightStyle = typeof maxHeight === 'number' ? Math.max(164, maxHeight) : maxHeight;
   const isSyncing = syncingTabIds?.has(activeIntegration) ?? false;
 
   return (
-    <div
-      className="relative overflow-hidden"
-      style={{ height: heightStyle, minHeight: 164 }}
-    >
+    <div className="relative overflow-hidden" style={{ height: heightStyle, minHeight: 164 }}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
           key={activeIntegration}
@@ -529,27 +510,21 @@ export function IntegrationSwitcher({
   syncingTabIds,
 }: IntegrationSwitcherProps) {
   const instanceId = React.useId();
-  const [selectedIntegration, setSelectedIntegration] =
-    useControllableIntegration({
-      integrations,
-      activeIntegration,
-      defaultActiveIntegration,
-      onActiveIntegrationChange,
-    });
+  const [selectedIntegration, setSelectedIntegration] = useControllableIntegration({
+    integrations,
+    activeIntegration,
+    defaultActiveIntegration,
+    onActiveIntegrationChange,
+  });
   const activeIntegrationId = integrations.some(
     (integration) => integration.id === selectedIntegration,
   )
     ? selectedIntegration
-    : (integrations[0]?.id ?? "");
+    : (integrations[0]?.id ?? '');
   const activeItems = data[activeIntegrationId] ?? [];
 
   return (
-    <Card
-      className={cn(
-        "w-full max-w-[560px] gap-4 rounded-2xl bg-card p-3 shadow-sm",
-        className,
-      )}
-    >
+    <Card className={cn('w-full max-w-[560px] gap-4 rounded-2xl bg-card p-3 shadow-sm', className)}>
       <CardContent className="space-y-3 p-0">
         <IntegrationTabBar
           integrations={integrations}

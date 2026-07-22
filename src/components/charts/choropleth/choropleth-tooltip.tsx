@@ -1,30 +1,24 @@
-"use client";
+'use client';
 
-import { intFmt } from "../chart-formatters";
-import { TooltipBox } from "../tooltip/tooltip-box";
-import { TooltipContent, type TooltipRow } from "../tooltip/tooltip-content";
+import { intFmt } from '../chart-formatters';
+import { TooltipBox } from '../tooltip/tooltip-box';
+import { TooltipContent, type TooltipRow } from '../tooltip/tooltip-content';
 import {
   type ChoroplethFeature,
   useChoroplethInteraction,
   useChoroplethStable,
   useChoroplethZoom,
-} from "./choropleth-context";
+} from './choropleth-context';
 
 export interface ChoroplethTooltipProps {
   /** Custom content renderer for feature tooltips */
-  content?: (props: {
-    feature: ChoroplethFeature;
-    index: number;
-  }) => React.ReactNode;
+  content?: (props: { feature: ChoroplethFeature; index: number }) => React.ReactNode;
   /** Value formatter function */
   formatValue?: (value: number) => string;
   /** Get the display name for a feature. Default: uses feature.properties.name */
   getFeatureName?: (feature: ChoroplethFeature, index: number) => string;
   /** Get the value for a feature (for display in tooltip) */
-  getFeatureValue?: (
-    feature: ChoroplethFeature,
-    index: number
-  ) => number | undefined;
+  getFeatureValue?: (feature: ChoroplethFeature, index: number) => number | undefined;
   /** Label for the value row. Default: "Value" */
   valueLabel?: string;
   /** Custom class name */
@@ -43,8 +37,8 @@ export function ChoroplethTooltip({
   formatValue = intFmt,
   getFeatureName,
   getFeatureValue,
-  valueLabel = "Value",
-  className = "",
+  valueLabel = 'Value',
+  className = '',
   panelStyle,
   backgroundColor,
 }: ChoroplethTooltipProps) {
@@ -103,7 +97,7 @@ export function ChoroplethTooltip({
       ? []
       : [
           {
-            color: "var(--chart-1)",
+            color: 'var(--chart-1)',
             label: valueLabel,
             value: formatValue(value),
           },
@@ -126,6 +120,6 @@ export function ChoroplethTooltip({
   );
 }
 
-ChoroplethTooltip.displayName = "ChoroplethTooltip";
+ChoroplethTooltip.displayName = 'ChoroplethTooltip';
 
 export default ChoroplethTooltip;

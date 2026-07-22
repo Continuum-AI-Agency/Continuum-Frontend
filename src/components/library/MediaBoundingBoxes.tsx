@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import type { DetectedObject } from "@continuum/contracts";
-import { cn } from "@/lib/utils";
+import type { DetectedObject } from '@continuum/contracts';
+import { cn } from '@/lib/utils';
 
 type Props = {
   objects: DetectedObject[];
@@ -16,7 +16,7 @@ export function MediaBoundingBoxes({ objects, className }: Props) {
   if (withBoxes.length === 0) return null;
 
   return (
-    <div className={cn("pointer-events-none absolute inset-0", className)}>
+    <div className={cn('pointer-events-none absolute inset-0', className)}>
       {withBoxes.map((obj, idx) => {
         const box = obj.box!;
         return (

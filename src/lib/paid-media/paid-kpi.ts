@@ -1,43 +1,43 @@
-import type { PaidEntityKpi, PaidEntityKpiUnit, PaidRankedEntity } from "@continuum/contracts";
+import type { PaidEntityKpi, PaidEntityKpiUnit, PaidRankedEntity } from '@continuum/contracts';
 
 // The KPIs the dashboard lets you rank/re-sort the top ads by. Order is the
 // dropdown order.
 export const PAID_KPI_OPTIONS: ReadonlyArray<{ value: PaidEntityKpi; label: string }> = [
-  { value: "roas", label: "ROAS" },
-  { value: "spend", label: "Spend" },
-  { value: "ctr", label: "CTR" },
-  { value: "conversions", label: "Conversions" },
-  { value: "conversions_value", label: "Conv. value" },
-  { value: "cpc", label: "CPC" },
-  { value: "cpm", label: "CPM" },
-  { value: "cost_per_conversion", label: "Cost / conv." },
+  { value: 'roas', label: 'ROAS' },
+  { value: 'spend', label: 'Spend' },
+  { value: 'ctr', label: 'CTR' },
+  { value: 'conversions', label: 'Conversions' },
+  { value: 'conversions_value', label: 'Conv. value' },
+  { value: 'cpc', label: 'CPC' },
+  { value: 'cpm', label: 'CPM' },
+  { value: 'cost_per_conversion', label: 'Cost / conv.' },
 ];
 
 // KPI enum (snake_case wire) → the camelCase key on PaidRankedEntity.metrics.
-const KPI_METRIC_KEY: Record<PaidEntityKpi, keyof PaidRankedEntity["metrics"]> = {
-  spend: "spend",
-  impressions: "impressions",
-  clicks: "clicks",
-  ctr: "ctr",
-  cpc: "cpc",
-  cpm: "cpm",
-  conversions: "conversions",
-  conversions_value: "conversionValue",
-  cost_per_conversion: "costPerConversion",
-  roas: "roas",
+const KPI_METRIC_KEY: Record<PaidEntityKpi, keyof PaidRankedEntity['metrics']> = {
+  spend: 'spend',
+  impressions: 'impressions',
+  clicks: 'clicks',
+  ctr: 'ctr',
+  cpc: 'cpc',
+  cpm: 'cpm',
+  conversions: 'conversions',
+  conversions_value: 'conversionValue',
+  cost_per_conversion: 'costPerConversion',
+  roas: 'roas',
 };
 
 const KPI_UNIT: Record<PaidEntityKpi, PaidEntityKpiUnit> = {
-  spend: "currency",
-  impressions: "number",
-  clicks: "number",
-  ctr: "percent",
-  cpc: "currency",
-  cpm: "currency",
-  conversions: "number",
-  conversions_value: "currency",
-  cost_per_conversion: "currency",
-  roas: "multiplier",
+  spend: 'currency',
+  impressions: 'number',
+  clicks: 'number',
+  ctr: 'percent',
+  cpc: 'currency',
+  cpm: 'currency',
+  conversions: 'number',
+  conversions_value: 'currency',
+  cost_per_conversion: 'currency',
+  roas: 'multiplier',
 };
 
 const KPI_LABEL: Record<PaidEntityKpi, string> = Object.fromEntries(
@@ -46,9 +46,9 @@ const KPI_LABEL: Record<PaidEntityKpi, string> = Object.fromEntries(
 
 // Cost-efficiency KPIs where a lower value is better.
 const LOWER_IS_BETTER: ReadonlySet<PaidEntityKpi> = new Set<PaidEntityKpi>([
-  "cpc",
-  "cpm",
-  "cost_per_conversion",
+  'cpc',
+  'cpm',
+  'cost_per_conversion',
 ]);
 
 export function kpiUnit(kpi: PaidEntityKpi): PaidEntityKpiUnit {
@@ -63,8 +63,8 @@ export function kpiLabel(kpi: PaidEntityKpi): string {
 // metrics (roas falls back to the server-ranked kpi_value). Missing → undefined.
 export function metricForKpi(entity: PaidRankedEntity, kpi: PaidEntityKpi): number | undefined {
   const value = entity.metrics[KPI_METRIC_KEY[kpi]];
-  if (typeof value === "number") return value;
-  if (kpi === "roas" && typeof entity.kpi_value === "number") return entity.kpi_value;
+  if (typeof value === 'number') return value;
+  if (kpi === 'roas' && typeof entity.kpi_value === 'number') return entity.kpi_value;
   return undefined;
 }
 

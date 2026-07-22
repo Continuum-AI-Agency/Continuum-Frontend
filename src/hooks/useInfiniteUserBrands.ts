@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useInfiniteQuery } from "@tanstack/react-query";
-import type { BrandSummary } from "@/components/DashboardLayoutShell";
+import { useInfiniteQuery } from '@tanstack/react-query';
+import type { BrandSummary } from '@/components/DashboardLayoutShell';
 
 const USER_BRANDS_PAGE_SIZE = 20;
 const LOGO_SIGNED_URL_TTL_SECONDS = 604800;
@@ -39,8 +39,8 @@ type FetchUserBrandPageParams = {
 };
 
 async function signLogoUrls(
-  supabase: ReturnType<typeof import("@/lib/supabase/client").createSupabaseBrowserClient>,
-  logoPaths: string[]
+  supabase: ReturnType<typeof import('@/lib/supabase/client').createSupabaseBrowserClient>,
+  logoPaths: string[],
 ): Promise<Map<string, string>> {
   const uniquePaths = Array.from(new Set(logoPaths.filter(Boolean)));
   if (uniquePaths.length === 0) {
@@ -48,7 +48,7 @@ async function signLogoUrls(
   }
 
   const { data, error } = await supabase.storage
-    .from("brand-profile-assets")
+    .from('brand-profile-assets')
     .createSignedUrls(uniquePaths, LOGO_SIGNED_URL_TTL_SECONDS);
 
   if (error) {
@@ -62,7 +62,7 @@ async function signLogoUrls(
       }
 
       return [[item.path, item.signedUrl]];
-    })
+    }),
   );
 }
 
@@ -85,17 +85,17 @@ type IntegrationStatus = {
 // response is narrowed immediately below via BrandIntegrationStatusRow.
 // Fail-open: any error just means the badge doesn't render this page.
 async function fetchIntegrationStatusByBrandId(
-  supabase: ReturnType<typeof import("@/lib/supabase/client").createSupabaseBrowserClient>,
+  supabase: ReturnType<typeof import('@/lib/supabase/client').createSupabaseBrowserClient>,
   userId: string,
-  brandIds: string[]
+  brandIds: string[],
 ): Promise<Map<string, IntegrationStatus>> {
   if (brandIds.length === 0) {
     return new Map();
   }
 
   const { data, error } = await (supabase as any)
-    .schema("plugin_mcp")
-    .rpc("list_brands_integration_status", {
+    .schema('plugin_mcp')
+    .rpc('list_brands_integration_status', {
       p_user_id: userId,
       p_brand_ids: brandIds,
     });
@@ -108,7 +108,7 @@ async function fetchIntegrationStatusByBrandId(
     ((data ?? []) as BrandIntegrationStatusRow[]).map((row) => [
       row.brand_id,
       { hasActiveIntegration: row.has_active_integration, accountCount: row.account_count },
-    ])
+    ]),
   );
 }
 
@@ -118,28 +118,29 @@ async function fetchUserBrandPage({
   page,
   pageSize = USER_BRANDS_PAGE_SIZE,
 }: FetchUserBrandPageParams): Promise<UserBrandPage> {
-  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
   const supabase = createSupabaseBrowserClient();
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
   const permissionsQuery = supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .select("brand_profile_id, role")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
+    .schema('brand_profiles')
+    .from('permissions')
+    .select('brand_profile_id, role')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
     .range(from, to);
-  const invitesQuery = page === 0 && userEmail
-    ? supabase
-        .schema("brand_profiles")
-        .from("invites")
-        .select("brand_profile_id, role")
-        .eq("email", userEmail)
-        .is("accepted_at", null)
-        .is("revoked_at", null)
-        .gt("expires_at", new Date().toISOString())
-    : Promise.resolve({ data: [] as UserBrandPermissionRow[], error: null });
+  const invitesQuery =
+    page === 0 && userEmail
+      ? supabase
+          .schema('brand_profiles')
+          .from('invites')
+          .select('brand_profile_id, role')
+          .eq('email', userEmail)
+          .is('accepted_at', null)
+          .is('revoked_at', null)
+          .gt('expires_at', new Date().toISOString())
+      : Promise.resolve({ data: [] as UserBrandPermissionRow[], error: null });
 
   const [
     { data: permissionRows, error: permissionsError },
@@ -168,20 +169,20 @@ async function fetchUserBrandPage({
   }
 
   const { data: brandRows, error: brandsError } = await supabase
-    .schema("brand_profiles")
-    .from("brand_profiles")
-    .select("id, brand_name, logo_path, completed_at")
-    .in("id", brandIds)
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('id, brand_name, logo_path, completed_at')
+    .in('id', brandIds)
     // Exclude soft-deleted brands (active=false) so a deleted brand does not
     // reappear in the paginated brand list.
-    .eq("active", true);
+    .eq('active', true);
 
   if (brandsError) {
     throw brandsError;
   }
 
   const profiles = new Map(
-    ((brandRows ?? []) as UserBrandProfileRow[]).map((brand) => [brand.id, brand])
+    ((brandRows ?? []) as UserBrandProfileRow[]).map((brand) => [brand.id, brand]),
   );
   const activeBrandIds = ((brandRows ?? []) as UserBrandProfileRow[]).map((brand) => brand.id);
   const [signedUrls, integrationStatusByBrandId] = await Promise.all([
@@ -189,7 +190,7 @@ async function fetchUserBrandPage({
       supabase,
       ((brandRows ?? []) as UserBrandProfileRow[])
         .map((brand) => brand.logo_path)
-        .filter((path): path is string => Boolean(path))
+        .filter((path): path is string => Boolean(path)),
     ),
     fetchIntegrationStatusByBrandId(supabase, userId, activeBrandIds),
   ]);
@@ -205,10 +206,10 @@ async function fetchUserBrandPage({
     return [
       {
         id: profile.id,
-        name: profile.brand_name ?? "Untitled brand",
+        name: profile.brand_name ?? 'Untitled brand',
         completed: profile.completed_at !== null,
         logoPath,
-        logoUrl: logoPath ? signedUrls.get(logoPath) ?? null : null,
+        logoUrl: logoPath ? (signedUrls.get(logoPath) ?? null) : null,
         isPending: permission.isPending,
         role: permission.role,
         hasActiveIntegration: integrationStatus?.hasActiveIntegration ?? false,
@@ -230,7 +231,7 @@ type UseInfiniteUserBrandsOptions = {
 
 export function useInfiniteUserBrands({ userId, userEmail }: UseInfiniteUserBrandsOptions) {
   const query = useInfiniteQuery({
-    queryKey: ["settings-user-brands", userId, userEmail],
+    queryKey: ['settings-user-brands', userId, userEmail],
     queryFn: ({ pageParam }) =>
       userId
         ? fetchUserBrandPage({ userId, userEmail, page: pageParam })

@@ -1,1 +1,2 @@
-export * from "./activeBrand";
+export * from './activeBrand';
+export * from './reportSchedule';

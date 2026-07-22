@@ -9,7 +9,7 @@ import type {
   InstagramCompetitorSearchResult,
   InstagramMediaItem,
   InstagramPost,
-} from "@continuum/contracts";
+} from '@continuum/contracts';
 
 export interface CompetitorPostView {
   competitorId?: string;

@@ -16,7 +16,7 @@ const PARENT_NODE_BY_TARGET_TYPE: Partial<Record<CampaignNodeType, CampaignNodeT
 
 export function getNodeTypeToCreateFromHandle(
   nodeType: CampaignNodeType,
-  handleType: HandleType | null
+  handleType: HandleType | null,
 ): CampaignNodeType | null {
   if (handleType === 'source') {
     return CHILD_NODE_BY_SOURCE_TYPE[nodeType] ?? null;

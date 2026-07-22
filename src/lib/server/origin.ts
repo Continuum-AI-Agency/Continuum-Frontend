@@ -1,6 +1,9 @@
 function firstHeaderValue(value: string | null | undefined): string | null {
   if (!value) return null;
-  const [first] = value.split(",").map(part => part.trim()).filter(Boolean);
+  const [first] = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
   return first ?? null;
 }
 
@@ -18,47 +21,47 @@ function normalizeOrigin(candidate: string | null | undefined): string | null {
 }
 
 function parseForwardedOrigin(request: Request): string | null {
-  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
+  const forwardedHost = firstHeaderValue(request.headers.get('x-forwarded-host'));
   if (forwardedHost) {
-    const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
-    const protocol = forwardedProto ?? (forwardedHost.startsWith("localhost") ? "http" : "https");
+    const forwardedProto = firstHeaderValue(request.headers.get('x-forwarded-proto'));
+    const protocol = forwardedProto ?? (forwardedHost.startsWith('localhost') ? 'http' : 'https');
     return normalizeOrigin(`${protocol}://${forwardedHost}`);
   }
 
-  const forwardedHeader = request.headers.get("forwarded");
+  const forwardedHeader = request.headers.get('forwarded');
   if (!forwardedHeader) return null;
 
-  const segments = forwardedHeader.split(";");
+  const segments = forwardedHeader.split(';');
   let proto: string | null = null;
   let host: string | null = null;
 
   for (const segment of segments) {
-    const [rawKey, rawValue] = segment.split("=").map(part => part.trim());
+    const [rawKey, rawValue] = segment.split('=').map((part) => part.trim());
     if (!rawValue) continue;
-    if (rawKey === "proto") {
+    if (rawKey === 'proto') {
       proto = rawValue;
-    } else if (rawKey === "host") {
+    } else if (rawKey === 'host') {
       host = rawValue;
     }
     if (proto && host) break;
   }
 
   if (!host) return null;
-  const protocol = proto ?? (host.startsWith("localhost") ? "http" : "https");
+  const protocol = proto ?? (host.startsWith('localhost') ? 'http' : 'https');
   return normalizeOrigin(`${protocol}://${host}`);
 }
 
 function parseHostOrigin(headerStore: Headers): string | null {
-  const host = firstHeaderValue(headerStore.get("host"));
+  const host = firstHeaderValue(headerStore.get('host'));
   if (!host) return null;
 
-  const forwardedProto = firstHeaderValue(headerStore.get("x-forwarded-proto"));
-  const protocol = forwardedProto ?? (host.startsWith("localhost") ? "http" : "https");
+  const forwardedProto = firstHeaderValue(headerStore.get('x-forwarded-proto'));
+  const protocol = forwardedProto ?? (host.startsWith('localhost') ? 'http' : 'https');
   return normalizeOrigin(`${protocol}://${host}`);
 }
 
 function parseRefererOrigin(headerStore: Headers): string | null {
-  return normalizeOrigin(firstHeaderValue(headerStore.get("referer")));
+  return normalizeOrigin(firstHeaderValue(headerStore.get('referer')));
 }
 
 function hostnameFromOrigin(origin: string): string | null {
@@ -70,9 +73,9 @@ function hostnameFromOrigin(origin: string): string | null {
 }
 
 function baseDomain(hostname: string): string | null {
-  const labels = hostname.split(".").filter(Boolean);
+  const labels = hostname.split('.').filter(Boolean);
   if (labels.length < 2) return null;
-  return labels.slice(-2).join(".");
+  return labels.slice(-2).join('.');
 }
 
 function isSameAppDomain(candidateOrigin: string, knownOrigins: string[]): boolean {
@@ -99,15 +102,15 @@ function collectEnvOrigins(): string[] {
     process.env.SITE_URL,
   ];
 
-  const listEnvKeys = ["OAUTH_ALLOWED_ORIGINS", "NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS"];
+  const listEnvKeys = ['OAUTH_ALLOWED_ORIGINS', 'NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS'];
   for (const key of listEnvKeys) {
     const raw = process.env[key];
     if (!raw) continue;
     raw
-      .split(",")
-      .map(entry => entry.trim())
+      .split(',')
+      .map((entry) => entry.trim())
       .filter(Boolean)
-      .forEach(entry => rawValues.push(entry));
+      .forEach((entry) => rawValues.push(entry));
   }
 
   const normalized: string[] = [];
@@ -123,10 +126,10 @@ function collectEnvOrigins(): string[] {
 function isLocalhostOrigin(origin: string | null): boolean {
   if (!origin) return false;
   return (
-    origin.startsWith("http://localhost") ||
-    origin.startsWith("https://localhost") ||
-    origin.startsWith("http://127.0.0.1") ||
-    origin.startsWith("https://127.0.0.1")
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('https://localhost') ||
+    origin.startsWith('http://127.0.0.1') ||
+    origin.startsWith('https://127.0.0.1')
   );
 }
 
@@ -140,7 +143,7 @@ export function resolveHeadersOrigin(headerStore: Headers, fallbackOrigin: strin
 
   const allowedOrigins = new Set<string>([normalizedFallback, ...envOrigins]);
 
-  const headerOrigin = normalizeOrigin(firstHeaderValue(headerStore.get("origin")));
+  const headerOrigin = normalizeOrigin(firstHeaderValue(headerStore.get('origin')));
   const forwardedOrigin = parseForwardedOrigin({ headers: headerStore } as unknown as Request);
   const hostOrigin = parseHostOrigin(headerStore);
   const refererOrigin = parseRefererOrigin(headerStore);
@@ -153,7 +156,7 @@ export function resolveHeadersOrigin(headerStore: Headers, fallbackOrigin: strin
     }
   }
 
-  if (process.env.NODE_ENV !== "production" && isLocalhostOrigin(headerOrigin)) {
+  if (process.env.NODE_ENV !== 'production' && isLocalhostOrigin(headerOrigin)) {
     return headerOrigin!;
   }
 

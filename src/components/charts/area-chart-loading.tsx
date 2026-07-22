@@ -1,24 +1,23 @@
-"use client";
+'use client';
 
-import { curveNatural } from "@visx/curve";
-import { useMemo } from "react";
-import { Area } from "./area";
-import { AreaChart } from "./area-chart";
-import type { Margin } from "./chart-context";
-import type { LoadingStyle } from "./chart-phase";
+import { curveNatural } from '@visx/curve';
+import { useMemo } from 'react';
+import { Area } from './area';
+import { AreaChart } from './area-chart';
+import type { Margin } from './chart-context';
+import type { LoadingStyle } from './chart-phase';
 import {
   DEFAULT_SKELETON_DATA_KEY,
   DEFAULT_SKELETON_POINT_COUNT,
   generateChartSkeletonData,
-} from "./generate-chart-skeleton-data";
-import { Grid } from "./grid";
+} from './generate-chart-skeleton-data';
+import { Grid } from './grid';
 
 const LOADING_DATA_KEY = DEFAULT_SKELETON_DATA_KEY;
-const DEFAULT_LOADING_STROKE = "var(--foreground)";
-const DEFAULT_LOADING_GRID_STROKE =
-  "color-mix(in oklch, var(--chart-grid) 50%, transparent)";
+const DEFAULT_LOADING_STROKE = 'var(--foreground)';
+const DEFAULT_LOADING_GRID_STROKE = 'color-mix(in oklch, var(--chart-grid) 50%, transparent)';
 const DEFAULT_LOADING_GRID_SHIMMER_STROKE =
-  "color-mix(in oklch, var(--foreground) 68%, transparent)";
+  'color-mix(in oklch, var(--foreground) 68%, transparent)';
 const DEFAULT_LOADING_STROKE_OPACITY = 0.5;
 
 export interface AreaChartLoadingProps {
@@ -61,10 +60,10 @@ export function AreaChartLoading({
   gridShimmerLength,
   gridShimmerSpeed,
   gridShimmerSync = false,
-  loadingStyle = "pulse",
-  label = "Loading",
-  aspectRatio = "2 / 1",
-  className = "",
+  loadingStyle = 'pulse',
+  label = 'Loading',
+  aspectRatio = '2 / 1',
+  className = '',
 }: AreaChartLoadingProps) {
   const data = useMemo(
     () =>
@@ -72,7 +71,7 @@ export function AreaChartLoading({
         dataKey: DEFAULT_SKELETON_DATA_KEY,
         pointCount: DEFAULT_SKELETON_POINT_COUNT,
       }),
-    []
+    [],
   );
 
   return (
@@ -87,7 +86,7 @@ export function AreaChartLoading({
     >
       <Grid
         horizontal
-        shimmer={loadingStyle === "sweep" ? false : gridShimmer}
+        shimmer={loadingStyle === 'sweep' ? false : gridShimmer}
         shimmerLength={gridShimmerLength}
         shimmerSpeed={gridShimmerSpeed}
         shimmerStroke={gridShimmerStroke}

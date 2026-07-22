@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { MessageSquarePlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import type { AgentMentionSuggestion } from "@/lib/agent-references";
-import { enqueueAgentMentions } from "@/lib/agent/mention-queue-store";
+import { MessageSquarePlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { enqueueAgentMentions } from '@/lib/agent/mention-queue-store';
+import type { AgentMentionSuggestion } from '@/lib/agent-references';
+import { cn } from '@/lib/utils';
 
 type PinToAgentButtonProps = {
   suggestions: AgentMentionSuggestion | AgentMentionSuggestion[];
@@ -21,7 +21,7 @@ type PinToAgentButtonProps = {
  */
 export function PinToAgentButton({
   suggestions,
-  label = "Add to agent",
+  label = 'Add to agent',
   className,
   iconOnly = false,
   stopPropagation = true,
@@ -30,13 +30,13 @@ export function PinToAgentButton({
     <Button
       type="button"
       variant="ghost"
-      size={iconOnly ? "icon" : "sm"}
+      size={iconOnly ? 'icon' : 'sm'}
       aria-label={label}
       title={label}
       className={cn(
         iconOnly
-          ? "size-7 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
-          : "h-7 gap-1.5 px-2 text-xs text-muted-foreground",
+          ? 'size-7 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100'
+          : 'h-7 gap-1.5 px-2 text-xs text-muted-foreground',
         className,
       )}
       onClick={(event) => {

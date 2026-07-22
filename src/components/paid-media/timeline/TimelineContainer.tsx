@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { format, subDays } from 'date-fns';
 import {
+  Calendar as CalendarIcon,
   Maximize2,
   Minimize2,
   PanelRightClose,
   PanelRightOpen,
-  Calendar as CalendarIcon,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -15,18 +16,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { format, subDays } from 'date-fns';
-
-import { useTimelineBlocks } from '@/hooks/timeline/useTimelineBlocks';
-import { TimelineGrid } from './TimelineGrid';
-import { TimelineSidePanel } from './TimelineSidePanel';
-import { TimelineEvent } from '@/types/timeline';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -34,6 +28,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useTimelineBlocks } from '@/hooks/timeline/useTimelineBlocks';
+import { cn } from '@/lib/utils';
+import type { TimelineEvent } from '@/types/timeline';
+import { TimelineGrid } from './TimelineGrid';
+import { TimelineSidePanel } from './TimelineSidePanel';
 
 interface TimelineContainerProps {
   brandId: string;
@@ -177,7 +176,8 @@ export function TimelineContainer({
         const campaignWithAds = campaign as { ads?: unknown[] };
         const hasCampaignAds = Array.isArray(campaignWithAds.ads) && campaignWithAds.ads.length > 0;
         const hasAdSetAds =
-          campaign.ad_sets?.some((adSet) => Array.isArray(adSet.ads) && adSet.ads.length > 0) ?? false;
+          campaign.ad_sets?.some((adSet) => Array.isArray(adSet.ads) && adSet.ads.length > 0) ??
+          false;
 
         return hasCampaignAds || hasAdSetAds;
       })
@@ -221,9 +221,21 @@ export function TimelineContainer({
 
   const metricStripItems = useMemo<MetricStripItem[]>(() => {
     return [
-      { label: 'Spend', value: formatCurrency(toNumber(summary.total_spend)), deltaPct: toNumber(deltas.spend_delta_pct) },
-      { label: 'ROAS', value: formatNumber(toNumber(summary.avg_roas)), deltaPct: toNumber(deltas.roas_delta_pct) },
-      { label: 'CTR', value: formatPercent(toNumber(summary.avg_ctr_pct)), deltaPct: toNumber(deltas.ctr_delta_pct) },
+      {
+        label: 'Spend',
+        value: formatCurrency(toNumber(summary.total_spend)),
+        deltaPct: toNumber(deltas.spend_delta_pct),
+      },
+      {
+        label: 'ROAS',
+        value: formatNumber(toNumber(summary.avg_roas)),
+        deltaPct: toNumber(deltas.roas_delta_pct),
+      },
+      {
+        label: 'CTR',
+        value: formatPercent(toNumber(summary.avg_ctr_pct)),
+        deltaPct: toNumber(deltas.ctr_delta_pct),
+      },
       { label: 'Conversions', value: formatNumber(toNumber(summary.total_conversions)) },
       { label: 'Active Campaigns', value: formatNumber(toNumber(summary.active_campaigns)) },
     ];
@@ -247,7 +259,10 @@ export function TimelineContainer({
                 <Button
                   id="date"
                   variant="outline"
-                  className={cn('w-[260px] justify-start text-left font-normal', !date && 'text-muted-foreground')}
+                  className={cn(
+                    'w-[260px] justify-start text-left font-normal',
+                    !date && 'text-muted-foreground',
+                  )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {date?.from ? (
@@ -278,7 +293,10 @@ export function TimelineContainer({
               </PopoverContent>
             </Popover>
 
-            <Select value={resolution} onValueChange={(value) => onResolutionChange(value as 'daily' | 'hourly')}>
+            <Select
+              value={resolution}
+              onValueChange={(value) => onResolutionChange(value as 'daily' | 'hourly')}
+            >
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="Resolution" />
               </SelectTrigger>
@@ -288,12 +306,23 @@ export function TimelineContainer({
               </SelectContent>
             </Select>
 
-            {loading ? <span className="ml-2 animate-pulse text-sm text-muted-foreground">Loading blocks...</span> : null}
-            {error ? <span className="ml-2 text-sm text-destructive">Error: {error.message}</span> : null}
+            {loading ? (
+              <span className="ml-2 animate-pulse text-sm text-muted-foreground">
+                Loading blocks...
+              </span>
+            ) : null}
+            {error ? (
+              <span className="ml-2 text-sm text-destructive">Error: {error.message}</span>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowSidebar(!showSidebar)} title="Toggle Events Sidebar">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSidebar(!showSidebar)}
+              title="Toggle Events Sidebar"
+            >
               {showSidebar ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
             </Button>
             <Button
@@ -344,7 +373,9 @@ export function TimelineContainer({
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 overflow-auto">
           {resolution === 'hourly' && visibleCampaigns.length === 0 ? (
-            <div className="p-8 text-sm text-muted-foreground">No DCO-managed campaigns available in this hourly range.</div>
+            <div className="p-8 text-sm text-muted-foreground">
+              No DCO-managed campaigns available in this hourly range.
+            </div>
           ) : (
             <TimelineGrid
               startDateMs={startDateMs}

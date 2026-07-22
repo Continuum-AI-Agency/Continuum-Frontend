@@ -1,16 +1,11 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { CheckIcon, CopyIcon, RefreshCwIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, RefreshCwIcon } from 'lucide-react';
+import * as React from 'react';
 
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 type MessageActionsProps = {
   content: string;
@@ -24,7 +19,12 @@ const COPY_RESET_MS = 1500;
 // Hover/focus action row under a settled assistant message: copy the text and
 // regenerate the turn. Kept intentionally small and muted so it reads as a
 // secondary affordance, not chrome competing with the message.
-export function MessageActions({ content, onRegenerate, disabled, className }: MessageActionsProps) {
+export function MessageActions({
+  content,
+  onRegenerate,
+  disabled,
+  className,
+}: MessageActionsProps) {
   const [copied, setCopied] = React.useState(false);
   const resetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -32,7 +32,7 @@ export function MessageActions({ content, onRegenerate, disabled, className }: M
     () => () => {
       if (resetRef.current) clearTimeout(resetRef.current);
     },
-    []
+    [],
   );
 
   const handleCopy = React.useCallback(async () => {
@@ -49,14 +49,14 @@ export function MessageActions({ content, onRegenerate, disabled, className }: M
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className={cn("flex items-center gap-0.5 text-muted-foreground", className)}>
+      <div className={cn('flex items-center gap-0.5 text-muted-foreground', className)}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={copied ? "Copied" : "Copy message"}
+              aria-label={copied ? 'Copied' : 'Copy message'}
               className="text-muted-foreground hover:text-foreground"
               onClick={handleCopy}
             >
@@ -67,7 +67,7 @@ export function MessageActions({ content, onRegenerate, disabled, className }: M
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
+          <TooltipContent>{copied ? 'Copied' : 'Copy'}</TooltipContent>
         </Tooltip>
 
         {onRegenerate ? (

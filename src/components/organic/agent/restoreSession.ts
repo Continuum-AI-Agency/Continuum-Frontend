@@ -1,12 +1,12 @@
-import type { MediaSearchResultsFrame } from "@continuum/contracts";
-import type { OrganicSessionMessage } from "@/lib/organic/agent-sessions";
+import type { MediaSearchResultsFrame } from '@continuum/contracts';
+import type { OrganicSessionMessage } from '@/lib/organic/agent-sessions';
 import {
+  type ParsedPlanStatus,
   parseOrganicStreamEvent,
   postListCardFromToolResult,
-  type ParsedPlanStatus,
-} from "./streamEventParser";
-import type { BulkRunRef } from "./useOrganicAgentReducer";
-import type { ConversationMessage, PipelineCardState, ToolCallEvent, UiCard } from "./types";
+} from './streamEventParser';
+import type { ConversationMessage, PipelineCardState, ToolCallEvent, UiCard } from './types';
+import type { BulkRunRef } from './useOrganicAgentReducer';
 
 export type RestoredSession = {
   messages: ConversationMessage[];
@@ -23,7 +23,7 @@ export type RestoredSession = {
  * message; pipeline/bulk-run state is reseeded. One mapping, no drift.
  */
 export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): RestoredSession {
-  const pipelineCards: RestoredSession["pipelineCards"] = [];
+  const pipelineCards: RestoredSession['pipelineCards'] = [];
   const bulkRuns: BulkRunRef[] = [];
   const planStatuses: ParsedPlanStatus[] = [];
   // Storyboard frames arrive from the (separate) blueprint job, usually after the
@@ -38,25 +38,29 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
     for (const frame of m.uiCardFrames) {
       const parsed = parseOrganicStreamEvent(frame);
       switch (parsed.kind) {
-        case "uiCard":
+        case 'uiCard':
           uiCards.push(parsed.card);
           break;
-        case "pipelineCard":
+        case 'pipelineCard':
           pipelineCards.push(parsed.card);
           break;
-        case "draftBlueprint":
+        case 'draftBlueprint':
           if (parsed.previews.length > 0) blueprintsByDraftId.set(parsed.draftId, parsed.previews);
           break;
-        case "bulkRun":
-          bulkRuns.push({ runId: parsed.run.runId, planId: parsed.run.planId, total: parsed.run.total });
+        case 'bulkRun':
+          bulkRuns.push({
+            runId: parsed.run.runId,
+            planId: parsed.run.planId,
+            total: parsed.run.total,
+          });
           break;
-        case "planStatus":
+        case 'planStatus':
           planStatuses.push(parsed.event);
           break;
-        case "toolCall":
+        case 'toolCall':
           toolCallsById.set(parsed.event.toolCallId, parsed.event);
           break;
-        case "toolResult": {
+        case 'toolResult': {
           const existing = toolCallsById.get(parsed.toolCallId);
           if (existing) {
             existing.result = parsed.result;
@@ -76,7 +80,7 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
           if (postCard) uiCards.push(postCard);
           break;
         }
-        case "mediaSearchResults":
+        case 'mediaSearchResults':
           mediaSearchResults.push(parsed.frame);
           break;
         default:

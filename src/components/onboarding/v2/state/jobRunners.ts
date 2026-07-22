@@ -1,26 +1,26 @@
-import type { ScrapeResult } from "@/lib/onboarding/scrape";
-import { getOnboardingAgentBaseUrl } from "@/lib/onboarding/agentClient";
-import { generateBrandInsights } from "@/lib/api/brandInsights.client";
-import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
-import { persistOnboardingBrandKit, streamGeneration } from "@/lib/onboarding/inspirationsClient";
-import { timing, trackOnboardingEvent } from "@/lib/onboarding/telemetry";
-import type { OnboardingGeneratedImage } from "@continuum/contracts";
+import type { OnboardingGeneratedImage } from '@continuum/contracts';
+import { generateBrandInsights } from '@/lib/api/brandInsights.client';
+import { runStrategicAnalysis } from '@/lib/api/strategicAnalyses.client';
+import { getOnboardingAgentBaseUrl } from '@/lib/onboarding/agentClient';
+import { persistOnboardingBrandKit, streamGeneration } from '@/lib/onboarding/inspirationsClient';
+import type { ScrapeResult } from '@/lib/onboarding/scrape';
+import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 
 export async function runScrape(url: string, signal: AbortSignal): Promise<ScrapeResult> {
   const t = timing();
-  trackOnboardingEvent("onboarding_scrape_started", { url });
+  trackOnboardingEvent('onboarding_scrape_started', { url });
   try {
     const base = getOnboardingAgentBaseUrl();
     const response = await fetch(`${base}/onboarding/brand-profiles/scrape`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
       signal,
     });
     if (!response.ok) {
       const detail = await safeJson(response);
       const message = detail?.error ?? `Scrape failed (${response.status})`;
-      trackOnboardingEvent("onboarding_scrape_failed", {
+      trackOnboardingEvent('onboarding_scrape_failed', {
         url,
         duration_ms: t.sinceStart(),
         status: response.status,
@@ -30,7 +30,7 @@ export async function runScrape(url: string, signal: AbortSignal): Promise<Scrap
     }
     const body = (await response.json()) as { scrape: ScrapeResult };
     const result = body.scrape;
-    trackOnboardingEvent("onboarding_scrape_completed", {
+    trackOnboardingEvent('onboarding_scrape_completed', {
       url,
       duration_ms: t.sinceStart(),
       colors: result.colors?.length ?? 0,
@@ -38,12 +38,12 @@ export async function runScrape(url: string, signal: AbortSignal): Promise<Scrap
     });
     return result;
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    if (!(error instanceof Error) || !error.message.startsWith("Scrape failed")) {
-      trackOnboardingEvent("onboarding_scrape_failed", {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    if (!(error instanceof Error) || !error.message.startsWith('Scrape failed')) {
+      trackOnboardingEvent('onboarding_scrape_failed', {
         url,
         duration_ms: t.sinceStart(),
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : 'Unknown error',
       });
     }
     throw error;
@@ -92,7 +92,7 @@ export async function runCreativePrewarm(
     brandId,
     signal,
     onFrame: (frame) => {
-      if (frame.type === "image_ready") {
+      if (frame.type === 'image_ready') {
         images.push(frame.data);
         onImages?.(images.slice());
       }

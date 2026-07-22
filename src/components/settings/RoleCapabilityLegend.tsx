@@ -1,48 +1,43 @@
-"use client"
+'use client';
 
 // Plain-English explanation of what each brand role can and cannot do (IMP-019
 // copy). Sits under the members list so admins can see exactly who can view data
 // and who can act before they change a role. Copy + tooltip only — the security
 // lane owns the actual RBAC enforcement; this component never changes behaviour.
 
-import Link from "next/link"
-import { Info, ScrollText } from "lucide-react"
+import { Info, ScrollText } from 'lucide-react';
+import Link from 'next/link';
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type RoleCapability = {
-  role: string
-  summary: string
-  boundary: string
-}
+  role: string;
+  summary: string;
+  boundary: string;
+};
 
 const ROLE_CAPABILITIES: readonly RoleCapability[] = [
   {
-    role: "Owner",
-    summary: "Full control of the brand, including billing and deletion.",
-    boundary: "Owners cannot be removed, and at least one owner must always remain.",
+    role: 'Owner',
+    summary: 'Full control of the brand, including billing and deletion.',
+    boundary: 'Owners cannot be removed, and at least one owner must always remain.',
   },
   {
-    role: "Admin",
-    summary: "Manage members, edit settings, connect integrations, and run everything.",
-    boundary: "Can perform destructive actions such as removing members or deleting the brand.",
+    role: 'Admin',
+    summary: 'Manage members, edit settings, connect integrations, and run everything.',
+    boundary: 'Can perform destructive actions such as removing members or deleting the brand.',
   },
   {
-    role: "Operator",
-    summary: "Do the day-to-day work — generate content and set the ad naming convention.",
-    boundary: "Cannot manage members, change roles, or delete the brand.",
+    role: 'Operator',
+    summary: 'Do the day-to-day work — generate content and set the ad naming convention.',
+    boundary: 'Cannot manage members, change roles, or delete the brand.',
   },
   {
-    role: "Viewer",
-    summary: "See brand data, insights, and reports.",
-    boundary: "Read-only — cannot change settings, members, or content.",
+    role: 'Viewer',
+    summary: 'See brand data, insights, and reports.',
+    boundary: 'Read-only — cannot change settings, members, or content.',
   },
-]
+];
 
 export function RoleCapabilityLegend() {
   return (
@@ -86,5 +81,5 @@ export function RoleCapabilityLegend() {
         </dl>
       </div>
     </TooltipProvider>
-  )
+  );
 }

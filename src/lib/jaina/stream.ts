@@ -1,68 +1,68 @@
+import { z } from 'zod';
+import type { JainaPlan } from '@/components/paid-media/jaina/types';
+import type { CampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
 import {
-  jainaStreamEventSchema,
+  type ArtifactDeltaEventData,
+  adkEventSchema,
+  agentCompleteEventSchema,
+  agentEnvelopeSchema,
+  agentSpawnEventSchema,
+  artifactDeltaSchema,
+  type CheckpointBlockV2,
+  type CheckpointReportV2,
+  canvasActionsProposedSchema,
+  checkpointReportV2Schema,
+  degradeToNarrativeBlockV2,
+  deriveLegacyFieldsFromBlocks,
+  type FrontendCheckpointReport,
   frontendCheckpointReportSchema,
+  type HandoffTraceEntry,
+  handoffCompleteSchema,
+  handoffStartSchema,
+  hasReportContent,
+  hitlPausedSchema,
+  type JainaObjective,
+  type JainaObjectiveStatus,
+  type JainaStreamEvent,
+  jainaStreamEventSchema,
   outputJsonDeltaSchema,
-  reportAssemblySchema,
-  responseObjectiveUpdatedSchema,
-  responseObjectivesSchema,
-  responseClarificationRequestSchema,
+  type ProgressEventData,
+  parsePlanDecisionPayload,
+  parsePlanRequestedPayload,
   progressEventSchema,
-  responseContentPartSchema,
-  responseContentPartDoneSchema,
-  responseCreatedSchema,
-  responseDoneSchema,
-  responseRunCreatedSchema,
-  responseOutputItemSchema,
-  responseOutputItemDoneSchema,
-  responseReportArtifactJobStartedSchema,
-  responseReportAssemblySchema,
-  responseCheckpointReportSchema,
+  type ReportAssembly,
+  type ReportPayload,
+  type ResponsePlanDecisionEventData,
+  type ResponseReportArtifactJobStartedEventData,
+  reportAssemblySchema,
+  reportPayloadSchema,
   responseBlockDeltaSchema,
   responseBlockDeltaV2Schema,
   responseBlockDeltaV2TolerantSchema,
-  degradeToNarrativeBlockV2,
-  checkpointReportV2Schema,
-  type CheckpointReportV2,
-  type CheckpointBlockV2,
-  reportPayloadSchema,
-  stateDeltaSchema,
+  responseCheckpointReportSchema,
+  responseClarificationRequestSchema,
+  responseContentPartDoneSchema,
+  responseContentPartSchema,
+  responseCreatedSchema,
+  responseDoneSchema,
+  responseObjectivesSchema,
+  responseObjectiveUpdatedSchema,
+  responseOutputItemDoneSchema,
+  responseOutputItemSchema,
   responsePlanReadySchema,
-  hitlPausedSchema,
-  canvasActionsProposedSchema,
-  artifactDeltaSchema,
-  streamErrorSchema,
-  toolBatchSchema,
-  handoffStartSchema,
-  handoffCompleteSchema,
-  agentEnvelopeSchema,
-  agentSpawnEventSchema,
-  agentCompleteEventSchema,
-  toolCallSchema,
-  toolResultSchema,
-  thoughtEventSchema,
-  adkEventSchema,
-  parsePlanDecisionPayload,
-  parsePlanRequestedPayload,
-  deriveLegacyFieldsFromBlocks,
-  hasReportContent,
-  type JainaStreamEvent,
-  type ProgressEventData,
-  type ReportAssembly,
-  type ReportPayload,
+  responseReportArtifactJobStartedSchema,
+  responseReportAssemblySchema,
+  responseRunCreatedSchema,
   type StateDeltaEventData,
-  type ArtifactDeltaEventData,
+  stateDeltaSchema,
+  streamErrorSchema,
   type ToolCallEventData,
   type ToolResultEventData,
-  type ResponsePlanDecisionEventData,
-  type ResponseReportArtifactJobStartedEventData,
-  type FrontendCheckpointReport,
-  type HandoffTraceEntry,
-  type JainaObjective,
-  type JainaObjectiveStatus,
-} from "./schemas";
-import type { CampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
-import { z } from "zod";
-import type { JainaPlan } from "@/components/paid-media/jaina/types";
+  thoughtEventSchema,
+  toolBatchSchema,
+  toolCallSchema,
+  toolResultSchema,
+} from './schemas';
 import {
   extractArrayFieldByKeys,
   extractObjectFieldByKeys,
@@ -70,37 +70,39 @@ import {
   parseLooseJsonCandidate,
   shouldAttemptStringReportExtraction,
   unwrapReportEnvelope,
-} from "./unwrapping";
+} from './unwrapping';
 
 // Block categories the Backend streams progressively as `response.block.delta`
 // previews. Others (metric_grid/insight_list/comparison) arrive only in the
 // final checkpoint report, so they are ignored mid-stream.
-const STREAMABLE_V2_DELTA_CATEGORIES = new Set(["chart", "data_table"]);
+const STREAMABLE_V2_DELTA_CATEGORIES = new Set(['chart', 'data_table']);
 
-export type JainaStreamStatus = "idle" | "starting" | "streaming" | "complete" | "error";
+export type JainaStreamStatus = 'idle' | 'starting' | 'streaming' | 'complete' | 'error';
 
 export type ActiveWorkerInfo = {
   agentId: string;
   displayName: string;
   lastToolName?: string;
-  lastToolState?: "calling" | "returned" | "cached" | "failed";
+  lastToolState?: 'calling' | 'returned' | 'cached' | 'failed';
   outputBytes?: number;
   error?: string;
 };
 
-const compatibilityStreamEventSchema = z.object({
-  type: z.enum([
-    "response.output_json.delta",
-    "tool.call",
-    "tool.result",
-    "thought",
-    "adk.event",
-    "artifact.delta",
-    "response.plan.requested",
-    "response.plan.decision",
-  ]),
-  data: z.unknown().optional(),
-}).passthrough();
+const compatibilityStreamEventSchema = z
+  .object({
+    type: z.enum([
+      'response.output_json.delta',
+      'tool.call',
+      'tool.result',
+      'thought',
+      'adk.event',
+      'artifact.delta',
+      'response.plan.requested',
+      'response.plan.decision',
+    ]),
+    data: z.unknown().optional(),
+  })
+  .passthrough();
 
 type CompatibilityStreamEvent = z.infer<typeof compatibilityStreamEventSchema>;
 export type ParsedJainaStreamEvent = JainaStreamEvent | CompatibilityStreamEvent;
@@ -114,7 +116,7 @@ export type JainaProgressEntry = {
 
 export type JainaPendingPlan = {
   prompt: string;
-  status: "awaiting_approval";
+  status: 'awaiting_approval';
 };
 
 export type JainaPendingClarification = {
@@ -140,21 +142,21 @@ export type JainaStreamState = {
   runId?: string;
   runSessionId?: string;
   latestCheckpointSummary?: string;
-  checkpointSummarySource?: "synthesis" | "tool_fallback" | "default_unavailable" | null;
+  checkpointSummarySource?: 'synthesis' | 'tool_fallback' | 'default_unavailable' | null;
 
   itemId?: string;
   partId?: string;
   outputItemId?: string;
-  contentPartKinds: Record<string, "text" | "json">;
+  contentPartKinds: Record<string, 'text' | 'json'>;
   lastCompletedPartId?: string;
-  finalContentKind?: "report" | "text";
+  finalContentKind?: 'report' | 'text';
   progress: JainaProgressEntry[];
   hasCanonicalCheckpointReport: boolean;
   blockDeltas: Array<{
     sequence: number;
     source: string;
     agent?: string;
-    block: FrontendCheckpointReport["blocks"][number];
+    block: FrontendCheckpointReport['blocks'][number];
   }>;
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
@@ -176,10 +178,10 @@ export type JainaStreamState = {
 
 export function createInitialJainaStreamState(): JainaStreamState {
   return {
-    status: "idle",
-    reportJson: "",
-    planJson: "",
-    responseText: "",
+    status: 'idle',
+    reportJson: '',
+    planJson: '',
+    responseText: '',
     report: null,
     reportAssembly: null,
     reportAssemblyHtml: null,
@@ -206,30 +208,28 @@ export function createInitialJainaStreamState(): JainaStreamState {
   };
 }
 
-function normalizeReportAssemblyToSoT(
-  reportAssembly: ReportAssembly
-): FrontendCheckpointReport {
+function normalizeReportAssemblyToSoT(reportAssembly: ReportAssembly): FrontendCheckpointReport {
   const snapshot = reportAssembly.metrics.map((metric) => ({
     metric: metric.label,
     value: metric.actual,
     change: metric.index_percent,
-    suffix: metric.unit === "%" ? "%" : undefined,
+    suffix: metric.unit === '%' ? '%' : undefined,
     context: `Planned: ${metric.planned}`,
     status:
-      metric.deviation_type === "positive"
-        ? "positive"
-        : metric.deviation_type === "negative"
-          ? "risk"
-          : "neutral",
+      metric.deviation_type === 'positive'
+        ? 'positive'
+        : metric.deviation_type === 'negative'
+          ? 'risk'
+          : 'neutral',
   }));
 
   const recommendations = reportAssembly.recommendations.map((entry) => {
-    if (typeof entry === "string") {
+    if (typeof entry === 'string') {
       return {
         title: entry,
         rationale: entry,
         expected_impact: null,
-        priority: "MEDIUM",
+        priority: 'MEDIUM',
       };
     }
 
@@ -242,7 +242,7 @@ function normalizeReportAssemblyToSoT(
   });
 
   return {
-    language: "en",
+    language: 'en',
     report_title: reportAssembly.header.title,
     executive_summary: reportAssembly.summary.narrative,
     budget: null,
@@ -252,7 +252,7 @@ function normalizeReportAssemblyToSoT(
       {
         heading: reportAssembly.header.title,
         scope: reportAssembly.header.period,
-        summary: reportAssembly.summary.principal_deviation || "",
+        summary: reportAssembly.summary.principal_deviation || '',
         highlights: reportAssembly.insights,
         tables: [],
         actions: recommendations,
@@ -270,35 +270,37 @@ function normalizeReportAssemblyToSoT(
   };
 }
 
-function normalizeInsightSeverity(value: unknown): "positive" | "neutral" | "watch" | "risk" {
+function normalizeInsightSeverity(value: unknown): 'positive' | 'neutral' | 'watch' | 'risk' {
   const raw = getNonEmptyString(value)?.toLowerCase();
-  if (!raw) return "neutral";
-  if (raw === "positive" || raw === "neutral" || raw === "watch" || raw === "risk") {
+  if (!raw) return 'neutral';
+  if (raw === 'positive' || raw === 'neutral' || raw === 'watch' || raw === 'risk') {
     return raw;
   }
-  if (raw.includes("positive") || raw.includes("success")) return "positive";
-  if (raw.includes("warning") || raw.includes("watch")) return "watch";
-  if (raw.includes("risk") || raw.includes("negative") || raw.includes("critical")) return "risk";
-  return "neutral";
+  if (raw.includes('positive') || raw.includes('success')) return 'positive';
+  if (raw.includes('warning') || raw.includes('watch')) return 'watch';
+  if (raw.includes('risk') || raw.includes('negative') || raw.includes('critical')) return 'risk';
+  return 'neutral';
 }
 
 function normalizeMetricStatus(value: unknown): string | undefined {
   const raw = getNonEmptyString(value)?.toLowerCase();
   if (!raw) return undefined;
-  if (raw === "success") return "positive";
-  if (raw === "error" || raw === "critical") return "risk";
+  if (raw === 'success') return 'positive';
+  if (raw === 'error' || raw === 'critical') return 'risk';
   return raw;
 }
 
-function normalizeRecommendation(value: unknown): FrontendCheckpointReport["strategic_recommendations"][number] | null {
-  if (typeof value === "string") {
+function normalizeRecommendation(
+  value: unknown,
+): FrontendCheckpointReport['strategic_recommendations'][number] | null {
+  if (typeof value === 'string') {
     const title = getNonEmptyString(value);
     if (!title) return null;
     return {
       title,
       rationale: title,
       expected_impact: null,
-      priority: "MEDIUM",
+      priority: 'MEDIUM',
     };
   }
 
@@ -309,26 +311,27 @@ function normalizeRecommendation(value: unknown): FrontendCheckpointReport["stra
     getNonEmptyString(record.title) ??
     getNonEmptyString(record.action) ??
     getNonEmptyString(record.type) ??
-    "Recommendation";
+    'Recommendation';
   const rationale =
     getNonEmptyString(record.rationale) ??
     getNonEmptyString(record.reasoning) ??
     getNonEmptyString(record.description) ??
     getNonEmptyString(record.summary) ??
-    "No rationale provided.";
-  const expectedImpactRaw = getNonEmptyString(record.expected_impact) ?? getNonEmptyString(record.impact);
+    'No rationale provided.';
+  const expectedImpactRaw =
+    getNonEmptyString(record.expected_impact) ?? getNonEmptyString(record.impact);
 
   return {
     title,
     rationale,
     expected_impact: expectedImpactRaw ?? null,
-    priority: getNonEmptyString(record.priority) ?? "MEDIUM",
+    priority: getNonEmptyString(record.priority) ?? 'MEDIUM',
   };
 }
 
 function normalizeMetric(
-  value: unknown
-): FrontendCheckpointReport["performance_snapshot"][number] | null {
+  value: unknown,
+): FrontendCheckpointReport['performance_snapshot'][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -337,28 +340,26 @@ function normalizeMetric(
     getNonEmptyString(record.label) ??
     getNonEmptyString(record.name) ??
     getNonEmptyString(record.title) ??
-    "Metric";
+    'Metric';
 
   const valueRaw = record.value ?? record.actual ?? record.current;
-  const normalizedMetric: FrontendCheckpointReport["performance_snapshot"][number] = {
+  const normalizedMetric: FrontendCheckpointReport['performance_snapshot'][number] = {
     metric,
     value:
-      typeof valueRaw === "number" || typeof valueRaw === "string"
+      typeof valueRaw === 'number' || typeof valueRaw === 'string'
         ? valueRaw
-        : String(valueRaw ?? ""),
+        : String(valueRaw ?? ''),
   };
 
   const changeRaw =
     record.change ??
-    (typeof record.trend === "number" ? record.trend : undefined) ??
-    (typeof record.index_percent === "number" ? record.index_percent : undefined);
-  if (typeof changeRaw === "number" || typeof changeRaw === "string") {
+    (typeof record.trend === 'number' ? record.trend : undefined) ??
+    (typeof record.index_percent === 'number' ? record.index_percent : undefined);
+  if (typeof changeRaw === 'number' || typeof changeRaw === 'string') {
     normalizedMetric.change = changeRaw;
   }
 
-  const status = normalizeMetricStatus(
-    record.status ?? record.trend ?? record.deviation_type
-  );
+  const status = normalizeMetricStatus(record.status ?? record.trend ?? record.deviation_type);
   if (status) normalizedMetric.status = status;
 
   const direction = getNonEmptyString(record.direction);
@@ -366,9 +367,7 @@ function normalizeMetric(
 
   const context =
     getNonEmptyString(record.context) ??
-    (record.planned !== undefined
-      ? `Planned: ${String(record.planned)}`
-      : undefined);
+    (record.planned !== undefined ? `Planned: ${String(record.planned)}` : undefined);
   if (context) normalizedMetric.context = context;
 
   const subLabel = getNonEmptyString(record.sub_label);
@@ -376,16 +375,16 @@ function normalizeMetric(
 
   const prefix = getNonEmptyString(record.prefix);
   if (prefix) normalizedMetric.prefix = prefix;
-  else if (getNonEmptyString(record.unit) === "currency") normalizedMetric.prefix = "$";
+  else if (getNonEmptyString(record.unit) === 'currency') normalizedMetric.prefix = '$';
 
   const suffix = getNonEmptyString(record.suffix);
   if (suffix) normalizedMetric.suffix = suffix;
-  else if (getNonEmptyString(record.unit) === "%") normalizedMetric.suffix = "%";
-  else if (getNonEmptyString(record.unit) === "x") normalizedMetric.suffix = "x";
+  else if (getNonEmptyString(record.unit) === '%') normalizedMetric.suffix = '%';
+  else if (getNonEmptyString(record.unit) === 'x') normalizedMetric.suffix = 'x';
 
   const format = getNonEmptyString(record.format);
   if (format) normalizedMetric.format = format;
-  else if (getNonEmptyString(record.unit) === "currency") normalizedMetric.format = "currency";
+  else if (getNonEmptyString(record.unit) === 'currency') normalizedMetric.format = 'currency';
 
   return normalizedMetric;
 }
@@ -399,13 +398,13 @@ function normalizeGraph(value: unknown): Record<string, unknown> | null {
 }
 
 const summaryFieldPriority = [
-  "narrative",
-  "summary",
-  "text",
-  "description",
-  "overview",
-  "title",
-  "principal_deviation",
+  'narrative',
+  'summary',
+  'text',
+  'description',
+  'overview',
+  'title',
+  'principal_deviation',
 ] as const;
 
 function extractSummaryText(value: unknown): string | undefined {
@@ -424,8 +423,8 @@ function extractSummaryText(value: unknown): string | undefined {
 }
 
 function normalizeTable(
-  value: unknown
-): FrontendCheckpointReport["sections"][number]["tables"][number] | null {
+  value: unknown,
+): FrontendCheckpointReport['sections'][number]['tables'][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -437,9 +436,7 @@ function normalizeTable(
         ? record.columns
         : [];
   const hasHeaders = headerSource.length > 0;
-  const headers = hasHeaders
-    ? (headerSource as unknown[]).map((header) => String(header))
-    : [];
+  const headers = hasHeaders ? (headerSource as unknown[]).map((header) => String(header)) : [];
 
   const normalizedRows: Array<unknown[] | Record<string, unknown>> = rowsRaw
     .map((row) => {
@@ -479,15 +476,15 @@ function normalizeTable(
 }
 
 function normalizeHighlight(
-  value: unknown
-): FrontendCheckpointReport["sections"][number]["highlights"][number] | null {
+  value: unknown,
+): FrontendCheckpointReport['sections'][number]['highlights'][number] | null {
   const textHighlight = getNonEmptyString(value);
   if (textHighlight) {
     return {
-      category: "analysis",
+      category: 'analysis',
       text: textHighlight,
       impact: null,
-      severity: "neutral",
+      severity: 'neutral',
       confidence: null,
       evidence: [],
     };
@@ -510,7 +507,7 @@ function normalizeHighlight(
     .filter((item): item is string => Boolean(item));
 
   return {
-    category: getNonEmptyString(record.category) ?? "general",
+    category: getNonEmptyString(record.category) ?? 'general',
     ...(title ? { title } : {}),
     text,
     impact: impact ?? null,
@@ -520,33 +517,35 @@ function normalizeHighlight(
   };
 }
 
-function normalizeSection(
-  value: unknown
-): FrontendCheckpointReport["sections"][number] | null {
+function normalizeSection(value: unknown): FrontendCheckpointReport['sections'][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
   return {
-    heading: getNonEmptyString(record.heading) ?? getNonEmptyString(record.title) ?? "Analysis",
-    scope: getNonEmptyString(record.scope) ?? "account",
+    heading: getNonEmptyString(record.heading) ?? getNonEmptyString(record.title) ?? 'Analysis',
+    scope: getNonEmptyString(record.scope) ?? 'account',
     summary:
       extractSummaryText(record.summary) ??
       getNonEmptyString(record.content) ??
       getNonEmptyString(record.section_summary) ??
       getNonEmptyString(record.analysis_summary) ??
-      "",
+      '',
     highlights: asArray(record.highlights ?? record.insights ?? record.key_insights)
       .concat(asArray(record.key_findings))
       .map((item) => normalizeHighlight(item))
-      .filter((item): item is FrontendCheckpointReport["sections"][number]["highlights"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport['sections'][number]['highlights'][number] =>
+        Boolean(item),
+      ),
     tables: asArray(record.tables ?? (record.table ? [record.table] : []))
       .map((item) => normalizeTable(item))
-      .filter((item): item is FrontendCheckpointReport["sections"][number]["tables"][number] => Boolean(item)),
-    actions: asArray(
-      record.actions ?? record.recommendations ?? record.reccomendations
-    )
+      .filter((item): item is FrontendCheckpointReport['sections'][number]['tables'][number] =>
+        Boolean(item),
+      ),
+    actions: asArray(record.actions ?? record.recommendations ?? record.reccomendations)
       .map((item) => normalizeRecommendation(item))
-      .filter((item): item is FrontendCheckpointReport["sections"][number]["actions"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport['sections'][number]['actions'][number] =>
+        Boolean(item),
+      ),
     confidence: getNonEmptyString(record.confidence) ?? null,
     cached_sources: asArray(record.cached_sources)
       .map((item) => getNonEmptyString(item))
@@ -562,16 +561,16 @@ function normalizeHandoffTraceEntry(value: unknown): HandoffTraceEntry | null {
   if (!record) return null;
 
   return {
-    correlation_id: getNonEmptyString(record.correlation_id) ?? "",
+    correlation_id: getNonEmptyString(record.correlation_id) ?? '',
     parent_correlation_id: getNonEmptyString(record.parent_correlation_id) ?? null,
     from_scope: getNonEmptyString(record.from_scope) ?? null,
-    to_scope: getNonEmptyString(record.to_scope) ?? "unknown",
+    to_scope: getNonEmptyString(record.to_scope) ?? 'unknown',
     objective: getNonEmptyString(record.objective) ?? null,
     entity_id: getNonEmptyString(record.entity_id) ?? null,
-    status: (getNonEmptyString(record.status) as "started" | "completed" | "failed") ?? "started",
+    status: (getNonEmptyString(record.status) as 'started' | 'completed' | 'failed') ?? 'started',
     started_at: getNonEmptyString(record.started_at) ?? new Date().toISOString(),
     finished_at: getNonEmptyString(record.finished_at) ?? null,
-    duration_ms: typeof record.duration_ms === "number" ? record.duration_ms : null,
+    duration_ms: typeof record.duration_ms === 'number' ? record.duration_ms : null,
     error: getNonEmptyString(record.error) ?? null,
   };
 }
@@ -589,8 +588,8 @@ function hasStructuredReportContent(report: FrontendCheckpointReport): boolean {
           section.highlights.length > 0 ||
           section.actions.length > 0 ||
           section.tables.length > 0 ||
-          section.graphs.length > 0
-      )
+          section.graphs.length > 0,
+      ),
   );
 }
 
@@ -599,15 +598,15 @@ function createEmptyStructuredReport(): FrontendCheckpointReport {
 }
 
 function asStructuredReportFromState(
-  report: ReportPayload | null
+  report: ReportPayload | null,
 ): FrontendCheckpointReport | null {
   if (!report) return null;
-  if ("type" in report && report.type === "direct_answer") return null;
+  if ('type' in report && report.type === 'direct_answer') return null;
   return report as FrontendCheckpointReport;
 }
 
 function mergeBlockDerivedCompatibility(
-  report: FrontendCheckpointReport
+  report: FrontendCheckpointReport,
 ): FrontendCheckpointReport {
   if (!Array.isArray(report.blocks) || report.blocks.length === 0) {
     return report;
@@ -631,12 +630,9 @@ function mergeBlockDerivedCompatibility(
         ? report.follow_up_questions
         : derived.follow_up_questions,
     graphs: report.graphs.length > 0 ? report.graphs : derived.graphs,
-    cached_sources: Array.from(
-      new Set([...report.cached_sources, ...derived.cached_sources])
-    ),
+    cached_sources: Array.from(new Set([...report.cached_sources, ...derived.cached_sources])),
   };
 }
-
 
 export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointReport | null {
   const unwrappedValue = unwrapReportEnvelope(value);
@@ -658,25 +654,24 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
 
   const normalizedSections = asArray(payloadRecord.sections)
     .map((item) => normalizeSection(item))
-    .filter((item): item is FrontendCheckpointReport["sections"][number] => Boolean(item));
+    .filter((item): item is FrontendCheckpointReport['sections'][number] => Boolean(item));
   const normalizedTopLevelHighlights = asArray(
     payloadRecord.key_insights ??
       payloadRecord.strategic_analysis ??
       payloadRecord.strategy_and_insights ??
       payloadRecord.insights ??
       payloadRecord.key_findings ??
-      summaryRecord?.key_findings
+      summaryRecord?.key_findings,
   )
     .map((item) => normalizeHighlight(item))
-    .filter((item): item is FrontendCheckpointReport["sections"][number]["highlights"][number] => Boolean(item));
+    .filter((item): item is FrontendCheckpointReport['sections'][number]['highlights'][number] =>
+      Boolean(item),
+    );
 
   if (normalizedSections.length > 0 && normalizedTopLevelHighlights.length > 0) {
     normalizedSections[0] = {
       ...normalizedSections[0],
-      highlights: [
-        ...normalizedTopLevelHighlights,
-        ...normalizedSections[0].highlights,
-      ],
+      highlights: [...normalizedTopLevelHighlights, ...normalizedSections[0].highlights],
     };
   }
 
@@ -689,23 +684,25 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
       payloadRecord.reccomendations ??
       payloadRecord.priority_recommendations ??
       payloadRecord.priority_reccomendations ??
-      payloadRecord["priority reccomendations"] ??
-      summaryRecord?.recommendations
+      payloadRecord['priority reccomendations'] ??
+      summaryRecord?.recommendations,
   )
     .map((item) => normalizeRecommendation(item))
-    .filter((item): item is FrontendCheckpointReport["strategic_recommendations"][number] => Boolean(item));
+    .filter((item): item is FrontendCheckpointReport['strategic_recommendations'][number] =>
+      Boolean(item),
+    );
 
   const sectionActions = normalizedSections.flatMap((section) => section.actions);
   const strategicRecommendations =
     normalizedRecommendations.length > 0 ? normalizedRecommendations : sectionActions;
 
   const normalizedPerformanceSnapshot = asArray(
-    payloadRecord.performance_snapshot ??
-      payloadRecord.key_metrics ??
-      payloadRecord.metrics
+    payloadRecord.performance_snapshot ?? payloadRecord.key_metrics ?? payloadRecord.metrics,
   )
     .map((item) => normalizeMetric(item))
-    .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item));
+    .filter((item): item is FrontendCheckpointReport['performance_snapshot'][number] =>
+      Boolean(item),
+    );
 
   const normalizedKpis = asArray(payloadRecord.kpis)
     .map((item) => {
@@ -716,45 +713,45 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
           getNonEmptyString(kpi.name) ??
           getNonEmptyString(kpi.metric) ??
           getNonEmptyString(kpi.label) ??
-          "KPI",
+          'KPI',
         value: kpi.value,
         status: kpi.status,
         unit: kpi.unit,
         context: kpi.description,
       });
     })
-    .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item));
+    .filter((item): item is FrontendCheckpointReport['performance_snapshot'][number] =>
+      Boolean(item),
+    );
 
   const budgetRecord = asRecord(payloadRecord.budget);
   const budgetMetric =
     budgetRecord &&
-    (typeof budgetRecord.total_spend === "number" || typeof budgetRecord.total_spend === "string")
+    (typeof budgetRecord.total_spend === 'number' || typeof budgetRecord.total_spend === 'string')
       ? normalizeMetric({
-          metric: "Total Spend",
+          metric: 'Total Spend',
           value: budgetRecord.total_spend,
-          unit: budgetRecord.currency === "USD" ? "currency" : undefined,
-          status: "neutral",
+          unit: budgetRecord.currency === 'USD' ? 'currency' : undefined,
+          status: 'neutral',
         })
       : null;
   const normalizedBlocksResult = frontendCheckpointReportSchema.shape.blocks.safeParse(
-    asArray(payloadRecord.blocks)
+    asArray(payloadRecord.blocks),
   );
-  const normalizedBlocks = normalizedBlocksResult.success
-    ? normalizedBlocksResult.data
-    : [];
+  const normalizedBlocks = normalizedBlocksResult.success ? normalizedBlocksResult.data : [];
 
   const normalized: FrontendCheckpointReport = {
-    language: getNonEmptyString(payloadRecord.language) ?? "en",
+    language: getNonEmptyString(payloadRecord.language) ?? 'en',
     report_title:
       getNonEmptyString(summaryRecord?.title) ??
       getNonEmptyString(headerRecord?.title) ??
       getNonEmptyString(payloadRecord.title) ??
-      "",
+      '',
     executive_summary:
       getNonEmptyString(payloadRecord.executive_summary) ??
       extractSummaryText(payloadRecord.summary) ??
       getNonEmptyString(payloadRecord.title) ??
-      "",
+      '',
     budget: asRecord(payloadRecord.budget) ?? null,
     performance_snapshot: [
       ...normalizedPerformanceSnapshot,
@@ -767,13 +764,15 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
     follow_up_questions: asArray(payloadRecord.follow_up_questions)
       .map((item) => getNonEmptyString(item))
       .filter((item): item is string => Boolean(item)),
-    handoff_trace: asArray(payloadRecord.handoff_trace).map(normalizeHandoffTraceEntry).filter((item): item is HandoffTraceEntry => Boolean(item)),
+    handoff_trace: asArray(payloadRecord.handoff_trace)
+      .map(normalizeHandoffTraceEntry)
+      .filter((item): item is HandoffTraceEntry => Boolean(item)),
     execution_objectives: asArray(payloadRecord.execution_objectives)
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item))
       .map((objective) => ({
-        id: getNonEmptyString(objective.id) ?? "",
-        title: getNonEmptyString(objective.title) ?? "",
+        id: getNonEmptyString(objective.id) ?? '',
+        title: getNonEmptyString(objective.title) ?? '',
         status: normalizeObjectiveStatus(objective.status),
         scope: getNonEmptyString(objective.scope) ?? null,
         details: getNonEmptyString(objective.details) ?? null,
@@ -798,7 +797,7 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
 
   const fallback = reportPayloadSchema.safeParse(unwrappedValue);
   if (!fallback.success) return null;
-  if ("type" in fallback.data && fallback.data.type === "direct_answer") return null;
+  if ('type' in fallback.data && fallback.data.type === 'direct_answer') return null;
 
   const fallbackResult = frontendCheckpointReportSchema.safeParse(fallback.data);
   if (!fallbackResult.success) return null;
@@ -834,8 +833,8 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
   if (!trimmed) return null;
 
   const candidates = [trimmed];
-  const firstBraceIndex = trimmed.indexOf("{");
-  const lastBraceIndex = trimmed.lastIndexOf("}");
+  const firstBraceIndex = trimmed.indexOf('{');
+  const lastBraceIndex = trimmed.lastIndexOf('}');
   if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
     const extracted = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
     if (extracted !== trimmed) candidates.push(extracted);
@@ -856,10 +855,7 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
   return bestReport;
 }
 
-function extractReportPayloadFromUnknown(
-  value: unknown,
-  depth = 0
-): ReportPayload | null {
+function extractReportPayloadFromUnknown(value: unknown, depth = 0): ReportPayload | null {
   if (depth > 6 || value == null) return null;
 
   const normalized = normalizeCheckpointReportPayload(value);
@@ -868,7 +864,7 @@ function extractReportPayloadFromUnknown(
   const parsed = reportPayloadSchema.safeParse(unwrapReportEnvelope(value));
   if (parsed.success && hasReportContent(parsed.data)) return parsed.data;
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     if (!shouldAttemptStringReportExtraction(value)) return null;
     const parsedJson = parseLooseJsonCandidate(value.trim());
     if (!parsedJson) return null;
@@ -887,15 +883,15 @@ function extractReportPayloadFromUnknown(
   if (!record) return null;
 
   const prioritizedKeys = [
-    "checkpoint_report",
-    "report",
-    "payload",
-    "data",
-    "content",
-    "parts",
-    "text",
-    "message",
-    "response",
+    'checkpoint_report',
+    'report',
+    'payload',
+    'data',
+    'content',
+    'parts',
+    'text',
+    'message',
+    'response',
   ];
 
   for (const key of prioritizedKeys) {
@@ -915,16 +911,14 @@ function extractReportPayloadFromUnknown(
 
 function scoreReport(report: ReportPayload | null): number {
   if (!report) return -1;
-  if ("type" in report && report.type === "direct_answer") {
+  if ('type' in report && report.type === 'direct_answer') {
     return report.content.trim().length > 0 ? 1 : 0;
   }
 
   const structured = report as any;
   return (
     (structured.executive_summary ? 1 : 0) +
-    (Array.isArray(structured.performance_snapshot)
-      ? structured.performance_snapshot.length
-      : 0) +
+    (Array.isArray(structured.performance_snapshot) ? structured.performance_snapshot.length : 0) +
     (Array.isArray(structured.blocks) ? structured.blocks.length : 0) +
     (Array.isArray(structured.graphs) ? structured.graphs.length : 0) +
     (Array.isArray(structured.strategic_recommendations)
@@ -938,7 +932,7 @@ function scoreReport(report: ReportPayload | null): number {
             (Array.isArray(section?.highlights) ? section.highlights.length : 0) +
             (Array.isArray(section?.tables) ? section.tables.length : 0) +
             (Array.isArray(section?.graphs) ? section.graphs.length : 0),
-          0
+          0,
         )
       : 0)
   );
@@ -946,7 +940,7 @@ function scoreReport(report: ReportPayload | null): number {
 
 function pickRicherReport(
   currentReport: ReportPayload | null,
-  candidateReport: ReportPayload | null
+  candidateReport: ReportPayload | null,
 ): ReportPayload | null {
   if (!candidateReport) return currentReport;
   if (!currentReport) return candidateReport;
@@ -955,24 +949,22 @@ function pickRicherReport(
     : currentReport;
 }
 
-function parsePartialReportFromAccumulatedText(
-  reportJson: string
-): ReportPayload | null {
+function parsePartialReportFromAccumulatedText(reportJson: string): ReportPayload | null {
   const trimmed = reportJson.trim();
   if (!trimmed) return null;
 
   const raw: Record<string, unknown> = {};
 
   const executiveSummary = extractStringFieldByKeys(trimmed, [
-    "executive_summary",
-    "summary",
-    "title",
+    'executive_summary',
+    'summary',
+    'title',
   ]);
   if (executiveSummary) {
     raw.summary = executiveSummary;
   }
 
-  const summaryObject = extractObjectFieldByKeys(trimmed, ["summary"]);
+  const summaryObject = extractObjectFieldByKeys(trimmed, ['summary']);
   if (summaryObject) {
     const summaryTitle = getNonEmptyString(summaryObject.title);
     if (summaryTitle) {
@@ -996,76 +988,70 @@ function parsePartialReportFromAccumulatedText(
   }
 
   const sectionSummary = extractStringFieldByKeys(trimmed, [
-    "section_summary",
-    "analysis_summary",
-    "section_overview",
+    'section_summary',
+    'analysis_summary',
+    'section_overview',
   ]);
   if (sectionSummary) {
     raw.section_summary = sectionSummary;
   }
 
   const performanceSnapshot = extractArrayFieldByKeys(trimmed, [
-    "performance_snapshot",
-    "key_metrics",
-    "kpis",
-    "metrics",
+    'performance_snapshot',
+    'key_metrics',
+    'kpis',
+    'metrics',
   ]);
   if (performanceSnapshot) {
     raw.performance_snapshot = performanceSnapshot;
   }
 
-  const budget = extractObjectFieldByKeys(trimmed, ["budget"]);
+  const budget = extractObjectFieldByKeys(trimmed, ['budget']);
   if (budget) {
     raw.budget = budget;
   }
 
   const keyInsights = extractArrayFieldByKeys(trimmed, [
-    "key_insights",
-    "strategic_analysis",
-    "strategy_and_insights",
-    "insights",
-    "key_findings",
+    'key_insights',
+    'strategic_analysis',
+    'strategy_and_insights',
+    'insights',
+    'key_findings',
   ]);
   if (keyInsights) {
     raw.key_insights = keyInsights;
   }
 
   const recommendationList = extractArrayFieldByKeys(trimmed, [
-    "strategic_recommendations",
-    "action_plan",
-    "next_steps",
-    "recommendations",
-    "reccomendations",
-    "priority_recommendations",
-    "priority_reccomendations",
-    "priority reccomendations",
+    'strategic_recommendations',
+    'action_plan',
+    'next_steps',
+    'recommendations',
+    'reccomendations',
+    'priority_recommendations',
+    'priority_reccomendations',
+    'priority reccomendations',
   ]);
   if (recommendationList) {
     raw.recommendations = recommendationList;
   }
 
-  const sections = extractArrayFieldByKeys(trimmed, ["sections"]);
+  const sections = extractArrayFieldByKeys(trimmed, ['sections']);
   if (sections) {
     raw.sections = sections;
   }
 
-  const charts = extractArrayFieldByKeys(trimmed, ["charts", "graphs"]);
+  const charts = extractArrayFieldByKeys(trimmed, ['charts', 'graphs']);
   if (charts) {
     raw.charts = charts;
   }
 
-  const mainGraph = extractObjectFieldByKeys(trimmed, [
-    "main_graph",
-    "primary_performance_graph",
-  ]);
+  const mainGraph = extractObjectFieldByKeys(trimmed, ['main_graph', 'primary_performance_graph']);
   if (mainGraph) {
     raw.main_graph = mainGraph;
   }
 
-  const tableRows = extractArrayFieldByKeys(trimmed, [
-    "performance_table",
-    "campaign_table",
-  ]);
+  const tableRows = extractArrayFieldByKeys(trimmed, ['performance_table', 'campaign_table']);
   if (tableRows) {
     raw.performance_table = tableRows;
   }
@@ -1081,17 +1067,17 @@ function parsePartialReportFromAccumulatedText(
 function looksLikeStructuredReportDelta(delta: string): boolean {
   const trimmed = delta.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return true;
   return (
-    trimmed.includes("checkpoint_report") ||
-    trimmed.includes("\"report_type\"") ||
-    trimmed.includes("\"executive_summary\"") ||
-    trimmed.includes("\"performance_snapshot\"") ||
-    trimmed.includes("\"sections\"") ||
-    trimmed.includes("\"blocks\"") ||
-    trimmed.includes("\"strategic_recommendations\"") ||
-    trimmed.includes("\"kpis\"") ||
-    trimmed.includes("\"budget\"")
+    trimmed.includes('checkpoint_report') ||
+    trimmed.includes('"report_type"') ||
+    trimmed.includes('"executive_summary"') ||
+    trimmed.includes('"performance_snapshot"') ||
+    trimmed.includes('"sections"') ||
+    trimmed.includes('"blocks"') ||
+    trimmed.includes('"strategic_recommendations"') ||
+    trimmed.includes('"kpis"') ||
+    trimmed.includes('"budget"')
   );
 }
 
@@ -1107,26 +1093,26 @@ export function parseJainaStreamEvent(line: string): ParsedJainaStreamEvent | nu
       return compatibilityEvent.data;
     }
     const rawType =
-      json && typeof json === "object" && "type" in json
-        ? String((json as { type?: unknown }).type ?? "")
-        : "unknown";
-    console.warn("Invalid Jaina stream event schema for type:", rawType);
+      json && typeof json === 'object' && 'type' in json
+        ? String((json as { type?: unknown }).type ?? '')
+        : 'unknown';
+    console.warn('Invalid Jaina stream event schema for type:', rawType);
   } catch (error) {
-    console.error("Failed to parse Jaina stream event JSON:", error, "Line:", line);
+    console.error('Failed to parse Jaina stream event JSON:', error, 'Line:', line);
   }
   return null;
 }
 
 function parsePlanFromAccumulatedDelta(
   planJson: string,
-  currentPlan: JainaPlan | null
+  currentPlan: JainaPlan | null,
 ): JainaPlan | null {
   const trimmed = planJson.trim();
   if (!trimmed) return currentPlan;
 
   const candidates = [trimmed];
-  const firstBraceIndex = trimmed.indexOf("{");
-  const lastBraceIndex = trimmed.lastIndexOf("}");
+  const firstBraceIndex = trimmed.indexOf('{');
+  const lastBraceIndex = trimmed.lastIndexOf('}');
   if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
     const extracted = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
     if (extracted !== trimmed) candidates.push(extracted);
@@ -1140,14 +1126,14 @@ function parsePlanFromAccumulatedDelta(
         : Array.isArray(parsed.objectives)
           ? parsed.objectives
           : [];
-      const steps = stepsRaw.reduce<JainaPlan["steps"]>((acc, step) => {
-        if (!step || typeof step !== "object") return acc;
+      const steps = stepsRaw.reduce<JainaPlan['steps']>((acc, step) => {
+        if (!step || typeof step !== 'object') return acc;
         const record = step as Record<string, unknown>;
         const title =
           getNonEmptyString(record.title) ??
           getNonEmptyString(record.task) ??
           getNonEmptyString(record.objective) ??
-          "";
+          '';
         if (!title) return acc;
         acc.push({
           title,
@@ -1157,39 +1143,37 @@ function parsePlanFromAccumulatedDelta(
             getNonEmptyString(record.summary) ??
             undefined,
           status:
-            typeof record.status === "string"
-              ? (record.status as JainaPlan["steps"][number]["status"])
-              : "pending",
+            typeof record.status === 'string'
+              ? (record.status as JainaPlan['steps'][number]['status'])
+              : 'pending',
         });
         return acc;
       }, []);
 
       return {
         id:
-          (typeof parsed.id === "string" && parsed.id) ||
-          (typeof parsed.plan_id === "string" && parsed.plan_id) ||
+          (typeof parsed.id === 'string' && parsed.id) ||
+          (typeof parsed.plan_id === 'string' && parsed.plan_id) ||
           currentPlan?.id ||
-          "plan-1",
+          'plan-1',
         title:
-          (typeof parsed.chat_title === "string" && parsed.chat_title) ||
-          (typeof parsed.chatTitle === "string" && parsed.chatTitle) ||
-          (typeof parsed.title === "string" && parsed.title) ||
+          (typeof parsed.chat_title === 'string' && parsed.chat_title) ||
+          (typeof parsed.chatTitle === 'string' && parsed.chatTitle) ||
+          (typeof parsed.title === 'string' && parsed.title) ||
           currentPlan?.title ||
-          "Execution Plan",
+          'Execution Plan',
         description:
-          (typeof parsed.description === "string" && parsed.description) ||
-          (typeof parsed.summary === "string" && parsed.summary) ||
+          (typeof parsed.description === 'string' && parsed.description) ||
+          (typeof parsed.summary === 'string' && parsed.summary) ||
           currentPlan?.description ||
-          "Review this execution plan.",
+          'Review this execution plan.',
         status:
-          (typeof parsed.status === "string"
-            ? (parsed.status as JainaPlan["status"])
-            : currentPlan?.status) || "pending",
+          (typeof parsed.status === 'string'
+            ? (parsed.status as JainaPlan['status'])
+            : currentPlan?.status) || 'pending',
         steps: steps.length > 0 ? steps : currentPlan?.steps || [],
       };
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 
   return currentPlan;
@@ -1199,17 +1183,17 @@ function looksLikePlanDelta(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
   return (
-    trimmed.includes("\"plan_id\"") ||
-    trimmed.includes("\"planId\"") ||
-    trimmed.includes("\"chat_title\"") ||
-    trimmed.includes("\"chatTitle\"") ||
-    trimmed.includes("\"objectives\"") ||
-    trimmed.includes("\"steps\"")
+    trimmed.includes('"plan_id"') ||
+    trimmed.includes('"planId"') ||
+    trimmed.includes('"chat_title"') ||
+    trimmed.includes('"chatTitle"') ||
+    trimmed.includes('"objectives"') ||
+    trimmed.includes('"steps"')
   );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
@@ -1217,31 +1201,31 @@ function toObjectiveId(candidate: string, fallbackIndex?: number): string {
   const normalized = candidate
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   if (normalized.length > 0) return normalized;
-  if (typeof fallbackIndex === "number") return `objective-${fallbackIndex + 1}`;
+  if (typeof fallbackIndex === 'number') return `objective-${fallbackIndex + 1}`;
   return `objective-${Date.now()}`;
 }
 
 function normalizeObjectiveStatus(value: unknown): JainaObjectiveStatus {
   const raw = getNonEmptyString(value)?.toLowerCase();
-  if (!raw) return "pending";
-  if (["completed", "complete", "done", "success", "succeeded"].includes(raw)) {
-    return "completed";
+  if (!raw) return 'pending';
+  if (['completed', 'complete', 'done', 'success', 'succeeded'].includes(raw)) {
+    return 'completed';
   }
-  if (["in_progress", "in-progress", "running", "active", "started"].includes(raw)) {
-    return "in_progress";
+  if (['in_progress', 'in-progress', 'running', 'active', 'started'].includes(raw)) {
+    return 'in_progress';
   }
-  if (["failed", "error", "errored", "cancelled", "canceled", "blocked"].includes(raw)) {
-    return "failed";
+  if (['failed', 'error', 'errored', 'cancelled', 'canceled', 'blocked'].includes(raw)) {
+    return 'failed';
   }
-  return "pending";
+  return 'pending';
 }
 
 function normalizeObjectiveFromRecord(
   record: Record<string, unknown>,
-  fallbackIndex?: number
+  fallbackIndex?: number,
 ): JainaObjective | null {
   const rawId =
     getNonEmptyString(record.id) ??
@@ -1253,7 +1237,7 @@ function normalizeObjectiveFromRecord(
     getNonEmptyString(record.task) ??
     getNonEmptyString(record.objective) ??
     getNonEmptyString(record.summary) ??
-    (rawId ? rawId.replace(/[_-]+/g, " ") : undefined);
+    (rawId ? rawId.replace(/[_-]+/g, ' ') : undefined);
   if (!title) return null;
 
   const id = toObjectiveId(rawId ?? title, fallbackIndex);
@@ -1261,9 +1245,7 @@ function normalizeObjectiveFromRecord(
     id,
     title,
     description:
-      getNonEmptyString(record.description) ??
-      getNonEmptyString(record.summary) ??
-      undefined,
+      getNonEmptyString(record.description) ?? getNonEmptyString(record.summary) ?? undefined,
     status: normalizeObjectiveStatus(record.status),
   };
 }
@@ -1285,17 +1267,16 @@ const snapshotObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
 
 function mergeObjectiveSnapshotStatus(
   existingStatus: JainaObjectiveStatus,
-  incomingStatus: JainaObjectiveStatus
+  incomingStatus: JainaObjectiveStatus,
 ): JainaObjectiveStatus {
-  return snapshotObjectiveStatusRank[incomingStatus] >=
-    snapshotObjectiveStatusRank[existingStatus]
+  return snapshotObjectiveStatusRank[incomingStatus] >= snapshotObjectiveStatusRank[existingStatus]
     ? incomingStatus
     : existingStatus;
 }
 
 function mergeObjectiveSnapshots(
   currentObjectives: JainaObjective[],
-  incomingObjectives: JainaObjective[]
+  incomingObjectives: JainaObjective[],
 ): JainaObjective[] {
   if (incomingObjectives.length === 0) return currentObjectives;
 
@@ -1309,9 +1290,7 @@ function mergeObjectiveSnapshots(
 
   for (const incoming of incomingObjectives) {
     const titleKey = incoming.title.trim().toLowerCase();
-    const targetId = byId.has(incoming.id)
-      ? incoming.id
-      : titleToId.get(titleKey) ?? incoming.id;
+    const targetId = byId.has(incoming.id) ? incoming.id : (titleToId.get(titleKey) ?? incoming.id);
     const existing = byId.get(targetId);
 
     if (!existing) {
@@ -1338,37 +1317,31 @@ function mergeObjectiveSnapshots(
 
 function mergeExplicitObjectiveStatus(
   existingStatus: JainaObjectiveStatus | undefined,
-  incomingStatus: JainaObjectiveStatus
+  incomingStatus: JainaObjectiveStatus,
 ): JainaObjectiveStatus {
-  if (existingStatus === "completed" && incomingStatus !== "completed") {
-    return "completed";
+  if (existingStatus === 'completed' && incomingStatus !== 'completed') {
+    return 'completed';
   }
   return incomingStatus;
 }
 
 function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
-  const hasPlanId =
-    typeof payload.plan_id === "string" ||
-    typeof payload.id === "string";
+  const hasPlanId = typeof payload.plan_id === 'string' || typeof payload.id === 'string';
   const hasObjectives =
-    Array.isArray(payload.objectives) ||
-    Array.isArray(payload.execution_objectives);
+    Array.isArray(payload.objectives) || Array.isArray(payload.execution_objectives);
   return hasPlanId && hasObjectives;
 }
 
-function parsePlanFromKeyValueDelta(
-  delta: string,
-  previous: JainaPlan | null
-): JainaPlan | null {
+function parsePlanFromKeyValueDelta(delta: string, previous: JainaPlan | null): JainaPlan | null {
   const trimmed = delta.trim();
-  if (!trimmed || trimmed.startsWith("{") || trimmed.startsWith("[")) return null;
-  if (!trimmed.includes("=")) return null;
+  if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) return null;
+  if (!trimmed.includes('=')) return null;
   const record: Record<string, string> = {};
-  for (const segment of trimmed.split(";")) {
-    const [rawKey, ...rest] = segment.split("=");
+  for (const segment of trimmed.split(';')) {
+    const [rawKey, ...rest] = segment.split('=');
     if (!rawKey || rest.length === 0) continue;
     const key = rawKey.trim();
-    const value = rest.join("=").trim();
+    const value = rest.join('=').trim();
     if (!key) continue;
     record[key] = value;
   }
@@ -1387,10 +1360,13 @@ function parsePlanFromKeyValueDelta(
   }
   return {
     id: planId,
-    title: explicitTitle ?? derivedTitle ?? previous?.title ?? "Execution Plan",
+    title: explicitTitle ?? derivedTitle ?? previous?.title ?? 'Execution Plan',
     description:
-      explicitDescription ?? derivedDescription ?? previous?.description ?? "Review this execution plan.",
-    status: previous?.status ?? "pending",
+      explicitDescription ??
+      derivedDescription ??
+      previous?.description ??
+      'Review this execution plan.',
+    status: previous?.status ?? 'pending',
     steps: previous?.steps ?? [],
   };
 }
@@ -1415,16 +1391,15 @@ function normalizeObjectiveListFromPayload(payload: Record<string, unknown>): Ja
       const objective = normalizeObjectiveFromRecord(record, index);
       if (objective) acc.push(objective);
       return acc;
-    }, [])
+    }, []),
   );
 }
 
 function upsertObjective(
   currentObjectives: JainaObjective[],
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
 ): JainaObjective[] {
-  const nestedRecord =
-    asRecord(payload.objective) ?? asRecord(payload.update) ?? payload;
+  const nestedRecord = asRecord(payload.objective) ?? asRecord(payload.update) ?? payload;
   const rawId =
     getNonEmptyString(nestedRecord.id) ??
     getNonEmptyString(nestedRecord.objective_id) ??
@@ -1446,7 +1421,7 @@ function upsertObjective(
         getNonEmptyString(payload.label);
       if (!title) return undefined;
       return currentObjectives.find(
-        (objective) => objective.title.toLowerCase() === title.toLowerCase()
+        (objective) => objective.title.toLowerCase() === title.toLowerCase(),
       );
     })();
 
@@ -1465,11 +1440,7 @@ function upsertObjective(
       getNonEmptyString(payload.description) ??
       getNonEmptyString(payload.summary) ??
       existingMatch?.description,
-    status:
-      nestedRecord.status ??
-      payload.status ??
-      existingMatch?.status ??
-      "pending",
+    status: nestedRecord.status ?? payload.status ?? existingMatch?.status ?? 'pending',
   };
 
   const normalized = normalizeObjectiveFromRecord(mergedRecord);
@@ -1481,9 +1452,7 @@ function upsertObjective(
     id: targetId,
     status: mergeExplicitObjectiveStatus(existingMatch?.status, normalized.status),
   };
-  const nextObjectives = currentObjectives.filter(
-    (objective) => objective.id !== targetId
-  );
+  const nextObjectives = currentObjectives.filter((objective) => objective.id !== targetId);
   nextObjectives.push(withTargetId);
   return dedupeObjectives(nextObjectives);
 }
@@ -1491,7 +1460,7 @@ function upsertObjective(
 function collectToolDeltaCandidates(
   delta: Record<string, unknown>,
   singleKeys: string[],
-  listKeys: string[]
+  listKeys: string[],
 ): unknown[] {
   const candidates: unknown[] = [];
   for (const key of singleKeys) {
@@ -1516,17 +1485,17 @@ function buildToolCallFromDelta(value: unknown): ToolCallEventData | null {
   if (!raw) return null;
 
   const name =
-    typeof raw.name === "string"
+    typeof raw.name === 'string'
       ? raw.name
-      : typeof raw.tool_name === "string"
+      : typeof raw.tool_name === 'string'
         ? raw.tool_name
-        : "";
+        : '';
   if (!name) return null;
 
   const id =
-    typeof raw.id === "string"
+    typeof raw.id === 'string'
       ? raw.id
-      : typeof raw.tool_call_id === "string"
+      : typeof raw.tool_call_id === 'string'
         ? raw.tool_call_id
         : `${name}-${Date.now()}`;
 
@@ -1534,13 +1503,13 @@ function buildToolCallFromDelta(value: unknown): ToolCallEventData | null {
     id,
     name,
     args:
-      raw.args && typeof raw.args === "object" && !Array.isArray(raw.args)
+      raw.args && typeof raw.args === 'object' && !Array.isArray(raw.args)
         ? (raw.args as Record<string, unknown>)
         : {},
     metadata:
-      raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
+      raw.metadata && typeof raw.metadata === 'object' && !Array.isArray(raw.metadata)
         ? (raw.metadata as Record<string, unknown>)
-        : { source: "state.delta" },
+        : { source: 'state.delta' },
   };
 }
 
@@ -1552,30 +1521,30 @@ function buildToolResultFromDelta(value: unknown): ToolResultEventData | null {
   if (!raw) return null;
 
   const name =
-    typeof raw.name === "string"
+    typeof raw.name === 'string'
       ? raw.name
-      : typeof raw.tool_name === "string"
+      : typeof raw.tool_name === 'string'
         ? raw.tool_name
-        : "";
+        : '';
   if (!name) return null;
 
   const id =
-    typeof raw.id === "string"
+    typeof raw.id === 'string'
       ? raw.id
-      : typeof raw.tool_call_id === "string"
+      : typeof raw.tool_call_id === 'string'
         ? raw.tool_call_id
         : `${name}-${Date.now()}`;
 
-  const error = typeof raw.error === "string" ? raw.error : undefined;
-  const ok = typeof raw.ok === "boolean" ? raw.ok : !error;
+  const error = typeof raw.error === 'string' ? raw.error : undefined;
+  const ok = typeof raw.ok === 'boolean' ? raw.ok : !error;
 
   return {
     id,
     name,
     ok,
     cached: Boolean(raw.cached),
-    shared: typeof raw.shared === "boolean" ? raw.shared : undefined,
-    duration_ms: typeof raw.duration_ms === "number" ? raw.duration_ms : undefined,
+    shared: typeof raw.shared === 'boolean' ? raw.shared : undefined,
+    duration_ms: typeof raw.duration_ms === 'number' ? raw.duration_ms : undefined,
     output: raw.output,
     error,
   };
@@ -1587,13 +1556,13 @@ function hydrateToolsFromStateDelta(delta: Record<string, unknown>): {
 } {
   const toolCallCandidates = collectToolDeltaCandidates(
     delta,
-    ["tool_call", "call", "latest_tool_call"],
-    ["tool_calls", "calls"]
+    ['tool_call', 'call', 'latest_tool_call'],
+    ['tool_calls', 'calls'],
   );
   const toolResultCandidates = collectToolDeltaCandidates(
     delta,
-    ["tool_result", "result", "latest_tool_result"],
-    ["tool_results", "results"]
+    ['tool_result', 'result', 'latest_tool_result'],
+    ['tool_results', 'results'],
   );
 
   return {
@@ -1608,8 +1577,8 @@ function hydrateToolsFromStateDelta(delta: Record<string, unknown>): {
 
 function normalizeToolProgressData(
   tool: ToolCallEventData | ToolResultEventData,
-  stage: "tool_start" | "tool_complete",
-  source: string
+  stage: 'tool_start' | 'tool_complete',
+  source: string,
 ): Record<string, unknown> {
   return {
     ...tool,
@@ -1623,11 +1592,11 @@ function normalizeToolProgressData(
 function getEnvelopeString(
   envelope: Record<string, unknown>,
   payload: Record<string, unknown>,
-  keys: string[]
+  keys: string[],
 ): string | undefined {
   for (const key of keys) {
     const value = envelope[key] ?? payload[key];
-    if (typeof value === "string" && value.trim().length > 0) {
+    if (typeof value === 'string' && value.trim().length > 0) {
       return value;
     }
   }
@@ -1638,79 +1607,65 @@ function getEnvelopeRecord(value: unknown): Record<string, unknown> {
   return asRecord(value) ?? {};
 }
 
-function buildToolCallFromEnvelope(
-  envelope: Record<string, unknown>
-): ToolCallEventData | null {
+function buildToolCallFromEnvelope(envelope: Record<string, unknown>): ToolCallEventData | null {
   const payload = getEnvelopeRecord(envelope.payload);
-  const name = getEnvelopeString(envelope, payload, ["name", "tool_name"]);
+  const name = getEnvelopeString(envelope, payload, ['name', 'tool_name']);
   if (!name) return null;
   const id =
-    getEnvelopeString(envelope, payload, ["id", "tool_call_id"]) ??
-    getEnvelopeString(envelope, payload, ["correlation_id"]) ??
+    getEnvelopeString(envelope, payload, ['id', 'tool_call_id']) ??
+    getEnvelopeString(envelope, payload, ['correlation_id']) ??
     `${name}-${Date.now()}`;
 
   return {
     id,
     name,
     args: getEnvelopeRecord(payload.args ?? payload.input),
-    metadata: { source: "agent.envelope", ...payload },
-    correlation_id:
-      getEnvelopeString(envelope, payload, ["correlation_id"]) ?? undefined,
-    parent_correlation_id:
-      getEnvelopeString(envelope, payload, ["parent_correlation_id"]) ?? null,
-    agent_id: getEnvelopeString(envelope, payload, ["agent_id"]) ?? null,
-    parent_agent_id:
-      getEnvelopeString(envelope, payload, ["parent_agent_id"]) ?? null,
-    display_name:
-      getEnvelopeString(envelope, payload, ["display_name"]) ?? null,
-    agent_name: getEnvelopeString(envelope, payload, ["agent_name"]) ?? null,
+    metadata: { source: 'agent.envelope', ...payload },
+    correlation_id: getEnvelopeString(envelope, payload, ['correlation_id']) ?? undefined,
+    parent_correlation_id: getEnvelopeString(envelope, payload, ['parent_correlation_id']) ?? null,
+    agent_id: getEnvelopeString(envelope, payload, ['agent_id']) ?? null,
+    parent_agent_id: getEnvelopeString(envelope, payload, ['parent_agent_id']) ?? null,
+    display_name: getEnvelopeString(envelope, payload, ['display_name']) ?? null,
+    agent_name: getEnvelopeString(envelope, payload, ['agent_name']) ?? null,
   };
 }
 
 function buildToolResultFromEnvelope(
-  envelope: Record<string, unknown>
+  envelope: Record<string, unknown>,
 ): ToolResultEventData | null {
   const payload = getEnvelopeRecord(envelope.payload);
-  const name = getEnvelopeString(envelope, payload, ["name", "tool_name"]);
+  const name = getEnvelopeString(envelope, payload, ['name', 'tool_name']);
   if (!name) return null;
   const id =
-    getEnvelopeString(envelope, payload, ["id", "tool_call_id"]) ??
-    getEnvelopeString(envelope, payload, ["correlation_id"]) ??
+    getEnvelopeString(envelope, payload, ['id', 'tool_call_id']) ??
+    getEnvelopeString(envelope, payload, ['correlation_id']) ??
     `${name}-${Date.now()}`;
-  const event = getEnvelopeString(envelope, payload, ["event"]);
-  const error = getEnvelopeString(envelope, payload, ["error"]);
+  const event = getEnvelopeString(envelope, payload, ['event']);
+  const error = getEnvelopeString(envelope, payload, ['error']);
 
   return {
     id,
     name,
-    ok: event !== "error" && !error,
+    ok: event !== 'error' && !error,
     cached: Boolean(payload.cached),
-    duration_ms:
-      typeof payload.duration_ms === "number" ? payload.duration_ms : undefined,
+    duration_ms: typeof payload.duration_ms === 'number' ? payload.duration_ms : undefined,
     output: payload.output,
     error,
-    output_bytes:
-      typeof payload.output_bytes === "number" ? payload.output_bytes : undefined,
+    output_bytes: typeof payload.output_bytes === 'number' ? payload.output_bytes : undefined,
     output_tokens_est:
-      typeof payload.output_tokens_est === "number"
-        ? payload.output_tokens_est
-        : undefined,
-    correlation_id:
-      getEnvelopeString(envelope, payload, ["correlation_id"]) ?? undefined,
-    parent_correlation_id:
-      getEnvelopeString(envelope, payload, ["parent_correlation_id"]) ?? null,
-    agent_id: getEnvelopeString(envelope, payload, ["agent_id"]) ?? null,
-    parent_agent_id:
-      getEnvelopeString(envelope, payload, ["parent_agent_id"]) ?? null,
-    display_name:
-      getEnvelopeString(envelope, payload, ["display_name"]) ?? null,
-    agent_name: getEnvelopeString(envelope, payload, ["agent_name"]) ?? null,
+      typeof payload.output_tokens_est === 'number' ? payload.output_tokens_est : undefined,
+    correlation_id: getEnvelopeString(envelope, payload, ['correlation_id']) ?? undefined,
+    parent_correlation_id: getEnvelopeString(envelope, payload, ['parent_correlation_id']) ?? null,
+    agent_id: getEnvelopeString(envelope, payload, ['agent_id']) ?? null,
+    parent_agent_id: getEnvelopeString(envelope, payload, ['parent_agent_id']) ?? null,
+    display_name: getEnvelopeString(envelope, payload, ['display_name']) ?? null,
+    agent_name: getEnvelopeString(envelope, payload, ['agent_name']) ?? null,
   };
 }
 
 function mergeToolCalls(
   existing: ToolCallEventData[],
-  incoming: ToolCallEventData[]
+  incoming: ToolCallEventData[],
 ): { merged: ToolCallEventData[]; added: ToolCallEventData[] } {
   if (incoming.length === 0) return { merged: existing, added: [] };
   const seenIds = new Set(existing.map((item) => item.id));
@@ -1727,7 +1682,7 @@ function mergeToolCalls(
 
 function mergeToolResults(
   existing: ToolResultEventData[],
-  incoming: ToolResultEventData[]
+  incoming: ToolResultEventData[],
 ): { merged: ToolResultEventData[]; added: ToolResultEventData[] } {
   if (incoming.length === 0) return { merged: existing, added: [] };
   const seenIds = new Set(existing.map((item) => item.id));
@@ -1744,7 +1699,7 @@ function mergeToolResults(
 
 function parseDeltaPayload<TSchema extends z.ZodTypeAny>(
   event: ParsedJainaStreamEvent,
-  schema: TSchema
+  schema: TSchema,
 ): z.infer<TSchema> | null {
   const fromData = schema.safeParse((event as { data?: unknown }).data ?? {});
   if (fromData.success) return fromData.data;
@@ -1757,20 +1712,20 @@ function parseDeltaPayload<TSchema extends z.ZodTypeAny>(
 
 export function reduceJainaStreamEvent(
   state: JainaStreamState,
-  event: ParsedJainaStreamEvent
+  event: ParsedJainaStreamEvent,
 ): JainaStreamState {
   const nextBase: JainaStreamState = {
     ...state,
-    status: state.status === "idle" ? "streaming" : state.status,
+    status: state.status === 'idle' ? 'streaming' : state.status,
     lastEventType: event.type,
   };
 
   const eventType = event.type as string | undefined;
   switch (eventType) {
-    case "response.plan.delta": {
+    case 'response.plan.delta': {
       const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
       if (!payload) {
-        return { ...nextBase, status: "error", error: "Malformed response.plan.delta event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.plan.delta event' };
       }
 
       const nextPlanJson = `${state.planJson}${payload.delta}`;
@@ -1783,12 +1738,13 @@ export function reduceJainaStreamEvent(
         plan: nextPlan ?? state.plan,
       };
     }
-    case "response.plan_ready": {
+    case 'response.plan_ready': {
       const parsed = responsePlanReadySchema.safeParse(event);
       const planFromSchema = parsed.success ? asRecord(parsed.data.data?.plan) : null;
       const eventRecord = asRecord(event);
       const dataRecord = asRecord(eventRecord?.data);
-      const planRecord = planFromSchema ?? asRecord(dataRecord?.plan) ?? asRecord(eventRecord?.plan);
+      const planRecord =
+        planFromSchema ?? asRecord(dataRecord?.plan) ?? asRecord(eventRecord?.plan);
 
       if (!planRecord) {
         return nextBase;
@@ -1803,24 +1759,24 @@ export function reduceJainaStreamEvent(
         objectives: mergeObjectiveSnapshots(state.objectives, planObjectives),
       };
     }
-    case "hitl.paused": {
+    case 'hitl.paused': {
       const parsed = hitlPausedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed hitl.paused event" };
+        return { ...nextBase, status: 'error', error: 'Malformed hitl.paused event' };
       }
 
       return {
         ...nextBase,
         pendingPlan: {
           prompt: parsed.data.data.prompt,
-          status: "awaiting_approval",
+          status: 'awaiting_approval',
         },
       };
     }
-    case "canvas.actions.proposed": {
+    case 'canvas.actions.proposed': {
       const parsed = canvasActionsProposedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed canvas.actions.proposed event" };
+        return { ...nextBase, status: 'error', error: 'Malformed canvas.actions.proposed event' };
       }
 
       const envelope = parsed.data.data;
@@ -1837,7 +1793,7 @@ export function reduceJainaStreamEvent(
             userId: candidate.userId,
             sessionId: candidate.sessionId,
             actions: candidate.actions,
-          }) === envelopeKey
+          }) === envelopeKey,
       );
 
       return {
@@ -1845,16 +1801,24 @@ export function reduceJainaStreamEvent(
         canvasActions: hasEnvelope ? state.canvasActions : [...state.canvasActions, envelope],
       };
     }
-    case "response.checkpoint_report": {
+    case 'response.checkpoint_report': {
       const parsed = responseCheckpointReportSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.checkpoint_report event" };
+        return {
+          ...nextBase,
+          status: 'error',
+          error: 'Malformed response.checkpoint_report event',
+        };
       }
 
       const rawReport = parsed.data.data.report;
       const interpreted = interpretCheckpointReportPayload(rawReport);
       if (!interpreted) {
-        return { ...nextBase, status: "error", error: "Invalid response.checkpoint_report payload" };
+        return {
+          ...nextBase,
+          status: 'error',
+          error: 'Invalid response.checkpoint_report payload',
+        };
       }
 
       if (interpreted.reportV2) {
@@ -1867,7 +1831,7 @@ export function reduceJainaStreamEvent(
           hasCanonicalCheckpointReport: true,
           blockDeltas: [],
           blockDeltasV2: [],
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
 
@@ -1881,10 +1845,10 @@ export function reduceJainaStreamEvent(
         reportJson: JSON.stringify(normalizedReport),
         hasCanonicalCheckpointReport: true,
         blockDeltas: [],
-        finalContentKind: "report",
+        finalContentKind: 'report',
       };
     }
-    case "response.block.delta": {
+    case 'response.block.delta': {
       if (state.hasCanonicalCheckpointReport) {
         return nextBase;
       }
@@ -1914,9 +1878,9 @@ export function reduceJainaStreamEvent(
 
         const existingMeta = state.reportV2?._meta;
         const progressiveV2: CheckpointReportV2 = {
-          language: state.reportV2?.language ?? "en",
-          executive_summary: state.reportV2?.executive_summary ?? "",
-          reasoning_trace: state.reportV2?.reasoning_trace ?? "",
+          language: state.reportV2?.language ?? 'en',
+          executive_summary: state.reportV2?.executive_summary ?? '',
+          reasoning_trace: state.reportV2?.reasoning_trace ?? '',
           blocks: nextV2Deltas.map((entry) => entry.block),
           follow_up_questions: state.reportV2?.follow_up_questions ?? [],
           media_map: state.reportV2?.media_map ?? {},
@@ -1924,11 +1888,12 @@ export function reduceJainaStreamEvent(
           execution_objectives: state.reportV2?.execution_objectives ?? [],
           cached_sources: state.reportV2?.cached_sources ?? [],
           _meta: {
-            schema_version: "2" as const,
+            schema_version: '2' as const,
             block_count: existingMeta?.block_count ?? nextV2Deltas.length,
-            has_charts: existingMeta?.has_charts ?? nextV2Deltas.some((d) => d.block.category === "chart"),
+            has_charts:
+              existingMeta?.has_charts ?? nextV2Deltas.some((d) => d.block.category === 'chart'),
             has_media: existingMeta?.has_media ?? false,
-            primary_scope: existingMeta?.primary_scope ?? nextV2Deltas[0]?.block.scope ?? "",
+            primary_scope: existingMeta?.primary_scope ?? nextV2Deltas[0]?.block.scope ?? '',
           },
         };
 
@@ -1936,7 +1901,7 @@ export function reduceJainaStreamEvent(
           ...nextBase,
           blockDeltasV2: nextV2Deltas,
           reportV2: progressiveV2,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
 
@@ -1967,9 +1932,9 @@ export function reduceJainaStreamEvent(
 
         const existingMeta = state.reportV2?._meta;
         const progressiveV2: CheckpointReportV2 = {
-          language: state.reportV2?.language ?? "en",
-          executive_summary: state.reportV2?.executive_summary ?? "",
-          reasoning_trace: state.reportV2?.reasoning_trace ?? "",
+          language: state.reportV2?.language ?? 'en',
+          executive_summary: state.reportV2?.executive_summary ?? '',
+          reasoning_trace: state.reportV2?.reasoning_trace ?? '',
           blocks: nextV2Deltas.map((entry) => entry.block),
           follow_up_questions: state.reportV2?.follow_up_questions ?? [],
           media_map: state.reportV2?.media_map ?? {},
@@ -1977,11 +1942,12 @@ export function reduceJainaStreamEvent(
           execution_objectives: state.reportV2?.execution_objectives ?? [],
           cached_sources: state.reportV2?.cached_sources ?? [],
           _meta: {
-            schema_version: "2" as const,
+            schema_version: '2' as const,
             block_count: existingMeta?.block_count ?? nextV2Deltas.length,
-            has_charts: existingMeta?.has_charts ?? nextV2Deltas.some((d) => d.block.category === "chart"),
+            has_charts:
+              existingMeta?.has_charts ?? nextV2Deltas.some((d) => d.block.category === 'chart'),
             has_media: existingMeta?.has_media ?? false,
-            primary_scope: existingMeta?.primary_scope ?? nextV2Deltas[0]?.block.scope ?? "",
+            primary_scope: existingMeta?.primary_scope ?? nextV2Deltas[0]?.block.scope ?? '',
           },
         };
 
@@ -1989,13 +1955,13 @@ export function reduceJainaStreamEvent(
           ...nextBase,
           blockDeltasV2: nextV2Deltas,
           reportV2: progressiveV2,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
 
       const parsed = responseBlockDeltaSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.block.delta event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.block.delta event' };
       }
 
       const payload = parsed.data.data;
@@ -2023,13 +1989,13 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         blockDeltas: nextBlockDeltas,
         report: progressiveReport,
-        finalContentKind: "report",
+        finalContentKind: 'report',
       };
     }
-    case "response.report_assembly": {
+    case 'response.report_assembly': {
       const parsed = responseReportAssemblySchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.report_assembly event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.report_assembly event' };
       }
 
       return {
@@ -2042,16 +2008,16 @@ export function reduceJainaStreamEvent(
         reportSourceEventId: undefined,
         hasCanonicalCheckpointReport: false,
         blockDeltas: [],
-        finalContentKind: "report",
+        finalContentKind: 'report',
       };
     }
-    case "response.report_artifact_job.started": {
+    case 'response.report_artifact_job.started': {
       const parsed = responseReportArtifactJobStartedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
         return {
           ...nextBase,
-          status: "error",
-          error: "Malformed response.report_artifact_job.started event",
+          status: 'error',
+          error: 'Malformed response.report_artifact_job.started event',
         };
       }
 
@@ -2060,10 +2026,10 @@ export function reduceJainaStreamEvent(
         reportArtifactJob: parsed.data.data,
       };
     }
-    case "response.created": {
+    case 'response.created': {
       const parsed = responseCreatedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.created event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.created event' };
       }
       const incomingResponseId = parsed.data.data.id;
       const isDuplicateCreated = state.responseId === incomingResponseId;
@@ -2073,11 +2039,9 @@ export function reduceJainaStreamEvent(
           responseId: state.responseId,
         };
       }
-      const isInFlight =
-        state.status === "starting" || state.status === "streaming";
+      const isInFlight = state.status === 'starting' || state.status === 'streaming';
       const hasActiveResponse =
-        Boolean(state.responseId) &&
-        state.responseId !== incomingResponseId;
+        Boolean(state.responseId) && state.responseId !== incomingResponseId;
       const hasStreamingOutput =
         state.responseText.trim().length > 0 ||
         state.reportJson.trim().length > 0 ||
@@ -2087,17 +2051,17 @@ export function reduceJainaStreamEvent(
         state.objectives.length > 0 ||
         state.toolCalls.length > 0 ||
         state.toolResults.length > 0;
-      if (hasActiveResponse && (isInFlight || hasStreamingOutput || state.status === "error")) {
+      if (hasActiveResponse && (isInFlight || hasStreamingOutput || state.status === 'error')) {
         return nextBase;
       }
       return {
         ...nextBase,
-        status: "streaming",
+        status: 'streaming',
         error: undefined,
         responseId: incomingResponseId,
-        reportJson: "",
-        planJson: "",
-        responseText: "",
+        reportJson: '',
+        planJson: '',
+        responseText: '',
         report: null,
         reportAssembly: null,
         reportAssemblyHtml: null,
@@ -2131,10 +2095,10 @@ export function reduceJainaStreamEvent(
         reportArtifactJob: null,
       };
     }
-    case "response.run.created": {
+    case 'response.run.created': {
       const parsed = responseRunCreatedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.run.created event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.run.created event' };
       }
       return {
         ...nextBase,
@@ -2142,10 +2106,14 @@ export function reduceJainaStreamEvent(
         runSessionId: parsed.data.data.session_id ?? undefined,
       };
     }
-    case "response.output_item.added": {
+    case 'response.output_item.added': {
       const parsed = responseOutputItemSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.output_item.added event" };
+        return {
+          ...nextBase,
+          status: 'error',
+          error: 'Malformed response.output_item.added event',
+        };
       }
       return {
         ...nextBase,
@@ -2153,26 +2121,30 @@ export function reduceJainaStreamEvent(
         outputItemId: parsed.data.data.item.id,
       };
     }
-    case "response.content_part.added": {
+    case 'response.content_part.added': {
       const parsed = responseContentPartSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.content_part.added event" };
+        return {
+          ...nextBase,
+          status: 'error',
+          error: 'Malformed response.content_part.added event',
+        };
       }
       return {
         ...nextBase,
         itemId: parsed.data.data.item_id,
         partId: parsed.data.data.part.id,
-        ...(parsed.data.data.part.type === "text" ? { reportJson: "" } : {}),
+        ...(parsed.data.data.part.type === 'text' ? { reportJson: '' } : {}),
         contentPartKinds: {
           ...state.contentPartKinds,
           [parsed.data.data.part.id]: parsed.data.data.part.type,
         },
       };
     }
-    case "response.objectives": {
+    case 'response.objectives': {
       const parsed = responseObjectivesSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.objectives event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.objectives event' };
       }
       const payload = Array.isArray(parsed.data.data)
         ? { objectives: parsed.data.data }
@@ -2186,13 +2158,13 @@ export function reduceJainaStreamEvent(
         objectives: mergeObjectiveSnapshots(state.objectives, objectives),
       };
     }
-    case "response.objective.updated": {
+    case 'response.objective.updated': {
       const parsed = responseObjectiveUpdatedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
         return {
           ...nextBase,
-          status: "error",
-          error: "Malformed response.objective.updated event",
+          status: 'error',
+          error: 'Malformed response.objective.updated event',
         };
       }
       const payload = parsed.data.data as Record<string, unknown>;
@@ -2201,76 +2173,68 @@ export function reduceJainaStreamEvent(
         objectives: upsertObjective(state.objectives, payload),
       };
     }
-    case "response.progress": {
+    case 'response.progress': {
       const parsed = progressEventSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.progress event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.progress event' };
       }
       const progressPayload = parsed.data.data;
       const detail = buildProgressDetail(progressPayload);
       let nextToolCalls = state.toolCalls;
       let nextToolResults = state.toolResults;
 
-      if (progressPayload.stage === "tool_start") {
-        const toolName = String(progressPayload.tool_name ?? "").trim();
+      if (progressPayload.stage === 'tool_start') {
+        const toolName = String(progressPayload.tool_name ?? '').trim();
         const toolCallId = String(
-          progressPayload.tool_call_id ?? progressPayload.call_id ?? ""
+          progressPayload.tool_call_id ?? progressPayload.call_id ?? '',
         ).trim();
         if (toolName) {
           const hasToolCall = state.toolCalls.some(
             (item) =>
-              (toolCallId && item.id === toolCallId) ||
-              (!toolCallId && item.name === toolName)
+              (toolCallId && item.id === toolCallId) || (!toolCallId && item.name === toolName),
           );
           if (!hasToolCall) {
             nextToolCalls = [
               ...state.toolCalls,
               {
-                id:
-                  toolCallId ||
-                  `${toolName}-${Date.now()}-${state.toolCalls.length + 1}`,
+                id: toolCallId || `${toolName}-${Date.now()}-${state.toolCalls.length + 1}`,
                 name: toolName,
                 args:
                   progressPayload.args &&
-                  typeof progressPayload.args === "object" &&
+                  typeof progressPayload.args === 'object' &&
                   !Array.isArray(progressPayload.args)
                     ? (progressPayload.args as Record<string, unknown>)
                     : {},
-                metadata: { source: "response.progress", ...progressPayload },
+                metadata: { source: 'response.progress', ...progressPayload },
               },
             ];
           }
         }
       }
 
-      if (progressPayload.stage === "tool_complete") {
-        const toolName = String(progressPayload.tool_name ?? "").trim();
+      if (progressPayload.stage === 'tool_complete') {
+        const toolName = String(progressPayload.tool_name ?? '').trim();
         const toolCallId = String(
-          progressPayload.tool_call_id ?? progressPayload.call_id ?? ""
+          progressPayload.tool_call_id ?? progressPayload.call_id ?? '',
         ).trim();
         if (toolName) {
           const hasToolResult = state.toolResults.some(
             (item) =>
-              (toolCallId && item.id === toolCallId) ||
-              (!toolCallId && item.name === toolName)
+              (toolCallId && item.id === toolCallId) || (!toolCallId && item.name === toolName),
           );
           if (!hasToolResult) {
             const errorMessage =
-              typeof progressPayload.error === "string"
-                ? progressPayload.error
-                : undefined;
+              typeof progressPayload.error === 'string' ? progressPayload.error : undefined;
             const hasError = Boolean(errorMessage && errorMessage.trim().length > 0);
             nextToolResults = [
               ...state.toolResults,
               {
-                id:
-                  toolCallId ||
-                  `${toolName}-${Date.now()}-${state.toolResults.length + 1}`,
+                id: toolCallId || `${toolName}-${Date.now()}-${state.toolResults.length + 1}`,
                 name: toolName,
                 ok: !hasError,
                 cached: Boolean(progressPayload.cached),
                 duration_ms:
-                  typeof progressPayload.duration_ms === "number"
+                  typeof progressPayload.duration_ms === 'number'
                     ? progressPayload.duration_ms
                     : undefined,
                 output: progressPayload.output,
@@ -2296,38 +2260,35 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
-    case "tool.batch": {
+    case 'tool.batch': {
       const parsed = toolBatchSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed tool.batch event" };
+        return { ...nextBase, status: 'error', error: 'Malformed tool.batch event' };
       }
 
-      const { merged: nextToolCalls } = mergeToolCalls(
-        state.toolCalls,
-        parsed.data.data.calls
-      );
+      const { merged: nextToolCalls } = mergeToolCalls(state.toolCalls, parsed.data.data.calls);
       const { merged: nextToolResults, added: newResults } = mergeToolResults(
         state.toolResults,
-        parsed.data.data.results
+        parsed.data.data.results,
       );
 
       const nextProgress = [...state.progress];
       for (const call of parsed.data.data.calls) {
         if (!state.toolCalls.some((c) => c.id === call.id)) {
           nextProgress.push({
-            stage: "tool_start",
+            stage: 'tool_start',
             at: new Date().toISOString(),
             detail: `Executing ${call.name}`,
-            data: normalizeToolProgressData(call, "tool_start", "tool.batch"),
+            data: normalizeToolProgressData(call, 'tool_start', 'tool.batch'),
           });
         }
       }
       for (const res of newResults) {
         nextProgress.push({
-          stage: "tool_complete",
+          stage: 'tool_complete',
           at: new Date().toISOString(),
           detail: `Completed ${res.name}`,
-          data: normalizeToolProgressData(res, "tool_complete", "tool.batch"),
+          data: normalizeToolProgressData(res, 'tool_complete', 'tool.batch'),
         });
       }
 
@@ -2337,7 +2298,13 @@ export function reduceJainaStreamEvent(
         if (pid && pid in nextActiveWorkers) {
           nextActiveWorkers = {
             ...nextActiveWorkers,
-            [pid]: { ...nextActiveWorkers[pid], lastToolName: call.name, lastToolState: "calling" as const, outputBytes: undefined, error: undefined },
+            [pid]: {
+              ...nextActiveWorkers[pid],
+              lastToolName: call.name,
+              lastToolState: 'calling' as const,
+              outputBytes: undefined,
+              error: undefined,
+            },
           };
         }
       }
@@ -2349,7 +2316,11 @@ export function reduceJainaStreamEvent(
             [pid]: {
               ...nextActiveWorkers[pid],
               lastToolName: res.name,
-              lastToolState: (res.ok ? (res.cached ? "cached" : "returned") : "failed") as ActiveWorkerInfo["lastToolState"],
+              lastToolState: (res.ok
+                ? res.cached
+                  ? 'cached'
+                  : 'returned'
+                : 'failed') as ActiveWorkerInfo['lastToolState'],
               outputBytes: (res as { output_bytes?: number }).output_bytes,
               error: res.ok ? undefined : res.error,
             },
@@ -2365,10 +2336,14 @@ export function reduceJainaStreamEvent(
         progress: nextProgress,
       };
     }
-    case "tool.call": {
+    case 'tool.call': {
       const raw = asRecord((event as { data?: unknown }).data) ?? {};
       // Individual tool.call events use "input" for args; normalize before parsing
-      const normalized = { ...raw, args: raw.args ?? raw.input ?? {}, metadata: raw.metadata ?? {} };
+      const normalized = {
+        ...raw,
+        args: raw.args ?? raw.input ?? {},
+        metadata: raw.metadata ?? {},
+      };
       const parsed = toolCallSchema.safeParse(normalized);
       if (!parsed.success) return nextBase;
       const call = parsed.data;
@@ -2382,7 +2357,7 @@ export function reduceJainaStreamEvent(
           [parentAgentId]: {
             ...state.activeWorkers[parentAgentId],
             lastToolName: call.name,
-            lastToolState: "calling",
+            lastToolState: 'calling',
             outputBytes: undefined,
             error: undefined,
           },
@@ -2395,15 +2370,15 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "tool_start",
+            stage: 'tool_start',
             at: new Date().toISOString(),
             detail: `Executing ${call.name}`,
-            data: normalizeToolProgressData(call, "tool_start", "tool.call"),
+            data: normalizeToolProgressData(call, 'tool_start', 'tool.call'),
           },
         ],
       };
     }
-    case "tool.result": {
+    case 'tool.result': {
       const parsed = toolResultSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) return nextBase;
       const result = parsed.data;
@@ -2417,7 +2392,7 @@ export function reduceJainaStreamEvent(
           [parentAgentId]: {
             ...state.activeWorkers[parentAgentId],
             lastToolName: result.name,
-            lastToolState: result.ok ? (result.cached ? "cached" : "returned") : "failed",
+            lastToolState: result.ok ? (result.cached ? 'cached' : 'returned') : 'failed',
             outputBytes: result.output_bytes,
             error: result.ok ? undefined : result.error,
           },
@@ -2430,18 +2405,18 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "tool_complete",
+            stage: 'tool_complete',
             at: new Date().toISOString(),
             detail: `Completed ${result.name}`,
-            data: normalizeToolProgressData(result, "tool_complete", "tool.result"),
+            data: normalizeToolProgressData(result, 'tool_complete', 'tool.result'),
           },
         ],
       };
     }
-    case "handoff.start": {
+    case 'handoff.start': {
       const parsed = handoffStartSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed handoff.start event" };
+        return { ...nextBase, status: 'error', error: 'Malformed handoff.start event' };
       }
       const data = parsed.data.data;
       return {
@@ -2449,18 +2424,18 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "handoff_start",
+            stage: 'handoff_start',
             at: new Date().toISOString(),
-            detail: `Handoff from ${data.from_scope ?? "unknown"} to ${data.to_scope}`,
+            detail: `Handoff from ${data.from_scope ?? 'unknown'} to ${data.to_scope}`,
             data,
           },
         ],
       };
     }
-    case "handoff.complete": {
+    case 'handoff.complete': {
       const parsed = handoffCompleteSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed handoff.complete event" };
+        return { ...nextBase, status: 'error', error: 'Malformed handoff.complete event' };
       }
       const data = parsed.data.data;
       return {
@@ -2468,7 +2443,7 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "handoff_complete",
+            stage: 'handoff_complete',
             at: new Date().toISOString(),
             detail: `Handoff to ${data.to_scope} ${data.status}`,
             data,
@@ -2476,18 +2451,18 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
-    case "agent.envelope": {
+    case 'agent.envelope': {
       const parsed = agentEnvelopeSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed agent.envelope event" };
+        return { ...nextBase, status: 'error', error: 'Malformed agent.envelope event' };
       }
       const envelope = parsed.data.data.envelope;
       const envelopeRecord = envelope as Record<string, unknown>;
       const payload = getEnvelopeRecord(envelope.payload);
       const now = new Date().toISOString();
 
-      if (envelope.kind === "tool") {
-        if (envelope.event === "start") {
+      if (envelope.kind === 'tool') {
+        if (envelope.event === 'start') {
           const toolCall = buildToolCallFromEnvelope(envelopeRecord);
           if (!toolCall) return nextBase;
           const { merged: nextToolCalls, added } = mergeToolCalls(state.toolCalls, [toolCall]);
@@ -2498,10 +2473,10 @@ export function reduceJainaStreamEvent(
             progress: [
               ...state.progress,
               {
-                stage: "tool_start",
+                stage: 'tool_start',
                 at: now,
                 detail: `Executing ${toolCall.name}`,
-                data: normalizeToolProgressData(toolCall, "tool_start", "agent.envelope"),
+                data: normalizeToolProgressData(toolCall, 'tool_start', 'agent.envelope'),
               },
             ],
           };
@@ -2509,7 +2484,9 @@ export function reduceJainaStreamEvent(
 
         const toolResult = buildToolResultFromEnvelope(envelopeRecord);
         if (!toolResult) return nextBase;
-        const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [toolResult]);
+        const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [
+          toolResult,
+        ]);
         if (added.length === 0) return nextBase;
         return {
           ...nextBase,
@@ -2517,23 +2494,22 @@ export function reduceJainaStreamEvent(
           progress: [
             ...state.progress,
             {
-              stage: "tool_complete",
+              stage: 'tool_complete',
               at: now,
-              detail: `${envelope.event === "error" ? "Failed" : "Completed"} ${toolResult.name}`,
-              data: normalizeToolProgressData(toolResult, "tool_complete", "agent.envelope"),
+              detail: `${envelope.event === 'error' ? 'Failed' : 'Completed'} ${toolResult.name}`,
+              data: normalizeToolProgressData(toolResult, 'tool_complete', 'agent.envelope'),
             },
           ],
         };
       }
 
-      if (envelope.kind === "agent") {
+      if (envelope.kind === 'agent') {
         const agentId =
-          getEnvelopeString(envelopeRecord, payload, ["agent_id"]) ??
-          envelope.correlation_id;
+          getEnvelopeString(envelopeRecord, payload, ['agent_id']) ?? envelope.correlation_id;
         const displayName =
-          getEnvelopeString(envelopeRecord, payload, ["display_name", "name", "agent_name"]) ??
+          getEnvelopeString(envelopeRecord, payload, ['display_name', 'name', 'agent_name']) ??
           agentId;
-        if (envelope.event === "start") {
+        if (envelope.event === 'start') {
           return {
             ...nextBase,
             activeWorkers: {
@@ -2543,24 +2519,23 @@ export function reduceJainaStreamEvent(
             progress: [
               ...state.progress,
               {
-                stage: "agent_spawn",
+                stage: 'agent_spawn',
                 at: now,
                 detail:
-                  getEnvelopeString(envelopeRecord, payload, ["task_description"]) ??
+                  getEnvelopeString(envelopeRecord, payload, ['task_description']) ??
                   `Agent ${agentId} spawned`,
                 data: {
                   ...payload,
                   agent_id: agentId,
                   display_name: displayName,
-                  name: getEnvelopeString(envelopeRecord, payload, ["name"]),
+                  name: getEnvelopeString(envelopeRecord, payload, ['name']),
                   parent_agent_id:
-                    getEnvelopeString(envelopeRecord, payload, ["parent_agent_id"]) ?? null,
+                    getEnvelopeString(envelopeRecord, payload, ['parent_agent_id']) ?? null,
                   task_id:
-                    getEnvelopeString(envelopeRecord, payload, ["task_id"]) ??
+                    getEnvelopeString(envelopeRecord, payload, ['task_id']) ??
                     envelope.correlation_id,
                   task_description:
-                    getEnvelopeString(envelopeRecord, payload, ["task_description"]) ??
-                    undefined,
+                    getEnvelopeString(envelopeRecord, payload, ['task_description']) ?? undefined,
                   started_at: envelope.timestamp,
                   spawn_ts: Date.now(),
                 },
@@ -2576,23 +2551,21 @@ export function reduceJainaStreamEvent(
           progress: [
             ...state.progress,
             {
-              stage: "agent_complete",
+              stage: 'agent_complete',
               at: now,
               detail: `Agent ${agentId} ${envelope.event}`,
               data: {
                 ...payload,
                 agent_id: agentId,
                 display_name: displayName,
-                name: getEnvelopeString(envelopeRecord, payload, ["name"]),
+                name: getEnvelopeString(envelopeRecord, payload, ['name']),
                 task_id:
-                  getEnvelopeString(envelopeRecord, payload, ["task_id"]) ??
+                  getEnvelopeString(envelopeRecord, payload, ['task_id']) ??
                   envelope.correlation_id,
-                status: envelope.event === "error" ? "failed" : "completed",
+                status: envelope.event === 'error' ? 'failed' : 'completed',
                 duration_ms:
-                  typeof payload.duration_ms === "number"
-                    ? payload.duration_ms
-                    : undefined,
-                error: getEnvelopeString(envelopeRecord, payload, ["error"]),
+                  typeof payload.duration_ms === 'number' ? payload.duration_ms : undefined,
+                error: getEnvelopeString(envelopeRecord, payload, ['error']),
               },
             },
           ],
@@ -2604,7 +2577,7 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: envelope.event === "start" ? "handoff_start" : "handoff_complete",
+            stage: envelope.event === 'start' ? 'handoff_start' : 'handoff_complete',
             at: now,
             detail: `Handoff ${envelope.event}`,
             data: {
@@ -2612,24 +2585,23 @@ export function reduceJainaStreamEvent(
               correlation_id: envelope.correlation_id,
               parent_correlation_id: envelope.parent_correlation_id,
               from_scope: payload.from_scope ?? null,
-              to_scope: envelope.scope ?? payload.to_scope ?? "unknown",
+              to_scope: envelope.scope ?? payload.to_scope ?? 'unknown',
               display_name: envelope.display_name ?? payload.display_name ?? null,
               name: envelope.name ?? payload.name ?? null,
               objective: payload.objective ?? null,
-              status: envelope.event === "error" ? "failed" : "completed",
+              status: envelope.event === 'error' ? 'failed' : 'completed',
             },
           },
         ],
       };
     }
-    case "agent.spawn": {
+    case 'agent.spawn': {
       const parsed = agentSpawnEventSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {
         return nextBase;
       }
       const data = parsed.data;
-      const displayName =
-        data.display_name ?? data.name ?? data.agent_id;
+      const displayName = data.display_name ?? data.name ?? data.agent_id;
       return {
         ...nextBase,
         activeWorkers: {
@@ -2639,7 +2611,7 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "agent_spawn",
+            stage: 'agent_spawn',
             at: new Date().toISOString(),
             detail: data.task_description ?? `Agent ${data.agent_id} spawned`,
             data: { ...data, spawn_ts: Date.now() },
@@ -2647,7 +2619,7 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
-    case "agent.complete": {
+    case 'agent.complete': {
       const parsed = agentCompleteEventSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {
         return nextBase;
@@ -2660,32 +2632,32 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "agent_complete",
+            stage: 'agent_complete',
             at: new Date().toISOString(),
-            detail: `Agent ${data.agent_id} ${data.status ?? "complete"}`,
+            detail: `Agent ${data.agent_id} ${data.status ?? 'complete'}`,
             data,
           },
         ],
       };
     }
-    case "response.heartbeat":
+    case 'response.heartbeat':
       return nextBase;
 
-    case "canvas.context.loaded":
+    case 'canvas.context.loaded':
       return {
         ...nextBase,
         progress: [
           ...state.progress,
           {
-            stage: "context_loaded",
+            stage: 'context_loaded',
             at: new Date().toISOString(),
-            detail: "Loaded campaign context",
+            detail: 'Loaded campaign context',
             data: {},
           },
         ],
       };
 
-    case "thought": {
+    case 'thought': {
       const parsed = thoughtEventSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {
         return nextBase;
@@ -2696,7 +2668,7 @@ export function reduceJainaStreamEvent(
         progress: [
           ...state.progress,
           {
-            stage: "thinking",
+            stage: 'thinking',
             at: new Date().toISOString(),
             detail,
             data: parsed.data,
@@ -2704,7 +2676,7 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
-    case "adk.event": {
+    case 'adk.event': {
       const parsed = adkEventSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {
         return nextBase;
@@ -2718,12 +2690,13 @@ export function reduceJainaStreamEvent(
         .find(
           (entry) =>
             entry.data &&
-            typeof entry.data === "object" &&
-            "author" in (entry.data as Record<string, unknown>) &&
-            (entry.data as Record<string, unknown>).author
+            typeof entry.data === 'object' &&
+            'author' in (entry.data as Record<string, unknown>) &&
+            (entry.data as Record<string, unknown>).author,
         );
-      const lastAuthor = (lastAuthorEntry?.data as Record<string, unknown> | undefined)
-        ?.author as string | undefined;
+      const lastAuthor = (lastAuthorEntry?.data as Record<string, unknown> | undefined)?.author as
+        | string
+        | undefined;
 
       if (author && lastAuthor && author !== lastAuthor) {
         nextState = {
@@ -2731,17 +2704,17 @@ export function reduceJainaStreamEvent(
           progress: [
             ...nextState.progress,
             {
-              stage: "handoff_start",
+              stage: 'handoff_start',
               at: new Date().toISOString(),
               detail: `Delegating to ${author}`,
-              data: { stage: "handoff_start", to: author, from: lastAuthor },
+              data: { stage: 'handoff_start', to: author, from: lastAuthor },
             },
           ],
         };
       }
 
       for (const part of parsed.data.content?.parts ?? []) {
-        if ("text" in part) {
+        if ('text' in part) {
           const detail = formatThoughtDetail(part.text);
           const inferredPlan = looksLikePlanDelta(part.text)
             ? parsePlanFromAccumulatedDelta(part.text, nextState.plan)
@@ -2752,7 +2725,7 @@ export function reduceJainaStreamEvent(
             progress: [
               ...nextState.progress,
               {
-                stage: "thinking",
+                stage: 'thinking',
                 at: new Date().toISOString(),
                 detail,
                 data: { ...parsed.data, author },
@@ -2762,13 +2735,13 @@ export function reduceJainaStreamEvent(
           continue;
         }
 
-        if ("functionCall" in part) {
+        if ('functionCall' in part) {
           const call = part.functionCall;
           const callRecord = {
             id: call.id,
             name: call.name,
             args: call.args,
-            metadata: { source: "adk.event", author },
+            metadata: { source: 'adk.event', author },
           };
 
           nextState = {
@@ -2777,11 +2750,11 @@ export function reduceJainaStreamEvent(
             progress: [
               ...nextState.progress,
               {
-                stage: "tool_start",
+                stage: 'tool_start',
                 at: new Date().toISOString(),
                 detail: `Running tool: ${formatToolLabel(call.name)}`,
                 data: {
-                  stage: "tool_start",
+                  stage: 'tool_start',
                   tool_name: call.name,
                   tool_call_id: call.id,
                   author,
@@ -2792,12 +2765,12 @@ export function reduceJainaStreamEvent(
           continue;
         }
 
-        if ("functionResponse" in part) {
+        if ('functionResponse' in part) {
           const response = part.functionResponse;
           const isError =
             response.response &&
-            typeof response.response === "object" &&
-            "error" in response.response;
+            typeof response.response === 'object' &&
+            'error' in response.response;
 
           const resultRecord = {
             id: response.id,
@@ -2816,11 +2789,11 @@ export function reduceJainaStreamEvent(
             progress: [
               ...nextState.progress,
               {
-                stage: "tool_complete",
+                stage: 'tool_complete',
                 at: new Date().toISOString(),
                 detail: `Finished tool: ${formatToolLabel(response.name)}`,
                 data: {
-                  stage: "tool_complete",
+                  stage: 'tool_complete',
                   tool_name: response.name,
                   tool_call_id: response.id,
                   author,
@@ -2834,17 +2807,14 @@ export function reduceJainaStreamEvent(
       // Handle flat format: top-level functionResponse (no content.parts wrapper)
       if (!parsed.data.content && parsed.data.functionResponse) {
         const fr = parsed.data.functionResponse;
-        const isError =
-          typeof (fr.response as Record<string, unknown>)?.error === "string";
+        const isError = typeof (fr.response as Record<string, unknown>)?.error === 'string';
         const resultRecord: ToolResultEventData = {
           id: fr.id,
           name: fr.name,
           ok: !isError,
           cached: false,
           output: fr.response,
-          error: isError
-            ? String((fr.response as Record<string, unknown>).error)
-            : undefined,
+          error: isError ? String((fr.response as Record<string, unknown>).error) : undefined,
         };
         nextState = {
           ...nextState,
@@ -2852,11 +2822,11 @@ export function reduceJainaStreamEvent(
           progress: [
             ...nextState.progress,
             {
-              stage: "tool_complete",
+              stage: 'tool_complete',
               at: new Date().toISOString(),
               detail: `Finished tool: ${formatToolLabel(fr.name)}`,
               data: {
-                stage: "tool_complete",
+                stage: 'tool_complete',
                 tool_name: fr.name,
                 tool_call_id: fr.id,
                 author,
@@ -2873,7 +2843,7 @@ export function reduceJainaStreamEvent(
           id: fc.id,
           name: fc.name,
           args: fc.args,
-          metadata: { source: "adk.event", author },
+          metadata: { source: 'adk.event', author },
         };
         nextState = {
           ...nextState,
@@ -2881,11 +2851,11 @@ export function reduceJainaStreamEvent(
           progress: [
             ...nextState.progress,
             {
-              stage: "tool_start",
+              stage: 'tool_start',
               at: new Date().toISOString(),
               detail: `Running tool: ${formatToolLabel(fc.name)}`,
               data: {
-                stage: "tool_start",
+                stage: 'tool_start',
                 tool_name: fc.name,
                 tool_call_id: fc.id,
                 author,
@@ -2897,7 +2867,7 @@ export function reduceJainaStreamEvent(
 
       return nextState;
     }
-    case "artifact.delta": {
+    case 'artifact.delta': {
       const parsed = artifactDeltaSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {
         return nextBase;
@@ -2910,31 +2880,32 @@ export function reduceJainaStreamEvent(
         },
       };
     }
-    case "response.plan.requested": {
+    case 'response.plan.requested': {
       const parsed = parsePlanRequestedPayload((event as { data?: unknown }).data ?? {});
       if (!parsed) {
-        return { ...nextBase, status: "error", error: "Malformed response.plan.requested event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.plan.requested event' };
       }
       const currentPlan = state.plan;
       return {
         ...nextBase,
         pendingPlan: {
           prompt: parsed.summary,
-          status: "awaiting_approval",
+          status: 'awaiting_approval',
         },
         plan: {
           id: parsed.plan_id,
-          title: currentPlan?.title || "Execution Plan",
-          description: parsed.summary || currentPlan?.description || "Review and approve this plan.",
-          status: "awaiting_approval",
+          title: currentPlan?.title || 'Execution Plan',
+          description:
+            parsed.summary || currentPlan?.description || 'Review and approve this plan.',
+          status: 'awaiting_approval',
           steps: currentPlan?.steps || [],
         },
       };
     }
-    case "response.plan.decision": {
+    case 'response.plan.decision': {
       const parsed = parsePlanDecisionPayload((event as { data?: unknown }).data ?? {});
       if (!parsed) {
-        return { ...nextBase, status: "error", error: "Malformed response.plan.decision event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.plan.decision event' };
       }
       const nextPlan =
         state.plan && state.plan.id === parsed.plan_id
@@ -2951,17 +2922,21 @@ export function reduceJainaStreamEvent(
         lastPlanDecision: parsed,
       };
     }
-    case "response.output_json.delta": {
+    case 'response.output_json.delta': {
       const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
       if (!payload) {
-        return { ...nextBase, status: "error", error: "Malformed response.output_json.delta event" };
+        return {
+          ...nextBase,
+          status: 'error',
+          error: 'Malformed response.output_json.delta event',
+        };
       }
       const nextReportJson = `${state.reportJson}${payload.delta}`;
       if (state.hasCanonicalCheckpointReport) {
         return {
           ...nextBase,
           reportJson: nextReportJson,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
       const parsedReport =
@@ -2972,48 +2947,44 @@ export function reduceJainaStreamEvent(
         reportJson: nextReportJson,
         report: pickRicherReport(state.report, parsedReport),
         reportSourceEventId: parsedReport ? undefined : state.reportSourceEventId,
-        finalContentKind: "report",
+        finalContentKind: 'report',
       };
     }
-    case "response.output_text.delta": {
+    case 'response.output_text.delta': {
       const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
       if (!payload) {
-        return { ...nextBase, status: "error", error: "Malformed response.output_text.delta event" };
+        return {
+          ...nextBase,
+          status: 'error',
+          error: 'Malformed response.output_text.delta event',
+        };
       }
       if (state.hasCanonicalCheckpointReport) {
         const appendCanonicalDelta = !looksLikeStructuredReportDelta(payload.delta);
         return {
           ...nextBase,
-          ...(payload.item_id && !nextBase.outputItemId
-            ? { outputItemId: payload.item_id }
-            : {}),
+          ...(payload.item_id && !nextBase.outputItemId ? { outputItemId: payload.item_id } : {}),
           responseText: appendCanonicalDelta
             ? `${state.responseText}${payload.delta}`
             : state.responseText,
         };
       }
-      const partKind = payload.part_id
-        ? state.contentPartKinds[payload.part_id]
-        : undefined;
+      const partKind = payload.part_id ? state.contentPartKinds[payload.part_id] : undefined;
       const deltaLooksStructured = looksLikeStructuredReportDelta(payload.delta);
       const accumulateReportJson =
-        partKind === "json" ||
-        deltaLooksStructured ||
-        state.reportJson.trim().length > 0;
+        partKind === 'json' || deltaLooksStructured || state.reportJson.trim().length > 0;
       const nextReportJson = accumulateReportJson
         ? `${state.reportJson}${payload.delta}`
         : state.reportJson;
       const parsedReport = accumulateReportJson
-        ? parseReportFromAccumulatedText(nextReportJson) ??
-          parsePartialReportFromAccumulatedText(nextReportJson)
+        ? (parseReportFromAccumulatedText(nextReportJson) ??
+          parsePartialReportFromAccumulatedText(nextReportJson))
         : null;
-      const appendToResponseText = partKind !== "json" && !deltaLooksStructured;
+      const appendToResponseText = partKind !== 'json' && !deltaLooksStructured;
 
       return {
         ...nextBase,
-        ...(payload.item_id && !nextBase.outputItemId
-          ? { outputItemId: payload.item_id }
-          : {}),
+        ...(payload.item_id && !nextBase.outputItemId ? { outputItemId: payload.item_id } : {}),
         reportJson: nextReportJson,
         responseText: appendToResponseText
           ? `${state.responseText}${payload.delta}`
@@ -3022,27 +2993,26 @@ export function reduceJainaStreamEvent(
         reportSourceEventId: parsedReport ? undefined : state.reportSourceEventId,
       };
     }
-    case "response.clarification_request": {
+    case 'response.clarification_request': {
       const parsed = responseClarificationRequestSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
         return {
           ...nextBase,
-          status: "error",
-          error: "Malformed response.clarification_request event",
+          status: 'error',
+          error: 'Malformed response.clarification_request event',
         };
       }
 
       const payload = parsed.data.data;
       const question =
-        (typeof payload.question === "string" && payload.question.trim()) ||
-        (typeof payload.prompt === "string" && payload.prompt.trim()) ||
-        (typeof payload.message === "string" && payload.message.trim()) ||
+        (typeof payload.question === 'string' && payload.question.trim()) ||
+        (typeof payload.prompt === 'string' && payload.prompt.trim()) ||
+        (typeof payload.message === 'string' && payload.message.trim()) ||
         state.responseText.trim() ||
-        "Clarification needed.";
+        'Clarification needed.';
       const clarificationId =
-        (typeof payload.id === "string" && payload.id.trim()) ||
-        (typeof payload.clarification_id === "string" &&
-          payload.clarification_id.trim()) ||
+        (typeof payload.id === 'string' && payload.id.trim()) ||
+        (typeof payload.clarification_id === 'string' && payload.clarification_id.trim()) ||
         undefined;
 
       return {
@@ -3051,30 +3021,30 @@ export function reduceJainaStreamEvent(
           ...(clarificationId ? { id: clarificationId } : {}),
           question,
         },
-        finalContentKind: "text",
+        finalContentKind: 'text',
       };
     }
-    case "state.delta": {
+    case 'state.delta': {
       const parsed = stateDeltaSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed state.delta event" };
+        return { ...nextBase, status: 'error', error: 'Malformed state.delta event' };
       }
 
       const payload = parsed.data.data;
       const nextStateDeltas = [...state.stateDeltas, payload];
       const toolDeltaPayload = asRecord(payload.delta) ?? {};
       const checkpointSummarySourceRaw =
-        payload.source === "checkpoint_summary"
+        payload.source === 'checkpoint_summary'
           ? getNonEmptyString(toolDeltaPayload.summary_source)
           : undefined;
       const checkpointSummarySource =
-        checkpointSummarySourceRaw === "synthesis" ||
-        checkpointSummarySourceRaw === "tool_fallback" ||
-        checkpointSummarySourceRaw === "default_unavailable"
+        checkpointSummarySourceRaw === 'synthesis' ||
+        checkpointSummarySourceRaw === 'tool_fallback' ||
+        checkpointSummarySourceRaw === 'default_unavailable'
           ? checkpointSummarySourceRaw
           : undefined;
       const checkpointSummaryPatch =
-        payload.source === "checkpoint_summary"
+        payload.source === 'checkpoint_summary'
           ? {
               latestCheckpointSummary:
                 getNonEmptyString(toolDeltaPayload.latest_checkpoint_summary) ??
@@ -3086,20 +3056,20 @@ export function reduceJainaStreamEvent(
       const hydratedTools = hydrateToolsFromStateDelta(toolDeltaPayload);
       const { merged: mergedToolCalls, added: addedToolCalls } = mergeToolCalls(
         state.toolCalls,
-        hydratedTools.toolCalls
+        hydratedTools.toolCalls,
       );
       const { merged: mergedToolResults, added: addedToolResults } = mergeToolResults(
         state.toolResults,
-        hydratedTools.toolResults
+        hydratedTools.toolResults,
       );
       const nextProgress = [
         ...state.progress,
         ...addedToolCalls.map((toolCall) => ({
-          stage: "tool_start",
+          stage: 'tool_start',
           at: new Date().toISOString(),
           detail: `Running tool: ${formatToolLabel(toolCall.name)}`,
           data: {
-            stage: "tool_start",
+            stage: 'tool_start',
             source: payload.source,
             tool_name: toolCall.name,
             tool_call_id: toolCall.id,
@@ -3107,11 +3077,11 @@ export function reduceJainaStreamEvent(
           },
         })),
         ...addedToolResults.map((toolResult) => ({
-          stage: "tool_complete",
+          stage: 'tool_complete',
           at: new Date().toISOString(),
           detail: `Finished tool: ${formatToolLabel(toolResult.name)}`,
           data: {
-            stage: "tool_complete",
+            stage: 'tool_complete',
             source: payload.source,
             tool_name: toolResult.name,
             tool_call_id: toolResult.id,
@@ -3130,7 +3100,7 @@ export function reduceJainaStreamEvent(
         planFromDelta = parsePlanFromAccumulatedDelta(planJson, state.plan) ?? state.plan;
       }
 
-      if (payload.source !== "hitl_feedback") {
+      if (payload.source !== 'hitl_feedback') {
         return {
           ...nextBase,
           stateDeltas: nextStateDeltas,
@@ -3174,27 +3144,31 @@ export function reduceJainaStreamEvent(
         ...checkpointSummaryPatch,
       };
     }
-    case "error": {
+    case 'error': {
       const parsed = streamErrorSchema.safeParse(event);
       const message =
-        parsed.success && parsed.data.data ? parsed.data.data.message : "Stream error";
-      return { ...nextBase, status: "error", error: message };
+        parsed.success && parsed.data.data ? parsed.data.data.message : 'Stream error';
+      return { ...nextBase, status: 'error', error: message };
     }
-    case "response.output_item.done": {
+    case 'response.output_item.done': {
       const parsed = responseOutputItemDoneSchema.safeParse(event);
-      if (parsed.success && parsed.data.data?.item_id && parsed.data.data.item_id !== state.outputItemId) {
+      if (
+        parsed.success &&
+        parsed.data.data?.item_id &&
+        parsed.data.data.item_id !== state.outputItemId
+      ) {
         return nextBase;
       }
       if (state.hasCanonicalCheckpointReport) {
         return {
           ...nextBase,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
       if (!state.reportJson.trim() || state.report) {
         return {
           ...nextBase,
-          finalContentKind: state.report ? "report" : state.finalContentKind,
+          finalContentKind: state.report ? 'report' : state.finalContentKind,
         };
       }
       const parsedReport = parseReportFromAccumulatedText(state.reportJson);
@@ -3203,14 +3177,19 @@ export function reduceJainaStreamEvent(
           ...nextBase,
           report: parsedReport,
           reportSourceEventId: undefined,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
       return nextBase;
     }
-    case "response.content_part.done": {
+    case 'response.content_part.done': {
       const parsed = responseContentPartDoneSchema.safeParse(event);
-      if (parsed.success && parsed.data.data?.part_id && state.partId && parsed.data.data.part_id !== state.partId) {
+      if (
+        parsed.success &&
+        parsed.data.data?.part_id &&
+        state.partId &&
+        parsed.data.data.part_id !== state.partId
+      ) {
         return nextBase;
       }
       const completedPartId = parsed.success ? parsed.data.data?.part_id : undefined;
@@ -3219,10 +3198,10 @@ export function reduceJainaStreamEvent(
           ? state.contentPartKinds[completedPartId]
           : undefined;
       const finalContentKind =
-        state.report || completedPartKind === "json"
-          ? "report"
-          : completedPartKind === "text"
-            ? "text"
+        state.report || completedPartKind === 'json'
+          ? 'report'
+          : completedPartKind === 'text'
+            ? 'text'
             : state.finalContentKind;
 
       if (!state.reportJson.trim() || state.report) {
@@ -3239,7 +3218,7 @@ export function reduceJainaStreamEvent(
           report: parsedReport,
           reportSourceEventId: undefined,
           lastCompletedPartId: completedPartId,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
       return {
@@ -3248,20 +3227,16 @@ export function reduceJainaStreamEvent(
         finalContentKind,
       };
     }
-    case "response.done": {
+    case 'response.done': {
       const parsed = responseDoneSchema.safeParse(event);
       if (!parsed.success) {
-        return { ...nextBase, status: "error", error: "Malformed response.done event" };
+        return { ...nextBase, status: 'error', error: 'Malformed response.done event' };
       }
-      if (
-        parsed.data.data?.id &&
-        state.responseId &&
-        parsed.data.data.id !== state.responseId
-      ) {
+      if (parsed.data.data?.id && state.responseId && parsed.data.data.id !== state.responseId) {
         return nextBase;
       }
-      const terminalStatus = parsed.data.data?.status ?? "completed";
-      if (terminalStatus !== "completed") {
+      const terminalStatus = parsed.data.data?.status ?? 'completed';
+      if (terminalStatus !== 'completed') {
         const recoveredReport =
           state.report ??
           (state.reportJson.trim().length > 0
@@ -3269,38 +3244,37 @@ export function reduceJainaStreamEvent(
             : null);
         return {
           ...nextBase,
-          status: "error",
+          status: 'error',
           error: getDoneFailureMessage(parsed.data.data?.status_details),
           report: recoveredReport ?? state.report,
-          finalContentKind:
-            recoveredReport || state.report ? "report" : state.finalContentKind,
+          finalContentKind: recoveredReport || state.report ? 'report' : state.finalContentKind,
         };
       }
       if (state.hasCanonicalCheckpointReport) {
         return {
           ...nextBase,
-          status: "complete",
-          finalContentKind: state.report ? "report" : state.finalContentKind,
+          status: 'complete',
+          finalContentKind: state.report ? 'report' : state.finalContentKind,
         };
       }
       if (!state.reportJson.trim()) {
         return {
           ...nextBase,
-          status: "complete",
-          finalContentKind: state.report ? "report" : state.finalContentKind,
+          status: 'complete',
+          finalContentKind: state.report ? 'report' : state.finalContentKind,
         };
       }
       const parsedReport = parseReportFromAccumulatedText(state.reportJson);
       if (parsedReport) {
         return {
           ...nextBase,
-          status: "complete",
+          status: 'complete',
           report: parsedReport,
           reportSourceEventId: undefined,
-          finalContentKind: "report",
+          finalContentKind: 'report',
         };
       }
-      return { ...nextBase, status: "complete" };
+      return { ...nextBase, status: 'complete' };
     }
     default:
       return nextBase;
@@ -3308,52 +3282,50 @@ export function reduceJainaStreamEvent(
 }
 
 function buildProgressDetail(data: ProgressEventData): string | undefined {
-  if (data.stage === "handoff_start") {
-    return `Delegating to ${String(data.to ?? "specialist")}`;
+  if (data.stage === 'handoff_start') {
+    return `Delegating to ${String(data.to ?? 'specialist')}`;
   }
-  if (data.stage === "handoff_complete") {
-    return `Completed ${String(data.from ?? "handoff")}`;
+  if (data.stage === 'handoff_complete') {
+    return `Completed ${String(data.from ?? 'handoff')}`;
   }
-  if (data.stage === "synthesis_start") {
-    return `Synthesizing across ${String(
-      data.specialist_count ?? "multiple"
-    )} specialists`;
+  if (data.stage === 'synthesis_start') {
+    return `Synthesizing across ${String(data.specialist_count ?? 'multiple')} specialists`;
   }
-  if (data.stage === "synthesis_complete") {
-    return "Synthesis complete";
+  if (data.stage === 'synthesis_complete') {
+    return 'Synthesis complete';
   }
-  if (data.stage === "report_ready") {
-    return "Report ready";
+  if (data.stage === 'report_ready') {
+    return 'Report ready';
   }
-  if (data.stage === "canvas_complete") {
-    return "Canvas update complete";
+  if (data.stage === 'canvas_complete') {
+    return 'Canvas update complete';
   }
-  if (data.stage === "tool_start") {
+  if (data.stage === 'tool_start') {
     return `Running tool: ${formatToolLabel(data.tool_name)}`;
   }
-  if (data.stage === "tool_complete") {
+  if (data.stage === 'tool_complete') {
     return `Finished tool: ${formatToolLabel(data.tool_name)}`;
   }
   return undefined;
 }
 
 function formatToolLabel(toolName: unknown) {
-  const value = String(toolName ?? "unknown");
-  if (value === "router") {
-    return "Consulting the Council";
+  const value = String(toolName ?? 'unknown');
+  if (value === 'router') {
+    return 'Consulting the Council';
   }
-  return value.replace(/_/g, " ");
+  return value.replace(/_/g, ' ');
 }
 
 function getDoneFailureMessage(statusDetails: unknown): string {
   const details = asRecord(statusDetails);
-  if (!details) return "Jaina run failed.";
+  if (!details) return 'Jaina run failed.';
   const directMessage = getNonEmptyString(details.message);
   if (directMessage) return directMessage;
   const nestedError = asRecord(details.error);
   const nestedMessage = getNonEmptyString(nestedError?.message);
   if (nestedMessage) return nestedMessage;
-  return "Jaina run failed.";
+  return 'Jaina run failed.';
 }
 
 type ThoughtPayload = Record<string, unknown>;
@@ -3388,20 +3360,20 @@ function formatThoughtDetail(text: string | undefined): string | undefined {
   }
 
   if (insights.length > 0) {
-    parts.push(`Insights: ${insights.join("; ")}`);
+    parts.push(`Insights: ${insights.join('; ')}`);
   }
   if (recommendations.length > 0) {
-    parts.push(`Recommendations: ${recommendations.join("; ")}`);
+    parts.push(`Recommendations: ${recommendations.join('; ')}`);
   }
   if (nextSteps.length > 0) {
-    parts.push(`Next steps: ${nextSteps.join("; ")}`);
+    parts.push(`Next steps: ${nextSteps.join('; ')}`);
   }
   if (tables.length > 0) {
-    parts.push(`Tables: ${tables.join("; ")}`);
+    parts.push(`Tables: ${tables.join('; ')}`);
   }
 
   if (parts.length > 0) {
-    return parts.join(" • ");
+    return parts.join(' • ');
   }
 
   const serialized = serializeThoughtPayload(parsed);
@@ -3414,7 +3386,7 @@ function parseThoughtPayload(text: string): ThoughtPayload | null {
 
   try {
     const parsed = JSON.parse(candidate);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null;
     }
     return parsed as ThoughtPayload;
@@ -3429,7 +3401,7 @@ function extractJsonCandidate(text: string): string | null {
     return fenced[1].trim();
   }
   const trimmed = text.trim();
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     return trimmed;
   }
   return null;
@@ -3456,7 +3428,7 @@ function serializeThoughtPayload(payload: ThoughtPayload): string | null {
 }
 
 function getNonEmptyString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -3468,8 +3440,8 @@ function asArray(value: unknown): unknown[] {
 function formatInsightItems(value: unknown): string[] {
   return asArray(value)
     .map((item) => {
-      if (typeof item === "string") return getNonEmptyString(item);
-      if (!item || typeof item !== "object") return undefined;
+      if (typeof item === 'string') return getNonEmptyString(item);
+      if (!item || typeof item !== 'object') return undefined;
       const record = item as Record<string, unknown>;
       const title =
         getNonEmptyString(record.title) ??
@@ -3485,11 +3457,10 @@ function formatInsightItems(value: unknown): string[] {
 function formatRecommendationItems(value: unknown): string[] {
   return asArray(value)
     .map((item) => {
-      if (typeof item === "string") return getNonEmptyString(item);
-      if (!item || typeof item !== "object") return undefined;
+      if (typeof item === 'string') return getNonEmptyString(item);
+      if (!item || typeof item !== 'object') return undefined;
       const record = item as Record<string, unknown>;
-      const title =
-        getNonEmptyString(record.title) ?? getNonEmptyString(record.action);
+      const title = getNonEmptyString(record.title) ?? getNonEmptyString(record.action);
       const priority = getNonEmptyString(record.priority);
       const rationale = getNonEmptyString(record.rationale);
       if (title && priority) return `${title} (${priority})`;
@@ -3502,8 +3473,8 @@ function formatRecommendationItems(value: unknown): string[] {
 function formatNextStepItems(value: unknown): string[] {
   return asArray(value)
     .map((item) => {
-      if (typeof item === "string") return getNonEmptyString(item);
-      if (!item || typeof item !== "object") return undefined;
+      if (typeof item === 'string') return getNonEmptyString(item);
+      if (!item || typeof item !== 'object') return undefined;
       const record = item as Record<string, unknown>;
       return (
         getNonEmptyString(record.title) ??
@@ -3517,7 +3488,7 @@ function formatNextStepItems(value: unknown): string[] {
 function formatTableItems(value: unknown): string[] {
   return asArray(value)
     .map((item) => {
-      if (!item || typeof item !== "object") return undefined;
+      if (!item || typeof item !== 'object') return undefined;
       const record = item as Record<string, unknown>;
       return getNonEmptyString(record.title);
     })
@@ -3530,14 +3501,14 @@ function formatTableItems(value: unknown): string[] {
 export function hasRenderableStreamContent(
   state: Pick<
     JainaStreamState,
-    "report" | "reportAssembly" | "responseText" | "pendingClarification" | "plan"
-  >
+    'report' | 'reportAssembly' | 'responseText' | 'pendingClarification' | 'plan'
+  >,
 ): boolean {
   return Boolean(
     state.report ||
       state.reportAssembly ||
       (state.responseText && state.responseText.trim().length > 0) ||
       state.pendingClarification ||
-      state.plan
+      state.plan,
   );
 }

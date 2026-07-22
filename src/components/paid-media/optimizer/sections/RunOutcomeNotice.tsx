@@ -54,17 +54,24 @@ function describe(outcome: RunCycleOutcome): { tone: Tone; message: string } {
   }
 
   switch (outcome.kind) {
+    // Deliberately says nothing about environments or wiring. The user cannot act
+    // on our deployment topology, and naming it reads as a broken product rather
+    // than a feature that has not switched on for them yet.
     case 'not_configured':
       return {
         tone: 'warning',
         message:
-          "The optimizer service isn't wired up for this environment yet — scheduled cycles will populate this once it is.",
+          "The optimizer isn't running for this account yet. Nothing is wrong with your setup — scoring starts automatically once it's switched on.",
       };
+    // Deliberately makes NO promise about budgets. The request timed out, which
+    // means the cycle may still be completing server-side — on an autopilot
+    // portfolio it could still write. "Nothing was changed" is a claim we cannot
+    // make here, and the one place a money tool must not guess is this one.
     case 'timeout':
       return {
         tone: 'warning',
         message:
-          "The optimizer service didn't respond in time. The cycle may still be running — check back in a minute.",
+          "The optimizer didn't respond in time. The cycle may still be finishing — check the Logs tab in a minute to see what it did before running again.",
       };
     case 'forbidden':
       return { tone: 'warning', message: "That ad account isn't connected to this brand." };
@@ -72,12 +79,13 @@ function describe(outcome: RunCycleOutcome): { tone: Tone; message: string } {
       return {
         tone: 'destructive',
         message:
-          'The optimizer returned an unexpected response. The cycle may still have run — this is a bug and has been logged.',
+          "The optimizer returned something we couldn't read. The cycle may still have run — we've logged it. Check the Logs tab before running again.",
       };
     default:
       return {
         tone: 'warning',
-        message: "Couldn't reach the optimizer service. Scheduled cycles will still run.",
+        message:
+          "Couldn't reach the optimizer just now. Your budgets are untouched, and the next scheduled cycle will still run.",
       };
   }
 }

@@ -154,21 +154,45 @@ export function FigmaImportDialog({
                 if (event.key === 'Enter') void loadProjects();
               }}
             />
-            <Button type="button" variant="secondary" disabled={!teamId.trim() || busy !== null} onClick={() => void loadProjects()}>
-              {busy === 'projects' ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!teamId.trim() || busy !== null}
+              onClick={() => void loadProjects()}
+            >
+              {busy === 'projects' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
               Browse
             </Button>
           </div>
 
           {error ? (
-            <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm">
-              <span>{error === 'invalid_configuration'
-                ? 'Figma is not configured for this environment.'
-                : error === 'provider_unavailable' || error.includes('not_connected')
-                  ? 'Connect Figma, then browse again.'
-                  : error}</span>
-              <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => void connect()}>
-                {busy === 'connect' ? <Loader2 className="size-4 animate-spin" /> : <Figma className="size-4" />}
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm"
+            >
+              <span>
+                {error === 'invalid_configuration'
+                  ? 'Figma is not configured for this environment.'
+                  : error === 'provider_unavailable' || error.includes('not_connected')
+                    ? 'Connect Figma, then browse again.'
+                    : error}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => void connect()}
+              >
+                {busy === 'connect' ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Figma className="size-4" />
+                )}
                 Connect
               </Button>
             </div>
@@ -176,18 +200,30 @@ export function FigmaImportDialog({
 
           {projects.length ? (
             <Select value={projectId} onValueChange={(value) => void chooseProject(value)}>
-              <SelectTrigger aria-label="Figma project"><SelectValue placeholder="Choose a project" /></SelectTrigger>
+              <SelectTrigger aria-label="Figma project">
+                <SelectValue placeholder="Choose a project" />
+              </SelectTrigger>
               <SelectContent>
-                {projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           ) : null}
 
           {files.length ? (
             <Select value={fileKey} onValueChange={(value) => void chooseFile(value)}>
-              <SelectTrigger aria-label="Figma file"><SelectValue placeholder="Choose a file" /></SelectTrigger>
+              <SelectTrigger aria-label="Figma file">
+                <SelectValue placeholder="Choose a file" />
+              </SelectTrigger>
               <SelectContent>
-                {files.map((file) => <SelectItem key={file.key} value={file.key}>{file.name}</SelectItem>)}
+                {files.map((file) => (
+                  <SelectItem key={file.key} value={file.key}>
+                    {file.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           ) : null}
@@ -211,33 +247,58 @@ export function FigmaImportDialog({
                       className="sr-only"
                       checked={checked}
                       disabled={!checked && selected.length >= 50}
-                      onChange={() => setSelected((current) => checked
-                        ? current.filter((id) => id !== frame.id)
-                        : current.length < 50
-                          ? [...current, frame.id]
-                          : current)}
+                      onChange={() =>
+                        setSelected((current) =>
+                          checked
+                            ? current.filter((id) => id !== frame.id)
+                            : current.length < 50
+                              ? [...current, frame.id]
+                              : current,
+                        )
+                      }
                     />
-                    <span className={`flex size-5 shrink-0 items-center justify-center rounded border ${checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}>
+                    <span
+                      className={`flex size-5 shrink-0 items-center justify-center rounded border ${checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}`}
+                    >
                       {checked ? <Check className="size-3.5" /> : null}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{frame.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{frame.pageName}{frame.width && frame.height ? ` · ${Math.round(frame.width)}×${Math.round(frame.height)}` : ''}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {frame.pageName}
+                        {frame.width && frame.height
+                          ? ` · ${Math.round(frame.width)}×${Math.round(frame.height)}`
+                          : ''}
+                      </span>
                     </span>
                   </label>
                 );
               })}
             </fieldset>
           ) : fileKey && busy === null ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No top-level frames found in this file.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No top-level frames found in this file.
+            </p>
           ) : null}
         </div>
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
-          <p className="text-xs text-muted-foreground">{selected.length ? `${selected.length} selected` : 'Select up to 50 frames'}</p>
+          <p className="text-xs text-muted-foreground">
+            {selected.length ? `${selected.length} selected` : 'Select up to 50 frames'}
+          </p>
           <div className="flex gap-2">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="button" disabled={!selected.length || busy !== null} onClick={() => void importSelected()}>
-              {busy === 'import' ? <Loader2 className="size-4 animate-spin" /> : <Figma className="size-4" />}
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!selected.length || busy !== null}
+              onClick={() => void importSelected()}
+            >
+              {busy === 'import' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Figma className="size-4" />
+              )}
               Import
             </Button>
           </div>

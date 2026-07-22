@@ -1,5 +1,5 @@
-import { brandBookResponseSchema, type BrandBookResponse } from "@continuum/contracts";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { type BrandBookResponse, brandBookResponseSchema } from '@continuum/contracts';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 // Durable Brand Book read. Calls the DB-adjacent `get-brand-book` edge function
 // (which reads the materialized brand_book row under the caller's JWT/RLS) rather
@@ -10,7 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 // benign "not built yet" case is no longer an error.
 export async function fetchBrandBook(brandId: string): Promise<BrandBookResponse | null> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.functions.invoke("get-brand-book", {
+  const { data, error } = await supabase.functions.invoke('get-brand-book', {
     body: { brandId },
   });
 

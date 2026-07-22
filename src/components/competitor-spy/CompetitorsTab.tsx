@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { CompetitorTagInput } from "./CompetitorTagInput";
-import { TrackedCompetitorsList } from "./TrackedCompetitorsList";
-import { RecommendedCompetitors } from "./RecommendedCompetitors";
+import { CompetitorTagInput } from './CompetitorTagInput';
+import { RecommendedCompetitors } from './RecommendedCompetitors';
+import { TrackedCompetitorsList } from './TrackedCompetitorsList';
 
 // Competitors tab: search-based add (CompetitorTagInput), the clear tracked list,
 // then onboarding-derived recommendations the user accepts one-by-one.

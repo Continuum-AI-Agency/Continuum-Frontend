@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
 import { isValidConnection } from './isValidConnection';
-import { StudioNode } from '../types';
-import { Edge } from '@xyflow/react';
 
 describe('isValidConnection', () => {
   const nodes: StudioNode[] = [
@@ -15,14 +15,19 @@ describe('isValidConnection', () => {
     { id: 'nano1', type: 'nanoGen', position: { x: 0, y: 0 }, data: { prompt: '' } },
     { id: 'video1', type: 'video', position: { x: 0, y: 0 }, data: { video: '' } },
     { id: 'extend1', type: 'extendVideo', position: { x: 0, y: 0 }, data: { prompt: '' } },
-    { id: 'videoGen1', type: 'videoGen', position: { x: 0, y: 0 }, data: { model: 'kling-omni', prompt: '' } as any },
+    {
+      id: 'videoGen1',
+      type: 'videoGen',
+      position: { x: 0, y: 0 },
+      data: { model: 'kling-omni', prompt: '' } as any,
+    },
   ];
 
   it('should allow connecting Image to String node', () => {
     const valid = isValidConnection(
       { source: 'image1', sourceHandle: 'image', target: 'string1', targetHandle: 'image' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
@@ -31,7 +36,7 @@ describe('isValidConnection', () => {
     const valid = isValidConnection(
       { source: 'audio1', sourceHandle: 'audio', target: 'string1', targetHandle: 'audio' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
@@ -40,64 +45,93 @@ describe('isValidConnection', () => {
     const valid = isValidConnection(
       { source: 'doc1', sourceHandle: 'document', target: 'string1', targetHandle: 'document' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
 
   it('should prevent multiple Audio connections to the same String node', () => {
     const edges: Edge[] = [
-      { id: 'e1', source: 'audio1', sourceHandle: 'audio', target: 'string1', targetHandle: 'audio' }
+      {
+        id: 'e1',
+        source: 'audio1',
+        sourceHandle: 'audio',
+        target: 'string1',
+        targetHandle: 'audio',
+      },
     ];
     const valid = isValidConnection(
       { source: 'audio2', sourceHandle: 'audio', target: 'string1', targetHandle: 'audio' },
       edges,
-      nodes
+      nodes,
     );
     expect(valid).toBe(false);
   });
 
   it('should allow multiple Document connections to the same String node', () => {
     const edges: Edge[] = [
-      { id: 'e1', source: 'doc1', sourceHandle: 'document', target: 'string1', targetHandle: 'document' }
+      {
+        id: 'e1',
+        source: 'doc1',
+        sourceHandle: 'document',
+        target: 'string1',
+        targetHandle: 'document',
+      },
     ];
     const valid = isValidConnection(
       { source: 'doc2', sourceHandle: 'document', target: 'string1', targetHandle: 'document' },
       edges,
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
 
   it('should allow multiple Image connections to the same String node', () => {
     const edges: Edge[] = [
-      { id: 'e1', source: 'image1', sourceHandle: 'image', target: 'string1', targetHandle: 'image' }
+      {
+        id: 'e1',
+        source: 'image1',
+        sourceHandle: 'image',
+        target: 'string1',
+        targetHandle: 'image',
+      },
     ];
-    const nodesWithImage2 = [...nodes, { id: 'image2', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } }];
-    
+    const nodesWithImage2 = [
+      ...nodes,
+      { id: 'image2', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } },
+    ];
+
     const valid = isValidConnection(
       { source: 'image2', sourceHandle: 'image', target: 'string1', targetHandle: 'image' },
       edges,
-      nodesWithImage2
+      nodesWithImage2,
     );
     expect(valid).toBe(true);
   });
 
   it('should prevent connecting mismatched types to String node handles', () => {
-    expect(isValidConnection(
-      { source: 'image1', sourceHandle: 'image', target: 'string1', targetHandle: 'audio' }, [], nodes
-    )).toBe(false);
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'string1', targetHandle: 'audio' },
+        [],
+        nodes,
+      ),
+    ).toBe(false);
 
-    expect(isValidConnection(
-      { source: 'audio1', sourceHandle: 'audio', target: 'string1', targetHandle: 'document' }, [], nodes
-    )).toBe(false);
+    expect(
+      isValidConnection(
+        { source: 'audio1', sourceHandle: 'audio', target: 'string1', targetHandle: 'document' },
+        [],
+        nodes,
+      ),
+    ).toBe(false);
   });
 
   it('should allow String to NanoGen prompt connection', () => {
     const valid = isValidConnection(
       { source: 'string1', sourceHandle: 'text', target: 'nano1', targetHandle: 'prompt' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
@@ -106,7 +140,7 @@ describe('isValidConnection', () => {
     const valid = isValidConnection(
       { source: 'image1', sourceHandle: 'image', target: 'nano1', targetHandle: 'prompt' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(false);
   });
@@ -115,19 +149,25 @@ describe('isValidConnection', () => {
     const valid = isValidConnection(
       { source: 'image1', sourceHandle: 'image', target: 'nano1', targetHandle: 'ref-image' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
 
   it('should enforce single connection limit for NanoGen prompt', () => {
     const edges: Edge[] = [
-      { id: 'e1', source: 'string1', sourceHandle: 'text', target: 'nano1', targetHandle: 'prompt' }
+      {
+        id: 'e1',
+        source: 'string1',
+        sourceHandle: 'text',
+        target: 'nano1',
+        targetHandle: 'prompt',
+      },
     ];
     const valid = isValidConnection(
       { source: 'string2', sourceHandle: 'text', target: 'nano1', targetHandle: 'prompt' },
       edges,
-      nodes
+      nodes,
     );
     expect(valid).toBe(false);
   });
@@ -135,19 +175,19 @@ describe('isValidConnection', () => {
   it('should enforce 14 connection limit for NanoGen ref-image', () => {
     const edges: Edge[] = [];
     for (let i = 0; i < 14; i++) {
-        edges.push({ 
-            id: `e${i}`, 
-            source: `img${i}`, 
-            sourceHandle: 'image', 
-            target: 'nano1', 
-            targetHandle: 'ref-image' 
-        });
+      edges.push({
+        id: `e${i}`,
+        source: `img${i}`,
+        sourceHandle: 'image',
+        target: 'nano1',
+        targetHandle: 'ref-image',
+      });
     }
-    
+
     const valid = isValidConnection(
       { source: 'image1', sourceHandle: 'image', target: 'nano1', targetHandle: 'ref-image' },
       edges,
-      nodes
+      nodes,
     );
     expect(valid).toBe(false);
   });
@@ -155,8 +195,11 @@ describe('isValidConnection', () => {
   it('should enforce custom NanoGen max reference image limit when configured', () => {
     const customNodes = nodes.map((node) =>
       node.id === 'nano1'
-        ? ({ ...node, data: { ...(node.data as Record<string, unknown>), maxReferenceImages: 5 } } as StudioNode)
-        : node
+        ? ({
+            ...node,
+            data: { ...(node.data as Record<string, unknown>), maxReferenceImages: 5 },
+          } as StudioNode)
+        : node,
     );
 
     const edges: Edge[] = [];
@@ -171,27 +214,32 @@ describe('isValidConnection', () => {
     }
 
     const valid = isValidConnection(
-      { source: 'image-overflow', sourceHandle: 'image', target: 'nano1', targetHandle: 'ref-image' },
+      {
+        source: 'image-overflow',
+        sourceHandle: 'image',
+        target: 'nano1',
+        targetHandle: 'ref-image',
+      },
       edges,
-      customNodes
+      customNodes,
     );
     expect(valid).toBe(false);
   });
 
   it('should allow connecting Video to ExtendVideo', () => {
     const valid = isValidConnection(
-        { source: 'video1', sourceHandle: 'video', target: 'extend1', targetHandle: 'video' },
-        [],
-        nodes
+      { source: 'video1', sourceHandle: 'video', target: 'extend1', targetHandle: 'video' },
+      [],
+      nodes,
     );
     expect(valid).toBe(true);
   });
 
   it('should prevent connecting String to ExtendVideo video handle', () => {
     const valid = isValidConnection(
-        { source: 'string1', sourceHandle: 'text', target: 'extend1', targetHandle: 'video' },
-        [],
-        nodes
+      { source: 'string1', sourceHandle: 'text', target: 'extend1', targetHandle: 'video' },
+      [],
+      nodes,
     );
     expect(valid).toBe(false);
   });
@@ -200,7 +248,7 @@ describe('isValidConnection', () => {
     const valid = isValidConnection(
       { source: 'video1', sourceHandle: 'video', target: 'videoGen1', targetHandle: 'ref-video' },
       [],
-      nodes
+      nodes,
     );
     expect(valid).toBe(true);
   });
@@ -214,17 +262,47 @@ describe('isValidConnection', () => {
       { id: 'image5', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } } as any,
     ];
     const edges: Edge[] = [
-      { id: 'ref-video', source: 'video1', sourceHandle: 'video', target: 'videoGen1', targetHandle: 'ref-video' },
-      { id: 'img-1', source: 'image1', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
-      { id: 'img-2', source: 'image2', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
-      { id: 'img-3', source: 'image3', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
-      { id: 'img-4', source: 'image4', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
+      {
+        id: 'ref-video',
+        source: 'video1',
+        sourceHandle: 'video',
+        target: 'videoGen1',
+        targetHandle: 'ref-video',
+      },
+      {
+        id: 'img-1',
+        source: 'image1',
+        sourceHandle: 'image',
+        target: 'videoGen1',
+        targetHandle: 'ref-images',
+      },
+      {
+        id: 'img-2',
+        source: 'image2',
+        sourceHandle: 'image',
+        target: 'videoGen1',
+        targetHandle: 'ref-images',
+      },
+      {
+        id: 'img-3',
+        source: 'image3',
+        sourceHandle: 'image',
+        target: 'videoGen1',
+        targetHandle: 'ref-images',
+      },
+      {
+        id: 'img-4',
+        source: 'image4',
+        sourceHandle: 'image',
+        target: 'videoGen1',
+        targetHandle: 'ref-images',
+      },
     ];
 
     const valid = isValidConnection(
       { source: 'image5', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
       edges,
-      nodesWithImages as StudioNode[]
+      nodesWithImages as StudioNode[],
     );
 
     expect(valid).toBe(false);
@@ -245,16 +323,16 @@ describe('isValidConnection', () => {
       isValidConnection(
         { source: 'image1', sourceHandle: 'image', target: 'veoLite', targetHandle: 'first-frame' },
         [],
-        liteNodes
-      )
+        liteNodes,
+      ),
     ).toBe(true);
 
     expect(
       isValidConnection(
         { source: 'image1', sourceHandle: 'image', target: 'veoLite', targetHandle: 'ref-images' },
         [],
-        liteNodes
-      )
+        liteNodes,
+      ),
     ).toBe(false);
   });
 });

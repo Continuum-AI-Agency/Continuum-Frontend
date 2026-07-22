@@ -1,21 +1,21 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 
-import { parseWeeklyGridPayload } from "./weekly-grid";
+import { parseWeeklyGridPayload } from './weekly-grid';
 
 const row = {
-  day: "Monday",
-  type: "Post",
-  format: "Reel",
-  tone: "Educational",
-  title_topic: "Trend A",
-  objective: "Awareness",
-  target: "Founders",
-  cta: "Comment below",
+  day: 'Monday',
+  type: 'Post',
+  format: 'Reel',
+  tone: 'Educational',
+  title_topic: 'Trend A',
+  objective: 'Awareness',
+  target: 'Founders',
+  cta: 'Comment below',
   num_slides: 1,
 };
 
-describe("parseWeeklyGridPayload", () => {
-  it("parses a direct weekly grid payload", () => {
+describe('parseWeeklyGridPayload', () => {
+  it('parses a direct weekly grid payload', () => {
     const parsed = parseWeeklyGridPayload({ grid: [row] });
 
     expect(parsed).toEqual({
@@ -23,7 +23,7 @@ describe("parseWeeklyGridPayload", () => {
     });
   });
 
-  it("parses nested envelope payloads and weekly_grid arrays", () => {
+  it('parses nested envelope payloads and weekly_grid arrays', () => {
     const parsed = parseWeeklyGridPayload({
       data: {
         result: {
@@ -37,11 +37,11 @@ describe("parseWeeklyGridPayload", () => {
     });
   });
 
-  it("returns null for invalid payloads", () => {
+  it('returns null for invalid payloads', () => {
     const parsed = parseWeeklyGridPayload({
       data: {
         result: {
-          weekly_grid: "not-a-grid",
+          weekly_grid: 'not-a-grid',
         },
       },
     });

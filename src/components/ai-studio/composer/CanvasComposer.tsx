@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ArrowUpIcon,
   ChatBubbleIcon,
   Cross2Icon,
   ExclamationTriangleIcon,
@@ -9,7 +8,7 @@ import {
   PlayIcon,
   TrashIcon,
 } from '@radix-ui/react-icons';
-import { type KeyboardEvent, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Conversation,
   ConversationContent,
@@ -17,10 +16,13 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
+import { MentionifiedText } from '@/components/chat/mentionified-text';
+import { PromptInput } from '@/components/chat/prompt-input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
+import { createCanvasComposerMentionProvider } from './canvasContextProvider';
 import { StarterPickerButton } from './StarterPickerButton';
 import {
   type CanvasComposerState,
@@ -50,6 +52,8 @@ interface CanvasComposerProps {
   /** Whether the canvas currently has any nodes — decides hero vs bar. */
   isCanvasEmpty: boolean;
   selectedNodeIds: string[];
+  /** Whether the Team chat panel is open, so the bar can clear its footprint. */
+  chatOpen?: boolean;
   onRun: () => void;
   className?: string;
 }
@@ -59,69 +63,83 @@ export function CanvasComposer({
   roomId,
   isCanvasEmpty,
   selectedNodeIds,
+  chatOpen = false,
   onRun,
   className,
 }: CanvasComposerProps) {
-  const [prompt, setPrompt] = useState('');
   const [expanded, setExpanded] = useState(false);
-  const { state, turns, submit, cancel, clear } = useCanvasComposer(brandProfileId, roomId);
+  const [thinking, setThinking] = useState(false);
+  const [queuedText, setQueuedText] = useState<string | null>(null);
+  const { state, turns, submit, cancel, clear, dismiss } = useCanvasComposer(
+    brandProfileId,
+    roomId,
+  );
+  const { all: brandSkills } = useBrandSkills(brandProfileId);
+  const mentionProvider = useMemo(
+    () =>
+      brandProfileId
+        ? createCanvasComposerMentionProvider({ brandId: brandProfileId, skills: brandSkills })
+        : undefined,
+    [brandProfileId, brandSkills],
+  );
 
   const isRunning = state.status === 'running';
-  const canSubmit = Boolean(brandProfileId && roomId && prompt.trim() && !isRunning);
-
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    void submit(prompt, selectedNodeIds, { remember: expanded });
-    setPrompt('');
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleSubmit();
-    }
-  };
 
   const hero = isCanvasEmpty && state.status === 'idle' && !expanded;
 
   const inputRow = (
-    <div className="flex items-end gap-2 p-2">
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => setExpanded((value) => !value)}
-        aria-label={expanded ? 'Collapse composer chat' : 'Expand composer chat'}
-        aria-expanded={expanded}
-        data-testid="composer-expand"
-        className="mb-1 shrink-0 text-muted-foreground"
-      >
-        {expanded ? <Cross2Icon /> : <ChatBubbleIcon />}
-      </Button>
-      <StarterPickerButton brandProfileId={brandProfileId} />
-      <Textarea
-        value={prompt}
-        onChange={(event) => setPrompt(event.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={isRunning}
-        rows={hero ? 2 : 1}
-        aria-label="Describe the workflow you want on the canvas"
-        placeholder={
-          selectedNodeIds.length > 0
-            ? `Change the ${selectedNodeIds.length} selected node${selectedNodeIds.length > 1 ? 's' : ''}…`
-            : 'e.g. a hero image of the new sneaker, animated into a 6s clip'
-        }
-        className="min-h-0 resize-none border-0 bg-transparent p-2 shadow-none focus-visible:ring-0"
-      />
-      <Button
-        size="icon"
-        onClick={handleSubmit}
-        disabled={!canSubmit}
-        aria-label="Build this workflow"
-        className="mb-1 shrink-0"
-      >
-        <ArrowUpIcon />
-      </Button>
-    </div>
+    <PromptInput
+      variant="canvas"
+      disabled={!brandProfileId || !roomId}
+      isStreaming={isRunning}
+      onStop={cancel}
+      mentionProvider={mentionProvider}
+      mentionSource="canvas"
+      queuedText={queuedText}
+      onQueuedTextConsumed={() => setQueuedText(null)}
+      onSubmit={(value, _attachments, references) => {
+        void submit(value, selectedNodeIds, {
+          remember: expanded,
+          references,
+          thinking,
+        });
+      }}
+      ariaLabel="Describe the workflow you want on the canvas"
+      placeholder={
+        selectedNodeIds.length > 0
+          ? `Change the ${selectedNodeIds.length} selected node${selectedNodeIds.length > 1 ? 's' : ''}…`
+          : 'Describe a workflow; type @ for skills or Library media'
+      }
+      actions={
+        <>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setExpanded((value) => !value)}
+            aria-label={expanded ? 'Collapse composer chat' : 'Expand composer chat'}
+            aria-expanded={expanded}
+            data-testid="composer-expand"
+            className="size-8 shrink-0 text-muted-foreground"
+            type="button"
+          >
+            {expanded ? <Cross2Icon /> : <ChatBubbleIcon />}
+          </Button>
+          <StarterPickerButton brandProfileId={brandProfileId} />
+          <Button
+            size="sm"
+            variant={thinking ? 'secondary' : 'ghost'}
+            aria-label={thinking ? 'Disable deeper thinking' : 'Enable deeper thinking'}
+            aria-pressed={thinking}
+            title={thinking ? 'Thinking mode: maximum reasoning' : 'Fast mode: low reasoning'}
+            onClick={() => setThinking((value) => !value)}
+            className="h-8 px-2 text-xs"
+            type="button"
+          >
+            {thinking ? 'Thinking' : 'Fast'}
+          </Button>
+        </>
+      }
+    />
   );
 
   return (
@@ -129,6 +147,9 @@ export function CanvasComposer({
       className={cn(
         'pointer-events-none absolute inset-x-0 z-20 flex justify-center px-4',
         hero ? 'top-1/2 -translate-y-1/2' : 'bottom-6',
+        // Reserve the Team chat panel's bottom-right footprint (~400px) when it is
+        // open so the two overlays never overlap or steal each other's clicks.
+        chatOpen && !hero ? 'md:pr-[26rem]' : '',
         className,
       )}
     >
@@ -188,14 +209,12 @@ export function CanvasComposer({
               <ConversationScrollButton />
             </Conversation>
 
-            <div className="border-t">{inputRow}</div>
+            <div className="border-t p-2">{inputRow}</div>
           </div>
         ) : (
           <>
-            <ComposerProgress state={state} onDismiss={cancel} onRun={onRun} />
-            <div className="rounded-xl border bg-background/95 shadow-lg backdrop-blur">
-              {inputRow}
-            </div>
+            <ComposerProgress state={state} onDismiss={dismiss} onRun={onRun} />
+            {inputRow}
           </>
         )}
 
@@ -205,7 +224,7 @@ export function CanvasComposer({
               <button
                 key={example}
                 type="button"
-                onClick={() => setPrompt(example)}
+                onClick={() => setQueuedText(example)}
                 className="rounded-full border bg-background/80 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 {example}
@@ -236,7 +255,9 @@ function TurnMessages({
     <>
       {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the Message component's author prop (house ai-elements API), not an ARIA role */}
       <Message role="user">
-        <p className="text-sm">{turn.prompt}</p>
+        <p className="text-sm">
+          <MentionifiedText text={turn.prompt} references={turn.references} />
+        </p>
       </Message>
       {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the Message component's author prop (house ai-elements API), not an ARIA role */}
       <Message role="assistant">

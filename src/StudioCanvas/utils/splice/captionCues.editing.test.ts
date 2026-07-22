@@ -15,7 +15,10 @@ describe('updateCaptionCue', () => {
   });
 
   it('clears a cue override without discarding the global style', () => {
-    const cue = { ...groupWordsIntoCues([{ text: 'hello', startSec: 0, endSec: 1 }])[0], style: { textColor: '#ff0000' } };
+    const cue = {
+      ...groupWordsIntoCues([{ text: 'hello', startSec: 0, endSec: 1 }])[0],
+      style: { textColor: '#ff0000' },
+    };
     expect(updateCaptionCue(cue, { style: undefined }).style).toBeUndefined();
   });
 });

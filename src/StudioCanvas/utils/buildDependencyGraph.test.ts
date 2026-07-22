@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
 import { buildDependencyGraph, getExecutableNodes } from './buildDependencyGraph';
-import { StudioNode } from '../types';
-import { Edge } from '@xyflow/react';
 
 describe('buildDependencyGraph', () => {
   it('should build dependency graph correctly', () => {
@@ -26,9 +26,9 @@ describe('buildDependencyGraph', () => {
 
   it('should identify entry points (nodes with no executable dependencies)', () => {
     const nodes: StudioNode[] = [
-      { id: '1', position: { x: 0, y: 0 }, data: {}, type: 'string' }, 
-      { id: '2', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' }, 
-      { id: '3', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' }, 
+      { id: '1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: '2', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+      { id: '3', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
     ];
 
     const edges: Edge[] = [

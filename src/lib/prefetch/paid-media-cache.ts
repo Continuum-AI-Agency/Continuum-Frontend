@@ -1,8 +1,8 @@
 import {
-  fetchCampaignPerformanceRows,
   type CampaignPerformanceParams,
-} from "@/lib/paid-media/campaign-performance-loader";
-import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
+  fetchCampaignPerformanceRows,
+} from '@/lib/paid-media/campaign-performance-loader';
+import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
 
 type CacheEntry = {
   promise: Promise<unknown>;
@@ -23,16 +23,13 @@ function isStale(entry: CacheEntry): boolean {
  * Call this while the user is on the Jaina tab so data is warm when they switch to Dashboard.
  * Mirrors the pattern in src/lib/prefetch/organic-metrics-cache.ts.
  */
-export function prefetchPaidMediaDashboard(params: {
-  brandId: string;
-  adAccountId: string;
-}): void {
+export function prefetchPaidMediaDashboard(params: { brandId: string; adAccountId: string }): void {
   const { brandId, adAccountId } = params;
   const campaignParams: CampaignPerformanceParams = {
     brandId,
     adAccountId,
-    platform: "meta",
-    range: { preset: "last_7d" },
+    platform: 'meta',
+    range: { preset: 'last_7d' },
   };
 
   const campaignsKey = buildCampaignsKey(campaignParams);
@@ -61,7 +58,7 @@ export function prefetchPaidMediaDashboard(params: {
  * The entry stays warm for the TTL duration after consumption.
  */
 export function consumePrefetchedCampaigns(
-  params: CampaignPerformanceParams
+  params: CampaignPerformanceParams,
 ): Promise<CampaignPerformanceRow[]> | null {
   const key = buildCampaignsKey(params);
   const entry = campaignsCache.get(key);
@@ -77,7 +74,7 @@ export function consumePrefetchedCampaigns(
  */
 export function consumePrefetchedIndexes(
   brandId: string,
-  adAccountId: string
+  adAccountId: string,
 ): Promise<unknown> | null {
   const key = buildIndexesKey(brandId, adAccountId);
   const entry = indexesCache.get(key);
@@ -95,7 +92,7 @@ export function clearPaidMediaPrefetchCache(): void {
 
 function buildCampaignsKey(params: CampaignPerformanceParams): string {
   const rangeKey =
-    params.range.preset === "custom"
+    params.range.preset === 'custom'
       ? `custom:${params.range.since}:${params.range.until}`
       : params.range.preset;
   return `${params.brandId}:${params.adAccountId}:${params.platform}:${rangeKey}:campaigns`;

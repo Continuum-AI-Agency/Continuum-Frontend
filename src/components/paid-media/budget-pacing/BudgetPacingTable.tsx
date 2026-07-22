@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { ChevronRight } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
-import type { BudgetPacingEntry, BudgetPacingAdSetEntry } from "@/lib/schemas/budgetPacing";
-import { BudgetPacingStatusBadge } from "./BudgetPacingStatusBadge";
-import type { RangeOption } from "./BudgetPacingChart";
+import { ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { Progress } from '@/components/ui/progress';
+import type { BudgetPacingAdSetEntry, BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
+import { cn } from '@/lib/utils';
+import type { RangeOption } from './BudgetPacingChart';
+import { BudgetPacingStatusBadge } from './BudgetPacingStatusBadge';
 
 const PAGE_SIZE = 10;
 const DAY_MS = 86_400_000;
@@ -21,9 +21,9 @@ type Props = {
 };
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
 }
@@ -39,7 +39,7 @@ function computeWindowSpend(trend: DailyPoint[], days: number | null): number {
 }
 
 function computeWindowTarget(
-  budgetType: "daily" | "lifetime",
+  budgetType: 'daily' | 'lifetime',
   totalBudget: number,
   daysElapsed: number,
   daysRemaining: number | null,
@@ -50,7 +50,7 @@ function computeWindowTarget(
 
   const totalFlightDays = daysRemaining !== null ? daysElapsed + daysRemaining : null;
 
-  if (budgetType === "daily") {
+  if (budgetType === 'daily') {
     return totalBudget * days;
   }
   if (totalFlightDays && totalFlightDays > 0) {
@@ -60,44 +60,44 @@ function computeWindowTarget(
 }
 
 const RANGE_DAYS: Record<RangeOption, number | null> = {
-  "7d": 7,
-  "14d": 14,
-  "30d": 30,
-  "all": null,
+  '7d': 7,
+  '14d': 14,
+  '30d': 30,
+  all: null,
 };
 
 const SPEND_LABEL: Record<RangeOption, string> = {
-  "7d": "7D Spend",
-  "14d": "14D Spend",
-  "30d": "30D Spend",
-  "all": "Spend",
+  '7d': '7D Spend',
+  '14d': '14D Spend',
+  '30d': '30D Spend',
+  all: 'Spend',
 };
 
 const REMAINING_LABEL: Record<RangeOption, string> = {
-  "7d": "7D Left",
-  "14d": "14D Left",
-  "30d": "30D Left",
-  "all": "Remaining",
+  '7d': '7D Left',
+  '14d': '14D Left',
+  '30d': '30D Left',
+  all: 'Remaining',
 };
 
 const paceColor: Record<string, string> = {
-  on_pace: "text-emerald-500",
-  underspending: "text-amber-500",
-  overspending: "text-red-500",
+  on_pace: 'text-emerald-500',
+  underspending: 'text-amber-500',
+  overspending: 'text-red-500',
 };
 
-const GRID = "grid-cols-[minmax(160px,1fr)_72px_104px_136px_136px_88px_96px]";
+const GRID = 'grid-cols-[minmax(160px,1fr)_72px_104px_136px_136px_88px_96px]';
 
 type RowData = {
   id: string;
   name: string;
-  budgetType: "daily" | "lifetime";
+  budgetType: 'daily' | 'lifetime';
   totalBudget: number;
   spendToDate: number;
   budgetRemaining: number;
   pacePct: number;
-  paceStatus: "on_pace" | "underspending" | "overspending";
-  paceMethod: "budget" | "trend";
+  paceStatus: 'on_pace' | 'underspending' | 'overspending';
+  paceMethod: 'budget' | 'trend';
   todaySpend: number;
   daysElapsed: number;
   daysRemaining: number | null;
@@ -129,11 +129,8 @@ function PacingRow({
     row.daysRemaining,
     days,
   );
-  const windowRemaining = days === null
-    ? row.budgetRemaining
-    : windowTarget !== null
-      ? windowTarget - windowSpend
-      : null;
+  const windowRemaining =
+    days === null ? row.budgetRemaining : windowTarget !== null ? windowTarget - windowSpend : null;
 
   return (
     <div
@@ -141,14 +138,17 @@ function PacingRow({
       tabIndex={0}
       onClick={onFocus}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onFocus(); }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onFocus();
+        }
       }}
       className={cn(
         `grid ${GRID} items-center gap-x-3 border-b border-border/40 px-4 py-2.5 last:border-b-0`,
-        "cursor-pointer select-none transition-colors",
-        indent && "pl-8 bg-muted/20",
-        isFocused ? "bg-primary/10 border-l-2 border-l-primary" : "hover:bg-muted/40",
-        !isFocused && !indent && row.paceStatus === "overspending" && "bg-red-500/5",
+        'cursor-pointer select-none transition-colors',
+        indent && 'pl-8 bg-muted/20',
+        isFocused ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-muted/40',
+        !isFocused && !indent && row.paceStatus === 'overspending' && 'bg-red-500/5',
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
@@ -166,25 +166,26 @@ function PacingRow({
       <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{row.budgetType}</span>
 
       <span className="tabular-nums text-sm text-right">
-        {row.totalBudget > 0 ? formatCurrency(row.totalBudget) : "—"}
+        {row.totalBudget > 0 ? formatCurrency(row.totalBudget) : '—'}
       </span>
 
       <div className="text-right">
         <p className="tabular-nums text-sm">{formatCurrency(windowSpend)}</p>
-        {row.budgetType === "daily" && (
+        {row.budgetType === 'daily' && (
           <p className="text-xs text-muted-foreground">Today {formatCurrency(row.todaySpend)}</p>
         )}
       </div>
 
       <span className="tabular-nums text-sm text-right">
-        {windowRemaining !== null ? formatCurrency(windowRemaining) : "—"}
+        {windowRemaining !== null ? formatCurrency(windowRemaining) : '—'}
       </span>
 
       <div className="flex flex-col items-end gap-1">
-        <span className={cn("tabular-nums text-sm", paceColor[row.paceStatus])}>
-          {row.paceMethod === "trend" ? "~" : ""}{row.pacePct.toFixed(1)}%
+        <span className={cn('tabular-nums text-sm', paceColor[row.paceStatus])}>
+          {row.paceMethod === 'trend' ? '~' : ''}
+          {row.pacePct.toFixed(1)}%
         </span>
-        {row.paceMethod === "trend" && (
+        {row.paceMethod === 'trend' && (
           <span className="text-2xs text-muted-foreground">vs 7d avg</span>
         )}
         <Progress value={Math.min(100, row.pacePct)} className="h-1 w-16" />
@@ -234,12 +235,12 @@ function toAdSetRow(a: BudgetPacingAdSetEntry): RowData {
 }
 
 export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRange }: Props) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const active = [...campaigns]
-    .filter((c) => c.status === "ACTIVE")
+    .filter((c) => c.status === 'ACTIVE')
     .sort((a, b) => a.campaignName.localeCompare(b.campaignName));
 
   const filtered = query.trim()
@@ -259,7 +260,8 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
     e.stopPropagation();
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -270,12 +272,17 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
         type="search"
         placeholder="Search campaigns…"
         value={query}
-        onChange={(e) => { setQuery(e.target.value); setVisibleCount(PAGE_SIZE); }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setVisibleCount(PAGE_SIZE);
+        }}
         className="w-full rounded border border-border/60 bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
       />
 
       <div className="min-w-0 rounded-lg border border-border/60 overflow-x-auto overflow-y-hidden">
-        <div className={`grid ${GRID} min-w-[640px] gap-x-3 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground`}>
+        <div
+          className={`grid ${GRID} min-w-[640px] gap-x-3 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground`}
+        >
           <span>Campaign</span>
           <span>Type</span>
           <span className="text-right">Budget</span>
@@ -297,7 +304,9 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
                   row={toCampaignRow(campaign)}
                   isFocused={isCampaignFocused}
                   selectedRange={selectedRange}
-                  onFocus={() => onFocusKey(isCampaignFocused ? null : `campaign:${campaign.campaignId}`)}
+                  onFocus={() =>
+                    onFocusKey(isCampaignFocused ? null : `campaign:${campaign.campaignId}`)
+                  }
                   expandSlot={
                     hasAdSets ? (
                       <button
@@ -305,14 +314,15 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
                         className="flex shrink-0 items-center justify-center rounded p-1.5 hover:bg-muted min-w-[28px] min-h-[28px] active:scale-[0.96] transition-[transform,background-color]"
                         onClick={(e) => toggleExpand(campaign.campaignId, e)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") toggleExpand(campaign.campaignId, e);
+                          if (e.key === 'Enter' || e.key === ' ')
+                            toggleExpand(campaign.campaignId, e);
                         }}
-                        aria-label={isExpanded ? "Collapse adsets" : "Expand adsets"}
+                        aria-label={isExpanded ? 'Collapse adsets' : 'Expand adsets'}
                       >
                         <ChevronRight
                           className={cn(
-                            "size-4 text-muted-foreground transition-transform duration-200",
-                            isExpanded && "rotate-90"
+                            'size-4 text-muted-foreground transition-transform duration-200',
+                            isExpanded && 'rotate-90',
                           )}
                         />
                       </button>
@@ -321,19 +331,20 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
                     )
                   }
                 />
-                {isExpanded && campaign.adSets.map((adSet) => {
-                  const isAdSetFocused = focusKey === `adset:${adSet.adSetId}`;
-                  return (
-                    <PacingRow
-                      key={adSet.adSetId}
-                      row={toAdSetRow(adSet)}
-                      isFocused={isAdSetFocused}
-                      selectedRange={selectedRange}
-                      indent
-                      onFocus={() => onFocusKey(isAdSetFocused ? null : `adset:${adSet.adSetId}`)}
-                    />
-                  );
-                })}
+                {isExpanded &&
+                  campaign.adSets.map((adSet) => {
+                    const isAdSetFocused = focusKey === `adset:${adSet.adSetId}`;
+                    return (
+                      <PacingRow
+                        key={adSet.adSetId}
+                        row={toAdSetRow(adSet)}
+                        isFocused={isAdSetFocused}
+                        selectedRange={selectedRange}
+                        indent
+                        onFocus={() => onFocusKey(isAdSetFocused ? null : `adset:${adSet.adSetId}`)}
+                      />
+                    );
+                  })}
               </div>
             );
           })}

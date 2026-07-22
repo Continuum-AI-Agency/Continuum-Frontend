@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import { useVersionCheck } from "@/hooks/use-version-check";
+import { Button } from '@/components/ui/button';
+import { useVersionCheck } from '@/hooks/use-version-check';
 
 export function VersionBanner() {
   const { isUpdateAvailable, reload } = useVersionCheck();

@@ -88,9 +88,7 @@ export function ToolApprovalCard({
                 </div>
                 {scheduledAt && <MetaRow items={[scheduledAt]} className="text-xs" />}
                 {angle && (
-                  <p className="line-clamp-3 text-sm leading-relaxed text-foreground/80">
-                    {angle}
-                  </p>
+                  <p className="line-clamp-3 text-sm leading-relaxed text-foreground/80">{angle}</p>
                 )}
                 {!platform && !angle && (
                   <p className="text-xs text-muted-foreground">{approval.toolName}</p>

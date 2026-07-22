@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
+import { useCallback, useState } from 'react';
 import {
   generateBrandInsights,
   isTerminalBrandInsightsStatus,
   subscribeToBrandInsightsJob,
-} from "@/lib/api/brandInsights.client";
+} from '@/lib/api/brandInsights.client';
 
 export function useBrandInsightsRefresh(brandId: string) {
   const [isFetching, setIsFetching] = useState(false);
@@ -17,7 +17,7 @@ export function useBrandInsightsRefresh(brandId: string) {
     setIsFetching(true);
     try {
       const result = await generateBrandInsights({ brandId });
-      if (result.status === "processing" && result.generationId) {
+      if (result.status === 'processing' && result.generationId) {
         const generationId = result.generationId;
         await new Promise<void>((resolve) => {
           const stop = subscribeToBrandInsightsJob({

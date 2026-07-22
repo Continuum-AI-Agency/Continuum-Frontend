@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const BudgetPacingRequestSchema = z.object({
   brandId: z.string(),
@@ -15,13 +15,13 @@ export const BudgetPacingAdSetEntrySchema = z.object({
   adSetId: z.string(),
   adSetName: z.string(),
   status: z.string(),
-  budgetType: z.enum(["daily", "lifetime"]),
+  budgetType: z.enum(['daily', 'lifetime']),
   totalBudget: z.number(),
   spendToDate: z.number(),
   budgetRemaining: z.number(),
   pacePct: z.number(),
-  paceStatus: z.enum(["on_pace", "underspending", "overspending"]),
-  paceMethod: z.enum(["budget", "trend"]),
+  paceStatus: z.enum(['on_pace', 'underspending', 'overspending']),
+  paceMethod: z.enum(['budget', 'trend']),
   todaySpend: z.number(),
   projectedEndSpend: z.number(),
   daysElapsed: z.number(),
@@ -35,13 +35,13 @@ export const BudgetPacingEntrySchema = z.object({
   campaignId: z.string(),
   campaignName: z.string(),
   status: z.string(),
-  budgetType: z.enum(["daily", "lifetime"]),
+  budgetType: z.enum(['daily', 'lifetime']),
   totalBudget: z.number(),
   spendToDate: z.number(),
   budgetRemaining: z.number(),
   pacePct: z.number(),
-  paceStatus: z.enum(["on_pace", "underspending", "overspending"]),
-  paceMethod: z.enum(["budget", "trend"]),
+  paceStatus: z.enum(['on_pace', 'underspending', 'overspending']),
+  paceMethod: z.enum(['budget', 'trend']),
   todaySpend: z.number(),
   projectedEndSpend: z.number(),
   daysElapsed: z.number(),
@@ -49,7 +49,7 @@ export const BudgetPacingEntrySchema = z.object({
   flightStart: z.string().nullable(),
   flightEnd: z.string().nullable(),
   dailyTrend: z.array(dailyTrendPointSchema),
-  budgetSource: z.enum(["campaign", "adset_sum"]),
+  budgetSource: z.enum(['campaign', 'adset_sum']),
   adSets: z.array(BudgetPacingAdSetEntrySchema),
 });
 
@@ -59,8 +59,8 @@ export const BudgetPacingSummarySchema = z.object({
   totalTodaySpend: z.number(),
   totalBudgetRemaining: z.number(),
   overallPacePct: z.number(),
-  paceStatus: z.enum(["on_pace", "underspending", "overspending"]),
-  accountBudgetPeriod: z.enum(["daily", "lifetime", "mixed"]),
+  paceStatus: z.enum(['on_pace', 'underspending', 'overspending']),
+  accountBudgetPeriod: z.enum(['daily', 'lifetime', 'mixed']),
 });
 
 export const BudgetPacingResponseSchema = z.object({

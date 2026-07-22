@@ -1,6 +1,6 @@
-import "server-only";
+import 'server-only';
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type OwnedConnection = {
   id: string;
@@ -14,14 +14,14 @@ export async function fetchOwnedConnections(userId: string): Promise<OwnedConnec
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("user_integrations")
-    .select("id, provider, status, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .schema('brand_profiles')
+    .from('user_integrations')
+    .select('id, provider, status, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
 
   if (error) {
-    console.error("[fetchOwnedConnections] query failed", error);
+    console.error('[fetchOwnedConnections] query failed', error);
     return [];
   }
 

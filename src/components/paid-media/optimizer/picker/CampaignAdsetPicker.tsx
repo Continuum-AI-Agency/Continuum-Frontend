@@ -169,14 +169,23 @@ const AdsetRow = memo(function AdsetRow({
           className={cn('block min-w-0', row.eligible ? 'cursor-pointer' : 'cursor-not-allowed')}
         >
           <span className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                'truncate text-sm',
-                row.eligible ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {row.name}
-            </span>
+            {/* Name-first: the raw Meta id lives in the tooltip, never inline, so the
+                name column stays legible instead of carrying a debug string. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    'truncate text-sm',
+                    row.eligible ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {row.name}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <span className="font-mono text-2xs">{row.id}</span>
+              </TooltipContent>
+            </Tooltip>
             {row.eligible && row.budgetType ? (
               <Badge variant="outline" className="shrink-0 text-3xs">
                 {BUDGET_TYPE_LABEL[row.budgetType]}

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 
-import { buildPaidStatCards, type PaidOverviewInput } from "./paid-stat-cards";
+import { buildPaidStatCards, type PaidOverviewInput } from './paid-stat-cards';
 
 const overview: PaidOverviewInput = {
   metrics: {
@@ -25,35 +25,35 @@ const overview: PaidOverviewInput = {
   ],
 };
 
-describe("buildPaidStatCards", () => {
-  it("builds spend, ROAS, and CTR cards", () => {
+describe('buildPaidStatCards', () => {
+  it('builds spend, ROAS, and CTR cards', () => {
     const cards = buildPaidStatCards(overview);
-    expect(cards.map((card) => card.id)).toEqual(["spend", "roas", "ctr"]);
+    expect(cards.map((card) => card.id)).toEqual(['spend', 'roas', 'ctr']);
   });
 
-  it("formats values by unit and carries the delta", () => {
+  it('formats values by unit and carries the delta', () => {
     const [spend, roas, ctr] = buildPaidStatCards(overview);
-    expect(spend.value).toBe("$2.3K");
+    expect(spend.value).toBe('$2.3K');
     expect(spend.deltaPct).toBe(11.7);
-    expect(roas.value).toBe("4.12x");
-    expect(ctr.value).toBe("1.8%");
+    expect(roas.value).toBe('4.12x');
+    expect(ctr.value).toBe('1.8%');
     expect(ctr.deltaPct).toBe(-8.5);
   });
 
-  it("derives the daily bar series from trends", () => {
+  it('derives the daily bar series from trends', () => {
     const [spend] = buildPaidStatCards(overview);
     expect(spend.series).toEqual([300, 360]);
   });
 
-  it("surfaces the prior window in the hover detail", () => {
+  it('surfaces the prior window in the hover detail', () => {
     const [spend] = buildPaidStatCards(overview);
-    expect(spend.detail[0]).toEqual({ label: "Prev 7d", value: "$2.1K" });
+    expect(spend.detail[0]).toEqual({ label: 'Prev 7d', value: '$2.1K' });
   });
 
-  it("degrades missing secondary metrics to a dash", () => {
+  it('degrades missing secondary metrics to a dash', () => {
     const cards = buildPaidStatCards({ metrics: { spend: 10, roas: 1, ctr: 1 } });
     const spend = cards[0];
-    expect(spend.detail.find((row) => row.label === "Impressions")?.value).toBe("—");
+    expect(spend.detail.find((row) => row.label === 'Impressions')?.value).toBe('—');
     expect(spend.deltaPct).toBeUndefined();
     expect(spend.series).toEqual([]);
   });

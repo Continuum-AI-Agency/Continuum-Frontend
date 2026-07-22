@@ -1,9 +1,9 @@
-"use client"
+'use client';
 
-import * as React from "react"
+import * as React from 'react';
 
-import { useCalendarStore } from "@/lib/organic/store"
-import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+import { useCalendarStore } from '@/lib/organic/store';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
  * Keeps the planner authoritative with the server: subscribes to Supabase
@@ -18,36 +18,36 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
  * pulls in the draft wherever it landed, so no off-window nudge is needed.
  */
 export function useCalendarRealtimeSync(args: { brandProfileId?: string }) {
-  const { brandProfileId } = args
-  const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch)
-  const supabase = React.useMemo(() => createSupabaseBrowserClient(), [])
+  const { brandProfileId } = args;
+  const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
+  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   React.useEffect(() => {
-    if (!brandProfileId) return
+    if (!brandProfileId) return;
 
-    let debounce: ReturnType<typeof setTimeout> | null = null
+    let debounce: ReturnType<typeof setTimeout> | null = null;
     const handleChange = () => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(() => requestCalendarRefetch(), 400)
-    }
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => requestCalendarRefetch(), 400);
+    };
 
     const channel = supabase
       .channel(`organic-calendar-drafts-${brandProfileId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "organic",
-          table: "organic_calendar_drafts",
+          event: '*',
+          schema: 'organic',
+          table: 'organic_calendar_drafts',
           filter: `brand_id=eq.${brandProfileId}`,
         },
         handleChange,
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      if (debounce) clearTimeout(debounce)
-      void supabase.removeChannel(channel)
-    }
-  }, [brandProfileId, requestCalendarRefetch, supabase])
+      if (debounce) clearTimeout(debounce);
+      void supabase.removeChannel(channel);
+    };
+  }, [brandProfileId, requestCalendarRefetch, supabase]);
 }

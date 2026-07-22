@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import dynamic from "next/dynamic";
-import type { GalaxyBackgroundProps } from "./GalaxyBackground";
+import dynamic from 'next/dynamic';
+import type { GalaxyBackgroundProps } from './GalaxyBackground';
 
 const GalaxyBackground = dynamic(
-  () => import("./GalaxyBackground").then((mod) => ({ default: mod.GalaxyBackground })),
+  () => import('./GalaxyBackground').then((mod) => ({ default: mod.GalaxyBackground })),
   { ssr: false },
 );
 

@@ -62,14 +62,55 @@ describe('RunOutcomeNotice', () => {
     expect(screen.getByRole('status').textContent).not.toContain('not live yet');
   });
 
-  it('distinguishes an unconfigured service from a skip', () => {
+  it('distinguishes an unconfigured service from a skip, and absolves the user', () => {
     renderOutcome({ status: 'unavailable', kind: 'not_configured' });
-    expect(screen.getByRole('status').textContent).toContain("isn't wired up for this environment");
+    const text = screen.getByRole('status').textContent ?? '';
+    expect(text).toContain("isn't running for this account yet");
+    expect(text).toContain('Nothing is wrong with your setup');
   });
 
-  it('names contract drift as a bug rather than an outage', () => {
+  it('names contract drift as something logged, not as an outage', () => {
     renderOutcome({ status: 'unavailable', kind: 'malformed' });
-    expect(screen.getByRole('status').textContent).toContain('this is a bug and has been logged');
+    const text = screen.getByRole('status').textContent ?? '';
+    expect(text).toContain("we've logged it");
+    expect(text).toContain('Check the Logs tab');
+  });
+
+  // Deployment topology is ours, not the reader's. A media buyer has no local
+  // stack, no edge functions and no "environment" — seeing those words reads as
+  // a broken product rather than a feature that has not switched on for them.
+  it.each([
+    ['not_configured'],
+    ['timeout'],
+    ['malformed'],
+    ['unknown'],
+  ] as const)('keeps engineering vocabulary out of the %s message', (kind) => {
+    renderOutcome({ status: 'unavailable', kind } as never);
+    const text = (screen.getByRole('status').textContent ?? '').toLowerCase();
+    for (const term of ['local stack', 'edge function', 'this environment', 'wired up']) {
+      expect(text).not.toContain(term);
+    }
+  });
+
+  // A failure in a tool that spends money has to answer "did anything change?".
+  // When the request never reached the service, it did not, and saying so is the
+  // reassurance the reader needs.
+  it('reassures that budgets are untouched when the request never reached the service', () => {
+    renderOutcome({ status: 'unavailable', kind: 'unknown' } as never);
+    expect((screen.getByRole('status').textContent ?? '').toLowerCase()).toContain('untouched');
+  });
+
+  // A TIMEOUT is the one path where we genuinely do not know: the cycle may still
+  // be completing server-side, and on an autopilot portfolio it could still write.
+  // Claiming safety here would be the most expensive kind of wrong, so the message
+  // must send the reader to the record instead of guessing on their behalf.
+  it('makes no budget-safety claim on a timeout, and points at the record instead', () => {
+    renderOutcome({ status: 'unavailable', kind: 'timeout' } as never);
+    const text = (screen.getByRole('status').textContent ?? '').toLowerCase();
+    expect(text).not.toContain('untouched');
+    expect(text).not.toContain('no budgets were changed');
+    expect(text).not.toContain('nothing was changed');
+    expect(text).toContain('logs');
   });
 
   it('shows a busy state while the cycle is running', () => {

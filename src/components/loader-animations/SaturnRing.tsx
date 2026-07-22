@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
-import React, { useRef, useMemo } from "react";
-import { useFrame } from "@react-three/fiber";
-import { GradientTexture } from "@react-three/drei";
-import * as THREE from "three";
+import { GradientTexture } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import type React from 'react';
+import { useMemo, useRef } from 'react';
+import * as THREE from 'three';
 
 interface SaturnRingProps {
   radius: number;
@@ -20,7 +21,7 @@ const SaturnRing: React.FC<SaturnRingProps> = ({
   rotation,
   colors,
   speed,
-  opacity
+  opacity,
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -49,11 +50,7 @@ const SaturnRing: React.FC<SaturnRingProps> = ({
         roughness={0.3}
         metalness={0.1}
       >
-        <GradientTexture
-          stops={gradientStops}
-          colors={colors}
-          size={512}
-        />
+        <GradientTexture stops={gradientStops} colors={colors} size={512} />
       </meshStandardMaterial>
     </mesh>
   );

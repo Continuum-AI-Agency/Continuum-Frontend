@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
 
-import { useToast } from "@/components/ui/ToastProvider";
-import { usePersistentState } from "@/lib/usePersistentState";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { registerStrategicRunsCatchUp } from "./realtimeBus";
+import { useToast } from '@/components/ui/ToastProvider';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { registerStrategicRunsCatchUp } from './realtimeBus';
 
 type Props = {
   brandId: string;
@@ -19,7 +19,7 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
 
   const [lastCompletedAt, setLastCompletedAt] = usePersistentState<string | null>(
     `strategic-analysis:last-completed:${brandId}`,
-    null
+    null,
   );
 
   const lastCompletedAtRef = useRef<string | null>(lastCompletedAt);
@@ -48,25 +48,25 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
       }
 
       show({
-        title: "Strategic analysis ready",
-        description: "Your latest run finished processing.",
-        variant: "success",
+        title: 'Strategic analysis ready',
+        description: 'Your latest run finished processing.',
+        variant: 'success',
       });
 
-      queryClient.invalidateQueries({ queryKey: ["strategic-analysis", brandId] });
-      queryClient.invalidateQueries({ queryKey: ["strategic-analysis-runs", brandId] });
+      queryClient.invalidateQueries({ queryKey: ['strategic-analysis', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['strategic-analysis-runs', brandId] });
     };
 
     const catchUpMissed = async () => {
-      const since = lastCompletedAtRef.current ?? "1970-01-01T00:00:00Z";
+      const since = lastCompletedAtRef.current ?? '1970-01-01T00:00:00Z';
       const { data, error } = await supabase
-        .schema("brand_trends" as never)
-        .from("strategic_analysis_runs")
-        .select("id, completed_at")
-        .eq("brand_id", brandId)
-        .eq("status", "completed")
-        .gt("completed_at", since)
-        .order("completed_at", { ascending: true });
+        .schema('brand_trends' as never)
+        .from('strategic_analysis_runs')
+        .select('id, completed_at')
+        .eq('brand_id', brandId)
+        .eq('status', 'completed')
+        .gt('completed_at', since)
+        .order('completed_at', { ascending: true });
 
       if (error || !data) return;
 
@@ -83,27 +83,27 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
     const channel = supabase
       .channel(`strategic_runs_${brandId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "UPDATE",
-          schema: "brand_trends",
-          table: "strategic_analysis_runs",
+          event: 'UPDATE',
+          schema: 'brand_trends',
+          table: 'strategic_analysis_runs',
           filter: `brand_id=eq.${brandId}`,
         },
-        payload => {
+        (payload) => {
           const previous = payload.old?.status;
           const next = payload.new?.status;
           const runId = payload.new?.id;
           if (!runId) return;
-          if (previous === "completed" || next !== "completed") return;
+          if (previous === 'completed' || next !== 'completed') return;
           if (seenRunIdsRef.current.has(runId)) return;
 
           const completedAt = payload.new?.completed_at ?? null;
           handleCompletion(runId, completedAt);
-        }
+        },
       )
-      .subscribe(status => {
-        if (status === "SUBSCRIBED") {
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
           void catchUpMissed();
         }
       });

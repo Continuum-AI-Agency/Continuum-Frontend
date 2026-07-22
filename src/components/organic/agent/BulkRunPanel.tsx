@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
-import { useCalendarStore } from "@/lib/organic/store";
-import { useGenerationSummaries } from "@/lib/organic/generationSummaries";
-import type { BulkRunState, BulkRunStatus } from "./types";
-import { useRunEventStream, type ParsedRunEvent } from "@/hooks/useRunEventStream";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ParsedRunEvent, useRunEventStream } from '@/hooks/useRunEventStream';
+import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
+import { useCalendarStore } from '@/lib/organic/store';
+import { cn } from '@/lib/utils';
+import type { BulkRunState, BulkRunStatus } from './types';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
+  return typeof v === 'object' && v !== null;
 }
 
 function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
@@ -17,12 +17,15 @@ function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
   const inner = isRecord(event.data.event) ? event.data.event : event.data;
 
   switch (event.type) {
-    case "run_started":
-      return { ...prev, total: typeof inner.totalPlacements === "number" ? inner.totalPlacements : prev.total };
-    case "slot_completed": {
+    case 'run_started':
+      return {
+        ...prev,
+        total: typeof inner.totalPlacements === 'number' ? inner.totalPlacements : prev.total,
+      };
+    case 'slot_completed': {
       const pl = isRecord(inner.placement) ? inner.placement : {};
-      const platform = isRecord(pl.platform) ? String(pl.platform.name ?? "unknown") : "unknown";
-      const format = isRecord(pl.content) ? String(pl.content.format ?? "unknown") : "unknown";
+      const platform = isRecord(pl.platform) ? String(pl.platform.name ?? 'unknown') : 'unknown';
+      const format = isRecord(pl.content) ? String(pl.content.format ?? 'unknown') : 'unknown';
       return {
         ...prev,
         completed: prev.completed + 1,
@@ -30,12 +33,12 @@ function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
         byFormat: { ...prev.byFormat, [format]: (prev.byFormat[format] ?? 0) + 1 },
       };
     }
-    case "slot_failed":
+    case 'slot_failed':
       return { ...prev, failed: prev.failed + 1 };
-    case "run_completed":
-      return { ...prev, status: "completed" as BulkRunStatus };
-    case "run_failed":
-      return { ...prev, status: "failed" as BulkRunStatus };
+    case 'run_completed':
+      return { ...prev, status: 'completed' as BulkRunStatus };
+    case 'run_failed':
+      return { ...prev, status: 'failed' as BulkRunStatus };
     default:
       return prev;
   }
@@ -44,14 +47,14 @@ function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
 function useBulkRunProgress(runId: string, total: number): BulkRunState {
   const [state, setState] = useState<BulkRunState>({
     runId,
-    planId: runId.replace(/^run_/, ""),
-    brandId: "",
+    planId: runId.replace(/^run_/, ''),
+    brandId: '',
     total,
     completed: 0,
     failed: 0,
     byPlatform: {},
     byFormat: {},
-    status: "running",
+    status: 'running',
   });
 
   const handleEvent = useCallback((event: ParsedRunEvent) => {
@@ -98,10 +101,10 @@ export function BulkRunPanel({
     () => summaries.filter((s) => s.planId === planId),
     [summaries, planId],
   );
-  const completed = planSummaries.filter((s) => s.status === "completed").length;
-  const failed = planSummaries.filter((s) => s.status === "failed").length;
+  const completed = planSummaries.filter((s) => s.status === 'completed').length;
+  const failed = planSummaries.filter((s) => s.status === 'failed').length;
   const activeCount = planSummaries.filter(
-    (s) => s.status === "running" || s.status === "queued",
+    (s) => s.status === 'running' || s.status === 'queued',
   ).length;
   // Total = the real number of jobs created (so a partial dispatch or a deduped
   // re-click reports honestly), not run_started.totalPlacements. Before any job
@@ -115,15 +118,15 @@ export function BulkRunPanel({
   const status: BulkRunStatus =
     summaryTotal > 0 && activeCount === 0
       ? failed > 0 && completed === 0
-        ? "failed"
-        : "completed"
+        ? 'failed'
+        : 'completed'
       : run.status;
 
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
-    if (status === "completed" || status === "failed") {
+    if (status === 'completed' || status === 'failed') {
       reconciledRef.current = true;
       requestCalendarRefetch();
     }
@@ -137,12 +140,12 @@ export function BulkRunPanel({
         </p>
         <span
           className={cn(
-            "shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide",
-            status === "completed"
-              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-              : status === "failed"
-                ? "bg-red-500/15 text-red-500"
-                : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+            'shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide',
+            status === 'completed'
+              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+              : status === 'failed'
+                ? 'bg-red-500/15 text-red-500'
+                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
           )}
         >
           {status}
@@ -155,7 +158,7 @@ export function BulkRunPanel({
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">
           {done}/{displayTotal}
-          {failed > 0 ? ` · ${failed} failed` : ""}
+          {failed > 0 ? ` · ${failed} failed` : ''}
         </span>
       </div>
 

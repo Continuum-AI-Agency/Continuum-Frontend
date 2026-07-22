@@ -8,6 +8,7 @@ import {
 import { Cross2Icon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
@@ -15,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { readSavedAccountSelection } from '@/lib/organic/account-selection';
@@ -34,6 +36,7 @@ import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
 import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
 import { useCalendarSelection } from '../hooks/useCalendarSelection';
 import { useDraftGeneration } from '../hooks/useDraftGeneration';
+import { useRescheduleDraft } from '../hooks/useRescheduleDraft';
 import { AiPostComposer } from './AiPostComposer';
 import { AiStudioHandoffProvider } from './AiStudioHandoffContext';
 import { BulkActionToolbar } from './BulkActionToolbar';
@@ -150,7 +153,6 @@ function OrganicCalendarWorkspaceInner({
     persistedWeekStartId,
     setPersistedWeekStartId,
     toggleTrend,
-    bulkMoveDrafts,
     bulkDeleteDrafts,
     clearCalendar,
     setSelectedDraftId,
@@ -178,7 +180,6 @@ function OrganicCalendarWorkspaceInner({
       persistedWeekStartId: state.persistedWeekStartId,
       setPersistedWeekStartId: state.setPersistedWeekStartId,
       toggleTrend: state.toggleTrend,
-      bulkMoveDrafts: state.bulkMoveDrafts,
       bulkDeleteDrafts: state.bulkDeleteDrafts,
       clearCalendar: state.clearCalendar,
       setSelectedDraftId: state.setSelectedDraftId,
@@ -465,6 +466,27 @@ function OrganicCalendarWorkspaceInner({
     return drafts.find((draft) => draft.id === selectedId) ?? null;
   }, [drafts, selectedId]);
 
+  // The panel's mount is driven by selection INTENT, not by the resolved draft
+  // object. `drafts` is rebuilt from scratch on every autosave/refetch/realtime
+  // reconcile (useCalendarDraftPersistence.refetch → setCalendarDays), so
+  // `selectedDraft` can transiently resolve to null for a still-valid selection
+  // while ids are reconciled — gating the panel on it alone made the post-info
+  // panel silently blank until a reload. Gate on `selectedId` and bridge the
+  // transient gap with the last-resolved draft so the panel never blanks and
+  // re-renders with fresh content the moment the draft resolves again.
+  const hasSelection = Boolean(selectedId);
+  const lastResolvedDraftRef = React.useRef<OrganicCalendarDraft | null>(null);
+  if (!selectedId) {
+    lastResolvedDraftRef.current = null;
+  } else if (selectedDraft) {
+    lastResolvedDraftRef.current = selectedDraft;
+  }
+  const previewDraft =
+    selectedDraft ??
+    (selectedId && lastResolvedDraftRef.current?.id === selectedId
+      ? lastResolvedDraftRef.current
+      : null);
+
   const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts]);
 
   // Unified selection sync: prune stale selections and restore preferred
@@ -520,10 +542,28 @@ function OrganicCalendarWorkspaceInner({
     setSelectedDraftIds,
   ]);
 
+  // "View draft" deep-link (agent JobGrid → router.push('?tab=planner&draftId=…'))
+  // landing on an ALREADY-mounted planner: initialSelectedDraftId is captured at
+  // mount and the reconciliation effect above only restores a selection when there
+  // is none, so a draftId query-param change on a live planner would otherwise be
+  // ignored. Watch the param directly and re-select once the target draft is loaded.
+  const searchParams = useSearchParams();
+  const searchDraftId = searchParams?.get('draftId') ?? null;
+  React.useEffect(() => {
+    if (!searchDraftId || searchDraftId === selectedId) return;
+    if (!isCalendarHydrated || !allDraftIds.has(searchDraftId)) return;
+    setSelectedDraftId(searchDraftId);
+  }, [searchDraftId, selectedId, isCalendarHydrated, allDraftIds, setSelectedDraftId]);
+
+  const { show } = useToast();
+  const { reschedule, rescheduleMany } = useRescheduleDraft();
+
   const { activeDragDraft, handleDragStart, handleDragEnd, handleNativeDrop } = useCalendarDnD(
     calendarDays,
     drafts,
     platformAccountIds,
+    selectedIds,
+    { reschedule, rescheduleMany },
   );
 
   const { gridStatus, handleRegenerate, handleClearFailure } = useDraftGeneration({
@@ -739,18 +779,25 @@ function OrganicCalendarWorkspaceInner({
     // rest as drafts so the readiness gate can't be bypassed in bulk. Persistence
     // must go through the backend approve→schedule chain — a local status flip
     // never reaches the DB row, so the scheduled-publish poller would never see it.
-    const ready = selectedIds
+    const selected = selectedIds
       .map((id) => drafts.find((draft) => draft.id === id))
-      .filter(
-        (draft): draft is OrganicCalendarDraft => !!draft && evaluateDraftReadiness(draft).ready,
-      );
+      .filter((draft): draft is OrganicCalendarDraft => !!draft);
+    const ready = selected.filter((draft) => evaluateDraftReadiness(draft).ready);
     void (async () => {
+      let approved = 0;
       for (const draft of ready) {
-        await approveAndSchedule(draft);
+        // Silence the per-draft toast; one summary toast reports the whole batch.
+        if (await approveAndSchedule(draft, { silent: true })) approved += 1;
       }
+      const skipped = selected.length - approved;
+      show({
+        title: 'Bulk approve complete',
+        description: `Approved ${approved} • skipped ${skipped}`,
+        variant: approved > 0 ? 'success' : 'info',
+      });
     })();
     clearAll();
-  }, [selectedIds, drafts, approveAndSchedule, clearAll]);
+  }, [selectedIds, drafts, approveAndSchedule, clearAll, show]);
 
   const handleBulkDelete = React.useCallback(() => {
     requestDraftDeletion(selectedIds, (ids) => {
@@ -759,10 +806,15 @@ function OrganicCalendarWorkspaceInner({
     });
   }, [bulkDeleteDrafts, selectedIds, clearAll, requestDraftDeletion]);
 
-  const handleBulkMove = React.useCallback(() => {
-    bulkMoveDrafts(selectedIds, calendarDays[0]?.id);
-    clearAll();
-  }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll]);
+  const handleBulkMove = React.useCallback(
+    (dayId: string) => {
+      // The day comes from BulkActionToolbar's date picker; the reschedule hook moves
+      // the whole selection optimistically and persists each backend-backed draft.
+      void rescheduleMany(selectedIds, dayId);
+      clearAll();
+    },
+    [rescheduleMany, selectedIds, clearAll],
+  );
 
   // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel
   // drafts. Reel and image batches both flow through this single hook so the
@@ -934,7 +986,7 @@ function OrganicCalendarWorkspaceInner({
     draftsCount: drafts.length,
     scheduledCount,
     isGenerating,
-    hasSelection: Boolean(selectedDraft),
+    hasSelection,
   });
   const plannerInsight = React.useMemo(
     () => derivePlannerInsight(visibleWeekDays),
@@ -983,11 +1035,11 @@ function OrganicCalendarWorkspaceInner({
           }
         >
           <ResizablePanelGroup
-            key={`${isWidePlanner ? 'wide' : 'narrow'}:${selectedDraft ? 'preview' : 'workspace'}`}
+            key={`${isWidePlanner ? 'wide' : 'narrow'}:${hasSelection ? 'preview' : 'workspace'}`}
             id="organic-planner-layout"
             orientation={isWidePlanner ? 'horizontal' : 'vertical'}
             defaultLayout={
-              selectedDraft
+              hasSelection
                 ? {
                     'planner-workspace': 100 - (isWidePlanner ? previewPercent : 48),
                     'planner-preview': isWidePlanner ? previewPercent : 48,
@@ -1002,7 +1054,7 @@ function OrganicCalendarWorkspaceInner({
             }}
             className="h-full min-h-0 w-full"
           >
-            <ResizablePanel id="planner-workspace" minSize={selectedDraft ? 55 : 100}>
+            <ResizablePanel id="planner-workspace" minSize={hasSelection ? 55 : 100}>
               <motion.section
                 layout
                 transition={layoutTransition}
@@ -1193,7 +1245,7 @@ function OrganicCalendarWorkspaceInner({
                 )}
               </motion.section>
             </ResizablePanel>
-            {selectedDraft ? (
+            {hasSelection ? (
               <>
                 <ResizableHandle
                   withHandle
@@ -1239,9 +1291,13 @@ function OrganicCalendarWorkspaceInner({
                                     type="button"
                                     variant="secondary"
                                     size="sm"
-                                    disabled={!brandProfileId}
+                                    disabled={!brandProfileId || !previewDraft}
                                     onClick={handleOpenInAiStudio}
-                                    style={!brandProfileId ? { pointerEvents: 'none' } : undefined}
+                                    style={
+                                      !brandProfileId || !previewDraft
+                                        ? { pointerEvents: 'none' }
+                                        : undefined
+                                    }
                                   >
                                     Open in AI Studio
                                   </Button>
@@ -1266,27 +1322,47 @@ function OrganicCalendarWorkspaceInner({
 
                       {/* The preview's status reads from the same presentation map as the card's
                           pill — one status, one hue, one word, wherever it is shown. */}
-                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                        <Badge variant="outline">
-                          {selectedDraft.platforms[0] ?? 'Unassigned'}
-                        </Badge>
-                        <StatusBadge status={selectedDraft.status} format={selectedDraft.format} />
-                        <Badge variant="outline">
-                          {selectedDraft.dateLabel || 'Unscheduled'} ·{' '}
-                          {selectedDraft.timeLabel || 'No time'}
-                        </Badge>
-                      </div>
+                      {previewDraft ? (
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline">
+                            {previewDraft.platforms[0] ?? 'Unassigned'}
+                          </Badge>
+                          <StatusBadge status={previewDraft.status} format={previewDraft.format} />
+                          <Badge variant="outline">
+                            {previewDraft.dateLabel || 'Unscheduled'} ·{' '}
+                            {previewDraft.timeLabel || 'No time'}
+                          </Badge>
+                        </div>
+                      ) : null}
 
                       <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                        <OrganicDraftPreview
-                          draft={selectedDraft}
-                          brandName={brandName}
-                          brandProfileId={brandProfileId}
-                          onApprove={(draftId) => {
-                            const target = drafts.find((draft) => draft.id === draftId);
-                            if (target) void approveAndSchedule(target);
-                          }}
-                        />
+                        {previewDraft ? (
+                          <OrganicDraftPreview
+                            draft={previewDraft}
+                            brandName={brandName}
+                            brandProfileId={brandProfileId}
+                            onApprove={(draftId) => {
+                              const target = drafts.find((draft) => draft.id === draftId);
+                              if (target) void approveAndSchedule(target);
+                            }}
+                          />
+                        ) : (
+                          // Selection is set but the draft has not resolved from the
+                          // current calendar set yet (a refetch/reconcile is in flight).
+                          // Show a neutral loading state — the panel re-renders with
+                          // content the moment the draft resolves, so no reload is needed.
+                          <div
+                            className="flex h-full flex-col gap-3 p-3"
+                            role="status"
+                            aria-busy="true"
+                            aria-label="Loading post preview"
+                          >
+                            <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
+                            <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
+                            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
+                            <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
+                          </div>
+                        )}
                       </div>
                     </motion.aside>
                   </AnimatePresence>

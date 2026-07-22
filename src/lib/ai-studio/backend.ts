@@ -1,22 +1,22 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
+  type AiStudioGenerationResponse,
+  type AiStudioJob,
+  type AiStudioJobsResponse,
+  type AiStudioTemplate,
+  type AiStudioTemplatesResponse,
+  aiStudioGenerationResponseSchema,
   aiStudioJobSchema,
+  aiStudioJobStatusSchema,
   aiStudioMediumSchema,
   aiStudioProviderSchema,
   aiStudioTemplateSchema,
   aiStudioTemplatesResponseSchema,
-  aiStudioGenerationResponseSchema,
-  aiStudioJobStatusSchema,
-  type AiStudioJob,
-  type AiStudioTemplate,
-  type AiStudioGenerationResponse,
-  type AiStudioJobsResponse,
-  type AiStudioTemplatesResponse,
-} from "@/lib/schemas/aiStudio";
+} from '@/lib/schemas/aiStudio';
 
 const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
-  message: "Invalid ISO timestamp",
+  message: 'Invalid ISO timestamp',
 });
 
 const backendProviderSchema = z.string().min(1);
@@ -98,14 +98,14 @@ function mapArtifact(artifact: z.infer<typeof backendArtifactSchema>) {
 }
 
 function normalizeProvider(provider: string): z.infer<typeof aiStudioProviderSchema> {
-  if (provider === "kling-omni-video" || provider === "kling-omni-v1") {
-    return "kling-omni";
+  if (provider === 'kling-omni-video' || provider === 'kling-omni-v1') {
+    return 'kling-omni';
   }
-  if (provider === "veo-3-1-fast") {
-    return "veo-3-1";
+  if (provider === 'veo-3-1-fast') {
+    return 'veo-3-1';
   }
-  if (provider === "veo-3.1-lite-generate-preview") {
-    return "veo-3-1-lite";
+  if (provider === 'veo-3.1-lite-generate-preview') {
+    return 'veo-3-1-lite';
   }
   return aiStudioProviderSchema.parse(provider);
 }
@@ -151,7 +151,9 @@ function mapTemplate(template: z.infer<typeof backendTemplateSchema>): AiStudioT
     defaultNegativePrompt: template.default_negative_prompt ?? undefined,
     metadata: template.metadata ?? undefined,
     tags:
-      template.tags?.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0) ?? undefined,
+      template.tags?.filter(
+        (tag): tag is string => typeof tag === 'string' && tag.trim().length > 0,
+      ) ?? undefined,
   };
 
   return aiStudioTemplateSchema.parse(mapped);

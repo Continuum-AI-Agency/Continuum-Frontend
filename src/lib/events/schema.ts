@@ -1,13 +1,13 @@
-import { z, type ZodTypeAny } from "zod";
+import { type ZodTypeAny, z } from 'zod';
 
 export const CONTINUUM_EVENT_TYPES = [
-  "ai.task.progress",
-  "ai.task.completed",
-  "ai.task.failed",
-  "integration.status.changed",
-  "campaign.metrics.updated",
-  "organic.trend.updated",
-  "onboarding.document.updated",
+  'ai.task.progress',
+  'ai.task.completed',
+  'ai.task.failed',
+  'integration.status.changed',
+  'campaign.metrics.updated',
+  'organic.trend.updated',
+  'onboarding.document.updated',
 ] as const;
 
 export type ContinuumEventName = (typeof CONTINUUM_EVENT_TYPES)[number];
@@ -40,7 +40,7 @@ const aiTaskFailedSchema = z
 const integrationStatusChangedSchema = z
   .object({
     provider: z.string(),
-    status: z.enum(["connected", "disconnected", "pending", "error"]),
+    status: z.enum(['connected', 'disconnected', 'pending', 'error']),
     detail: z.string().optional(),
   })
   .strict();
@@ -48,7 +48,7 @@ const integrationStatusChangedSchema = z
 const campaignMetricsUpdatedSchema = z
   .object({
     campaignId: z.string(),
-    timeframe: z.enum(["24h", "7d", "30d", "lifetime"]),
+    timeframe: z.enum(['24h', '7d', '30d', 'lifetime']),
     metrics: z.record(z.string(), z.number()),
   })
   .strict();
@@ -66,20 +66,20 @@ const onboardingDocumentUpdatedSchema = z
   .object({
     brandId: z.string(),
     documentId: z.string(),
-    status: z.enum(["processing", "ready", "error"]),
+    status: z.enum(['processing', 'ready', 'error']),
     errorMessage: z.string().optional(),
     updatedAt: z.string().datetime().optional(),
   })
   .strict();
 
 export const continuumEventPayloadSchemas = {
-  "ai.task.progress": aiTaskProgressSchema,
-  "ai.task.completed": aiTaskCompletedSchema,
-  "ai.task.failed": aiTaskFailedSchema,
-  "integration.status.changed": integrationStatusChangedSchema,
-  "campaign.metrics.updated": campaignMetricsUpdatedSchema,
-  "organic.trend.updated": organicTrendUpdatedSchema,
-  "onboarding.document.updated": onboardingDocumentUpdatedSchema,
+  'ai.task.progress': aiTaskProgressSchema,
+  'ai.task.completed': aiTaskCompletedSchema,
+  'ai.task.failed': aiTaskFailedSchema,
+  'integration.status.changed': integrationStatusChangedSchema,
+  'campaign.metrics.updated': campaignMetricsUpdatedSchema,
+  'organic.trend.updated': organicTrendUpdatedSchema,
+  'onboarding.document.updated': onboardingDocumentUpdatedSchema,
 } as const satisfies Record<ContinuumEventName, ZodTypeAny>;
 
 type ContinuumEventSchemaMap = typeof continuumEventPayloadSchemas;

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { Bot, ExternalLink, Lightbulb, Search } from "lucide-react";
-import type { AeoSnapshotCard as AeoSnapshotCardData } from "@continuum/contracts";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import type { AeoSnapshotCard as AeoSnapshotCardData } from '@continuum/contracts';
+import { Bot, ExternalLink, Lightbulb, Search } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import {
   AgentArtifactCard,
   AgentCardBody,
@@ -12,31 +12,40 @@ import {
   AgentCardSummary,
   AgentCardTitle,
   StatusLabel,
-} from "./agentCardKit";
+} from './agentCardKit';
 
 function scoreTone(score: number): string {
-  if (score >= 70) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 40) return "text-amber-600 dark:text-amber-400";
-  return "text-destructive";
+  if (score >= 70) return 'text-emerald-600 dark:text-emerald-400';
+  if (score >= 40) return 'text-amber-600 dark:text-amber-400';
+  return 'text-destructive';
 }
 
 function formatDate(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "just now";
+  if (Number.isNaN(date.getTime())) return 'just now';
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   }).format(date);
 }
 
-function MetricBlock({ label, value, suffix = "" }: { label: string; value: number; suffix?: string }) {
+function MetricBlock({
+  label,
+  value,
+  suffix = '',
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+}) {
   return (
     <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 text-xl font-semibold tabular-nums", scoreTone(value))}>
-        {value}{suffix}
+      <div className={cn('mt-1 text-xl font-semibold tabular-nums', scoreTone(value))}>
+        {value}
+        {suffix}
       </div>
     </div>
   );
@@ -49,14 +58,21 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
 
   return (
     <AgentArtifactCard>
-      <AgentCardHeader action={<StatusLabel tone="done">{snapshot.promptCount} prompts</StatusLabel>}>
+      <AgentCardHeader
+        action={<StatusLabel tone="done">{snapshot.promptCount} prompts</StatusLabel>}
+      >
         <AgentCardEyebrow
           label="AEO snapshot"
-          right={<span className="text-xs text-muted-foreground">{formatDate(snapshot.generatedAt)}</span>}
+          right={
+            <span className="text-xs text-muted-foreground">
+              {formatDate(snapshot.generatedAt)}
+            </span>
+          }
         />
         <AgentCardTitle>How AI is representing {snapshot.brandName}</AgentCardTitle>
         <AgentCardSummary>
-          Simulated answer-engine run using brand, competitor, document, trend, and audience-question context.
+          Simulated answer-engine run using brand, competitor, document, trend, and
+          audience-question context.
         </AgentCardSummary>
       </AgentCardHeader>
 
@@ -100,7 +116,9 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
 
         {citations.length > 0 ? (
           <section>
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Cited/source-like domains</div>
+            <div className="mb-2 text-xs font-medium text-muted-foreground">
+              Cited/source-like domains
+            </div>
             <div className="space-y-1.5">
               {citations.map((citation) => (
                 <a
@@ -129,14 +147,22 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
             </div>
             <div className="space-y-2">
               {topOpportunities.map((opportunity, index) => (
-                <div key={opportunity.id ?? `${opportunity.title}:${index}`} className="rounded-lg border border-border/50 bg-background/60 p-3">
+                <div
+                  key={opportunity.id ?? `${opportunity.title}:${index}`}
+                  className="rounded-lg border border-border/50 bg-background/60 p-3"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="min-w-0 truncate text-sm font-medium">{opportunity.title}</h4>
-                    <Badge variant={opportunity.priority === "high" ? "default" : "outline"} className="rounded-md">
+                    <Badge
+                      variant={opportunity.priority === 'high' ? 'default' : 'outline'}
+                      className="rounded-md"
+                    >
                       {opportunity.priority}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{opportunity.suggestedAction}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {opportunity.suggestedAction}
+                  </p>
                 </div>
               ))}
             </div>

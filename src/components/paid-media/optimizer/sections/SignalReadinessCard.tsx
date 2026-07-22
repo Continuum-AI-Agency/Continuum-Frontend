@@ -7,6 +7,7 @@
 
 import type { AdSetSnapshot, OptimizationObjective } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
+import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -58,10 +59,16 @@ export function SignalReadinessCard({
   snapshots,
   objective,
   className,
+  action,
 }: {
   snapshots: AdSetSnapshot[];
   objective: OptimizationObjective;
   className?: string;
+  /** Affordance for the remedy the verdict names. A diagnosis that prescribes a
+   *  fix and gives the reader no way to reach it is half a diagnosis — the
+   *  "nothing movable" verdict in particular points at the CBO section, which
+   *  can sit several screens below. */
+  action?: ReactNode;
 }) {
   if (snapshots.length === 0) return null;
 
@@ -72,6 +79,7 @@ export function SignalReadinessCard({
 
   return (
     <OptimizerPanel
+      action={action}
       className={className}
       meta={
         <Badge className="text-3xs" variant={tone}>

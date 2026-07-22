@@ -1,23 +1,23 @@
-import { z } from "zod";
+import type { z } from 'zod';
 
 import {
-  aiStudioGenerationRequestSchema,
-  aiStudioGenerationResponseSchema,
-  aiStudioJobSchema,
-  aiStudioJobsResponseSchema,
-  aiStudioTemplatesResponseSchema,
   type AiStudioGenerationRequest,
   type AiStudioJob,
   type AiStudioMedium,
   type AiStudioProvider,
   type AiStudioTemplate,
-} from "@/lib/schemas/aiStudio";
+  aiStudioGenerationRequestSchema,
+  aiStudioGenerationResponseSchema,
+  aiStudioJobSchema,
+  aiStudioJobsResponseSchema,
+  aiStudioTemplatesResponseSchema,
+} from '@/lib/schemas/aiStudio';
 
 type JsonSchema<T> = z.ZodType<T>;
 
 function resolveInternalApiUrl(path: string): string {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  if (typeof window !== "undefined") {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (typeof window !== 'undefined') {
     return normalizedPath;
   }
 
@@ -25,15 +25,12 @@ function resolveInternalApiUrl(path: string): string {
     process.env.NEXT_PUBLIC_APP_URL ??
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
-    "http://localhost:3000";
+    'http://localhost:3000';
 
-  return `${baseUrl.replace(/\/$/, "")}${normalizedPath}`;
+  return `${baseUrl.replace(/\/$/, '')}${normalizedPath}`;
 }
 
-async function parseJsonResponse<T>(
-  response: Response,
-  schema: JsonSchema<T>
-): Promise<T> {
+async function parseJsonResponse<T>(response: Response, schema: JsonSchema<T>): Promise<T> {
   const payload = (await response.json()) as unknown;
   return schema.parse(payload);
 }
@@ -42,7 +39,7 @@ async function handleErrorResponse(response: Response): Promise<never> {
   try {
     const data = (await response.json()) as { error?: string };
     const message =
-      typeof data?.error === "string"
+      typeof data?.error === 'string'
         ? data.error
         : `${response.status} ${response.statusText}`.trim();
     throw new Error(message);
@@ -58,8 +55,8 @@ async function getInternal<T>(path: string, schema: JsonSchema<T>, init?: Reques
   const url = resolveInternalApiUrl(path);
   const headers = new Headers(init?.headers);
   const response = await fetch(url, {
-    method: "GET",
-    cache: "no-store",
+    method: 'GET',
+    cache: 'no-store',
     ...init,
     headers,
   });
@@ -71,18 +68,14 @@ async function getInternal<T>(path: string, schema: JsonSchema<T>, init?: Reques
   return parseJsonResponse(response, schema);
 }
 
-async function postInternal<T>(
-  path: string,
-  body: unknown,
-  schema: JsonSchema<T>
-): Promise<T> {
+async function postInternal<T>(path: string, body: unknown, schema: JsonSchema<T>): Promise<T> {
   const url = resolveInternalApiUrl(path);
   const response = await fetch(url, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
-    cache: "no-store",
+    cache: 'no-store',
     body: JSON.stringify(body),
   });
 
@@ -93,18 +86,14 @@ async function postInternal<T>(
   return parseJsonResponse(response, schema);
 }
 
-async function patchInternal<T>(
-  path: string,
-  body: unknown,
-  schema: JsonSchema<T>
-): Promise<T> {
+async function patchInternal<T>(path: string, body: unknown, schema: JsonSchema<T>): Promise<T> {
   const url = resolveInternalApiUrl(path);
   const response = await fetch(url, {
-    method: "PATCH",
+    method: 'PATCH',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
-    cache: "no-store",
+    cache: 'no-store',
     body: JSON.stringify(body),
   });
 
@@ -118,8 +107,8 @@ async function patchInternal<T>(
 async function deleteInternal(path: string): Promise<void> {
   const url = resolveInternalApiUrl(path);
   const response = await fetch(url, {
-    method: "DELETE",
-    cache: "no-store",
+    method: 'DELETE',
+    cache: 'no-store',
   });
 
   if (!response.ok) {
@@ -127,14 +116,12 @@ async function deleteInternal(path: string): Promise<void> {
   }
 }
 
-export async function createAiStudioJob(
-  payload: AiStudioGenerationRequest
-): Promise<AiStudioJob> {
+export async function createAiStudioJob(payload: AiStudioGenerationRequest): Promise<AiStudioJob> {
   const body = aiStudioGenerationRequestSchema.parse(payload);
   const { job } = await postInternal(
-    "/api/ai-studio/generate",
+    '/api/ai-studio/generate',
     body,
-    aiStudioGenerationResponseSchema
+    aiStudioGenerationResponseSchema,
   );
   return aiStudioJobSchema.parse(job);
 }
@@ -147,7 +134,7 @@ type ListJobsParams = {
 
 export async function listAiStudioJobs(
   params: ListJobsParams,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<AiStudioJob[]> {
   const search = new URLSearchParams({
     brandProfileId: params.brandProfileId,
@@ -158,7 +145,7 @@ export async function listAiStudioJobs(
   const { jobs } = await getInternal(
     `/api/ai-studio/jobs?${search.toString()}`,
     aiStudioJobsResponseSchema,
-    init
+    init,
   );
   return jobs.map((job) => aiStudioJobSchema.parse(job));
 }
@@ -166,7 +153,7 @@ export async function listAiStudioJobs(
 export async function getAiStudioJob(
   jobId: string,
   brandProfileId: string,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<AiStudioJob> {
   const search = new URLSearchParams({
     brandProfileId,
@@ -174,7 +161,7 @@ export async function getAiStudioJob(
   const job = await getInternal(
     `/api/ai-studio/jobs/${encodeURIComponent(jobId)}?${search.toString()}`,
     aiStudioJobSchema,
-    init
+    init,
   );
   return aiStudioJobSchema.parse(job);
 }
@@ -187,7 +174,7 @@ type ListTemplatesParams = {
 
 export async function listAiStudioTemplates(
   params: ListTemplatesParams,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<AiStudioTemplate[]> {
   const search = new URLSearchParams({
     brandProfileId: params.brandProfileId,
@@ -198,7 +185,7 @@ export async function listAiStudioTemplates(
   const { templates } = await getInternal(
     `/api/ai-studio/templates?${search.toString()}`,
     aiStudioTemplatesResponseSchema,
-    init
+    init,
   );
   return templates;
 }

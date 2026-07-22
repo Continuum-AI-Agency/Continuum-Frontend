@@ -1,15 +1,15 @@
 import {
-  hasReportContent,
-  reportPayloadSchema,
   type CheckpointReportV2,
+  hasReportContent,
   type ReportPayload,
-} from "@/lib/jaina/schemas";
-import { interpretCheckpointReportPayload } from "@/lib/jaina/stream";
+  reportPayloadSchema,
+} from '@/lib/jaina/schemas';
+import { interpretCheckpointReportPayload } from '@/lib/jaina/stream';
 import {
   extractJsonObjectCandidates,
   parseLooseJsonCandidate,
   unwrapReportEnvelope,
-} from "@/lib/jaina/unwrapping";
+} from '@/lib/jaina/unwrapping';
 
 // The DB loader and the live-stream reducer MUST interpret a checkpoint-report
 // payload identically — same strict-V2-then-heal tiering — so a report renders
@@ -34,7 +34,7 @@ function parseReportV2Payload(value: unknown): CheckpointReportV2 | undefined {
 function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | undefined {
   if (depth > 6 || value == null) return undefined;
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const embeddedCandidates = extractJsonObjectCandidates(value);
     for (const embedded of embeddedCandidates) {
       const parsed = parseReportFromUnknown(embedded, depth + 1);
@@ -61,22 +61,22 @@ function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | unde
     return undefined;
   }
 
-  if (!unwrapped || typeof unwrapped !== "object") {
+  if (!unwrapped || typeof unwrapped !== 'object') {
     return undefined;
   }
   const record = unwrapped as Record<string, unknown>;
   const prioritizedKeys = [
-    "result_payload",
-    "checkpoint_report",
-    "report",
-    "payload",
-    "data",
-    "content",
-    "parts",
-    "text",
-    "detail",
-    "message",
-    "response",
+    'result_payload',
+    'checkpoint_report',
+    'report',
+    'payload',
+    'data',
+    'content',
+    'parts',
+    'text',
+    'detail',
+    'message',
+    'response',
   ];
 
   for (const key of prioritizedKeys) {
@@ -91,7 +91,7 @@ function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | unde
 function parseReportV2FromUnknown(value: unknown, depth = 0): CheckpointReportV2 | undefined {
   if (depth > 6 || value == null) return undefined;
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const embeddedCandidates = extractJsonObjectCandidates(value);
     for (const embedded of embeddedCandidates) {
       const parsed = parseReportV2FromUnknown(embedded, depth + 1);
@@ -118,22 +118,22 @@ function parseReportV2FromUnknown(value: unknown, depth = 0): CheckpointReportV2
     return undefined;
   }
 
-  if (!unwrapped || typeof unwrapped !== "object") {
+  if (!unwrapped || typeof unwrapped !== 'object') {
     return undefined;
   }
   const record = unwrapped as Record<string, unknown>;
   const prioritizedKeys = [
-    "result_payload",
-    "checkpoint_report",
-    "report",
-    "payload",
-    "data",
-    "content",
-    "parts",
-    "text",
-    "detail",
-    "message",
-    "response",
+    'result_payload',
+    'checkpoint_report',
+    'report',
+    'payload',
+    'data',
+    'content',
+    'parts',
+    'text',
+    'detail',
+    'message',
+    'response',
   ];
 
   for (const key of prioritizedKeys) {

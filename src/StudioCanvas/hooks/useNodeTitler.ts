@@ -20,7 +20,9 @@ type UseNodeTitlerArgs = {
 // label describing what the box produces, then writes it to the node's `label`.
 // Read-only UX — the user never edits the title. Skips while the node is
 // executing so it does not fire on every streamed enrichment delta.
-export function useNodeTitler({ id, value, isExecuting }: UseNodeTitlerArgs): { isTitling: boolean } {
+export function useNodeTitler({ id, value, isExecuting }: UseNodeTitlerArgs): {
+  isTitling: boolean;
+} {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
 

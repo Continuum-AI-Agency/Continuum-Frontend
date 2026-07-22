@@ -45,7 +45,13 @@ export function ShareAccessChallenge({
         {needsPasscode ? (
           <div className="grid gap-1.5">
             <Label htmlFor="share-passcode">Passcode</Label>
-            <Input id="share-passcode" name="passcode" type="password" autoComplete="current-password" required />
+            <Input
+              id="share-passcode"
+              name="passcode"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
           </div>
         ) : null}
 
@@ -62,7 +68,11 @@ export function ShareAccessChallenge({
           </div>
         ) : null}
 
-        {state.error ? <p className="text-sm text-destructive" role="alert">{state.error}</p> : null}
+        {state.error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {state.error}
+          </p>
+        ) : null}
         <Button type="submit" disabled={pending}>
           {pending ? 'Checking…' : 'Continue'}
         </Button>

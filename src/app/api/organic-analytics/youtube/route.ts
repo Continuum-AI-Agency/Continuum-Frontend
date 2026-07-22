@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import {
   organicAnalyticsScopeSchema,
   organicDateRangePresetSchema,
   organicMetricsResponseSchema,
-} from "@/lib/schemas/organicMetrics";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+} from '@/lib/schemas/organicMetrics';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const requestSchema = z.object({
   brandId: z.string(),
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   const parsed = requestSchema.safeParse(body);
@@ -41,18 +41,18 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !sessionData.session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const { data, error } = await supabase.functions.invoke("organic-reporting/analytics", {
+    const { data, error } = await supabase.functions.invoke('organic-reporting/analytics', {
       body: {
         brandId: parsed.data.brandId,
         integrationAccountId: parsed.data.integrationAccountId,
-        platform: "youtube",
+        platform: 'youtube',
         range: parsed.data.range,
         forceRefresh: parsed.data.forceRefresh ?? false,
-        scope: parsed.data.scope ?? "all",
+        scope: parsed.data.scope ?? 'all',
         selectedPostId: parsed.data.selectedPostId,
       },
     });
@@ -65,8 +65,8 @@ export async function POST(request: Request) {
         return NextResponse.json(edgeBody, { status: 502 });
       }
       return NextResponse.json(
-        { error: edgeBody?.error ?? "Failed to fetch YouTube organic analytics" },
-        { status: 500 }
+        { error: edgeBody?.error ?? 'Failed to fetch YouTube organic analytics' },
+        { status: 500 },
       );
     }
 
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     // alias like `last_30_days` can be served for a later `last_7d` request
     // that happens to share the same since/until.
     const stamped =
-      data && typeof data === "object"
+      data && typeof data === 'object'
         ? {
             ...(data as Record<string, unknown>),
             range: {
@@ -91,7 +91,8 @@ export async function POST(request: Request) {
         : data;
     return NextResponse.json(organicMetricsResponseSchema.parse(stamped));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load YouTube organic analytics";
+    const message =
+      error instanceof Error ? error.message : 'Failed to load YouTube organic analytics';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

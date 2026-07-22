@@ -1,7 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TonePicker } from "./TonePicker";
-import { FindingCallout } from "../readiness/FindingCallout";
-import type { ReadinessFinding } from "@/lib/onboarding/agentClient";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { ReadinessFinding } from '@/lib/onboarding/agentClient';
+import { FindingCallout } from '../readiness/FindingCallout';
+import { TonePicker } from './TonePicker';
 
 type Props = {
   chip?: React.ReactNode;

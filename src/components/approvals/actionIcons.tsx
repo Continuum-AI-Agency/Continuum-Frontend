@@ -1,13 +1,13 @@
 import {
+  AlertTriangle,
+  Bell,
+  Circle,
+  type LucideIcon,
   Pause,
   Play,
-  TrendingUp,
-  Bell,
   Replace,
-  Circle,
-  AlertTriangle,
-  type LucideIcon,
-} from "lucide-react";
+  TrendingUp,
+} from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   PAUSE_AD: Pause,

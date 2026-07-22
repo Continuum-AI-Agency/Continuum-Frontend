@@ -14,12 +14,12 @@ import {
   commentRowToMediaComment,
   type MediaCommentRow,
 } from '@/lib/library/comments';
+import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
 import {
   type AssetHeadRow,
   loadAssetHead,
   resolveHeadVersionId,
 } from '@/lib/library/ensureHeadVersion';
-import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';

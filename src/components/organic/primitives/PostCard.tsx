@@ -1,1 +1,1 @@
-export { CalendarDraftCard as PostCard } from "./CalendarDraftCard"
+export { CalendarDraftCard as PostCard } from './CalendarDraftCard';

@@ -402,6 +402,15 @@ export const useCalendarStore = create<CalendarState>()(
 
           if (movedDrafts.length === 0) return { days: nextDays };
 
+          // The target day may be a synthesized day not yet in the loaded set (the
+          // week/month grid renders days regardless of what's loaded). Materialize it
+          // exactly like moveDraft — otherwise the moved drafts vanish on a day miss.
+          if (!nextDays.some((day) => day.id === targetDayId)) {
+            return {
+              days: [...nextDays, { ...makeCalendarDay(targetDayId), slots: movedDrafts }],
+            };
+          }
+
           return {
             days: nextDays.map((day) => {
               if (day.id === targetDayId) {

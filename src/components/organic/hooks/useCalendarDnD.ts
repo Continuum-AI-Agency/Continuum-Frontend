@@ -80,11 +80,15 @@ export function useCalendarDnD(
   days: OrganicCalendarDay[],
   drafts: OrganicCalendarDraft[],
   platformAccountIds: Partial<Record<OrganicPlatformKey, string>>,
+  selectedIds: string[],
+  rescheduler: {
+    reschedule: (draftId: string, targetDayId: string) => void | Promise<void>;
+    rescheduleMany: (draftIds: string[], targetDayId: string) => void | Promise<void>;
+  },
 ) {
   const { show } = useToast();
-  const { moveDraft, addDraft, updateDraft } = useCalendarStore(
+  const { addDraft, updateDraft } = useCalendarStore(
     useShallow((state) => ({
-      moveDraft: state.moveDraft,
       addDraft: state.addDraft,
       updateDraft: state.updateDraft,
     })),
@@ -134,33 +138,34 @@ export function useCalendarDnD(
         const plannerCell = parsePlannerCellId(overId);
 
         if (plannerCell) {
-          const targetDay = daysById.get(plannerCell.dayId);
+          // Restamp the destination platform/account onto the dragged draft; the day
+          // move, dateLabel and persistence are owned by the reschedule hook below.
+          if (plannerCell.platform) {
+            const destPlatform = plannerCell.platform;
+            updateDraft(draftId, (draft) => ({
+              ...draft,
+              platforms: [destPlatform],
+              targetAccountId: platformAccountIds[destPlatform] ?? draft.targetAccountId,
+            }));
+          }
 
-          updateDraft(draftId, (draft) => ({
-            ...draft,
-            dateLabel: targetDay ? `${targetDay.label}, ${targetDay.dateLabel}` : draft.dateLabel,
-            platforms: plannerCell.platform ? [plannerCell.platform] : draft.platforms,
-            targetAccountId:
-              plannerCell.platform && platformAccountIds[plannerCell.platform]
-                ? platformAccountIds[plannerCell.platform]
-                : draft.targetAccountId,
-          }));
-
-          moveDraft(draftId, plannerCell.dayId);
+          // A multi-select drag moves the whole selection (previously only the dragged
+          // id moved); a single drag moves just the dragged draft.
+          if (selectedIds.includes(draftId) && selectedIds.length > 1) {
+            void rescheduler.rescheduleMany(selectedIds, plannerCell.dayId);
+          } else {
+            void rescheduler.reschedule(draftId, plannerCell.dayId);
+          }
           return;
         }
 
         const targetDay = daysById.get(overId);
         if (targetDay) {
-          updateDraft(draftId, (draft) => ({
-            ...draft,
-            dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
-          }));
-          moveDraft(draftId, targetDay.id);
+          void rescheduler.reschedule(draftId, targetDay.id);
         }
       }
     },
-    [daysById, moveDraft, platformAccountIds, updateDraft],
+    [daysById, platformAccountIds, updateDraft, selectedIds, rescheduler],
   );
 
   const handleNativeDrop = React.useCallback(

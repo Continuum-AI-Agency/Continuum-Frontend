@@ -20,9 +20,7 @@ const requestDeps = (response: Response) => {
 
 describe('organic agent cancellation requests', () => {
   it('confirms Stop only from a successful cancelled run response', async () => {
-    const { deps, fetchImpl } = requestDeps(
-      Response.json({ runId: 'run-1', status: 'cancelled' }),
-    );
+    const { deps, fetchImpl } = requestDeps(Response.json({ runId: 'run-1', status: 'cancelled' }));
 
     await expect(requestOrganicRunCancellation('run-1', deps)).resolves.toEqual({
       runId: 'run-1',

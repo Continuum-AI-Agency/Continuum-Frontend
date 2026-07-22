@@ -3,19 +3,19 @@
 // job; the generated draft surfaces later via realtime / job polling.
 
 import {
-  quickCreatePostRequestSchema,
-  quickCreatePostResponseSchema,
   type QuickCreatePostRequest,
   type QuickCreatePostResponse,
-} from "@continuum/contracts"
+  quickCreatePostRequestSchema,
+  quickCreatePostResponseSchema,
+} from '@continuum/contracts';
 
-import { getApiBaseUrl } from "@/lib/api/config"
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken"
+import { getApiBaseUrl } from '@/lib/api/config';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 
 export interface QuickCreatePostDeps {
-  fetchImpl?: typeof fetch
-  getToken?: () => Promise<string | null>
-  baseUrl?: string
+  fetchImpl?: typeof fetch;
+  getToken?: () => Promise<string | null>;
+  baseUrl?: string;
 }
 
 export async function quickCreatePost(
@@ -23,23 +23,23 @@ export async function quickCreatePost(
   deps: QuickCreatePostDeps = {},
 ): Promise<QuickCreatePostResponse> {
   // Validate before any network call so a malformed request fails fast.
-  const body = quickCreatePostRequestSchema.parse(request)
-  const fetchImpl = deps.fetchImpl ?? fetch
-  const getToken = deps.getToken ?? getBrowserAccessToken
-  const baseUrl = deps.baseUrl ?? getApiBaseUrl()
+  const body = quickCreatePostRequestSchema.parse(request);
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const getToken = deps.getToken ?? getBrowserAccessToken;
+  const baseUrl = deps.baseUrl ?? getApiBaseUrl();
 
-  const token = await getToken()
+  const token = await getToken();
   const response = await fetchImpl(`${baseUrl}/api/organic/agent/posts/quick-create`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
-  })
+  });
 
   if (!response.ok) {
-    throw new Error(`quick-create failed (${response.status})`)
+    throw new Error(`quick-create failed (${response.status})`);
   }
-  return quickCreatePostResponseSchema.parse(await response.json())
+  return quickCreatePostResponseSchema.parse(await response.json());
 }

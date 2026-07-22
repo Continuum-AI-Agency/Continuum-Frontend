@@ -3,9 +3,9 @@
 import { Cross2Icon, FileIcon } from '@radix-ui/react-icons';
 import { AlertCircle, BookmarkPlus, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ChatMediaThumb } from './media/ChatMedia';
 import { mediaFromAttachment } from './media/media';
-import { cn } from '@/lib/utils';
 
 export type ChatAttachmentStatus = 'uploading' | 'ready' | 'error';
 

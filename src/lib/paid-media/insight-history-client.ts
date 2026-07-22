@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type {
   CampaignInsightDataPoint,
   CampaignInsightMetric,
   CampaignInsightStatus,
   GeneratedCampaignInsight,
-} from "@/lib/paid-media/insight-data-points";
+} from '@/lib/paid-media/insight-data-points';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type PersistedCampaignInsight = GeneratedCampaignInsight & {
   rowId: string;
@@ -32,14 +32,14 @@ type RawInsightRow = {
   account_id: string;
   entity_id: string | null;
   entity_name: string | null;
-  scope: GeneratedCampaignInsight["scope"];
-  severity: GeneratedCampaignInsight["severity"];
+  scope: GeneratedCampaignInsight['scope'];
+  severity: GeneratedCampaignInsight['severity'];
   status: CampaignInsightStatus;
   primary_metric: CampaignInsightMetric;
   title: string | null;
   summary: string;
   recommendation: string | null;
-  source: GeneratedCampaignInsight["source"];
+  source: GeneratedCampaignInsight['source'];
   evidence: CampaignInsightDataPoint[];
   fingerprint: string;
   created_at: string;
@@ -58,7 +58,7 @@ function toPersistedInsight(row: RawInsightRow): PersistedCampaignInsight {
     severity: row.severity,
     status: row.status,
     primaryMetric: row.primary_metric,
-    title: row.title ?? "",
+    title: row.title ?? '',
     summary: row.summary,
     recommendation: row.recommendation ?? undefined,
     source: row.source,
@@ -74,14 +74,12 @@ export async function getLatestInsights(params: {
   limit?: number;
 }): Promise<PersistedCampaignInsight[]> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .rpc("get_latest_media_insights", {
-      p_brand_id: params.brandId,
-      p_account_id: params.adAccountId,
-      p_channel: "paid",
-      p_limit: params.limit ?? 20,
-    });
+  const { data, error } = await supabase.schema('brand_profiles').rpc('get_latest_media_insights', {
+    p_brand_id: params.brandId,
+    p_account_id: params.adAccountId,
+    p_channel: 'paid',
+    p_limit: params.limit ?? 20,
+  });
 
   if (error) {
     throw new Error(`Failed to load latest insights: ${error.message}`);
@@ -98,18 +96,16 @@ export async function getInsightStreak(params: {
   lookbackDays?: number;
 }): Promise<number> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .rpc("get_media_insight_streak", {
-      p_brand_id: params.brandId,
-      p_account_id: params.adAccountId,
-      p_fingerprint: params.fingerprint,
-      p_channel: "paid",
-      p_lookback_days: params.lookbackDays ?? 14,
-    });
+  const { data, error } = await supabase.schema('brand_profiles').rpc('get_media_insight_streak', {
+    p_brand_id: params.brandId,
+    p_account_id: params.adAccountId,
+    p_fingerprint: params.fingerprint,
+    p_channel: 'paid',
+    p_lookback_days: params.lookbackDays ?? 14,
+  });
 
   if (error) {
     throw new Error(`Failed to load insight streak: ${error.message}`);
   }
-  return typeof data === "number" ? data : 0;
+  return typeof data === 'number' ? data : 0;
 }

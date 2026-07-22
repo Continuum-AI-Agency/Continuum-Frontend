@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { BrandIntegrationsManager } from "@/components/integrations/BrandIntegrationsManager";
+import { BrandIntegrationsManager } from '@/components/integrations/BrandIntegrationsManager';
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 
 type Props = {
   brandProfileId?: string;

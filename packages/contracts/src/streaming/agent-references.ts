@@ -20,7 +20,7 @@ export const agentMentionReferenceTypeSchema = z.enum([
   'kpi',
 ]);
 
-export const agentMentionReferenceSourceSchema = z.enum(['organic', 'jaina']);
+export const agentMentionReferenceSourceSchema = z.enum(['organic', 'jaina', 'canvas']);
 
 export const agentMentionReferenceSchema = z.object({
   id: z.string().min(1),

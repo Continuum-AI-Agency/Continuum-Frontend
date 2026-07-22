@@ -39,9 +39,7 @@ describe('fetchStorageUsedBytes', () => {
       size_bytes: 999_999,
     });
 
-    const activeRows = rows.filter(
-      (row) => row.brand_id === BRAND_ID && row.deleted_at === null,
-    );
+    const activeRows = rows.filter((row) => row.brand_id === BRAND_ID && row.deleted_at === null);
     let window = { from: 0, to: 999 };
     const query = {
       select: () => query,

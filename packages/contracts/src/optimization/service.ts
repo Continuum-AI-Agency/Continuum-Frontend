@@ -221,6 +221,10 @@ export type CreatePortfolioResponse = z.infer<typeof CreatePortfolioResponseSche
 export const UpdatePortfolioPatchSchema = z
   .object({
     name: z.string().min(1).optional(),
+    /** Changing the objective changes the portfolio's KPI currency: enrolled ad sets
+     *  buying the old event freeze as kpi_mismatch until moved. The Manage UI must
+     *  surface that consequence before submitting this field. */
+    objective: OptimizationObjectiveSchema.optional(),
     mode: OptimizationModeSchema.optional(),
     apply_mode: ApplyModeSchema.optional(),
     daily_total: z.number().nonnegative().optional(),
@@ -258,9 +262,22 @@ export const EnrollRequestSchema = z
   });
 export type EnrollRequest = z.infer<typeof EnrollRequestSchema>;
 
+/** How a `campaign_id` enrollment resolved. Present ONLY on the campaign path, and only
+ *  when the ad-set snapshot read SUCCEEDED — a failed read is a 502 with
+ *  `reason: 'snapshot_read_failed'`, never a 200 with `enrolled: 0`. Without this the two
+ *  are the same empty answer, and a dead Meta token reads as "the campaign has no ad sets". */
+export const EnrollExpansionSchema = z.object({
+  campaign_id: z.string(),
+  snapshots_read: z.number().int().nonnegative(),
+  matched: z.number().int().nonnegative(),
+  outcome: z.enum(['expanded', 'no_adsets_matched']),
+});
+export type EnrollExpansion = z.infer<typeof EnrollExpansionSchema>;
+
 export const EnrollResultSchema = z.object({
   enrolled: z.number().int().nonnegative(),
   first_cycle: z.literal('queued'),
+  expansion: EnrollExpansionSchema.optional(),
 });
 export type EnrollResult = z.infer<typeof EnrollResultSchema>;
 
@@ -393,6 +410,9 @@ export type CycleItemApplyStatus = z.infer<typeof CycleItemApplyStatusSchema>;
 export const CycleItemRowSchema = z
   .object({
     adset_id: z.string(),
+    /** Enroll-time name merged in by optimizer_get_portfolio_performance; null when the
+     *  ad set was never enrolled in this portfolio (stale/unenrolled rows). */
+    adset_name: z.string().nullable().optional(),
     current_budget: z.number().nullable(),
     final_budget: z.number().nullable(),
     change_abs: z.number().nullable(),
@@ -413,6 +433,9 @@ export const RecommendationRowSchema = z
   .object({
     id: z.string().uuid(),
     adset_id: z.string(),
+    /** Enroll-time name merged in by optimizer_get_portfolio_performance; null when the
+     *  ad set was never enrolled in this portfolio. */
+    adset_name: z.string().nullable().optional(),
     /** The specific AD this is about. Non-null on the creative-level kinds (pause_ad,
      *  variate_creative); null on the ad-set-level ones. Without it, "your creative is worn
      *  out" across five creatives gives you five suspects and no defendant. */
@@ -728,6 +751,57 @@ export const RequestApplyItemRequestSchema = z.object({
 });
 export type RequestApplyItemRequest = z.infer<typeof RequestApplyItemRequestSchema>;
 
+/** Approve MANY proposed budget changes in one round-trip
+ *  (optimizer_request_apply_items — the Action Log's multi-select "Approve selected"). */
+export const RequestApplyItemsRequestSchema = z.object({
+  run_id: z.string().uuid(),
+  adset_ids: z.array(z.string().min(1)).min(1),
+});
+export type RequestApplyItemsRequest = z.infer<typeof RequestApplyItemsRequestSchema>;
+
+/** Drain approved ad-set pause recommendations into real Meta status writes
+ *  (optimizer-apply-adset-status edge → service /apply/adset-status). Pause is a
+ *  HUMAN-ONLY write in every tier: the scheduler never calls this path, observe
+ *  hard-refuses, and `dryRun` (default true) returns the would-pause set with ZERO
+ *  writes. Each executed pause is ledgered (optimizer.adset_status_ledger), audited
+ *  (apply_audits scope 'adset_status', prior→target status), and revertible. */
+export const ApplyAdsetStatusRequestSchema = z.object({
+  portfolio_id: z.string().uuid(),
+  brandId: z.string().uuid().optional(),
+  accountId: z.string().optional(),
+  dryRun: z.boolean().optional(),
+  /** The human who approved the pauses — stamped by the edge from the caller's JWT. */
+  authorized_by: z.string().uuid().optional(),
+});
+export type ApplyAdsetStatusRequest = z.infer<typeof ApplyAdsetStatusRequestSchema>;
+
+/** One would-pause / pause outcome in the adset-status drain envelope. */
+export const AdsetStatusWouldWriteSchema = z.object({
+  adset_id: z.string(),
+  target_status: z.string(),
+});
+export type AdsetStatusWouldWrite = z.infer<typeof AdsetStatusWouldWriteSchema>;
+
+/** optimizer-apply-adset-status response — same envelope family as ApplyRunResponse.
+ *  Dry-run returns `would` (the pauses that WOULD be written, 0 writes); a real drain
+ *  returns ledger-guarded counters + per-item `results`. */
+export const ApplyAdsetStatusResponseSchema = z.object({
+  ok: z.boolean(),
+  dryRun: z.boolean().optional(),
+  runId: z.string().optional(),
+  would: z.array(AdsetStatusWouldWriteSchema).default([]),
+  applied: z.number().int().nonnegative().optional(),
+  failed: z.number().int().nonnegative().optional(),
+  deduped: z.number().int().nonnegative().optional(),
+  skipped: z.number().int().nonnegative().optional(),
+  results: z
+    .array(z.object({ adsetId: z.string(), ok: z.boolean(), error: z.string().optional() }))
+    .default([]),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ApplyAdsetStatusResponse = z.infer<typeof ApplyAdsetStatusResponseSchema>;
+
 /** The Meta write receipt captured on a successful budget write and stored in
  *  optimizer.apply_audits.meta_receipt. Kept loose — it is read back from jsonb. */
 export const ApplyReceiptSchema = z
@@ -744,12 +818,18 @@ export type ApplyReceipt = z.infer<typeof ApplyReceiptSchema>;
 export const ApplyAuditSchema = z
   .object({
     id: z.string().optional(),
-    scope: z.enum(['adset_budget', 'campaign_convert']).optional(),
+    scope: z.enum(['adset_budget', 'campaign_convert', 'ad_status', 'adset_status']).optional(),
     portfolio_id: z.string().nullable().optional(),
     campaign_id: z.string().nullable().optional(),
     adset_id: z.string().nullable().optional(),
+    /** The specific ad on a scope='ad_status' row; null on ad-set-scoped writes. */
+    ad_id: z.string().nullable().optional(),
     prior_minor: z.number().nullable().optional(),
     target_minor: z.number().nullable().optional(),
+    /** Status-write scopes (ad_status / adset_status) record the transition here;
+     *  budget scopes leave them null. prior_status null = unknown, not revertible. */
+    prior_status: z.string().nullable().optional(),
+    target_status: z.string().nullable().optional(),
     authorized_kind: z.enum(['autopilot', 'human']).optional(),
     authorized_by: z.string().nullable().optional(),
     mode: z.string().nullable().optional(),
@@ -816,18 +896,24 @@ export const ApplyRevertRequestSchema = z.object({
 export type ApplyRevertRequest = z.infer<typeof ApplyRevertRequestSchema>;
 
 /** optimizer-apply-revert response — the same envelope family as ApplyRunResponse. A
- *  dry-run returns `would` (the single current←prior move, 0 writes); a real revert returns
- *  the ledger-guarded outcome counters + per-item `results`. `auditId` echoes the reverted
- *  audit id. `reason` is a soft failure: audit_not_found / unsupported_scope / scope_mismatch
- *  / no_prior / observe_mode / campaign_unsupported / account_unreadable. */
+ *  dry-run returns `would` (0 writes); a real revert returns the ledger-guarded outcome
+ *  counters + per-item `results`. `auditId` echoes the reverted audit id. `reason` is a soft
+ *  failure: audit_not_found / unsupported_scope / scope_mismatch / no_prior / no_prior_status
+ *  / observe_mode / campaign_unsupported / account_unreadable.
+ *
+ *  `would` is scope-shaped: a BUDGET revert previews the single current←prior move
+ *  (ApplyWouldWrite); an ad-set STATUS revert (unpausing a pause) previews the target status
+ *  it would restore (AdsetStatusWouldWrite {adset_id, target_status}). The union lets one
+ *  envelope carry both without a status revert failing to parse as a budget move. */
 export const ApplyRevertResponseSchema = z.object({
   ok: z.boolean(),
   dryRun: z.boolean().optional(),
   auditId: z.string().optional(),
-  would: z.array(ApplyWouldWriteSchema).default([]),
+  would: z.array(z.union([ApplyWouldWriteSchema, AdsetStatusWouldWriteSchema])).default([]),
   applied: z.number().int().nonnegative().optional(),
   failed: z.number().int().nonnegative().optional(),
   deduped: z.number().int().nonnegative().optional(),
+  skipped: z.number().int().nonnegative().optional(),
   results: z.array(ApplyResultItemSchema).default([]),
   reason: z.string().optional(),
   error: z.string().optional(),

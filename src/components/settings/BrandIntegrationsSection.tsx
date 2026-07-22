@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import React from "react";
-import { BrandIntegrationsCard } from "./BrandIntegrationsCard";
-import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
+import React from 'react';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
+import { BrandIntegrationsCard } from './BrandIntegrationsCard';
 
 type Props = {
   initialSummary?: BrandIntegrationSummary;

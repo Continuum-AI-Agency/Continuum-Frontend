@@ -1,12 +1,10 @@
-import Link from "next/link";
+import Link from 'next/link';
 
 export default function Forbidden() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
       <div className="mx-auto max-w-md text-center">
-        <div className="mb-6 text-6xl font-bold text-zinc-300 dark:text-zinc-700">
-          403
-        </div>
+        <div className="mb-6 text-6xl font-bold text-zinc-300 dark:text-zinc-700">403</div>
         <h1 className="mb-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
           Access denied
         </h1>

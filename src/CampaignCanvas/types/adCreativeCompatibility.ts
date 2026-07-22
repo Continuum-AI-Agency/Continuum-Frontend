@@ -16,20 +16,20 @@ const CREATIVE_TYPE_TO_AD_FORMATS: Record<CreativeAssetType, readonly AdFormat[]
 };
 
 export function getAllowedCreativeTypesForAdFormat(
-  adFormat: AdFormat | undefined
+  adFormat: AdFormat | undefined,
 ): readonly CreativeAssetType[] {
   return AD_FORMAT_TO_CREATIVE_TYPES[adFormat ?? DEFAULT_AD_FORMAT];
 }
 
 export function getAllowedAdFormatsForCreativeType(
-  assetType: CreativeAssetType | undefined
+  assetType: CreativeAssetType | undefined,
 ): readonly AdFormat[] {
   return CREATIVE_TYPE_TO_AD_FORMATS[assetType ?? DEFAULT_CREATIVE_ASSET_TYPE];
 }
 
 export function isAdFormatCompatibleWithCreativeType(
   adFormat: AdFormat | undefined,
-  assetType: CreativeAssetType | undefined
+  assetType: CreativeAssetType | undefined,
 ): boolean {
   const allowedCreativeTypes = getAllowedCreativeTypesForAdFormat(adFormat);
   const creativeType = assetType ?? DEFAULT_CREATIVE_ASSET_TYPE;

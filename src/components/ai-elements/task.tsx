@@ -1,35 +1,26 @@
-"use client";
-
-import type { ComponentProps } from "react";
+'use client';
 
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
-import { 
-  ChevronDownIcon, 
-  CircleIcon, 
-  CheckCircle2Icon, 
-  Loader2Icon, 
   AlertCircleIcon,
-  FileIcon
-} from "lucide-react";
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  CircleIcon,
+  FileIcon,
+  Loader2Icon,
+} from 'lucide-react';
+import type { ComponentProps } from 'react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
-export type TaskStatus = "pending" | "in_progress" | "completed" | "error";
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'error';
 
-export type TaskItemFileProps = ComponentProps<"div">;
+export type TaskItemFileProps = ComponentProps<'div'>;
 
-export const TaskItemFile = ({
-  children,
-  className,
-  ...props
-}: TaskItemFileProps) => (
+export const TaskItemFile = ({ children, className, ...props }: TaskItemFileProps) => (
   <div
     className={cn(
-      "inline-flex items-center gap-1.5 rounded-md border bg-secondary/50 px-2 py-0.5 text-foreground text-xs transition-colors hover:bg-secondary",
-      className
+      'inline-flex items-center gap-1.5 rounded-md border bg-secondary/50 px-2 py-0.5 text-foreground text-xs transition-colors hover:bg-secondary',
+      className,
     )}
     {...props}
   >
@@ -38,16 +29,10 @@ export const TaskItemFile = ({
   </div>
 );
 
-export type TaskItemProps = ComponentProps<"div">;
+export type TaskItemProps = ComponentProps<'div'>;
 
 export const TaskItem = ({ children, className, ...props }: TaskItemProps) => (
-  <div 
-    className={cn(
-      "text-muted-foreground text-sm flex items-start gap-2", 
-      className
-    )} 
-    {...props}
-  >
+  <div className={cn('text-muted-foreground text-sm flex items-start gap-2', className)} {...props}>
     <div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border" />
     <div className="flex-1">{children}</div>
   </div>
@@ -60,13 +45,13 @@ export type TaskProps = ComponentProps<typeof Collapsible> & {
 export const Task = ({
   defaultOpen = true,
   className,
-  status = "pending",
+  status = 'pending',
   ...props
 }: TaskProps) => (
-  <Collapsible 
-    className={cn("group/task w-full", className)} 
-    defaultOpen={defaultOpen} 
-    {...props} 
+  <Collapsible
+    className={cn('group/task w-full', className)}
+    defaultOpen={defaultOpen}
+    {...props}
   />
 );
 
@@ -80,22 +65,24 @@ export const TaskTrigger = ({
   children,
   className,
   title,
-  status = "pending",
+  status = 'pending',
   progress,
   ...props
 }: TaskTriggerProps) => (
-  <CollapsibleTrigger asChild className={cn("group", className)} {...props}>
+  <CollapsibleTrigger asChild className={cn('group', className)} {...props}>
     {children ?? (
-      <button 
-        type="button" 
+      <button
+        type="button"
         className="flex w-full cursor-pointer items-center gap-2.5 text-muted-foreground text-sm transition-all hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
       >
         <StatusIcon status={status} />
-        <p className={cn(
-          "text-sm font-medium flex-1 text-left",
-          status === "completed" && "text-foreground",
-          status === "in_progress" && "text-foreground"
-        )}>
+        <p
+          className={cn(
+            'text-sm font-medium flex-1 text-left',
+            status === 'completed' && 'text-foreground',
+            status === 'in_progress' && 'text-foreground',
+          )}
+        >
           {title}
         </p>
         {progress && (
@@ -111,11 +98,11 @@ export const TaskTrigger = ({
 
 function StatusIcon({ status }: { status: TaskStatus }) {
   switch (status) {
-    case "completed":
+    case 'completed':
       return <CheckCircle2Icon className="size-4 text-indigo-500 shrink-0" />;
-    case "in_progress":
+    case 'in_progress':
       return <Loader2Icon className="size-4 text-indigo-400 animate-spin shrink-0" />;
-    case "error":
+    case 'error':
       return <AlertCircleIcon className="size-4 text-red-500 shrink-0" />;
     default:
       return <CircleIcon className="size-4 text-muted-foreground/40 shrink-0" />;
@@ -124,20 +111,14 @@ function StatusIcon({ status }: { status: TaskStatus }) {
 
 export type TaskContentProps = ComponentProps<typeof CollapsibleContent>;
 
-export const TaskContent = ({
-  children,
-  className,
-  ...props
-}: TaskContentProps) => (
+export const TaskContent = ({ children, className, ...props }: TaskContentProps) => (
   <CollapsibleContent
     className={cn(
-      "overflow-hidden text-sm transition-all data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down",
-      className
+      'overflow-hidden text-sm transition-all data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down',
+      className,
     )}
     {...props}
   >
-    <div className="ml-[11px] mt-2 space-y-3 border-l border-muted/60 pl-5 pb-2">
-      {children}
-    </div>
+    <div className="ml-[11px] mt-2 space-y-3 border-l border-muted/60 pl-5 pb-2">{children}</div>
   </CollapsibleContent>
 );

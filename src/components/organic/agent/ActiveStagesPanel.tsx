@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle2Icon, CircleDotIcon, AlertCircleIcon } from "lucide-react";
-import type { PipelineStage, PipelineStageNode } from "./types";
+import { AlertCircleIcon, CheckCircle2Icon, CircleDotIcon } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import type { PipelineStage, PipelineStageNode } from './types';
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
-  strategist: "Concept",
-  concept: "Concept",
-  draft: "Copy",
-  blueprint: "Preview",
-  assets: "Preview",
-  quality: "Fully fleshed out",
-  merge: "Fully fleshed out",
+  strategist: 'Concept',
+  concept: 'Concept',
+  draft: 'Copy',
+  blueprint: 'Preview',
+  assets: 'Preview',
+  quality: 'Fully fleshed out',
+  merge: 'Fully fleshed out',
 };
 
 const TOTAL_STAGES = 7;
@@ -23,7 +23,7 @@ type StageRowProps = {
 };
 
 function StageRow({ node, isLast, index }: StageRowProps) {
-  const treeChar = isLast ? "└─" : "├─";
+  const treeChar = isLast ? '└─' : '├─';
   const label = STAGE_LABELS[node.stage] ?? node.stage;
   const codename = node.agentName ?? node.stage;
 
@@ -39,12 +39,12 @@ function StageRow({ node, isLast, index }: StageRowProps) {
       <span className="text-muted-foreground/40">·</span>
       <span className="text-muted-foreground/60">{label}</span>
       <span className="text-muted-foreground/40">·</span>
-      {node.status === "done" ? (
+      {node.status === 'done' ? (
         <span className="flex items-center gap-1 text-emerald-500/70">
           <CheckCircle2Icon className="size-3" />
           done
         </span>
-      ) : node.status === "failed" ? (
+      ) : node.status === 'failed' ? (
         <span className="flex items-center gap-1 text-destructive/70">
           <AlertCircleIcon className="size-3" />
           failed
@@ -67,7 +67,7 @@ type ActiveStagesPanelProps = {
 export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProps) {
   if (!isStreaming || stages.length === 0) return null;
 
-  const doneCount = stages.filter((s) => s.status === "done").length;
+  const doneCount = stages.filter((s) => s.status === 'done').length;
 
   return (
     <AnimatePresence initial={false}>
@@ -80,7 +80,9 @@ export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProp
       >
         <div className="mb-0.5 flex items-center gap-2 text-xs text-muted-foreground/50">
           <span className="font-mono">Pipeline</span>
-          <span className="tabular-nums">{doneCount}/{TOTAL_STAGES}</span>
+          <span className="tabular-nums">
+            {doneCount}/{TOTAL_STAGES}
+          </span>
         </div>
         <AnimatePresence initial={false}>
           {stages.map((node, index) => (

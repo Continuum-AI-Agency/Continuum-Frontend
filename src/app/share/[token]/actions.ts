@@ -1,20 +1,17 @@
 'use server';
 
 import {
-  createExternalShareCommentResponseSchema,
   createExternalShareCommentRequestSchema,
+  createExternalShareCommentResponseSchema,
   decideExternalShareReviewRequestSchema,
-  externalShareReviewDecisionSchema,
-  externalReviewerSessionResponseSchema,
   externalReviewerSessionRequestSchema,
+  externalReviewerSessionResponseSchema,
+  externalShareReviewDecisionSchema,
 } from '@continuum/contracts';
+import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { revalidatePath } from 'next/cache';
-import {
-  invokePublicCreativeOperation,
-  reviewerSessionCookieName,
-} from './reviewerSession.server';
+import { invokePublicCreativeOperation, reviewerSessionCookieName } from './reviewerSession.server';
 
 export type ShareAccessActionState = { error: string | null };
 
@@ -71,7 +68,10 @@ async function reviewerSessionForMutation(
     passcode: String(formData.get('passcode') ?? '').trim() || undefined,
   });
   if (!identity.success) {
-    return { ok: false, error: identity.error.issues[0]?.message ?? 'Name and email are required.' };
+    return {
+      ok: false,
+      error: identity.error.issues[0]?.message ?? 'Name and email are required.',
+    };
   }
   const sessionResult = await invokePublicCreativeOperation({
     action: 'create_external_reviewer_session',
@@ -149,7 +149,8 @@ export async function decideExternalReview(
   });
   if (!result.ok) return { error: result.message, decision: null };
   const decision = externalShareReviewDecisionSchema.safeParse(result.data);
-  if (!decision.success) return { error: 'The review service returned an invalid decision.', decision: null };
+  if (!decision.success)
+    return { error: 'The review service returned an invalid decision.', decision: null };
   revalidatePath(`/share/${token}`);
   return { error: null, decision: decision.data.decision };
 }

@@ -1,42 +1,44 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const brandId = searchParams.get("brandId");
-  const adAccountId = searchParams.get("adAccountId");
-  const platform = searchParams.get("platform");
+  const brandId = searchParams.get('brandId');
+  const adAccountId = searchParams.get('adAccountId');
+  const platform = searchParams.get('platform');
 
   if (!brandId || !adAccountId) {
-    return NextResponse.json({ error: "brandId and adAccountId are required" }, { status: 400 });
+    return NextResponse.json({ error: 'brandId and adAccountId are required' }, { status: 400 });
   }
 
   try {
     // Get the Authorization header from the incoming request
-    const authHeader = request.headers.get("Authorization");
+    const authHeader = request.headers.get('Authorization');
 
     const functionName =
-      platform === "google-ads" ? "fetch-google-ads-campaigns" : "paid-media-reporting/campaigns";
+      platform === 'google-ads' ? 'fetch-google-ads-campaigns' : 'paid-media-reporting/campaigns';
 
     // Call the Supabase edge function
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}${platform ? `&platform=${encodeURIComponent(platform)}` : ""}`,
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}${platform ? `&platform=${encodeURIComponent(platform)}` : ''}`,
       {
         headers: {
           'Content-Type': 'application/json',
-          ...(authHeader && { 'Authorization': authHeader }),
+          ...(authHeader && { Authorization: authHeader }),
         },
-      }
+      },
     );
 
     if (!response.ok) {
-      console.error("Edge function error:", response.status, response.statusText);
+      console.error('Edge function error:', response.status, response.statusText);
       const errorText = await response.text();
-      console.error("Edge function error response:", errorText);
+      console.error('Edge function error response:', errorText);
       let errorBody: { error?: string; code?: string } = {};
       try {
         errorBody = JSON.parse(errorText);
       } catch {
-        errorBody = { error: `Failed to fetch campaigns: ${response.status} ${response.statusText}` };
+        errorBody = {
+          error: `Failed to fetch campaigns: ${response.status} ${response.statusText}`,
+        };
       }
       return NextResponse.json(errorBody, { status: response.status });
     }
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Unexpected error in campaigns API:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('Unexpected error in campaigns API:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

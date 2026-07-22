@@ -1,8 +1,8 @@
-import "server-only";
+import 'server-only';
 
-import { after } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { toAuthIdentity } from "@/lib/auth/claims";
+import { after } from 'next/server';
+import { toAuthIdentity } from '@/lib/auth/claims';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 type SupabaseLikeError = {
   message?: string;
@@ -16,7 +16,7 @@ function toDetailedError(context: string, error: unknown): Error {
     return new Error(`${context}: ${error.message}`);
   }
 
-  if (error && typeof error === "object") {
+  if (error && typeof error === 'object') {
     const details = error as SupabaseLikeError;
     const parts = [
       details.message,
@@ -26,7 +26,7 @@ function toDetailedError(context: string, error: unknown): Error {
     ].filter(Boolean);
 
     if (parts.length > 0) {
-      return new Error(`${context}: ${parts.join(" | ")}`);
+      return new Error(`${context}: ${parts.join(' | ')}`);
     }
   }
 
@@ -40,7 +40,9 @@ async function getSessionUserId() {
   // actions), validating the session and refreshing the cookie. Reading from
   // that cookie here avoids a second round-trip to Supabase Auth on every brand
   // switch. We fall back to getUser() only if the cookie is absent or stale.
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (session?.user) {
     return { supabase, userId: session.user.id };
   }
@@ -48,7 +50,7 @@ async function getSessionUserId() {
   const { data, error } = await supabase.auth.getClaims();
   const identity = toAuthIdentity(data?.claims);
   if (error || !identity) {
-    throw new Error("Not authenticated");
+    throw new Error('Not authenticated');
   }
 
   return { supabase, userId: identity.id };
@@ -56,7 +58,7 @@ async function getSessionUserId() {
 
 export async function setActiveBrandPreference(brandId: string): Promise<void> {
   if (!brandId) {
-    throw new Error("Brand id is required");
+    throw new Error('Brand id is required');
   }
 
   // Membership is already enforced at the context layer — brandSummaries only
@@ -67,21 +69,21 @@ export async function setActiveBrandPreference(brandId: string): Promise<void> {
 
   // Only await the DB write — this is the source of truth for getActiveBrandContext
   const { error: preferenceError } = await supabase
-    .schema("brand_profiles")
-    .from("user_brand_preferences" as any)
+    .schema('brand_profiles')
+    .from('user_brand_preferences' as any)
     .upsert(
       {
         user_id: userId,
         active_brand_id: brandId,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" } as any
+      { onConflict: 'user_id' } as any,
     );
 
   if (preferenceError) {
     throw toDetailedError(
-      "Active brand preference upsert failed (ensure migration 20260226113000_create_user_brand_preferences.sql is applied)",
-      preferenceError
+      'Active brand preference upsert failed (ensure migration 20260226113000_create_user_brand_preferences.sql is applied)',
+      preferenceError,
     );
   }
 
@@ -96,7 +98,7 @@ export async function setActiveBrandPreference(brandId: string): Promise<void> {
       },
     });
     if (error) {
-      console.error("[setActiveBrandPreference] Auth metadata update failed:", error.message);
+      console.error('[setActiveBrandPreference] Auth metadata update failed:', error.message);
     }
   });
 }

@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function DashboardShellSkeleton() {
   return (
@@ -27,7 +27,10 @@ export function PaidWidgetSkeleton() {
             <Skeleton className="h-4 w-72 bg-muted/70" />
             <div className="grid grid-cols-2 gap-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={`paid-top-metric-${i}`} className="h-14 w-full rounded-md bg-muted/70" />
+                <Skeleton
+                  key={`paid-top-metric-${i}`}
+                  className="h-14 w-full rounded-md bg-muted/70"
+                />
               ))}
             </div>
             <Skeleton className="h-48 w-full rounded-md bg-muted/70" />
@@ -38,7 +41,10 @@ export function PaidWidgetSkeleton() {
             <Skeleton className="h-5 w-36 bg-muted/70" />
             <Skeleton className="h-4 w-52 bg-muted/70" />
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={`paid-action-row-${i}`} className="h-11 w-full rounded-md bg-muted/70" />
+              <Skeleton
+                key={`paid-action-row-${i}`}
+                className="h-11 w-full rounded-md bg-muted/70"
+              />
             ))}
           </div>
         </div>
@@ -122,7 +128,10 @@ export function WidgetSkeleton() {
           {/* Data rows */}
           <div className="rounded-lg border overflow-hidden">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={`trends-row-${i}`} className="flex items-start gap-3 px-4 py-3 border-b last:border-0">
+              <div
+                key={`trends-row-${i}`}
+                className="flex items-start gap-3 px-4 py-3 border-b last:border-0"
+              >
                 <div className="flex-1 space-y-1.5">
                   <Skeleton className="h-3.5 w-3/5 bg-muted/70" />
                   <Skeleton className="h-3 w-4/5 bg-muted/70" />

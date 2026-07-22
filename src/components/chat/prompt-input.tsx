@@ -47,7 +47,8 @@ type PromptInputProps = {
   onSubmit: (value: string, attachments: Attachment[], references: AgentMentionReference[]) => void;
   // Attachment state lives with the surface, which owns the brand and session that decide where an
   // upload lands. The composer only drives it. Build one with useChatAttachments.
-  attachments: ChatAttachmentsController;
+  attachments?: ChatAttachmentsController;
+  variant?: 'chat' | 'canvas';
   disabled?: boolean;
   placeholder?: string;
   ariaLabel?: string;
@@ -427,6 +428,7 @@ export function PromptInput({
   onMentionPlatformChange,
   isStreaming = false,
   onStop,
+  variant = 'chat',
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -466,9 +468,9 @@ export function PromptInput({
   // never uploaded serialized to an attachment with no url, and the agent silently received none.
   const canSubmit = useMemo(
     () =>
-      !attachments.isUploading &&
-      (Boolean(plainValue.trim()) || attachments.files.length > 0 || references.length > 0),
-    [attachments.files.length, attachments.isUploading, plainValue, references.length],
+      !(attachments?.isUploading ?? false) &&
+      (Boolean(plainValue.trim()) || (attachments?.files.length ?? 0) > 0 || references.length > 0),
+    [attachments?.files.length, attachments?.isUploading, plainValue, references.length],
   );
 
   const handleSubmit = useCallback(
@@ -478,7 +480,7 @@ export function PromptInput({
       const serialized = syncFromEditor();
       const trimmedValue = serialized.text.trim();
       const linkReferences = extractLinkReferences(trimmedValue, mentionSource);
-      onSubmit(trimmedValue, attachments.files, [
+      onSubmit(trimmedValue, attachments?.files ?? [], [
         ...serialized.references.map(({ token: _t, preview, refKey: _k, ...reference }) => {
           // Fold composer preview into metadata so history can render inline media
           // thumbs + hover cards without a re-fetch.
@@ -494,7 +496,7 @@ export function PromptInput({
         }),
         ...linkReferences,
       ]);
-      attachments.clear();
+      attachments?.clear();
       setReferences([]);
       referencesRef.current.clear();
       setPlainValue('');
@@ -670,7 +672,7 @@ export function PromptInput({
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       if (!event.target.files?.length) return;
-      attachments.add(event.target.files);
+      attachments?.add(event.target.files);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -684,18 +686,19 @@ export function PromptInput({
       if (pasted.length === 0) return;
       // A pasted screenshot must not also land in the contenteditable as an <img> node.
       event.preventDefault();
-      attachments.add(pasted);
+      if (attachments) attachments.add(pasted);
+      else event.preventDefault();
     },
     [attachments],
   );
 
   const handleDragOver = useCallback(
     (event: React.DragEvent<HTMLFormElement>) => {
-      if (disabled || !event.dataTransfer.types.includes('Files')) return;
+      if (!attachments || disabled || !event.dataTransfer.types.includes('Files')) return;
       event.preventDefault();
       setIsDraggingOver(true);
     },
-    [disabled],
+    [attachments, disabled],
   );
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLFormElement>) => {
@@ -706,7 +709,7 @@ export function PromptInput({
 
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLFormElement>) => {
-      if (disabled) return;
+      if (!attachments || disabled) return;
       const dropped = Array.from(event.dataTransfer.files ?? []);
       event.preventDefault();
       setIsDraggingOver(false);
@@ -751,7 +754,12 @@ export function PromptInput({
   }, []);
 
   return (
-    <div className={cn('mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8', className)}>
+    <div
+      className={cn(
+        variant === 'canvas' ? 'w-full' : 'mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8',
+        className,
+      )}
+    >
       <form
         onSubmit={handleSubmit}
         onDragOver={handleDragOver}
@@ -760,7 +768,7 @@ export function PromptInput({
         className="relative flex flex-col gap-2"
       >
         <AnimatePresence initial={false}>
-          {attachments.files.length > 0 ? (
+          {(attachments?.files.length ?? 0) > 0 ? (
             <motion.div
               key="attachments"
               initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 6 }}
@@ -769,9 +777,9 @@ export function PromptInput({
               transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
             >
               <Attachments
-                files={attachments.files}
-                onRemove={attachments.remove}
-                onSaveToLibrary={attachments.saveToLibrary}
+                files={attachments?.files ?? []}
+                onRemove={attachments?.remove ?? (() => undefined)}
+                onSaveToLibrary={attachments?.saveToLibrary}
               />
             </motion.div>
           ) : null}
@@ -804,7 +812,8 @@ export function PromptInput({
               aria-label={ariaLabel}
               aria-multiline="true"
               className={cn(
-                'relative min-h-[74px] max-h-[160px] overflow-y-auto whitespace-pre-wrap break-words',
+                'relative max-h-[160px] overflow-y-auto whitespace-pre-wrap break-words',
+                variant === 'canvas' ? 'min-h-11' : 'min-h-[74px]',
                 'px-3 py-3.5 text-sm leading-6 text-foreground outline-none',
                 'focus-visible:ring-0',
                 disabled && 'pointer-events-none opacity-60',
@@ -881,23 +890,27 @@ export function PromptInput({
                   variant="ghost"
                 />
 
-                <input
-                  accept={ACCEPTED_ATTACHMENT_TYPES}
-                  className="hidden"
-                  multiple
-                  onChange={handleFileChange}
-                  ref={fileInputRef}
-                  type="file"
-                />
-                <InputGroupButton
-                  aria-label="Attach files"
-                  disabled={disabled}
-                  onClick={() => fileInputRef.current?.click()}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <Paperclip className="size-4" />
-                </InputGroupButton>
+                {attachments ? (
+                  <>
+                    <input
+                      accept={ACCEPTED_ATTACHMENT_TYPES}
+                      className="hidden"
+                      multiple
+                      onChange={handleFileChange}
+                      ref={fileInputRef}
+                      type="file"
+                    />
+                    <InputGroupButton
+                      aria-label="Attach files"
+                      disabled={disabled}
+                      onClick={() => fileInputRef.current?.click()}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <Paperclip className="size-4" />
+                    </InputGroupButton>
+                  </>
+                ) : null}
 
                 {isStreaming ? (
                   <Button

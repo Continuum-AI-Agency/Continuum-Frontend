@@ -151,6 +151,14 @@ function readAuditId(fields: Record<string, unknown>): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/** The write's scope, when the service stamped it into the log fields. Drives the revert
+ *  dialog's copy: 'adset_status' reads as "Unpause", everything else as "Revert budget".
+ *  Absent on budget rows written before the field was added → the dialog defaults to budget. */
+function readScope(fields: Record<string, unknown>): string | null {
+  const value = fields.scope;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 function MoneyLogRow({
   row,
   move,
@@ -174,17 +182,40 @@ function MoneyLogRow({
             ) : null}
           </div>
           {canRevert && auditId && row.portfolio_id ? (
-            <RevertApplyDialog auditId={auditId} portfolioId={row.portfolio_id} brandId={brandId} />
+            <RevertApplyDialog
+              auditId={auditId}
+              portfolioId={row.portfolio_id}
+              brandId={brandId}
+              scope={readScope(row.fields ?? {})}
+            />
           ) : null}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-            {formatAmount(move.prior)}
-          </span>
-          <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-          <span className="font-mono text-2xs font-semibold tabular-nums">
-            {formatAmount(move.target)}
-          </span>
+          {move.targetStatus != null ? (
+            <>
+              <span className="font-mono text-2xs text-muted-foreground">
+                {move.priorStatus ?? '—'}
+              </span>
+              <ArrowRightIcon
+                aria-hidden="true"
+                className="size-3 shrink-0 text-muted-foreground"
+              />
+              <span className="font-mono text-2xs font-semibold">{move.targetStatus}</span>
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                {formatAmount(move.prior)}
+              </span>
+              <ArrowRightIcon
+                aria-hidden="true"
+                className="size-3 shrink-0 text-muted-foreground"
+              />
+              <span className="font-mono text-2xs font-semibold tabular-nums">
+                {formatAmount(move.target)}
+              </span>
+            </>
+          )}
           {move.actorKind ? <ActorBadge kind={move.actorKind} /> : null}
         </div>
         {move.receipt ? <ReceiptToken value={move.receipt} /> : null}

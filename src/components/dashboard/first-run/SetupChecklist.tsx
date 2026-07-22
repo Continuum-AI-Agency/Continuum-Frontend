@@ -4,42 +4,37 @@
 // surface where the user can act — it never rebuilds an assignment path, it
 // links into the existing one.
 
-import Link from "next/link";
-import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle } from 'lucide-react';
+import Link from 'next/link';
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import type { DashboardSetupState, DashboardSetupStep } from "./setupState";
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import type { DashboardSetupState, DashboardSetupStep } from './setupState';
 
-function StepIcon({ status }: { status: DashboardSetupStep["status"] }) {
-  if (status === "done") {
+function StepIcon({ status }: { status: DashboardSetupStep['status'] }) {
+  if (status === 'done') {
     return <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-emerald-500" />;
   }
   return <Circle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground/60" />;
 }
 
 function ChecklistRow({ step }: { step: DashboardSetupStep }) {
-  const isDone = step.status === "done";
+  const isDone = step.status === 'done';
   return (
     <li className="flex items-start gap-3 py-2.5">
       <StepIcon status={step.status} />
       <div className="min-w-0 flex-1">
         <p
           className={cn(
-            "text-sm font-medium",
-            isDone ? "text-muted-foreground line-through" : "text-foreground",
+            'text-sm font-medium',
+            isDone ? 'text-muted-foreground line-through' : 'text-foreground',
           )}
         >
           {step.label}
         </p>
         <p className="text-xs text-muted-foreground">{step.description}</p>
       </div>
-      <Button
-        asChild
-        size="xs"
-        variant={isDone ? "ghost" : "outline"}
-        className="shrink-0"
-      >
+      <Button asChild size="xs" variant={isDone ? 'ghost' : 'outline'} className="shrink-0">
         <Link href={step.href} data-testid={`setup-step-cta-${step.id}`}>
           {step.cta}
           <ArrowRight aria-hidden="true" className="size-3" />

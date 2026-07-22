@@ -27,7 +27,7 @@ export const GENERATE_IMAGE_PATH = '/api/ai-studio/generate';
 
 // Nano Banana flash 3.1: the current image-to-image editing model; honors
 // generationConfig.imageConfig (aspectRatio + imageSize) on the Backend.
-export const QUICK_LOOK_MODEL = 'gemini-3.1-flash-image-preview';
+export const QUICK_LOOK_MODEL = 'gemini-3.1-flash-image';
 export const QUICK_LOOK_IMAGE_SIZE = '1K';
 
 export const BRAND_BOOK_PIECE_OPTIONS: readonly BrandBookPieceKind[] =

@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import dynamic from "next/dynamic";
-import type { OrganicAgentMentionContext } from "./OrganicAgentPanel";
+import dynamic from 'next/dynamic';
+import type { OrganicAgentMentionContext } from './OrganicAgentPanel';
 
 const OrganicAgentPanelDynamic = dynamic(
   () =>
-    import("@/components/organic/agent/OrganicAgentPanel").then((m) => ({
+    import('@/components/organic/agent/OrganicAgentPanel').then((m) => ({
       default: m.OrganicAgentPanel,
     })),
-  { ssr: false }
+  { ssr: false },
 );
 
 type OrganicAgentPanelLazyProps = {

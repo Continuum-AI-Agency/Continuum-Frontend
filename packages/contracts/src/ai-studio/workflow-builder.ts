@@ -46,8 +46,21 @@ export interface WorkflowGraph {
   metadata?: Record<string, unknown>;
 }
 
-const COLUMN_SPACING = 360;
-const ROW_SPACING = 220;
+// Fixed empty space between adjacent node boxes. The columns/rows themselves are
+// sized cumulatively from each node's own width/height (below), so a wide node
+// (videoEditor 460) or tall generator no longer overlaps its neighbours the way a
+// flat 360/220 grid did once a node exceeded those constants.
+const LAYOUT_GUTTER = 80;
+// Fallbacks for nodes with no style box — prompt/string nodes carry no default
+// width/height, so laying them out at 0 would stack them on the origin.
+const DEFAULT_NODE_WIDTH = 320;
+const DEFAULT_NODE_HEIGHT = 180;
+
+const nodeBoxWidth = (node: WorkflowNode): number =>
+  node.style?.width ?? node.width ?? DEFAULT_NODE_WIDTH;
+
+const nodeBoxHeight = (node: WorkflowNode): number =>
+  node.style?.height ?? node.height ?? DEFAULT_NODE_HEIGHT;
 
 const isStudioNodeType = (type: string): type is StudioNodeType =>
   (STUDIO_NODE_TYPES as readonly string[]).includes(type);
@@ -199,13 +212,42 @@ export function autoLayout(nodes: WorkflowNode[], edges: WorkflowEdge[]): Workfl
     if (!changed) break;
   }
 
-  const rowByLayer = new Map<number, number>();
-  return nodes.map((node) => {
+  // Group nodes by layer (column), preserving their original order within each.
+  const byLayer = new Map<number, WorkflowNode[]>();
+  for (const node of nodes) {
     const depth = layer.get(node.id) ?? 0;
-    const row = rowByLayer.get(depth) ?? 0;
-    rowByLayer.set(depth, row + 1);
-    return { ...node, position: { x: depth * COLUMN_SPACING, y: row * ROW_SPACING } };
-  });
+    const column = byLayer.get(depth) ?? [];
+    column.push(node);
+    byLayer.set(depth, column);
+  }
+
+  // Column x-offsets: each column starts past the widest box of every column
+  // before it, plus one gutter — so no node ever reaches into the next column.
+  const maxDepth = byLayer.size === 0 ? 0 : Math.max(...byLayer.keys());
+  const columnX = new Map<number, number>();
+  let x = 0;
+  for (let depth = 0; depth <= maxDepth; depth += 1) {
+    columnX.set(depth, x);
+    const column = byLayer.get(depth) ?? [];
+    const widest = column.reduce((max, node) => Math.max(max, nodeBoxWidth(node)), 0);
+    x += (widest || DEFAULT_NODE_WIDTH) + LAYOUT_GUTTER;
+  }
+
+  // Row y-offsets: stack each node below the cumulative height of the ones above
+  // it in the same column, plus a gutter.
+  const positionById = new Map<string, { x: number; y: number }>();
+  for (const [depth, column] of byLayer) {
+    let y = 0;
+    for (const node of column) {
+      positionById.set(node.id, { x: columnX.get(depth) ?? 0, y });
+      y += nodeBoxHeight(node) + LAYOUT_GUTTER;
+    }
+  }
+
+  return nodes.map((node) => ({
+    ...node,
+    position: positionById.get(node.id) ?? node.position,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -301,8 +343,11 @@ export function buildWorkflowGraph(
 
 function lowestFreeY(nodes: WorkflowNode[]): number {
   if (nodes.length === 0) return 0;
-  const bottom = Math.max(...nodes.map((n) => n.position.y + (n.height ?? 0)));
-  return bottom + ROW_SPACING;
+  // A string/prompt node has no `height`; falling back to 0 (the old behaviour)
+  // let incoming nodes land on top of it. Use the sane min-height fallback so the
+  // merge always drops new work clear of existing nodes.
+  const bottom = Math.max(...nodes.map((n) => n.position.y + nodeBoxHeight(n)));
+  return bottom + LAYOUT_GUTTER;
 }
 
 /**

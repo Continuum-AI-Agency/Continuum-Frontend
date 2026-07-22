@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   assetPreviewSchema,
   assetRenditionSchema,
+  completeAssetRenditionOperationSchema,
   preferredAssetPreview,
 } from './asset-renditions';
 
@@ -55,5 +56,67 @@ describe('asset rendition contracts', () => {
     ];
     expect(preferredAssetPreview(renditions, 'card')?.role).toBe('preview_image');
     expect(preferredAssetPreview(renditions, 'detail')?.role).toBe('preview_video');
+  });
+
+  const poster = {
+    ...base,
+    role: 'poster',
+    storagePath: '222/333/444/poster.webp',
+    mimeType: 'image/webp',
+  } as const;
+
+  it('parses a rendition with and without poster provenance', () => {
+    expect(assetRenditionSchema.safeParse(poster).success).toBe(true);
+    const parsed = assetRenditionSchema.safeParse({
+      ...poster,
+      posterSource: 'user',
+      sourceTimestampMs: 2000,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.posterSource).toBe('user');
+      expect(parsed.data.sourceTimestampMs).toBe(2000);
+    }
+    expect(
+      assetRenditionSchema.safeParse({ ...poster, posterSource: null, sourceTimestampMs: null })
+        .success,
+    ).toBe(true);
+  });
+
+  it('rejects an unknown posterSource or a negative sourceTimestampMs', () => {
+    expect(assetRenditionSchema.safeParse({ ...poster, posterSource: 'x' }).success).toBe(false);
+    expect(assetRenditionSchema.safeParse({ ...poster, sourceTimestampMs: -1 }).success).toBe(
+      false,
+    );
+  });
+
+  const completeBody = {
+    action: 'complete_asset_rendition',
+    brandId: base.brandId,
+    assetId: base.assetId,
+    assetVersionId: base.assetVersionId,
+    renditionId: base.id,
+    mimeType: 'image/webp',
+    sizeBytes: 4096,
+    renderer: 'mediabunny-browser-poster',
+  } as const;
+
+  it('accepts optional poster provenance on the complete operation and rejects bad values', () => {
+    expect(completeAssetRenditionOperationSchema.safeParse(completeBody).success).toBe(true);
+    expect(
+      completeAssetRenditionOperationSchema.safeParse({
+        ...completeBody,
+        posterSource: 'user',
+        sourceTimestampMs: 2000,
+      }).success,
+    ).toBe(true);
+    expect(
+      completeAssetRenditionOperationSchema.safeParse({ ...completeBody, posterSource: 'x' })
+        .success,
+    ).toBe(false);
+    expect(
+      completeAssetRenditionOperationSchema.safeParse({ ...completeBody, sourceTimestampMs: -5 })
+        .success,
+    ).toBe(false);
   });
 });

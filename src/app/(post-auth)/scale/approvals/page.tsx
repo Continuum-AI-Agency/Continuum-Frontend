@@ -1,14 +1,13 @@
-import { redirect } from "next/navigation";
-
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
-import ApprovalsClient from "./ApprovalsClient";
+import { redirect } from 'next/navigation';
+import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import ApprovalsClient from './ApprovalsClient';
 
 export default async function ApprovalsPage() {
   const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
-    redirect("/onboarding");
+    redirect('/onboarding');
   }
 
   // Match the paid-media tier gate: tiers 1-3 only.
@@ -19,7 +18,7 @@ export default async function ApprovalsPage() {
   }
 
   const brandName =
-    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? "Untitled brand";
+    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'Untitled brand';
 
   return (
     <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full min-w-0 overflow-hidden">

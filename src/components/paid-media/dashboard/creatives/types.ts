@@ -4,12 +4,12 @@ import type {
   ActionType,
   CreativeSwitchExternalPayload,
   ProductSwapProduct,
-} from "@/lib/types/dco";
-import type { PaidMetricsTrendPoint } from "../PerformanceDetails";
+} from '@/lib/types/dco';
+import type { PaidMetricsTrendPoint } from '../PerformanceDetails';
 
 export const CREATIVE_SWAP_ACTION_TYPES: ReadonlyArray<ActionType> = [
-  "CREATIVE_SWITCH_EXTERNAL",
-  "SWITCH_CREATIVE",
+  'CREATIVE_SWITCH_EXTERNAL',
+  'SWITCH_CREATIVE',
 ];
 
 export type RotationEvent = {
@@ -46,7 +46,7 @@ export type OpenCreativeDetail = {
   focusLogId?: string;
 };
 
-export type CreativeFormat = "image" | "video" | "carousel";
+export type CreativeFormat = 'image' | 'video' | 'carousel';
 
 export type CreativeAdMetrics = {
   spend: number;
@@ -85,8 +85,8 @@ export type CreativeAd = {
 };
 
 export type CreativeMetricKey = keyof CreativeAdMetrics;
-export type CreativeSortKey = CreativeMetricKey | "name";
-export type CreativeStatusFilter = "all" | "active" | "paused";
+export type CreativeSortKey = CreativeMetricKey | 'name';
+export type CreativeStatusFilter = 'all' | 'active' | 'paused';
 
 export type CreativeGalleryFilters = {
   query: string;

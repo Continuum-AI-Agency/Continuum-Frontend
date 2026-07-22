@@ -25,19 +25,21 @@ const NODE_DISPLAY_NAMES: Record<CampaignNodeType, string> = {
   creative: 'creative',
 };
 
-function isSingleParentChildNodeType(nodeType: CampaignNodeType): nodeType is ChildNodeTypeWithSingleParent {
+function isSingleParentChildNodeType(
+  nodeType: CampaignNodeType,
+): nodeType is ChildNodeTypeWithSingleParent {
   return nodeType === 'ad-set' || nodeType === 'ad' || nodeType === 'creative';
 }
 
 export function getExpectedSingleParentTypeForChild(
-  childType: CampaignNodeType
+  childType: CampaignNodeType,
 ): CampaignNodeType | null {
   return isSingleParentChildNodeType(childType) ? SINGLE_PARENT_RULES[childType] : null;
 }
 
 export function getSingleParentConstraintMessage(
   childType: CampaignNodeType,
-  parentType: CampaignNodeType
+  parentType: CampaignNodeType,
 ): string {
   return `${hierarchyErrorPrefix}: ${NODE_DISPLAY_NAMES[childType]} can only be attached to one ${NODE_DISPLAY_NAMES[parentType]} at a time.`;
 }
@@ -46,7 +48,7 @@ export function hasExistingSingleParentAttachment(
   childNodeId: string,
   parentType: CampaignNodeType,
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): boolean {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   return edges.some((edge) => {
@@ -65,10 +67,10 @@ function getHierarchyErrorMessage(issue: SingleParentIssue): string {
 
 function getHierarchyErrorsForNode(
   existingErrors: string[] | undefined,
-  issues: SingleParentIssue[]
+  issues: SingleParentIssue[],
 ): string[] {
   const retainedErrors = (existingErrors ?? []).filter(
-    (error) => !error.startsWith(hierarchyErrorPrefix)
+    (error) => !error.startsWith(hierarchyErrorPrefix),
   );
   const hierarchyErrors = issues.map(getHierarchyErrorMessage);
   return [...retainedErrors, ...hierarchyErrors];
@@ -77,7 +79,7 @@ function getHierarchyErrorsForNode(
 export function getSingleParentConnectionViolationMessage(
   connection: Connection,
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): string | null {
   const sourceNode = nodes.find((node) => node.id === connection.source);
   const targetNode = nodes.find((node) => node.id === connection.target);
@@ -99,7 +101,7 @@ export function getSingleParentConnectionViolationMessage(
     targetNode.id,
     expectedParentType,
     nodes,
-    edges.filter((edge) => edge.source !== sourceNode.id)
+    edges.filter((edge) => edge.source !== sourceNode.id),
   );
 
   if (!hasExistingAttachment) {
@@ -115,7 +117,7 @@ export function getSingleParentConnectionViolationMessage(
 
 export function collectSingleParentRelationshipIssues(
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): SingleParentIssue[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const issues: SingleParentIssue[] = [];
@@ -153,7 +155,7 @@ export function collectSingleParentRelationshipIssues(
 
 export function applySingleParentRelationshipValidation(
   nodes: CampaignCanvasNode[],
-  edges: CampaignCanvasEdge[]
+  edges: CampaignCanvasEdge[],
 ): CampaignCanvasNode[] {
   const issues = collectSingleParentRelationshipIssues(nodes, edges);
   const nodeIssues = new Map<string, SingleParentIssue[]>();

@@ -1,72 +1,72 @@
-import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 import {
   instagramOrganicMetricsResponseSchema,
   linkedInOrganicMetricsResponseSchema,
   organicMetricsResponseSchema,
-} from "./organicMetrics";
+} from './organicMetrics';
 
 function basePayload() {
   return {
-    accountId: "acct-1",
+    accountId: 'acct-1',
     range: {
-      preset: "last_7d" as const,
-      since: "2026-02-17",
-      until: "2026-02-23",
+      preset: 'last_7d' as const,
+      since: '2026-02-17',
+      until: '2026-02-23',
     },
     metrics: {},
   };
 }
 
-describe("organic metrics platform schemas", () => {
-  test("instagram schema rejects linkedin payloads", () => {
+describe('organic metrics platform schemas', () => {
+  test('instagram schema rejects linkedin payloads', () => {
     const parsed = instagramOrganicMetricsResponseSchema.safeParse({
       ...basePayload(),
-      platform: "linkedin",
-      posts: [{ id: "li-post-1", content: "LinkedIn body copy" }],
+      platform: 'linkedin',
+      posts: [{ id: 'li-post-1', content: 'LinkedIn body copy' }],
     });
 
     assert.equal(parsed.success, false);
   });
 
-  test("linkedin schema accepts linkedin-specific post fields", () => {
+  test('linkedin schema accepts linkedin-specific post fields', () => {
     const parsed = linkedInOrganicMetricsResponseSchema.safeParse({
       ...basePayload(),
-      platform: "linkedin",
+      platform: 'linkedin',
       posts: [
         {
-          id: "li-post-1",
-          content: "LinkedIn body copy",
-          author: "Continuum",
-          headline: "Team update",
+          id: 'li-post-1',
+          content: 'LinkedIn body copy',
+          author: 'Continuum',
+          headline: 'Team update',
           reactions: 42,
           reposts: 5,
-          postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:123",
+          postUrl: 'https://www.linkedin.com/feed/update/urn:li:activity:123',
         },
       ],
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
   });
 
-  test("union schema routes linkedin payloads to dedicated branch", () => {
+  test('union schema routes linkedin payloads to dedicated branch', () => {
     const parsed = organicMetricsResponseSchema.safeParse({
       ...basePayload(),
-      platform: "linkedin",
-      posts: [{ id: "li-post-2", content: "Dedicated LinkedIn schema payload" }],
+      platform: 'linkedin',
+      posts: [{ id: 'li-post-2', content: 'Dedicated LinkedIn schema payload' }],
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
     if (!parsed.success) return;
 
-    assert.equal(parsed.data.platform, "linkedin");
+    assert.equal(parsed.data.platform, 'linkedin');
   });
 
-  test("union schema accepts youtube organic analytics edge payloads", () => {
+  test('union schema accepts youtube organic analytics edge payloads', () => {
     const parsed = organicMetricsResponseSchema.safeParse({
       ...basePayload(),
-      platform: "youtube",
+      platform: 'youtube',
       metrics: {
         subscribers: 0,
         views: 1,
@@ -83,33 +83,33 @@ describe("organic metrics platform schemas", () => {
       },
       posts: [
         {
-          id: "vid-1",
-          title: "Sample short",
-          mediaProductType: "SHORTS",
+          id: 'vid-1',
+          title: 'Sample short',
+          mediaProductType: 'SHORTS',
           metrics: { views: 1, likes: 0, comments: 0, hookRate: 99.43 },
         },
       ],
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
     if (!parsed.success) return;
-    assert.equal(parsed.data.platform, "youtube");
+    assert.equal(parsed.data.platform, 'youtube');
   });
 
-  test("coerces Meta-style last_30_days preset aliases on response range", () => {
+  test('coerces Meta-style last_30_days preset aliases on response range', () => {
     const parsed = organicMetricsResponseSchema.safeParse({
       ...basePayload(),
-      platform: "youtube",
+      platform: 'youtube',
       range: {
-        preset: "last_30_days",
-        since: "2026-06-09",
-        until: "2026-07-08",
+        preset: 'last_30_days',
+        since: '2026-06-09',
+        until: '2026-07-08',
       },
       metrics: { views: 1, subscribers: 0 },
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
     if (!parsed.success) return;
-    assert.equal(parsed.data.range.preset, "last_30d");
+    assert.equal(parsed.data.range.preset, 'last_30d');
   });
 });

@@ -1,36 +1,38 @@
-"use client";
+'use client';
 
-import { http } from "@/lib/api/http";
+import { http } from '@/lib/api/http';
 import {
+  type ProductCatalogCreateInput,
+  type ProductCatalogRecord,
+  type ProductCatalogUpdateInput,
   productCatalogCreateSchema,
   productCatalogListResponseSchema,
   productCatalogSingleResponseSchema,
   productCatalogUpdateSchema,
-  type ProductCatalogCreateInput,
-  type ProductCatalogRecord,
-  type ProductCatalogUpdateInput,
-} from "@/lib/schemas/productCatalogs";
+} from '@/lib/schemas/productCatalogs';
 
 export async function listProductCatalogs(brandId: string): Promise<ProductCatalogRecord[]> {
   const response = await http.request<{ catalogs: ProductCatalogRecord[] }>({
     path: `/api/paid-media/product-catalogs?brandId=${encodeURIComponent(brandId)}`,
-    method: "GET",
+    method: 'GET',
     schema: productCatalogListResponseSchema,
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   return response.catalogs;
 }
 
-export async function createProductCatalog(input: ProductCatalogCreateInput): Promise<ProductCatalogRecord> {
+export async function createProductCatalog(
+  input: ProductCatalogCreateInput,
+): Promise<ProductCatalogRecord> {
   const payload = productCatalogCreateSchema.parse(input);
 
   const response = await http.request<{ catalog: ProductCatalogRecord }>({
-    path: "/api/paid-media/product-catalogs",
-    method: "POST",
+    path: '/api/paid-media/product-catalogs',
+    method: 'POST',
     body: payload,
     schema: productCatalogSingleResponseSchema,
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   return response.catalog;
@@ -38,16 +40,16 @@ export async function createProductCatalog(input: ProductCatalogCreateInput): Pr
 
 export async function updateProductCatalog(
   catalogId: string,
-  input: ProductCatalogUpdateInput
+  input: ProductCatalogUpdateInput,
 ): Promise<ProductCatalogRecord> {
   const payload = productCatalogUpdateSchema.parse(input);
 
   const response = await http.request<{ catalog: ProductCatalogRecord }>({
     path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}`,
-    method: "PUT",
+    method: 'PUT',
     body: payload,
     schema: productCatalogSingleResponseSchema,
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   return response.catalog;
@@ -55,17 +57,17 @@ export async function updateProductCatalog(
 
 export async function deleteProductCatalog(
   catalogId: string,
-  options?: { brandId?: string; metaAccountId?: string }
+  options?: { brandId?: string; metaAccountId?: string },
 ): Promise<void> {
   const params = new URLSearchParams();
-  if (options?.brandId) params.set("brandId", options.brandId);
-  if (options?.metaAccountId) params.set("metaAccountId", options.metaAccountId);
+  if (options?.brandId) params.set('brandId', options.brandId);
+  if (options?.metaAccountId) params.set('metaAccountId', options.metaAccountId);
   const query = params.toString();
 
   await http.request({
-    path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}${query ? `?${query}` : ""}`,
-    method: "DELETE",
-    cache: "no-store",
+    path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}${query ? `?${query}` : ''}`,
+    method: 'DELETE',
+    cache: 'no-store',
   });
 }
 
@@ -97,35 +99,38 @@ type EdgeJobResponse = {
   [key: string]: unknown;
 };
 
-export async function syncProductCatalog(catalogId: string, input: SyncProductCatalogInput): Promise<EdgeJobResponse> {
+export async function syncProductCatalog(
+  catalogId: string,
+  input: SyncProductCatalogInput,
+): Promise<EdgeJobResponse> {
   return http.request({
     path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}/sync`,
-    method: "POST",
+    method: 'POST',
     body: input,
-    cache: "no-store",
+    cache: 'no-store',
   });
 }
 
 export async function reconcileProductCatalogActivity(
   catalogId: string,
-  input: ReconcileProductCatalogInput
+  input: ReconcileProductCatalogInput,
 ): Promise<EdgeJobResponse> {
   return http.request({
     path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}/reconcile`,
-    method: "POST",
+    method: 'POST',
     body: input,
-    cache: "no-store",
+    cache: 'no-store',
   });
 }
 
 export async function backfillProductCatalogHistory(
   catalogId: string,
-  input: BackfillProductCatalogInput
+  input: BackfillProductCatalogInput,
 ): Promise<EdgeJobResponse> {
   return http.request({
     path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}/backfill`,
-    method: "POST",
+    method: 'POST',
     body: input,
-    cache: "no-store",
+    cache: 'no-store',
   });
 }

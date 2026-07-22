@@ -1,5 +1,5 @@
-import type { RegisterCanvasAssetRequest } from "@continuum/contracts";
-import { attachVideoPoster } from "@/lib/library/videoPoster";
+import type { RegisterCanvasAssetRequest } from '@continuum/contracts';
+import { attachVideoPoster } from '@/lib/library/videoPoster';
 
 type RegisterCanvasOutputOptions = {
   videoSource?: string | Blob;
@@ -17,20 +17,20 @@ export async function registerCanvasOutput(
   const fetchImpl = options.fetchImpl ?? fetch;
   let assetId: string | null;
   try {
-    const resp = await fetchImpl("/api/library/register-canvas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const resp = await fetchImpl('/api/library/register-canvas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { assetId?: string | null };
     assetId = data.assetId ?? null;
   } catch (err) {
-    console.warn("[registerCanvasOutput] failed", err);
+    console.warn('[registerCanvasOutput] failed', err);
     return null;
   }
 
-  if (!assetId || input.kind !== "video" || !options.videoSource) return assetId;
+  if (!assetId || input.kind !== 'video' || !options.videoSource) return assetId;
 
   try {
     const file =
@@ -49,7 +49,7 @@ export async function registerCanvasOutput(
   } catch (err) {
     // Registration already succeeded. Poster extraction is a browser-only,
     // fail-soft enhancement and must never turn a generated asset into a failure.
-    console.warn("[registerCanvasOutput] poster backfill failed", err);
+    console.warn('[registerCanvasOutput] poster backfill failed', err);
   }
 
   return assetId;

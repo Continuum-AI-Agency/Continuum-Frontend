@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { InspirationBrowser } from "@/components/competitors/InspirationBrowser";
+import { InspirationBrowser } from '@/components/competitors/InspirationBrowser';
 
 // Competitor inspiration inside the Library: organic Instagram posts and paid ad
 // creatives, sorted by source, synced on demand (server-side IG unwrap + cache),

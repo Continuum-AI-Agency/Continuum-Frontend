@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  applyEnvelope,
   AUDIO_SAMPLE_RATE,
+  applyEnvelope,
   clampStereo,
   mixInto,
   resampleToStereo48k,

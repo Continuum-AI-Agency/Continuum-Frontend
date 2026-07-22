@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 type SpeechProxyRequest = {
   audioBase64: string;
@@ -42,64 +42,63 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as SpeechProxyRequest;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
   if (!payload?.audioBase64?.trim()) {
-    return NextResponse.json({ error: "audioBase64 is required" }, { status: 400 });
+    return NextResponse.json({ error: 'audioBase64 is required' }, { status: 400 });
   }
 
   const supabase = await createSupabaseServerClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   if (!supabaseUrl) {
-    return NextResponse.json({ error: "Missing Supabase URL" }, { status: 500 });
+    return NextResponse.json({ error: 'Missing Supabase URL' }, { status: 500 });
   }
 
   const edgeResponse = await fetch(`${supabaseUrl}/functions/v1/jaina-speech-to-text`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      Accept: payload.stream === false ? "application/json" : "text/event-stream",
+      'Content-Type': 'application/json',
+      Accept: payload.stream === false ? 'application/json' : 'text/event-stream',
       Authorization: `Bearer ${accessToken}`,
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
     },
     body: JSON.stringify(payload),
-    cache: "no-store",
+    cache: 'no-store',
   });
 
   if (!edgeResponse.ok) {
-    const message = await edgeResponse.text().catch(() => "Speech service unavailable");
+    const message = await edgeResponse.text().catch(() => 'Speech service unavailable');
     return NextResponse.json(
-      { error: message || "Speech service unavailable" },
-      { status: edgeResponse.status || 500 }
+      { error: message || 'Speech service unavailable' },
+      { status: edgeResponse.status || 500 },
     );
   }
 
   if (payload.stream === false) {
     const json = await edgeResponse.json().catch(() => null);
-    return NextResponse.json(
-      json ?? { error: "Invalid speech payload" },
-      { status: edgeResponse.status }
-    );
+    return NextResponse.json(json ?? { error: 'Invalid speech payload' }, {
+      status: edgeResponse.status,
+    });
   }
 
   const headers = new Headers(edgeResponse.headers);
-  headers.set("Content-Type", "text/event-stream");
-  headers.set("Cache-Control", "no-cache, no-transform");
-  headers.set("Connection", "keep-alive");
-  headers.set("X-Accel-Buffering", "no");
-  headers.delete("content-length");
+  headers.set('Content-Type', 'text/event-stream');
+  headers.set('Cache-Control', 'no-cache, no-transform');
+  headers.set('Connection', 'keep-alive');
+  headers.set('X-Accel-Buffering', 'no');
+  headers.delete('content-length');
 
   return new Response(relayResponseBody(edgeResponse), {
     headers,

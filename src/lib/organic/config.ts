@@ -1,10 +1,10 @@
-import { getApiBaseUrl } from "@/lib/api/config";
+import { getApiBaseUrl } from '@/lib/api/config';
 
 const ENV_VAR_CANDIDATES = [
-  "ORGANIC_AGENT_BASE_URL",
-  "ANTONIDAS_API_BASE_URL",
-  "CONTINUUM_AGENT_BASE_URL",
-  "CONTINUUM_API_BASE_URL",
+  'ORGANIC_AGENT_BASE_URL',
+  'ANTONIDAS_API_BASE_URL',
+  'CONTINUUM_AGENT_BASE_URL',
+  'CONTINUUM_API_BASE_URL',
 ];
 
 function readEnvVar(): string | null {
@@ -20,7 +20,7 @@ function readEnvVar(): string | null {
 export function getOrganicServiceBaseUrl(): string {
   const raw = readEnvVar();
   if (raw) {
-    return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+    return raw.endsWith('/') ? raw.slice(0, -1) : raw;
   }
   return getApiBaseUrl();
 }

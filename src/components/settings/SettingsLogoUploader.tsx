@@ -1,13 +1,14 @@
-"use client";
+'use client';
 
-import React, { useRef, useState, useEffect } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Upload, X, Loader2 } from "lucide-react";
-import { uploadCreativeAsset, createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
-import { updateBrandLogoAction } from "@/app/(post-auth)/settings/actions";
-import { useToast } from "@/components/ui/ToastProvider";
-import { useRouter } from "next/navigation";
+import { Loader2, Upload, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { updateBrandLogoAction } from '@/app/(post-auth)/settings/actions';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/ToastProvider';
+import { createSignedAssetUrl, uploadCreativeAsset } from '@/lib/creative-assets/storageClient';
 
 type SettingsLogoUploaderProps = {
   brandId: string;
@@ -17,7 +18,13 @@ type SettingsLogoUploaderProps = {
   disabledReason?: string;
 };
 
-export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disabled, disabledReason }: SettingsLogoUploaderProps) {
+export function SettingsLogoUploader({
+  brandId,
+  brandName,
+  initialLogoPath,
+  disabled,
+  disabledReason,
+}: SettingsLogoUploaderProps) {
   const { show } = useToast();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -33,12 +40,16 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
       return;
     }
     let isActive = true;
-    createSignedAssetUrl(logoPath, 3600).then((url) => {
-      if (isActive) setPreviewUrl(url);
-    }).catch(() => {
-      if (isActive) setPreviewUrl(null);
-    });
-    return () => { isActive = false; };
+    createSignedAssetUrl(logoPath, 3600)
+      .then((url) => {
+        if (isActive) setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (isActive) setPreviewUrl(null);
+      });
+    return () => {
+      isActive = false;
+    };
   }, [logoPath]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,30 +57,30 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      show({ title: "File too large", description: "Logo must be under 2MB", variant: "error" });
+      show({ title: 'File too large', description: 'Logo must be under 2MB', variant: 'error' });
       return;
     }
 
     setIsUploading(true);
     try {
-      const extension = file.name.split(".").pop() || "png";
+      const extension = file.name.split('.').pop() || 'png';
       const namedFile = new File([file], `logo.${extension}`, { type: file.type });
-      
-      const { asset } = await uploadCreativeAsset(brandId, "branding", namedFile);
-      
+
+      const { asset } = await uploadCreativeAsset(brandId, 'branding', namedFile);
+
       await updateBrandLogoAction(brandId, asset.fullPath);
-      
+
       setLogoPath(asset.fullPath);
-      show({ title: "Logo uploaded", description: "Brand logo updated.", variant: "success" });
+      show({ title: 'Logo uploaded', description: 'Brand logo updated.', variant: 'success' });
       router.refresh();
     } catch (error) {
       console.error(error);
       const description =
-        error instanceof Error && error.message ? error.message : "Could not upload logo.";
-      show({ title: "Upload failed", description, variant: "error" });
+        error instanceof Error && error.message ? error.message : 'Could not upload logo.';
+      show({ title: 'Upload failed', description, variant: 'error' });
     } finally {
       setIsUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
@@ -82,20 +93,20 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
       await updateBrandLogoAction(brandId, null);
       setLogoPath(null);
       setPreviewUrl(null);
-      show({ title: "Logo removed", description: "Brand logo removed.", variant: "success" });
+      show({ title: 'Logo removed', description: 'Brand logo removed.', variant: 'success' });
       router.refresh();
     } catch (error) {
       console.error(error);
       const description =
-        error instanceof Error && error.message ? error.message : "Could not remove logo.";
-      show({ title: "Remove failed", description, variant: "error" });
+        error instanceof Error && error.message ? error.message : 'Could not remove logo.';
+      show({ title: 'Remove failed', description, variant: 'error' });
     } finally {
       setIsUploading(false);
     }
   };
 
   const disabledTitle = disabled
-    ? disabledReason ?? "Only brand owners or admins can change the logo."
+    ? (disabledReason ?? 'Only brand owners or admins can change the logo.')
     : undefined;
 
   return (
@@ -108,9 +119,9 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
         onChange={handleFileChange}
         disabled={isUploading || disabled}
       />
-      
-      <Avatar 
-        className={`w-24 h-24 border-4 border-muted-foreground/10 transition-all shadow-sm ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-primary/50'}`} 
+
+      <Avatar
+        className={`w-24 h-24 border-4 border-muted-foreground/10 transition-all shadow-sm ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-primary/50'}`}
         onClick={() => !isUploading && !disabled && inputRef.current?.click()}
       >
         <AvatarImage src={previewUrl ?? undefined} alt="Brand Logo" className="object-cover" />

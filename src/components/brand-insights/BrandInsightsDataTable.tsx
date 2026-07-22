@@ -4,7 +4,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from 'lucide-rea
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -331,32 +330,7 @@ export function BrandInsightsDataTable({
                             aria-controls={`brand-insights-row-details-${row.id}`}
                           >
                             <span className="min-w-0">
-                              {hoverDetails.length > 0 ? (
-                                <HoverCard openDelay={150} closeDelay={80}>
-                                  <HoverCardTrigger asChild>
-                                    <span className={titleClassName}>{row.title}</span>
-                                  </HoverCardTrigger>
-                                  <HoverCardContent
-                                    side="right"
-                                    align="start"
-                                    sideOffset={12}
-                                    className="flex w-72 flex-col gap-2 text-xs leading-relaxed"
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    <p className="text-foreground font-medium">{row.title}</p>
-                                    {hoverDetails.map((detail) => (
-                                      <div key={detail.label}>
-                                        <p className="text-2xs text-muted-foreground font-semibold tracking-wide uppercase">
-                                          {detail.label}
-                                        </p>
-                                        <p className="text-foreground mt-0.5">{detail.value}</p>
-                                      </div>
-                                    ))}
-                                  </HoverCardContent>
-                                </HoverCard>
-                              ) : (
-                                <span className={titleClassName}>{row.title}</span>
-                              )}
+                              <span className={titleClassName}>{row.title}</span>
                             </span>
                             <ChevronDown
                               className={cn(
@@ -412,18 +386,23 @@ export function BrandInsightsDataTable({
                           id={`brand-insights-row-details-${row.id}`}
                           className="animate-in fade-in-0 duration-150 bg-muted/20 hover:bg-muted/20"
                         >
-                          <TableCell colSpan={renderRowAction ? 3 : 2} className="px-3 pb-4">
+                          <TableCell
+                            colSpan={renderRowAction ? 3 : 2}
+                            className="@container/insights-detail px-3 pb-4"
+                          >
                             {hoverDetails.length > 0 ? (
-                              <dl className="grid gap-2 sm:grid-cols-2">
+                              <dl className="grid min-w-0 gap-2 @sm/insights-detail:grid-cols-2">
                                 {hoverDetails.map((detail) => (
                                   <div
                                     key={`${row.id}-${detail.label}`}
-                                    className="rounded-md border bg-background p-3"
+                                    className="min-w-0 rounded-md border bg-background p-3"
                                   >
                                     <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                                       {detail.label}
                                     </dt>
-                                    <dd className="mt-1 text-sm leading-6">{detail.value}</dd>
+                                    <dd className="mt-1 text-sm leading-6 break-words">
+                                      {detail.value}
+                                    </dd>
                                   </div>
                                 ))}
                               </dl>

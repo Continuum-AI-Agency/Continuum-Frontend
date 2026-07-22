@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useState } from 'react';
 
 // Minimal context that tracks whether the brand.md editor has unsaved local
 // changes. `BrandBookActions` reads `isDirty` to suppress auto-refresh while
@@ -27,7 +27,7 @@ export function BrandMdDirtyProvider({ children }: { children: React.ReactNode }
 
 export function useBrandMdDirty(): BrandMdDirtyContextValue {
   const ctx = useContext(BrandMdDirtyContext);
-  if (!ctx) throw new Error("useBrandMdDirty must be used inside BrandMdDirtyProvider");
+  if (!ctx) throw new Error('useBrandMdDirty must be used inside BrandMdDirtyProvider');
   return ctx;
 }
 

@@ -1,66 +1,66 @@
-import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
 import {
-  calendarPlacementSchema,
   calendarGenerationRequestSchema,
+  calendarPlacementSchema,
   toBackendCalendarGenerationRequest,
-} from "./calendar-generation";
+} from './calendar-generation';
 
 function buildRequestPayload() {
   return {
-    brandProfileId: "brand-123",
-    weekStart: "2026-02-23",
-    timezone: "America/New_York",
+    brandProfileId: 'brand-123',
+    weekStart: '2026-02-23',
+    timezone: 'America/New_York',
     placements: [
       {
-        placementId: "seed-1",
+        placementId: 'seed-1',
         schedule: {
-          dayId: "2026-02-23",
-          scheduledAt: "2026-02-23T14:00:00.000Z",
-          timeLabel: "9:00 AM",
+          dayId: '2026-02-23',
+          scheduledAt: '2026-02-23T14:00:00.000Z',
+          timeLabel: '9:00 AM',
         },
         platform: {
-          name: "instagram" as const,
-          accountId: "acct-1",
+          name: 'instagram' as const,
+          accountId: 'acct-1',
         },
         seed: {
-          source: "trend" as const,
-          trendId: "trend-42",
+          source: 'trend' as const,
+          trendId: 'trend-42',
         },
         content: {
-          format: "static",
+          format: 'static',
         },
       },
     ],
     platformAccountIds: {
-      instagram: "acct-1",
+      instagram: 'acct-1',
     },
     options: {
-      schedulePreset: "beta-launch" as const,
+      schedulePreset: 'beta-launch' as const,
       includeNewsletter: true,
-      newsletterDayId: "2026-02-25",
-      preferredPlatforms: ["instagram", "linkedin"] as const,
+      newsletterDayId: '2026-02-25',
+      preferredPlatforms: ['instagram', 'linkedin'] as const,
     },
   };
 }
 
-describe("calendarGenerationRequestSchema", () => {
-  test("accepts a valid placement with schedule/platform/seed blocks", () => {
+describe('calendarGenerationRequestSchema', () => {
+  test('accepts a valid placement with schedule/platform/seed blocks', () => {
     const parsed = calendarGenerationRequestSchema.safeParse(buildRequestPayload());
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
   });
 
-  test("rejects scheduledAt when it does not match dayId", () => {
+  test('rejects scheduledAt when it does not match dayId', () => {
     const parsed = calendarGenerationRequestSchema.safeParse({
       ...buildRequestPayload(),
       placements: [
         {
           ...buildRequestPayload().placements[0],
           schedule: {
-            dayId: "2026-02-23",
-            scheduledAt: "2026-02-24T09:00:00.000Z",
-            timeLabel: "9:00 AM",
+            dayId: '2026-02-23',
+            scheduledAt: '2026-02-24T09:00:00.000Z',
+            timeLabel: '9:00 AM',
           },
         },
       ],
@@ -68,14 +68,14 @@ describe("calendarGenerationRequestSchema", () => {
     assert.equal(parsed.success, false);
   });
 
-  test("rejects trend source seed without trendId", () => {
+  test('rejects trend source seed without trendId', () => {
     const parsed = calendarGenerationRequestSchema.safeParse({
       ...buildRequestPayload(),
       placements: [
         {
           ...buildRequestPayload().placements[0],
           seed: {
-            source: "trend",
+            source: 'trend',
           },
         },
       ],
@@ -83,108 +83,111 @@ describe("calendarGenerationRequestSchema", () => {
     assert.equal(parsed.success, false);
   });
 
-  test("accepts mediaSuggestion generationContext payload", () => {
+  test('accepts mediaSuggestion generationContext payload', () => {
     const parsed = calendarPlacementSchema.safeParse({
-      placementId: "seed-1",
+      placementId: 'seed-1',
       schedule: {
-        dayId: "2026-02-23",
-        scheduledAt: "2026-02-23T14:00:00.000Z",
+        dayId: '2026-02-23',
+        scheduledAt: '2026-02-23T14:00:00.000Z',
       },
       platform: {
-        name: "instagram",
+        name: 'instagram',
       },
       seed: {
-        source: "manual",
+        source: 'manual',
       },
       content: {
-        format: "FeedPost",
+        format: 'FeedPost',
       },
       creative: {
         mediaSuggestion: {
-          kind: "carousel",
-          assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+          kind: 'carousel',
+          assetBase64: 'iVBORw0KGgoAAAANSUhEUgAA',
           generationContext: {
-            sourceAgent: "creative-director",
-            finalPrompt: "Generate the hero slide",
+            sourceAgent: 'creative-director',
+            finalPrompt: 'Generate the hero slide',
             request: {
-              provider: "nano-banana",
-              model: "2-flash",
-              imageSize: "500x500",
+              provider: 'nano-banana',
+              model: '2-flash',
+              imageSize: '500x500',
             },
             placement: {
-              placementId: "seed-1",
-              dayId: "2026-02-23",
-              scheduledAt: "2026-02-23T14:00:00.000Z",
+              placementId: 'seed-1',
+              dayId: '2026-02-23',
+              scheduledAt: '2026-02-23T14:00:00.000Z',
             },
             strategist: {
-              objective: "Awareness",
-              funnel: "TOFU",
-              funnelStage: "middle",
-              targetAudience: "Families",
-              tone: "Direct",
-              angle: "Pain-point",
-              postType: "Post",
-              postSize: "Square",
+              objective: 'Awareness',
+              funnel: 'TOFU',
+              funnelStage: 'middle',
+              targetAudience: 'Families',
+              tone: 'Direct',
+              angle: 'Pain-point',
+              postType: 'Post',
+              postSize: 'Square',
             },
             creativeDirection: {
-              title: "Monday Momentum",
-              conceptTitle: "Monday Momentum",
-              direction: "Fast-paced",
-              creativeDirection: "Focus on family dinner relief",
-              hook: "60-second save",
-              storyHook: "Dinner solved in one tap",
-              trendIntegration: "Tie to weekly trend",
-              modes: ["carousel", "static"],
-              visualMode: "carousel",
-              audioMode: "music-led",
-              notes: "High contrast visuals",
-              productionNotes: ["Use warm natural light"],
+              title: 'Monday Momentum',
+              conceptTitle: 'Monday Momentum',
+              direction: 'Fast-paced',
+              creativeDirection: 'Focus on family dinner relief',
+              hook: '60-second save',
+              storyHook: 'Dinner solved in one tap',
+              trendIntegration: 'Tie to weekly trend',
+              modes: ['carousel', 'static'],
+              visualMode: 'carousel',
+              audioMode: 'music-led',
+              notes: 'High contrast visuals',
+              productionNotes: ['Use warm natural light'],
             },
             trend: {
-              trendId: "trend-42",
-              seedSource: "trend",
+              trendId: 'trend-42',
+              seedSource: 'trend',
             },
           },
         },
       },
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
     if (parsed.success) {
-      assert.equal(parsed.data.creative?.mediaSuggestion?.generationContext?.strategist?.funnelStage, "middle");
+      assert.equal(
+        parsed.data.creative?.mediaSuggestion?.generationContext?.strategist?.funnelStage,
+        'middle',
+      );
       assert.equal(
         parsed.data.creative?.mediaSuggestion?.generationContext?.creativeDirection?.conceptTitle,
-        "Monday Momentum"
+        'Monday Momentum',
       );
       assert.equal(
         parsed.data.creative?.mediaSuggestion?.generationContext?.creativeDirection?.storyHook,
-        "Dinner solved in one tap"
+        'Dinner solved in one tap',
       );
     }
   });
 
-  test("accepts nullable mediaSuggestion fields from streaming payloads", () => {
+  test('accepts nullable mediaSuggestion fields from streaming payloads', () => {
     const parsed = calendarPlacementSchema.safeParse({
-      placementId: "seed-2",
+      placementId: 'seed-2',
       schedule: {
-        dayId: "2026-02-24",
-        scheduledAt: "2026-02-24T14:00:00.000Z",
+        dayId: '2026-02-24',
+        scheduledAt: '2026-02-24T14:00:00.000Z',
       },
       platform: {
-        name: "instagram",
+        name: 'instagram',
       },
       seed: {
-        source: "manual",
+        source: 'manual',
       },
       content: {
-        format: "FeedPost",
+        format: 'FeedPost',
       },
       creative: {
         mediaSuggestion: {
-          provider: "nano-banana",
-          model: "2-flash",
-          kind: "carousel",
-          prompt: "Prompt",
+          provider: 'nano-banana',
+          model: '2-flash',
+          kind: 'carousel',
+          prompt: 'Prompt',
           width: 512,
           height: 512,
           assetUrl: null,
@@ -195,100 +198,99 @@ describe("calendarGenerationRequestSchema", () => {
       },
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
   });
 
-  test("accepts mediaSuggestion assets list from v2 slot_completed payloads", () => {
+  test('accepts mediaSuggestion assets list from v2 slot_completed payloads', () => {
     const parsed = calendarPlacementSchema.safeParse({
-      placementId: "seed-3",
+      placementId: 'seed-3',
       schedule: {
-        dayId: "2026-02-25",
-        scheduledAt: "2026-02-25T14:00:00.000Z",
+        dayId: '2026-02-25',
+        scheduledAt: '2026-02-25T14:00:00.000Z',
       },
       platform: {
-        name: "instagram",
+        name: 'instagram',
       },
       seed: {
-        source: "manual",
+        source: 'manual',
       },
       content: {
-        format: "Carousel",
+        format: 'Carousel',
       },
       creative: {
         mediaSuggestion: {
-          provider: "gemini-3.1-flash-image-preview",
-          model: "gemini-3.1-flash-image-preview",
-          kind: "carousel",
-          prompt: "Primary visual prompt",
+          provider: 'gemini-3.1-flash-image',
+          model: 'gemini-3.1-flash-image',
+          kind: 'carousel',
+          prompt: 'Primary visual prompt',
           width: 512,
           height: 512,
-          assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+          assetBase64: 'iVBORw0KGgoAAAANSUhEUgAA',
           generationContext: {
-            sourceAgent: "asset_producer",
+            sourceAgent: 'asset_producer',
           },
           assets: [
             {
-              role: "slide_1",
+              role: 'slide_1',
               order: 1,
-              provider: "gemini-3.1-flash-image-preview",
-              model: "gemini-3.1-flash-image-preview",
-              prompt: "Slide 1 prompt",
+              provider: 'gemini-3.1-flash-image',
+              model: 'gemini-3.1-flash-image',
+              prompt: 'Slide 1 prompt',
               width: 512,
               height: 512,
-              assetBase64: "slide1base64",
-              mimeType: "image/png",
+              assetBase64: 'slide1base64',
+              mimeType: 'image/png',
               generationContext: {
-                sourceAgent: "asset_producer",
+                sourceAgent: 'asset_producer',
               },
             },
             {
-              role: "slide_2",
+              role: 'slide_2',
               order: 2,
-              error: "generation failed",
+              error: 'generation failed',
             },
           ],
         },
       },
     });
 
-    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
     if (parsed.success) {
-      assert.equal(parsed.data.creative?.mediaSuggestion?.assets?.[0]?.role, "slide_1");
-      assert.equal(parsed.data.creative?.mediaSuggestion?.assets?.[1]?.error, "generation failed");
+      assert.equal(parsed.data.creative?.mediaSuggestion?.assets?.[0]?.role, 'slide_1');
+      assert.equal(parsed.data.creative?.mediaSuggestion?.assets?.[1]?.error, 'generation failed');
     }
   });
-
 });
 
-describe("toBackendCalendarGenerationRequest", () => {
-  test("flattens placement schedule and seed data for backend payload", () => {
+describe('toBackendCalendarGenerationRequest', () => {
+  test('flattens placement schedule and seed data for backend payload', () => {
     const backend = toBackendCalendarGenerationRequest(
-      calendarGenerationRequestSchema.parse(buildRequestPayload())
+      calendarGenerationRequestSchema.parse(buildRequestPayload()),
     );
 
-    assert.equal(backend.placements[0]?.placementId, "seed-1");
-    assert.equal(backend.placements[0]?.dayId, "2026-02-23");
-    assert.equal(backend.placements[0]?.scheduledAt, "2026-02-23T14:00:00.000Z");
-    assert.equal(backend.placements[0]?.trendId, "trend-42");
-    assert.equal(backend.placements[0]?.seedSource, "trend");
-    assert.equal(backend.placements[0]?.desiredFormat, "post");
-    assert.equal(backend.placements[0]?.platform, "instagram");
+    assert.equal(backend.placements[0]?.placementId, 'seed-1');
+    assert.equal(backend.placements[0]?.dayId, '2026-02-23');
+    assert.equal(backend.placements[0]?.scheduledAt, '2026-02-23T14:00:00.000Z');
+    assert.equal(backend.placements[0]?.trendId, 'trend-42');
+    assert.equal(backend.placements[0]?.seedSource, 'trend');
+    assert.equal(backend.placements[0]?.desiredFormat, 'post');
+    assert.equal(backend.placements[0]?.platform, 'instagram');
   });
 
-  test("rejects mixed-platform placement batches", () => {
+  test('rejects mixed-platform placement batches', () => {
     const parsed = calendarGenerationRequestSchema.parse({
       ...buildRequestPayload(),
       placements: [
         buildRequestPayload().placements[0],
         {
           ...buildRequestPayload().placements[0],
-          placementId: "seed-2",
-          platform: { name: "linkedin", accountId: "acct-2" },
+          placementId: 'seed-2',
+          platform: { name: 'linkedin', accountId: 'acct-2' },
         },
       ],
       platformAccountIds: {
-        instagram: "acct-1",
-        linkedin: "acct-2",
+        instagram: 'acct-1',
+        linkedin: 'acct-2',
       },
     });
 

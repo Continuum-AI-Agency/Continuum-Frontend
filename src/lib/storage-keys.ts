@@ -1,12 +1,12 @@
-import { z } from "zod";
-import { makeKey, migrateLegacyKey } from "@/lib/storage/brandScopedStorage";
+import { z } from 'zod';
+import { makeKey, migrateLegacyKey } from '@/lib/storage/brandScopedStorage';
 
 // ─── Static keys ───────────────────────────────────────────────────────────────
-export const STORAGE_KEY_THEME = "theme";
+export const STORAGE_KEY_THEME = 'theme';
 
 // User-level keys (no brand scoping needed) — preserved for legacy migration only.
-export const STORAGE_KEY_RECENT_PAGES = "continuum:recent-pages";
-export const STORAGE_KEY_AI_STUDIO_KEY_INDEX = "continuum:ai-studio:key-index";
+export const STORAGE_KEY_RECENT_PAGES = 'continuum:recent-pages';
+export const STORAGE_KEY_AI_STUDIO_KEY_INDEX = 'continuum:ai-studio:key-index';
 
 // ─── Brand-scoped key builders ────────────────────────────────────────────────
 // Each `brandStorageKey*` returns a fully-qualified localStorage key namespaced
@@ -46,7 +46,7 @@ export {
   buildAiStudioStorageKey,
   buildPendingApplyStorageKey,
   buildSessionHistoryStorageKey,
-} from "@/lib/organic/ai-studio-bridge";
+} from '@/lib/organic/ai-studio-bridge';
 
 // ─── Zod schemas for validated reads ──────────────────────────────────────────
 export const recentPageSchema = z.object({

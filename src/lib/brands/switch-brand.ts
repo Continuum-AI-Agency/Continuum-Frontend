@@ -1,4 +1,4 @@
-import { switchActiveBrandAction } from "@/app/(post-auth)/settings/actions";
+import { switchActiveBrandAction } from '@/app/(post-auth)/settings/actions';
 
 export type SwitchBrandOptions = {
   targetBrandId?: string;

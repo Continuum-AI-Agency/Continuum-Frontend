@@ -3,13 +3,13 @@
 // Component rendering tests are deferred until the test environment is
 // configured with happy-dom (see Continuum-Frontend/bunfig.toml [test.environment]).
 
-import { describe, it, expect } from 'bun:test';
-import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
+import { describe, expect, it } from 'bun:test';
 import {
   isAcceptedDocumentMime,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_MB,
 } from '@/lib/documents/uploadLimits';
+import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
 
 describe('document upload limits', () => {
   it('rejects oversized files', () => {
@@ -26,9 +26,11 @@ describe('document upload limits', () => {
   });
 
   it('accepts docx', () => {
-    expect(isAcceptedDocumentMime(
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    )).toBe(true);
+    expect(
+      isAcceptedDocumentMime(
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    ).toBe(true);
   });
 
   it('rejects unknown binary', () => {

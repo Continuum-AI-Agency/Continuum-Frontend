@@ -10,7 +10,7 @@ export const supportedModels = MODEL_CATALOG.filter(
 
 const modelMedium: Record<SupportedModel, 'image' | 'video'> = {
   'nano-banana': 'image',
-  'gemini-3-pro-image-preview': 'image',
+  'gemini-3-pro-image': 'image',
   'veo-3-1': 'video',
   'veo-3-1-fast': 'video',
   'veo-3-1-lite': 'video',
@@ -63,7 +63,7 @@ export const chatImageRequestBase = z.object({
 export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, ctx) => {
   const medium = modelMedium[value.model];
   const providerKey =
-    value.model === 'gemini-3-pro-image-preview'
+    value.model === 'gemini-3-pro-image'
       ? 'nano-banana'
       : value.model === 'veo-3-1-fast'
         ? 'veo-3-1'
@@ -185,7 +185,7 @@ export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, c
     });
   }
 
-  if (value.model === 'gemini-3-pro-image-preview') {
+  if (value.model === 'gemini-3-pro-image') {
     if (!value.imageSize) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -227,7 +227,7 @@ export function getAspectsForModel(
     return ['16:9', '9:16'] as const;
   }
 
-  if (model === 'gemini-3-pro-image-preview') {
+  if (model === 'gemini-3-pro-image') {
     return ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'] as const;
   }
   return providerAspectRatioOptions[model]?.[medium] ?? [];

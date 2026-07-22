@@ -1,8 +1,8 @@
-import { FileText } from "@phosphor-icons/react";
+import { FileText } from '@phosphor-icons/react';
 
-import { DocumentUploader } from "@/components/onboarding/shared/DocumentUploader";
+import { DocumentUploader } from '@/components/onboarding/shared/DocumentUploader';
 
-import { HelpPopover } from "../HelpPopover";
+import { HelpPopover } from '../HelpPopover';
 
 type DocumentsScreenProps = {
   totalSteps: number;
@@ -24,16 +24,15 @@ export function DocumentsScreen({ totalSteps }: DocumentsScreenProps) {
             <HelpPopover label="What documents help?">
               <p className="font-semibold text-foreground">What documents help?</p>
               <p className="text-muted-foreground">
-                Anything that captures your brand&apos;s voice or strategy:
-                style guides, prior campaigns, taglines, decks, or product
-                one-pagers. Continuum reads them to ground its analysis in your
-                actual work.
+                Anything that captures your brand&apos;s voice or strategy: style guides, prior
+                campaigns, taglines, decks, or product one-pagers. Continuum reads them to ground
+                its analysis in your actual work.
               </p>
             </HelpPopover>
           </div>
           <p className="mx-auto mt-3 max-w-md text-[0.875rem] leading-relaxed text-muted-foreground">
-            Optional. Upload assets to ground your Brand DNA in real materials —
-            or skip and let us infer from your website.
+            Optional. Upload assets to ground your Brand DNA in real materials — or skip and let us
+            infer from your website.
           </p>
         </div>
 

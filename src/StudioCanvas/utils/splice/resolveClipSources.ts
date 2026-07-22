@@ -1,10 +1,16 @@
-import type { Edge } from '@xyflow/react';
 import { TIMELINE_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
-import type { StudioNode, ClipSlot, TimelineItem, TimelineInputSource, TimelineTrack } from '../../types';
+import type { Edge } from '@xyflow/react';
+import type {
+  ClipSlot,
+  StudioNode,
+  TimelineInputSource,
+  TimelineItem,
+  TimelineTrack,
+} from '../../types';
 import type { NodeOutput } from '../../types/execution';
-import type { TimelineOverlayRenderItem, TimelineRenderItem } from './composeTimeline';
 import { parseDataUrl } from '../dataUrl';
 import { isVideoGeneratorNodeType } from '../videoModel';
+import type { TimelineOverlayRenderItem, TimelineRenderItem } from './composeTimeline';
 
 export type ResolvedClip = {
   slotId: string;
@@ -53,9 +59,15 @@ function readVideoFromSourceNode(node: StudioNode | undefined): string | undefin
     node.type === 'timelineEditor'
   ) {
     const data = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
-    const generated = typeof data.generatedVideo === 'string' && data.generatedVideo.trim() ? data.generatedVideo.trim() : undefined;
+    const generated =
+      typeof data.generatedVideo === 'string' && data.generatedVideo.trim()
+        ? data.generatedVideo.trim()
+        : undefined;
     if (generated) return generated;
-    const url = typeof data.generatedVideoUrl === 'string' && data.generatedVideoUrl.trim() ? data.generatedVideoUrl.trim() : undefined;
+    const url =
+      typeof data.generatedVideoUrl === 'string' && data.generatedVideoUrl.trim()
+        ? data.generatedVideoUrl.trim()
+        : undefined;
     return url;
   }
 
@@ -127,10 +139,14 @@ function readImageFromSourceNode(node: StudioNode | undefined): string | undefin
   if (node.type === 'nanoGen') {
     const data = node.data as { generatedImage?: unknown; generatedImageUrl?: unknown };
     const generated =
-      typeof data.generatedImage === 'string' && data.generatedImage.trim() ? data.generatedImage.trim() : undefined;
+      typeof data.generatedImage === 'string' && data.generatedImage.trim()
+        ? data.generatedImage.trim()
+        : undefined;
     if (generated) return generated;
     const url =
-      typeof data.generatedImageUrl === 'string' && data.generatedImageUrl.trim() ? data.generatedImageUrl.trim() : undefined;
+      typeof data.generatedImageUrl === 'string' && data.generatedImageUrl.trim()
+        ? data.generatedImageUrl.trim()
+        : undefined;
     return url;
   }
 
@@ -158,7 +174,10 @@ function deriveSourceLabel(node: StudioNode): string {
   }
 }
 
-function readSourceKindAndUrl(node: StudioNode | undefined): { kind: 'video' | 'image'; url?: string } {
+function readSourceKindAndUrl(node: StudioNode | undefined): {
+  kind: 'video' | 'image';
+  url?: string;
+} {
   if (node?.type === 'image' || node?.type === 'nanoGen') {
     return { kind: 'image', url: readImageFromSourceNode(node) };
   }
@@ -178,7 +197,8 @@ export function resolveTimelineInputPool(
   const pool: TimelineInputSource[] = [];
 
   for (const edge of edges) {
-    if (edge.target !== targetNodeId || (edge.targetHandle ?? '') !== TIMELINE_MEDIA_INPUT_HANDLE) continue;
+    if (edge.target !== targetNodeId || (edge.targetHandle ?? '') !== TIMELINE_MEDIA_INPUT_HANDLE)
+      continue;
     if (seen.has(edge.source)) continue;
     const node = nodeById.get(edge.source);
     if (!node) continue;
@@ -248,7 +268,9 @@ export async function resolveTimelineOverlays(
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const poolSourceIds = new Set(
     edges
-      .filter((e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE)
+      .filter(
+        (e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
+      )
       .map((e) => e.source),
   );
   const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
@@ -292,7 +314,9 @@ export async function resolveTimelineSources(
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const poolSourceIds = new Set(
     edges
-      .filter((e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE)
+      .filter(
+        (e) => e.target === targetNodeId && (e.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
+      )
       .map((e) => e.source),
   );
   const ordered = [...items].sort((a, b) => a.order - b.order);

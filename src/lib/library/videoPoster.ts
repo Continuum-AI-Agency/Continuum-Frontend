@@ -24,10 +24,21 @@ export const POSTER_JPEG_MIME = 'image/jpeg';
 export type VideoPoster = {
   blob: Blob;
   mimeType: string;
+  /** Dimensions of the POSTER image (downscaled to POSTER_MAX_WIDTH), not the source. */
   width: number;
   height: number;
   /** The timestamp (seconds) the frame was actually decoded at. */
   timestampSec: number;
+  /**
+   * Source metadata read straight from the container header — the true display
+   * dimensions (rotation-aware) and duration of the uploaded file, NOT the poster.
+   * These populate media.assets.width/height/duration_ms, which the library browse
+   * read model sorts on; without them `duration_desc` is a no-op. Null when the
+   * header could not be read — a poster is still returned, metadata is best-effort.
+   */
+  sourceWidth: number | null;
+  sourceHeight: number | null;
+  durationMs: number | null;
 };
 
 // Pure: which timestamp to grab for a clip of `durationSec`. Non-finite or
@@ -41,13 +52,30 @@ export function posterTimestampSec(durationSec: number | null | undefined): numb
   return PREFERRED_POSTER_TIME_SEC;
 }
 
+// Pure: which timestamp to decode when the caller (the frame picker) asks for a
+// specific moment. A requested time is clamped into the clip, so a scrubber that
+// overshoots the real duration still lands on the last decodable frame; absent a
+// request, the automatic offset stands.
+export function resolvePosterTimestamp(
+  durationSec: number | null | undefined,
+  requestedSec?: number | null,
+): number {
+  if (typeof requestedSec !== 'number' || !Number.isFinite(requestedSec)) {
+    return posterTimestampSec(durationSec);
+  }
+  // An unknown duration leaves the upper bound open (the decoder clamps a seek
+  // past the last frame); the lower bound of 0 always applies.
+  const upper =
+    typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0
+      ? durationSec
+      : Number.POSITIVE_INFINITY;
+  return Math.min(Math.max(requestedSec, 0), upper);
+}
+
 // Explicit fallback for legacy/AI videos that predate persisted posters. A
 // metadata-only <video> often paints its blank first frame; seeking asks the
 // browser for one representative frame without pretending a poster exists.
-export function seekVideoPreviewFrame(video: {
-  duration: number;
-  currentTime: number;
-}): boolean {
+export function seekVideoPreviewFrame(video: { duration: number; currentTime: number }): boolean {
   if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
   try {
     video.currentTime = posterTimestampSec(video.duration);
@@ -88,8 +116,12 @@ async function encodePoster(canvas: CanvasLike): Promise<{ blob: Blob; mimeType:
 
 // Decodes one frame of `file` and returns it as an encoded still. Null on any
 // failure (no video track, unsupported codec, no WebCodecs) — the caller MUST
-// treat a poster as optional.
-export async function generateVideoPoster(file: Blob): Promise<VideoPoster | null> {
+// treat a poster as optional. `timestampSec` picks a specific moment (the frame
+// picker's chosen frame); omitted, the automatic offset is used.
+export async function generateVideoPoster(
+  file: Blob,
+  options?: { timestampSec?: number },
+): Promise<VideoPoster | null> {
   try {
     const { Input, BlobSource, ALL_FORMATS, CanvasSink } = await import('mediabunny');
 
@@ -99,7 +131,21 @@ export async function generateVideoPoster(file: Blob): Promise<VideoPoster | nul
       if (!track) return null;
 
       const durationSec = await track.computeDuration().catch(() => null);
-      const wanted = posterTimestampSec(durationSec);
+      const wanted = resolvePosterTimestamp(durationSec, options?.timestampSec);
+
+      // Source metadata off the already-open track. getDisplayWidth/Height are
+      // rotation- and aspect-corrected, so a 1920x1080 file shot vertical reports
+      // 1080x1920 — the shape the aspect facet must bucket on. Each is independently
+      // fail-soft: a header that yields a poster but no clean dimension still ships
+      // the poster.
+      const [sourceWidth, sourceHeight] = await Promise.all([
+        track.getDisplayWidth().catch(() => null),
+        track.getDisplayHeight().catch(() => null),
+      ]);
+      const durationMs =
+        typeof durationSec === 'number' && Number.isFinite(durationSec)
+          ? Math.round(durationSec * 1000)
+          : null;
 
       const sink = new CanvasSink(track, { width: POSTER_MAX_WIDTH, fit: 'contain' });
       // A seek past the last keyframe-decodable moment yields null; frame 0
@@ -114,6 +160,9 @@ export async function generateVideoPoster(file: Blob): Promise<VideoPoster | nul
         width: wrapped.canvas.width,
         height: wrapped.canvas.height,
         timestampSec: wrapped.timestamp,
+        sourceWidth,
+        sourceHeight,
+        durationMs,
       };
     } finally {
       input.dispose();
@@ -142,6 +191,11 @@ export async function persistVideoPoster(params: {
     form.append('brandId', brandId);
     form.append('assetId', assetId);
     form.append('poster', poster.blob, `${POSTER_FILE_NAME}.${extension}`);
+    // Source metadata rides along with the poster so the route can backfill
+    // media.assets.width/height/duration_ms in the same brand-guarded write.
+    if (poster.sourceWidth !== null) form.append('sourceWidth', String(poster.sourceWidth));
+    if (poster.sourceHeight !== null) form.append('sourceHeight', String(poster.sourceHeight));
+    if (poster.durationMs !== null) form.append('durationMs', String(poster.durationMs));
 
     const response = await fetch('/api/library/thumbnail', { method: 'POST', body: form });
     if (!response.ok) {

@@ -1,22 +1,21 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
-import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AgentMentionReference } from '@/lib/agent-references';
+import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import {
-  jainaChatRequestSchema,
   type JainaChatStreamRequest,
   type JainaPlanAction,
-} from "@/lib/jaina/schemas";
-import type { AgentMentionReference } from "@/lib/agent-references";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
+  jainaChatRequestSchema,
+} from '@/lib/jaina/schemas';
 import {
   createInitialJainaStreamState,
   hasRenderableStreamContent,
+  type JainaStreamState,
   parseJainaStreamEvent,
   reduceJainaStreamEvent,
-  type JainaStreamState,
-} from "@/lib/jaina/stream";
+} from '@/lib/jaina/stream';
+import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
 
 type JainaChatInput = {
   query: string;
@@ -75,7 +74,7 @@ export function useJainaChatStream() {
     clearWatchdog();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
-    setState((prev) => ({ ...prev, status: "idle" }));
+    setState((prev) => ({ ...prev, status: 'idle' }));
   }, [clearWatchdog]);
 
   useEffect(() => () => cancel(), [cancel]);
@@ -83,7 +82,7 @@ export function useJainaChatStream() {
   const getAccessToken = useCallback(async () => {
     const token = await getBrowserAccessToken();
     if (!token) {
-      throw new Error("No authentication token available");
+      throw new Error('No authentication token available');
     }
     return token;
   }, []);
@@ -91,23 +90,26 @@ export function useJainaChatStream() {
   const clearMemory = useCallback(
     async (adAccountId: string) => {
       const token = await getAccessToken();
-      const response = await fetch("/api/agents/jaina/chat/memory?ad_account_id=" + encodeURIComponent(adAccountId), {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetch(
+        '/api/agents/jaina/chat/memory?ad_account_id=' + encodeURIComponent(adAccountId),
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
       if (!response.ok) {
-        const detail = await response.text().catch(() => "Failed to clear memory.");
-        throw new Error(detail || "Failed to clear memory.");
+        const detail = await response.text().catch(() => 'Failed to clear memory.');
+        throw new Error(detail || 'Failed to clear memory.');
       }
     },
-    [getAccessToken]
+    [getAccessToken],
   );
 
   const start = useCallback(
     async (input: JainaChatInput): Promise<StartResult> => {
       reset();
-      setState((prev) => ({ ...prev, status: "starting" }));
+      setState((prev) => ({ ...prev, status: 'starting' }));
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -124,9 +126,7 @@ export function useJainaChatStream() {
               : undefined,
           userId: input.userId,
           canvas: input.canvas,
-          clarification: input.clarificationId
-            ? { id: input.clarificationId }
-            : undefined,
+          clarification: input.clarificationId ? { id: input.clarificationId } : undefined,
           ...(input.planAction ? { plan_action: input.planAction } : {}),
           context: {
             adAccountId: input.adAccountId,
@@ -140,18 +140,18 @@ export function useJainaChatStream() {
           },
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Invalid request payload";
-        setState((prev) => ({ ...prev, status: "error", error: message }));
+        const message = error instanceof Error ? error.message : 'Invalid request payload';
+        setState((prev) => ({ ...prev, status: 'error', error: message }));
         return { error: message };
       }
 
       try {
         const token = await getAccessToken();
-        const response = await fetch("/api/agents/jaina/chat/stream", {
-          method: "POST",
+        const response = await fetch('/api/agents/jaina/chat/stream', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
-            Accept: "application/x-ndjson",
+            'Content-Type': 'application/json',
+            Accept: 'application/x-ndjson',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(payload),
@@ -159,13 +159,13 @@ export function useJainaChatStream() {
         });
 
         if (!response.ok || !response.body) {
-          const detail = await response.text().catch(() => "Failed to start stream.");
-          throw new Error(detail || "Failed to start stream.");
+          const detail = await response.text().catch(() => 'Failed to start stream.');
+          throw new Error(detail || 'Failed to start stream.');
         }
 
         const reader = response.body.getReader();
         readerRef.current = reader;
-        setState((prev) => ({ ...prev, status: "streaming" }));
+        setState((prev) => ({ ...prev, status: 'streaming' }));
 
         // On prolonged silence, authoritatively check the durable run row before
         // giving up — so we never falsely error a run that actually finished or
@@ -177,13 +177,13 @@ export function useJainaChatStream() {
             const surfaceStall = () => {
               controller.abort();
               setState((prev) =>
-                prev.status === "complete" || prev.status === "error"
+                prev.status === 'complete' || prev.status === 'error'
                   ? prev
                   : {
                       ...prev,
-                      status: "error",
-                      error: "Jaina stopped responding. Please try again.",
-                    }
+                      status: 'error',
+                      error: 'Jaina stopped responding. Please try again.',
+                    },
               );
             };
 
@@ -207,7 +207,7 @@ export function useJainaChatStream() {
             try {
               const res = await fetch(
                 `/api/agents/jaina/chat/runs/${encodeURIComponent(currentRunId)}`,
-                { headers: { Authorization: `Bearer ${token}` } }
+                { headers: { Authorization: `Bearer ${token}` } },
               );
               if (res.ok) {
                 const body = (await res.json().catch(() => null)) as {
@@ -220,23 +220,23 @@ export function useJainaChatStream() {
               // transient — handled by reArmOrStall below
             }
 
-            if (runStatus === "completed") {
+            if (runStatus === 'completed') {
               controller.abort();
               setState((prev) =>
-                prev.status === "error" ? prev : { ...prev, status: "complete" }
+                prev.status === 'error' ? prev : { ...prev, status: 'complete' },
               );
               return;
             }
-            if (runStatus === "failed") {
+            if (runStatus === 'failed') {
               controller.abort();
               setState((prev) => ({
                 ...prev,
-                status: "error",
-                error: runErrorMessage || "Jaina run failed.",
+                status: 'error',
+                error: runErrorMessage || 'Jaina run failed.',
               }));
               return;
             }
-            if (runStatus === "running" || runStatus === "pending") {
+            if (runStatus === 'running' || runStatus === 'pending') {
               transientWatchdogPolls = 0;
               armWatchdog();
               return;
@@ -265,27 +265,27 @@ export function useJainaChatStream() {
         // Otherwise finalize from whatever was streamed: render if there is content,
         // else surface an error rather than a silent/empty "complete".
         setState((prev) => {
-          if (prev.status === "error" || prev.status === "complete") return prev;
+          if (prev.status === 'error' || prev.status === 'complete') return prev;
           return hasRenderableStreamContent(prev)
-            ? { ...prev, status: "complete" }
+            ? { ...prev, status: 'complete' }
             : {
                 ...prev,
-                status: "error",
-                error: "Jaina ended unexpectedly. Please try again.",
+                status: 'error',
+                error: 'Jaina ended unexpectedly. Please try again.',
               };
         });
       } catch (error) {
         clearWatchdog();
-        const message = error instanceof Error ? error.message : "Stream failed";
+        const message = error instanceof Error ? error.message : 'Stream failed';
         if (!controller.signal.aborted) {
-          setState((prev) => ({ ...prev, status: "error", error: message }));
+          setState((prev) => ({ ...prev, status: 'error', error: message }));
         }
         return { error: message };
       }
 
       return {};
     },
-    [getAccessToken, reset, clearWatchdog]
+    [getAccessToken, reset, clearWatchdog],
   );
 
   return {

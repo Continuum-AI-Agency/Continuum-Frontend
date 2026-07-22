@@ -6,7 +6,7 @@
 // landscape and vertical short-form sources. No I/O, so it unit-tests cleanly.
 
 function evenFloor(value: number): number {
-  return Math.max(2, Math.floor(value / 2) * 2)
+  return Math.max(2, Math.floor(value / 2) * 2);
 }
 
 export function computeCappedDimensions(
@@ -15,12 +15,12 @@ export function computeCappedDimensions(
   maxShortEdgePx?: number,
 ): { width: number; height: number } {
   if (!(sourceWidth > 0) || !(sourceHeight > 0)) {
-    return { width: 2, height: 2 }
+    return { width: 2, height: 2 };
   }
-  const shortEdge = Math.min(sourceWidth, sourceHeight)
-  const scale = maxShortEdgePx && maxShortEdgePx > 0 ? Math.min(1, maxShortEdgePx / shortEdge) : 1
+  const shortEdge = Math.min(sourceWidth, sourceHeight);
+  const scale = maxShortEdgePx && maxShortEdgePx > 0 ? Math.min(1, maxShortEdgePx / shortEdge) : 1;
   return {
     width: evenFloor(sourceWidth * scale),
     height: evenFloor(sourceHeight * scale),
-  }
+  };
 }

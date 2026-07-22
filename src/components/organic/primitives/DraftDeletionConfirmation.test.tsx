@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Button } from '@/components/ui/button';
-import { DraftDeletionConfirmationProvider, useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
+import {
+  DraftDeletionConfirmationProvider,
+  useDraftDeletionConfirmation,
+} from './DraftDeletionConfirmation';
 
 Object.assign(globalThis, {
   MutationObserver: window.MutationObserver,
@@ -11,7 +14,9 @@ Object.assign(globalThis, {
 function Trigger({ onDelete }: { onDelete: (ids: string[]) => void }) {
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   return (
-    <Button onClick={() => requestDraftDeletion(['draft-1', 'draft-2'], onDelete)}>Delete drafts</Button>
+    <Button onClick={() => requestDraftDeletion(['draft-1', 'draft-2'], onDelete)}>
+      Delete drafts
+    </Button>
   );
 }
 

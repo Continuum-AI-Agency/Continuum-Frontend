@@ -1,9 +1,4 @@
-export type MetricPresentationState =
-  | 'loading'
-  | 'not_connected'
-  | 'no_data'
-  | 'ready'
-  | 'error';
+export type MetricPresentationState = 'loading' | 'not_connected' | 'no_data' | 'ready' | 'error';
 
 export type MetricPresentation = {
   state: MetricPresentationState;

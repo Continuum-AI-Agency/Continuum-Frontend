@@ -1,4 +1,4 @@
-export type BrandSwitchReason = "local-switch" | "cross-tab-sync";
+export type BrandSwitchReason = 'local-switch' | 'cross-tab-sync';
 
 export type BrandSwitchEvent = {
   prevBrandId: string;
@@ -33,13 +33,12 @@ export function subscribe(handler: Subscriber): () => void {
 
 export function teardown(prevBrandId: string, event?: BrandSwitchEvent): void {
   if (!prevBrandId) return;
-  const evt: BrandSwitchEvent =
-    event ?? { prevBrandId, nextBrandId: null, reason: "local-switch" };
+  const evt: BrandSwitchEvent = event ?? { prevBrandId, nextBrandId: null, reason: 'local-switch' };
   for (const entry of entries.values()) {
     try {
       entry.teardown(prevBrandId, evt);
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
+      if (process.env.NODE_ENV !== 'production') {
         console.error(`[storeRegistry] teardown failed for "${entry.name}"`, error);
       }
     }
@@ -48,8 +47,8 @@ export function teardown(prevBrandId: string, event?: BrandSwitchEvent): void {
     try {
       handler(evt);
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error("[storeRegistry] subscriber failed", error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[storeRegistry] subscriber failed', error);
       }
     }
   }
@@ -62,7 +61,7 @@ export function purge(prevBrandId: string): void {
     try {
       entry.purge(prevBrandId);
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
+      if (process.env.NODE_ENV !== 'production') {
         console.error(`[storeRegistry] purge failed for "${entry.name}"`, error);
       }
     }

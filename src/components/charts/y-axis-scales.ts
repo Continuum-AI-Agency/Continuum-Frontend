@@ -1,21 +1,19 @@
-import { scaleLinear } from "@visx/scale";
-import type { LineConfig } from "./chart-context";
+import { scaleLinear } from '@visx/scale';
+import type { LineConfig } from './chart-context';
 
 /** Default axis id when `yAxisId` is omitted (Recharts-style `0` / primary left axis). */
-export const DEFAULT_Y_AXIS_ID = "left";
+export const DEFAULT_Y_AXIS_ID = 'left';
 
-export type YAxisOrientation = "left" | "right";
+export type YAxisOrientation = 'left' | 'right';
 
 export function normalizeYAxisId(id?: string | number): string {
-  if (id == null || id === "") {
+  if (id == null || id === '') {
     return DEFAULT_Y_AXIS_ID;
   }
   return String(id);
 }
 
-export function groupLinesByYAxisId(
-  lines: LineConfig[]
-): Map<string, LineConfig[]> {
+export function groupLinesByYAxisId(lines: LineConfig[]): Map<string, LineConfig[]> {
   const groups = new Map<string, LineConfig[]>();
   for (const line of lines) {
     const axisId = normalizeYAxisId(line.yAxisId);
@@ -28,10 +26,7 @@ export function groupLinesByYAxisId(
 
 type YScale = ReturnType<typeof scaleLinear<number>>;
 
-export function getPrimaryYScale(
-  yScales: Record<string, YScale>,
-  fallback: YScale
-): YScale {
+export function getPrimaryYScale(yScales: Record<string, YScale>, fallback: YScale): YScale {
   const primary = yScales[DEFAULT_Y_AXIS_ID];
   if (primary) {
     return primary;
@@ -90,9 +85,7 @@ export function buildYScalesFromDomains({
 
   for (const [axisId] of groups) {
     const domain =
-      domainsByAxis[axisId] ??
-      domainsByAxis[DEFAULT_Y_AXIS_ID] ??
-      ([0, 100] as [number, number]);
+      domainsByAxis[axisId] ?? domainsByAxis[DEFAULT_Y_AXIS_ID] ?? ([0, 100] as [number, number]);
     scales[axisId] = scaleLinear({
       range: [innerHeight, 0],
       domain,

@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'bun:test';
-import { serializeWorkflowSnapshot, serializeForBroadcast, normalizeWorkflowSnapshot } from './workflowSerialization';
-import type { StudioNode } from '../types';
+import { describe, expect, it } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
+import {
+  normalizeWorkflowSnapshot,
+  serializeForBroadcast,
+  serializeWorkflowSnapshot,
+} from './workflowSerialization';
 
 const buildNode = (overrides: Partial<StudioNode> = {}): StudioNode => ({
   id: 'node-1',
@@ -33,7 +37,7 @@ describe('workflowSerialization', () => {
     const snapshot = serializeWorkflowSnapshot(
       [buildNode(), buildNode({ id: 'node-2', data: { value: 'world' } })],
       [buildEdge({ source: 'node-1', target: 'node-2' })],
-      'bezier'
+      'bezier',
     );
 
     const firstNode = snapshot.nodes[0];
@@ -61,12 +65,19 @@ describe('workflowSerialization', () => {
     const node = buildNode({
       id: 'gen',
       type: 'nanoGen',
-      data: { positivePrompt: 'a prompt', model: 'nano-banana', brandBookPieces: ['colors', 'voice'] },
+      data: {
+        positivePrompt: 'a prompt',
+        model: 'nano-banana',
+        brandBookPieces: ['colors', 'voice'],
+      },
     });
 
     const persisted = serializeWorkflowSnapshot([node], [], 'bezier');
 
-    expect((persisted.nodes[0].data as Record<string, unknown>).brandBookPieces).toEqual(['colors', 'voice']);
+    expect((persisted.nodes[0].data as Record<string, unknown>).brandBookPieces).toEqual([
+      'colors',
+      'voice',
+    ]);
   });
 
   it('drops edges referencing missing nodes', () => {
@@ -78,7 +89,7 @@ describe('workflowSerialization', () => {
           buildEdge({ source: 'node-2', target: 'node-1' }),
         ],
       },
-      'bezier'
+      'bezier',
     );
 
     expect(snapshot.edges).toHaveLength(0);
@@ -88,7 +99,7 @@ describe('workflowSerialization', () => {
     const snapshot = serializeWorkflowSnapshot(
       [buildNode({ id: 'node-1' }), buildNode({ id: 'node-2', data: { value: 'ok' } })],
       [buildEdge({ source: 'node-1', target: 'node-2', data: {} })],
-      'smoothstep'
+      'smoothstep',
     );
 
     expect(snapshot.nodes).toHaveLength(2);
@@ -113,16 +124,31 @@ describe('workflowSerialization', () => {
         buildNode({
           id: 'doc',
           type: 'document',
-          data: { documents: [{ name: 'doc.pdf', content: 'data:application/pdf;base64,abc', type: 'pdf' }] } as any,
+          data: {
+            documents: [
+              { name: 'doc.pdf', content: 'data:application/pdf;base64,abc', type: 'pdf' },
+            ],
+          } as any,
         }),
         buildNode({
           id: 'string',
-          data: { value: 'hello', inputs: [{ type: 'image', src: dataUrl }, { type: 'text', src: 'Keep me' }] } as any,
+          data: {
+            value: 'hello',
+            inputs: [
+              { type: 'image', src: dataUrl },
+              { type: 'text', src: 'Keep me' },
+            ],
+          } as any,
         }),
         buildNode({
           id: 'video-gen',
           type: 'video-gen',
-          data: { model: 'veo-3.1', prompt: '', enhancePrompt: false, frameList: [{ id: 'f1', src: dataUrl, type: 'image' }] } as any,
+          data: {
+            model: 'veo-3.1',
+            prompt: '',
+            enhancePrompt: false,
+            frameList: [{ id: 'f1', src: dataUrl, type: 'image' }],
+          } as any,
         }),
         buildNode({
           id: 'video-ref',
@@ -136,7 +162,7 @@ describe('workflowSerialization', () => {
         }),
       ],
       [],
-      'bezier'
+      'bezier',
     );
 
     const imageNode = snapshot.nodes.find((node) => node.id === 'img');
@@ -156,7 +182,9 @@ describe('workflowSerialization', () => {
     const videoReferenceNode = snapshot.nodes.find((node) => node.id === 'video-ref');
     expect((videoReferenceNode?.data as any)?.video).toBeUndefined();
     expect((videoReferenceNode?.data as any)?.sourcePath).toBe('brand-assets/clip.mp4');
-    expect((videoReferenceNode?.data as any)?.sourceUrl).toBe('https://cdn.continuum.test/clip.mp4');
+    expect((videoReferenceNode?.data as any)?.sourceUrl).toBe(
+      'https://cdn.continuum.test/clip.mp4',
+    );
   });
 
   it('strips complex data URLs with extra parameters', () => {
@@ -164,7 +192,7 @@ describe('workflowSerialization', () => {
     const snapshot = serializeWorkflowSnapshot(
       [buildNode({ id: 'img', type: 'image', data: { image: complexDataUrl } as any })],
       [],
-      'bezier'
+      'bezier',
     );
     expect((snapshot.nodes[0].data as any).image).toBeUndefined();
   });
@@ -187,13 +215,15 @@ describe('workflowSerialization', () => {
         }),
       ],
       [],
-      'bezier'
+      'bezier',
     );
 
     const generatorNode = snapshot.nodes.find((node) => node.id === 'gen');
     expect((generatorNode?.data as any)?.generatedImage).toBeUndefined();
     expect((generatorNode?.data as any)?.generatedImageUrl).toBeUndefined();
-    expect((generatorNode?.data as any)?.generatedImageStoragePath).toBe('brand-assets/generated.png');
+    expect((generatorNode?.data as any)?.generatedImageStoragePath).toBe(
+      'brand-assets/generated.png',
+    );
     expect((generatorNode?.data as any)?.generatedImageBucket).toBe('brand-profile-assets');
     expect((generatorNode?.data as any)?.image).toBeUndefined();
   });
@@ -228,19 +258,23 @@ describe('workflowSerialization', () => {
         }),
       ],
       [],
-      'bezier'
+      'bezier',
     );
 
     const imageGenNode = snapshot.nodes.find((node) => node.id === 'gen');
     expect((imageGenNode?.data as any)?.generatedImage).toBeUndefined();
     expect((imageGenNode?.data as any)?.generatedImageUrl).toBeUndefined();
-    expect((imageGenNode?.data as any)?.generatedImageStoragePath).toBe('brand-assets/generated.png');
+    expect((imageGenNode?.data as any)?.generatedImageStoragePath).toBe(
+      'brand-assets/generated.png',
+    );
     expect((imageGenNode?.data as any)?.generatedImageBucket).toBe('brand-profile-assets');
 
     const videoGenNode = snapshot.nodes.find((node) => node.id === 'video-gen');
     expect((videoGenNode?.data as any)?.generatedVideo).toBeUndefined();
     expect((videoGenNode?.data as any)?.generatedVideoUrl).toBeUndefined();
-    expect((videoGenNode?.data as any)?.generatedVideoStoragePath).toBe('brand-assets/generated.mp4');
+    expect((videoGenNode?.data as any)?.generatedVideoStoragePath).toBe(
+      'brand-assets/generated.mp4',
+    );
     expect((videoGenNode?.data as any)?.generatedVideoBucket).toBe('brand-profile-assets');
   });
 
@@ -258,7 +292,7 @@ describe('workflowSerialization', () => {
         }),
       ],
       [],
-      'bezier'
+      'bezier',
     );
 
     expect(snapshot.nodes[0].style).toEqual({ width: 400, height: 400 });

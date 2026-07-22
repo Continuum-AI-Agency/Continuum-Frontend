@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as React from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -21,14 +20,11 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+} from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
 
 const schema = z.object({
-  reason: z
-    .string()
-    .min(3, "Tell the rule engine why — at least 3 characters.")
-    .max(2000),
+  reason: z.string().min(3, 'Tell the rule engine why — at least 3 characters.').max(2000),
 });
 
 type RejectFormValues = z.infer<typeof schema>;
@@ -44,11 +40,11 @@ type Props = {
 export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel }: Props) {
   const form = useForm<RejectFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { reason: "" },
+    defaultValues: { reason: '' },
   });
 
   React.useEffect(() => {
-    if (!open) form.reset({ reason: "" });
+    if (!open) form.reset({ reason: '' });
   }, [open, form]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
@@ -61,7 +57,8 @@ export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel 
         <DialogHeader>
           <DialogTitle>Reject this action</DialogTitle>
           <DialogDescription>
-            {actionLabel}. The reason is stored on the audit row and surfaces to whoever reviews this rule next.
+            {actionLabel}. The reason is stored on the audit row and surfaces to whoever reviews
+            this rule next.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -85,11 +82,16 @@ export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel 
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onOpenChange(false)}
+                disabled={busy}
+              >
                 Cancel
               </Button>
               <Button type="submit" variant="destructive" disabled={busy}>
-                {busy ? "Rejecting…" : "Reject"}
+                {busy ? 'Rejecting…' : 'Reject'}
               </Button>
             </DialogFooter>
           </form>

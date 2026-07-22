@@ -8,6 +8,7 @@ import {
 } from '@continuum/contracts';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { writeAssetSourceMetadata } from './sourceMetadata';
 import { generateVideoPoster } from './videoPoster';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
@@ -49,6 +50,8 @@ export async function persistAssetRendition(params: {
   height?: number | null;
   durationMs?: number | null;
   renderer: string;
+  posterSource?: 'auto' | 'user';
+  sourceTimestampMs?: number;
 }): Promise<PersistedPreview> {
   const signed = signAssetRenditionResponseSchema.parse(
     await invokeCreativeOperation(params.client, {
@@ -78,6 +81,10 @@ export async function persistAssetRendition(params: {
     durationMs: params.durationMs ?? null,
     renderer: params.renderer,
     rendererVersion: '1',
+    ...(params.posterSource ? { posterSource: params.posterSource } : {}),
+    ...(params.sourceTimestampMs !== undefined
+      ? { sourceTimestampMs: params.sourceTimestampMs }
+      : {}),
   })) as { signedUrl?: unknown } | null;
   return {
     renditionId: signed.renditionId,
@@ -115,11 +122,17 @@ async function canvasBlob(canvas: HTMLCanvasElement | OffscreenCanvas): Promise<
 
 export async function rasterizeBrowserImage(file: Blob): Promise<{
   blob: Blob;
+  /** Dimensions of the downscaled preview image. */
   width: number;
   height: number;
+  /** True dimensions of the source image, before the PREVIEW_MAX_EDGE downscale. */
+  sourceWidth: number;
+  sourceHeight: number;
 } | null> {
   try {
     const bitmap = await createImageBitmap(file);
+    const sourceWidth = bitmap.width;
+    const sourceHeight = bitmap.height;
     try {
       const scale = Math.min(1, PREVIEW_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
       const width = Math.max(1, Math.round(bitmap.width * scale));
@@ -136,7 +149,7 @@ export async function rasterizeBrowserImage(file: Blob): Promise<{
       if (!context) return null;
       context.drawImage(bitmap, 0, 0, width, height);
       const blob = await canvasBlob(canvas);
-      return blob ? { blob, width, height } : null;
+      return blob ? { blob, width, height, sourceWidth, sourceHeight } : null;
     } finally {
       bitmap.close();
     }
@@ -178,6 +191,21 @@ export async function attachAssetPreview(params: {
       width: poster.width,
       height: poster.height,
       renderer: 'mediabunny-browser-poster',
+      posterSource: 'auto',
+      sourceTimestampMs: Math.round(poster.timestampSec * 1000),
+    });
+    // Persist the SOURCE dimensions/duration (poster.width/height are the 640px
+    // poster, not the file). Fail-soft: the poster is already stored, so a metadata
+    // miss must not fail the upload.
+    await writeAssetSourceMetadata({
+      client,
+      brandId: params.brandId,
+      assetId: params.assetId,
+      metadata: {
+        width: poster.sourceWidth,
+        height: poster.sourceHeight,
+        durationMs: poster.durationMs,
+      },
     });
     return 'ready';
   }
@@ -194,6 +222,12 @@ export async function attachAssetPreview(params: {
         width: preview.width,
         height: preview.height,
         renderer: 'browser-image-decoder',
+      });
+      await writeAssetSourceMetadata({
+        client,
+        brandId: params.brandId,
+        assetId: params.assetId,
+        metadata: { width: preview.sourceWidth, height: preview.sourceHeight, durationMs: null },
       });
       return 'ready';
     }
@@ -237,6 +271,18 @@ export async function uploadCompanionPreview(params: {
         width: poster.width,
         height: poster.height,
         renderer: 'mediabunny-companion-poster',
+        posterSource: 'auto',
+        sourceTimestampMs: Math.round(poster.timestampSec * 1000),
+      });
+      await writeAssetSourceMetadata({
+        client,
+        brandId: params.brandId,
+        assetId: params.assetId,
+        metadata: {
+          width: poster.sourceWidth,
+          height: poster.sourceHeight,
+          durationMs: poster.durationMs,
+        },
       });
     }
     return;
@@ -255,5 +301,11 @@ export async function uploadCompanionPreview(params: {
     width: rasterized.width,
     height: rasterized.height,
     renderer: 'user-companion',
+  });
+  await writeAssetSourceMetadata({
+    client,
+    brandId: params.brandId,
+    assetId: params.assetId,
+    metadata: { width: rasterized.sourceWidth, height: rasterized.sourceHeight, durationMs: null },
   });
 }
