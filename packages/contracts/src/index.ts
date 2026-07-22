@@ -2,7 +2,6 @@ export * from './agents/index';
 export * from './ai-studio/index';
 export * from './analytics/index';
 export * from './automations/index';
-export * from './billing/index';
 export * from './brands/index';
 export * from './competitor-spy/index';
 export * from './creative-strategy/index';
