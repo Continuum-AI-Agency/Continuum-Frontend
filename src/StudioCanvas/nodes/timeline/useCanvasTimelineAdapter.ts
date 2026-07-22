@@ -1,12 +1,12 @@
 'use client';
 
+import { timelineRenderFingerprint } from '@continuum/contracts';
 import { useCallback, useMemo } from 'react';
-import { useToast } from '@/components/ui/ToastProvider';
-import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
+import { completeCanvasRender } from '@/lib/api/canvasRender.client';
+import { useCanvasRuntime } from '../../contexts/CanvasRuntimeContext';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { StudioNode, TimelineEditorNodeData, TimelineItem, TimelineTrack } from '../../types';
 import type { NodeOutput } from '../../types/execution';
-import { collectDownstreamLeafIds, executeWorkflow } from '../../utils/executeWorkflow';
 import { persistTimelineRender } from '../../utils/persistTimelineRender';
 import {
   resolveTimelineInputPool,
@@ -17,13 +17,16 @@ import type {
   TimelineDocument,
   TimelineEditorAdapter,
   TimelinePatchOptions,
+  TimelineRenderCompletionContext,
   TimelineRenderSink,
+  TimelineRenderSnapshot,
 } from './adapter';
 
 // The canvas implementation of the Video Editor host seam. The document is a
 // React Flow node's data, the media bin is the node's incoming `media-in` edges,
 // every patch autosaves the whole canvas session, and a finished render commits
-// the break-point gate (`committed`) then resumes the parked downstream chain.
+// the break-point gate (`committed`) plus a durable continuation marker. The open
+// originating room claims that marker and resumes the parked downstream chain.
 // Everything canvas-shaped about the editor lives here and nowhere else.
 
 const EMPTY_ITEMS: TimelineItem[] = [];
@@ -77,7 +80,10 @@ export function applyDocumentPatch(
     captionWords: next.captionWords,
     captionStyle: next.captionStyle,
   };
-  if (options?.invalidatesRender ?? true) patched.committed = false;
+  if (options?.invalidatesRender ?? true) {
+    patched.committed = false;
+    patched.renderContinuation = undefined;
+  }
   return patched;
 }
 
@@ -109,8 +115,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const setKeyboardScope = useStudioStore((state) => state.setKeyboardScope);
-  const executionControls = useWorkflowExecution();
-  const { show } = useToast();
+  const runtime = useCanvasRuntime();
 
   const nodeData = useMemo(
     () => nodes.find((node) => node.id === nodeId)?.data as TimelineEditorNodeData | undefined,
@@ -187,74 +192,132 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
     [nodeId, updateNode],
   );
 
+  const renderOrigin = useMemo(
+    () =>
+      runtime
+        ? {
+            brandProfileId: runtime.brandProfileId,
+            roomId: runtime.roomId,
+            nodeId,
+            label: 'Video Editor',
+            viewHref: `/ai-studio?roomId=${encodeURIComponent(runtime.roomId)}&focusNodeId=${encodeURIComponent(nodeId)}`,
+          }
+        : undefined,
+    [nodeId, runtime],
+  );
+
+  const captureRenderSnapshot = useCallback((): TimelineRenderSnapshot => {
+    const state = useStudioStore.getState();
+    const snapshotNodes = structuredClone(state.nodes) as StudioNode[];
+    const snapshotEdges = structuredClone(state.edges);
+    const currentNode = snapshotNodes.find((node) => node.id === nodeId);
+    const snapshotDocument = documentFromNodeData(
+      (currentNode?.data as TimelineEditorNodeData | undefined) ?? EMPTY_NODE_DATA,
+    );
+    const inputFingerprint = timelineRenderFingerprint(
+      { nodes: snapshotNodes, edges: snapshotEdges },
+      nodeId,
+    );
+    if (!inputFingerprint) throw new Error('The Video Editor node is no longer available');
+
+    const overlayTracks = snapshotDocument.overlayTracks ?? [];
+    return {
+      document: snapshotDocument,
+      inputFingerprint,
+      resolveSources: () =>
+        resolveTimelineSources(
+          snapshotDocument.items,
+          snapshotEdges,
+          snapshotNodes,
+          new Map<string, NodeOutput>(),
+          nodeId,
+        ),
+      resolveOverlays: () =>
+        resolveTimelineOverlays(
+          overlayTracks,
+          snapshotEdges,
+          snapshotNodes,
+          new Map<string, NodeOutput>(),
+          nodeId,
+        ),
+    };
+  }, [nodeId]);
+
+  const flushRenderSnapshot = useCallback(async () => {
+    if (!runtime) throw new Error('Canvas workspace is not ready');
+    await runtime.flushSave();
+  }, [runtime]);
+
   const completeRender = useCallback(
-    async (blob: Blob) => {
-      const objectUrl = URL.createObjectURL(blob);
-      updateNode(nodeId, (node) => ({
-        ...node,
-        data: {
-          ...(node.data as TimelineEditorNodeData),
-          generatedVideo: objectUrl,
-          progress: 1,
-        },
-      }));
+    async (blob: Blob, _sink: string, context?: TimelineRenderCompletionContext) => {
+      if (!runtime || !context) throw new Error('Background render context is unavailable');
 
-      // Persist the finalized clip to the media library. Prefer the durable signed
-      // URL + storage coords so the output survives canvas reloads; fall back to
-      // the in-memory object URL when the brand is anonymous (local preview).
-      const brand = useStudioStore.getState().brandId;
-      let committedUrl = objectUrl;
-      let storagePath: string | undefined;
-      let bucket: string | undefined;
-      if (brand && brand !== 'default-brand') {
-        try {
-          const persisted = await persistTimelineRender({ blob, brandId: brand, nodeId });
-          committedUrl = persisted.signedUrl;
-          storagePath = persisted.storagePath;
-          bucket = persisted.bucket;
-        } catch (persistError) {
-          const message =
-            persistError instanceof Error ? persistError.message : 'Library save failed';
-          show({ title: 'Saved locally only', description: message, variant: 'warning' });
-        }
-      }
-
-      updateNode(nodeId, (node) => ({
-        ...node,
-        data: {
-          ...(node.data as TimelineEditorNodeData),
-          committed: true,
-          generatedVideo: committedUrl,
-          generatedVideoUrl: committedUrl,
-          generatedVideoStoragePath: storagePath,
-          generatedVideoBucket: bucket,
-          isExecuting: false,
-          isComplete: true,
-          awaitingInput: false,
-          progress: 1,
-        },
-      }));
-      triggerSave();
-
-      // Resume the workflow: re-run only the parked downstream chain, targeting
-      // each leaf so its upstream closure reuses this committed clip instead of
-      // regenerating the whole graph.
-      const state = useStudioStore.getState();
-      const currentNodes = state.nodes as StudioNode[];
-      const leafIds = collectDownstreamLeafIds(
+      const persisted = await persistTimelineRender({
+        blob,
+        brandId: runtime.brandProfileId,
         nodeId,
-        state.edges,
-        new Map(currentNodes.map((candidate) => [candidate.id, candidate])),
+      });
+      const response = await completeCanvasRender(
+        {
+          jobId: context.jobId,
+          brandProfileId: runtime.brandProfileId,
+          roomId: runtime.roomId,
+          nodeId,
+          inputFingerprint: context.inputFingerprint,
+          output: {
+            assetId: persisted.assetId,
+            bucket: persisted.bucket,
+            storagePath: persisted.storagePath,
+            signedUrl: persisted.signedUrl,
+            mimeType: blob.type || 'video/mp4',
+            durationSec: context.result.durationSec,
+            width: context.result.width,
+            height: context.result.height,
+          },
+        },
+        context.signal,
       );
-      for (const leafId of leafIds) {
-        await executeWorkflow(executionControls, {
-          targetNodeId: leafId,
-          clearDownstream: false,
-          brandId: brand,
-        });
+
+      const currentState = useStudioStore.getState();
+      const isOriginOpen =
+        currentState.brandId === runtime.brandProfileId &&
+        currentState.activeRoomId === runtime.roomId &&
+        currentState.nodes.some((node) => node.id === nodeId);
+      if (isOriginOpen) {
+        currentState.updateNodeData(nodeId, {
+          ...(response.outcome === 'committed'
+            ? {
+                committed: true,
+                generatedVideo: persisted.signedUrl,
+                generatedVideoUrl: persisted.signedUrl,
+                generatedVideoStoragePath: persisted.storagePath,
+                generatedVideoBucket: persisted.bucket,
+                renderOutputAssetId: persisted.assetId,
+                lastRenderJobId: context.jobId,
+                renderContinuation: {
+                  jobId: context.jobId,
+                  status: response.downstreamLeafIds.length > 0 ? 'pending' : 'done',
+                  downstreamLeafIds: response.downstreamLeafIds,
+                },
+                isComplete: true,
+                awaitingInput: false,
+                error: undefined,
+              }
+            : {
+                committed: false,
+                error:
+                  response.outcome === 'stale'
+                    ? 'Timeline changed while this render was running. Render again to apply it.'
+                    : 'The Video Editor node was removed before the render finished.',
+              }),
+          isExecuting: false,
+          progress: 1,
+        } as Partial<StudioNode['data']>);
       }
+
+      return { outcome: response.outcome };
     },
-    [executionControls, nodeId, show, triggerSave, updateNode],
+    [nodeId, runtime],
   );
 
   // Claim the keyboard while the editor is open so the canvas-level Delete/copy/
@@ -277,6 +340,9 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       resolveSources,
       resolveOverlays,
       renderSinks: CANVAS_RENDER_SINKS,
+      renderOrigin,
+      captureRenderSnapshot,
+      flushRenderSnapshot,
       completeRender,
       reportRenderProgress,
       reportRenderState,
@@ -284,14 +350,17 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
     }),
     [
       brandId,
+      captureRenderSnapshot,
       completeRender,
       document,
+      flushRenderSnapshot,
       getDocument,
       onEditorOpenChange,
       patchDocument,
       pool,
       reportRenderProgress,
       reportRenderState,
+      renderOrigin,
       resolveOverlays,
       resolveSources,
     ],

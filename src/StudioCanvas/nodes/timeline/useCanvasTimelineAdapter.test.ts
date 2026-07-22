@@ -33,12 +33,22 @@ const committedData = (
 
 describe('applyDocumentPatch — the committed break-point matrix', () => {
   it('resets committed for an items write (the base-track model)', () => {
-    const next = applyDocumentPatch(committedData(), (document) => ({
-      ...document,
-      items: normalizeOrder(placeItem(document.items, 'src-b', 'image')),
-    }));
+    const next = applyDocumentPatch(
+      committedData({
+        renderContinuation: {
+          jobId: 'f5f608a9-cbac-49d2-9572-72b0c6f4f80e',
+          status: 'pending',
+          downstreamLeafIds: ['leaf'],
+        },
+      }),
+      (document) => ({
+        ...document,
+        items: normalizeOrder(placeItem(document.items, 'src-b', 'image')),
+      }),
+    );
     expect(next.items).toHaveLength(2);
     expect(next.committed).toBe(false);
+    expect(next.renderContinuation).toBeUndefined();
   });
 
   it('resets committed for an overlay-tracks write (the overlay model)', () => {

@@ -80,7 +80,9 @@ import {
   resolveWorkflowConceptSpec,
   type WorkflowConceptSpec,
 } from '@/lib/organic/ai-studio-bridge';
+import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
+import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
@@ -101,6 +103,8 @@ import type { StudioNode } from '../types';
 import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { STUDIO_FIT_VIEW_OPTIONS } from '../utils/fitViewOptions';
+import { computeGenerationSignature } from '../utils/generationSignature';
 import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
 import { isValidConnection } from '../utils/isValidConnection';
 import { layoutInRow } from '../utils/layoutImportedNodes';
@@ -468,6 +472,58 @@ function buildSeedImageNodeData(seedImage: string): Record<string, unknown> {
   };
 }
 
+// Pulls the durable bucket + object path out of a Supabase storage URL (signed,
+// public, or authenticated). The path segment after `/storage/v1/object/<mode>/`
+// is `<bucket>/<path...>`, independent of the expiring `?token`. Returns null for
+// any non-storage URL (e.g. a third-party CDN), which simply skips durable coords.
+function parseSupabaseStorageRef(url: string): { bucket: string; storagePath: string } | null {
+  try {
+    const { pathname } = new URL(url);
+    const marker = '/storage/v1/object/';
+    const markerIndex = pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    let rest = pathname.slice(markerIndex + marker.length);
+    for (const mode of ['sign/', 'public/', 'authenticated/']) {
+      if (rest.startsWith(mode)) {
+        rest = rest.slice(mode.length);
+        break;
+      }
+    }
+    const firstSlash = rest.indexOf('/');
+    if (firstSlash <= 0) return null;
+    const bucket = decodeURIComponent(rest.slice(0, firstSlash));
+    const storagePath = decodeURIComponent(rest.slice(firstSlash + 1));
+    if (!bucket || !storagePath) return null;
+    return { bucket, storagePath };
+  } catch {
+    return null;
+  }
+}
+
+// Presents the already-produced creative AS the generator node's own output, so
+// "Open in AI Studio" opens the flow that made the post — prompt node + the image
+// it produced — rather than parking the image as a side reference. A remote signed
+// URL is mirrored onto both fields the way the node's own expiry-resign does, and
+// its durable storage coords are persisted so the resign machinery can refresh the
+// thumbnail once the seeded signed URL expires (otherwise it stays broken forever).
+function buildSeedGeneratedImageData(seedImage: string): Record<string, unknown> {
+  const trimmed = seedImage.trim();
+  const isRemoteUrl = /^https?:\/\//i.test(trimmed);
+  if (!isRemoteUrl) return { generatedImage: seedImage };
+
+  const storageRef = parseSupabaseStorageRef(trimmed);
+  return {
+    generatedImage: seedImage,
+    generatedImageUrl: seedImage,
+    ...(storageRef
+      ? {
+          generatedImageStoragePath: storageRef.storagePath,
+          generatedImageBucket: storageRef.bucket,
+        }
+      : {}),
+  };
+}
+
 function buildSeedPrompt(seed: PlannerAiStudioHandoff): string {
   const workflowSpec = resolveWorkflowConceptSpec({
     platform: seed.platform,
@@ -687,22 +743,23 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
   }
 
   const imageGenNodeId = `organic-seed-image-${seed.draftId}`;
-  const nodes: StudioNode[] = [
-    textNode,
-    {
-      id: imageGenNodeId,
-      type: 'nanoGen',
-      position: { x: 620, y: 190 },
-      data: {
-        model: workflowSpec.defaultModel,
-        positivePrompt: '',
-        aspectRatio: '1:1',
-        imageSize: '1K',
-        maxReferenceImages: workflowSpec.maxReferenceImages,
-      },
-      style: { width: 420, height: 420 },
-    } as StudioNode,
-  ];
+  const imageGenNode: StudioNode = {
+    id: imageGenNodeId,
+    type: 'nanoGen',
+    position: { x: 620, y: 190 },
+    data: {
+      model: workflowSpec.defaultModel,
+      positivePrompt: '',
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      maxReferenceImages: workflowSpec.maxReferenceImages,
+      // Seed the produced creative as this node's output so the flow opens showing
+      // the posted image, editable in place. See buildSeedGeneratedImageData.
+      ...(seedImage ? buildSeedGeneratedImageData(seedImage) : {}),
+    },
+    style: { width: 420, height: 420 },
+  } as StudioNode;
+  const nodes: StudioNode[] = [textNode, imageGenNode];
   const edges: Edge[] = [
     {
       id: `e-${textNodeId}-${imageGenNodeId}-prompt`,
@@ -715,24 +772,17 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
     },
   ];
 
+  // Store a signature matching the seeded output + its prompt wiring. Without it a
+  // node with output but no signature reads as "not stale" and a Run would reuse
+  // the seeded image; with it, editing the prompt drifts the signature so Run
+  // regenerates — which is exactly the "change the image we gave you" the user wants.
   if (seedImage) {
-    const imageRefId = `organic-seed-image-ref-${seed.draftId}`;
-    nodes.push({
-      id: imageRefId,
-      type: 'image',
-      position: { x: 620, y: 650 },
-      data: { image: seedImage, fileName: 'planner-seed-image.png' },
-      style: { width: 196, height: 196 },
-    } as StudioNode);
-    edges.push({
-      id: `e-${imageRefId}-${imageGenNodeId}-ref`,
-      source: imageRefId,
-      sourceHandle: 'image',
-      target: imageGenNodeId,
-      targetHandle: 'ref-image',
-      type: 'dataType',
-      data: { dataType: 'image', pathType: 'bezier' },
-    });
+    const nodeById = new Map(nodes.map((node): [string, StudioNode] => [node.id, node]));
+    (imageGenNode.data as Record<string, unknown>).generationSignature = computeGenerationSignature(
+      imageGenNode,
+      edges,
+      nodeById,
+    );
   }
 
   return { nodes, edges };
@@ -742,11 +792,13 @@ function Flow({
   brandProfileId,
   realtime,
   activeRoomId,
+  focusNodeId,
   organicPlannerSeed,
 }: {
   brandProfileId?: string;
   realtime: ReturnType<typeof useCanvasRealtime>;
   activeRoomId?: string;
+  focusNodeId?: string;
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }) {
   const {
@@ -765,6 +817,7 @@ function Flow({
     keyboardScope,
     triggerSave,
     setBrandId,
+    setActiveRoomId,
     updateNodeData,
     copySelectedNodes,
     cutSelectedNodes,
@@ -777,6 +830,7 @@ function Flow({
   // Pick up MCP-issued run requests for this room and execute them on the open
   // canvas (results persist + broadcast through the normal autosave path).
   useCanvasRunRequests(brandProfileId || '', activeRoomId);
+  useTimelineRenderContinuations(brandProfileId, activeRoomId);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const lastMousePositionRef = useRef({ x: 240, y: 180 });
@@ -790,6 +844,23 @@ function Flow({
     }
   }, [brandProfileId, setBrandId]);
 
+  useEffect(() => {
+    setActiveRoomId(activeRoomId);
+  }, [activeRoomId, setActiveRoomId]);
+
+  const focusedNodeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusNodeId || isLoading || focusedNodeRef.current === focusNodeId) return;
+    const target = nodes.find((node) => node.id === focusNodeId);
+    if (!target) return;
+    focusedNodeRef.current = focusNodeId;
+    setNodes(nodes.map((node) => ({ ...node, selected: node.id === focusNodeId })));
+    const handle = requestAnimationFrame(() => {
+      fitView({ nodes: [target], padding: 0.65, duration: 350 });
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [fitView, focusNodeId, isLoading, nodes, setNodes]);
+
   // When the walkthrough seeds starter nodes, frame them so the tour's node
   // steps always have an on-screen target. Runs once per Flow instance.
   const hasFitTourSeedRef = useRef(false);
@@ -798,7 +869,7 @@ function Flow({
     if (!nodes.some((node) => node.data?.isTourSeed === true)) return;
     hasFitTourSeedRef.current = true;
     const handle = requestAnimationFrame(() => {
-      fitView({ padding: 0.2, duration: 0 });
+      fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 0 });
     });
     return () => cancelAnimationFrame(handle);
   }, [nodes, fitView]);
@@ -815,6 +886,9 @@ function Flow({
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
   const [isSaveStarterOpen, setIsSaveStarterOpen] = useState(false);
+  // Team chat open/closed lifted here so the composer can reserve the chat panel's
+  // footprint and the two overlays never fight for the same bottom-right region.
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [starterSelectionNodes, setStarterSelectionNodes] = useState<StudioNode[]>([]);
   const hydratedPlannerSeedRef = useRef<string | null>(null);
 
@@ -1453,7 +1527,7 @@ function Flow({
               />
             )}
 
-            <Controls />
+            <Controls fitViewOptions={STUDIO_FIT_VIEW_OPTIONS} />
             <MiniMap className="!border !bg-background/95" />
 
             {Object.entries(remoteCursors).map(([userId, cursor]) => (
@@ -1479,7 +1553,11 @@ function Flow({
               position="bottom-right"
               className="mb-4 mr-4 border-none bg-transparent p-0 shadow-none"
             >
-              <AIStudioChat brandProfileId={brandProfileId || ''} roomId={activeRoomId} />
+              <AIStudioChat
+                brandProfileId={brandProfileId || ''}
+                roomId={activeRoomId}
+                onOpenChange={setIsChatOpen}
+              />
             </Panel>
 
             <Panel position="bottom-center" className="border-none bg-transparent p-0 shadow-none">
@@ -1632,7 +1710,9 @@ function Flow({
                 <ZoomOut className="mr-2 h-4 w-4" />
                 Zoom Out
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => fitView({ padding: 0.2, duration: 350 })}>
+              <ContextMenuItem
+                onClick={() => fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 })}
+              >
                 Fit View
                 <ContextMenuShortcut>Shift+F</ContextMenuShortcut>
               </ContextMenuItem>
@@ -1657,6 +1737,7 @@ function Flow({
         roomId={activeRoomId}
         isCanvasEmpty={nodes.length === 0}
         selectedNodeIds={selectedNodeIds}
+        chatOpen={isChatOpen}
         onRun={handleComposerRun}
       />
       <LoadWorkflowDialog
@@ -1679,6 +1760,7 @@ interface StudioCanvasProps {
   embedded?: boolean;
   brandProfileId?: string;
   initialRoomId?: string;
+  focusNodeId?: string;
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }
 
@@ -1686,6 +1768,7 @@ export function StudioCanvas({
   embedded = false,
   brandProfileId,
   initialRoomId,
+  focusNodeId,
   organicPlannerSeed,
 }: StudioCanvasProps) {
   const router = useRouter();
@@ -1808,6 +1891,17 @@ export function StudioCanvas({
   }, [activeRoomId, rooms]);
 
   const realtime = useCanvasRealtime(brandProfileId || '', activeRoomId);
+  const canvasRuntime = useMemo(
+    () =>
+      brandProfileId && activeRoomId
+        ? {
+            brandProfileId,
+            roomId: activeRoomId,
+            flushSave: realtime.saveCanvasToDatabase,
+          }
+        : null,
+    [activeRoomId, brandProfileId, realtime.saveCanvasToDatabase],
+  );
   const handleReturnToPlanner = useCallback(() => {
     if (!organicPlannerSeed) return;
 
@@ -2004,16 +2098,16 @@ export function StudioCanvas({
     <ReactFlowProvider>
       <div className="flex h-full min-h-0 w-full flex-col bg-background">
         {!embedded && (
-          <div className="relative z-[100] flex h-14 shrink-0 items-center justify-between border-b bg-background px-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-lg font-bold">
+          <div className="relative z-[100] flex h-14 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b bg-background px-4">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex shrink-0 items-center gap-2 text-lg font-bold">
                 <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
                   Continuum
                 </span>
                 <span className="font-normal text-muted-foreground">Studio</span>
               </div>
               <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
-              <div data-tour-id="studio-multiplayer" className="flex items-center gap-4">
+              <div data-tour-id="studio-multiplayer" className="flex min-w-0 items-center gap-4">
                 <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
                   <CanvasSyncStatus
                     status={realtime.status}
@@ -2038,7 +2132,7 @@ export function StudioCanvas({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {organicPlannerSeed ? (
                 <>
                   {applyReadiness && workflowSummaryLabel ? (
@@ -2103,12 +2197,15 @@ export function StudioCanvas({
         )}
 
         <main className="relative flex-1 min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
-          <Flow
-            brandProfileId={brandProfileId}
-            realtime={realtime}
-            activeRoomId={activeRoomId}
-            organicPlannerSeed={organicPlannerSeed}
-          />
+          <CanvasRuntimeProvider value={canvasRuntime}>
+            <Flow
+              brandProfileId={brandProfileId}
+              realtime={realtime}
+              activeRoomId={activeRoomId}
+              focusNodeId={focusNodeId}
+              organicPlannerSeed={organicPlannerSeed}
+            />
+          </CanvasRuntimeProvider>
         </main>
       </div>
     </ReactFlowProvider>

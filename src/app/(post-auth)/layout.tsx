@@ -8,6 +8,7 @@ import { NavigationTransition } from '@/components/ui/NavigationTransition';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { ReactQueryProvider } from '@/lib/react-query/provider';
+import { StudioRenderProvider } from '@/lib/studio-render/StudioRenderProvider';
 import DashboardLayoutShell from '../../components/DashboardLayoutShell';
 import { DashboardLayoutFallback } from './DashboardLayoutFallback';
 
@@ -51,19 +52,21 @@ export default function DashboardLayout({
         {/* Above the router on purpose: an agent run registered here keeps streaming
             while you navigate away, open another session, or close the chat panel. */}
         <AgentRunsProvider>
-          <GalaxyBackgroundLazy intensity={1} speed="glacial" />
-          <div
-            className="min-h-dvh overflow-hidden"
-            style={{
-              backgroundColor: 'var(--background)',
-              color: 'var(--foreground)',
-            }}
-          >
-            <MixpanelInit />
-            <Suspense fallback={<DashboardLayoutFallback />}>
-              <DashboardLayoutContent>{children}</DashboardLayoutContent>
-            </Suspense>
-          </div>
+          <StudioRenderProvider>
+            <GalaxyBackgroundLazy intensity={1} speed="glacial" />
+            <div
+              className="min-h-dvh overflow-hidden"
+              style={{
+                backgroundColor: 'var(--background)',
+                color: 'var(--foreground)',
+              }}
+            >
+              <MixpanelInit />
+              <Suspense fallback={<DashboardLayoutFallback />}>
+                <DashboardLayoutContent>{children}</DashboardLayoutContent>
+              </Suspense>
+            </div>
+          </StudioRenderProvider>
         </AgentRunsProvider>
       </ToastProvider>
     </ReactQueryProvider>

@@ -19,6 +19,7 @@ type AIStudioClientProps = {
   brandProfileId: string;
   brandName: string;
   initialRoomId: string;
+  focusNodeId?: string;
 };
 
 function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff | null {
@@ -39,6 +40,7 @@ export default function AIStudioClient({
   brandProfileId,
   brandName,
   initialRoomId,
+  focusNodeId,
 }: AIStudioClientProps) {
   const searchParams = useSearchParams();
   const source = searchParams.get('source');
@@ -60,31 +62,24 @@ export default function AIStudioClient({
     <div className="fixed inset-x-0 top-0 h-dvh md:left-[var(--app-sidebar-width,3.5rem)] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
-      <main
-        className="relative z-[1] flex min-h-0 flex-1 flex-col"
-        style={{
-          gap: 'var(--app-shell-gap-compact)',
-          padding: 'var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)',
-        }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <main className="relative z-[1] flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-2">
           <div className="flex items-baseline gap-3">
             <h1 className="text-base font-semibold text-white">AI Studio</h1>
             <span className="text-sm text-gray-400">Build flows for {brandName}</span>
           </div>
         </div>
 
-        <div
-          data-tour-id="studio-canvas"
-          className="flex-1 min-h-0 w-full overflow-hidden rounded-lg border border-white/10"
-        >
-          <div className="h-full w-full">
-            <StudioCanvas
-              brandProfileId={brandProfileId}
-              initialRoomId={initialRoomId}
-              organicPlannerSeed={organicPlannerSeed}
-            />
-          </div>
+        {/* Full-bleed: the canvas fills the remaining viewport with no padded or
+            bordered box around it, so panning reaches the true edges and the
+            toolbar/composer/chat overlays are never clipped by a shrunken frame. */}
+        <div data-tour-id="studio-canvas" className="min-h-0 w-full flex-1 overflow-hidden">
+          <StudioCanvas
+            brandProfileId={brandProfileId}
+            initialRoomId={initialRoomId}
+            focusNodeId={focusNodeId}
+            organicPlannerSeed={organicPlannerSeed}
+          />
         </div>
       </main>
 

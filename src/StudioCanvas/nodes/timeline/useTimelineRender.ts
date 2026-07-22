@@ -1,26 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import {
+  isTerminalStudioRenderStatus,
+  studioRenderOriginKey,
+  useStudioRenderStore,
+} from '@/lib/studio-render/renderStore';
+import { useStudioRenderQueue } from '@/lib/studio-render/StudioRenderProvider';
 import { resolveExportPreset } from '../../utils/render/exportPresets';
 import { checkSpliceSupport, type WebCodecsSupport } from '../../utils/splice/webcodecsSupport';
 import { runTimelineInWorker } from '../../workers/spliceWorkerClient';
-import type { TimelineEditorAdapter, TimelineRenderSinkKind } from './adapter';
+import type {
+  TimelineEditorAdapter,
+  TimelineRenderCompletion,
+  TimelineRenderSinkKind,
+  TimelineRenderSnapshot,
+} from './adapter';
 import { resolveOverlayTracks } from './multiTrack';
-
-// The Video Editor render orchestration, shared by the node launcher and the full
-// editor dialog: resolve the placed timeline to source blobs, compose the MP4 in a
-// worker, then hand the result to the host's sink (which persists it and runs the
-// host's post-render side effects). Reads the document fresh from the adapter at
-// call time so it always renders the latest edit, never a stale props closure.
 
 export interface UseTimelineRenderResult {
   render: (sink?: TimelineRenderSinkKind) => Promise<boolean>;
   isRendering: boolean;
   progress: number;
   support: WebCodecsSupport | null;
+  status?: string;
 }
 
 export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRenderResult {
   const { show } = useToast();
+  const queue = useStudioRenderQueue();
+  const jobs = useStudioRenderStore((state) => state.jobs);
   const {
     getDocument,
     resolveSources,
@@ -29,11 +37,14 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
     reportRenderProgress,
     reportRenderState,
     renderSinks,
+    renderOrigin,
+    captureRenderSnapshot,
+    flushRenderSnapshot,
   } = adapter;
 
   const [support, setSupport] = useState<WebCodecsSupport | null>(null);
-  const [isRendering, setIsRendering] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [localIsRendering, setLocalIsRendering] = useState(false);
+  const [localProgress, setLocalProgress] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -45,29 +56,35 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
     };
   }, []);
 
+  const originKey = renderOrigin ? studioRenderOriginKey(renderOrigin) : null;
+  const globalJob = useMemo(
+    () =>
+      originKey
+        ? Object.values(jobs)
+            .filter((job) => job.originKey === originKey)
+            .sort((left, right) => right.createdAt - left.createdAt)[0]
+        : undefined,
+    [jobs, originKey],
+  );
+  const globalIsRendering = Boolean(globalJob && !isTerminalStudioRenderStatus(globalJob.status));
+
   const defaultSink = renderSinks[0]?.kind;
 
-  const render = useCallback(
-    async (sink?: TimelineRenderSinkKind): Promise<boolean> => {
+  const validateTarget = useCallback(
+    (sink?: TimelineRenderSinkKind) => {
       if (support && !support.ok) {
         show({ title: 'Editor unavailable', description: support.reason, variant: 'warning' });
-        return false;
+        return null;
       }
-
       const document = getDocument();
-      const items = document.items;
-      const overlayTracks = resolveOverlayTracks(document);
-      const exportPreset = resolveExportPreset(document.exportPresetId);
-
-      if (items.length === 0) {
+      if (document.items.length === 0) {
         show({
           title: 'Nothing to render',
           description: 'Place at least one clip or image on the timeline.',
           variant: 'warning',
         });
-        return false;
+        return null;
       }
-
       const target = sink ?? defaultSink;
       if (!target) {
         show({
@@ -75,23 +92,143 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
           description: 'This editor has no render destination.',
           variant: 'warning',
         });
+        return null;
+      }
+      return { document, target };
+    },
+    [defaultSink, getDocument, show, support],
+  );
+
+  const renderInBackground = useCallback(
+    async (sink?: TimelineRenderSinkKind): Promise<boolean> => {
+      const validated = validateTarget(sink);
+      if (!validated || !renderOrigin || !captureRenderSnapshot) return false;
+
+      let snapshot: TimelineRenderSnapshot;
+      try {
+        snapshot = captureRenderSnapshot();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to capture render inputs';
+        show({ title: 'Render unavailable', description: message, variant: 'warning' });
         return false;
       }
+      const exportPreset = resolveExportPreset(snapshot.document.exportPresetId);
+      const captionsOn =
+        Boolean(snapshot.document.captionsEnabled) &&
+        ((snapshot.document.captionCues?.length ?? 0) > 0 ||
+          (snapshot.document.captionWords?.length ?? 0) > 0);
 
+      const enqueued = queue.enqueue({
+        origin: renderOrigin,
+        execute: async ({ jobId, signal, setPhase, setProgress }) => {
+          setPhase('preparing');
+          await flushRenderSnapshot?.();
+          const [items, overlays] = await Promise.all([
+            snapshot.resolveSources(),
+            snapshot.resolveOverlays(),
+          ]);
+
+          setPhase('rendering');
+          const result = await runTimelineInWorker({
+            items,
+            overlays,
+            videoBitrate: exportPreset.videoBitrate,
+            targetWidth: exportPreset.width ?? undefined,
+            targetHeight: exportPreset.height ?? undefined,
+            captionCues: captionsOn ? snapshot.document.captionCues : undefined,
+            captionWords: captionsOn ? snapshot.document.captionWords : undefined,
+            captionStyle: captionsOn ? snapshot.document.captionStyle : undefined,
+            signal,
+            onProgress: ({ progress }) => {
+              setProgress(progress);
+              reportRenderProgress(progress);
+            },
+          });
+
+          setPhase('saving');
+          let completion: TimelineRenderCompletion | void;
+          try {
+            completion = await completeRender(result.blob, validated.target, {
+              jobId,
+              inputFingerprint: snapshot.inputFingerprint,
+              signal,
+              result: {
+                durationSec: result.durationSec,
+                width: result.width,
+                height: result.height,
+              },
+            });
+          } finally {
+            URL.revokeObjectURL(result.objectUrl);
+          }
+
+          if (completion?.outcome === 'stale') {
+            return {
+              status: 'stale',
+              title: 'Video rendered, but the timeline changed',
+              description: 'The clip was saved to Library. Render again to apply it to the node.',
+              variant: 'warning',
+            };
+          }
+          if (completion?.outcome === 'missing') {
+            return {
+              status: 'stale',
+              title: 'Video rendered after the node was removed',
+              description: 'The clip is safe in Library, but the deleted node was not recreated.',
+              variant: 'warning',
+            };
+          }
+          return {
+            status: 'completed',
+            title: 'Video render finished',
+            description: 'The clip is saved to Library and ready on the canvas.',
+            variant: 'success',
+          };
+        },
+        onFailure: (error) =>
+          reportRenderState({ isExecuting: false, error: error.message || 'Render failed' }),
+      });
+
+      if (!enqueued.accepted) return false;
+      reportRenderState({ isExecuting: true, error: undefined });
+      reportRenderProgress(0);
+      return true;
+    },
+    [
+      captureRenderSnapshot,
+      completeRender,
+      flushRenderSnapshot,
+      queue,
+      renderOrigin,
+      reportRenderProgress,
+      reportRenderState,
+      show,
+      validateTarget,
+    ],
+  );
+
+  const renderLocally = useCallback(
+    async (sink?: TimelineRenderSinkKind): Promise<boolean> => {
+      const validated = validateTarget(sink);
+      if (!validated) return false;
+      const { document, target } = validated;
+      const overlayTracks = resolveOverlayTracks(document);
+      const exportPreset = resolveExportPreset(document.exportPresetId);
       const controller = new AbortController();
-      setIsRendering(true);
-      setProgress(0);
+      setLocalIsRendering(true);
+      setLocalProgress(0);
       reportRenderState({ isExecuting: true, error: undefined });
       reportRenderProgress(0);
 
       try {
-        const resolved = await resolveSources(items);
-        const resolvedOverlays = await resolveOverlays(overlayTracks);
-        const captionsOn = Boolean(document.captionsEnabled) &&
+        const items = await resolveSources(document.items);
+        const overlays = await resolveOverlays(overlayTracks);
+        const captionsOn =
+          Boolean(document.captionsEnabled) &&
           ((document.captionCues?.length ?? 0) > 0 || (document.captionWords?.length ?? 0) > 0);
         const result = await runTimelineInWorker({
-          items: resolved,
-          overlays: resolvedOverlays,
+          items,
+          overlays,
           videoBitrate: exportPreset.videoBitrate,
           targetWidth: exportPreset.width ?? undefined,
           targetHeight: exportPreset.height ?? undefined,
@@ -99,14 +236,17 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
           captionWords: captionsOn ? document.captionWords : undefined,
           captionStyle: captionsOn ? document.captionStyle : undefined,
           signal: controller.signal,
-          onProgress: ({ progress: value }) => {
-            setProgress(value);
-            reportRenderProgress(value);
+          onProgress: ({ progress }) => {
+            setLocalProgress(progress);
+            reportRenderProgress(progress);
           },
         });
-
-        setProgress(1);
-        await completeRender(result.blob, target);
+        try {
+          await completeRender(result.blob, target);
+        } finally {
+          URL.revokeObjectURL(result.objectUrl);
+        }
+        setLocalProgress(1);
         return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Render failed';
@@ -114,21 +254,26 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
         show({ title: 'Render failed', description: message, variant: 'warning' });
         return false;
       } finally {
-        setIsRendering(false);
+        setLocalIsRendering(false);
       }
     },
     [
       completeRender,
-      defaultSink,
-      getDocument,
       reportRenderProgress,
       reportRenderState,
       resolveOverlays,
       resolveSources,
       show,
-      support,
+      validateTarget,
     ],
   );
 
-  return { render, isRendering, progress, support };
+  const render = renderOrigin && captureRenderSnapshot ? renderInBackground : renderLocally;
+  return {
+    render,
+    isRendering: globalIsRendering || localIsRendering,
+    progress: globalJob?.progress ?? localProgress,
+    support,
+    status: globalJob?.status,
+  };
 }

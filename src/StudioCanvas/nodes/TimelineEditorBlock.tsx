@@ -84,7 +84,13 @@ export function TimelineEditorBlock({
   // The editor runs against a host adapter, not the canvas store. The canvas one
   // is built here and shared by the node's Render button and the editor dialog.
   const adapter = useCanvasTimelineAdapter(id);
-  const { render, isRendering, support } = useTimelineRender(adapter);
+  const {
+    render,
+    isRendering,
+    progress: renderProgress,
+    status,
+    support,
+  } = useTimelineRender(adapter);
 
   const [isHovered, setIsHovered] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -123,7 +129,11 @@ export function TimelineEditorBlock({
   const isRunning = Boolean(data.isExecuting) || isRendering;
   const isAwaiting =
     Boolean((data as { awaitingInput?: boolean }).awaitingInput) && !data.committed;
-  const progress = typeof data.progress === 'number' ? Math.max(0, Math.min(1, data.progress)) : 0;
+  const progress = isRendering
+    ? renderProgress
+    : typeof data.progress === 'number'
+      ? Math.max(0, Math.min(1, data.progress))
+      : 0;
   const displayVideo = data.generatedVideo ?? data.generatedVideoUrl;
 
   const handleDownload = useCallback(() => {
@@ -233,7 +243,13 @@ export function TimelineEditorBlock({
                       <GenerationPulseLoader />
                       <Progress value={progress * 100} className="h-1.5 w-3/4" />
                       <span className="text-2xs text-muted-foreground">
-                        {Math.round(progress * 100)}% rendering in browser
+                        {status === 'queued'
+                          ? 'Queued for browser rendering'
+                          : status === 'preparing'
+                            ? 'Preparing media…'
+                            : status === 'saving'
+                              ? 'Saving render…'
+                              : `${Math.round(progress * 100)}% rendering in browser`}
                       </span>
                     </div>
                   ) : displayVideo ? (

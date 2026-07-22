@@ -1,5 +1,6 @@
 export * from './agent-vocabulary';
 export * from './brand-enforcement';
+export * from './canvas-render';
 export * from './canvas-compose';
 export * from './image-size';
 export * from './model-catalog';

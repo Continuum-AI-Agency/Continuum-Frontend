@@ -233,6 +233,8 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
   const preparedOverlays: PreparedOverlay[] = [];
   let targetWidth = 0;
   let targetHeight = 0;
+  let cancelOutput: (() => Promise<void>) | undefined;
+  let outputFinalized = false;
 
   try {
     for (let i = 0; i < items.length; i += 1) {
@@ -315,6 +317,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       format: new mb.Mp4OutputFormat(),
       target: new mb.BufferTarget(),
     });
+    cancelOutput = () => output.cancel();
     const videoSource = new mb.CanvasSource(offscreen, {
       codec: 'avc',
       bitrate: options.videoBitrate ?? DEFAULT_VIDEO_BITRATE,
@@ -531,6 +534,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     throwIfAborted(signal);
 
     await output.finalize();
+    outputFinalized = true;
 
     const buffer = output.target.buffer;
     if (!buffer) {
@@ -555,6 +559,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       height: targetHeight,
     };
   } finally {
+    if (cancelOutput && !outputFinalized) {
+      await cancelOutput().catch(() => undefined);
+    }
     for (const item of prepared) {
       if (item.kind === 'video') {
         disposeInput(item.input);

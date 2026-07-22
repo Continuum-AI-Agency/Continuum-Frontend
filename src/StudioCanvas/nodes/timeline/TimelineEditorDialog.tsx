@@ -123,7 +123,7 @@ export function TimelineEditorDialog({
 
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC);
   const model = useTimelineEditorModel({ adapter, items, sourceDurations, pxPerSec });
-  const { render, isRendering, progress, support } = useTimelineRender(adapter);
+  const { render, isRendering, progress, status, support } = useTimelineRender(adapter);
   const captions = useTimelineCaptions(adapter);
 
   const mediaFor = useCallback(
@@ -385,7 +385,9 @@ export function TimelineEditorDialog({
   })();
 
   const captionCues = useMemo(
-    () => document.captionCues ?? (document.captionWords?.length ? groupWordsIntoCues(document.captionWords) : []),
+    () =>
+      document.captionCues ??
+      (document.captionWords?.length ? groupWordsIntoCues(document.captionWords) : []),
     [document.captionCues, document.captionWords],
   );
   const captionsEnabled = document.captionsEnabled;
@@ -464,12 +466,7 @@ export function TimelineEditorDialog({
                 ))}
               </select>
             </label>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              disabled={isRendering}
-            >
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Done
             </Button>
             {primarySink ? (
@@ -481,7 +478,13 @@ export function TimelineEditorDialog({
                   disabled={renderDisabled}
                 >
                   <PlayIcon className="h-3.5 w-3.5" />
-                  {isRendering ? 'Rendering…' : primarySink.label}
+                  {isRendering
+                    ? status === 'queued'
+                      ? 'Queued…'
+                      : status === 'saving'
+                        ? 'Saving…'
+                        : 'Rendering…'
+                    : primarySink.label}
                 </Button>
                 {renderSinks.length > 1 ? (
                   <DropdownMenu>
@@ -570,50 +573,50 @@ export function TimelineEditorDialog({
               <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                 <div className="min-h-[220px]">
                   <ClipInspector
-                  item={inspectorItem}
-                  context={inspectingOverlay ? 'overlay' : 'base'}
-                  durationSec={inspectorDuration}
-                  sourceDurationSec={inspectorSourceDuration}
-                  label={inspectorLabel}
-                  onTrim={(range) => {
-                    if (inspectingOverlay) {
-                      if (selectedOverlayId) overlayModel.trim(selectedOverlayId, range);
-                    } else if (selectedItemId) {
-                      model.trim(selectedItemId, range);
-                    }
-                  }}
-                  onSetStill={(sec) => {
-                    if (inspectingOverlay) {
-                      if (selectedOverlayId) overlayModel.setStill(selectedOverlayId, sec);
-                    } else if (selectedItemId) {
-                      model.setStill(selectedItemId, sec);
-                    }
-                  }}
-                  onSetMute={(mute) => {
-                    if (inspectingOverlay) {
-                      if (selectedOverlayId) overlayModel.setMuteAudio(selectedOverlayId, mute);
-                    } else if (selectedItemId) {
-                      model.setMuteAudio(selectedItemId, mute);
-                    }
-                  }}
-                  onSetAudio={(patch) => {
-                    if (inspectingOverlay) {
-                      if (selectedOverlayId) overlayModel.setAudio(selectedOverlayId, patch);
-                    } else if (selectedItemId) {
-                      model.setAudio(selectedItemId, patch);
-                    }
-                  }}
-                  onSetEffects={(patch) => {
-                    if (inspectingOverlay) {
-                      if (selectedOverlayId) overlayModel.setEffects(selectedOverlayId, patch);
-                    } else if (selectedItemId) {
-                      model.setEffects(selectedItemId, patch);
-                    }
-                  }}
-                  onSetTransition={(transition) => {
-                    if (!inspectingOverlay && selectedItemId)
-                      model.setTransition(selectedItemId, transition);
-                  }}
+                    item={inspectorItem}
+                    context={inspectingOverlay ? 'overlay' : 'base'}
+                    durationSec={inspectorDuration}
+                    sourceDurationSec={inspectorSourceDuration}
+                    label={inspectorLabel}
+                    onTrim={(range) => {
+                      if (inspectingOverlay) {
+                        if (selectedOverlayId) overlayModel.trim(selectedOverlayId, range);
+                      } else if (selectedItemId) {
+                        model.trim(selectedItemId, range);
+                      }
+                    }}
+                    onSetStill={(sec) => {
+                      if (inspectingOverlay) {
+                        if (selectedOverlayId) overlayModel.setStill(selectedOverlayId, sec);
+                      } else if (selectedItemId) {
+                        model.setStill(selectedItemId, sec);
+                      }
+                    }}
+                    onSetMute={(mute) => {
+                      if (inspectingOverlay) {
+                        if (selectedOverlayId) overlayModel.setMuteAudio(selectedOverlayId, mute);
+                      } else if (selectedItemId) {
+                        model.setMuteAudio(selectedItemId, mute);
+                      }
+                    }}
+                    onSetAudio={(patch) => {
+                      if (inspectingOverlay) {
+                        if (selectedOverlayId) overlayModel.setAudio(selectedOverlayId, patch);
+                      } else if (selectedItemId) {
+                        model.setAudio(selectedItemId, patch);
+                      }
+                    }}
+                    onSetEffects={(patch) => {
+                      if (inspectingOverlay) {
+                        if (selectedOverlayId) overlayModel.setEffects(selectedOverlayId, patch);
+                      } else if (selectedItemId) {
+                        model.setEffects(selectedItemId, patch);
+                      }
+                    }}
+                    onSetTransition={(transition) => {
+                      if (!inspectingOverlay && selectedItemId)
+                        model.setTransition(selectedItemId, transition);
+                    }}
                     onClose={clearSelection}
                   />
                 </div>

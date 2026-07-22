@@ -1,4 +1,9 @@
-import type { BrandBookPieceKind, ImageGeneratorModel, ImageSize } from '@continuum/contracts';
+import type {
+  BrandBookPieceKind,
+  CanvasRenderContinuation,
+  ImageGeneratorModel,
+  ImageSize,
+} from '@continuum/contracts';
 import type {
   Connection,
   Edge,
@@ -96,6 +101,8 @@ export interface NanoGenNodeData extends BaseNodeData {
 
 export interface StringNodeData extends BaseNodeData {
   value: string;
+  /** Composer-authored prompts are already final; user-authored text can opt into enrichment. */
+  promptMode?: 'literal' | 'enrich';
   model?: LLMModel;
   inputs?: Array<{ type: 'image' | 'video' | 'text'; src: string }>;
   isSplitting?: boolean;
@@ -216,6 +223,12 @@ export interface VideoEditorNodeData extends BaseNodeData {
   generatedVideoUrl?: string;
   generatedVideoStoragePath?: string;
   generatedVideoBucket?: string;
+  renderOutputAssetId?: string;
+  renderOutputDurationSec?: number;
+  renderOutputWidth?: number;
+  renderOutputHeight?: number;
+  lastRenderJobId?: string;
+  renderContinuation?: CanvasRenderContinuation;
   unsupportedReason?: string;
 }
 

@@ -1,12 +1,11 @@
-import { Suspense } from "react";
-import { redirect } from "next/navigation";
+import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
+import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
+import { resolveInitialCanvasRoomId } from '@/lib/ai-studio/canvas-room.server';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import AIStudioClient from './AIStudioClient';
 
-import AIStudioClient from "./AIStudioClient";
-import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
-import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { resolveInitialCanvasRoomId } from "@/lib/ai-studio/canvas-room.server";
-
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 function AIStudioSkeleton() {
   return (
@@ -18,11 +17,16 @@ function AIStudioSkeleton() {
   );
 }
 
-export default async function AIStudioPage() {
+type AIStudioPageProps = {
+  searchParams: Promise<{ roomId?: string; focusNodeId?: string }>;
+};
+
+export default async function AIStudioPage({ searchParams }: AIStudioPageProps) {
+  const { roomId, focusNodeId } = await searchParams;
   const { activeBrandId, brandSummaries, activeBrandTier } = await getActiveBrandContext();
 
   if (!activeBrandId) {
-    redirect("/onboarding");
+    redirect('/onboarding');
   }
 
   if (activeBrandTier === 0) {
@@ -32,12 +36,12 @@ export default async function AIStudioPage() {
   }
 
   const brandName =
-    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? "Untitled brand";
+    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'Untitled brand';
 
   // Guarantee a workspace exists before the canvas mounts so realtime connects on
   // first paint (no perpetual "Connecting…" spinner) and the MCP co-pilot can target
   // the same live room the user lands in.
-  const initialRoomId = await resolveInitialCanvasRoomId(activeBrandId);
+  const initialRoomId = await resolveInitialCanvasRoomId(activeBrandId, roomId);
 
   // AIStudioClient uses dynamic({ ssr: false }) for StudioCanvas internally,
   // so ClientOnly is redundant — Suspense handles the loading state.
@@ -47,6 +51,7 @@ export default async function AIStudioPage() {
         brandProfileId={activeBrandId}
         brandName={brandName}
         initialRoomId={initialRoomId}
+        focusNodeId={focusNodeId}
       />
     </Suspense>
   );

@@ -1,5 +1,5 @@
-import type { ResolvedClip } from './resolveClipSources';
 import { appendRange, loadMediabunny, throwIfAborted } from './appendRange';
+import type { ResolvedClip } from './resolveClipSources';
 
 const TARGET_SAMPLE_RATE = 48_000;
 const TARGET_CHANNEL_COUNT = 2;
@@ -39,16 +39,19 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
   const mb = await loadMediabunny();
   throwIfAborted(signal);
 
-  const inputs = clips.map((clip) =>
-    new mb.Input({
-      source: new mb.BlobSource(clip.blob),
-      formats: mb.ALL_FORMATS,
-    }),
+  const inputs = clips.map(
+    (clip) =>
+      new mb.Input({
+        source: new mb.BlobSource(clip.blob),
+        formats: mb.ALL_FORMATS,
+      }),
   );
 
   let targetWidth = 0;
   let targetHeight = 0;
   const trimRanges: Array<{ startSec: number; endSec: number; durationSec: number }> = [];
+  let cancelOutput: (() => Promise<void>) | undefined;
+  let outputFinalized = false;
 
   try {
     for (let i = 0; i < inputs.length; i += 1) {
@@ -68,7 +71,8 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
 
       const fullDuration = await input.computeDuration();
       const trimStart = Math.max(0, clip.trimStartSec ?? 0);
-      const trimEnd = clip.trimEndSec !== undefined ? Math.min(clip.trimEndSec, fullDuration) : fullDuration;
+      const trimEnd =
+        clip.trimEndSec !== undefined ? Math.min(clip.trimEndSec, fullDuration) : fullDuration;
       if (trimEnd <= trimStart) {
         throw new Error(`Clip ${i + 1}: trim range produces zero duration`);
       }
@@ -89,6 +93,7 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
       format: new mb.Mp4OutputFormat(),
       target: new mb.BufferTarget(),
     });
+    cancelOutput = () => output.cancel();
 
     const videoSource = new mb.CanvasSource(offscreen, {
       codec: 'avc',
@@ -131,7 +136,8 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
         muteAudio,
         signal,
         onRangeProgress: (processedSecInRange) => {
-          const progress = totalDuration > 0 ? (processedDuration + processedSecInRange) / totalDuration : 0;
+          const progress =
+            totalDuration > 0 ? (processedDuration + processedSecInRange) / totalDuration : 0;
           options.onProgress?.({
             progress: Math.min(0.99, progress),
             processedClips: i,
@@ -150,6 +156,7 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
     }
 
     await output.finalize();
+    outputFinalized = true;
 
     const buffer = output.target.buffer;
     if (!buffer) {
@@ -170,6 +177,9 @@ export async function spliceClips(options: SpliceOptions): Promise<SpliceResult>
       height: targetHeight,
     };
   } finally {
+    if (cancelOutput && !outputFinalized) {
+      await cancelOutput().catch(() => undefined);
+    }
     for (const input of inputs) {
       try {
         (input as unknown as { dispose?: () => void }).dispose?.();

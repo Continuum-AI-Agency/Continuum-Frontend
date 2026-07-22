@@ -1,8 +1,8 @@
-import type { SpliceProgress, SpliceResult } from './spliceClips';
+import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { appendRange, loadMediabunny, throwIfAborted } from './appendRange';
 import { computeCappedDimensions } from './cappedDimensions';
 import { buildCaptionCues, type CaptionWord } from './captionCues';
-import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { SpliceProgress, SpliceResult } from './spliceClips';
 
 // Single-source variant of the splice engine: open ONE input and concatenate N
 // ordered keep-ranges into one MP4, shifting timestamps by a cumulative offset.
@@ -46,7 +46,9 @@ export type SpliceSingleSourceOptions = {
   signal?: AbortSignal;
 };
 
-export async function spliceSingleSource(options: SpliceSingleSourceOptions): Promise<SpliceResult> {
+export async function spliceSingleSource(
+  options: SpliceSingleSourceOptions,
+): Promise<SpliceResult> {
   const { blob, ranges, signal } = options;
   if (ranges.length < 1) {
     throw new Error('Single-source splice requires at least one range');
@@ -56,6 +58,8 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
   throwIfAborted(signal);
 
   const input = new mb.Input({ source: new mb.BlobSource(blob), formats: mb.ALL_FORMATS });
+  let cancelOutput: (() => Promise<void>) | undefined;
+  let outputFinalized = false;
 
   try {
     const videoTrack = await input.getPrimaryVideoTrack();
@@ -78,7 +82,12 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
       .map((r) => {
         const startSec = Math.max(0, Math.min(r.startSec, fullDuration));
         const endSec = Math.max(startSec, Math.min(r.endSec, fullDuration));
-        return { startSec, endSec, durationSec: endSec - startSec, muteAudio: Boolean(r.muteAudio) };
+        return {
+          startSec,
+          endSec,
+          durationSec: endSec - startSec,
+          muteAudio: Boolean(r.muteAudio),
+        };
       })
       .filter((r) => r.durationSec > 0);
     if (clamped.length === 0) {
@@ -106,10 +115,13 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
       format: new mb.Mp4OutputFormat(),
       target: new mb.BufferTarget(),
     });
+    cancelOutput = () => output.cancel();
 
     const videoSource = new mb.CanvasSource(offscreen, {
       codec: 'avc',
-      bitrate: options.videoBitrate ?? defaultVideoBitrateForShortEdge(Math.min(targetWidth, targetHeight)),
+      bitrate:
+        options.videoBitrate ??
+        defaultVideoBitrateForShortEdge(Math.min(targetWidth, targetHeight)),
     });
     output.addVideoTrack(videoSource);
 
@@ -147,7 +159,8 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
         captionStyle: options.captionStyle,
         signal,
         onRangeProgress: (processedSecInRange) => {
-          const progress = totalDuration > 0 ? (processedDuration + processedSecInRange) / totalDuration : 0;
+          const progress =
+            totalDuration > 0 ? (processedDuration + processedSecInRange) / totalDuration : 0;
           options.onProgress?.({
             progress: Math.min(0.99, progress),
             processedClips: i,
@@ -166,6 +179,7 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
     }
 
     await output.finalize();
+    outputFinalized = true;
 
     const buffer = output.target.buffer;
     if (!buffer) {
@@ -176,7 +190,11 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
     const outputBlob = new Blob([buffer], { type: mimeType });
     const objectUrl = URL.createObjectURL(outputBlob);
 
-    options.onProgress?.({ progress: 1, processedClips: clamped.length, totalClips: clamped.length });
+    options.onProgress?.({
+      progress: 1,
+      processedClips: clamped.length,
+      totalClips: clamped.length,
+    });
 
     return {
       blob: outputBlob,
@@ -186,6 +204,9 @@ export async function spliceSingleSource(options: SpliceSingleSourceOptions): Pr
       height: targetHeight,
     };
   } finally {
+    if (cancelOutput && !outputFinalized) {
+      await cancelOutput().catch(() => undefined);
+    }
     try {
       (input as unknown as { dispose?: () => void }).dispose?.();
     } catch {

@@ -14,6 +14,7 @@
 
 import type { ReactNode } from 'react';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { StudioRenderOrigin } from '@/lib/studio-render/renderStore';
 import type { TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
 import type { CaptionCue, CaptionWord } from '../../utils/splice/captionCues';
 import type {
@@ -56,6 +57,28 @@ export interface TimelineRenderSink {
   description?: string;
 }
 
+export interface TimelineRenderSnapshot {
+  document: TimelineDocument;
+  inputFingerprint: string;
+  resolveSources(): Promise<TimelineRenderItem[]>;
+  resolveOverlays(): Promise<TimelineOverlayRenderItem[]>;
+}
+
+export interface TimelineRenderCompletionContext {
+  jobId: string;
+  inputFingerprint: string;
+  signal: AbortSignal;
+  result: {
+    durationSec: number;
+    width: number;
+    height: number;
+  };
+}
+
+export type TimelineRenderCompletion = {
+  outcome: 'committed' | 'stale' | 'missing';
+};
+
 export interface TimelineEditorAdapter {
   scope: 'canvas' | 'library';
   brandId: string | null;
@@ -90,7 +113,18 @@ export interface TimelineEditorAdapter {
   // canvas commits the break-point and resumes the workflow; the Library saves
   // a new version or a new asset and stamps the draft.
   renderSinks: TimelineRenderSink[];
-  completeRender(blob: Blob, sink: TimelineRenderSinkKind): Promise<void>;
+  completeRender(
+    blob: Blob,
+    sink: TimelineRenderSinkKind,
+    context?: TimelineRenderCompletionContext,
+  ): Promise<TimelineRenderCompletion | void>;
+
+  // Canvas renders opt into the app-level render runtime. The snapshot captures
+  // the exact document + source graph at click time; the queued job resolves its
+  // bytes later without reading a different room from the live Zustand store.
+  renderOrigin?: StudioRenderOrigin;
+  captureRenderSnapshot?(): TimelineRenderSnapshot;
+  flushRenderSnapshot?(): Promise<void>;
 
   // Progress fan-out beyond the dialog. The canvas mirrors it onto the node so
   // the collapsed node card keeps showing its progress bar; the Library has no

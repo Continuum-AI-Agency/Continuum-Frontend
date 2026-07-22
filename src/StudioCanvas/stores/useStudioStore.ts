@@ -68,6 +68,8 @@ interface StudioState {
   triggerSave: () => void;
   brandId?: string;
   setBrandId: (id: string) => void;
+  activeRoomId?: string;
+  setActiveRoomId: (id: string | undefined) => void;
 
   history: {
     past: Array<{ nodes: StudioNode[]; edges: Edge[] }>;
@@ -76,6 +78,7 @@ interface StudioState {
   takeSnapshot: () => void;
   undo: () => void;
   redo: () => void;
+  resetForRoomSwitch: () => void;
   resetForBrandSwitch: () => void;
 
   // Clipboard — canvas-level copy/cut/paste for selected nodes
@@ -270,9 +273,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   deletedEdgeIds: [],
   saveTrigger: 0,
   brandId: undefined,
+  activeRoomId: undefined,
   clipboard: [],
 
   setBrandId: (id: string) => set({ brandId: id }),
+  setActiveRoomId: (id: string | undefined) => set({ activeRoomId: id }),
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
     const deletedNodes = changes
@@ -603,6 +608,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       deletedEdgeIds: [],
       saveTrigger: 0,
       brandId: undefined,
+      activeRoomId: undefined,
+      clipboard: [],
+      history: { past: [], future: [] },
+    }),
+
+  resetForRoomSwitch: () =>
+    set({
+      nodes: [],
+      edges: [],
+      deletedNodeIds: [],
+      deletedEdgeIds: [],
       clipboard: [],
       history: { past: [], future: [] },
     }),
