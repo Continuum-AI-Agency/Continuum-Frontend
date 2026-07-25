@@ -1,6 +1,6 @@
 'use client';
 
-import { AGENT_CHAT_STARTED, AGENT_RUN_QUEUED } from '@continuum/contracts';
+import { AGENT_CHAT_STARTED, AGENT_RUN_QUEUED, type AgentRunStatus } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   applyOrganicFrame,
@@ -14,6 +14,24 @@ import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
 
 const RECONNECT_BACKOFF_MS = 750;
 const MAX_RECONNECT_ATTEMPTS = 5;
+// 5 minutes of total silence — matches useRunEventStream's watchdog budget. Reset on
+// every frame, so a long-but-progressing turn is never cut short; only a genuinely idle
+// stream trips it.
+const STREAM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * How to settle a run the idle watchdog had to end. A run that emitted at least one
+ * frame produced real work (drafts landed, jobs were enqueued) and its missing terminal
+ * frame is a backend gap, not a user-facing failure — settle it `completed` so the panel
+ * unlocks without claiming the turn broke. A run that emitted nothing at all never
+ * started, so `failed` is the honest report.
+ *
+ * Mirrors resolveWatchdogStatus in useRunEventStream; kept separate because that hook
+ * speaks RunStreamStatus and this one speaks AgentRunStatus.
+ */
+export function resolveIdleRunStatus(receivedAnyFrame: boolean): AgentRunStatus {
+  return receivedAnyFrame ? 'completed' : 'failed';
+}
 
 type OrganicAgentStreamOptions = {
   onRunStarted?: (runId: string) => void;
@@ -63,26 +81,34 @@ export function useOrganicAgentStream(
    * Actually STOP the run — what the user means by pressing stop. Aborting the local reader
    * alone would just hide a run that keeps burning tokens, which is exactly the bug the old
    * DB-only cancel had on the Backend.
+   *
+   * `targetRunId` lets a caller stop a run this reader does NOT own — the projected run you
+   * returned to after switching away. It defaults to the locally-owned run. When the target
+   * is not the owned run, `isCurrent` is false and the caller is responsible for clearing its
+   * own transcript (the store status still flips to `cancelled` via `acknowledge`).
    */
-  const cancel = useCallback(async () => {
-    const runId = runIdRef.current;
-    if (!runId) return { ok: false as const, error: 'No active run to stop.' };
+  const cancel = useCallback(
+    async (targetRunId?: string) => {
+      const runId = targetRunId ?? runIdRef.current;
+      if (!runId) return { ok: false as const, error: 'No active run to stop.' };
 
-    return confirmOrganicRunCancellation({
-      runId,
-      acknowledge: (cancelledRunId) => {
-        const record = useAgentRunStore.getState().runs[cancelledRunId];
-        if (record) {
-          useAgentRunStore.getState().upsertRun({ ...record.run, status: 'cancelled' });
-        }
-      },
-      isCurrent: (cancelledRunId) => runIdRef.current === cancelledRunId,
-      reconcileCurrent: () => {
-        dispatch({ type: 'STREAM_COMPLETE' });
-        detach();
-      },
-    });
-  }, [detach, dispatch]);
+      return confirmOrganicRunCancellation({
+        runId,
+        acknowledge: (cancelledRunId) => {
+          const record = useAgentRunStore.getState().runs[cancelledRunId];
+          if (record) {
+            useAgentRunStore.getState().upsertRun({ ...record.run, status: 'cancelled' });
+          }
+        },
+        isCurrent: (cancelledRunId) => runIdRef.current === cancelledRunId,
+        reconcileCurrent: () => {
+          dispatch({ type: 'STREAM_COMPLETE' });
+          detach();
+        },
+      });
+    },
+    [detach, dispatch],
+  );
 
   // Unmount detaches the view. It does NOT cancel: this cleanup used to abort the run's
   // only reader, which — together with the Backend aborting on socket close — is why
@@ -115,9 +141,55 @@ export function useOrganicAgentStream(
       let chatRunId: string | null = null;
       let lastSeq = -1;
       let terminal = false;
+      let receivedAnyFrame = false;
+
+      /**
+       * Idle watchdog. `composerBusy` is `isStreaming || viewedSessionStreaming`, and BOTH
+       * halves hang on a terminal frame that a stalled backend never sends: the local flag
+       * clears only in this function's `finally`, and the store derives status from the last
+       * terminal frame in the log. A run that goes silent therefore locks the composer and
+       * every action on the panel — permanently, and across reloads — which is the
+       * "can't make anything" half of the frozen-planner report.
+       *
+       * So the watchdog settles both: abort the reader (which runs the `finally`) and stamp
+       * a terminal status on the store record. Aborting alone would leave the store record
+       * "running" forever.
+       */
+      let idleHandle: ReturnType<typeof setTimeout> | null = null;
+      let idleTimedOut = false;
+      const clearIdleWatchdog = () => {
+        if (idleHandle) clearTimeout(idleHandle);
+        idleHandle = null;
+      };
+      const settleIdleRun = () => {
+        if (terminal || controller.signal.aborted) return;
+        idleTimedOut = true;
+        const store = useAgentRunStore.getState();
+        const record = chatRunId ? store.runs[chatRunId] : undefined;
+        if (record) {
+          store.upsertRun({ ...record.run, status: resolveIdleRunStatus(receivedAnyFrame) });
+        }
+        controller.abort();
+        // Abort alone is not enough to unblock the read loop: the pending `reader.read()`
+        // resolves only if the body stream is torn down, so cancel it explicitly rather
+        // than trusting the fetch signal to propagate. Without this the `finally` (which
+        // clears isStreaming) never runs and the panel stays locked.
+        readerRef.current?.cancel().catch(() => {});
+      };
+      const armIdleWatchdog = () => {
+        if (mode !== 'chat') return;
+        clearIdleWatchdog();
+        idleHandle = setTimeout(settleIdleRun, STREAM_IDLE_TIMEOUT_MS);
+      };
 
       const dispatchParsed = (event: Record<string, unknown>): void => {
         const type = typeof event.type === 'string' ? event.type : undefined;
+        // Any frame proves the stream is alive, so every frame re-arms the watchdog. Only
+        // frames that carry actual output count as WORK though: agent.chat_started merely
+        // names the run and agent.run_queued says the turn has not begun, so a run that
+        // sent nothing else produced nothing and should not settle as completed.
+        armIdleWatchdog();
+        if (type !== AGENT_CHAT_STARTED && type !== AGENT_RUN_QUEUED) receivedAnyFrame = true;
 
         // The seq-0 frame that names the durable run this stream is a view of. Registering
         // it in the app-level store is what lets the run outlive this component: the store
@@ -187,6 +259,10 @@ export function useOrganicAgentStream(
         });
       };
 
+      // Armed before the request: a backend that accepts the POST and then never writes
+      // a byte is exactly the stall this guards.
+      armIdleWatchdog();
+
       try {
         // Proxied through the Next.js route at /api/organic/agent/chat
         // (mirrors the Jaina chat-stream pattern). The proxy attaches the
@@ -223,11 +299,21 @@ export function useOrganicAgentStream(
 
         const initialReader = response.body.getReader();
         if (mode === 'chat') readerRef.current = initialReader;
-        await consumeReader(initialReader);
+        try {
+          await consumeReader(initialReader);
+        } catch (error) {
+          // A mid-stream throw on a NAMED run is a dropped connection, not a failed
+          // turn — fall into the resume loop below (GET replay from after_seq, no
+          // re-billing) instead of surfacing STREAM_ERROR. Without a runId there is
+          // nothing to resume, so the throw propagates to the outer catch.
+          if (terminal || !chatRunId || controller.signal.aborted) throw error;
+        }
 
-        // Stream closed. If we never saw a terminal frame and we have a
-        // runId, the connection dropped mid-turn — reconnect via the
-        // resumable GET endpoint and continue from the last-seen seq.
+        // Stream closed or broke mid-turn. If we never saw a terminal frame and we
+        // have a runId, reconnect via the resumable GET endpoint and continue from
+        // the last-seen seq. Each failed attempt (fetch error, non-OK response, or
+        // another mid-stream throw) burns one attempt; only exhausting them all
+        // falls through to STREAM_ERROR.
         let attempts = 0;
         while (
           !terminal &&
@@ -245,29 +331,42 @@ export function useOrganicAgentStream(
           });
           if (controller.signal.aborted) break;
 
-          // Proxied through /api/organic/agent/runs/[runId]/events — the
-          // server-side route attaches the Supabase token from the cookie
-          // and forwards to the Backend resume endpoint.
-          const resumeUrl = `/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
-          const resumeResponse = await fetch(resumeUrl, {
-            headers: {
-              Accept: 'application/x-ndjson',
-            },
-            signal: controller.signal,
-          });
+          try {
+            // Proxied through /api/organic/agent/runs/[runId]/events — the
+            // server-side route attaches the Supabase token from the cookie
+            // and forwards to the Backend resume endpoint.
+            const resumeUrl = `/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
+            const resumeResponse = await fetch(resumeUrl, {
+              headers: {
+                Accept: 'application/x-ndjson',
+              },
+              signal: controller.signal,
+            });
 
-          if (!resumeResponse.ok || !resumeResponse.body) {
-            // If the run can't be found (e.g. older deployment without
-            // chat-run persistence), surface the dropped-connection
-            // error instead of silently spinning.
-            throw new Error(
-              `Stream reconnect failed (status ${resumeResponse.status}). The connection was lost and could not be resumed.`,
-            );
+            if (!resumeResponse.ok || !resumeResponse.body) {
+              // If the run can't be found (e.g. older deployment without
+              // chat-run persistence), surface the dropped-connection
+              // error instead of silently spinning.
+              throw new Error(
+                `Stream reconnect failed (status ${resumeResponse.status}). The connection was lost and could not be resumed.`,
+              );
+            }
+
+            const resumeReader = resumeResponse.body.getReader();
+            if (mode === 'chat') readerRef.current = resumeReader;
+            await consumeReader(resumeReader);
+          } catch (error) {
+            if (controller.signal.aborted) break;
+            if (attempts >= MAX_RECONNECT_ATTEMPTS) throw error;
           }
+        }
 
-          const resumeReader = resumeResponse.body.getReader();
-          if (mode === 'chat') readerRef.current = resumeReader;
-          await consumeReader(resumeReader);
+        if (!terminal && chatRunId && !controller.signal.aborted) {
+          // Every resume attempt ran out without a terminal frame — this is the
+          // only path from a resumable run to STREAM_ERROR.
+          throw new Error(
+            'The connection was lost and could not be resumed after multiple attempts.',
+          );
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Stream failed';
@@ -276,8 +375,17 @@ export function useOrganicAgentStream(
         }
         return { error: message };
       } finally {
+        clearIdleWatchdog();
         if (mode === 'chat') {
-          dispatch({ type: 'STREAM_COMPLETE' });
+          // An aborted controller means an INTENTIONAL detach (session switch / unmount), not
+          // a finished turn — the run lives on and the projection owns it now. Dispatching
+          // STREAM_COMPLETE here would clear the streaming state of whatever session is now on
+          // screen. A natural end already dispatched STREAM_COMPLETE via the terminal frame.
+          //
+          // The watchdog is the exception: it aborts precisely BECAUSE the turn will never
+          // end on its own, so its abort must settle the transcript rather than leave the
+          // assistant bubble rendering as streaming forever.
+          if (!controller.signal.aborted || idleTimedOut) dispatch({ type: 'STREAM_COMPLETE' });
           setIsStreaming(false);
         } else {
           controlAbortRefs.current.delete(controller);
@@ -300,5 +408,10 @@ export function useOrganicAgentStream(
 
   // The run THIS reader owns. The store projection uses it to stay off the run we are already
   // folding — exactly one folder per run, or every delta lands twice.
-  return { start, startControl, cancel, isStreaming, liveRunId };
+  //
+  // `detach` is exported so the panel can release the local reader when the user switches
+  // sessions mid-run: the run keeps executing (Backend + app-level store), and the projection
+  // reattaches when they come back. Without this, the reader would keep dispatching the old
+  // session's frames into a reducer that has already switched to a different transcript.
+  return { start, startControl, cancel, detach, isStreaming, liveRunId };
 }

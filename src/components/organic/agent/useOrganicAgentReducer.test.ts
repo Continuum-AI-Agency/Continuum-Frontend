@@ -782,6 +782,128 @@ describe('RETRY_FROM_ASSISTANT', () => {
   });
 });
 
+describe('silent auto-retry on transient STREAM_ERROR', () => {
+  const submitted = () =>
+    panelReducer(initialPanelState(), {
+      type: 'SUBMIT_USER_MESSAGE',
+      content: 'plan my week',
+      messageId: 'u1',
+    });
+
+  it('queues one silent retry on the first transient error instead of painting the row', () => {
+    const state = submitted();
+    const assistantId = state.streamingMessageId!;
+    const errored = panelReducer(state, {
+      type: 'STREAM_ERROR',
+      error: 'upstream reset',
+      code: 'upstream_reset',
+      transient: true,
+    });
+
+    expect(errored.pendingAutoRetry).toBe(assistantId);
+    expect(errored.autoRetryConsumed).toBe(true);
+    expect(errored.streamingMessageId).toBeNull();
+  });
+
+  it('keeps the pending retry through the trailing STREAM_COMPLETE the stream hook emits', () => {
+    let state = submitted();
+    state = panelReducer(state, { type: 'STREAM_ERROR', error: 'reset', transient: true });
+    const after = panelReducer(state, { type: 'STREAM_COMPLETE' });
+
+    expect(after.pendingAutoRetry).toBe(state.pendingAutoRetry);
+  });
+
+  it('paints msg.error when the auto-retried turn fails transiently again', () => {
+    let state = submitted();
+    const firstAssistantId = state.streamingMessageId!;
+    state = panelReducer(state, { type: 'STREAM_ERROR', error: 'reset', transient: true });
+    state = panelReducer(state, {
+      type: 'RETRY_FROM_ASSISTANT',
+      assistantMessageId: firstAssistantId,
+    });
+    expect(state.pendingAutoRetry).toBeNull();
+
+    const retriedAssistantId = state.streamingMessageId!;
+    state = panelReducer(state, { type: 'STREAM_ERROR', error: 'reset again', transient: true });
+
+    expect(state.pendingAutoRetry).toBeNull();
+    expect(state.messages.find((m) => m.id === retriedAssistantId)?.error).toBe('reset again');
+  });
+
+  it('paints msg.error immediately on a non-transient error', () => {
+    const state = submitted();
+    const assistantId = state.streamingMessageId!;
+    const errored = panelReducer(state, { type: 'STREAM_ERROR', error: 'invalid request' });
+
+    expect(errored.pendingAutoRetry).toBeNull();
+    expect(errored.messages.find((m) => m.id === assistantId)?.error).toBe('invalid request');
+  });
+
+  it('stamps the error on the held turn so an abandoned retry still surfaces it', () => {
+    const state = submitted();
+    const assistantId = state.streamingMessageId!;
+    let next = panelReducer(state, { type: 'STREAM_ERROR', error: 'reset', transient: true });
+    next = panelReducer(next, { type: 'AUTO_RETRY_ABANDON' });
+
+    expect(next.pendingAutoRetry).toBeNull();
+    expect(next.messages.find((m) => m.id === assistantId)?.error).toBe('reset');
+  });
+
+  it('resets the auto-retry budget when the next user turn opens', () => {
+    let state = submitted();
+    state = panelReducer(state, { type: 'STREAM_ERROR', error: 'reset', transient: true });
+    state = panelReducer(state, {
+      type: 'SUBMIT_USER_MESSAGE',
+      content: 'try something else',
+      messageId: 'u2',
+    });
+
+    expect(state.autoRetryConsumed).toBe(false);
+    expect(state.pendingAutoRetry).toBeNull();
+  });
+});
+
+describe('STREAM_RETRYING reconnecting status', () => {
+  const streaming = () =>
+    panelReducer(initialPanelState(), {
+      type: 'SUBMIT_USER_MESSAGE',
+      content: 'plan my week',
+      messageId: 'u1',
+    });
+
+  it('sets the reconnecting status while a turn is streaming', () => {
+    const next = panelReducer(streaming(), {
+      type: 'STREAM_RETRYING',
+      attempt: 2,
+      reason: 'upstream_reset',
+    });
+
+    expect(next.streamRetrying).toEqual({ attempt: 2, reason: 'upstream_reset' });
+  });
+
+  it('ignores a retrying frame when no turn is streaming', () => {
+    const idle = panelReducer(initialPanelState(), { type: 'STREAM_RETRYING', attempt: 1 });
+
+    expect(idle.streamRetrying).toBeNull();
+  });
+
+  it('clears on the next delta (activity resumed)', () => {
+    let state = panelReducer(streaming(), { type: 'STREAM_RETRYING', attempt: 1 });
+    state = panelReducer(state, { type: 'STREAM_DELTA', delta: 'back' });
+
+    expect(state.streamRetrying).toBeNull();
+  });
+
+  it('clears on STREAM_COMPLETE and STREAM_ERROR', () => {
+    const retrying = panelReducer(streaming(), { type: 'STREAM_RETRYING', attempt: 1 });
+
+    expect(panelReducer(retrying, { type: 'STREAM_COMPLETE' }).streamRetrying).toBeNull();
+    expect(
+      panelReducer(retrying, { type: 'STREAM_ERROR', error: 'gone' }).streamRetrying,
+    ).toBeNull();
+  });
+});
+
 describe('PLAN_STATUS + tool approvals', () => {
   it('records plan item status by itemId', () => {
     const next = panelReducer(initialPanelState(), {
@@ -806,5 +928,151 @@ describe('PLAN_STATUS + tool approvals', () => {
     expect(state.bulkRuns['run_p1']).toEqual(run);
     state = panelReducer(state, { type: 'BULK_RUN_START', run });
     expect(Object.keys(state.bulkRuns)).toHaveLength(1);
+  });
+});
+
+// Bug #220 — the media-choice checkpoint must never lose the approval token.
+// `previewRevision` is what the realize path validates, so a path that carries
+// "awaitingMediaChoice" without it strands the card with nothing to click.
+describe('useOrganicAgentReducer media-choice approval token', () => {
+  const cardWithText = (draftId: string) =>
+    panelReducer(initialPanelState(), {
+      type: 'PIPELINE_CARD',
+      card: {
+        jobId: 'job-b',
+        brandId: 'brand-1',
+        status: 'running',
+        draftId,
+        checkpoint: { textReady: true },
+      },
+    });
+
+  it('keeps the blueprint checkpoint and token when preview signing produced nothing', () => {
+    const next = panelReducer(cardWithText('draft-b'), {
+      type: 'DRAFT_BLUEPRINT',
+      draftId: 'draft-b',
+      previewRevision: 'revision-b',
+      previews: [],
+    });
+
+    expect(next.pipeline['job-b'].checkpoint?.blueprintReady).toBe(true);
+    expect(next.pipeline['job-b'].checkpoint?.awaitingMediaChoice).toBe(true);
+    expect(next.pipeline['job-b'].checkpoint?.previewRevision).toBe('revision-b');
+  });
+
+  it('does not invent an empty preview list when there are no previews', () => {
+    const next = panelReducer(cardWithText('draft-b'), {
+      type: 'DRAFT_BLUEPRINT',
+      draftId: 'draft-b',
+      previewRevision: 'revision-b',
+      previews: [],
+    });
+
+    expect(next.pipeline['job-b'].preview?.images).toBeUndefined();
+  });
+
+  it('still stamps previews when the blueprint carried them', () => {
+    const next = panelReducer(cardWithText('draft-b'), {
+      type: 'DRAFT_BLUEPRINT',
+      draftId: 'draft-b',
+      previewRevision: 'revision-b',
+      previews: ['https://cdn.example/b.png'],
+    });
+
+    expect(next.pipeline['job-b'].preview?.images).toEqual(['https://cdn.example/b.png']);
+    expect(next.pipeline['job-b'].checkpoint?.previewRevision).toBe('revision-b');
+  });
+
+  it('ignores a blueprint with no draft id', () => {
+    const base = cardWithText('draft-b');
+    const next = panelReducer(base, {
+      type: 'DRAFT_BLUEPRINT',
+      draftId: '',
+      previewRevision: 'revision-b',
+      previews: [],
+    });
+
+    expect(next).toBe(base);
+  });
+
+  // checkpointFromDurableState is exercised through HYDRATE_JOBS, its real caller.
+  it('carries previewRevision from a durable job row into the checkpoint', () => {
+    const next = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [
+        {
+          jobId: 'job-d',
+          brandId: 'brand-1',
+          status: 'completed',
+          draftId: 'draft-d',
+          toolCallId: 'tool-d',
+          mediaStage: 'storyboard_ready',
+          previewRevision: 'revision-d',
+        } as unknown as AgentJobState,
+      ],
+    });
+
+    expect(next.pipeline['job-d'].checkpoint?.blueprintReady).toBe(true);
+    expect(next.pipeline['job-d'].checkpoint?.awaitingMediaChoice).toBe(true);
+    expect(next.pipeline['job-d'].checkpoint?.previewRevision).toBe('revision-d');
+  });
+
+  it('does not claim awaitingMediaChoice from a job row that carries no token', () => {
+    const next = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [
+        {
+          jobId: 'job-e',
+          brandId: 'brand-1',
+          status: 'completed',
+          draftId: 'draft-e',
+          toolCallId: 'tool-e',
+          mediaStage: 'storyboard_ready',
+        } as unknown as AgentJobState,
+      ],
+    });
+
+    expect(next.pipeline['job-e'].checkpoint?.blueprintReady).toBe(true);
+    expect(next.pipeline['job-e'].checkpoint?.previewRevision).toBeUndefined();
+    expect(next.pipeline['job-e'].checkpoint?.awaitingMediaChoice).toBeUndefined();
+  });
+
+  // The durable row is stage-only, so hydrating after a restore must not erase the
+  // token the persisted draft.blueprint_ready frame already delivered.
+  it('preserves a token already merged onto the card when a stage-only row hydrates', () => {
+    const restored = panelReducer(initialPanelState(), {
+      type: 'PIPELINE_CARD',
+      card: {
+        jobId: 'job-f',
+        brandId: 'brand-1',
+        status: 'completed',
+        draftId: 'draft-f',
+        toolCallId: 'tool-f',
+        checkpoint: {
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'pending',
+          awaitingMediaChoice: true,
+          previewRevision: 'revision-f',
+        },
+      },
+    });
+
+    const next = panelReducer(restored, {
+      type: 'HYDRATE_JOBS',
+      jobs: [
+        {
+          jobId: 'job-f',
+          brandId: 'brand-1',
+          status: 'completed',
+          draftId: 'draft-f',
+          toolCallId: 'tool-f',
+          mediaStage: 'storyboard_ready',
+        } as unknown as AgentJobState,
+      ],
+    });
+
+    expect(next.pipeline['job-f'].checkpoint?.previewRevision).toBe('revision-f');
+    expect(next.pipeline['job-f'].checkpoint?.awaitingMediaChoice).toBe(true);
   });
 });

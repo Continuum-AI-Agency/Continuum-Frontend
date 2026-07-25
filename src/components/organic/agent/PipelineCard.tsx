@@ -1,6 +1,10 @@
 'use client';
 
-import { resolveOrganicAgentLabel, resolveOrganicGenerationDisplay } from '@continuum/contracts';
+import {
+  hasApprovablePreview,
+  resolveOrganicAgentLabel,
+  resolveOrganicGenerationDisplay,
+} from '@continuum/contracts';
 import {
   AlertCircle,
   Check,
@@ -49,6 +53,18 @@ const STATUS: Record<
   failed: { label: 'Failed', tone: 'failed' },
   cancelled: { label: 'Cancelled', tone: 'neutral' },
 };
+
+// A completed pipeline may have stopped at the copy or blueprint checkpoint. The
+// green done tone is reserved for settled media (generated or user-supplied);
+// mid-ladder outcomes keep the amber working tone so the badge never overstates
+// readiness beside its truthful outcome label.
+function resolveOutcomeTone(card: PipelineCardState): 'running' | 'done' | 'failed' | 'neutral' {
+  if (card.status !== 'completed') return STATUS[card.status].tone;
+  const mediaStatus = card.checkpoint?.mediaStatus;
+  if (mediaStatus === 'ready' || mediaStatus === 'user_supplied') return 'done';
+  if (card.checkpoint?.blueprintReady || card.checkpoint?.textReady) return 'running';
+  return STATUS.completed.tone;
+}
 
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
@@ -293,19 +309,24 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   const mediaStatus = card.checkpoint?.mediaStatus;
   const mediaSettled =
     mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
-  const showEnrich = Boolean(
-    onEnrichDraft &&
-      draftId &&
-      card.checkpoint?.textReady &&
-      !card.checkpoint?.blueprintReady &&
-      !mediaSettled,
-  );
+  // Generate media needs the approval token: the realize path re-reads the draft's
+  // stamped revision and rejects an absent or stale one, so a button without it would
+  // only ever return preview_approval_required / preview_changed.
+  const canApprovePreview = hasApprovablePreview(card.checkpoint);
   const showGenerateMedia = Boolean(
     onGenerateMedia &&
       draftId &&
-      card.checkpoint?.previewRevision &&
+      canApprovePreview &&
       card.checkpoint?.blueprintReady &&
       !mediaSettled,
+  );
+  // THE INVARIANT: an unsettled card must always offer something to click. Enrich
+  // re-runs the blueprint expansion, which stamps a FRESH previewRevision — so it is
+  // both the pre-blueprint action and the recovery when a blueprint landed without a
+  // usable token (preview signing failed, or an older row hydrated stage-only). Without
+  // this fallback the card renders "Awaiting media choice" and dies there.
+  const showEnrich = Boolean(
+    onEnrichDraft && draftId && card.checkpoint?.textReady && !mediaSettled && !showGenerateMedia,
   );
   const [mediaActionSent, setMediaActionSent] = useState(false);
   const outcomeLabel =
@@ -335,7 +356,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
           {card.platform && <PlatformTag platform={card.platform} />}
           <MetaRow items={[card.preview?.format ?? undefined]} />
         </div>
-        <StatusLabel tone={status.tone}>
+        <StatusLabel tone={resolveOutcomeTone(card)}>
           {liveLabel ?? outcomeLabel}
           {quality != null ? ` · ${quality}%` : ''}
         </StatusLabel>
@@ -375,7 +396,11 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
           {showEnrich && (
             <button
               type="button"
-              title="Sketch a low-cost blueprint before final media"
+              title={
+                card.checkpoint?.blueprintReady
+                  ? 'Rebuild the blueprint to refresh its preview approval'
+                  : 'Sketch a low-cost blueprint before final media'
+              }
               disabled={mediaActionSent}
               onClick={() => {
                 setMediaActionSent(true);
@@ -384,7 +409,11 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
               className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
             >
               <PencilRuler className="h-3 w-3" />
-              {mediaActionSent ? 'Enriching…' : 'Enrich'}
+              {mediaActionSent
+                ? 'Enriching…'
+                : card.checkpoint?.blueprintReady
+                  ? 'Rebuild preview'
+                  : 'Enrich'}
             </button>
           )}
           {showGenerateMedia && (

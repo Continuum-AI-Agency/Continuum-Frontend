@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { isTerminalAgentRunStatus } from '@continuum/contracts';
 
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import {
   normalizeToolCallEvent,
   normalizeToolResultEvent,
   normalizeTrendChartEvent,
   parseOrganicStreamEvent,
 } from '@/components/organic/agent/streamEventParser';
+import type { AgentChatInput } from '@/components/organic/agent/types';
+import type { PanelAction } from '@/components/organic/agent/useOrganicAgentReducer';
+import { resolveIdleRunStatus, useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
+import { useAgentRunStore } from '@/lib/agents/runStore';
 
 describe('normalizeToolCallEvent', () => {
   it('uses camelCase tool fields when present', () => {
@@ -464,5 +471,348 @@ describe('parseOrganicStreamEvent contract coverage', () => {
         failed: [{ refId: 'asset-1', type: 'media_asset', reason: 'storage_miss' }],
       },
     });
+  });
+});
+
+describe('parseOrganicStreamEvent chat retry frames (R1)', () => {
+  it('parses response.retrying into a retrying event', () => {
+    expect(
+      parseOrganicStreamEvent({
+        type: 'response.retrying',
+        data: { attempt: 2, reason: 'upstream_reset' },
+      }),
+    ).toEqual({ kind: 'retrying', attempt: 2, reason: 'upstream_reset' });
+  });
+
+  it('defaults a malformed retrying attempt to 1', () => {
+    expect(parseOrganicStreamEvent({ type: 'response.retrying', data: {} })).toEqual({
+      kind: 'retrying',
+      attempt: 1,
+    });
+  });
+
+  it('carries code and transient through response.error', () => {
+    expect(
+      parseOrganicStreamEvent({
+        type: 'response.error',
+        data: { message: 'model reset', code: 'upstream_reset', transient: true },
+      }),
+    ).toEqual({ kind: 'error', message: 'model reset', code: 'upstream_reset', transient: true });
+  });
+
+  it('leaves retry metadata off a plain response.error', () => {
+    expect(parseOrganicStreamEvent({ type: 'response.error', data: { message: 'boom' } })).toEqual({
+      kind: 'error',
+      message: 'boom',
+    });
+  });
+});
+
+// The resume-loop contract: a mid-stream throw on a named run re-enters the existing
+// reconnect/resume loop (GET replay from after_seq — no re-billing) instead of surfacing
+// STREAM_ERROR; only exhausted attempts or a run with no id fall through to the error row.
+describe('useOrganicAgentStream resume loop', () => {
+  const encoder = new TextEncoder();
+  const line = (obj: Record<string, unknown>) => encoder.encode(`${JSON.stringify(obj)}\n`);
+  const chatStarted = () =>
+    line({
+      type: 'agent.chat_started',
+      seq: 0,
+      data: { runId: 'run_hook_1', sessionId: 'sess_hook' },
+    });
+  const delta = (seq: number, text: string) =>
+    line({ type: 'response.output_text.delta', seq, data: { delta: text } });
+  const done = (seq: number) => line({ type: 'response.done', seq, data: {} });
+
+  // Pull-based on purpose: Bun discards chunks queued before controller.error() in
+  // start(), so erroring there would never deliver the frames. One chunk per read,
+  // THEN the failure — exactly how a socket drops mid-stream.
+  const streamOf = (
+    lines: Uint8Array[],
+    opts?: { failAfter?: boolean },
+  ): ReadableStream<Uint8Array> => {
+    let index = 0;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (index < lines.length) {
+          controller.enqueue(lines[index]);
+          index += 1;
+          return;
+        }
+        if (opts?.failAfter) controller.error(new Error('connection reset mid-stream'));
+        else controller.close();
+      },
+    });
+  };
+
+  const okResponse = (body: ReadableStream<Uint8Array>): Response =>
+    ({ ok: true, status: 200, body, text: async () => '' }) as unknown as Response;
+  const failedResponse = (status: number): Response =>
+    ({ ok: false, status, body: null, text: async () => 'unavailable' }) as unknown as Response;
+
+  const input = (): AgentChatInput => ({
+    brandId: 'brand_hook',
+    sessionId: 'sess_hook',
+    messages: [{ id: 'u1', role: 'user', content: 'hi' }],
+  });
+
+  // The tree currently carries two React copies (root 19.2.8, FE-local 19.2.7), which
+  // breaks @testing-library/react's renderer against FE hooks. Render the hook with the
+  // SAME react + react-dom the hook itself resolves, so there is exactly one dispatcher.
+  const renderStreamHook = (dispatch: (action: PanelAction) => void) => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const result: { current: ReturnType<typeof useOrganicAgentStream> | null } = {
+      current: null,
+    };
+    const Harness = () => {
+      result.current = useOrganicAgentStream(dispatch);
+      return null;
+    };
+    act(() => {
+      root.render(createElement(Harness));
+    });
+    return {
+      result: result as { current: ReturnType<typeof useOrganicAgentStream> },
+      unmount: () => {
+        act(() => {
+          root.unmount();
+        });
+      },
+    };
+  };
+
+  const actEnvironment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const realActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+  const realFetch = globalThis.fetch;
+  const realSetTimeout = globalThis.setTimeout;
+
+  // Shrink timers within [lo, hi] to 1ms and leave everything else alone. Bounded on
+  // purpose: the reconnect backoff (750ms x attempt) and the 5-minute idle watchdog both
+  // run through setTimeout, and a blanket clamp would fire the watchdog inside every
+  // resume test and abort the run before it could resume.
+  const clampTimersBetween = (lo: number, hi: number) => {
+    globalThis.setTimeout = ((
+      handler: Parameters<typeof setTimeout>[0],
+      timeout?: number,
+      ...args: unknown[]
+    ) =>
+      realSetTimeout(
+        handler,
+        timeout !== undefined && timeout >= lo && timeout <= hi ? 1 : timeout,
+        ...args,
+      )) as unknown as typeof setTimeout;
+  };
+
+  beforeEach(() => {
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+    useAgentRunStore.getState().reset();
+    // Reconnect backoff only, so exhausting all five attempts stays fast.
+    clampTimersBetween(21, 60_000);
+  });
+
+  afterEach(() => {
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = realActEnvironment;
+    globalThis.fetch = realFetch;
+    globalThis.setTimeout = realSetTimeout;
+  });
+
+  it('re-enters the resume loop on a mid-stream throw instead of dispatching STREAM_ERROR', async () => {
+    const actions: PanelAction[] = [];
+    const resumeUrls: string[] = [];
+    globalThis.fetch = (async (requested: RequestInfo | URL) => {
+      const url = String(requested);
+      if (url === '/api/organic/agent/chat') {
+        return okResponse(streamOf([chatStarted(), delta(1, 'Hel')], { failAfter: true }));
+      }
+      if (url.startsWith('/api/organic/agent/runs/run_hook_1/events')) {
+        resumeUrls.push(url);
+        return okResponse(streamOf([delta(2, 'lo'), done(3)]));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const view = renderStreamHook((action) => actions.push(action));
+    await act(async () => {
+      const result = await view.result.current.start(input());
+      expect(result.error).toBeUndefined();
+    });
+    view.unmount();
+
+    expect(resumeUrls).toEqual(['/api/organic/agent/runs/run_hook_1/events?after_seq=2']);
+    expect(actions.filter((a) => a.type === 'STREAM_ERROR')).toHaveLength(0);
+    expect(actions.filter((a) => a.type === 'STREAM_COMPLETE').length).toBeGreaterThanOrEqual(1);
+    expect(
+      actions.filter((a) => a.type === 'STREAM_DELTA').map((a) => (a as { delta: string }).delta),
+    ).toEqual(['Hel', 'lo']);
+  });
+
+  it('dispatches STREAM_ERROR only after resume attempts exhaust', async () => {
+    const actions: PanelAction[] = [];
+    let resumeCalls = 0;
+    let resumeCallsWhenErrorDispatched = -1;
+    globalThis.fetch = (async (requested: RequestInfo | URL) => {
+      const url = String(requested);
+      if (url === '/api/organic/agent/chat') {
+        return okResponse(streamOf([chatStarted()], { failAfter: true }));
+      }
+      if (url.startsWith('/api/organic/agent/runs/run_hook_1/events')) {
+        resumeCalls += 1;
+        return failedResponse(503);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const view = renderStreamHook((action) => {
+      actions.push(action);
+      if (action.type === 'STREAM_ERROR') resumeCallsWhenErrorDispatched = resumeCalls;
+    });
+    await act(async () => {
+      const result = await view.result.current.start(input());
+      expect(result.error).toBeTruthy();
+    });
+    view.unmount();
+
+    expect(resumeCalls).toBe(5);
+    expect(actions.filter((a) => a.type === 'STREAM_ERROR')).toHaveLength(1);
+    expect(resumeCallsWhenErrorDispatched).toBe(5);
+  });
+
+  it('falls through to STREAM_ERROR when a mid-stream throw has no run id to resume', async () => {
+    const actions: PanelAction[] = [];
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      return okResponse(streamOf([delta(1, 'partial')], { failAfter: true }));
+    }) as typeof fetch;
+
+    const view = renderStreamHook((action) => actions.push(action));
+    await act(async () => {
+      const result = await view.result.current.start(input());
+      expect(result.error).toBeTruthy();
+    });
+    view.unmount();
+
+    expect(fetchCalls).toBe(1);
+    expect(actions.filter((a) => a.type === 'STREAM_ERROR')).toHaveLength(1);
+  });
+
+  // Bug #220, the panel-lock half. `composerBusy` is `isStreaming || viewedSessionStreaming`
+  // and BOTH hang on a terminal frame: the local flag clears only in the reader's
+  // `finally`, and the store derives status from the last terminal frame in the log. A run
+  // that goes silent locked the composer and every action, permanently and across reloads
+  // — "can't make anything". The watchdog must release both.
+  describe('idle watchdog', () => {
+    // Widen the clamp to cover the 5-minute watchdog so a stream that never ends trips it
+    // inside the test. The outer beforeEach runs first, so this override wins.
+    beforeEach(() => {
+      clampTimersBetween(21, Number.MAX_SAFE_INTEGER);
+    });
+
+    const neverEndingStream = (lines: Uint8Array[]): ReadableStream<Uint8Array> => {
+      let index = 0;
+      return new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (index < lines.length) {
+            controller.enqueue(lines[index]);
+            index += 1;
+          }
+          // Past the seeded lines: never enqueue, never close. Exactly a backend that
+          // holds the socket open and stops writing.
+        },
+      });
+    };
+
+    it('releases both halves of composerBusy when a named run goes silent', async () => {
+      const actions: PanelAction[] = [];
+      globalThis.fetch = (async (requested: RequestInfo | URL) => {
+        const url = String(requested);
+        if (url === '/api/organic/agent/chat') {
+          return okResponse(neverEndingStream([chatStarted(), delta(1, 'thinking')]));
+        }
+        if (url.startsWith('/api/organic/agent/runs/run_hook_1/events')) {
+          return okResponse(neverEndingStream([]));
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }) as typeof fetch;
+
+      const view = renderStreamHook((action) => actions.push(action));
+      await act(async () => {
+        await view.result.current.start(input());
+      });
+
+      // Local half: the reader's own streaming flag.
+      expect(view.result.current.isStreaming).toBe(false);
+      // Store half: the run must carry a TERMINAL status, or isSessionStreaming keeps the
+      // panel locked no matter what the local flag says.
+      const record = useAgentRunStore.getState().runs.run_hook_1;
+      expect(record).toBeTruthy();
+      expect(isTerminalAgentRunStatus(record!.run.status)).toBe(true);
+      // A run that produced frames did real work; a missing terminal row is a backend gap,
+      // not a failed turn.
+      expect(record!.run.status).toBe('completed');
+      // The transcript must settle too — otherwise the assistant bubble renders as
+      // streaming forever even with the composer unlocked.
+      expect(actions.filter((a) => a.type === 'STREAM_COMPLETE').length).toBeGreaterThanOrEqual(1);
+
+      view.unmount();
+    });
+
+    it('settles a run that never emitted a single frame as failed', async () => {
+      const actions: PanelAction[] = [];
+      globalThis.fetch = (async () =>
+        okResponse(neverEndingStream([chatStarted()]))) as typeof fetch;
+
+      const view = renderStreamHook((action) => actions.push(action));
+      await act(async () => {
+        await view.result.current.start(input());
+      });
+
+      // agent.chat_started only NAMES the run — it is not output, so this run produced
+      // nothing and `failed` is the honest settlement.
+      const record = useAgentRunStore.getState().runs.run_hook_1;
+      expect(record).toBeTruthy();
+      expect(record!.run.status).toBe('failed');
+      expect(isTerminalAgentRunStatus(record!.run.status)).toBe(true);
+      expect(view.result.current.isStreaming).toBe(false);
+      expect(actions.filter((a) => a.type === 'STREAM_COMPLETE').length).toBeGreaterThanOrEqual(1);
+
+      view.unmount();
+    });
+
+    it('does not fire when the stream terminates normally', async () => {
+      const actions: PanelAction[] = [];
+      globalThis.fetch = (async () =>
+        okResponse(streamOf([chatStarted(), delta(1, 'hi'), done(2)]))) as typeof fetch;
+
+      const view = renderStreamHook((action) => actions.push(action));
+      await act(async () => {
+        const result = await view.result.current.start(input());
+        expect(result.error).toBeUndefined();
+      });
+
+      // The terminal frame settled the run; the watchdog must not have overwritten it.
+      const record = useAgentRunStore.getState().runs.run_hook_1;
+      expect(record!.run.status).not.toBe('failed');
+      expect(view.result.current.isStreaming).toBe(false);
+      expect(actions.filter((a) => a.type === 'STREAM_ERROR')).toHaveLength(0);
+
+      view.unmount();
+    });
+  });
+});
+
+describe('resolveIdleRunStatus', () => {
+  it('treats a run that produced frames as completed-partial, not failed', () => {
+    expect(resolveIdleRunStatus(true)).toBe('completed');
+  });
+
+  it('treats a run that produced nothing as failed', () => {
+    expect(resolveIdleRunStatus(false)).toBe('failed');
+  });
+
+  it('only ever returns a terminal status — a non-terminal one would keep the panel locked', () => {
+    expect(isTerminalAgentRunStatus(resolveIdleRunStatus(true))).toBe(true);
+    expect(isTerminalAgentRunStatus(resolveIdleRunStatus(false))).toBe(true);
   });
 });

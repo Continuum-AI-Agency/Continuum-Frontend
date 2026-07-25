@@ -249,4 +249,71 @@ describe('restoreSessionFromMessages', () => {
     expect(pipelineCards[0]!.checkpoint?.blueprintReady).toBe(true);
     expect(pipelineCards[0]!.checkpoint?.previewRevision).toBe('revision-1');
   });
+
+  // Bug #220 on the reload path. previews and previewRevision fail independently:
+  // signing a 512px frame can miss while the blueprint (and its approval token)
+  // succeeded. Gating the merge on previews threw the token away, so a reloaded card
+  // showed "Awaiting media choice" with no action.
+  it('restores the approval token even when the blueprint carried no previews', () => {
+    const { pipelineCards } = restoreSessionFromMessages([
+      message({
+        uiCardFrames: [
+          {
+            type: 'ui.pipeline_card',
+            data: { jobId: 'job_1', brandId: 'b1', status: 'completed', draftId: 'd1' },
+          },
+          {
+            type: 'draft.blueprint_ready',
+            data: {
+              jobId: 'blueprint_job',
+              brandId: 'b1',
+              draftId: 'd1',
+              previewRevision: 'revision-2',
+            },
+          },
+        ],
+      }),
+    ]);
+
+    expect(pipelineCards).toHaveLength(1);
+    expect(pipelineCards[0]!.checkpoint?.blueprintReady).toBe(true);
+    expect(pipelineCards[0]!.checkpoint?.awaitingMediaChoice).toBe(true);
+    expect(pipelineCards[0]!.checkpoint?.previewRevision).toBe('revision-2');
+    // No previews means no preview block — not an empty one that would blank the card.
+    expect(pipelineCards[0]!.preview).toBeUndefined();
+  });
+
+  // The blueprint frame is older than a realize that followed it, so replaying it must
+  // not walk a finished card back to "awaiting choice".
+  it('does not reopen the media choice on a card whose media already settled', () => {
+    const { pipelineCards } = restoreSessionFromMessages([
+      message({
+        uiCardFrames: [
+          {
+            type: 'ui.pipeline_card',
+            data: {
+              jobId: 'job_1',
+              brandId: 'b1',
+              status: 'completed',
+              draftId: 'd1',
+              checkpoint: { textReady: true, blueprintReady: true, mediaStatus: 'ready' },
+            },
+          },
+          {
+            type: 'draft.blueprint_ready',
+            data: {
+              jobId: 'blueprint_job',
+              brandId: 'b1',
+              draftId: 'd1',
+              previewRevision: 'revision-3',
+            },
+          },
+        ],
+      }),
+    ]);
+
+    expect(pipelineCards[0]!.checkpoint?.mediaStatus).toBe('ready');
+    expect(pipelineCards[0]!.checkpoint?.awaitingMediaChoice).toBeUndefined();
+    expect(pipelineCards[0]!.checkpoint?.previewRevision).toBe('revision-3');
+  });
 });

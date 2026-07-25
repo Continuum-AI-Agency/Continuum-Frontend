@@ -52,6 +52,19 @@ export type PanelState = {
    * hung, and the UI must be able to say which.
    */
   queuedAheadOf: number | null;
+  /**
+   * Assistant message a SILENT auto-retry is queued for. While set, the red error row for
+   * that message stays hidden; the panel fires the same path as the manual Retry button
+   * and RETRY_FROM_ASSISTANT (or AUTO_RETRY_ABANDON on a retry that cannot start) clears it.
+   */
+  pendingAutoRetry: string | null;
+  /** One silent auto-retry per turn: consumed by the first transient STREAM_ERROR. */
+  autoRetryConsumed: boolean;
+  /**
+   * Set while the Backend retries a transient mid-turn failure (response.retrying) —
+   * rendered as a subtle status swap on the streaming indicator, not an error.
+   */
+  streamRetrying: { attempt: number; reason?: string } | null;
 };
 
 export type PanelAction =
@@ -75,7 +88,9 @@ export type PanelAction =
       reason?: string;
     }
   | { type: 'STREAM_COMPLETE' }
-  | { type: 'STREAM_ERROR'; error: string }
+  | { type: 'STREAM_ERROR'; error: string; code?: string; transient?: boolean }
+  | { type: 'STREAM_RETRYING'; attempt: number; reason?: string }
+  | { type: 'AUTO_RETRY_ABANDON' }
   | { type: 'STREAM_QUEUED'; aheadOf: number }
   | { type: 'RESUME_STREAMING'; messageId: string }
   | { type: 'RETRY_FROM_ASSISTANT'; assistantMessageId: string }
@@ -196,6 +211,7 @@ type DurableJobLike = {
   mediaStage?: string | null;
   stage?: string | null;
   pct?: number | null;
+  previewRevision?: string | null;
   error?: unknown;
 };
 
@@ -204,19 +220,30 @@ const PIPELINE_CARD_STATUSES = new Set(['running', 'completed', 'failed', 'cance
 // Map the draft's durable media-enrichment stage (plus the job status) onto the
 // three-step checkpoint the pipeline card renders — the same semantics the live
 // ui.pipeline_card checkpoint frames carry.
+//
+// `previewRevision` is carried through when the durable source has it: it is the
+// approval token the realize path demands, so a checkpoint that claims
+// awaitingMediaChoice without one promises an action the user cannot take. A job row
+// alone does not carry the token (it lives on the draft), which is why the claim is
+// conditional rather than hardcoded true — the token arrives with the persisted
+// draft.blueprint_ready frame, and applyPipelineCard merges the two.
 function checkpointFromDurableState(
   status: string | null | undefined,
   mediaStage: string | null | undefined,
+  previewRevision?: string | null,
 ): PipelineCardState['checkpoint'] {
+  const approval = typeof previewRevision === 'string' && previewRevision.length > 0;
   switch (mediaStage) {
     case 'text_only':
       return { textReady: true };
     case 'storyboard_ready':
+      // awaitingMediaChoice is OMITTED (not set false) without a token, so a richer
+      // earlier frame that already carried the token keeps its claim through the merge.
       return {
         textReady: true,
         blueprintReady: true,
         mediaStatus: 'pending',
-        awaitingMediaChoice: true,
+        ...(approval ? { awaitingMediaChoice: true, previewRevision } : {}),
       };
     case 'realizing':
       return {
@@ -257,7 +284,7 @@ function pipelineCardFromDurableJob(
   const status = (
     job.status && PIPELINE_CARD_STATUSES.has(job.status) ? job.status : 'running'
   ) as PipelineCardState['status'];
-  const checkpoint = checkpointFromDurableState(job.status, job.mediaStage);
+  const checkpoint = checkpointFromDurableState(job.status, job.mediaStage, job.previewRevision);
   const error = normalizeDurableError(job.error);
   return {
     jobId: job.jobId,
@@ -305,6 +332,9 @@ export function initialPanelState(): PanelState {
     streamingMessageId: null,
     mediaResolution: null,
     queuedAheadOf: null,
+    pendingAutoRetry: null,
+    autoRetryConsumed: false,
+    streamRetrying: null,
   };
 }
 
@@ -362,6 +392,9 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         inputValue: '',
         mediaResolution: null,
         queuedAheadOf: null,
+        pendingAutoRetry: null,
+        autoRetryConsumed: false,
+        streamRetrying: null,
       };
     }
 
@@ -377,6 +410,9 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         ...state,
         messages: [...state.messages, { id: streamingId, role: 'assistant' as const, content: '' }],
         streamingMessageId: streamingId,
+        pendingAutoRetry: null,
+        autoRetryConsumed: false,
+        streamRetrying: null,
       };
     }
 
@@ -384,6 +420,8 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (!state.streamingMessageId) return state;
       return {
         ...state,
+        // Activity resumed, so any transient reconnecting status is over.
+        streamRetrying: null,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId ? { ...m, content: m.content + action.delta } : m,
         ),
@@ -393,6 +431,8 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (!state.streamingMessageId) return state;
       return {
         ...state,
+        // A tool call after response.retrying means the retried call is running again.
+        streamRetrying: null,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
             ? { ...m, toolCalls: [...(m.toolCalls ?? []), action.event] }
@@ -451,30 +491,62 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     // same run cannot open a second one.
     case 'RESUME_STREAMING': {
       if (state.messages.some((m) => m.id === action.messageId)) {
-        return { ...state, streamingMessageId: action.messageId };
+        return {
+          ...state,
+          streamingMessageId: action.messageId,
+          pendingAutoRetry: null,
+          autoRetryConsumed: false,
+          streamRetrying: null,
+        };
       }
       return {
         ...state,
         messages: [...state.messages, { id: action.messageId, role: 'assistant', content: '' }],
         streamingMessageId: action.messageId,
+        pendingAutoRetry: null,
+        autoRetryConsumed: false,
+        streamRetrying: null,
       };
     }
 
     case 'STREAM_COMPLETE':
-      return { ...state, streamingMessageId: null, queuedAheadOf: null };
+      // The stream hook emits a trailing STREAM_COMPLETE after a terminal error frame,
+      // so a queued silent auto-retry must survive it — only streaming state clears.
+      return { ...state, streamingMessageId: null, queuedAheadOf: null, streamRetrying: null };
 
-    case 'STREAM_ERROR':
+    case 'STREAM_ERROR': {
+      // First transient failure of a turn: stamp the error but queue ONE silent
+      // auto-retry — the panel hides the red row while the retry is pending and
+      // fires the same path as the manual Retry button. A second failure, or a
+      // non-transient one, paints the error row immediately.
+      const erroredMessageId = state.streamingMessageId;
+      const autoRetry =
+        action.transient === true && !state.autoRetryConsumed && erroredMessageId !== null;
       return {
         ...state,
         streamingMessageId: null,
+        streamRetrying: null,
         messages: state.messages.map((m) =>
-          m.id === state.streamingMessageId ? { ...m, error: action.error } : m,
+          m.id === erroredMessageId ? { ...m, error: action.error } : m,
         ),
+        ...(autoRetry ? { pendingAutoRetry: erroredMessageId, autoRetryConsumed: true } : {}),
       };
+    }
+
+    case 'STREAM_RETRYING':
+      if (!state.streamingMessageId) return state;
+      return { ...state, streamRetrying: { attempt: action.attempt, reason: action.reason } };
+
+    case 'AUTO_RETRY_ABANDON':
+      // The silent retry could not start (no session, no user turn) — release the
+      // hold so the already-stamped error row surfaces with the manual Retry button.
+      return state.pendingAutoRetry === null ? state : { ...state, pendingAutoRetry: null };
 
     case 'RETRY_FROM_ASSISTANT': {
       // Drop the failed/stale assistant turn (and anything after it) and re-open
       // a fresh empty assistant message; the caller re-runs the prior user turn.
+      // autoRetryConsumed is deliberately kept: the retried turn inherits the spent
+      // silent-retry budget, so a second transient failure paints the error row.
       const idx = state.messages.findIndex((m) => m.id === action.assistantMessageId);
       if (idx === -1) return state;
       const streamingId = newAssistantMessageId();
@@ -485,6 +557,8 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           { id: streamingId, role: 'assistant' as const, content: '' },
         ],
         streamingMessageId: streamingId,
+        pendingAutoRetry: null,
+        streamRetrying: null,
       };
     }
 
@@ -596,7 +670,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
 
     case 'DRAFT_BLUEPRINT': {
       const { draftId, previewRevision, previews } = action;
-      if (!draftId || previews.length === 0) return state;
+      // Only the draftId is load-bearing. `previews` is a rendering nicety that fails
+      // independently (preview signing can miss while the blueprint succeeded), whereas
+      // `previewRevision` is the approval token the Generate-media action requires —
+      // bailing on an empty preview list threw the token away and left the card stranded
+      // on "awaiting media choice" with nothing to click.
+      if (!draftId) return state;
+      const hasPreviews = previews.length > 0;
       // The blueprint job's own jobId differs from the post-generation card, so
       // match by draftId: stamp the storyboard onto that card's preview images and
       // the job's thumbnail, and confirm the blueprint checkpoint step.
@@ -607,12 +687,16 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           pipelineChanged = true;
           pipeline[jobId] = {
             ...card,
-            preview: {
-              caption: card.preview?.caption ?? null,
-              imageUrl: card.preview?.imageUrl ?? previews[0] ?? null,
-              images: previews,
-              format: card.preview?.format ?? null,
-            },
+            ...(hasPreviews
+              ? {
+                  preview: {
+                    caption: card.preview?.caption ?? null,
+                    imageUrl: card.preview?.imageUrl ?? previews[0] ?? null,
+                    images: previews,
+                    format: card.preview?.format ?? null,
+                  },
+                }
+              : {}),
             checkpoint: {
               ...card.checkpoint,
               blueprintReady: true,
@@ -629,7 +713,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       let jobsChanged = false;
       const jobs: Record<string, AgentJobState> = {};
       for (const [jobId, job] of Object.entries(state.jobs)) {
-        if (job.draftId === draftId) {
+        if (job.draftId === draftId && hasPreviews) {
           jobsChanged = true;
           jobs[jobId] = { ...job, previewImages: previews };
         } else {
@@ -688,6 +772,9 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         pendingToolApprovals: [],
         bulkRuns: {},
         streamingMessageId: null,
+        pendingAutoRetry: null,
+        autoRetryConsumed: false,
+        streamRetrying: null,
         isHydrated: false,
       };
 

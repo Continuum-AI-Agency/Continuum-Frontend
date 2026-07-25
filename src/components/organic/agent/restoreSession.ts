@@ -45,12 +45,13 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
           pipelineCards.push(parsed.card);
           break;
         case 'draftBlueprint':
-          if (parsed.previews.length > 0) {
-            blueprintsByDraftId.set(parsed.draftId, {
-              previews: parsed.previews,
-              previewRevision: parsed.previewRevision,
-            });
-          }
+          // Kept regardless of preview count: `previewRevision` is the approval token
+          // the Generate-media action needs, and preview signing fails independently of
+          // the blueprint. Gating on previews dropped the token on reload.
+          blueprintsByDraftId.set(parsed.draftId, {
+            previews: parsed.previews,
+            previewRevision: parsed.previewRevision,
+          });
           break;
         case 'bulkRun':
           bulkRuns.push({
@@ -110,21 +111,28 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
   if (blueprintsByDraftId.size > 0) {
     for (const card of pipelineCards) {
       const blueprint = card.draftId ? blueprintsByDraftId.get(card.draftId) : undefined;
-      if (blueprint && blueprint.previews.length > 0) {
+      if (!blueprint) continue;
+      if (blueprint.previews.length > 0) {
         card.preview = {
           caption: card.preview?.caption ?? null,
           imageUrl: card.preview?.imageUrl ?? blueprint.previews[0] ?? null,
           images: blueprint.previews,
           format: card.preview?.format ?? null,
         };
-        card.checkpoint = {
-          ...card.checkpoint,
-          blueprintReady: true,
-          mediaStatus: 'pending',
-          awaitingMediaChoice: true,
-          previewRevision: blueprint.previewRevision,
-        };
       }
+      // The blueprint frame is older than a realize that followed it, so it must not
+      // walk a settled card back to "awaiting choice". The approval token is still
+      // carried — it is the draft's, not the stage's.
+      const settled =
+        card.checkpoint?.mediaStatus === 'ready' ||
+        card.checkpoint?.mediaStatus === 'user_supplied' ||
+        card.checkpoint?.mediaStatus === 'generating';
+      card.checkpoint = {
+        ...card.checkpoint,
+        blueprintReady: true,
+        previewRevision: blueprint.previewRevision,
+        ...(settled ? {} : { mediaStatus: 'pending', awaitingMediaChoice: true }),
+      };
     }
   }
 

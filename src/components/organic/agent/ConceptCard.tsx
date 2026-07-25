@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  hasApprovablePreview,
   type OrganicGenerationStatus,
   type OrganicGenerationTone,
   type OrganicMediaStage,
@@ -125,15 +126,22 @@ export function ConceptCard({
   // or already rendering.
   const mediaSettled =
     mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
+  const showGenerateMedia = Boolean(
+    onGenerateMedia &&
+      draftId &&
+      hasApprovablePreview(pipeline?.checkpoint) &&
+      hasPreviewReady &&
+      !mediaSettled,
+  );
+  // Same invariant as PipelineCard: an unsettled card always offers an action. Enrich
+  // doubles as the recovery for a blueprint that landed without a usable approval
+  // token, because re-expanding stamps a fresh previewRevision.
   const showEnrich = Boolean(
     onEnrichDraft &&
       draftId &&
       pipeline?.checkpoint?.textReady &&
-      !hasPreviewReady &&
-      !mediaSettled,
-  );
-  const showGenerateMedia = Boolean(
-    onGenerateMedia && draftId && previewRevision && hasPreviewReady && !mediaSettled,
+      !mediaSettled &&
+      !showGenerateMedia,
   );
   const [mediaActionSent, setMediaActionSent] = useState(false);
 
@@ -270,7 +278,11 @@ export function ConceptCard({
                 <div className="w-px self-stretch bg-border/40" />
                 <button
                   type="button"
-                  title="Sketch a low-cost blueprint before final media"
+                  title={
+                    hasPreviewReady
+                      ? 'Rebuild the blueprint to refresh its preview approval'
+                      : 'Sketch a low-cost blueprint before final media'
+                  }
                   disabled={mediaActionSent}
                   onClick={() => {
                     setMediaActionSent(true);
@@ -279,7 +291,7 @@ export function ConceptCard({
                   className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
                 >
                   <PencilRuler className="h-3 w-3" />
-                  {mediaActionSent ? 'Enriching…' : 'Enrich'}
+                  {mediaActionSent ? 'Enriching…' : hasPreviewReady ? 'Rebuild preview' : 'Enrich'}
                 </button>
               </>
             )}
