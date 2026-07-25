@@ -68,6 +68,47 @@ describe('hasDraftMedia', () => {
   });
 });
 
+// While a generation is in flight (or never started) any URLs still sitting on
+// the suggestion are stale leftovers from a previous attempt — only realized
+// publishingAssets or a settled status may count as media.
+describe('hasDraftMedia — unsettled media status', () => {
+  it('ignores leftover suggestion URLs while media is generating', () => {
+    const draft = makeDraft({
+      mediaSuggestion: { mediaStatus: 'generating', assetUrl: 'https://cdn/stale.jpg' },
+    });
+    expect(hasDraftMedia(draft)).toBe(false);
+  });
+
+  it('ignores leftover suggestion URLs while media is pending', () => {
+    const draft = makeDraft({
+      mediaSuggestion: { mediaStatus: 'pending', signedUrl: 'https://cdn/stale.jpg' },
+    });
+    expect(hasDraftMedia(draft)).toBe(false);
+  });
+
+  it('counts user-supplied media', () => {
+    const draft = makeDraft({
+      mediaSuggestion: { mediaStatus: 'user_supplied', assetUrl: 'https://cdn/mine.jpg' },
+    });
+    expect(hasDraftMedia(draft)).toBe(true);
+  });
+
+  it('counts ready media', () => {
+    const draft = makeDraft({
+      mediaSuggestion: { mediaStatus: 'ready', assetUrl: 'https://cdn/final.jpg' },
+    });
+    expect(hasDraftMedia(draft)).toBe(true);
+  });
+
+  it('counts realized publishing assets even while a regeneration is in flight', () => {
+    const draft = makeDraft({
+      publishingAssets: [storageAsset],
+      mediaSuggestion: { mediaStatus: 'generating' },
+    });
+    expect(hasDraftMedia(draft)).toBe(true);
+  });
+});
+
 describe('evaluateDraftReadiness', () => {
   it('is not ready and flags both checks for an empty draft', () => {
     const result = evaluateDraftReadiness(makeDraft());
@@ -115,5 +156,75 @@ describe('evaluateDraftReadiness', () => {
       }),
     );
     expect(result.ready).toBe(true);
+  });
+
+  it('is not ready while media is generating even with leftover suggestion URLs', () => {
+    const result = evaluateDraftReadiness(
+      makeDraft({
+        captionPreview: 'Caption is done',
+        mediaSuggestion: { mediaStatus: 'generating', assetUrl: 'https://cdn/stale.jpg' },
+      }),
+    );
+    expect(result.ready).toBe(false);
+    expect(result.checks.find((c) => c.id === 'media')?.met).toBe(false);
+  });
+});
+
+// Readiness must agree with what the card/preview render. A video-only draft has
+// media, whichever leg carries it — a video publishing asset or just the reel.
+describe('hasDraftMedia — video-only drafts', () => {
+  it('is true for a video publishing asset', () => {
+    const draft = makeDraft({
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'video',
+          storagePath: 'library/clip.mp4',
+          storageUrl: 'https://storage.example/clip.mp4',
+        },
+      ],
+    });
+    expect(hasDraftMedia(draft)).toBe(true);
+  });
+
+  it('is true for an attached reel whose publishing asset was not signed yet', () => {
+    const draft = makeDraft({
+      publishingAssets: [
+        { role: 'primary', kind: 'video', storagePath: 'library/clip.mp4', storageUrl: '' },
+      ],
+      mediaSuggestion: {
+        kind: 'reel',
+        mediaStatus: 'user_supplied',
+        url: null,
+        assetUrl: null,
+        signedUrl: null,
+        assets: null,
+        reel: {
+          generated: true,
+          url: 'library/clip.mp4',
+          bucket: 'brand-profile-assets',
+          signedUrl: 'https://storage.example/clip.mp4',
+          durationSec: 12,
+        },
+      },
+    });
+    expect(hasDraftMedia(draft)).toBe(true);
+  });
+
+  it('gates scheduling on the caption only, once a video is attached', () => {
+    const draft = makeDraft({
+      captionPreview: 'Ready caption',
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'video',
+          storagePath: 'library/clip.mp4',
+          storageUrl: 'https://storage.example/clip.mp4',
+        },
+      ],
+    });
+    const readiness = evaluateDraftReadiness(draft);
+    expect(readiness.checks.find((check) => check.id === 'media')?.met).toBe(true);
+    expect(readiness.ready).toBe(true);
   });
 });

@@ -136,3 +136,89 @@ describe('summarizeDraftMedia', () => {
     expect(summary.reusable.some((item) => item.source === 'blueprint')).toBe(false);
   });
 });
+
+// A user-attached video lands in BOTH the realized publishingAssets and
+// `mediaSuggestion.reel` — the same file, twice — which is why the inventory
+// reported "2 videos" for one attached video.
+describe('summarizeDraftMedia — one video counted once', () => {
+  const attachedVideoDraft = () =>
+    baseDraft({
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'video',
+          storagePath: 'library/clip.mp4',
+          storageUrl: 'https://cdn/clip.mp4?sig=asset',
+        },
+      ],
+      mediaSuggestion: {
+        kind: 'reel',
+        mediaStatus: 'user_supplied',
+        reel: {
+          generated: true,
+          url: 'library/clip.mp4',
+          bucket: 'brand-profile-assets',
+          signedUrl: 'https://cdn/clip.mp4?sig=reel',
+          durationSec: 12,
+        },
+      },
+    });
+
+  it('reads as "1 video", not two', () => {
+    const summary = summarizeDraftMedia(attachedVideoDraft());
+    expect(summary.videoCount).toBe(1);
+    expect(summary.label).toBe('1 video');
+  });
+
+  it('keeps a single reusable entry, the realized one', () => {
+    const summary = summarizeDraftMedia(attachedVideoDraft());
+    expect(summary.reusable).toHaveLength(1);
+    expect(summary.reusable[0].source).toBe('realized');
+    expect(summary.reusable[0].url).toBe('https://cdn/clip.mp4?sig=asset');
+  });
+
+  it('still surfaces a reel that has no publishing asset, with a renderable URL', () => {
+    const summary = summarizeDraftMedia(
+      baseDraft({
+        mediaSuggestion: {
+          kind: 'reel',
+          mediaStatus: 'ready',
+          reel: {
+            generated: true,
+            url: 'organic/generated.mp4',
+            signedUrl: 'https://cdn/generated.mp4?sig=reel',
+            durationSec: 8,
+          },
+        },
+      }),
+    );
+    expect(summary.videoCount).toBe(1);
+    expect(summary.reusable).toHaveLength(1);
+    expect(summary.reusable[0].url).toBe('https://cdn/generated.mp4?sig=reel');
+  });
+
+  it('does not collapse two genuinely different videos', () => {
+    const summary = summarizeDraftMedia(
+      baseDraft({
+        publishingAssets: [
+          {
+            role: 'primary',
+            kind: 'video',
+            storagePath: 'library/a.mp4',
+            storageUrl: 'https://cdn/a.mp4',
+          },
+        ],
+        mediaSuggestion: {
+          reel: {
+            generated: true,
+            url: 'organic/b.mp4',
+            signedUrl: 'https://cdn/b.mp4',
+            durationSec: 4,
+          },
+        },
+      }),
+    );
+    expect(summary.videoCount).toBe(2);
+    expect(summary.label).toBe('2 videos');
+  });
+});

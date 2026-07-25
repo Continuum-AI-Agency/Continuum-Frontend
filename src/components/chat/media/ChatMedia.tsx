@@ -88,6 +88,7 @@ export function ChatMediaThumb({
           <video
             src={media.thumbnailUrl ? media.url : `${media.url}#t=0.01`}
             poster={media.thumbnailUrl}
+            aria-label={media.name ?? media.caption}
             preload="metadata"
             muted
             playsInline

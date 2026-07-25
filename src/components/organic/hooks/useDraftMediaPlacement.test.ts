@@ -350,4 +350,87 @@ describe('useDraftMediaPlacement', () => {
 
     expect(err?.type).toBe('invalid_kind');
   });
+
+  // A post has one video slot, so a 2-video selection must be refused — not shaped
+  // into a patch that keeps the first and silently discards the rest.
+  it('place() refuses two videos instead of dropping one', async () => {
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    let err: ReturnType<typeof result.current.place> = null;
+    await act(async () => {
+      err = result.current.place([makeVideoAsset(), makeVideoAsset({ id: 'asset-video-2' })], {
+        kind: 'video',
+      });
+    });
+
+    expect(err?.type).toBe('too_many_videos');
+    expect(err?.message).toBe('Only one video per post.');
+    expect(mockUpdateDraft).not.toHaveBeenCalled();
+    expect(result.current.error?.type).toBe('too_many_videos');
+  });
+
+  it('place() refuses a mixed image+video selection on the video slot', async () => {
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    let err: ReturnType<typeof result.current.place> = null;
+    await act(async () => {
+      err = result.current.place([makeVideoAsset(), makeImageAsset()], { kind: 'video' });
+    });
+
+    expect(err?.type).toBe('invalid_kind');
+    expect(mockUpdateDraft).not.toHaveBeenCalled();
+  });
+
+  it('place() carries the library poster into the reel so the preview can paint it', async () => {
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    await act(async () => {
+      result.current.place([makeVideoAsset({ thumbnailUrl: 'https://cdn/vid-poster.jpg' })], {
+        kind: 'video',
+      });
+    });
+
+    const draft = storedDraft as {
+      mediaSuggestion: { reel: { thumbnailUrl: string | null }; assetUrl: string | null };
+    };
+    expect(draft.mediaSuggestion.reel.thumbnailUrl).toBe('https://cdn/vid-poster.jpg');
+  });
+
+  // The absent-vs-null landmine: the patch is spread over the existing suggestion,
+  // so a video attach that merely omits assetUrl leaves the old image showing.
+  it('place() nulls a prior generation image when a video is attached', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      mediaSuggestion: {
+        mediaStatus: 'ready',
+        kind: 'image',
+        url: 'organic/old.png',
+        assetUrl: 'https://cdn/old.png',
+        signedUrl: 'https://cdn/old.png',
+      },
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, storagePath: 'old.png', storageUrl: 'https://cdn/old.png' },
+      ],
+    };
+
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    await act(async () => {
+      result.current.place([makeVideoAsset()], { kind: 'video' });
+    });
+
+    const draft = storedDraft as {
+      mediaSuggestion: {
+        url: string | null;
+        assetUrl: string | null;
+        signedUrl: string | null;
+        reel: { url: string };
+      };
+      publishingAssets: Array<{ kind: string }>;
+    };
+    expect(draft.mediaSuggestion.url).toBeNull();
+    expect(draft.mediaSuggestion.assetUrl).toBeNull();
+    expect(draft.mediaSuggestion.signedUrl).toBeNull();
+    expect(draft.mediaSuggestion.reel.url).toBe('brands/brand-1/img.jpg');
+    expect(draft.publishingAssets).toEqual([expect.objectContaining({ kind: 'video' })]);
+  });
 });

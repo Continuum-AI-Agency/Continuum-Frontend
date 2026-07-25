@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';
@@ -35,9 +35,18 @@ mock.module('./AiStudioHandoffContext', () => ({
   useOpenDraftInAiStudio: () => undefined,
 }));
 
+// Controllable signing mocks: the re-sign tests flip the resolved URL per test
+// and assert the exact durable pair each leg signs with.
+const signMediaAssetMock = mock((_args: { brandId: string; assetId: string }) =>
+  Promise.resolve<string | null>(null),
+);
+const signOrganicMediaAssetMock = mock((_args: { brandId: string; bucket: string; path: string }) =>
+  Promise.resolve<string | null>(null),
+);
+
 mock.module('@/lib/organic/hyperframeSign', () => ({
-  signMediaAsset: mock(() => Promise.resolve(null)),
-  signOrganicMediaAsset: mock(() => Promise.resolve(null)),
+  signMediaAsset: signMediaAssetMock,
+  signOrganicMediaAsset: signOrganicMediaAssetMock,
 }));
 
 mock.module('./CarouselSlideStrip', () => ({
@@ -359,5 +368,205 @@ describe('OrganicDraftPreview — schedule readiness', () => {
   it('renders the media-enrichment inventory label in the header', () => {
     renderPreview();
     expect(screen.getByText('No media yet')).toBeTruthy();
+  });
+});
+
+// Single-image drafts persist their durable pair on mediaSuggestion itself
+// (bucket + url as a storage path) with no publishingAssets/reel/hyperframe row
+// claiming it — the preview must re-sign that pair too, or the image 404s once
+// the upload-time signed URL expires (~1h).
+describe('OrganicDraftPreview — single-image re-sign', () => {
+  beforeEach(() => {
+    cleanup();
+    signOrganicMediaAssetMock.mockClear();
+    signOrganicMediaAssetMock.mockImplementation(() => Promise.resolve<string | null>(null));
+  });
+
+  it('re-signs the durable single-image pair and swaps in the fresh URL', async () => {
+    signOrganicMediaAssetMock.mockImplementation(() =>
+      Promise.resolve<string | null>('https://fresh.example/img.png'),
+    );
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          mediaSuggestion: {
+            mediaStatus: 'ready',
+            bucket: 'brand-profile-assets',
+            url: 'organic/d/img.png',
+            assetUrl: 'https://expired.example/img.png',
+          },
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(signOrganicMediaAssetMock).toHaveBeenCalledWith({
+        brandId: 'brand-1',
+        bucket: 'brand-profile-assets',
+        path: 'organic/d/img.png',
+      });
+      const img = screen.getByAltText('Test post — slide 1');
+      expect(img.getAttribute('src')).toBe('https://fresh.example/img.png');
+    });
+  });
+
+  it('never signs a user-supplied plain https URL', async () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          mediaSuggestion: {
+            mediaStatus: 'user_supplied',
+            bucket: 'brand-profile-assets',
+            url: 'https://cdn.example/user.png',
+            assetUrl: 'https://cdn.example/user.png',
+          },
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(signOrganicMediaAssetMock).not.toHaveBeenCalled();
+  });
+
+  it('signs a restored publishing asset whose storageUrl is empty once a bucket is threaded', async () => {
+    signOrganicMediaAssetMock.mockImplementation(() =>
+      Promise.resolve<string | null>('https://fresh.example/asset.png'),
+    );
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          publishingAssets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              slideIndex: 0,
+              bucket: 'brand-profile-assets',
+              storagePath: 'organic/d/final.png',
+              storageUrl: '',
+            },
+          ],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(signOrganicMediaAssetMock).toHaveBeenCalledWith({
+        brandId: 'brand-1',
+        bucket: 'brand-profile-assets',
+        path: 'organic/d/final.png',
+      });
+    });
+  });
+});
+
+// #231 — the attach persists, but the preview could not render video at all: both
+// media areas were next/image only and the resolvers filtered to kind === 'image',
+// so an attached video resolved to nothing and the phone preview showed the empty
+// "Select from library / Upload from your computer" split instead.
+describe('OrganicDraftPreview — attached video renders', () => {
+  beforeEach(() => cleanup());
+
+  const videoDraft = (poster: string | null) =>
+    baseDraft({
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'video',
+          storagePath: 'library/clip.mp4',
+          storageUrl: 'https://cdn.example/clip.mp4',
+        },
+      ],
+      mediaSuggestion: {
+        kind: 'reel',
+        mediaStatus: 'user_supplied',
+        url: null,
+        assetUrl: null,
+        signedUrl: null,
+        assets: null,
+        reel: {
+          generated: true,
+          url: 'library/clip.mp4',
+          bucket: 'brand-profile-assets',
+          signedUrl: 'https://cdn.example/clip.mp4',
+          thumbnailUrl: poster,
+          durationSec: 12,
+        },
+      },
+    });
+
+  const videoIn = (container: HTMLElement) => container.querySelector('video');
+
+  it('renders a <video> with its poster in the read-only media area', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={videoDraft('https://cdn.example/clip-poster.jpg')}
+        brandProfileId="brand-1"
+      />,
+    );
+    const video = videoIn(container);
+    expect(video).toBeTruthy();
+    expect(video?.getAttribute('poster')).toBe('https://cdn.example/clip-poster.jpg');
+    expect(video?.getAttribute('src')).toBe('https://cdn.example/clip.mp4');
+  });
+
+  it('renders a <video> with its poster in the editable media area', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={videoDraft('https://cdn.example/clip-poster.jpg')}
+        brandProfileId="brand-1"
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Edit post'));
+    const video = videoIn(container);
+    expect(video).toBeTruthy();
+    expect(video?.getAttribute('poster')).toBe('https://cdn.example/clip-poster.jpg');
+  });
+
+  it('never renders the empty library/upload fallback for a draft that has a video', () => {
+    render(
+      <OrganicDraftPreview
+        draft={videoDraft('https://cdn.example/clip-poster.jpg')}
+        brandProfileId="brand-1"
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Edit post'));
+    // The stubbed drop zone renders only the fallback ACTIONS; the real
+    // library/upload split is gated on the same empty-media state, which a video
+    // draft must no longer reach.
+    expect(screen.queryByText('No media')).toBeNull();
+  });
+
+  it('falls back to a first-frame seek when the library asset has no poster', () => {
+    const { container } = render(
+      <OrganicDraftPreview draft={videoDraft(null)} brandProfileId="brand-1" />,
+    );
+    const video = videoIn(container);
+    expect(video).toBeTruthy();
+    expect(video?.getAttribute('poster')).toBeNull();
+    expect(video?.getAttribute('src')).toBe('https://cdn.example/clip.mp4#t=0.01');
+  });
+
+  it('still renders an image draft as an image, not a video', () => {
+    const { container } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({
+          publishingAssets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              slideIndex: 0,
+              storagePath: 'library/img.png',
+              storageUrl: 'https://cdn.example/img.png',
+            },
+          ],
+        })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(videoIn(container)).toBeNull();
+    expect(screen.getByAltText('Test post — slide 1')).toBeTruthy();
   });
 });

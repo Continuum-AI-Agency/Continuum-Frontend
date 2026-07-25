@@ -19,19 +19,69 @@ function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+export type DraftMediaKind = 'image' | 'video';
+
+export type ResolvedDraftMedia = {
+  /** The renderable URL — a signed storage URL, or a base64 512px mockup for images. */
+  url: string;
+  kind: DraftMediaKind;
+  /** Poster frame for a video, when one is known. Always `null` for an image. */
+  poster: string | null;
+};
+
+/** The reel's poster, when the attach boundary carried the library's thumbnail through. */
+function resolveReelPoster(draft: OrganicCalendarDraft): string | null {
+  const thumbnail = draft.mediaSuggestion?.reel?.thumbnailUrl;
+  return hasText(thumbnail) ? thumbnail.trim() : null;
+}
+
 /**
- * Single FE draft → image resolver. Persisted publishing assets win (durable
- * storage URL); otherwise defer to the shared contracts resolver so chat, list
- * and calendar all surface the same media (incl. base64-only 512px mockups).
+ * The ONE draft → renderable-media resolver, shared by the calendar card, the list
+ * row and the post preview. It is video-aware on purpose: every earlier resolver
+ * filtered to `kind === 'image'` and never read `mediaSuggestion.reel`, so an
+ * attached video resolved to nothing and its surface rendered an empty placeholder.
+ *
+ * Precedence mirrors the publish path (`stageMediaForPublish`): durable
+ * publishingAssets first, then the generated reel, then the shared image resolver,
+ * and a HyperFrames cover last (its own player owns the composition itself).
+ */
+export function resolveDraftMedia(draft: OrganicCalendarDraft): ResolvedDraftMedia | null {
+  const published = [...(draft.publishingAssets ?? [])]
+    .filter((asset) => hasText(asset.storageUrl))
+    .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
+  const primary = published[0];
+  if (primary) {
+    return primary.kind === 'video'
+      ? { url: primary.storageUrl.trim(), kind: 'video', poster: resolveReelPoster(draft) }
+      : { url: primary.storageUrl.trim(), kind: 'image', poster: null };
+  }
+
+  const reel = draft.mediaSuggestion?.reel;
+  if (reel?.generated && hasText(reel.signedUrl)) {
+    return { url: reel.signedUrl.trim(), kind: 'video', poster: resolveReelPoster(draft) };
+  }
+
+  const imageUrl = resolveOrganicImageUrl(draft.mediaSuggestion);
+  if (imageUrl) return { url: imageUrl, kind: 'image', poster: null };
+
+  const cover = draft.mediaSuggestion?.hyperframe?.coverImageUrl;
+  if (hasText(cover)) return { url: cover.trim(), kind: 'image', poster: null };
+
+  return null;
+}
+
+/**
+ * Image-only view of the resolver, for the surfaces still rendering into an `<img>`.
+ * A video degrades to its poster rather than putting an MP4 in an image tag.
  */
 export function resolveDraftMediaAssetUrl(draft: OrganicCalendarDraft): string | null {
-  const persistedImageAsset = draft.publishingAssets?.find((a) => a.kind === 'image');
-  if (persistedImageAsset?.storageUrl) return persistedImageAsset.storageUrl;
-  return resolveOrganicImageUrl(draft.mediaSuggestion);
+  const media = resolveDraftMedia(draft);
+  if (!media) return null;
+  return media.kind === 'image' ? media.url : media.poster;
 }
 
 export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {
-  return resolveDraftMediaAssetUrl(draft) !== null;
+  return resolveDraftMedia(draft) !== null;
 }
 
 export function resolveFormatAspectClass(format: string): string {
@@ -117,15 +167,16 @@ export function DraftCardMedia({
     );
   }
 
-  const reel = draft.mediaSuggestion?.reel;
-  const reelUrl = reel?.generated && hasText(reel.signedUrl) ? reel.signedUrl.trim() : null;
-  if (reelUrl) {
+  const media = resolveDraftMedia(draft);
+
+  if (media?.kind === 'video') {
     return (
       <div className={cn('relative overflow-hidden', aspectClass, className)}>
-        {/* Muted, paused preview — the first frame is the implicit poster. */}
+        {/* Muted and paused: the poster (or the first frame) is the still preview. */}
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
-          src={reelUrl}
+          src={media.poster ? media.url : `${media.url}#t=0.01`}
+          poster={media.poster ?? undefined}
           muted
           playsInline
           preload="metadata"
@@ -141,13 +192,11 @@ export function DraftCardMedia({
     );
   }
 
-  const mediaUrl = resolveDraftMediaAssetUrl(draft);
-
   return (
     <div className={cn('relative overflow-hidden', aspectClass, className)}>
-      {mediaUrl ? (
+      {media ? (
         <Image
-          src={mediaUrl}
+          src={media.url}
           alt={altText}
           fill
           unoptimized

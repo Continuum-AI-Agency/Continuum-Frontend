@@ -2,6 +2,7 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
+import { creativeRefFromAsset, findMultiVideoSelectionError } from '@continuum/contracts';
 import { ImageOff, Loader2, PencilRuler, Play, Search, Wand2 } from 'lucide-react';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
@@ -153,11 +154,18 @@ export function MediaSelectPopover({
   const toggleAsset = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const handleAttach = () => {
+  const selectedAssets = React.useMemo(() => {
     const byId = new Map(assets.map((a) => [a.id, a]));
-    const selected = selectedIds.map((id) => byId.get(id)).filter((a): a is MediaAsset => !!a);
-    if (selected.length === 0) return;
-    onAttachAssets(selected);
+    return selectedIds.map((id) => byId.get(id)).filter((a): a is MediaAsset => !!a);
+  }, [assets, selectedIds]);
+
+  // A post has exactly one video slot, so the shape a 2-video selection produces
+  // keeps only the first pick. Refuse it here instead of losing the rest silently.
+  const multiVideoError = findMultiVideoSelectionError(selectedAssets.map(creativeRefFromAsset));
+
+  const handleAttach = () => {
+    if (selectedAssets.length === 0 || multiVideoError) return;
+    onAttachAssets(selectedAssets);
     onOpenChange(false);
   };
 
@@ -279,8 +287,16 @@ export function MediaSelectPopover({
         </div>
 
         {selectedIds.length > 0 && (
-          <div className="mt-2 flex justify-end">
-            <Button type="button" size="sm" onClick={handleAttach}>
+          <div className="mt-2 flex items-center justify-end gap-2">
+            {multiVideoError && (
+              <p
+                role="alert"
+                className="mr-auto text-2xs font-medium text-amber-600 dark:text-amber-400"
+              >
+                {multiVideoError}
+              </p>
+            )}
+            <Button type="button" size="sm" disabled={!!multiVideoError} onClick={handleAttach}>
               Attach {selectedIds.length > 1 ? `(${selectedIds.length})` : ''}
             </Button>
           </div>

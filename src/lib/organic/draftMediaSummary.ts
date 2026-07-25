@@ -13,6 +13,11 @@ export type ReusableMediaItem = {
   kind: 'image' | 'video';
   url: string;
   source: ReusableMediaSource;
+  /**
+   * Durable storage path, when the source carries one. Signed URLs for the same
+   * file differ per leg, so this — not `url` — is the identity used to dedupe.
+   */
+  storagePath?: string | null;
 };
 
 export type DraftMediaSummary = {
@@ -49,6 +54,7 @@ function collectRealized(draft: OrganicCalendarDraft): ReusableMediaItem[] {
       kind: asset.kind === 'video' ? 'video' : 'image',
       url: asset.storageUrl,
       source: 'realized',
+      storagePath: asset.storagePath,
     });
   });
   if (items.length > 0) return items;
@@ -77,9 +83,17 @@ function collectReel(draft: OrganicCalendarDraft): ReusableMediaItem | null {
   const suggestion = draft.mediaSuggestion;
   if (!suggestion) return null;
 
-  const reelUrl = firstUsableUrl(suggestion.reel?.url, suggestion.reel?.signedUrl);
+  // Renderable first: `reel.url` is the durable storage PATH, not a URL a thumbnail
+  // can load, so it is the dedupe identity rather than the render source.
+  const reelUrl = firstUsableUrl(suggestion.reel?.signedUrl, suggestion.reel?.url);
   if (reelUrl) {
-    return { id: 'reel', kind: 'video', url: reelUrl, source: 'reel' };
+    return {
+      id: 'reel',
+      kind: 'video',
+      url: reelUrl,
+      source: 'reel',
+      storagePath: firstUsableUrl(suggestion.reel?.url),
+    };
   }
 
   const hyperUrl = firstUsableUrl(
@@ -120,6 +134,21 @@ function buildLabel(summary: Omit<DraftMediaSummary, 'label'>): string {
   return 'No media yet';
 }
 
+/**
+ * One entry per underlying file. A user-attached video lands in BOTH the realized
+ * publishingAssets and `mediaSuggestion.reel` — the same file — which is why the
+ * inventory read "2 videos" for one attached video.
+ */
+function dedupeByFile(items: ReusableMediaItem[]): ReusableMediaItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.storagePath ?? item.url;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function summarizeDraftMedia(draft: OrganicCalendarDraft): DraftMediaSummary {
   const realized = collectRealized(draft);
   const reel = collectReel(draft);
@@ -128,9 +157,10 @@ export function summarizeDraftMedia(draft: OrganicCalendarDraft): DraftMediaSumm
   // Realized media wins the inventory; the reel/hyperframe and blueprint frames
   // are appended as additional reusable options. Blueprint frames are dropped
   // from the reuse list once realized media exists (they're superseded).
-  const reusable: ReusableMediaItem[] = [...realized];
-  if (reel) reusable.push(reel);
-  if (realized.length === 0) reusable.push(...blueprint);
+  const candidates: ReusableMediaItem[] = [...realized];
+  if (reel) candidates.push(reel);
+  if (realized.length === 0) candidates.push(...blueprint);
+  const reusable = dedupeByFile(candidates);
 
   const imageCount = reusable.filter(
     (item) => item.kind === 'image' && item.source !== 'blueprint',

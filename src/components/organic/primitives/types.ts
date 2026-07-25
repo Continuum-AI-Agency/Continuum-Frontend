@@ -1,4 +1,4 @@
-import type { OrganicMediaStage } from '@continuum/contracts';
+import type { OrganicMediaStage, PlannerComposition } from '@continuum/contracts';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 
@@ -120,6 +120,8 @@ export type OrganicCalendarDraft = {
       url?: string | null;
       bucket?: string | null;
       signedUrl?: string | null;
+      /** Poster frame for the video (library-derived thumbnail). */
+      thumbnailUrl?: string | null;
       mimeType?: string | null;
       durationSec?: number | null;
       scenes?: Array<{
@@ -128,10 +130,12 @@ export type OrganicCalendarDraft = {
         prompt?: string | null;
         captionText?: string | null;
         durationSec?: number | null;
+        bucket?: string | null;
         clipUrl?: string | null;
         signedClipUrl?: string | null;
         error?: string | null;
       }> | null;
+      composition?: PlannerComposition | null;
       error?: string | null;
     } | null;
     assets?: Array<{

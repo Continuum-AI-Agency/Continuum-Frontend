@@ -23,9 +23,13 @@ function isUsableUrl(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-// Mirrors the URL fields DraftCardMedia resolves so "has media" agrees with what
-// the card/preview can actually render. Transient base64 is intentionally excluded
-// because the schedule/publish path re-stages from durable URLs.
+// Covers every media slot `resolveDraftMedia` (DraftCardMedia) renders from — a
+// publishing asset of EITHER kind, the generated/attached reel, the single-image
+// trio and the hyperframe — so "has media" never disagrees with what the card and
+// the preview actually show for a video-only draft. Two deliberate divergences from
+// the renderer, both because schedule/publish re-stages from durable storage:
+// transient base64 does not count, and neither do URLs left over from a generation
+// that is still pending or in flight.
 export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {
   const publishingAssets = draft.publishingAssets ?? [];
   if (publishingAssets.some((asset) => isUsableUrl(asset.storageUrl))) {
@@ -34,6 +38,13 @@ export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {
 
   const suggestion = draft.mediaSuggestion;
   if (!suggestion) return false;
+
+  // While a generation is in flight (or never started) any URLs still on the
+  // suggestion are stale leftovers from a previous attempt. Only realized
+  // publishingAssets (above) or a settled status may count as media.
+  if (suggestion.mediaStatus === 'generating' || suggestion.mediaStatus === 'pending') {
+    return false;
+  }
 
   if (
     isUsableUrl(suggestion.assetUrl) ||

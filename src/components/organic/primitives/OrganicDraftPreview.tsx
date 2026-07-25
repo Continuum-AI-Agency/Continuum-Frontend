@@ -25,8 +25,8 @@ import {
   Trash2,
   Wand2,
 } from 'lucide-react';
-import Image from 'next/image';
 import * as React from 'react';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import {
   type SlotTarget,
   useDraftMediaPlacement,
@@ -49,6 +49,7 @@ import { useDraftEnrichmentLadder } from '../hooks/useDraftEnrichmentLadder';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
 import { BlueprintStoryboard, resolveStoryboardFrames } from './BlueprintStoryboard';
 import { CarouselSlideStrip } from './CarouselSlideStrip';
+import { type DraftMediaKind, resolveDraftMedia } from './DraftCardMedia';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import {
   EnrichmentLadder,
@@ -97,6 +98,14 @@ function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+// A mediaSuggestion url is only re-signable when it is a storage path — never a
+// transient data: payload nor a user-supplied absolute URL.
+function isSignableStoragePath(value: string | null | undefined): value is string {
+  if (!hasText(value)) return false;
+  const trimmed = value.trim();
+  return !trimmed.startsWith('data:') && !/^https?:\/\//i.test(trimmed);
+}
+
 function brandInitials(name: string | undefined): string {
   if (!name) return 'BR';
   return name
@@ -105,18 +114,6 @@ function brandInitials(name: string | undefined): string {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-}
-
-// Storage-first: the preview always resolves to a storage signed URL (durable +
-// re-signable), never an in-memory base64 data: URL.
-function resolveDraftMediaAssetUrl(draft: OrganicCalendarDraft): string | null {
-  const persistedImageAsset = draft.publishingAssets?.find((asset) => asset.kind === 'image');
-  if (hasText(persistedImageAsset?.storageUrl)) {
-    return persistedImageAsset.storageUrl;
-  }
-
-  const assetUrl = draft.mediaSuggestion?.assetUrl;
-  return hasText(assetUrl) ? assetUrl.trim() : null;
 }
 
 function resolveDraftMediaAltText(draft: OrganicCalendarDraft): string {
@@ -135,16 +132,24 @@ function resolveCreativeDirection(draft: OrganicCalendarDraft): string {
   );
 }
 
-function resolveCarouselSlides(draft: OrganicCalendarDraft): Array<{
+type PreviewSlide = {
   slideIndex: number;
   storageUrl: string;
   assetId?: string | null;
   storagePath: string;
-}> {
-  // Storage-first: carousel slides are durable published assets (storageUrl,
-  // refreshed by useDraftWithFreshMedia), ordered by slideIndex.
+  kind: DraftMediaKind;
+  /** Poster frame for a video slide; `null` for an image. */
+  poster: string | null;
+};
+
+// Storage-first: slides are durable published assets (storageUrl, refreshed by
+// useDraftWithFreshMedia), ordered by slideIndex. Videos are slides too — filtering
+// to `kind === 'image'` here is what left an attached video with zero slides, which
+// the media area reads as "no media" and replaces with the library/upload split.
+function resolveCarouselSlides(draft: OrganicCalendarDraft): PreviewSlide[] {
+  const reelPoster = draft.mediaSuggestion?.reel?.thumbnailUrl;
   const published = (draft.publishingAssets ?? [])
-    .filter((a) => a.kind === 'image' && hasText(a.storageUrl))
+    .filter((a) => hasText(a.storageUrl))
     .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999));
   if (published.length > 0) {
     return published.map((a) => ({
@@ -152,14 +157,41 @@ function resolveCarouselSlides(draft: OrganicCalendarDraft): Array<{
       storageUrl: a.storageUrl,
       assetId: a.assetId,
       storagePath: a.storagePath,
+      kind: a.kind === 'video' ? 'video' : 'image',
+      poster: a.kind === 'video' && hasText(reelPoster) ? reelPoster.trim() : null,
     }));
   }
 
-  const primary = resolveDraftMediaAssetUrl(draft);
+  const primary = resolveDraftMedia(draft);
   if (primary) {
-    return [{ slideIndex: 0, storageUrl: primary, storagePath: primary }];
+    return [
+      {
+        slideIndex: 0,
+        storageUrl: primary.url,
+        storagePath: primary.url,
+        kind: primary.kind,
+        poster: primary.poster,
+      },
+    ];
   }
   return [];
+}
+
+// One renderer for a slide, whatever its kind — ChatMediaThumb exists precisely
+// because every earlier surface used an <img> and so rendered MP4s into image tags.
+function PreviewSlideMedia({ slide, alt }: { slide: PreviewSlide; alt: string }) {
+  return (
+    <ChatMediaThumb
+      media={{
+        id: slide.storagePath,
+        url: slide.storageUrl,
+        thumbnailUrl: slide.poster ?? undefined,
+        kind: slide.kind,
+        name: alt,
+      }}
+      className="absolute inset-0 rounded-none"
+    />
+  );
 }
 
 // Derive the visual style of the media status (drives Generate-button gating).
@@ -178,7 +210,7 @@ function shouldShowUseOwnCta(draft: OrganicCalendarDraft): boolean {
   const status = draft.status;
   if (status === 'failed') return true;
   const ms = draft.mediaSuggestion?.mediaStatus;
-  const hasMedia = resolveDraftMediaAssetUrl(draft) !== null;
+  const hasMedia = resolveDraftMedia(draft) !== null;
   if (!hasMedia && ms !== 'generating') return true;
   return false;
 }
@@ -319,13 +351,9 @@ function InteractiveCarouselMediaArea({
       >
         {total > 0 && activeSlide && (
           <>
-            <Image
-              src={activeSlide.storageUrl}
+            <PreviewSlideMedia
+              slide={activeSlide}
               alt={`${alt} — slide ${(activeSlide.slideIndex ?? 0) + 1}`}
-              fill
-              unoptimized
-              sizes="(max-width: 768px) 100vw, 560px"
-              className="absolute inset-0 h-full w-full object-cover"
             />
 
             <button
@@ -469,13 +497,9 @@ function ReadOnlyCarouselMediaArea({
       className={cn('relative w-full overflow-hidden bg-muted/20', borderClass)}
       style={{ aspectRatio: `${aspectRatio}` }}
     >
-      <Image
-        src={activeSlide.storageUrl}
+      <PreviewSlideMedia
+        slide={activeSlide}
         alt={`${alt} — slide ${(activeSlide.slideIndex ?? 0) + 1}`}
-        fill
-        unoptimized
-        sizes="(max-width: 768px) 100vw, 560px"
-        className="absolute inset-0 h-full w-full object-cover"
       />
 
       <button
@@ -722,10 +746,41 @@ function useDraftWithFreshMedia(
     };
   }, [brandProfileId, hfMp4Bucket, hfMp4Path, hfCoverBucket, hfCoverPath]);
 
+  // Single-image drafts persist the durable pair on the suggestion itself
+  // (bucket + url as a storage path) with no publishingAssets/reel/hyperframe
+  // row claiming it. Re-sign that pair too so an expired assetUrl refreshes
+  // like every other leg.
+  const suggestion = draft.mediaSuggestion;
+  const suggestionUnclaimed = !suggestion?.reel && !suggestion?.hyperframe;
+  const suggestionUrl = suggestion?.url ?? null;
+  const suggestionBucket = suggestion?.bucket ?? null;
+  const singleImagePath =
+    suggestionUnclaimed && hasText(suggestionBucket) && isSignableStoragePath(suggestionUrl)
+      ? suggestionUrl
+      : null;
+  const singleImageBucket = singleImagePath ? suggestionBucket : null;
+  const [freshSingleImageUrl, setFreshSingleImageUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!brandProfileId || !singleImageBucket || !singleImagePath) return;
+    let cancelled = false;
+    void signOrganicMediaAsset({
+      brandId: brandProfileId,
+      bucket: singleImageBucket,
+      path: singleImagePath,
+    }).then((url) => {
+      if (!cancelled && url) setFreshSingleImageUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandProfileId, singleImageBucket, singleImagePath]);
+
   return React.useMemo(() => {
     const freshPublishing = Object.keys(freshByPath).length > 0 && draft.publishingAssets;
     const freshHyperframe = (freshHfMp4Url || freshHfCoverUrl) && draft.mediaSuggestion?.hyperframe;
-    if (!freshPublishing && !freshReelUrl && !freshHyperframe) return draft;
+    const freshSingleImage = freshSingleImageUrl && draft.mediaSuggestion;
+    if (!freshPublishing && !freshReelUrl && !freshHyperframe && !freshSingleImage) return draft;
     const next: OrganicCalendarDraft = { ...draft };
     if (freshPublishing && draft.publishingAssets) {
       next.publishingAssets = draft.publishingAssets.map((asset) =>
@@ -734,9 +789,12 @@ function useDraftWithFreshMedia(
           : asset,
       );
     }
-    if ((freshReelUrl || freshHyperframe) && draft.mediaSuggestion) {
+    if ((freshReelUrl || freshHyperframe || freshSingleImage) && draft.mediaSuggestion) {
       next.mediaSuggestion = {
         ...draft.mediaSuggestion,
+        ...(freshSingleImage
+          ? { assetUrl: freshSingleImageUrl, signedUrl: freshSingleImageUrl }
+          : {}),
         ...(freshReelUrl && draft.mediaSuggestion.reel
           ? { reel: { ...draft.mediaSuggestion.reel, signedUrl: freshReelUrl } }
           : {}),
@@ -752,7 +810,7 @@ function useDraftWithFreshMedia(
       };
     }
     return next;
-  }, [draft, freshByPath, freshReelUrl, freshHfMp4Url, freshHfCoverUrl]);
+  }, [draft, freshByPath, freshReelUrl, freshHfMp4Url, freshHfCoverUrl, freshSingleImageUrl]);
 }
 
 // A titled inline panel that appears on demand (from the ⋯ menu) and collapses
@@ -1016,8 +1074,12 @@ export function OrganicDraftPreview({
         assets.forEach((asset) => placement.addSlide(asset));
         return;
       }
-      const target: SlotTarget =
-        assets.length === 1 && assets[0].kind === 'video' ? { kind: 'video' } : { kind: 'single' };
+      // A selection carrying any video targets the reel slot — routing it at
+      // `single` is what let a 2-video selection through to a shape that keeps
+      // only the first and silently discards the rest.
+      const target: SlotTarget = assets.some((asset) => asset.kind === 'video')
+        ? { kind: 'video' }
+        : { kind: 'single' };
       placement.place(assets, target);
     },
     [isCarouselFormat, placement],
@@ -1183,6 +1245,7 @@ export function OrganicDraftPreview({
       : lightbox?.kind === 'slide'
         ? lightboxSlides.map((slide, index) => ({
             url: slide.storageUrl,
+            isVideo: slide.kind === 'video',
             caption:
               lightboxSlides.length > 1
                 ? `Slide ${index + 1} of ${lightboxSlides.length}`

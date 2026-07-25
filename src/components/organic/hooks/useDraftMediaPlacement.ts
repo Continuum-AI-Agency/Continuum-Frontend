@@ -6,7 +6,11 @@
 // attach) go through a single path and always emit publishable media shapes.
 
 import type { CreativeRef, MediaAsset } from '@continuum/contracts';
-import { creativeRefFromAsset, shapeUserSuppliedMedia } from '@continuum/contracts';
+import {
+  creativeRefFromAsset,
+  findMultiVideoSelectionError,
+  shapeUserSuppliedMedia,
+} from '@continuum/contracts';
 import * as React from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { getApiBaseUrl } from '@/lib/api/config';
@@ -49,6 +53,7 @@ export type SlotTarget =
 
 export type PlacementError =
   | { type: 'invalid_kind'; message: string }
+  | { type: 'too_many_videos'; message: string }
   | { type: 'min_slides'; message: string }
   | { type: 'empty_selection'; message: string };
 
@@ -89,22 +94,24 @@ function validateKindForTarget(
   creatives: CreativeRef[],
   target: SlotTarget,
 ): PlacementError | null {
-  const hasVideo = creatives.some((c) => c.kind === 'video');
-  const hasImage = creatives.some((c) => c.kind === 'image');
+  const videoCount = creatives.filter((c) => c.kind === 'video').length;
+  const imageCount = creatives.filter((c) => c.kind === 'image').length;
 
-  if (target.kind === 'carousel_slide' && hasVideo) {
+  if (target.kind === 'carousel_slide' && videoCount > 0) {
     return {
       type: 'invalid_kind',
       message: 'Carousels are image-only in v1. Use the Reel slot for video.',
     };
   }
 
-  if (target.kind === 'video' && hasImage && creatives.length === 1) {
-    // Single image onto a video slot is actually fine — will become an image post.
-    return null;
+  // The reel slot holds exactly one video, and `shapeUserSuppliedMedia` keeps only
+  // the first — so refuse the selection rather than discard the rest of it.
+  const multiVideo = findMultiVideoSelectionError(creatives);
+  if (multiVideo) {
+    return { type: 'too_many_videos', message: `${multiVideo}.` };
   }
 
-  if (target.kind === 'single' && hasVideo && hasImage) {
+  if (videoCount > 0 && imageCount > 0) {
     return {
       type: 'invalid_kind',
       message: 'Cannot mix image and video in a single post.',
