@@ -87,19 +87,23 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
+import { HyperframesAgentBlock } from '../nodes/HyperframesAgentBlock';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { ImageNode } from '../nodes/ImageNode';
 import { NoteNode } from '../nodes/NoteNode';
 import { OmniGenBlock } from '../nodes/OmniGenBlock';
-import { PublishToPlannerBlock } from '../nodes/PublishToPlannerBlock';
+import { OrganicPublisherBlock, PaidPublisherBlock } from '../nodes/PublishingBlock';
 import { StringNode } from '../nodes/StringNode';
 import { TimelineEditorBlock } from '../nodes/TimelineEditorBlock';
 import { VideoDecoderBlock } from '../nodes/VideoDecoderBlock';
-import { VideoEditorBlock } from '../nodes/VideoEditorBlock';
 import { VideoGenBlock } from '../nodes/VideoGenBlock';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
+import {
+  IMAGE_GENERATOR_NODE_BOUNDS,
+  snapNodeDimensionsToAspectRatio,
+} from '../utils/aspectRatioSizing';
 import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
 import { executeWorkflow } from '../utils/executeWorkflow';
@@ -135,9 +139,10 @@ type StudioCanvasNodeType =
   | 'veoFast'
   | 'omniGen'
   | 'extendVideo'
-  | 'videoEditor'
+  | 'hyperframesAgent'
   | 'timelineEditor'
-  | 'publishToPlanner'
+  | 'organicPublisher'
+  | 'paidPublisher'
   | 'string'
   | 'note'
   | 'image'
@@ -185,6 +190,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
     label: 'Video',
     items: [
       {
+        type: 'hyperframesAgent',
+        label: 'HyperFrames Agent',
+        desc: 'Agentic HTML video creation with media references',
+        tag: 'Creative',
+      },
+      {
         type: 'videoGen',
         label: 'Video Generation',
         desc: 'Generate clips with selectable models',
@@ -202,12 +213,6 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         label: 'Extend Video',
         desc: 'Continue existing footage',
         tag: 'Creative',
-      },
-      {
-        type: 'videoEditor',
-        label: 'Video Splicer',
-        desc: 'Concatenate clips in-browser',
-        tag: 'Editing',
       },
       {
         type: 'timelineEditor',
@@ -252,16 +257,28 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         tag: 'Intelligence',
       },
       {
-        type: 'publishToPlanner',
-        label: 'Publish to Planner',
-        desc: 'Attach an edited video to an organic draft',
-        tag: 'Publishing',
-      },
-      {
         type: 'note',
         label: 'Note / Annotation',
         desc: 'Free-text canvas note with bold (⌘B)',
         tag: 'Utility',
+      },
+    ],
+  },
+  {
+    value: 'publishing',
+    label: 'Publishing',
+    items: [
+      {
+        type: 'organicPublisher',
+        label: 'Organic Planner',
+        desc: 'Attach an image, carousel, or video to a Planner draft',
+        tag: 'Publishing',
+      },
+      {
+        type: 'paidPublisher',
+        label: 'Paid Ad',
+        desc: 'Replace creative on a paused or active Meta ad',
+        tag: 'Publishing',
       },
     ],
   },
@@ -274,9 +291,10 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'veoFast',
   'omniGen',
   'extendVideo',
-  'videoEditor',
+  'hyperframesAgent',
   'timelineEditor',
-  'publishToPlanner',
+  'organicPublisher',
+  'paidPublisher',
   'string',
   'note',
   'image',
@@ -308,32 +326,16 @@ const createNodeConfig = (
         : type === 'veoFast'
           ? 'veo-3.1-fast'
           : DEFAULT_VIDEO_GENERATOR_MODEL);
-    const referenceMode = getVideoGeneratorReferenceMode(model);
-    return {
-      data: { model, prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode },
-      style: { width: 512, height: 288 },
-    };
+    return createNodeData(type, {
+      model,
+      referenceMode: getVideoGeneratorReferenceMode(model),
+    });
   }
 
   if (type === 'extendVideo') {
     return {
       data: { prompt: '' },
       style: { width: 360, height: 200 },
-    };
-  }
-
-  if (type === 'videoEditor') {
-    return {
-      data: {
-        clipSlots: [
-          { id: crypto.randomUUID?.() ?? `slot-${Date.now()}-1`, order: 0 },
-          { id: crypto.randomUUID?.() ?? `slot-${Date.now()}-2`, order: 1 },
-        ],
-        outputFormat: 'mp4',
-        videoCodec: 'avc',
-        audioCodec: 'aac',
-      },
-      style: { width: 380, height: 460 },
     };
   }
 
@@ -350,15 +352,16 @@ const createNodeConfig = (
     };
   }
 
+  if (type === 'hyperframesAgent') {
+    return createNodeData('hyperframesAgent');
+  }
+
   if (type === 'string') {
     return { data: { value: '' } };
   }
 
-  if (type === 'publishToPlanner') {
-    return {
-      data: { clientKey: crypto.randomUUID?.() ?? `pub-${Date.now()}`, status: 'draft' },
-      style: { width: 300, height: 220 },
-    };
+  if (type === 'organicPublisher' || type === 'paidPublisher') {
+    return createNodeData(type);
   }
 
   if (type === 'note') {
@@ -373,10 +376,7 @@ const createNodeConfig = (
   }
 
   if (type === 'omniGen') {
-    return {
-      data: { model: 'gemini-omni-flash', prompt: '', aspectRatio: '16:9', variations: [] },
-      style: { width: 512, height: 360 },
-    };
+    return createNodeData('omniGen');
   }
 
   if (type === 'image') {
@@ -413,9 +413,10 @@ const nodeTypes = {
   veoFast: VideoGenBlock,
   omniGen: OmniGenBlock,
   extendVideo: ExtendVideoBlock,
-  videoEditor: VideoEditorBlock,
+  hyperframesAgent: HyperframesAgentBlock,
   timelineEditor: TimelineEditorBlock,
-  publishToPlanner: PublishToPlannerBlock,
+  organicPublisher: OrganicPublisherBlock,
+  paidPublisher: PaidPublisherBlock,
   string: StringNode,
   note: NoteNode,
   image: ImageNode,
@@ -610,6 +611,20 @@ function collectApplyAssetCandidates(nodes: StudioNode[]): ApplyAssetCandidate[]
   return [...imageCandidates, ...videoCandidates];
 }
 
+// The planner seed draws bigger generator nodes than the canvas default so a handoff
+// reads at a glance, but the SHAPE still comes from the one sizing helper — a seed that
+// hardcodes both dimensions is how a 9:16 post ends up in a landscape box (#230).
+function seedGeneratorStyle(aspectRatio: string, edge: number): { width: number; height: number } {
+  return snapNodeDimensionsToAspectRatio({
+    aspectRatio,
+    currentWidth: edge,
+    currentHeight: edge,
+    minWidth: IMAGE_GENERATOR_NODE_BOUNDS.minWidth,
+    minHeight: IMAGE_GENERATOR_NODE_BOUNDS.minHeight,
+    fallbackWidth: edge,
+  });
+}
+
 function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
   const workflowSpec = resolveWorkflowConceptSpec({
     platform: seed.platform,
@@ -629,20 +644,20 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
 
   if (workflowSpec.outputKind === 'video') {
     const videoNodeId = `organic-seed-reel-${seed.draftId}`;
+    // A Reel is vertical. This seed used to be stamped with the 16:9 default box, so the
+    // very first thing a planner handoff showed for a 9:16 post was a landscape node.
+    const seedAspectRatio = seed.postType === 'reel' ? '9:16' : '16:9';
     const nodes: StudioNode[] = [
       textNode,
       {
         id: videoNodeId,
         type: 'videoGen',
         position: { x: 620, y: 160 },
-        data: {
+        ...createNodeData('videoGen', {
           model: workflowSpec.defaultModel,
-          prompt: '',
-          negativePrompt: '',
-          enhancePrompt: false,
           referenceMode: 'frames',
-        },
-        style: { width: 512, height: 288 },
+          aspectRatio: seedAspectRatio,
+        }),
       } as StudioNode,
     ];
 
@@ -713,7 +728,7 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
           imageSize: '512px',
           maxReferenceImages: workflowSpec.maxReferenceImages,
         },
-        style: { width: 340, height: 340 },
+        style: seedGeneratorStyle('1:1', 340),
       } as StudioNode);
 
       edges.push({
@@ -757,7 +772,7 @@ function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
       // the posted image, editable in place. See buildSeedGeneratedImageData.
       ...(seedImage ? buildSeedGeneratedImageData(seedImage) : {}),
     },
-    style: { width: 420, height: 420 },
+    style: seedGeneratorStyle('1:1', 420),
   } as StudioNode;
   const nodes: StudioNode[] = [textNode, imageGenNode];
   const edges: Edge[] = [
@@ -2098,8 +2113,16 @@ export function StudioCanvas({
     <ReactFlowProvider>
       <div className="flex h-full min-h-0 w-full flex-col bg-background">
         {!embedded && (
-          <div className="relative z-[100] flex h-14 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b bg-background px-4">
-            <div className="flex min-w-0 items-center gap-4">
+          // One fixed-height row held ~11 children that could neither wrap nor shrink, so
+          // opening the Studio from the planner drew the readiness pill and the
+          // Back/Apply buttons ON TOP of the workspace tabs (Airtable #224). The row
+          // wraps now, each group keeps its own line, and the tabs scroll inside their
+          // own box instead of painting outside the group that holds them.
+          <div
+            className="relative z-[100] flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b bg-background px-4 py-2"
+            data-testid="studio-canvas-header"
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto">
               <div className="flex shrink-0 items-center gap-2 text-lg font-bold">
                 <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
                   Continuum
@@ -2107,7 +2130,10 @@ export function StudioCanvas({
                 <span className="font-normal text-muted-foreground">Studio</span>
               </div>
               <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
-              <div data-tour-id="studio-multiplayer" className="flex min-w-0 items-center gap-4">
+              <div
+                data-tour-id="studio-multiplayer"
+                className="flex min-w-0 shrink items-center gap-4"
+              >
                 <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
                   <CanvasSyncStatus
                     status={realtime.status}
@@ -2132,11 +2158,11 @@ export function StudioCanvas({
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
               {organicPlannerSeed ? (
                 <>
                   {applyReadiness && workflowSummaryLabel ? (
-                    <div className="hidden min-w-[18rem] items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2 lg:flex">
+                    <div className="hidden w-72 max-w-full items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2 lg:flex">
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <Badge variant="outline" className="h-5 px-2 text-2xs">

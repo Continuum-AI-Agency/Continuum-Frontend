@@ -21,7 +21,6 @@ import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -52,8 +51,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { NanoGenNodeData, StudioNode } from '../types';
 import {
-  getAspectRatioValue,
-  simplifyAspectRatio,
+  IMAGE_GENERATOR_NODE_BOUNDS,
   snapNodeDimensionsToAspectRatio,
 } from '../utils/aspectRatioSizing';
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
@@ -142,9 +140,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           aspectRatio: value,
           currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
           currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
-          minWidth: 200,
-          minHeight: 200,
-          fallbackWidth: 400,
+          minWidth: IMAGE_GENERATOR_NODE_BOUNDS.minWidth,
+          minHeight: IMAGE_GENERATOR_NODE_BOUNDS.minHeight,
+          fallbackWidth: IMAGE_GENERATOR_NODE_BOUNDS.fallbackWidth,
         });
 
         return {
@@ -221,37 +219,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       console.warn('[studio] failed to re-sign expired image url', err);
     }
   }, [data, id]);
-  // The node renders its output in a fixed-ratio box inside an overflow-hidden card.
-  // When the node's own box does not carry the image's ratio the render is CLIPPED —
-  // a 1:1 image in the 400x225 default box lost its top and bottom, which read as an
-  // unrequested crop. Snap the node to what actually came back.
-  const handleImageLoad = useCallback(
-    (event: React.SyntheticEvent<HTMLImageElement>) => {
-      const { naturalWidth, naturalHeight } = event.currentTarget;
-      if (!naturalWidth || !naturalHeight) return;
-      const rendered = simplifyAspectRatio(naturalWidth, naturalHeight);
-
-      updateNode(id, (node) => {
-        const next = snapNodeDimensionsToAspectRatio({
-          aspectRatio: rendered,
-          currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
-          currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
-          minWidth: 200,
-          minHeight: 200,
-          fallbackWidth: 400,
-        });
-
-        const current = node.style ?? {};
-        if (current.width === next.width && current.height === next.height) return node;
-        return { ...node, style: { ...current, width: next.width, height: next.height } };
-      });
-    },
-    [id, updateNode],
-  );
-
+  // A node used to RE-SIZE ITSELF when a generation came back at a ratio other than the
+  // one selected — the box moved under the user with no gesture behind it ("images
+  // should be still unless you change the format", Airtable #232). The box is derived
+  // from the selected ratio at creation and on ratio change, and nowhere else; a
+  // mismatched render is letterboxed by object-contain rather than resizing the node.
   const refImageLimit = data.maxReferenceImages ?? 14;
   const aspectRatio = data.aspectRatio || '16:9';
-  const ratio = getAspectRatioValue(aspectRatio);
   const fileBaseName = `image-${id}`;
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
   const model = data.model ?? 'nano-banana-2';
@@ -305,7 +279,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="absolute -top-3 left-3 z-10">
+          {/* Inside the card's top-left, not straddling its border: `-top-3` against a
+              24px chip put exactly half of it outside the node (Airtable #229). */}
+          <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
             <GroundingChip
               brandId={brandId}
               skillIds={data.skillIds}
@@ -313,11 +289,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
               editable
               onToggleSkill={handleToggleSkill}
               onTogglePiece={handleToggleBrandPiece}
+              className="bg-background/90 shadow-sm backdrop-blur-sm"
             />
           </div>
           <NodeResizer
-            minWidth={200}
-            minHeight={200}
+            minWidth={IMAGE_GENERATOR_NODE_BOUNDS.minWidth}
+            minHeight={IMAGE_GENERATOR_NODE_BOUNDS.minHeight}
+            keepAspectRatio
             isVisible={selected}
             lineClassName="border-brand-primary/60"
             handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
@@ -345,26 +323,27 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             selected={selected}
             className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
           >
-            <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
+            {/* The node's own box carries the aspect ratio now (and re-snaps to whatever
+                the model actually returned, see handleImageLoad), so the preview simply
+                fills it. A Radix AspectRatio here sized itself from the WIDTH and ignored
+                h-full: a 9:16 ratio in a 400-wide box computed ~400x711 and the
+                overflow-hidden card clipped it, which read as extreme zoom (#232). */}
+            <NodeContent
+              className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview"
+              data-testid="studio-node-preview"
+            >
               {data.isExecuting ? (
                 <div className="w-full h-full flex items-center justify-center bg-muted p-4">
-                  <AspectRatio ratio={ratio} className="w-full h-full">
-                    <GenerationPulseLoader />
-                  </AspectRatio>
+                  <GenerationPulseLoader />
                 </div>
               ) : previewImage ? (
                 <div className="relative w-full h-full flex items-center justify-center bg-muted">
-                  <div className="w-full h-full">
-                    <AspectRatio ratio={ratio} className="h-full w-full">
-                      <img
-                        src={previewImage as string}
-                        alt="Generated result"
-                        className="h-full w-full object-contain"
-                        onLoad={handleImageLoad}
-                        onError={handleImageError}
-                      />
-                    </AspectRatio>
-                  </div>
+                  <img
+                    src={previewImage as string}
+                    alt="Generated result"
+                    className="h-full w-full object-contain"
+                    onError={handleImageError}
+                  />
                   <Button
                     variant="secondary"
                     size="icon"

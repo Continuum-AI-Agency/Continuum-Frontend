@@ -21,9 +21,10 @@ export function CanvasRoomsTabs({
     useCanvasRooms(brandProfileId);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const generalRooms = rooms.filter((room) => room.kind !== 'planner');
 
   const handleCreate = async () => {
-    const name = `Workspace ${rooms.length + 1}`;
+    const name = `Workspace ${generalRooms.length + 1}`;
     const newRoom = await createRoom(name);
     if (newRoom) {
       onRoomChange(newRoom.id);
@@ -55,7 +56,13 @@ export function CanvasRoomsTabs({
   if (isLoading) return null;
 
   return (
-    <div className="flex h-10 items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+    // min-w-0 + its own scroller: the tabs are the widest thing in the canvas header, and
+    // without this they painted outside the group holding them, straight over the
+    // planner controls on the other side of the row (Airtable #224).
+    <div
+      className="flex h-10 min-w-0 shrink items-center gap-1.5 overflow-x-auto rounded-lg border border-border bg-muted/40 px-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]"
+      data-testid="canvas-rooms-tabs"
+    >
       {rooms.map((room) => {
         const isActive = room.id === activeRoomId;
         const isEditing = room.id === editingRoomId;
@@ -96,7 +103,12 @@ export function CanvasRoomsTabs({
             ) : (
               <div className="flex items-center gap-2">
                 <span className="whitespace-nowrap">{room.name}</span>
-                {isActive && (
+                {room.kind === 'planner' ? (
+                  <span className="rounded border border-border/70 px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                    Planner
+                  </span>
+                ) : null}
+                {isActive && room.kind !== 'planner' && (
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1.5 ml-1">
                     <Pencil2Icon
                       className="h-3.5 w-3.5 text-muted-foreground hover:scale-110 hover:text-primary"
@@ -105,7 +117,7 @@ export function CanvasRoomsTabs({
                         startEditing(room);
                       }}
                     />
-                    {rooms.length > 1 && (
+                    {generalRooms.length > 1 && (
                       <TrashIcon
                         className="h-3.5 w-3.5 text-muted-foreground hover:scale-110 hover:text-destructive"
                         onClick={(e) => {
@@ -122,7 +134,7 @@ export function CanvasRoomsTabs({
         );
       })}
 
-      {rooms.length < 3 && (
+      {generalRooms.length < 3 && (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

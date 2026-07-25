@@ -1,7 +1,11 @@
 'use client';
 
+import {
+  type PlannerCompositionListResponse,
+  plannerCompositionListResponseSchema,
+} from '@continuum/contracts';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import React from 'react';
 import { CreativeLibrarySidebar } from '@/components/creative-assets/CreativeLibrarySidebar';
 import {
@@ -42,12 +46,15 @@ export default function AIStudioClient({
   initialRoomId,
   focusNodeId,
 }: AIStudioClientProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const source = searchParams.get('source');
   const draftId = searchParams.get('draftId');
   const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(
     null,
   );
+  const [plannerCompositions, setPlannerCompositions] =
+    React.useState<PlannerCompositionListResponse | null>(null);
 
   React.useEffect(() => {
     if (source !== 'organic-planner' || !draftId) {
@@ -57,6 +64,40 @@ export default function AIStudioClient({
 
     setOrganicPlannerSeed(readOrganicPlannerSeedContext(draftId));
   }, [draftId, source]);
+
+  React.useEffect(() => {
+    if (source !== 'organic-planner' || !draftId) {
+      setPlannerCompositions(null);
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      const response = await fetch(
+        `/api/organic/ai-studio/compositions?${new URLSearchParams({
+          brandId: brandProfileId,
+          draftId,
+        }).toString()}`,
+      );
+      if (!response.ok || cancelled) return;
+      const parsed = plannerCompositionListResponseSchema.safeParse(await response.json());
+      if (!parsed.success || cancelled) return;
+      setPlannerCompositions(parsed.data);
+      if (parsed.data.current && !['ready', 'failed'].includes(parsed.data.current.status)) {
+        timer = setTimeout(load, 5_000);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [brandProfileId, draftId, source]);
+
+  const selectedComposition =
+    plannerCompositions?.revisions.find((revision) => revision.timelineNodeId === focusNodeId) ??
+    plannerCompositions?.current ??
+    null;
 
   return (
     <div className="fixed inset-x-0 top-0 h-dvh md:left-[var(--app-sidebar-width,3.5rem)] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
@@ -69,6 +110,37 @@ export default function AIStudioClient({
             <span className="text-sm text-gray-400">Build flows for {brandName}</span>
           </div>
         </div>
+
+        {plannerCompositions?.current && selectedComposition ? (
+          <div className="mx-4 mt-2 flex min-h-9 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-slate-900/75 px-3 py-1.5 text-xs text-slate-300">
+            <span className="font-medium text-white">Planner reel</span>
+            <span className="rounded border border-white/10 px-1.5 py-0.5 capitalize text-slate-300">
+              {selectedComposition.status.replace('_', ' ')}
+            </span>
+            <label className="flex items-center gap-1.5 text-slate-400">
+              Revision
+              <select
+                aria-label="Composition revision"
+                className="h-6 rounded border border-white/10 bg-slate-950 px-1.5 text-xs text-white outline-none focus:border-blue-400"
+                value={selectedComposition.id}
+                onChange={(event) => {
+                  const revision = plannerCompositions.revisions.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  if (revision) router.push(revision.openHref);
+                }}
+              >
+                {plannerCompositions.revisions.map((revision) => (
+                  <option key={revision.id} value={revision.id}>
+                    v{revision.revision} · {revision.status.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {/* No Back-to-Planner here: the canvas header already carries one, and two of
+                them read as two different destinations (Airtable #224). */}
+          </div>
+        ) : null}
 
         {/* Full-bleed: the canvas fills the remaining viewport with no padded or
             bordered box around it, so panning reaches the true edges and the

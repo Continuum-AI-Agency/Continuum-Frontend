@@ -21,7 +21,6 @@ import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -54,7 +53,10 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { OmniGenNodeData, OmniVariation } from '../types';
-import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import {
+  OMNI_GENERATOR_NODE_BOUNDS,
+  snapNodeDimensionsToAspectRatio,
+} from '../utils/aspectRatioSizing';
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
@@ -125,9 +127,9 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
           aspectRatio: value,
           currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
           currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
-          minWidth: 320,
-          minHeight: 260,
-          fallbackWidth: 512,
+          minWidth: OMNI_GENERATOR_NODE_BOUNDS.minWidth,
+          minHeight: OMNI_GENERATOR_NODE_BOUNDS.minHeight,
+          fallbackWidth: OMNI_GENERATOR_NODE_BOUNDS.fallbackWidth,
         });
         return {
           ...node,
@@ -327,7 +329,9 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            <div className="absolute -top-3 left-3 z-10">
+            {/* Inside the card's top-left, not straddling its border: `-top-3` against a
+                24px chip put exactly half of it outside the node (Airtable #229). */}
+            <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
               <GroundingChip
                 brandId={brandId}
                 skillIds={data.skillIds}
@@ -335,11 +339,13 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                 editable
                 onToggleSkill={handleToggleSkill}
                 onTogglePiece={handleToggleBrandPiece}
+                className="bg-background/90 shadow-sm backdrop-blur-sm"
               />
             </div>
             <NodeResizer
-              minWidth={320}
-              minHeight={260}
+              minWidth={OMNI_GENERATOR_NODE_BOUNDS.minWidth}
+              minHeight={OMNI_GENERATOR_NODE_BOUNDS.minHeight}
+              keepAspectRatio
               isVisible={selected}
               lineClassName="border-brand-primary/60"
               handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
@@ -369,9 +375,14 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             >
               <NodeContent className="relative flex h-full min-h-0 flex-col p-0">
                 <div className="relative flex-1 min-h-0 bg-muted/30">
-                  <AspectRatio
-                    ratio={aspectRatio === '16:9' ? 16 / 9 : 9 / 16}
-                    className="h-full w-full overflow-hidden bg-muted"
+                  {/* The node's own box carries the aspect ratio now, so the preview simply
+                      fills it. A Radix AspectRatio here sized itself from the WIDTH and
+                      ignored h-full: a 9:16 ratio in a 512-wide box computed ~512x910 and
+                      the overflow-hidden card clipped it, which read as extreme zoom
+                      (Airtable #232). object-contain letterboxes instead of cropping. */}
+                  <div
+                    className="relative h-full w-full overflow-hidden bg-muted"
+                    data-testid="studio-node-preview"
                   >
                     {previewPending ? (
                       <div className="flex h-full w-full items-center justify-center bg-muted p-4">
@@ -433,7 +444,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                         </Button>
                       </div>
                     )}
-                  </AspectRatio>
+                  </div>
                 </div>
 
                 {hasChain && (

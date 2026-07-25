@@ -66,16 +66,11 @@ export function getDefaultNodeData(type: NodeType): {
       return createNodeData('nanoGen', { label: 'Image Block' });
     case 'videoGen':
     case 'veoDirector':
-      return {
-        data: {
-          model: DEFAULT_VIDEO_GENERATOR_MODEL,
-          prompt: '',
-          enhancePrompt: false,
-          referenceMode: getVideoGeneratorReferenceMode(DEFAULT_VIDEO_GENERATOR_MODEL),
-          label: 'Video Block',
-        },
-        style: { width: 512, height: 288 },
-      };
+      return createNodeData(type, {
+        model: DEFAULT_VIDEO_GENERATOR_MODEL,
+        referenceMode: getVideoGeneratorReferenceMode(DEFAULT_VIDEO_GENERATOR_MODEL),
+        label: 'Video Block',
+      });
     case 'extendVideo':
       return {
         data: {

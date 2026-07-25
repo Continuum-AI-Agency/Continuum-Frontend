@@ -11,7 +11,7 @@
 // bytes at run time, so the seed never rots the way a stored signed URL would.
 
 import type { BrandBookPieceKind } from '@continuum/contracts';
-import { getAspectRatioValue } from '@/StudioCanvas/utils/aspectRatioSizing';
+import { snapNodeDimensionsToAspectRatio } from '@/StudioCanvas/utils/aspectRatioSizing';
 import { QUICK_LOOK_BASE_PROMPT, RESIZE_PRESETS, type ResizePreset } from './quickLook';
 
 export const LIBRARY_CANVAS_TEMPLATES = ['brand-align', 'resize-pack', 'blank'] as const;
@@ -27,7 +27,7 @@ const GEN_IMAGE_SIZE = '1K';
 const REFERENCE_NODE_SIZE = 208;
 const GEN_MIN_WIDTH = 260;
 const GEN_MIN_HEIGHT = 180;
-const GEN_TARGET_AREA = 400 * 400;
+const GEN_TARGET_EDGE = 400;
 const GEN_COLUMN_X = 620;
 const GEN_ROW_GAP = 60;
 const ORIGIN = { x: 120, y: 160 } as const;
@@ -73,22 +73,20 @@ export type BuildTemplateInput = {
   presets?: readonly ResizePreset[];
 };
 
-// A generation node sized to its own aspect ratio, so the canvas reads as the pack
-// it produces rather than a column of identical squares.
+// A generation node sized to its own aspect ratio, so the canvas reads as the pack it
+// produces rather than a column of identical squares. This used to be a hand-rolled
+// clone of snapNodeDimensionsToAspectRatio and would have drifted from the canvas the
+// first time either changed; only the envelope is local now — a library pack is drawn
+// larger than a bare node, and the shape comes from the one shared helper.
 function genNodeSize(aspectRatio: string): { width: number; height: number } {
-  const ratio = getAspectRatioValue(aspectRatio);
-  const safeRatio = ratio > 0 ? ratio : 1;
-  let width = Math.sqrt(GEN_TARGET_AREA * safeRatio);
-  let height = width / safeRatio;
-  if (width < GEN_MIN_WIDTH) {
-    width = GEN_MIN_WIDTH;
-    height = width / safeRatio;
-  }
-  if (height < GEN_MIN_HEIGHT) {
-    height = GEN_MIN_HEIGHT;
-    width = height * safeRatio;
-  }
-  return { width: Math.round(width), height: Math.round(height) };
+  return snapNodeDimensionsToAspectRatio({
+    aspectRatio,
+    currentWidth: GEN_TARGET_EDGE,
+    currentHeight: GEN_TARGET_EDGE,
+    minWidth: GEN_MIN_WIDTH,
+    minHeight: GEN_MIN_HEIGHT,
+    fallbackWidth: GEN_TARGET_EDGE,
+  });
 }
 
 export function referenceNodeId(seedId: string): string {

@@ -14,7 +14,6 @@ import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -45,7 +44,10 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoGenNodeData } from '../types';
-import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import {
+  snapNodeDimensionsToAspectRatio,
+  VIDEO_GENERATOR_NODE_BOUNDS,
+} from '../utils/aspectRatioSizing';
 import { toggleBrandPiece, toggleSkillId } from '../utils/brandEnforcement';
 import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
@@ -164,9 +166,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
           aspectRatio: value,
           currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
           currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
-          minWidth: 300,
-          minHeight: 170,
-          fallbackWidth: 512,
+          minWidth: VIDEO_GENERATOR_NODE_BOUNDS.minWidth,
+          minHeight: VIDEO_GENERATOR_NODE_BOUNDS.minHeight,
+          fallbackWidth: VIDEO_GENERATOR_NODE_BOUNDS.fallbackWidth,
         });
 
         return {
@@ -268,7 +270,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            <div className="absolute -top-3 left-3 z-10">
+            {/* Inside the card's top-left, not straddling its border: `-top-3` against a
+                24px chip put exactly half of it outside the node (Airtable #229). */}
+            <div className="absolute left-2 top-2 z-10" data-testid="studio-grounding-chip">
               <GroundingChip
                 brandId={brandId}
                 skillIds={data.skillIds}
@@ -276,11 +280,13 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                 editable
                 onToggleSkill={handleToggleSkill}
                 onTogglePiece={handleToggleBrandPiece}
+                className="bg-background/90 shadow-sm backdrop-blur-sm"
               />
             </div>
             <NodeResizer
-              minWidth={300}
-              minHeight={170}
+              minWidth={VIDEO_GENERATOR_NODE_BOUNDS.minWidth}
+              minHeight={VIDEO_GENERATOR_NODE_BOUNDS.minHeight}
+              keepAspectRatio
               isVisible={selected}
               lineClassName="border-brand-primary/60"
               handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
@@ -309,9 +315,14 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
               className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
             >
               <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
-                <AspectRatio
-                  ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16}
-                  className="h-full w-full overflow-hidden bg-muted"
+                {/* The node's own box carries the aspect ratio now, so the preview simply
+                    fills it. A Radix AspectRatio here sized itself from the WIDTH and
+                    ignored h-full: a 9:16 ratio in a 512-wide box computed ~512x910 and
+                    the overflow-hidden card clipped it, which read as extreme zoom
+                    (Airtable #232). object-contain letterboxes instead of cropping. */}
+                <div
+                  className="relative h-full w-full overflow-hidden bg-muted"
+                  data-testid="studio-node-preview"
                 >
                   {data.isExecuting ? (
                     <div className="w-full h-full flex items-center justify-center bg-muted p-4">
@@ -353,7 +364,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                       </Empty>
                     </div>
                   )}
-                </AspectRatio>
+                </div>
               </NodeContent>
             </CanvasNode>
 

@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  generatorNodeStyle,
   getAspectRatioValue,
+  IMAGE_GENERATOR_NODE_BOUNDS,
+  OMNI_GENERATOR_NODE_BOUNDS,
   simplifyAspectRatio,
   snapNodeDimensionsToAspectRatio,
+  VIDEO_GENERATOR_NODE_BOUNDS,
 } from './aspectRatioSizing';
 
 describe('aspectRatioSizing', () => {
@@ -42,5 +46,48 @@ describe('aspectRatioSizing', () => {
 
   it('rounds fractional pixel dimensions before reducing', () => {
     expect(simplifyAspectRatio(1919.6, 1079.6)).toBe('16:9');
+  });
+
+  // The canvas re-exports the contracts helpers so the browser and the agent write path
+  // size a node identically. If this file ever stops seeing them, a hand-rolled copy has
+  // crept back in — which is exactly how the library seeder drifted.
+  it('re-exports the generator envelopes the canvas nodes are built from', () => {
+    expect(IMAGE_GENERATOR_NODE_BOUNDS.area).toEqual({ width: 400, height: 225 });
+    expect(VIDEO_GENERATOR_NODE_BOUNDS.area).toEqual({ width: 512, height: 288 });
+    expect(OMNI_GENERATOR_NODE_BOUNDS.area).toEqual({ width: 512, height: 360 });
+  });
+
+  it('reads a locked node box back as the ratio that produced it', () => {
+    for (const bounds of [
+      IMAGE_GENERATOR_NODE_BOUNDS,
+      VIDEO_GENERATOR_NODE_BOUNDS,
+      OMNI_GENERATOR_NODE_BOUNDS,
+    ]) {
+      for (const ratio of ['16:9', '9:16', '1:1', '4:5']) {
+        const style = generatorNodeStyle(ratio, bounds);
+        const readBack = simplifyAspectRatio(style.width, style.height);
+        expect(getAspectRatioValue(readBack)).toBeCloseTo(getAspectRatioValue(ratio), 2);
+      }
+    }
+  });
+
+  it('is idempotent, which is what an aspect-locked resizer re-snaps against', () => {
+    const first = snapNodeDimensionsToAspectRatio({
+      aspectRatio: '9:16',
+      currentWidth: 777,
+      currentHeight: 225,
+      minWidth: 200,
+      minHeight: 200,
+      fallbackWidth: 400,
+    });
+    const second = snapNodeDimensionsToAspectRatio({
+      aspectRatio: '9:16',
+      currentWidth: first.width,
+      currentHeight: first.height,
+      minWidth: 200,
+      minHeight: 200,
+      fallbackWidth: 400,
+    });
+    expect(second).toEqual(first);
   });
 });
