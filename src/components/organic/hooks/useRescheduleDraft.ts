@@ -1,10 +1,13 @@
 'use client';
 
-import { organicRescheduleDraftRequestSchema } from '@continuum/contracts';
+import {
+  applyPlannerFutureFloor,
+  organicRescheduleDraftRequestSchema,
+  plannerInstantFromDayTime,
+} from '@continuum/contracts';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
-  buildScheduledAt,
   makeCalendarDay,
   UNSCHEDULED_DAY_ID,
 } from '@/components/organic/primitives/calendar-utils';
@@ -14,10 +17,6 @@ import { request } from '@/lib/api/http';
 import { useCalendarStore } from '@/lib/organic/store';
 
 const DAY_ID_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-// A day computed to be in the past would make the scheduled-publish poller fire the
-// instant the row persists (the reschedule route writes scheduled_date verbatim — no
-// server-side normalizeScheduledAt), so floor any past target to a few minutes out.
-const PAST_GUARD_FLOOR_MS = 5 * 60 * 1000;
 // Bulk selections can be large; persist a bounded number of PATCHes at a time so a
 // 50-draft move does not open 50 concurrent connections.
 const PERSIST_CONCURRENCY = 4;
@@ -53,14 +52,13 @@ function snapshotDraft(days: OrganicCalendarDay[], draftId: string): RescheduleS
 }
 
 // The new day keeps the chip's existing time-of-day; floor to the future if that lands
-// in the past. Returns null when the day id or time can't produce a real instant.
+// in the past. Both steps come from @continuum/contracts so a drag here and a
+// `planner_manage action=reschedule` call on the Backend normalize identically —
+// same time-of-day carry-over, same zone resolution, same past guard.
 function computeScheduledDate(targetDayId: string, timeLabel: string): string | null {
-  const built = buildScheduledAt(targetDayId, timeLabel);
+  const built = plannerInstantFromDayTime({ dayId: targetDayId, timeOfDay: timeLabel });
   if (!built) return null;
-  const target = new Date(built).getTime();
-  if (!Number.isFinite(target)) return null;
-  if (target < Date.now()) return new Date(Date.now() + PAST_GUARD_FLOOR_MS).toISOString();
-  return built;
+  return applyPlannerFutureFloor(built);
 }
 
 function dateLabelForDay(days: OrganicCalendarDay[], targetDayId: string): string {

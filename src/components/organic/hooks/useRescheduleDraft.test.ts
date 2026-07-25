@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import {
+  applyPlannerFutureFloor,
+  movePlannerDraftToDay,
+  plannerInstantFromDayTime,
+} from '@continuum/contracts';
 import { act, renderHook } from '@testing-library/react';
 
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
@@ -129,6 +134,36 @@ describe('useRescheduleDraft', () => {
     expect(show.mock.calls[0]?.[0]?.variant).toBe('error');
   });
 
+  // Anti-drift: the instant this hook PATCHes must be the instant
+  // `planner_manage action=reschedule` would write for the same move. Both call the
+  // same two contract helpers, so this asserts the UI has not grown its own arithmetic.
+  it('normalizes through the shared @continuum/contracts planner schedule', async () => {
+    seedDays([draft('a', { timeLabel: '5:00 PM' })]);
+    const target = dayIdAhead(20);
+    const { result } = renderHook(() => useRescheduleDraft());
+
+    await act(async () => {
+      await result.current.reschedule('a', target);
+    });
+
+    const sent = requestCalls[0]?.body?.scheduled_date ?? '';
+    const viaContract = applyPlannerFutureFloor(
+      plannerInstantFromDayTime({ dayId: target, timeOfDay: '5:00 PM' }) ?? '',
+    );
+    expect(sent).toBe(viaContract);
+
+    // …and the Backend's move helper, given the instant the UI just wrote, keeps
+    // the same time-of-day when it moves the draft on again.
+    const backendMove = movePlannerDraftToDay({
+      fromIso: sent,
+      targetDayId: dayIdAhead(21),
+    });
+    expect(backendMove?.timeOfDay).toBe('17:00');
+  });
+
+  // Manual-origin drafts stay with the debounced autosave HERE (it re-persists
+  // slot_data.dayId, which is what the grid reads for them); the server-side
+  // equivalent lives in planner_manage, which rewrites that same slot key itself.
   it('does NOT PATCH a manual-origin draft (autosave owns it)', async () => {
     seedDays([draft('a', { origin: 'manual' })]);
     const target = dayIdAhead(20);
