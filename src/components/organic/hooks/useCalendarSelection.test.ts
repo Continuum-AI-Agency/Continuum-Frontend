@@ -1,0 +1,153 @@
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
+
+const storeState: {
+  selectedDraftId: string | null;
+  selectedDraftIds: string[];
+  setSelectedDraftId: (id: string | null) => void;
+  toggleDraftSelection: (id: string) => void;
+  clearDraftSelection: () => void;
+  bulkDeleteDrafts: (ids: string[]) => void;
+} = {
+  selectedDraftId: null,
+  selectedDraftIds: [],
+  setSelectedDraftId: mock((id: string | null) => {
+    storeState.selectedDraftId = id;
+  }),
+  toggleDraftSelection: mock(),
+  clearDraftSelection: mock(() => {
+    storeState.selectedDraftIds = [];
+  }),
+  bulkDeleteDrafts: mock(),
+};
+
+mock.module('@/lib/organic/store', () => createCalendarStoreStub(storeState));
+
+mock.module('../primitives/DraftDeletionConfirmation', () => ({
+  useDraftDeletionConfirmation: () => ({ requestDraftDeletion: mock() }),
+}));
+
+import { useCalendarSelection } from './useCalendarSelection';
+
+function renderSelection(selectedDraftId: string | null = null) {
+  storeState.selectedDraftId = selectedDraftId;
+  storeState.selectedDraftIds = [];
+  return renderHook(() => useCalendarSelection([]));
+}
+
+describe('useCalendarSelection', () => {
+  beforeEach(() => {
+    storeState.selectedDraftId = null;
+    storeState.selectedDraftIds = [];
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('starts expanded and suppresses nothing', () => {
+    const { result } = renderSelection('draft-1');
+    expect(result.current.isPreviewCollapsed).toBe(false);
+    expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(false);
+  });
+
+  // Collapsing is what the panel's chevron does. It is deliberately NOT clearAll:
+  // the draft stays selected so the preview can be re-opened in place.
+  it('collapses the preview without clearing the selection', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() => result.current.collapsePreview());
+    rerender();
+
+    expect(result.current.isPreviewCollapsed).toBe(true);
+    expect(storeState.selectedDraftId).toBe('draft-1');
+    expect(result.current.selectedId).toBe('draft-1');
+  });
+
+  // The regression this hook exists to prevent: with `?draftId=` in the URL the
+  // workspace's deep-link watcher re-selects the draft on the very next render, so
+  // a collapse that only nulled the selection was undone before it could paint.
+  it('keeps a collapsed preview collapsed while a deep-linked draft stays selected', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() => result.current.collapsePreview());
+    rerender();
+
+    // Simulate the deep-link watcher re-asserting the same draft.
+    act(() => storeState.setSelectedDraftId('draft-1'));
+    rerender();
+
+    expect(result.current.isPreviewCollapsed).toBe(true);
+    expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(true);
+  });
+
+  it('suppresses auto-select for the draft the user just closed', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() => result.current.clearAll());
+    rerender();
+
+    expect(storeState.selectedDraftId).toBeNull();
+    expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(true);
+    // Only that draft: closing one preview must not stop another from opening.
+    expect(result.current.isAutoSelectSuppressed('draft-2')).toBe(false);
+    expect(result.current.isAutoSelectSuppressed(null)).toBe(false);
+    expect(result.current.isPreviewCollapsed).toBe(false);
+  });
+
+  it('re-opens on expand and clears the suppression', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() => result.current.collapsePreview());
+    rerender();
+    act(() => result.current.expandPreview());
+    rerender();
+
+    expect(result.current.isPreviewCollapsed).toBe(false);
+    expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(false);
+  });
+
+  // A user can always get the panel back: picking the row again re-opens it even
+  // after it was closed or collapsed.
+  it('re-opens when the user selects the dismissed draft again', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() => result.current.collapsePreview());
+    rerender();
+    act(() => result.current.handleSelect('draft-1'));
+    rerender();
+
+    expect(result.current.isPreviewCollapsed).toBe(false);
+    expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(false);
+    expect(storeState.selectedDraftId).toBe('draft-1');
+  });
+
+  it('leaves the preview alone for a multi-select toggle', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() => result.current.collapsePreview());
+    rerender();
+    act(() => result.current.handleSelect('draft-2', true));
+    rerender();
+
+    expect(result.current.isPreviewCollapsed).toBe(true);
+    expect(storeState.selectedDraftId).toBe('draft-1');
+  });
+
+  it('closes the preview on Escape', () => {
+    const { result, rerender } = renderSelection('draft-1');
+
+    act(() =>
+      result.current.handleKeyDown({
+        key: 'Escape',
+        preventDefault: () => undefined,
+        shiftKey: false,
+      } as React.KeyboardEvent),
+    );
+    rerender();
+
+    expect(storeState.selectedDraftId).toBeNull();
+    expect(result.current.isAutoSelectSuppressed('draft-1')).toBe(true);
+  });
+});

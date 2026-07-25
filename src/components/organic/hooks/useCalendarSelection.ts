@@ -37,22 +37,54 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
     return indexById;
   }, [orderedDraftIds]);
 
+  // Collapsing is a distinct operation from clearing: the draft stays selected
+  // (so the preview can be re-opened without hunting for the row again) while the
+  // panel renders at zero width.
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = React.useState(false);
+
+  // The draft the user last dismissed from the preview panel. Two effects in the
+  // workspace re-select a draft automatically — the `?draftId=` deep link and the
+  // last-draft restore — and both fire the instant a selection is nulled, which
+  // made close, collapse and Escape all read as dead buttons whenever the URL
+  // carried a draftId. Those effects consult this before re-selecting.
+  const [dismissedDraftId, setDismissedDraftId] = React.useState<string | null>(null);
+
   const handleSelect = React.useCallback(
     (id: string, isMulti: boolean = false) => {
       if (isMulti) {
         toggleDraftSelection(id);
-      } else {
-        setSelectedDraftId(id);
-        clearDraftSelection();
+        return;
       }
+      setSelectedDraftId(id);
+      clearDraftSelection();
+      setIsPreviewCollapsed(false);
+      setDismissedDraftId(null);
     },
     [toggleDraftSelection, setSelectedDraftId, clearDraftSelection],
   );
 
   const clearAll = React.useCallback(() => {
+    setDismissedDraftId(selectedDraftId);
     setSelectedDraftId(null);
     clearDraftSelection();
-  }, [setSelectedDraftId, clearDraftSelection]);
+    setIsPreviewCollapsed(false);
+  }, [selectedDraftId, setSelectedDraftId, clearDraftSelection]);
+
+  const collapsePreview = React.useCallback(() => {
+    setDismissedDraftId(selectedDraftId);
+    setIsPreviewCollapsed(true);
+  }, [selectedDraftId]);
+
+  const expandPreview = React.useCallback(() => {
+    setDismissedDraftId(null);
+    setIsPreviewCollapsed(false);
+  }, []);
+
+  const isAutoSelectSuppressed = React.useCallback(
+    (candidateDraftId: string | null | undefined) =>
+      candidateDraftId != null && candidateDraftId === dismissedDraftId,
+    [dismissedDraftId],
+  );
 
   const handleDelete = React.useCallback(() => {
     const idsToDelete = selectedDraftId ? [selectedDraftId] : selectedDraftIds;
@@ -69,6 +101,14 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         handleDelete();
         e.preventDefault();
+        return;
+      }
+
+      // Escape closes the preview regardless of where the draft sits. Resolving it
+      // through the ordered index first left Escape dead for any draft outside the
+      // visible range — which is precisely the deep-linked draft the agent opens.
+      if (e.key === 'Escape') {
+        clearAll();
         return;
       }
 
@@ -91,8 +131,6 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
           handleSelect(prevId, e.shiftKey);
           e.preventDefault();
         }
-      } else if (e.key === 'Escape') {
-        clearAll();
       }
     },
     [
@@ -113,5 +151,9 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
     clearAll,
     toggleMulti: toggleDraftSelection,
     handleKeyDown,
+    isPreviewCollapsed,
+    collapsePreview,
+    expandPreview,
+    isAutoSelectSuppressed,
   };
 }

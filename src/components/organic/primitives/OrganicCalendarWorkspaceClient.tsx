@@ -5,7 +5,7 @@ import {
   type OneShotPostResponse,
   type PublishPlatform,
 } from '@continuum/contracts';
-import { Cross2Icon } from '@radix-ui/react-icons';
+import { ChevronLeftIcon, Cross2Icon } from '@radix-ui/react-icons';
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
@@ -238,8 +238,17 @@ function OrganicCalendarWorkspaceInner({
     setAccountContext,
   ]);
 
-  const { selectedId, selectedIds, handleSelect, clearAll, handleKeyDown } =
-    useCalendarSelection(calendarDays);
+  const {
+    selectedId,
+    selectedIds,
+    handleSelect,
+    clearAll,
+    handleKeyDown,
+    isPreviewCollapsed,
+    collapsePreview,
+    expandPreview,
+    isAutoSelectSuppressed,
+  } = useCalendarSelection(calendarDays);
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
@@ -475,6 +484,9 @@ function OrganicCalendarWorkspaceInner({
   // transient gap with the last-resolved draft so the panel never blanks and
   // re-renders with fresh content the moment the draft resolves again.
   const hasSelection = Boolean(selectedId);
+  // Selection keeps the workflow rail on the "review" stage; only an expanded
+  // preview claims layout width.
+  const isPreviewOpen = hasSelection && !isPreviewCollapsed;
   const lastResolvedDraftRef = React.useRef<OrganicCalendarDraft | null>(null);
   if (!selectedId) {
     lastResolvedDraftRef.current = null;
@@ -513,7 +525,11 @@ function OrganicCalendarWorkspaceInner({
         const preferredDraftId =
           initialSelectedDraftId ??
           (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
-        if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
+        if (
+          preferredDraftId &&
+          allDraftIds.has(preferredDraftId) &&
+          !isAutoSelectSuppressed(preferredDraftId)
+        ) {
           setSelectedDraftId(preferredDraftId);
           return;
         }
@@ -522,12 +538,17 @@ function OrganicCalendarWorkspaceInner({
       return;
     }
 
-    // No current selection -- try to restore from initial prop / localStorage
+    // No current selection -- try to restore from initial prop / localStorage,
+    // unless the user just dismissed that very draft from the preview panel.
     if (!selectedId && typeof window !== 'undefined') {
       const preferredDraftId =
         initialSelectedDraftId ??
         (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
-      if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
+      if (
+        preferredDraftId &&
+        allDraftIds.has(preferredDraftId) &&
+        !isAutoSelectSuppressed(preferredDraftId)
+      ) {
         setSelectedDraftId(preferredDraftId);
       }
     }
@@ -535,6 +556,7 @@ function OrganicCalendarWorkspaceInner({
     allDraftIds,
     brandProfileId,
     initialSelectedDraftId,
+    isAutoSelectSuppressed,
     isCalendarHydrated,
     selectedId,
     selectedIds,
@@ -549,11 +571,21 @@ function OrganicCalendarWorkspaceInner({
   // ignored. Watch the param directly and re-select once the target draft is loaded.
   const searchParams = useSearchParams();
   const searchDraftId = searchParams?.get('draftId') ?? null;
+  // The param outlives the panel: closing or collapsing the preview must not be
+  // undone on the very next render by this watcher re-selecting the same draft.
   React.useEffect(() => {
     if (!searchDraftId || searchDraftId === selectedId) return;
     if (!isCalendarHydrated || !allDraftIds.has(searchDraftId)) return;
+    if (isAutoSelectSuppressed(searchDraftId)) return;
     setSelectedDraftId(searchDraftId);
-  }, [searchDraftId, selectedId, isCalendarHydrated, allDraftIds, setSelectedDraftId]);
+  }, [
+    searchDraftId,
+    selectedId,
+    isCalendarHydrated,
+    allDraftIds,
+    isAutoSelectSuppressed,
+    setSelectedDraftId,
+  ]);
 
   const { show } = useToast();
   const { reschedule, rescheduleMany } = useRescheduleDraft();
@@ -1034,7 +1066,7 @@ function OrganicCalendarWorkspaceInner({
     <AiStudioHandoffProvider onOpen={brandProfileId ? handleOpenDraftInStudio : null}>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: planner root is a keyboard-shortcut surface for the whole grid (delete/select), not a single control */}
       <div
-        className="@container/organic h-full min-h-0 w-full overflow-hidden focus:outline-none"
+        className="@container/organic relative h-full min-h-0 w-full overflow-hidden focus:outline-none"
         onKeyDown={handleKeyDown}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so grid-level key handlers fire without a child holding focus
         tabIndex={0}
@@ -1057,11 +1089,11 @@ function OrganicCalendarWorkspaceInner({
           }
         >
           <ResizablePanelGroup
-            key={`${isWidePlanner ? 'wide' : 'narrow'}:${hasSelection ? 'preview' : 'workspace'}`}
+            key={`${isWidePlanner ? 'wide' : 'narrow'}:${isPreviewOpen ? 'preview' : 'workspace'}`}
             id="organic-planner-layout"
             orientation={isWidePlanner ? 'horizontal' : 'vertical'}
             defaultLayout={
-              hasSelection
+              isPreviewOpen
                 ? {
                     'planner-workspace': 100 - (isWidePlanner ? previewPercent : 48),
                     'planner-preview': isWidePlanner ? previewPercent : 48,
@@ -1076,7 +1108,7 @@ function OrganicCalendarWorkspaceInner({
             }}
             className="h-full min-h-0 w-full"
           >
-            <ResizablePanel id="planner-workspace" minSize={hasSelection ? 55 : 100}>
+            <ResizablePanel id="planner-workspace" minSize={isPreviewOpen ? 55 : 100}>
               <motion.section
                 layout
                 transition={layoutTransition}
@@ -1267,13 +1299,13 @@ function OrganicCalendarWorkspaceInner({
                 )}
               </motion.section>
             </ResizablePanel>
-            {hasSelection ? (
+            {isPreviewOpen ? (
               <>
                 <ResizableHandle
                   withHandle
                   collapseDirection={isWidePlanner ? 'right' : undefined}
-                  collapseLabel="Close draft preview"
-                  onCollapse={clearAll}
+                  collapseLabel="Collapse draft preview"
+                  onCollapse={collapsePreview}
                   className={isWidePlanner ? 'mx-1 bg-transparent' : 'my-1 bg-transparent'}
                 />
                 <ResizablePanel
@@ -1393,6 +1425,21 @@ function OrganicCalendarWorkspaceInner({
             ) : null}
           </ResizablePanelGroup>
         </CalendarDndContext>
+
+        {/* The collapse chevron lives on the resize handle, which unmounts with the
+            panel — so collapsing used to remove the only way back. This trigger
+            stays mounted for as long as a draft is selected. */}
+        {hasSelection && isPreviewCollapsed ? (
+          <button
+            type="button"
+            data-testid="planner-preview-expand"
+            aria-label="Expand draft preview"
+            onClick={expandPreview}
+            className="bg-background hover:bg-accent absolute right-1 top-3 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-colors"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        ) : null}
 
         <BulkActionToolbar
           selectedCount={selectedIds.length}

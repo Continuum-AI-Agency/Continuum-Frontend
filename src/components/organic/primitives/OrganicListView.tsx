@@ -10,7 +10,7 @@ import {
   TrashIcon,
 } from '@radix-ui/react-icons';
 import * as React from 'react';
-
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,7 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { UNSCHEDULED_DAY_ID } from './calendar-utils';
-import { resolveDraftMediaAssetUrl } from './DraftCardMedia';
+import { resolveDraftMedia } from './DraftCardMedia';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { statusFrameClasses } from './draft-card-styles';
@@ -113,6 +113,89 @@ function PlannedBadge() {
   );
 }
 
+/**
+ * Keyboard activation for a clickable row. The row cannot be a `<button>` — it
+ * contains its own controls (checkbox, delete) — so it announces itself as one
+ * and answers Enter/Space instead.
+ */
+function rowActivationProps(onSelect: () => void) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: onSelect,
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      onSelect();
+    },
+  };
+}
+
+/**
+ * Row thumbnail. It routes through `ChatMediaThumb` because a video draft used to
+ * be fed to a raw `<img>` by an image-only resolver and rendered as a blank square.
+ */
+function DraftRowThumbnail({ draft }: { draft: OrganicCalendarDraft }) {
+  const media = resolveDraftMedia(draft);
+  return (
+    <div
+      data-testid="draft-row-thumbnail"
+      className="relative h-8 w-8 shrink-0 overflow-hidden rounded bg-muted"
+    >
+      {media ? (
+        <ChatMediaThumb
+          media={{
+            id: draft.id,
+            url: media.url,
+            thumbnailUrl: media.poster ?? undefined,
+            kind: media.kind,
+            name: draft.title,
+          }}
+          fallbackSeed={draft.title}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The floating preview for a list row.
+ *
+ * `side="right"` anchored on a full-width row had no room beside it whenever the
+ * post-preview panel was open, so floating-ui flipped it to `side="left"` — which
+ * anchors at the row's left edge minus the card width, off the left of the screen
+ * with no further fallback (`shift` only rescues the alignment axis, never the
+ * side axis). Anchoring below with `align="start"` puts the overflow on the axis
+ * `shift` can actually correct. The explicit width matches the card the content
+ * renders, so the collision box is not 48px wider than what the user sees.
+ */
+function DraftRowHoverPreview({
+  draft,
+  onEdit,
+  onRegenerate,
+}: {
+  draft: OrganicCalendarDraft;
+  onEdit: () => void;
+  onRegenerate?: () => void;
+}) {
+  return (
+    <HoverCardContent
+      side="bottom"
+      align="start"
+      sideOffset={4}
+      collisionPadding={12}
+      avoidCollisions
+      className="w-[272px] border-none bg-transparent p-0 shadow-none"
+    >
+      <DraftHoverCardContent
+        draft={draft}
+        onEdit={onEdit}
+        onRegenerate={onRegenerate ? () => onRegenerate() : undefined}
+      />
+    </HoverCardContent>
+  );
+}
+
 const DraftRow = React.memo(function DraftRow({
   draft,
   isSelected,
@@ -130,7 +213,6 @@ const DraftRow = React.memo(function DraftRow({
   onDelete: () => void;
   onRegenerate?: () => void;
 }) {
-  const thumbnail = resolveDraftMediaAssetUrl(draft);
   const framePlatform = draft.platforms[0] ?? 'instagram';
 
   return (
@@ -144,27 +226,17 @@ const DraftRow = React.memo(function DraftRow({
                 statusFrameClasses(framePlatform, draft.status, 'row'),
                 isSelected && 'bg-primary/[0.05]',
               )}
-              onClick={onSelect}
+              {...rowActivationProps(onSelect)}
             >
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle();
-                }}
-                className="flex shrink-0 cursor-pointer items-center"
-              >
-                <Checkbox
-                  checked={isMultiSelected}
-                  className="opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
-                />
-              </div>
+              <Checkbox
+                checked={isMultiSelected}
+                aria-label={`Select ${draft.title || 'Untitled'}`}
+                onClick={(e) => e.stopPropagation()}
+                onCheckedChange={() => onToggle()}
+                className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
+              />
 
-              <div className="relative shrink-0 h-8 w-8 overflow-hidden rounded bg-muted">
-                {thumbnail ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumbnail} alt="" className="h-full w-full object-cover" />
-                ) : null}
-              </div>
+              <DraftRowThumbnail draft={draft} />
 
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 {draft.platforms.map((p) => (
@@ -222,18 +294,7 @@ const DraftRow = React.memo(function DraftRow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <HoverCardContent
-        side="right"
-        align="start"
-        className="p-0 border-none bg-transparent shadow-none"
-        avoidCollisions
-      >
-        <DraftHoverCardContent
-          draft={draft}
-          onEdit={() => onSelect()}
-          onRegenerate={onRegenerate ? () => onRegenerate() : undefined}
-        />
-      </HoverCardContent>
+      <DraftRowHoverPreview draft={draft} onEdit={onSelect} onRegenerate={onRegenerate} />
     </HoverCard>
   );
 });
@@ -250,41 +311,49 @@ const BacklogRow = React.memo(function BacklogRow({
   onDelete: () => void;
 }) {
   return (
-    <div
-      className={cn(
-        'group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40',
-        isSelected && 'bg-primary/[0.05]',
-      )}
-      onClick={onSelect}
-    >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {draft.platforms.map((p) => (
-          <PlatformBadge key={p} platform={p} />
-        ))}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {draft.title || 'Untitled'}
-        </span>
-        {draft.captionPreview && (
-          <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
-            {draft.captionPreview}
-          </span>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="text-2xs uppercase tracking-wide text-muted-foreground/60">Backlog</span>
-        <button
-          type="button"
-          aria-label="Remove"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+    <HoverCard openDelay={300} closeDelay={120}>
+      <HoverCardTrigger asChild>
+        <div
+          className={cn(
+            'group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40',
+            isSelected && 'bg-primary/[0.05]',
+          )}
+          {...rowActivationProps(onSelect)}
         >
-          <Cross2Icon className="size-3" />
-        </button>
-      </div>
-    </div>
+          <DraftRowThumbnail draft={draft} />
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {draft.platforms.map((p) => (
+              <PlatformBadge key={p} platform={p} />
+            ))}
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {draft.title || 'Untitled'}
+            </span>
+            {draft.captionPreview && (
+              <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
+                {draft.captionPreview}
+              </span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-2xs uppercase tracking-wide text-muted-foreground/60">
+              Backlog
+            </span>
+            <button
+              type="button"
+              aria-label="Remove"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+            >
+              <Cross2Icon className="size-3" />
+            </button>
+          </div>
+        </div>
+      </HoverCardTrigger>
+      <DraftRowHoverPreview draft={draft} onEdit={onSelect} />
+    </HoverCard>
   );
 });
 
@@ -572,12 +641,16 @@ export function OrganicListView({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card/50">
-      <ScrollArea className="flex-1">
+      {/* `min-h-0` is load-bearing: `flex-1` alone leaves `min-height: auto`, so the
+          ScrollArea root grows to its intrinsic content height, the parent's
+          `overflow-hidden` clips it, and the viewport never overflows — a list that
+          renders every row but scrolls none of them. */}
+      <ScrollArea className="min-h-0 flex-1">
         {groupData.map(({ key, label, count, colorClass, showAdd, content }) => (
           <div key={key} className="group/section">
             <div
               className="flex cursor-pointer select-none items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-2"
-              onClick={() => toggleGroup(key)}
+              {...rowActivationProps(() => toggleGroup(key))}
             >
               <div className="flex items-center gap-2">
                 <ChevronDownIcon
@@ -613,6 +686,12 @@ export function OrganicListView({
             {!collapsed[key] && content}
           </div>
         ))}
+        {/* BulkActionToolbar is `fixed bottom-8` and rendered outside the panel
+            group, so it takes no layout space and covers the last rows. Scroll
+            clearance is the list's job because the list is what scrolls. */}
+        {selectedDraftIds.length > 0 ? (
+          <div aria-hidden="true" data-testid="bulk-toolbar-clearance" className="h-24 shrink-0" />
+        ) : null}
       </ScrollArea>
     </div>
   );
