@@ -616,6 +616,26 @@ describe('buildNodePayload', () => {
       expect(await buildEnrichPayload(node, new Map(), [node], [], 'brand-1')).toBeNull();
     });
 
+    // Bug #228: literal mode suppressed the pass-through call AND the node's own
+    // Enrich Prompt button, which made every Composer-authored prompt permanently
+    // un-enrichable — including the ones already persisted as literal.
+    it('still enriches a literal prompt when the user asked for it explicitly', async () => {
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'Final generation-ready prompt', promptMode: 'literal' },
+      };
+
+      const payload = await buildEnrichPayload(node, new Map(), [node], [], 'brand-1', {
+        ignoreLiteralMode: true,
+      });
+
+      expect(payload).not.toBeNull();
+      expect(payload?.prompt).toBe('Final generation-ready prompt');
+      expect(payload?.brandId).toBe('brand-1');
+    });
+
     it('should build payload with text, image, audio, and document inputs', async () => {
       const node: StudioNode = {
         id: 'string',

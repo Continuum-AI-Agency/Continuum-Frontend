@@ -154,6 +154,70 @@ describe('nodeIsStale', () => {
     expect(nodeIsStale(edited, [], lookup(edited))).toBe(true);
   });
 
+  // Bug #221: the sig1 -> sig2 bump added `negativePrompt` and `brandBookPieces`
+  // to nanoGen's recipe. Every node stamped before the bump then looked edited,
+  // so running a video regenerated the untouched image feeding it. A stored
+  // signature must be judged against the recipe of ITS OWN version.
+  describe('signature-version tolerance', () => {
+    const SIG1_NANO_FIELDS = [
+      'positivePrompt',
+      'model',
+      'aspectRatio',
+      'imageSize',
+      'stylePreset',
+      'skillIds',
+      'seed',
+      'steps',
+      'guidance',
+      'scheduler',
+      'promptEnhancement',
+    ];
+
+    // Reproduces exactly what the sig1 build wrote to `generationSignature`.
+    const sig1SignatureFor = (node: StudioNode): string => {
+      const data = node.data as Record<string, unknown>;
+      const own = SIG1_NANO_FIELDS.map(
+        (field) => `${field}=${data[field] === undefined ? '' : String(data[field])}`,
+      ).join('|');
+      return `sig1:nanoGen|${own}|refs()`;
+    };
+
+    it('is NOT stale when an unedited node still carries its sig1 signature', () => {
+      const node = nano('n', { generatedImage: 'data:image/png;base64,x' });
+      const stamped = nano('n', {
+        generatedImage: 'data:image/png;base64,x',
+        generationSignature: sig1SignatureFor(node),
+      });
+      expect(stamped.data.generationSignature).toStartWith('sig1:');
+      // The old rule was a raw string compare against the CURRENT signature. This
+      // asserts that rule would have called an untouched node stale — so the test
+      // below is load-bearing, not vacuously green.
+      expect(stamped.data.generationSignature).not.toBe(
+        computeGenerationSignature(stamped, [], lookup(stamped)),
+      );
+      expect(nodeIsStale(stamped, [], lookup(stamped))).toBe(false);
+    });
+
+    it('is still stale when a sig1-stamped node was genuinely edited', () => {
+      const old = nano('n', { positivePrompt: 'OLD' });
+      const edited = nano('n', {
+        positivePrompt: 'NEW',
+        generationSignature: sig1SignatureFor(old),
+      });
+      expect(nodeIsStale(edited, [], lookup(edited))).toBe(true);
+    });
+
+    it('re-stamps at the CURRENT version, never at the stored one', () => {
+      const node = nano('n', {});
+      expect(computeGenerationSignature(node, [], lookup(node))).toStartWith('sig2:');
+    });
+
+    it('is not stale when the signature came from a version this build cannot read', () => {
+      const node = nano('n', { generationSignature: 'sig9:from-a-newer-build' });
+      expect(nodeIsStale(node, [], lookup(node))).toBe(false);
+    });
+  });
+
   it('is false for non-tracked node types even with a mismatched signature', () => {
     const node: StudioNode = {
       id: 'n',

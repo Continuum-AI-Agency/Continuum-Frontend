@@ -50,9 +50,42 @@ const OWN_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
   veoFast: VIDEO_GENERATOR_FIELDS,
 };
 
+// sig1's nanoGen recipe, kept verbatim so a node stamped before the sig2 bump can
+// still be checked against the recipe that produced it.
+const SIG1_OWN_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
+  nanoGen: [
+    'positivePrompt',
+    'model',
+    'aspectRatio',
+    'imageSize',
+    'stylePreset',
+    'skillIds',
+    'seed',
+    'steps',
+    'guidance',
+    'scheduler',
+    'promptEnhancement',
+  ],
+  videoGen: VIDEO_GENERATOR_FIELDS,
+  veoDirector: VIDEO_GENERATOR_FIELDS,
+  veoFast: VIDEO_GENERATOR_FIELDS,
+};
+
+// Every recipe this app has ever stamped, keyed by its version prefix.
+//
+// Staleness must answer "was this node EDITED since it generated?", never "has the
+// signature format changed since?". Comparing a sig1 signature against the sig2
+// recipe answers the second question, so the sig2 bump made every pre-existing
+// node look edited: running a video regenerated the perfectly good image feeding
+// it (bug #221). Bumping the version now means adding the outgoing recipe here.
+const OWN_FIELDS_BY_VERSION: Record<string, Record<string, readonly string[]>> = {
+  sig1: SIG1_OWN_FIELDS_BY_TYPE,
+  sig2: OWN_FIELDS_BY_TYPE,
+};
+
 // Node types whose output is fully determined by their own settings + wiring, so
 // an edit can be detected by signature drift. Special media nodes (extendVideo /
-// videoEditor / timelineEditor) carry their own commit/await reuse semantics and
+// timelineEditor) carry their own commit/await reuse semantics and
 // are intentionally NOT signature-tracked here.
 export function isSignatureTracked(nodeType?: string): boolean {
   if (typeof nodeType !== 'string') return false;
@@ -100,22 +133,43 @@ function referenceSignature(
   return parts.join('|');
 }
 
+function signatureForVersion(
+  node: StudioNode,
+  edges: Edge[],
+  nodeById: Map<string, StudioNode>,
+  version: string,
+  ownFieldsByType: Record<string, readonly string[]>,
+): string {
+  const data = node.data as Record<string, unknown>;
+  const fields = ownFieldsByType[node.type ?? ''] ?? [];
+  const own = fields.map((field) => `${field}=${serializeValue(data[field])}`).join('|');
+  const refs = referenceSignature(node, edges, nodeById);
+  return `${version}:${node.type ?? ''}|${own}|refs(${refs})`;
+}
+
+/** The signature to STAMP on a node that just generated — always the current version. */
 export function computeGenerationSignature(
   node: StudioNode,
   edges: Edge[],
   nodeById: Map<string, StudioNode>,
 ): string {
-  const data = node.data as Record<string, unknown>;
-  const fields = OWN_FIELDS_BY_TYPE[node.type ?? ''] ?? [];
-  const own = fields.map((field) => `${field}=${serializeValue(data[field])}`).join('|');
-  const refs = referenceSignature(node, edges, nodeById);
-  return `${SIGNATURE_VERSION}:${node.type ?? ''}|${own}|refs(${refs})`;
+  return signatureForVersion(node, edges, nodeById, SIGNATURE_VERSION, OWN_FIELDS_BY_TYPE);
+}
+
+/** The version prefix a stored signature was stamped with, when it has one. */
+function storedSignatureVersion(stored: string): string | undefined {
+  const separator = stored.indexOf(':');
+  return separator === -1 ? undefined : stored.slice(0, separator);
 }
 
 // True when a signature-tracked node has output that no longer matches its
 // current settings/wiring. A node with no stored signature (legacy canvas, or
 // one generated before this feature shipped) is treated as NOT stale, so we
 // reuse it rather than force-regenerate everyone's existing work.
+//
+// The stored signature is re-derived under ITS OWN version's recipe. That is the
+// whole point: a version bump changes the format, not the node, and only a real
+// edit may mark a node stale.
 export function nodeIsStale(
   node: StudioNode,
   edges: Edge[],
@@ -124,5 +178,13 @@ export function nodeIsStale(
   if (!isSignatureTracked(node.type)) return false;
   const stored = (node.data as Record<string, unknown>).generationSignature;
   if (typeof stored !== 'string' || stored.length === 0) return false;
-  return stored !== computeGenerationSignature(node, edges, nodeById);
+
+  const version = storedSignatureVersion(stored);
+  // A signature from a version this build does not know (a rollback, or a
+  // hand-edited row) cannot be compared honestly — reuse rather than destroy work.
+  if (version === undefined) return false;
+  const ownFields = OWN_FIELDS_BY_VERSION[version];
+  if (!ownFields) return false;
+
+  return stored !== signatureForVersion(node, edges, nodeById, version, ownFields);
 }

@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
-import { collectDownstreamLeafIds, executeWorkflow } from './executeWorkflow';
+import {
+  collectDownstreamLeafIds,
+  collectPublisherHandoffs,
+  executeWorkflow,
+} from './executeWorkflow';
 import { computeGenerationSignature } from './generationSignature';
 
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
@@ -941,6 +945,131 @@ describe('executeWorkflow', () => {
     expect(payload.brandBookPieces).toEqual(['voice']);
   });
 
+  // Bug #228: literal mode short-circuited buildEnrichPayload to null, and the
+  // executor reported that null as SUCCESS — the button "reloaded" and nothing
+  // ever happened, on every Composer-authored prompt.
+  it('enriches a literal prompt node when the run is scoped to that node', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'text-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'composer-authored prompt', promptMode: 'literal' },
+        type: 'string',
+      },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([]);
+
+    const executeEnrichment = mock(async () => ({
+      success: true,
+      output: { type: 'text', value: 'enriched' },
+    }));
+    const controls = buildControls(
+      mock(async () => ({ success: true })),
+      undefined,
+      executeEnrichment,
+    );
+
+    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+
+    expect(executeEnrichment).toHaveBeenCalledTimes(1);
+    expect(useStudioStore.getState().nodes.find((n) => n.id === 'text-1')?.data.value).toBe(
+      'enriched',
+    );
+  });
+
+  it('leaves a literal prompt node alone on a whole-graph run', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'text-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'composer-authored prompt', promptMode: 'literal' },
+        type: 'string',
+      },
+      {
+        id: 'nano-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: '' },
+        type: 'nanoGen',
+      },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore
+      .getState()
+      .setEdges([{ id: 'e1', source: 'text-1', target: 'nano-1', targetHandle: 'prompt' }] as any);
+
+    const executeEnrichment = mock(async () => ({
+      success: true,
+      output: { type: 'text', value: 'enriched' },
+    }));
+    const controls = buildControls(
+      mock(async () => ({
+        success: true,
+        output: { type: 'image', base64: 'x', mimeType: 'image/png' },
+      })),
+      undefined,
+      executeEnrichment,
+    );
+
+    await executeWorkflow(controls as any, {});
+
+    expect(executeEnrichment).toHaveBeenCalledTimes(0);
+    expect(useStudioStore.getState().nodes.find((n) => n.id === 'text-1')?.data.value).toBe(
+      'composer-authored prompt',
+    );
+  });
+
+  it('reports a failure when enrichment returns no text instead of silently completing', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([]);
+
+    // A control that resolves without a result at all: the old code fell out of
+    // the `string` branch entirely, leaving the node spinning with no error.
+    const executeEnrichment = mock(async () => undefined);
+    const controls = buildControls(
+      mock(async () => ({ success: true })),
+      undefined,
+      executeEnrichment,
+    );
+
+    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+
+    const updated = useStudioStore.getState().nodes.find((n) => n.id === 'text-1');
+    expect(updated?.data.error).toBe('Enrichment returned no text');
+    expect(updated?.data.isComplete).toBe(false);
+    expect(updated?.data.isExecuting).toBe(false);
+  });
+
+  // Bug #222 (Run) / #221: the composer landing a generator with no prompt made
+  // Run look dead. It is not dead — preflight blocks it — but it must SAY so.
+  it('surfaces a preflight issue on a promptless generator instead of running it', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'nano-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: '' },
+        type: 'nanoGen',
+      },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([]);
+
+    const executeGeneration = mock(async () => ({ success: true }));
+    const show = mock(() => {});
+    const controls = { ...buildControls(executeGeneration), show };
+
+    await executeWorkflow(controls as any, {});
+
+    expect(executeGeneration).toHaveBeenCalledTimes(0);
+    expect(show).toHaveBeenCalled();
+    const blocked = useStudioStore.getState().nodes.find((n) => n.id === 'nano-1');
+    expect(blocked?.data.error).toBe('Missing required prompt');
+    expect(blocked?.selected).toBe(true);
+  });
+
   it('should fail string node when enrichment returns an error', async () => {
     const nodes: StudioNode[] = [
       { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
@@ -1609,6 +1738,56 @@ describe('executeWorkflow', () => {
       expect(imgA?.data.generatedImage).toBe('data:image/png;base64,a');
     });
 
+    // Bug #221: sig2 shipped with sig1 signatures already on every stored node,
+    // so a video run marked its untouched upstream image stale and re-made it.
+    it('a video run reuses an upstream image still stamped with a sig1 signature', async () => {
+      const imageNode: StudioNode = {
+        id: 'img-a',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: 'first',
+          aspectRatio: '1:1',
+          generatedImage: 'data:image/png;base64,a',
+        },
+        type: 'nanoGen',
+      };
+      // Exactly what the pre-bump build wrote: no negativePrompt, no brandBookPieces.
+      (imageNode.data as Record<string, unknown>).generationSignature =
+        'sig1:nanoGen|positivePrompt=first|model=nano-banana|aspectRatio=1:1|imageSize=|stylePreset=|skillIds=|seed=|steps=|guidance=|scheduler=|promptEnhancement=|refs()';
+
+      const videoNode: StudioNode = {
+        id: 'vid',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1-fast', prompt: 'pan across it' },
+        type: 'veoFast',
+      };
+      const edges: Edge[] = [
+        {
+          id: 'e1',
+          source: 'img-a',
+          sourceHandle: 'image',
+          target: 'vid',
+          targetHandle: 'first-frame',
+        },
+      ];
+      useStudioStore.getState().setNodes([imageNode, videoNode]);
+      useStudioStore.getState().setEdges(edges);
+
+      const executeGeneration = mock(async (nodeId: string) =>
+        nodeId === 'vid'
+          ? { success: true, output: { type: 'video', url: 'video_url' } }
+          : imgOutput(nodeId),
+      );
+      const controls = buildControls(executeGeneration);
+
+      await executeWorkflow(controls as any, { targetNodeId: 'vid', clearDownstream: false });
+
+      expect(executeGeneration.mock.calls.map((call) => call[0])).toEqual(['vid']);
+      const imgA = useStudioStore.getState().nodes.find((n) => n.id === 'img-a');
+      expect(imgA?.data.generatedImage).toBe('data:image/png;base64,a');
+    });
+
     it('forceRegenerateAll re-runs every node even when they already have content', async () => {
       const nodes: StudioNode[] = [
         {
@@ -1695,5 +1874,47 @@ describe('executeWorkflow', () => {
       expect(collectDownstreamLeafIds('gate', edges, nodeById)).toEqual([]);
       expect(collectDownstreamLeafIds('gate', [], nodeById)).toEqual([]);
     });
+  });
+});
+
+describe('collectPublisherHandoffs', () => {
+  it('reports a publisher sink fed by the run scope as a handoff', () => {
+    const nodes: StudioNode[] = [
+      { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+      { id: 'pub', position: { x: 0, y: 0 }, data: { format: 'image' }, type: 'organicPublisher' },
+    ];
+    const edges: Edge[] = [{ id: 'e1', source: 'gen', target: 'pub', targetHandle: 'image-in' }];
+
+    const handoffs = collectPublisherHandoffs(nodes, edges, ['gen']);
+    expect(handoffs).toEqual([
+      { nodeId: 'pub', kind: 'organic', state: 'handoff — deliver via studio_deliver' },
+    ]);
+  });
+
+  it('classifies a paid publisher sink', () => {
+    const nodes: StudioNode[] = [
+      { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+      { id: 'pub', position: { x: 0, y: 0 }, data: { format: 'video' }, type: 'paidPublisher' },
+    ];
+    const edges: Edge[] = [{ id: 'e1', source: 'gen', target: 'pub', targetHandle: 'video-in' }];
+    expect(collectPublisherHandoffs(nodes, edges, ['gen'])[0]?.kind).toBe('paid');
+  });
+
+  it('ignores a publisher not reachable from the run scope', () => {
+    const nodes: StudioNode[] = [
+      { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+      { id: 'orphan', position: { x: 0, y: 0 }, data: {}, type: 'organicPublisher' },
+    ];
+    // No edge from gen → orphan, so a run of `gen` never feeds it.
+    expect(collectPublisherHandoffs(nodes, [], ['gen'])).toEqual([]);
+  });
+
+  it('returns every publisher when no scope is given', () => {
+    const nodes: StudioNode[] = [
+      { id: 'a', position: { x: 0, y: 0 }, data: {}, type: 'organicPublisher' },
+      { id: 'b', position: { x: 0, y: 0 }, data: {}, type: 'paidPublisher' },
+      { id: 'c', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
+    ];
+    expect(collectPublisherHandoffs(nodes, [])).toHaveLength(2);
   });
 });

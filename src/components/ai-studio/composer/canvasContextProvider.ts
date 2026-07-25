@@ -1,4 +1,5 @@
-import type { Skill } from '@continuum/contracts';
+import type { EventSignal, QuestionSignal, Skill, TrendSignal } from '@continuum/contracts';
+import { currentWeekStartDateUtc } from '@continuum/contracts';
 import {
   type FetchMediaMentionAssetsInput,
   fetchMediaLibraryFolders,
@@ -6,14 +7,117 @@ import {
   parseMediaFolderKey,
 } from '@/lib/agent/media-mentions';
 import type { AgentMentionProvider, AgentMentionSuggestion } from '@/lib/agent-references';
+import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
 
 const SKILLS_ROOT_KEY = 'canvas-context:skills';
 const BRAND_SKILLS_KEY = 'canvas-context:brand-skills';
 const SKILL_LIBRARY_KEY = 'canvas-context:skill-library';
 const MEDIA_ROOT_KEY = 'canvas-context:media-library';
+const SIGNALS_ROOT_KEY = 'canvas-context:signals';
+const SIGNALS_TRENDS_KEY = 'canvas-context:signals-trends';
+const SIGNALS_EVENTS_KEY = 'canvas-context:signals-events';
+const SIGNALS_QUESTIONS_KEY = 'canvas-context:signals-questions';
 
 type FetchAssets = (input: FetchMediaMentionAssetsInput) => Promise<AgentMentionSuggestion[]>;
 type FetchFolders = (brandId: string, source?: 'canvas') => Promise<AgentMentionSuggestion[]>;
+
+/** This week's brand signals, already shaped as canvas mention suggestions. */
+export interface CanvasSignalCatalog {
+  trends: AgentMentionSuggestion[];
+  events: AgentMentionSuggestion[];
+  questions: AgentMentionSuggestion[];
+}
+
+type FetchSignals = (brandId: string) => Promise<CanvasSignalCatalog>;
+
+const EMPTY_SIGNALS: CanvasSignalCatalog = { trends: [], events: [], questions: [] };
+
+const signalSuggestion = (input: {
+  id: string;
+  label: string;
+  type: 'trend' | 'event' | 'question';
+  group: string;
+  badge: string;
+  description?: string;
+  metadata: Record<string, unknown>;
+}): AgentMentionSuggestion => ({
+  key: `canvas-${input.type}:${input.id}`,
+  label: input.label,
+  type: input.type,
+  source: 'canvas',
+  group: input.group,
+  ...(input.description ? { description: input.description } : {}),
+  badge: input.badge,
+  reference: {
+    id: input.id,
+    type: input.type,
+    label: input.label,
+    source: 'canvas',
+    metadata: input.metadata,
+  },
+});
+
+export function trendToCanvasMentionSuggestion(trend: TrendSignal): AgentMentionSuggestion {
+  return signalSuggestion({
+    id: trend.id,
+    label: trend.title,
+    type: 'trend',
+    group: 'Trends',
+    badge: 'trend',
+    description: trend.description ?? trend.relevanceToBrand,
+    metadata: { source: trend.source, relevanceToBrand: trend.relevanceToBrand },
+  });
+}
+
+export function eventToCanvasMentionSuggestion(event: EventSignal): AgentMentionSuggestion {
+  return signalSuggestion({
+    id: event.id,
+    label: event.title,
+    type: 'event',
+    group: 'Events',
+    badge: 'event',
+    description: event.opportunity ?? event.description,
+    metadata: { date: event.date, opportunity: event.opportunity },
+  });
+}
+
+export function questionToCanvasMentionSuggestion(
+  question: QuestionSignal,
+): AgentMentionSuggestion {
+  return signalSuggestion({
+    id: question.id,
+    label: question.question,
+    type: 'question',
+    group: 'Questions',
+    badge: 'question',
+    description: question.whyRelevant ?? question.contentTypeSuggestion,
+    metadata: { niche: question.niche, socialPlatform: question.socialPlatform },
+  });
+}
+
+// The canvas has no planner page to hand it a signals context, so it reads this
+// week's collection itself. A brand with no generation this week simply has empty
+// Signals folders — never a thrown mention menu.
+const fetchCanvasSignals: FetchSignals = async (brandId) => {
+  const insights = await fetchBrandInsightsWeek({
+    brandId,
+    weekStartDate: currentWeekStartDateUtc(),
+  }).catch(() => null);
+  if (!insights) return EMPTY_SIGNALS;
+
+  const nicheMap = insights.data.questionsByNiche.questionsByNiche ?? {};
+  const questions = Object.entries(nicheMap).flatMap(([niche, entry]) =>
+    (entry as { questions: QuestionSignal[] }).questions.map((question) =>
+      questionToCanvasMentionSuggestion({ ...question, niche: question.niche ?? niche }),
+    ),
+  );
+
+  return {
+    trends: insights.data.trendsAndEvents.trends.map(trendToCanvasMentionSuggestion),
+    events: insights.data.trendsAndEvents.events.map(eventToCanvasMentionSuggestion),
+    questions,
+  };
+};
 
 const matches = (suggestion: AgentMentionSuggestion, query: string): boolean => {
   const normalized = query.trim().toLowerCase();
@@ -53,7 +157,7 @@ export function skillToCanvasMentionSuggestion(skill: Skill): AgentMentionSugges
 const folder = (
   key: string,
   label: string,
-  type: 'skill' | 'media_asset',
+  type: AgentMentionSuggestion['type'],
   childrenLabel: string,
 ): AgentMentionSuggestion => ({
   key,
@@ -74,15 +178,25 @@ export function createCanvasComposerMentionProvider({
   skills,
   fetchAssets = fetchMediaMentionAssets,
   fetchFolders = fetchMediaLibraryFolders,
+  fetchSignals = fetchCanvasSignals,
 }: {
   brandId: string;
   skills: Skill[];
   fetchAssets?: FetchAssets;
   fetchFolders?: FetchFolders;
+  fetchSignals?: FetchSignals;
 }): AgentMentionProvider {
   const skillSuggestions = skills.filter(isComposableSkill).map(skillToCanvasMentionSuggestion);
   const brandSkills = skillSuggestions.filter((item) => item.group === 'Brand skills');
   const librarySkills = skillSuggestions.filter((item) => item.group === 'Skill library');
+
+  // One read per provider instance: opening Signals, drilling into Trends and
+  // then back into Questions must not re-fetch the week three times.
+  let signalsPromise: Promise<CanvasSignalCatalog> | null = null;
+  const signals = (): Promise<CanvasSignalCatalog> => {
+    signalsPromise ??= fetchSignals(brandId).catch(() => EMPTY_SIGNALS);
+    return signalsPromise;
+  };
 
   return {
     getSuggestions: async ({ query }) => {
@@ -90,17 +204,19 @@ export function createCanvasComposerMentionProvider({
         return [
           folder(SKILLS_ROOT_KEY, 'Skills', 'skill', 'Brand skills & library'),
           folder(MEDIA_ROOT_KEY, 'Media library', 'media_asset', 'Images & videos'),
+          folder(SIGNALS_ROOT_KEY, 'Signals', 'trend', 'Trends, events, questions'),
         ];
       }
-      const media = await fetchAssets({
-        brandId,
-        query,
-        limit: 8,
-        referenceSource: 'canvas',
-      }).catch(() => []);
+      const [media, catalog] = await Promise.all([
+        fetchAssets({ brandId, query, limit: 8, referenceSource: 'canvas' }).catch(() => []),
+        signals(),
+      ]);
       return [
         ...skillSuggestions.filter((item) => matches(item, query)),
         ...media.filter(isCanvasMedia),
+        ...[...catalog.trends, ...catalog.events, ...catalog.questions].filter((item) =>
+          matches(item, query),
+        ),
       ];
     },
     getChildSuggestions: async (parent, query) => {
@@ -114,6 +230,22 @@ export function createCanvasComposerMentionProvider({
         return brandSkills.filter((item) => matches(item, query));
       if (parent.key === SKILL_LIBRARY_KEY) {
         return librarySkills.filter((item) => matches(item, query));
+      }
+      if (parent.key === SIGNALS_ROOT_KEY) {
+        return [
+          folder(SIGNALS_TRENDS_KEY, 'Trends', 'trend', 'This week’s trends'),
+          folder(SIGNALS_EVENTS_KEY, 'Events', 'event', 'Upcoming events'),
+          folder(SIGNALS_QUESTIONS_KEY, 'Questions', 'question', 'Audience questions'),
+        ];
+      }
+      if (parent.key === SIGNALS_TRENDS_KEY) {
+        return (await signals()).trends.filter((item) => matches(item, query));
+      }
+      if (parent.key === SIGNALS_EVENTS_KEY) {
+        return (await signals()).events.filter((item) => matches(item, query));
+      }
+      if (parent.key === SIGNALS_QUESTIONS_KEY) {
+        return (await signals()).questions.filter((item) => matches(item, query));
       }
       if (parent.key === MEDIA_ROOT_KEY) {
         return query.trim().length >= 2

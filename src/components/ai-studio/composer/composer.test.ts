@@ -41,6 +41,77 @@ describe('parseComposerFrame', () => {
   });
 });
 
+describe('applyComposerFrame — agent.delegated', () => {
+  const delegation = (status: string, extra: Record<string, unknown> = {}) =>
+    ({
+      type: 'agent.delegated',
+      data: {
+        callId: 'call-1',
+        callerAgent: 'canvas',
+        calleeAgent: 'organic',
+        query: 'What is working organically?',
+        status,
+        ...extra,
+      },
+    }) as unknown as AiStudioComposerFrame;
+
+  it('records a delegation on the turn', () => {
+    const state = fold([delegation('running')]);
+    expect(state.delegations).toHaveLength(1);
+    expect(state.delegations[0]).toMatchObject({ callId: 'call-1', status: 'running' });
+  });
+
+  it('folds running → completed into ONE card by callId', () => {
+    const state = fold([
+      delegation('running'),
+      delegation('completed', { calleeSessionId: 'sess_1' }),
+    ]);
+    expect(state.delegations).toHaveLength(1);
+    expect(state.delegations[0]).toMatchObject({
+      status: 'completed',
+      calleeSessionId: 'sess_1',
+    });
+  });
+
+  it('keeps distinct calls apart', () => {
+    const other = {
+      type: 'agent.delegated',
+      data: {
+        callId: 'call-2',
+        callerAgent: 'canvas',
+        calleeAgent: 'jaina',
+        query: 'And paid?',
+        status: 'running',
+      },
+    } as unknown as AiStudioComposerFrame;
+
+    expect(fold([delegation('running'), other]).delegations).toHaveLength(2);
+  });
+
+  it('parses off the wire through the composer frame parser', () => {
+    const frame = parseComposerFrame(
+      line({
+        type: 'agent.delegated',
+        data: {
+          callId: 'call-1',
+          callerAgent: 'canvas',
+          calleeAgent: 'organic',
+          query: 'q',
+          status: 'running',
+        },
+      }),
+    );
+    expect(frame).toMatchObject({ type: 'agent.delegated' });
+  });
+
+  it('leaves the turn untouched for an unrelated frame', () => {
+    const state = fold([
+      { type: 'composer.status', data: { message: 'Working' } },
+    ] as AiStudioComposerFrame[]);
+    expect(state.delegations).toEqual([]);
+  });
+});
+
 describe('applyComposerFrame', () => {
   it('accumulates progress lines in order', () => {
     const state = fold([
@@ -183,6 +254,19 @@ describe('toCanvasComposerReferences', () => {
     expect(toCanvasComposerReferences(references)).toEqual([
       { id: 'skill-1', type: 'skill', label: 'Bold' },
       { id: 'asset-1', type: 'media_asset', label: 'Hero' },
+    ]);
+  });
+
+  it('carries signal grabs (trend / event / question) through to the wire', () => {
+    const references: AgentMentionReference[] = [
+      { id: 'trend-1', type: 'trend', label: 'Quiet luxury', source: 'canvas' },
+      { id: 'event-1', type: 'event', label: 'Black Friday', source: 'canvas' },
+      { id: 'question-1', type: 'question', label: 'How do I…', source: 'canvas' },
+    ];
+    expect(toCanvasComposerReferences(references)).toEqual([
+      { id: 'trend-1', type: 'trend', label: 'Quiet luxury' },
+      { id: 'event-1', type: 'event', label: 'Black Friday' },
+      { id: 'question-1', type: 'question', label: 'How do I…' },
     ]);
   });
 });

@@ -8,7 +8,8 @@ import {
   PlayIcon,
   TrashIcon,
 } from '@radix-ui/react-icons';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import {
   Conversation,
   ConversationContent,
@@ -20,6 +21,7 @@ import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { PromptInput } from '@/components/chat/prompt-input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { createCanvasComposerMentionProvider } from './canvasContextProvider';
@@ -74,6 +76,15 @@ export function CanvasComposer({
     brandProfileId,
     roomId,
   );
+
+  // Pressing Run hands the graph to the canvas executor, which then owns the
+  // feedback (node spinners, or a preflight toast naming the blocked node). The
+  // composer card has said everything it has to say, so it retires — leaving it
+  // up made a run that was genuinely executing look like a dead button.
+  const runAndRetireCard = useCallback(() => {
+    dismiss();
+    onRun();
+  }, [dismiss, onRun]);
   const { all: brandSkills } = useBrandSkills(brandProfileId);
   const mentionProvider = useMemo(
     () =>
@@ -83,9 +94,21 @@ export function CanvasComposer({
     [brandProfileId, brandSkills],
   );
 
-  const isRunning = state.status === 'running';
+  // A run started before this mount (navigation away and back) lives only in the
+  // app-level store — the local turn state is idle even though the model is still
+  // working the room. Treat it as running so Stop works and hero stays hidden.
+  const roomRunStreaming = useAgentRunStore(roomId ? isSessionStreaming(roomId) : () => false);
+  const isRunning = state.status === 'running' || roomRunStreaming;
 
-  const hero = isCanvasEmpty && state.status === 'idle' && !expanded;
+  const autoExpandedRef = useRef(false);
+  useEffect(() => {
+    if (roomRunStreaming && !autoExpandedRef.current) {
+      autoExpandedRef.current = true;
+      setExpanded(true);
+    }
+  }, [roomRunStreaming]);
+
+  const hero = isCanvasEmpty && state.status === 'idle' && !expanded && !roomRunStreaming;
 
   const inputRow = (
     <PromptInput
@@ -200,7 +223,7 @@ export function CanvasComposer({
                       key={turn.id}
                       turn={turn}
                       isLast={index === turns.length - 1}
-                      onRun={onRun}
+                      onRun={runAndRetireCard}
                       onCancel={cancel}
                     />
                   ))
@@ -213,7 +236,7 @@ export function CanvasComposer({
           </div>
         ) : (
           <>
-            <ComposerProgress state={state} onDismiss={dismiss} onRun={onRun} />
+            <ComposerProgress state={state} onDismiss={dismiss} onRun={runAndRetireCard} />
             {inputRow}
           </>
         )}
@@ -296,6 +319,14 @@ function TurnMessages({
             </ul>
           ) : null}
 
+          {state.delegations.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {state.delegations.map((delegation) => (
+                <AgentDelegatedCard key={delegation.callId} data={delegation} />
+              ))}
+            </div>
+          ) : null}
+
           {state.graph ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
@@ -304,7 +335,14 @@ function TurnMessages({
                 canvas
               </span>
               {isLast && state.status === 'done' ? (
-                <Button size="sm" variant="outline" onClick={onRun} className="h-6 px-2 text-xs">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={onRun}
+                  data-testid="composer-turn-run"
+                  className="h-6 px-2 text-xs"
+                >
                   <PlayIcon data-icon="inline-start" />
                   Run
                 </Button>
@@ -373,7 +411,7 @@ function ComposerProgress({
 
         <div className="flex shrink-0 items-center gap-1">
           {state.status === 'done' && state.graph ? (
-            <Button size="sm" onClick={onRun}>
+            <Button size="sm" type="button" onClick={onRun} data-testid="composer-card-run">
               <PlayIcon data-icon="inline-start" />
               Run
             </Button>
@@ -381,8 +419,10 @@ function ComposerProgress({
           <Button
             size="icon"
             variant="ghost"
+            type="button"
             onClick={onDismiss}
             aria-label={state.status === 'running' ? 'Stop the composer' : 'Dismiss'}
+            data-testid="composer-card-dismiss"
             className="size-7"
           >
             <Cross2Icon />

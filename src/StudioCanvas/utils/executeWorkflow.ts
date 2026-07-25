@@ -7,15 +7,13 @@ import { readServerSentEvents } from '@/lib/sse/readServerSentEvents';
 import type { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
-  ClipSlot,
+  HyperframesAgentNodeData,
   ImageNodeData,
   StudioNode,
   TimelineEditorNodeData,
   TimelineItem,
-  VideoEditorNodeData,
 } from '../types';
 import type { NodeOutput } from '../types/execution';
-import { runSpliceInWorker } from '../workers/spliceWorkerClient';
 import {
   buildEnrichPayload,
   buildExtendVideoPayload,
@@ -28,8 +26,7 @@ import { compositeImages } from './compositeImages';
 import { buildDataUrl, parseDataUrl } from './dataUrl';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
-import { resolveClipSources } from './splice/resolveClipSources';
-import { checkSpliceSupport } from './splice/webcodecsSupport';
+import { startHyperframesAgentNode } from './startHyperframesAgent';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
@@ -42,12 +39,52 @@ const MEDIA_NODE_TYPES = new Set([
   'veoFast',
   'omniGen',
   'extendVideo',
-  'videoEditor',
+  'hyperframesAgent',
   'timelineEditor',
 ]);
 
 const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
   typeof nodeType === 'string' && MEDIA_NODE_TYPES.has(nodeType);
+
+// Publisher sinks are structurally valid but NOT runnable: a run walks upstream
+// and never executes them. They are terminal DELIVERY HANDOFFS — the generated
+// media is delivered from the node itself (Attach to draft / Replace creative,
+// backed by the same publishing service as the studio_deliver MCP tool). Surfacing
+// them keeps a run from looking complete while its terminal node silently no-ops.
+const PUBLISHER_NODE_KINDS: Record<string, 'organic' | 'paid'> = {
+  organicPublisher: 'organic',
+  paidPublisher: 'paid',
+};
+
+export const PUBLISHER_HANDOFF_STATE = 'handoff — deliver via studio_deliver';
+
+export interface PublisherHandoff {
+  nodeId: string;
+  kind: 'organic' | 'paid';
+  state: string;
+}
+
+/**
+ * Publisher sinks that sit downstream of the nodes a run would execute — the ones
+ * a user might expect the Run button to publish, but which never execute. Scoped
+ * to reachable sinks so an unconnected publisher elsewhere on the board is ignored.
+ */
+export const collectPublisherHandoffs = (
+  nodes: StudioNode[],
+  edges: Edge[],
+  scopeNodeIds?: readonly string[],
+): PublisherHandoff[] => {
+  const scope = scopeNodeIds ? new Set(scopeNodeIds) : null;
+  const reachablePublisher = (publisherId: string): boolean => {
+    if (!scope) return true;
+    return edges.some((edge) => edge.target === publisherId && scope.has(edge.source));
+  };
+  return nodes.flatMap((node) => {
+    const kind = PUBLISHER_NODE_KINDS[node.type ?? ''];
+    if (kind === undefined || !reachablePublisher(node.id)) return [];
+    return [{ nodeId: node.id, kind, state: PUBLISHER_HANDOFF_STATE }];
+  });
+};
 
 type NodeReadiness = {
   ready: boolean;
@@ -171,7 +208,7 @@ const resolveVideoInput = (
     (isVideoGeneratorNodeType(sourceNode?.type) ||
       sourceNode?.type === 'omniGen' ||
       sourceNode?.type === 'extendVideo' ||
-      sourceNode?.type === 'videoEditor')
+      sourceNode?.type === 'timelineEditor')
   ) {
     const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
     const generatedVideoUrl = (sourceNode.data as any).generatedVideoUrl as string | undefined;
@@ -253,7 +290,9 @@ const getPromptValue = (
   allEdges: Edge[],
 ): { value?: string; fromEdge: boolean } => {
   const promptHandles =
-    isVideoGeneratorNodeType(node.type) || node.type === 'omniGen'
+    isVideoGeneratorNodeType(node.type) ||
+    node.type === 'omniGen' ||
+    node.type === 'hyperframesAgent'
       ? ['prompt-in', 'prompt']
       : ['prompt'];
   const promptEdges = incomingEdges.filter((edge) =>
@@ -432,24 +471,6 @@ const getNodeReadiness = (
     return { ready: true };
   }
 
-  if (node.type === 'videoEditor') {
-    const slots = ((node.data as VideoEditorNodeData).clipSlots ?? []) as ClipSlot[];
-    if (slots.length < 2) {
-      return { ready: false, reason: 'Need at least 2 clip slots' };
-    }
-    for (const slot of slots) {
-      const handleId = `clip-${slot.id}`;
-      const edge = incomingEdges.find((candidate) => candidate.targetHandle === handleId);
-      if (!edge) {
-        return { ready: false, reason: `Clip slot ${slot.order + 1} is not connected` };
-      }
-      if (!resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true })) {
-        return { ready: false, reason: `Clip slot ${slot.order + 1} has no resolvable video` };
-      }
-    }
-    return { ready: true };
-  }
-
   if (node.type === 'timelineEditor') {
     const data = node.data as TimelineEditorNodeData;
     const items = (data.items ?? []) as TimelineItem[];
@@ -486,6 +507,18 @@ const getNodeReadiness = (
       awaiting: true,
       reason: 'Awaiting manual edit — open the Video Editor and render',
     };
+  }
+
+  if (node.type === 'hyperframesAgent') {
+    const data = node.data as HyperframesAgentNodeData;
+    const renderedUrl = data.generatedVideoUrl;
+    if (renderedUrl) return { ready: true };
+    if (data.activeRunId) {
+      return { ready: false, awaiting: true, reason: 'HyperFrames Agent is still working' };
+    }
+    const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
+    if (!prompt.value) return { ready: false, reason: 'Add or connect a prompt' };
+    return { ready: true };
   }
 
   const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
@@ -896,6 +929,19 @@ export async function executeWorkflow(
     executableNodeIds,
   });
 
+  // Report — never silently skip — any publisher sink fed by this run. The run
+  // produces the media; delivery is an explicit handoff from the publisher node.
+  const publisherHandoffs = collectPublisherHandoffs(nodes, edges, executableNodeIds);
+  if (publisherHandoffs.length > 0) {
+    controls.show?.({
+      title: 'Publisher nodes are delivery handoffs',
+      description: `The run generates the media; a run never publishes. Deliver from the ${
+        publisherHandoffs.length === 1 ? 'publisher node' : 'publisher nodes'
+      } (Attach to draft / Replace creative).`,
+      variant: 'info',
+    });
+  }
+
   // A run regenerates a node only when it must: the explicit Run target, a node
   // with no usable output (empty or errored), or a node edited since it
   // generated (signature drift). Everything downstream of such a node also
@@ -1078,14 +1124,20 @@ export async function executeWorkflow(
         isVideoGeneratorNodeType(node.type) ||
         node.type === 'omniGen' ||
         node.type === 'extendVideo' ||
-        node.type === 'videoEditor' ||
+        node.type === 'hyperframesAgent' ||
         node.type === 'timelineEditor'
       ) {
         const genVideo =
           ((node.data as any).generatedVideo as string | undefined) ??
           ((node.data as any).generatedVideoUrl as string | undefined);
         if (genVideo) {
-          resolvedOutputs.set(node.id, { type: 'video', url: genVideo });
+          resolvedOutputs.set(node.id, {
+            type: 'video',
+            url: genVideo,
+            storagePath: (node.data as any).generatedVideoStoragePath,
+            storageBucket: (node.data as any).generatedVideoBucket,
+            assetId: (node.data as any).renderOutputAssetId,
+          });
         }
       } else if (node.type === 'string') {
         // Already handled above, but just in case logic changes
@@ -1168,7 +1220,11 @@ export async function executeWorkflow(
         },
       },
       asset.kind === 'video' ? { videoSource: asset.url } : undefined,
-    );
+    ).then((assetId) => {
+      if (!assetId) return;
+      useStudioStore.getState().updateNodeData(nodeId, { renderOutputAssetId: assetId });
+      useStudioStore.getState().triggerSave();
+    });
   };
 
   // Stamp the signature of the inputs that produced this output so a later run
@@ -1205,6 +1261,7 @@ export async function executeWorkflow(
         generatedImageUrl: persistentUrl,
         generatedImageStoragePath: output.storagePath,
         generatedImageBucket: output.storageBucket,
+        renderOutputAssetId: output.assetId,
         generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false,
@@ -1237,6 +1294,7 @@ export async function executeWorkflow(
         generatedVideoUrl: persistentUrl,
         generatedVideoStoragePath: output.storagePath,
         generatedVideoBucket: output.storageBucket,
+        renderOutputAssetId: output.assetId,
         generationSignature: generationSignatureFor(nodeId),
         isComplete: true,
         isExecuting: false,
@@ -1269,7 +1327,12 @@ export async function executeWorkflow(
     try {
       const brandId = options.brandId || 'default-brand';
       if (node.type === 'string') {
-        const payload = await buildEnrichPayload(node, resolvedOutputs, nodes, edges, brandId);
+        // A run scoped to THIS node is the node's own "Enrich Prompt" button, the
+        // one explicit request to enrich; a whole-graph run merely passes through.
+        const isExplicitEnrich = options.targetNodeId === nodeId;
+        const payload = await buildEnrichPayload(node, resolvedOutputs, nodes, edges, brandId, {
+          ignoreLiteralMode: isExplicitEnrich,
+        });
 
         console.info('[studio] executeNode string', {
           nodeId,
@@ -1297,6 +1360,13 @@ export async function executeWorkflow(
         // so it is brand + skill aware (services/studio-grounding.ts). The grounding
         // data piece rides in the payload, inherited from the downstream gen node.
         if (!payload) {
+          // Only a pass-through run reaches here (an explicit enrich always gets a
+          // payload). Reporting success on a request the user made explicitly is
+          // how Enrich Prompt read as "reloads and nothing happens".
+          if (isExplicitEnrich) {
+            updateNodeStatus(nodeId, 'failed', 'Nothing to enrich — this prompt box is empty');
+            return false;
+          }
           setNodeOutput(nodeId, { type: 'text', value: (node.data as any).value || '' });
           return true;
         }
@@ -1320,6 +1390,11 @@ export async function executeWorkflow(
           updateNodeStatus(nodeId, 'completed');
           return true;
         }
+
+        // Truthy-but-empty, or no result at all: the enrichment produced no text.
+        // Falling through here left the node spinning with no error to read.
+        updateNodeStatus(nodeId, 'failed', 'Enrichment returned no text');
+        return false;
       }
 
       if (node.type === 'omniGen') {
@@ -1571,7 +1646,13 @@ export async function executeWorkflow(
           data.generatedVideoUrl ??
           (typeof data.generatedVideo === 'string' ? data.generatedVideo : undefined);
         if (data.committed && committedUrl) {
-          setNodeOutput(nodeId, { type: 'video', url: committedUrl });
+          setNodeOutput(nodeId, {
+            type: 'video',
+            url: committedUrl,
+            storagePath: data.generatedVideoStoragePath,
+            storageBucket: data.generatedVideoBucket,
+            assetId: data.renderOutputAssetId,
+          });
           updateNodeStatus(nodeId, 'completed');
           return true;
         }
@@ -1579,41 +1660,30 @@ export async function executeWorkflow(
         return false;
       }
 
-      if (node.type === 'videoEditor') {
-        const support = await checkSpliceSupport();
-        if (!support.ok) {
-          updateNodeStatus(nodeId, 'failed', support.reason);
-          return false;
-        }
-
-        const slots = ((node.data as VideoEditorNodeData).clipSlots ?? []) as ClipSlot[];
-        const registerController = (
-          controls as { registerController?: (id: string) => AbortController }
-        ).registerController;
-        const releaseController = (
-          controls as { releaseController?: (id: string, ctrl: AbortController) => void }
-        ).releaseController;
-        const controller = registerController?.(nodeId) ?? new AbortController();
-        try {
-          const clips = await resolveClipSources(slots, edges, nodes, resolvedOutputs, nodeId);
-          const result = await runSpliceInWorker({
-            clips,
-            signal: controller.signal,
-            onProgress: ({ progress }) => {
-              useStudioStore.getState().updateNodeData(nodeId, { progress });
-            },
+      if (node.type === 'hyperframesAgent') {
+        const data = node.data as HyperframesAgentNodeData;
+        if (data.generatedVideoUrl) {
+          setNodeOutput(nodeId, {
+            type: 'video',
+            url: data.generatedVideoUrl,
+            storagePath: data.generatedVideoStoragePath,
+            storageBucket: data.generatedVideoStorageBucket,
+            assetId: data.generatedVideoAssetId,
           });
-          setNodeOutput(nodeId, { type: 'video', url: result.objectUrl });
-          useStudioStore.getState().updateNodeData(nodeId, { progress: 1 });
           updateNodeStatus(nodeId, 'completed');
           return true;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Splice failed';
-          updateNodeStatus(nodeId, 'failed', message);
-          return false;
-        } finally {
-          releaseController?.(nodeId, controller);
         }
+        if (!brandId || !options.roomId) {
+          updateNodeStatus(nodeId, 'failed', 'AI Studio workspace is unavailable');
+          return false;
+        }
+        await startHyperframesAgentNode({
+          nodeId,
+          roomId: options.roomId,
+          brandId,
+        });
+        updateNodeStatus(nodeId, 'awaiting');
+        return false;
       }
 
       let payload = null;

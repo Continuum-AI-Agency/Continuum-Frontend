@@ -410,20 +410,31 @@ export function resolveInheritedGrounding(
   return { brandBookPieces: DEFAULT_BRAND_BOOK_PIECES };
 }
 
+export interface BuildEnrichPayloadOptions {
+  /**
+   * Enrich even a `promptMode: 'literal'` node.
+   *
+   * Literal mode exists to stop a whole-graph RUN spending a second model call
+   * re-enriching a prompt the composer already wrote generation-ready. It was
+   * never meant to disable the node's own "Enrich Prompt" button — but because
+   * the button routes through the same builder, every composer-authored node
+   * came out permanently un-enrichable. An explicitly targeted enrich sets this.
+   */
+  ignoreLiteralMode?: boolean;
+}
+
 export async function buildEnrichPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
   allEdges: Edge[],
   brandId: string,
+  options: BuildEnrichPayloadOptions = {},
 ): Promise<EnrichPromptPayload | null> {
   const data = node.data as StringNodeData;
   const prompt = data.value || '';
 
-  // Composer already authored the generation-ready prompt. Re-enriching it adds a
-  // second model call, latency, cost, and another chance to dilute explicit brand
-  // constraints. Manually-authored strings keep the historical enrich behavior.
-  if (data.promptMode === 'literal') return null;
+  if (data.promptMode === 'literal' && !options.ignoreLiteralMode) return null;
 
   // Resolve Images (Multiple allowed)
   const imageEdges = allEdges.filter((e) => e.target === node.id && e.targetHandle === 'image');

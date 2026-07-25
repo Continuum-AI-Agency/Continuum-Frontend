@@ -97,6 +97,10 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
 
       if (data.isExecuting) return;
 
+      // Clear the previous attempt's message so a retry does not look like it
+      // failed again with a stale error.
+      updateNodeData(id, { error: undefined });
+
       try {
         await executeWorkflow(executionControls, {
           targetNodeId: id,
@@ -104,10 +108,17 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
           brandId,
         });
       } catch (err) {
-        console.error('Enrichment trigger failed', err);
+        // A throw here never reached the user — the console was the only report.
+        const message = err instanceof Error ? err.message : 'Enrichment could not start';
+        updateNodeData(id, { isExecuting: false, error: message });
+        executionControls.show?.({
+          title: 'Enrich Prompt failed',
+          description: message,
+          variant: 'error',
+        });
       }
     },
-    [id, executionControls, data.isExecuting, brandId],
+    [id, executionControls, data.isExecuting, brandId, updateNodeData],
   );
 
   return (
@@ -159,6 +170,15 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                 className="nodrag text-xs text-primary placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]"
                 placeholder="Enter prompt or instructions..."
               />
+
+              {data.error ? (
+                <p
+                  data-testid="studio-string-node-error"
+                  className="border-t border-destructive/30 bg-destructive/10 px-2 py-1 text-2xs text-destructive shrink-0"
+                >
+                  {data.error}
+                </p>
+              ) : null}
 
               <div className="p-2 border-t border-border/60 bg-background/70 flex items-center justify-between gap-2 relative z-20 shrink-0">
                 <GroundingChip
