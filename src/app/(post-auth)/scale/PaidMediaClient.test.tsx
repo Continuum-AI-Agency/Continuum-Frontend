@@ -14,6 +14,8 @@ let latestPlatformChange: ((platform: 'linkedin') => void) | null = null;
 let latestAccountSelect: ((accountId: string) => void) | null = null;
 let latestSelectorPlatform: string | null = null;
 let latestAssignedAccountIds: string[] | null | undefined;
+let searchParamsValue = 'tab=jaina';
+const routerReplaceMock = mock(() => {});
 let optimizerAdAccounts: { data: Array<{ account_id: string }>; isSuccess: boolean } = {
   data: [],
   isSuccess: false,
@@ -43,15 +45,14 @@ mock.module('next/dynamic', () => ({
       if (typeof props.onPlatformChange === 'function') {
         latestPlatformChange = props.onPlatformChange as (platform: 'linkedin') => void;
       }
-
       return <div data-testid={`dynamic-paid-media-surface-${componentIndex}`} />;
     };
   },
 }));
 
 mock.module('next/navigation', () => ({
-  useRouter: () => ({ replace: mock(() => {}) }),
-  useSearchParams: () => new URLSearchParams('tab=jaina'),
+  useRouter: () => ({ replace: routerReplaceMock }),
+  useSearchParams: () => new URLSearchParams(searchParamsValue),
 }));
 
 mock.module('@/hooks/useSession', () => ({
@@ -137,6 +138,8 @@ describe('PaidMediaClientPage brand context', () => {
     latestAccountSelect = null;
     latestSelectorPlatform = null;
     latestAssignedAccountIds = undefined;
+    searchParamsValue = 'tab=jaina';
+    routerReplaceMock.mockReset();
     optimizerAdAccounts = { data: [], isSuccess: false };
 
     globalThis.requestIdleCallback = ((callback: IdleRequestCallback) => {
@@ -264,5 +267,21 @@ describe('PaidMediaClientPage brand context', () => {
       expect(latestSelectorPlatform).toBe('meta');
     });
     expect(latestAssignedAccountIds).toBeUndefined();
+  });
+
+  it('does not turn a Goal URL prompt into ordinary Jaina chat input', async () => {
+    searchParamsValue = 'tab=jaina&prompt=%2Fgoal%20';
+
+    render(
+      <PaidMediaClientPage
+        brandProfileId="brand-a"
+        brandName="Brand A"
+        initialAccounts={[{ id: 'account-a', name: 'Account A' }]}
+        initialAdAccountId="account-a"
+      />,
+    );
+
+    await waitFor(() => expect(renderedContextPairs.length).toBeGreaterThan(0));
+    expect(routerReplaceMock).not.toHaveBeenCalled();
   });
 });

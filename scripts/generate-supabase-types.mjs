@@ -8,7 +8,9 @@ const __dirname = path.dirname(__filename);
 
 function loadDotEnv() {
   const rootDir = path.resolve(__dirname, '..');
-  const files = ['.env.local', '.env'];
+  // This command targets the linked hosted project. `.env.local` is reserved
+  // for the explicit local-Supabase workflow, so the hosted `.env` wins here.
+  const files = ['.env', '.env.local'];
   for (const filename of files) {
     const filePath = path.join(rootDir, filename);
     if (!fs.existsSync(filePath)) continue;
@@ -56,13 +58,14 @@ function generateTypes() {
 
   const schemas =
     process.env.SUPABASE_SCHEMAS ||
-    'public,brand_profiles,organic,paid_media,brand_trends,brand_integrations,DCO_Campaigns,integrations,plugin_mcp';
+    'public,brand_profiles,organic,paid_media,media,brand_trends,brand_integrations,DCO_Campaigns,integrations,plugin_mcp,external_connections,agent_workspace,jaina';
 
   const args = ['gen', 'types', 'typescript', '--project-id', projectRef, '--schema', schemas];
 
-  execFile('supabase', args, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+  execFile('supabase', args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
     if (error) {
-      console.error(stderr || error.message);
+      if (stderr) console.error(stderr);
+      console.error(error.message);
       console.error('Ensure the Supabase CLI is installed and you are logged in.');
       process.exit(error.code || 1);
     }

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
+import { resolveAutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import {
@@ -53,6 +54,11 @@ export default async function PaidMediaPage() {
         brandName={brandName}
         initialAccounts={initialAccounts}
         initialAdAccountId={firstAccountId}
+        deploymentEnvironment={resolveAutomationDeploymentEnvironment({
+          nodeEnv: process.env.NODE_ENV,
+          vercelEnv: process.env.VERCEL_ENV,
+          siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+        })}
       />
     </div>
   );

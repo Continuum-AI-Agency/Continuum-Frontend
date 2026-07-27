@@ -17,6 +17,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSession } from '@/hooks/useSession';
+import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
+import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import { canAccessGoals } from '@/lib/goals/access';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
@@ -131,6 +134,7 @@ type PaidMediaClientPageProps = {
   brandName: string;
   initialAccounts?: AdAccount[];
   initialAdAccountId?: string | null;
+  deploymentEnvironment?: AutomationDeploymentEnvironment;
 };
 
 type PaidMediaAccountContext = {
@@ -143,12 +147,17 @@ export default function PaidMediaClientPage({
   brandName,
   initialAccounts,
   initialAdAccountId,
+  deploymentEnvironment = 'production',
 }: PaidMediaClientPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get('tab');
   const normalizedTabParam = normalizePaidMediaTab(tabParam);
   const { user } = useSession();
+  const goalsAccessEnabled = canAccessGoals({
+    isAdmin: isAdminUser(user),
+    environment: deploymentEnvironment,
+  });
   const [, startTabTransition] = React.useTransition();
 
   const [accountContext, setAccountContext] = React.useState<PaidMediaAccountContext>(() => ({
@@ -551,6 +560,7 @@ export default function PaidMediaClientPage({
                 adAccountId={selectedAdAccount}
                 campaignId={selectedCampaign}
                 userId={user?.id ?? null}
+                goalsAccessEnabled={goalsAccessEnabled}
                 onCanvasActionApplied={handleCanvasActionApplied}
                 className="rounded-none border-none bg-transparent backdrop-blur-none"
               />

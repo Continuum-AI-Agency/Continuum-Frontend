@@ -143,6 +143,7 @@ type JainaChatSurfaceProps = {
   campaignCanvasPayload?: CampaignCanvasPayload | null;
   userId?: string | null;
   onCanvasActionApplied?: () => void;
+  goalsAccessEnabled?: boolean;
   className?: string;
 };
 
@@ -1088,6 +1089,7 @@ export function JainaChatSurface({
   campaignCanvasPayload,
   userId,
   onCanvasActionApplied,
+  goalsAccessEnabled = process.env.NODE_ENV !== 'production',
   className,
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
@@ -2836,6 +2838,7 @@ export function JainaChatSurface({
           }
           deletingSessionId={deletingSessionId}
           brandId={brandProfileId}
+          goalsAccessEnabled={goalsAccessEnabled}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapsed={toggleSidebarCollapsed}
           onCreateConversation={handleClearConversation}

@@ -8,16 +8,19 @@ import {
   CollapseConversationsButton,
   CollapsedConversationsRail,
 } from '@/components/chat/collapsibleConversations';
+import { CreateCampaignGoalDialog } from '@/components/goals/CreateCampaignGoalDialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AUTOMATIONS_AVAILABLE } from '@/lib/automations/availability';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
+import { GOALS_PRODUCTION_DISABLED_REASON } from '@/lib/goals/access';
 import type { JainaConversationSession } from '@/lib/jaina/conversations';
 import { cn } from '@/lib/utils';
+import { JainaGoalsSidebarPanel } from './JainaGoalsSidebarPanel';
 
-type SidebarMode = 'chats' | 'automations';
+type SidebarMode = 'chats' | 'automations' | 'goals';
 
 type JainaConversationSidebarProps = {
   sessions: JainaConversationSession[];
@@ -27,7 +30,8 @@ type JainaConversationSidebarProps = {
   isLoading: boolean;
   isInteractionDisabled: boolean;
   deletingSessionId?: string | null;
-  brandId?: string | null;
+  brandId: string;
+  goalsAccessEnabled: boolean;
   isCollapsed?: boolean;
   onToggleCollapsed?: () => void;
   onCreateConversation: () => void;
@@ -76,6 +80,7 @@ export function JainaConversationSidebar({
   isInteractionDisabled,
   deletingSessionId,
   brandId,
+  goalsAccessEnabled,
   isCollapsed = false,
   onToggleCollapsed,
   onCreateConversation,
@@ -135,6 +140,29 @@ export function JainaConversationSidebar({
                 </Tooltip>
               </TooltipProvider>
             )}
+            {goalsAccessEnabled ? (
+              <ToggleGroupItem value="goals" className="h-6 px-2 text-xs">
+                Goals
+              </ToggleGroupItem>
+            ) : (
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-not-allowed">
+                      <ToggleGroupItem
+                        value="goals"
+                        disabled
+                        aria-label={`Goals (${GOALS_PRODUCTION_DISABLED_REASON})`}
+                        className="pointer-events-none h-6 px-2 text-xs opacity-50"
+                      >
+                        Goals
+                      </ToggleGroupItem>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{GOALS_PRODUCTION_DISABLED_REASON}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </ToggleGroup>
         </div>
         {mode === 'chats' ? (
@@ -150,7 +178,7 @@ export function JainaConversationSidebar({
             <PlusIcon />
             New
           </Button>
-        ) : (
+        ) : mode === 'automations' ? (
           <Button
             type="button"
             size="sm"
@@ -163,11 +191,15 @@ export function JainaConversationSidebar({
             <PlusIcon />
             New
           </Button>
-        )}
+        ) : mode === 'goals' ? (
+          <CreateCampaignGoalDialog brandId={brandId} compact />
+        ) : null}
       </div>
 
       {mode === 'automations' ? (
-        <AutomationsSidebarPanel agent="jaina" brandId={brandId ?? null} />
+        <AutomationsSidebarPanel agent="jaina" brandId={brandId} />
+      ) : mode === 'goals' ? (
+        <JainaGoalsSidebarPanel brandId={brandId} />
       ) : (
         <ScrollArea className="max-h-44 md:max-h-none md:flex-1 md:min-h-0">
           <div className="flex gap-2 p-2 md:flex-col">
