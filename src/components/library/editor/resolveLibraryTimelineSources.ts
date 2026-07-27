@@ -13,16 +13,18 @@
 
 import type { TimelineItem, TimelineTrack } from '@/StudioCanvas/types';
 import type {
+  TimelineAudioRenderItem,
   TimelineOverlayRenderItem,
   TimelineRenderItem,
 } from '@/StudioCanvas/utils/splice/composeTimeline';
 import type { LibraryPoolSource } from './timelineDraftMapping';
 
-type ResolvedSource = { kind: 'video' | 'image'; blob: Blob };
+type ResolvedSource = { kind: 'video' | 'image' | 'audio'; blob: Blob };
 
 export interface LibraryTimelineResolver {
   resolveSources(items: TimelineItem[]): Promise<TimelineRenderItem[]>;
   resolveOverlays(tracks: TimelineTrack[]): Promise<TimelineOverlayRenderItem[]>;
+  resolveAudioTracks(tracks: TimelineTrack[]): Promise<TimelineAudioRenderItem[]>;
 }
 
 export interface LibraryTimelineResolverOptions {
@@ -99,6 +101,8 @@ export function createLibraryTimelineResolver(
       return Promise.all(
         ordered.map(async (item) => {
           const { kind, blob } = await requireSource(item, `Clip ${item.order + 1}`);
+          if (kind === 'audio')
+            throw new Error(`Clip ${item.order + 1}: audio belongs on an audio track`);
           return {
             itemId: item.id,
             kind,
@@ -123,6 +127,9 @@ export function createLibraryTimelineResolver(
       return Promise.all(
         overlayItems.map(async (item) => {
           const { kind, blob } = await requireSource(item, `Overlay clip ${item.id}`);
+          if (kind === 'audio') {
+            throw new Error(`Overlay clip ${item.id}: audio belongs on an audio track`);
+          }
           return {
             itemId: item.id,
             kind,
@@ -137,6 +144,28 @@ export function createLibraryTimelineResolver(
             audioFadeOutSec: item.audioFadeOutSec,
             effects: item.effects,
           } satisfies TimelineOverlayRenderItem;
+        }),
+      );
+    },
+
+    async resolveAudioTracks(tracks) {
+      const audioItems = tracks
+        .filter((track) => track.kind === 'audio')
+        .flatMap((track) => track.items);
+      return Promise.all(
+        audioItems.map(async (item) => {
+          const { kind, blob } = await requireSource(item, `Audio clip ${item.id}`);
+          if (kind !== 'audio') throw new Error(`Audio clip ${item.id}: source is not audio`);
+          return {
+            itemId: item.id,
+            blob,
+            startSec: Math.max(0, item.startSec ?? 0),
+            trimStartSec: item.trimStartSec,
+            trimEndSec: item.trimEndSec,
+            volume: item.volume,
+            fadeInSec: item.audioFadeInSec,
+            fadeOutSec: item.audioFadeOutSec,
+          } satisfies TimelineAudioRenderItem;
         }),
       );
     },

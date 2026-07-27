@@ -38,12 +38,14 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { AudioNodeData } from '../types';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
+import { uploadReferenceFile } from '../utils/uploadReferenceFile';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
 export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const brandId = useStudioStore((state) => state.brandId);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -95,11 +97,17 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
           setAudioSrc(result);
           updateNodeData(id, { audio: result, fileName: file.name });
           triggerSave();
+          if (brandId) {
+            void uploadReferenceFile(
+              { nodeId: id, file, brandId, field: 'audio' },
+              { updateNodeData },
+            );
+          }
         };
         reader.readAsDataURL(file);
       }
     },
-    [id, triggerSave, updateNodeData],
+    [brandId, id, triggerSave, updateNodeData],
   );
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -139,6 +147,12 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
           setAudioSrc(result);
           updateNodeData(id, { audio: result, fileName: file.name });
           triggerSave();
+          if (brandId) {
+            void uploadReferenceFile(
+              { nodeId: id, file, brandId, field: 'audio' },
+              { updateNodeData },
+            );
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read dropped file';
           show({
@@ -177,16 +191,25 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
       }
 
       setAudioSrc(resolved.dataUrl);
-      updateNodeData(id, { audio: resolved.dataUrl, fileName: resolved.fileName });
+      updateNodeData(id, {
+        audio: resolved.sourceUrl ?? resolved.dataUrl,
+        fileName: resolved.fileName,
+        assetId: resolved.assetId,
+        sourcePath: resolved.sourcePath,
+        bucket: resolved.bucket,
+        sourceUrl: resolved.sourceUrl,
+        referenceStatus: resolved.assetId ? 'ready' : undefined,
+      });
       triggerSave();
     },
-    [fileToDataUrl, id, triggerSave, updateNodeData, show],
+    [brandId, fileToDataUrl, id, triggerSave, updateNodeData, show],
   );
 
   return (
     <TooltipProvider>
       <ContextMenu>
         <ContextMenuTrigger asChild>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: the canvas drop surface must receive native drag events */}
           <div
             className={cn(
               'relative group w-full h-full min-w-[180px] min-h-[100px] rounded-xl transition-shadow',
@@ -217,6 +240,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                 >
                   {audioSrc ? (
                     <div className="flex h-full w-full items-center justify-center p-4">
+                      {/* biome-ignore lint/a11y/useMediaCaption: this is an arbitrary user audio reference, not authored dialogue */}
                       <audio
                         ref={audioRef}
                         src={audioSrc}
@@ -226,6 +250,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
 
                       <div className="nodrag flex w-full max-w-[220px] items-center gap-3 rounded-md border border-border/70 bg-background/90 px-3 py-2 shadow-sm">
                         <button
+                          type="button"
                           onClick={togglePlay}
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
                           aria-label={isPlaying ? 'Pause audio' : 'Play audio'}

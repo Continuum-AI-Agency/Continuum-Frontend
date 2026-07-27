@@ -201,6 +201,7 @@ describe('timelineDraftMapping', () => {
 
     expect(sources[0]).toEqual({
       nodeId: SOURCE_ASSET_ID,
+      sourceAssetId: SOURCE_ASSET_ID,
       kind: 'video',
       label: 'Hero cut',
       previewUrl: 'https://fresh/hero.mp4',
@@ -208,7 +209,12 @@ describe('timelineDraftMapping', () => {
     });
     // A deleted asset stays in the bin without a URL — a missing tile is visible,
     // a silently dropped clip is not.
-    expect(sources[1]).toEqual({ nodeId: OVERLAY_ASSET_ID, kind: 'image', label: 'Logo' });
+    expect(sources[1]).toEqual({
+      nodeId: OVERLAY_ASSET_ID,
+      sourceAssetId: OVERLAY_ASSET_ID,
+      kind: 'image',
+      label: 'Logo',
+    });
   });
 });
 

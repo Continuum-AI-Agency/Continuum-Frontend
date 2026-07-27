@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { TimelineAudioPreviewController } from './useTimelineAudioPreview';
 import { clipAtTime, type TimelineLayout } from './useTimelineEditorModel';
 
 // Drives the WYSIWYG sequence preview for the Video Editor. The timeline is a
@@ -56,6 +57,7 @@ export interface PlayheadPlayback {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   playheadSec: number;
   isPlaying: boolean;
+  isPreparing: boolean;
   seek: (sec: number) => void;
   play: () => void;
   pause: () => void;
@@ -65,6 +67,7 @@ export interface PlayheadPlayback {
 const SNAP_EPSILON = 0.02;
 const HAVE_METADATA = 1;
 const HAVE_CURRENT_DATA = 2;
+const VIDEO_DRIFT_TOLERANCE_SEC = 0.08;
 
 // The element's clock runs in source time, so a wall-clock tolerance has to be
 // scaled by the clip's speed: at 3.5x one animation frame consumes ~58ms of
@@ -185,19 +188,67 @@ export function advancePlayhead(params: {
   };
 }
 
+/**
+ * Drive the visual media toward an externally-owned timeline clock. Web Audio
+ * uses this path: the video element renders frames, but never decides time.
+ */
+export function syncVideoToTimelineTime(params: {
+  layout: TimelineLayout;
+  mediaFor: (itemId: string) => ClipMedia | undefined;
+  video: PlaybackVideoElement | null;
+  timelineSec: number;
+  cue: PlaybackCue | null;
+}): PlaybackCue | null {
+  const { layout, mediaFor, video, timelineSec, cue } = params;
+  const clip = clipAtTime(layout, timelineSec);
+  const media = clip ? mediaFor(clip.item.id) : undefined;
+  if (!clip || !video || media?.kind !== 'video' || !media.url) {
+    if (video && !video.paused) video.pause();
+    return null;
+  }
+
+  const localSec = Math.max(0, timelineSec - clip.startSec);
+  const desiredSourceSec = media.trimStartSec + localSec * clipSpeed(media);
+  let nextCue = cue;
+  if (!nextCue || nextCue.clipId !== clip.item.id) {
+    nextCue = cueVideoToClip(video, media, clip.item.id, localSec);
+  } else if (
+    !video.seeking &&
+    video.readyState >= HAVE_METADATA &&
+    Math.abs(video.currentTime - desiredSourceSec) > VIDEO_DRIFT_TOLERANCE_SEC
+  ) {
+    seekVideo(video, desiredSourceSec);
+    nextCue = { clipId: clip.item.id, sourceSec: desiredSourceSec, pending: true };
+  }
+
+  const speed = clipSpeed(media);
+  if (video.playbackRate !== speed) video.playbackRate = speed;
+  if (nextCue?.pending && !isCueLanded(video, nextCue.sourceSec)) {
+    reapplyPendingCue(video, nextCue.sourceSec);
+  } else if (nextCue?.pending) {
+    nextCue = { ...nextCue, pending: false };
+  }
+  if (video.paused) void video.play().catch(() => undefined);
+  return nextCue;
+}
+
 export function usePlayheadPlayback(params: {
   layout: TimelineLayout;
   mediaFor: (itemId: string) => ClipMedia | undefined;
+  audioPreview?: TimelineAudioPreviewController;
+  revisionKey?: string;
 }): PlayheadPlayback {
-  const { layout, mediaFor } = params;
+  const { layout, mediaFor, audioPreview, revisionKey } = params;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playheadSec, setPlayheadSecState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
 
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const cueRef = useRef<PlaybackCue | null>(null);
+  const playRequestRef = useRef(0);
   const totalSec = layout.totalSec;
 
   // The animation loop re-schedules itself, so a callback that closed over the
@@ -206,10 +257,12 @@ export function usePlayheadPlayback(params: {
   // durations. The loop reads the live layout through refs instead.
   const layoutRef = useRef(layout);
   const mediaForRef = useRef(mediaFor);
+  const audioPreviewRef = useRef(audioPreview);
   useEffect(() => {
     layoutRef.current = layout;
     mediaForRef.current = mediaFor;
-  }, [layout, mediaFor]);
+    audioPreviewRef.current = audioPreview;
+  }, [audioPreview, layout, mediaFor]);
 
   const setPlayhead = useCallback((sec: number) => {
     const clamped = Math.max(0, Math.min(sec, layoutRef.current.totalSec));
@@ -232,33 +285,53 @@ export function usePlayheadPlayback(params: {
         clip.item.id,
         playheadRef.current - clip.startSec,
       );
+      if (isPlaying && audioPreviewRef.current?.active) {
+        void audioPreviewRef.current.play(playheadRef.current);
+      }
     },
-    [setPlayhead],
+    [isPlaying, setPlayhead],
   );
 
   const stop = useCallback(() => {
+    playRequestRef.current += 1;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
     lastTsRef.current = null;
+    const audioTime = audioPreviewRef.current?.pause() ?? null;
+    if (audioTime !== null) setPlayhead(audioTime);
     setIsPlaying(false);
+    setIsPreparing(false);
     videoRef.current?.pause();
-  }, []);
+  }, [setPlayhead]);
 
   const tick = useCallback(
     (ts: number) => {
       const last = lastTsRef.current ?? ts;
       lastTsRef.current = ts;
 
-      const frame = advancePlayhead({
-        layout: layoutRef.current,
-        mediaFor: mediaForRef.current,
-        video: videoRef.current,
-        playheadSec: playheadRef.current,
-        dtSec: (ts - last) / 1000,
-        cue: cueRef.current,
-      });
+      const audioTime = audioPreviewRef.current?.currentTimelineTime() ?? null;
+      const frame =
+        audioTime === null
+          ? advancePlayhead({
+              layout: layoutRef.current,
+              mediaFor: mediaForRef.current,
+              video: videoRef.current,
+              playheadSec: playheadRef.current,
+              dtSec: (ts - last) / 1000,
+              cue: cueRef.current,
+            })
+          : {
+              playheadSec: audioTime,
+              cue: syncVideoToTimelineTime({
+                layout: layoutRef.current,
+                mediaFor: mediaForRef.current,
+                video: videoRef.current,
+                timelineSec: audioTime,
+                cue: cueRef.current,
+              }),
+            };
       cueRef.current = frame.cue;
 
       if (frame.playheadSec >= layoutRef.current.totalSec) {
@@ -272,33 +345,56 @@ export function usePlayheadPlayback(params: {
     [setPlayhead, stop],
   );
 
+  const startLoop = useCallback(() => {
+    lastTsRef.current = null;
+    setIsPreparing(false);
+    setIsPlaying(true);
+    rafRef.current = requestAnimationFrame(tick);
+  }, [tick]);
+
   const play = useCallback(() => {
     if (totalSec <= 0) return;
+    const request = ++playRequestRef.current;
     // Replaying from the end re-cues the element: it is parked on the last clip's
     // trim-out, and without a seek the first tick would read that as an instant end.
     if (playheadRef.current >= totalSec - SNAP_EPSILON) seek(0);
-    lastTsRef.current = null;
-    setIsPlaying(true);
-    rafRef.current = requestAnimationFrame(tick);
-  }, [seek, tick, totalSec]);
+    const preview = audioPreviewRef.current;
+    if (!preview?.enabled) {
+      startLoop();
+      return;
+    }
+    setIsPreparing(true);
+    void preview.play(playheadRef.current).then(() => {
+      if (request !== playRequestRef.current) return;
+      startLoop();
+    });
+  }, [seek, startLoop, totalSec]);
 
   const pause = useCallback(() => stop(), [stop]);
   const toggle = useCallback(() => {
-    if (isPlaying) pause();
+    if (isPlaying || isPreparing) pause();
     else play();
-  }, [isPlaying, pause, play]);
+  }, [isPlaying, isPreparing, pause, play]);
 
   // Stop playback if the timeline empties or shrinks past the playhead.
   useEffect(() => {
     if (playheadRef.current > totalSec) setPlayhead(totalSec);
   }, [setPlayhead, totalSec]);
 
+  const previousRevisionRef = useRef(revisionKey);
+  useEffect(() => {
+    if (previousRevisionRef.current === revisionKey) return;
+    previousRevisionRef.current = revisionKey;
+    if (isPlaying || isPreparing) stop();
+  }, [isPlaying, isPreparing, revisionKey, stop]);
+
   useEffect(
     () => () => {
+      playRequestRef.current += 1;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     },
     [],
   );
 
-  return { videoRef, playheadSec, isPlaying, seek, play, pause, toggle };
+  return { videoRef, playheadSec, isPlaying, isPreparing, seek, play, pause, toggle };
 }

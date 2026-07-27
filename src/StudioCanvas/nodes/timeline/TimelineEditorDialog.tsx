@@ -33,12 +33,19 @@ import { clipEffectsToCss, resolveTextOverlays, speedFor } from '../../utils/ren
 import { DEFAULT_EXPORT_PRESET_ID, EXPORT_PRESETS } from '../../utils/render/exportPresets';
 import { headFadeFor, tailFadeFor, transitionOverlayAt } from '../../utils/render/transitions';
 import { findActiveCue, groupWordsIntoCues } from '../../utils/splice/captionCues';
+import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import type { TimelineEditorAdapter, TimelineRenderSinkKind } from './adapter';
+import {
+  patchAudioItem,
+  placeAudioItem,
+  removeAudioItem,
+  resolveAudioPlacements,
+} from './audioTrackModel';
 import { CaptionEditor } from './CaptionEditor';
 import { ClipInspector } from './ClipInspector';
 import { buildClipPlacements } from './commentMapping';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
-import { probeVideoDuration } from './mediaProbe';
+import { probeAudioDuration, probeVideoDuration } from './mediaProbe';
 import { resolveOverlayTracks } from './multiTrack';
 import { OVERLAY_DROP_ID, trackIdFromOverlayDrop } from './OverlayTrack';
 import { OverlayTracks } from './OverlayTracks';
@@ -49,6 +56,7 @@ import { TimelinePreview } from './TimelinePreview';
 import { TIMELINE_DROP_ID, TimelineTrack } from './TimelineTrack';
 import { useOverlayModel } from './useOverlayModel';
 import { type ClipMedia, usePlayheadPlayback } from './usePlayheadPlayback';
+import { useTimelineAudioPreview } from './useTimelineAudioPreview';
 import { useTimelineCaptions } from './useTimelineCaptions';
 import { clipAtTime, toggleMarkerTime, useTimelineEditorModel } from './useTimelineEditorModel';
 import { useTimelineKeymap } from './useTimelineKeymap';
@@ -94,10 +102,18 @@ export function TimelineEditorDialog({
     let cancelled = false;
     for (const source of pool) {
       if (typeof source.durationSec === 'number' && source.durationSec > 0) continue;
-      if (source.kind !== 'video' || !source.previewUrl || probedRef.current.has(source.nodeId))
+      if (
+        (source.kind !== 'video' && source.kind !== 'audio') ||
+        !source.previewUrl ||
+        probedRef.current.has(source.nodeId)
+      )
         continue;
       probedRef.current.add(source.nodeId);
-      probeVideoDuration(source.previewUrl)
+      const probe =
+        source.kind === 'audio'
+          ? probeAudioDuration(source.previewUrl)
+          : probeVideoDuration(source.previewUrl);
+      probe
         .then((duration) => {
           if (cancelled || duration <= 0) return;
           setSourceDurations((prev) => {
@@ -131,8 +147,10 @@ export function TimelineEditorDialog({
       const item = items.find((candidate) => candidate.id === itemId);
       if (!item) return undefined;
       const source = poolById.get(item.sourceNodeId);
+      const kind = item.kind ?? source?.kind ?? 'video';
+      if (kind === 'audio') return undefined;
       return {
-        kind: item.kind ?? source?.kind ?? 'video',
+        kind,
         url: source?.previewUrl,
         trimStartSec: item.trimStartSec ?? 0,
         speed: speedFor(item.effects),
@@ -141,7 +159,19 @@ export function TimelineEditorDialog({
     [items, poolById],
   );
 
-  const playback = usePlayheadPlayback({ layout: model.layout, mediaFor });
+  const revisionKey = useMemo(() => JSON.stringify(document), [document]);
+  const audioPreview = useTimelineAudioPreview({
+    adapter,
+    layout: model.layout,
+    sourceDurations,
+    revisionKey,
+  });
+  const playback = usePlayheadPlayback({
+    layout: model.layout,
+    mediaFor,
+    audioPreview,
+    revisionKey,
+  });
 
   const labelFor = useCallback(
     (sourceNodeId: string) => poolById.get(sourceNodeId)?.label ?? 'Clip',
@@ -159,27 +189,45 @@ export function TimelineEditorDialog({
     sourceDurations,
     labelFor,
   });
+  const audioPlacements = useMemo(
+    () => resolveAudioPlacements(document, sourceDurations),
+    [document, sourceDurations],
+  );
 
-  // Base and overlay selections are mutually exclusive — selecting one clears
+  // Base, overlay, and audio selections are mutually exclusive — selecting one clears
   // the other so the inspector edits a single clip.
   const [selectedItemId, setSelectedItemId] = useState<string | undefined>(undefined);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | undefined>(undefined);
+  const [selectedAudioId, setSelectedAudioId] = useState<string | undefined>(undefined);
   const selectBaseClip = useCallback((itemId: string) => {
     setSelectedItemId(itemId);
     setSelectedOverlayId(undefined);
+    setSelectedAudioId(undefined);
   }, []);
   const selectOverlayClip = useCallback((itemId: string) => {
     setSelectedOverlayId(itemId);
     setSelectedItemId(undefined);
+    setSelectedAudioId(undefined);
+  }, []);
+  const selectAudioClip = useCallback((itemId: string) => {
+    setSelectedAudioId(itemId);
+    setSelectedItemId(undefined);
+    setSelectedOverlayId(undefined);
   }, []);
   const clearSelection = useCallback(() => {
     setSelectedItemId(undefined);
     setSelectedOverlayId(undefined);
+    setSelectedAudioId(undefined);
   }, []);
 
   // Selection-driven keyboard actions. Delete removes the selected clip (base or
   // overlay) — never the canvas node; S splits the clip under the playhead.
   const handleDeleteSelected = useCallback(() => {
+    if (selectedAudioId) {
+      patchDocument((current) => removeAudioItem(current, selectedAudioId));
+      setSelectedAudioId(undefined);
+      return;
+    }
     if (selectedOverlayId) {
       overlayModel.remove(selectedOverlayId);
       setSelectedOverlayId(undefined);
@@ -188,7 +236,14 @@ export function TimelineEditorDialog({
     if (!selectedItemId) return;
     model.remove(selectedItemId);
     setSelectedItemId(undefined);
-  }, [model.remove, overlayModel.remove, selectedItemId, selectedOverlayId]);
+  }, [
+    model.remove,
+    overlayModel.remove,
+    patchDocument,
+    selectedAudioId,
+    selectedItemId,
+    selectedOverlayId,
+  ]);
 
   const handleSplitAtPlayhead = useCallback(() => {
     const clip = clipAtTime(model.layout, playback.playheadSec);
@@ -269,10 +324,21 @@ export function TimelineEditorDialog({
 
       if (activeId.startsWith(BIN_DRAG_PREFIX)) {
         const payload = active.data.current as
-          | { sourceNodeId?: string; kind?: 'video' | 'image' }
+          | { sourceNodeId?: string; kind?: 'video' | 'image' | 'audio' }
           | undefined;
         if (!payload?.sourceNodeId || !payload.kind || !over) return;
         const overId = String(over.id);
+        if (payload.kind === 'audio') {
+          if (overId !== AUDIO_DROP_ID) return;
+          patchDocument((current) =>
+            placeAudioItem(current, {
+              sourceNodeId: payload.sourceNodeId as string,
+              startSec: playback.playheadSec,
+              sourceDurationSec: sourceDurations.get(payload.sourceNodeId as string),
+            }),
+          );
+          return;
+        }
         // Dropping onto an overlay lane places a layer at the playhead, in that lane.
         if (overId.startsWith(OVERLAY_DROP_ID)) {
           overlayModel.place(
@@ -304,12 +370,24 @@ export function TimelineEditorDialog({
         );
       }
     },
-    [items, model, overlayModel.place, playback.playheadSec],
+    [items, model, overlayModel.place, patchDocument, playback.playheadSec, sourceDurations],
   );
 
   const handlePlace = useCallback(
-    (source: TimelineInputSource) => model.place(source.nodeId, source.kind),
-    [model],
+    (source: TimelineInputSource) => {
+      if (source.kind === 'audio') {
+        patchDocument((current) =>
+          placeAudioItem(current, {
+            sourceNodeId: source.nodeId,
+            startSec: playback.playheadSec,
+            sourceDurationSec: sourceDurations.get(source.nodeId),
+          }),
+        );
+        return;
+      }
+      model.place(source.nodeId, source.kind);
+    },
+    [model, patchDocument, playback.playheadSec, sourceDurations],
   );
 
   const exportPresetId = document.exportPresetId ?? DEFAULT_EXPORT_PRESET_ID;
@@ -329,9 +407,10 @@ export function TimelineEditorDialog({
   );
 
   const activeClip = clipAtTime(model.layout, playback.playheadSec);
-  const activeKind = activeClip
+  const activeSourceKind = activeClip
     ? (activeClip.item.kind ?? poolById.get(activeClip.item.sourceNodeId)?.kind)
     : undefined;
+  const activeKind = activeSourceKind === 'audio' ? undefined : activeSourceKind;
   const activeImageUrl =
     activeClip && activeKind === 'image'
       ? poolById.get(activeClip.item.sourceNodeId)?.previewUrl
@@ -381,6 +460,7 @@ export function TimelineEditorDialog({
       nextDissolveClip.item.kind ??
       poolById.get(nextDissolveClip.item.sourceNodeId)?.kind ??
       'video';
+    if (kind === 'audio') return undefined;
     return { url, kind, opacity: Math.min(1, (localOut - tailStart) / dur) };
   })();
 
@@ -548,6 +628,7 @@ export function TimelineEditorDialog({
                   activeImageUrl={activeImageUrl}
                   isEmpty={items.length === 0}
                   isPlaying={playback.isPlaying}
+                  isPreparing={playback.isPreparing}
                   onTogglePlay={playback.toggle}
                   playheadSec={playback.playheadSec}
                   totalSec={model.layout.totalSec}
@@ -555,6 +636,8 @@ export function TimelineEditorDialog({
                   textOverlays={activeTextOverlays}
                   fadeOverlay={activeFadeOverlay}
                   crossfade={activeCrossfade}
+                  mediaMuted={audioPreview.active || activeClip?.item.muteAudio}
+                  mediaVolume={activeClip?.item.volume}
                   caption={activeCaption}
                   captionStyle={document.captionStyle}
                   onCaptionPositionChange={(position) => {
@@ -636,6 +719,23 @@ export function TimelineEditorDialog({
             </div>
 
             <div className="flex h-[42%] min-h-0 shrink-0 flex-col gap-2 overflow-hidden border-t border-border/60 p-3">
+              <div className="shrink-0">
+                <AudioTracks
+                  placements={audioPlacements}
+                  pxPerSec={pxPerSec}
+                  totalSec={model.layout.totalSec}
+                  selectedId={selectedAudioId}
+                  labelFor={labelFor}
+                  onSelect={selectAudioClip}
+                  onPatch={(itemId, patch) =>
+                    patchDocument((current) => patchAudioItem(current, itemId, patch))
+                  }
+                  onRemove={(itemId) => {
+                    patchDocument((current) => removeAudioItem(current, itemId));
+                    if (selectedAudioId === itemId) setSelectedAudioId(undefined);
+                  }}
+                />
+              </div>
               <div className="min-h-0 shrink-0 overflow-y-auto">
                 <OverlayTracks
                   lanes={overlayModel.lanes}

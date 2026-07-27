@@ -89,7 +89,7 @@ export function useOverlayModel(params: {
   const toLaneItem = useCallback(
     (item: TimelineItem): OverlayLaneItem => ({
       id: item.id,
-      kind: item.kind ?? 'video',
+      kind: item.kind === 'image' ? 'image' : 'video',
       label: labelFor(item.sourceNodeId),
       startSec: item.startSec ?? 0,
       durationSec: durationOf(item),

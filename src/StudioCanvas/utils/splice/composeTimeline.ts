@@ -14,14 +14,14 @@ import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './caption
 import { appendOverlapTransition, type CrossDissolveClip } from './crossDissolve';
 import { drawEffectFrame } from './frameDraw';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
+import { resolveTimelineAudioEnvelope } from './timelineAudioEnvelope';
 
 // Timeline renderer for the Video Editor (timelineEditor) node. Sibling to
 // spliceClips: where the splicer only concatenates video clips, this composes an
 // ordered mix of trimmed video clips and image stills onto one canvas via the
 // same mediabunny/WebCodecs pipeline. Reorder, trim, and split are pure data
 // (ordered items + ranges) so they need no encoder support here. Video items
-// keep their own audio; stills (and muted clips) are padded with silence. A
-// separate background-audio track is intentionally deferred (v1.1).
+// keep their own audio; stills (and muted clips) are padded with silence.
 
 const TARGET_SAMPLE_RATE = 48_000;
 const TARGET_CHANNEL_COUNT = 2;
@@ -69,9 +69,21 @@ export type TimelineOverlayRenderItem = {
   effects?: ClipEffectSpec;
 };
 
+export type TimelineAudioRenderItem = {
+  itemId: string;
+  blob: Blob;
+  startSec: number;
+  trimStartSec?: number;
+  trimEndSec?: number;
+  volume?: number;
+  fadeInSec?: number;
+  fadeOutSec?: number;
+};
+
 export type ComposeTimelineOptions = {
   items: TimelineRenderItem[];
   overlays?: TimelineOverlayRenderItem[];
+  audioTracks?: TimelineAudioRenderItem[];
   videoBitrate?: number;
   audioBitrate?: number;
   // Export-preset frame size. When both are set the timeline is letterboxed into
@@ -107,6 +119,29 @@ type PreparedOverlay = {
 
 type MediabunnyModule = Awaited<ReturnType<typeof loadMediabunny>>;
 type MbInput = InstanceType<MediabunnyModule['Input']>;
+
+export type PreparedTimelineAudio = {
+  input: MbInput;
+  sourceStartSec: number;
+  sourceEndSec: number;
+  outputStartSec: number;
+  gain: number;
+  fadeInSec: number;
+  fadeOutSec: number;
+};
+
+export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPlanItem[] {
+  return items.map((item) => ({
+    input: item.input,
+    sourceStartSec: item.sourceStartSec,
+    sourceEndSec: item.sourceEndSec,
+    speed: 1,
+    outputStartSec: item.outputStartSec,
+    gain: item.gain,
+    fadeInSec: item.fadeInSec,
+    fadeOutSec: item.fadeOutSec,
+  }));
+}
 
 type PreparedItem = {
   headFade?: FadeOverlay;
@@ -231,6 +266,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
 
   const prepared: PreparedItem[] = [];
   const preparedOverlays: PreparedOverlay[] = [];
+  const preparedAudio: PreparedTimelineAudio[] = [];
   let targetWidth = 0;
   let targetHeight = 0;
   let cancelOutput: (() => Promise<void>) | undefined;
@@ -337,6 +373,33 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     // source time via a per-frame callback threaded into the append helpers.
     if (options.overlays && options.overlays.length > 0) {
       preparedOverlays.push(...(await prepareOverlays(mb, options.overlays)));
+    }
+    for (const bed of options.audioTracks ?? []) {
+      const input = new mb.Input({
+        source: new mb.BlobSource(bed.blob),
+        formats: mb.ALL_FORMATS,
+      });
+      const track = await input.getPrimaryAudioTrack();
+      if (!track) {
+        disposeInput(input);
+        throw new Error(`Audio item ${bed.itemId}: no audio track found`);
+      }
+      const fullDuration = await input.computeDuration();
+      const sourceStartSec = Math.max(0, bed.trimStartSec ?? 0);
+      const sourceEndSec = Math.min(fullDuration, bed.trimEndSec ?? fullDuration);
+      if (sourceEndSec <= sourceStartSec) {
+        disposeInput(input);
+        throw new Error(`Audio item ${bed.itemId}: trim range produces zero duration`);
+      }
+      preparedAudio.push({
+        input,
+        sourceStartSec,
+        sourceEndSec,
+        outputStartSec: Math.max(0, bed.startSec),
+        gain: typeof bed.volume === 'number' && bed.volume >= 0 ? bed.volume : 1,
+        fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
+        fadeOutSec: Math.max(0, bed.fadeOutSec ?? 0),
+      });
     }
     const compositeOverlays: CompositeOverlays | undefined =
       preparedOverlays.length === 0
@@ -496,23 +559,20 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       if (item.kind !== 'video' || item.muteAudio) continue;
       const src = items[i];
       const place = placements[i];
+      const envelope = resolveTimelineAudioEnvelope({
+        gain: src.volume,
+        manualFadeInSec: src.audioFadeInSec,
+        manualFadeOutSec: src.audioFadeOutSec,
+        transitionFadeInSec: Math.max(place.inOverlapSec, item.headFade?.durationSec ?? 0),
+        transitionFadeOutSec: Math.max(place.outOverlapSec, item.tailFade?.durationSec ?? 0),
+      });
       audioPlan.push({
         input: item.input,
         sourceStartSec: item.range.startSec,
         sourceEndSec: item.range.endSec,
         speed: item.range.durationSec / item.outputDurationSec,
         outputStartSec: place.outputStartSec,
-        gain: typeof src.volume === 'number' && src.volume >= 0 ? src.volume : 1,
-        fadeInSec: Math.max(
-          place.inOverlapSec,
-          item.headFade?.durationSec ?? 0,
-          src.audioFadeInSec ?? 0,
-        ),
-        fadeOutSec: Math.max(
-          place.outOverlapSec,
-          item.tailFade?.durationSec ?? 0,
-          src.audioFadeOutSec ?? 0,
-        ),
+        ...envelope,
       });
     }
     // Overlay-track audio floats on top at each overlay's absolute startSec.
@@ -529,6 +589,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         fadeOutSec: overlay.audioFadeOutSec,
       });
     }
+    audioPlan.push(...buildAudioBedPlanItems(preparedAudio));
     const audioMaster = await mixdownTimelineAudio(mb, audioPlan, totalDuration, signal);
     await feedMixdown(mb, audioSource, audioMaster, signal);
     throwIfAborted(signal);
@@ -575,6 +636,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     }
     for (const overlay of preparedOverlays) {
       overlay.dispose();
+    }
+    for (const audio of preparedAudio) {
+      disposeInput(audio.input);
     }
   }
 }

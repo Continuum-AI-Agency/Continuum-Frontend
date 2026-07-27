@@ -10,7 +10,11 @@ import type {
 import type { NodeOutput } from '../../types/execution';
 import { parseDataUrl } from '../dataUrl';
 import { isVideoGeneratorNodeType } from '../videoModel';
-import type { TimelineOverlayRenderItem, TimelineRenderItem } from './composeTimeline';
+import type {
+  TimelineAudioRenderItem,
+  TimelineOverlayRenderItem,
+  TimelineRenderItem,
+} from './composeTimeline';
 
 export type ResolvedClip = {
   slotId: string;
@@ -153,6 +157,16 @@ function readImageFromSourceNode(node: StudioNode | undefined): string | undefin
   return undefined;
 }
 
+function readAudioFromSourceNode(node: StudioNode | undefined): string | undefined {
+  if (node?.type !== 'audio') return undefined;
+  const data = node.data as { audio?: unknown; sourceUrl?: unknown };
+  const audio = typeof data.audio === 'string' && data.audio.trim() ? data.audio.trim() : undefined;
+  if (audio) return audio;
+  return typeof data.sourceUrl === 'string' && data.sourceUrl.trim()
+    ? data.sourceUrl.trim()
+    : undefined;
+}
+
 function deriveSourceLabel(node: StudioNode): string {
   const data = node.data as { label?: unknown; fileName?: unknown };
   if (typeof data.label === 'string' && data.label.trim()) return data.label.trim();
@@ -164,6 +178,8 @@ function deriveSourceLabel(node: StudioNode): string {
       return 'Generated image';
     case 'video':
       return 'Video';
+    case 'audio':
+      return 'Audio';
     case 'extendVideo':
       return 'Extended video';
     case 'videoEditor':
@@ -174,10 +190,19 @@ function deriveSourceLabel(node: StudioNode): string {
   }
 }
 
+function sourceAssetId(node: StudioNode): string | undefined {
+  const data = node.data as Record<string, unknown>;
+  const candidate = data.assetId ?? data.renderOutputAssetId ?? data.sourceAssetId;
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
+}
+
 function readSourceKindAndUrl(node: StudioNode | undefined): {
-  kind: 'video' | 'image';
+  kind: 'video' | 'image' | 'audio';
   url?: string;
 } {
+  if (node?.type === 'audio') {
+    return { kind: 'audio', url: readAudioFromSourceNode(node) };
+  }
   if (node?.type === 'image' || node?.type === 'nanoGen') {
     return { kind: 'image', url: readImageFromSourceNode(node) };
   }
@@ -208,6 +233,7 @@ export function resolveTimelineInputPool(
       nodeId: edge.source,
       kind,
       label: deriveSourceLabel(node),
+      ...(sourceAssetId(node) ? { sourceAssetId: sourceAssetId(node) } : {}),
       previewUrl: isUsableUrl(url) ? url : undefined,
     });
   }
@@ -221,14 +247,14 @@ export function resolveTimelineInputPool(
 function createTimelineSourceResolver(
   nodeById: Map<string, StudioNode>,
   resolvedOutputs: Map<string, NodeOutput>,
-): (sourceId: string) => Promise<{ kind: 'video' | 'image'; blob: Blob }> {
-  const cache = new Map<string, Promise<{ kind: 'video' | 'image'; blob: Blob }>>();
+): (sourceId: string) => Promise<{ kind: 'video' | 'image' | 'audio'; blob: Blob }> {
+  const cache = new Map<string, Promise<{ kind: 'video' | 'image' | 'audio'; blob: Blob }>>();
   return (sourceId: string) => {
     const cached = cache.get(sourceId);
     if (cached) return cached;
     const promise = (async () => {
       const upstream = resolvedOutputs.get(sourceId);
-      let kind: 'video' | 'image';
+      let kind: 'video' | 'image' | 'audio';
       let source: string | undefined;
       if (upstream?.type === 'video' && upstream.url) {
         kind = 'video';
@@ -281,6 +307,9 @@ export async function resolveTimelineOverlays(
         throw new Error(`Overlay item ${item.id}: no connected source`);
       }
       const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
+      if (kind === 'audio') {
+        throw new Error(`Overlay item ${item.id}: audio belongs on an audio track`);
+      }
       return {
         itemId: item.id,
         kind,
@@ -328,6 +357,9 @@ export async function resolveTimelineSources(
         throw new Error(`Timeline item ${item.order + 1}: no connected source`);
       }
       const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
+      if (kind === 'audio') {
+        throw new Error(`Timeline item ${item.order + 1}: audio belongs on an audio track`);
+      }
       return {
         itemId: item.id,
         kind,
@@ -342,6 +374,51 @@ export async function resolveTimelineSources(
         effects: item.effects,
         transition: item.transition,
       } satisfies TimelineRenderItem;
+    }),
+  );
+}
+
+export async function resolveTimelineAudioTracks(
+  tracks: TimelineTrack[],
+  edges: Edge[],
+  nodes: StudioNode[],
+  resolvedOutputs: Map<string, NodeOutput>,
+  targetNodeId: string,
+): Promise<TimelineAudioRenderItem[]> {
+  const audioItems = tracks
+    .filter((track) => track.kind === 'audio')
+    .flatMap((track) => track.items);
+  if (audioItems.length === 0) return [];
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const poolSourceIds = new Set(
+    edges
+      .filter(
+        (edge) =>
+          edge.target === targetNodeId && (edge.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
+      )
+      .map((edge) => edge.source),
+  );
+  const resolveSourceNode = createTimelineSourceResolver(nodeById, resolvedOutputs);
+
+  return Promise.all(
+    audioItems.map(async (item) => {
+      if (!item.sourceNodeId || !poolSourceIds.has(item.sourceNodeId)) {
+        throw new Error(`Audio item ${item.id}: no connected source`);
+      }
+      const { kind, blob } = await resolveSourceNode(item.sourceNodeId);
+      if (kind !== 'audio') {
+        throw new Error(`Audio item ${item.id}: source is not audio`);
+      }
+      return {
+        itemId: item.id,
+        blob,
+        startSec: Math.max(0, item.startSec ?? 0),
+        trimStartSec: item.trimStartSec,
+        trimEndSec: item.trimEndSec,
+        volume: item.volume,
+        fadeInSec: item.audioFadeInSec,
+        fadeOutSec: item.audioFadeOutSec,
+      } satisfies TimelineAudioRenderItem;
     }),
   );
 }

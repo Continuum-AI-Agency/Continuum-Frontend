@@ -12,6 +12,7 @@
 
 import { createElement, type ReactElement, useEffect, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { TimelinePreviewAudioPlan } from '../../src/StudioCanvas/nodes/timeline/timelineAudioPreviewPlan';
 import {
   type ClipMedia,
   usePlayheadPlayback,
@@ -20,6 +21,7 @@ import {
   computeLayout,
   effectiveItemDuration,
 } from '../../src/StudioCanvas/nodes/timeline/useTimelineEditorModel';
+import { TimelineWebAudioPreviewEngine } from '../../src/StudioCanvas/nodes/timeline/webAudioPreviewEngine';
 import type { TimelineItem } from '../../src/StudioCanvas/types';
 
 const WIDTH = 320;
@@ -56,6 +58,86 @@ export interface PlaybackRun {
   stoppedByHook: boolean;
   finalPlayheadSec: number;
   samples: PlaybackSample[];
+}
+
+export interface AudioPreviewRun {
+  started: boolean;
+  firstClockSec: number;
+  secondClockSec: number;
+  pausedAtSec: number;
+  seekClockSec: number;
+}
+
+function toneWav(durationSec: number, frequencyHz: number): Blob {
+  const sampleRate = 48_000;
+  const frames = Math.round(durationSec * sampleRate);
+  const bytes = new ArrayBuffer(44 + frames * 2);
+  const view = new DataView(bytes);
+  const write = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+  write(0, 'RIFF');
+  view.setUint32(4, 36 + frames * 2, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, 'data');
+  view.setUint32(40, frames * 2, true);
+  for (let frame = 0; frame < frames; frame += 1) {
+    const sample = Math.sin((2 * Math.PI * frequencyHz * frame) / sampleRate) * 0.2;
+    view.setInt16(44 + frame * 2, Math.round(sample * 0x7fff), true);
+  }
+  return new Blob([bytes], { type: 'audio/wav' });
+}
+
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+export async function runAudioPreview(): Promise<AudioPreviewRun> {
+  const engine = new TimelineWebAudioPreviewEngine();
+  const blob = toneWav(3, 220);
+  const plan: TimelinePreviewAudioPlan = {
+    totalDurationSec: 3,
+    events: [
+      {
+        id: 'voiceover',
+        sourceKey: 'bench-voiceover:v1',
+        sourceNodeId: 'bench-voiceover',
+        kind: 'audio',
+        blob,
+        outputStartSec: 0,
+        outputEndSec: 3,
+        sourceStartSec: 0,
+        sourceEndSec: 3,
+        playbackRate: 1,
+        gain: 0.7,
+        fadeInSec: 0.1,
+        fadeOutSec: 0.1,
+      },
+    ],
+  };
+
+  try {
+    const started = await engine.play(plan, 0);
+    await wait(180);
+    const firstClockSec = engine.currentTimelineTime() ?? -1;
+    await wait(220);
+    const secondClockSec = engine.currentTimelineTime() ?? -1;
+    const pausedAtSec = engine.pause() ?? -1;
+    await engine.play(plan, 1.25);
+    await wait(160);
+    const seekClockSec = engine.currentTimelineTime() ?? -1;
+    return { started, firstClockSec, secondClockSec, pausedAtSec, seekClockSec };
+  } finally {
+    await engine.dispose();
+  }
 }
 
 async function encodeSource(colors: string[]): Promise<Blob> {
@@ -246,8 +328,11 @@ export async function runPlayback(): Promise<PlaybackRun> {
 
 declare global {
   interface Window {
-    __playbackBench: { runPlayback: typeof runPlayback };
+    __playbackBench: {
+      runPlayback: typeof runPlayback;
+      runAudioPreview: typeof runAudioPreview;
+    };
   }
 }
 
-window.__playbackBench = { runPlayback };
+window.__playbackBench = { runPlayback, runAudioPreview };

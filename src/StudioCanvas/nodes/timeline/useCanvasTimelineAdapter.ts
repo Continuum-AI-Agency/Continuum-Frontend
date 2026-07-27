@@ -9,6 +9,7 @@ import type { StudioNode, TimelineEditorNodeData, TimelineItem, TimelineTrack } 
 import type { NodeOutput } from '../../types/execution';
 import { persistTimelineRender } from '../../utils/persistTimelineRender';
 import {
+  resolveTimelineAudioTracks,
   resolveTimelineInputPool,
   resolveTimelineOverlays,
   resolveTimelineSources,
@@ -50,6 +51,7 @@ function documentFromNodeData(data: TimelineEditorNodeData): TimelineDocument {
   return {
     items: data.items ?? EMPTY_ITEMS,
     overlayTracks: data.overlayTracks,
+    audioTracks: data.audioTracks,
     exportPresetId: data.exportPresetId,
     markers: data.markers,
     captionsEnabled: data.captionsEnabled,
@@ -73,6 +75,7 @@ export function applyDocumentPatch(
     ...nodeData,
     items: next.items,
     overlayTracks: next.overlayTracks,
+    audioTracks: next.audioTracks,
     exportPresetId: next.exportPresetId,
     markers: next.markers,
     captionsEnabled: next.captionsEnabled,
@@ -171,6 +174,20 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
     [nodeId],
   );
 
+  const resolveAudioTracks = useCallback(
+    (tracks: TimelineTrack[]) => {
+      const state = useStudioStore.getState();
+      return resolveTimelineAudioTracks(
+        tracks,
+        state.edges,
+        state.nodes as StudioNode[],
+        new Map<string, NodeOutput>(),
+        nodeId,
+      );
+    },
+    [nodeId],
+  );
+
   const reportRenderProgress = useCallback(
     (progress: number) => {
       useStudioStore.getState().updateNodeData(nodeId, { progress });
@@ -221,6 +238,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
     if (!inputFingerprint) throw new Error('The Video Editor node is no longer available');
 
     const overlayTracks = snapshotDocument.overlayTracks ?? [];
+    const audioTracks = snapshotDocument.audioTracks ?? [];
     return {
       document: snapshotDocument,
       inputFingerprint,
@@ -235,6 +253,14 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       resolveOverlays: () =>
         resolveTimelineOverlays(
           overlayTracks,
+          snapshotEdges,
+          snapshotNodes,
+          new Map<string, NodeOutput>(),
+          nodeId,
+        ),
+      resolveAudioTracks: () =>
+        resolveTimelineAudioTracks(
+          audioTracks,
           snapshotEdges,
           snapshotNodes,
           new Map<string, NodeOutput>(),
@@ -339,6 +365,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       pool,
       resolveSources,
       resolveOverlays,
+      resolveAudioTracks,
       renderSinks: CANVAS_RENDER_SINKS,
       renderOrigin,
       captureRenderSnapshot,
@@ -362,6 +389,7 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       reportRenderState,
       renderOrigin,
       resolveOverlays,
+      resolveAudioTracks,
       resolveSources,
     ],
   );

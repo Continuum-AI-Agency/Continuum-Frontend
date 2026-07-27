@@ -4,6 +4,7 @@ import type {
   SingleSourceWorkerRange,
   SpliceWorkerInbound,
   SpliceWorkerOutbound,
+  TimelineAudioWorkerItem,
   TimelineOverlayWorkerItem,
   TimelineWorkerItem,
   WorkerClipInput,
@@ -40,6 +41,7 @@ export type RunSingleSourceSpliceInWorkerOptions = {
 export type RunTimelineInWorkerOptions = {
   items: TimelineWorkerItem[];
   overlays?: TimelineOverlayWorkerItem[];
+  audioTracks?: TimelineAudioWorkerItem[];
   videoBitrate?: number;
   audioBitrate?: number;
   targetWidth?: number;
@@ -229,6 +231,7 @@ export function runTimelineInWorker(
   const {
     items,
     overlays,
+    audioTracks,
     videoBitrate,
     audioBitrate,
     targetWidth,
@@ -245,6 +248,7 @@ export function runTimelineInWorker(
       kind: 'start_timeline',
       items,
       overlays,
+      audioTracks,
       videoBitrate,
       audioBitrate,
       targetWidth,

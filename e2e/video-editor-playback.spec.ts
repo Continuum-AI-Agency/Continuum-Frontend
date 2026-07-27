@@ -3,7 +3,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import type { PlaybackRun } from './support/playbackBenchEntry';
+import type { AudioPreviewRun, PlaybackRun } from './support/playbackBenchEntry';
 
 // End-to-end bench for bug #188 — "Sometimes it stays in a loop in a video and out
 // of nowhere it goes out" (AI Studio Video Editor preview).
@@ -125,6 +125,36 @@ test('preview: a trimmed, sped-up multi-clip timeline plays through without loop
   const onClipA = run.samples.filter((sample) => sample.srcTag === 'A');
   expect(Math.max(...onClipA.map((sample) => sample.currentTimeSec))).toBeGreaterThan(7);
   expect(Math.max(...onClipB.map((sample) => sample.currentTimeSec))).toBeGreaterThan(3);
+
+  await context.close();
+});
+
+test('preview: Web Audio is a monotonic timeline clock and seeks voiceover at output time', async ({
+  browser,
+}) => {
+  const bundle = buildBrowserBundle();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route('**/video-editor-playback-bench', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><html><body></body></html>',
+    }),
+  );
+  await page.goto('/video-editor-playback-bench', { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content: bundle, type: 'module' });
+  await page.waitForFunction(() => Boolean(window.__playbackBench));
+
+  const run = (await page.evaluate(() =>
+    window.__playbackBench.runAudioPreview(),
+  )) as AudioPreviewRun;
+
+  expect(run.started).toBe(true);
+  expect(run.firstClockSec).toBeGreaterThan(0.08);
+  expect(run.secondClockSec - run.firstClockSec).toBeGreaterThan(0.12);
+  expect(run.pausedAtSec).toBeCloseTo(run.secondClockSec, 1);
+  expect(run.seekClockSec).toBeGreaterThan(1.32);
+  expect(run.seekClockSec).toBeLessThan(1.8);
 
   await context.close();
 });

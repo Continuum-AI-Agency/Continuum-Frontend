@@ -33,6 +33,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
     getDocument,
     resolveSources,
     resolveOverlays,
+    resolveAudioTracks,
     completeRender,
     reportRenderProgress,
     reportRenderState,
@@ -123,15 +124,17 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
         execute: async ({ jobId, signal, setPhase, setProgress }) => {
           setPhase('preparing');
           await flushRenderSnapshot?.();
-          const [items, overlays] = await Promise.all([
+          const [items, overlays, audioTracks] = await Promise.all([
             snapshot.resolveSources(),
             snapshot.resolveOverlays(),
+            snapshot.resolveAudioTracks(),
           ]);
 
           setPhase('rendering');
           const result = await runTimelineInWorker({
             items,
             overlays,
+            audioTracks,
             videoBitrate: exportPreset.videoBitrate,
             targetWidth: exportPreset.width ?? undefined,
             targetHeight: exportPreset.height ?? undefined,
@@ -213,6 +216,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       if (!validated) return false;
       const { document, target } = validated;
       const overlayTracks = resolveOverlayTracks(document);
+      const audioTracks = document.audioTracks ?? [];
       const exportPreset = resolveExportPreset(document.exportPresetId);
       const controller = new AbortController();
       setLocalIsRendering(true);
@@ -223,12 +227,14 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       try {
         const items = await resolveSources(document.items);
         const overlays = await resolveOverlays(overlayTracks);
+        const resolvedAudioTracks = await resolveAudioTracks(audioTracks);
         const captionsOn =
           Boolean(document.captionsEnabled) &&
           ((document.captionCues?.length ?? 0) > 0 || (document.captionWords?.length ?? 0) > 0);
         const result = await runTimelineInWorker({
           items,
           overlays,
+          audioTracks: resolvedAudioTracks,
           videoBitrate: exportPreset.videoBitrate,
           targetWidth: exportPreset.width ?? undefined,
           targetHeight: exportPreset.height ?? undefined,
@@ -262,6 +268,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       reportRenderProgress,
       reportRenderState,
       resolveOverlays,
+      resolveAudioTracks,
       resolveSources,
       show,
       validateTarget,

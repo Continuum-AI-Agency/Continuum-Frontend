@@ -18,6 +18,7 @@ import type { StudioRenderOrigin } from '@/lib/studio-render/renderStore';
 import type { TimelineInputSource, TimelineItem, TimelineTrack } from '../../types';
 import type { CaptionCue, CaptionWord } from '../../utils/splice/captionCues';
 import type {
+  TimelineAudioRenderItem,
   TimelineOverlayRenderItem,
   TimelineRenderItem,
 } from '../../utils/splice/composeTimeline';
@@ -29,6 +30,7 @@ import type {
 export interface TimelineDocument {
   items: TimelineItem[];
   overlayTracks?: TimelineTrack[];
+  audioTracks?: TimelineTrack[];
   exportPresetId?: string;
   markers?: number[];
   captionsEnabled?: boolean;
@@ -62,6 +64,7 @@ export interface TimelineRenderSnapshot {
   inputFingerprint: string;
   resolveSources(): Promise<TimelineRenderItem[]>;
   resolveOverlays(): Promise<TimelineOverlayRenderItem[]>;
+  resolveAudioTracks(): Promise<TimelineAudioRenderItem[]>;
 }
 
 export interface TimelineRenderCompletionContext {
@@ -108,6 +111,7 @@ export interface TimelineEditorAdapter {
   // they differ only in how a source id becomes a Blob.
   resolveSources(items: TimelineItem[]): Promise<TimelineRenderItem[]>;
   resolveOverlays(tracks: TimelineTrack[]): Promise<TimelineOverlayRenderItem[]>;
+  resolveAudioTracks(tracks: TimelineTrack[]): Promise<TimelineAudioRenderItem[]>;
 
   // The sink owns persistence AND the host's post-render side effects: the
   // canvas commits the break-point and resumes the workflow; the Library saves

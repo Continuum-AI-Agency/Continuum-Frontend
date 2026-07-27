@@ -94,10 +94,11 @@ function draftTrackToTrack(track: TimelineDraftTrack): TimelineTrack {
   return { id: track.id, kind: track.kind, items: track.items.map(draftItemToItem) };
 }
 
-// Only image/video are placeable. A pool member whose asset row is a 'file' (or
-// whose row is gone) has no kind to render, so it is kept as a video tile rather
-// than silently dropped — a missing tile is visible, a missing clip is not.
-function poolKind(kind: string | null | undefined): 'video' | 'image' {
+function poolKind(
+  kind: string | null | undefined,
+  mimeType?: string | null,
+): 'video' | 'image' | 'audio' {
+  if (mimeType?.toLowerCase().startsWith('audio/')) return 'audio';
   return kind === 'image' ? 'image' : 'video';
 }
 
@@ -166,6 +167,7 @@ export function draftPoolToSources(
       source.durationSec ?? (media?.durationMs != null ? media.durationMs / 1000 : undefined);
     return compact({
       nodeId: source.assetId,
+      sourceAssetId: source.assetId,
       kind: source.kind,
       label: source.label,
       previewUrl: media?.signedUrl ?? undefined,
@@ -186,6 +188,7 @@ export function toDraftDocument(input: {
     pool: pool.map(poolSourceToDraft),
     items: document.items.map(itemToDraftItem),
     overlayTracks: document.overlayTracks?.map(trackToDraftTrack),
+    audioTracks: document.audioTracks?.map(trackToDraftTrack),
     exportPresetId: document.exportPresetId,
     markers: document.markers,
     captionsEnabled: document.captionsEnabled,
@@ -202,6 +205,7 @@ export function fromDraftDocument(draft: TimelineDraftDocument): TimelineDocumen
   return compact({
     items: draft.items.map(draftItemToItem),
     overlayTracks: draft.overlayTracks?.map(draftTrackToTrack),
+    audioTracks: draft.audioTracks?.map(draftTrackToTrack),
     exportPresetId: draft.exportPresetId,
     markers: draft.markers,
     captionsEnabled: draft.captionsEnabled,
@@ -224,7 +228,7 @@ export function seedTimelineDocumentFromAsset(asset: MediaAsset): {
 } {
   const source: LibraryPoolSource = compact({
     nodeId: asset.id,
-    kind: poolKind(asset.kind),
+    kind: poolKind(asset.kind, asset.mimeType),
     label: asset.title ?? asset.fileName,
     previewUrl: asset.signedUrl ?? undefined,
     durationSec: asset.durationMs != null ? asset.durationMs / 1000 : undefined,

@@ -299,6 +299,10 @@ export function useLibraryTimelineAdapter({
           ...track,
           items: track.items.filter((item) => item.sourceNodeId !== sourceId),
         })),
+        audioTracks: current.audioTracks?.map((track) => ({
+          ...track,
+          items: track.items.filter((item) => item.sourceNodeId !== sourceId),
+        })),
       });
       scheduler.schedule();
     },
@@ -402,6 +406,12 @@ export function useLibraryTimelineAdapter({
           renderResolverRef.current ??
           createLibraryTimelineResolver({ brandId, pool: poolRef.current });
         return resolver.resolveOverlays(tracks);
+      },
+      resolveAudioTracks: (tracks) => {
+        const resolver =
+          renderResolverRef.current ??
+          createLibraryTimelineResolver({ brandId, pool: poolRef.current });
+        return resolver.resolveAudioTracks(tracks);
       },
       renderSinks: RENDER_SINKS,
       completeRender,

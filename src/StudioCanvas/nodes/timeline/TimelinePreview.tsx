@@ -3,6 +3,7 @@
 import { VideoIcon } from '@radix-ui/react-icons';
 import { Pause, Play } from 'lucide-react';
 import type React from 'react';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { type CaptionStyle, resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
@@ -25,6 +26,7 @@ export function TimelinePreview({
   activeImageUrl,
   isEmpty,
   isPlaying,
+  isPreparing = false,
   onTogglePlay,
   playheadSec,
   totalSec,
@@ -32,6 +34,8 @@ export function TimelinePreview({
   textOverlays,
   fadeOverlay,
   crossfade,
+  mediaMuted,
+  mediaVolume,
   caption,
   captionStyle,
   onCaptionPositionChange,
@@ -41,6 +45,7 @@ export function TimelinePreview({
   activeImageUrl?: string;
   isEmpty: boolean;
   isPlaying: boolean;
+  isPreparing?: boolean;
   onTogglePlay: () => void;
   playheadSec: number;
   totalSec: number;
@@ -52,10 +57,22 @@ export function TimelinePreview({
   fadeOverlay?: { color: string; alpha: number } | null;
   // Incoming clip's frame faded in over the current one during a cross-dissolve.
   crossfade?: { url: string; kind: 'video' | 'image'; opacity: number };
+  mediaMuted?: boolean;
+  mediaVolume?: number;
   caption?: CaptionCue;
   captionStyle?: CaptionStyle;
   onCaptionPositionChange?: (position: { xFrac: number; yFrac: number }) => void;
 }) {
+  const resolvedCaptionStyle = caption
+    ? resolveCaptionStyle(captionStyle, caption.style)
+    : undefined;
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = mediaMuted ?? false;
+    video.volume = Math.max(0, Math.min(1, mediaVolume ?? 1));
+  }, [mediaMuted, mediaVolume, videoRef]);
+
   return (
     <div className="flex h-full flex-col gap-2">
       {/* containerType lets text overlays size via cqh (fraction of frame height). */}
@@ -152,20 +169,32 @@ export function TimelinePreview({
               });
             }}
             style={{
-              left: `${resolveCaptionStyle(captionStyle, caption.style).position!.xFrac * 100}%`,
-              top: `${resolveCaptionStyle(captionStyle, caption.style).position!.yFrac * 100}%`,
+              left: `${resolvedCaptionStyle!.position!.xFrac * 100}%`,
+              top: `${resolvedCaptionStyle!.position!.yFrac * 100}%`,
               cursor: onCaptionPositionChange ? 'grab' : undefined,
             }}
           >
             <span
               className="max-w-[90%] text-center font-bold uppercase leading-tight"
               style={{
-                fontSize: `${resolveCaptionStyle(captionStyle, caption.style).fontSizeFrac! * 100}cqh`,
-                color: resolveCaptionStyle(captionStyle, caption.style).textColor,
-                textShadow: `0 0 0.18em ${resolveCaptionStyle(captionStyle, caption.style).outlineColor}`,
+                fontSize: `${resolvedCaptionStyle!.fontSizeFrac! * 100}cqh`,
+                color: resolvedCaptionStyle!.textColor,
+                fontFamily: resolvedCaptionStyle!.fontFamily,
+                textShadow: `0 0 0.18em ${resolvedCaptionStyle!.outlineColor}`,
               }}
             >
-              {caption.words.map((word) => word.text).join(' ')}
+              {caption.words.map((word, index) => {
+                const active = playheadSec >= word.startSec && playheadSec < word.endSec;
+                return (
+                  <span
+                    key={`${caption.id}:${word.startSec}:${index}`}
+                    style={{ color: active ? resolvedCaptionStyle!.highlightColor : undefined }}
+                  >
+                    {index > 0 ? ' ' : ''}
+                    {word.text}
+                  </span>
+                );
+              })}
             </span>
           </div>
         ) : null}
@@ -185,9 +214,9 @@ export function TimelinePreview({
           className="h-8 w-8"
           onClick={onTogglePlay}
           disabled={isEmpty}
-          aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
+          aria-label={isPlaying || isPreparing ? 'Pause preview' : 'Play preview'}
         >
-          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          {isPlaying || isPreparing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
         <span className="tabular-nums text-xs text-muted-foreground">
           {formatTime(playheadSec)} / {formatTime(totalSec)}

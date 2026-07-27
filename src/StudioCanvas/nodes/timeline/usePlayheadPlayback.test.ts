@@ -5,6 +5,7 @@ import {
   advancePlayhead,
   type ClipMedia,
   type PlaybackVideoElement,
+  syncVideoToTimelineTime,
   usePlayheadPlayback,
 } from './usePlayheadPlayback';
 import type { ClipLayout, TimelineLayout } from './useTimelineEditorModel';
@@ -355,6 +356,31 @@ describe('advancePlayhead — image stills', () => {
 
     expect(video.paused).toBe(true);
     expect(frame.playheadSec).toBeCloseTo(1 + FRAME_SEC, 5);
+  });
+});
+
+describe('syncVideoToTimelineTime — Web Audio owns the clock', () => {
+  it('seeks visual media to the source time derived from the audio timeline', () => {
+    const layout = layoutOf([clipOf({ id: 'a', startSec: 0, durationSec: 4 })]);
+    const mediaFor = mediaLookup({
+      a: { kind: 'video', url: 'blob:a', trimStartSec: 2, speed: 1.5 },
+    });
+    const video = new FakeVideoElement();
+    video.src = 'blob:a';
+    video.setAttribute('data-clip-src', 'blob:a');
+    video.finishLoad(2);
+
+    const cue = syncVideoToTimelineTime({
+      layout,
+      mediaFor,
+      video,
+      timelineSec: 1,
+      cue: { clipId: 'a', sourceSec: 2, pending: false },
+    });
+
+    expect(video.currentTime).toBe(3.5);
+    expect(video.playbackRate).toBe(1.5);
+    expect(cue).toEqual({ clipId: 'a', sourceSec: 3.5, pending: true });
   });
 });
 

@@ -147,6 +147,12 @@ export interface VideoNodeData extends BaseNodeData {
 export interface AudioNodeData extends BaseNodeData {
   audio?: string;
   fileName?: string;
+  assetId?: string;
+  sourcePath?: string;
+  bucket?: string;
+  sourceUrl?: string;
+  referenceStatus?: 'processing' | 'ready' | 'error';
+  referenceError?: string;
 }
 
 export interface CanvasDocument {
@@ -246,7 +252,7 @@ export interface TimelineItem {
   id: string;
   order: number;
   sourceNodeId: string;
-  kind?: 'video' | 'image';
+  kind?: 'video' | 'image' | 'audio';
   trimStartSec?: number;
   trimEndSec?: number;
   // For image stills: how long the frame holds in the output (seconds).
@@ -267,7 +273,7 @@ export interface TimelineItem {
   startSec?: number;
 }
 
-export type TimelineTrackKind = 'base' | 'overlay';
+export type TimelineTrackKind = 'base' | 'overlay' | 'audio';
 
 // A layer in the Video Editor. The base track is the main sequence; overlay
 // tracks composite on top (picture-in-picture, logos, image/text overlays),
@@ -283,8 +289,12 @@ export interface TimelineTrack {
 // (hence `nodeId`); other hosts key it by their own source id.
 export interface TimelineInputSource {
   nodeId: string;
-  kind: 'video' | 'image';
+  kind: 'video' | 'image' | 'audio';
   label: string;
+  // Durable media.assets id when the source is Library-backed. Canvas node ids
+  // are not asset ids; keeping both lets captioning and analysis use scoped
+  // storage APIs without guessing from a React Flow id.
+  sourceAssetId?: string;
   previewUrl?: string;
   // Known source duration (seconds), when the host already has it. Absent on the
   // canvas, where the editor probes the preview URL for it instead.
@@ -296,6 +306,9 @@ export interface TimelineEditorNodeData extends BaseNodeData {
   // Overlay layers composited over the base `items` track. Optional/additive so
   // existing single-track timelines keep working unchanged.
   overlayTracks?: TimelineTrack[];
+  // Absolute-time music/voiceover lanes. Audio placements never enter the
+  // visual base/overlay tracks; they join the renderer's single master mix.
+  audioTracks?: TimelineTrack[];
   outputFormat?: 'mp4';
   videoCodec?: 'avc';
   audioCodec?: 'aac';

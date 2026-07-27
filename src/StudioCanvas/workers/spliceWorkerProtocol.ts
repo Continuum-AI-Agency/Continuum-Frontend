@@ -51,6 +51,17 @@ export type TimelineOverlayWorkerItem = {
   effects?: ClipEffectSpec;
 };
 
+export type TimelineAudioWorkerItem = {
+  itemId: string;
+  blob: Blob;
+  startSec: number;
+  trimStartSec?: number;
+  trimEndSec?: number;
+  volume?: number;
+  fadeInSec?: number;
+  fadeOutSec?: number;
+};
+
 export type SpliceWorkerInbound =
   | {
       kind: 'start';
@@ -72,6 +83,7 @@ export type SpliceWorkerInbound =
       kind: 'start_timeline';
       items: TimelineWorkerItem[];
       overlays?: TimelineOverlayWorkerItem[];
+      audioTracks?: TimelineAudioWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;
       targetWidth?: number;

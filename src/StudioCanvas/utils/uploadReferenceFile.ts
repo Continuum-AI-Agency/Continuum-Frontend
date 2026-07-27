@@ -14,7 +14,13 @@
 // injected so the orchestration is testable without the network.
 
 import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
-import type { CanvasDocument, DocumentNodeData, ImageNodeData, VideoNodeData } from '../types';
+import type {
+  AudioNodeData,
+  CanvasDocument,
+  DocumentNodeData,
+  ImageNodeData,
+  VideoNodeData,
+} from '../types';
 
 export const REFERENCE_UPLOAD_BUCKET = MEDIA_LIBRARY_BUCKET;
 
@@ -26,7 +32,7 @@ export interface UploadReferenceResult {
 
 type UpdateNodeData = (
   id: string,
-  data: Partial<ImageNodeData & VideoNodeData & DocumentNodeData>,
+  data: Partial<ImageNodeData & VideoNodeData & AudioNodeData & DocumentNodeData>,
 ) => void;
 
 export interface UploadReferenceDeps {
@@ -38,7 +44,7 @@ export interface UploadReferenceDeps {
 }
 
 export async function uploadReferenceFile(
-  params: { nodeId: string; file: File; brandId: string; field?: 'image' | 'video' },
+  params: { nodeId: string; file: File; brandId: string; field?: 'image' | 'video' | 'audio' },
   deps: UploadReferenceDeps,
 ): Promise<UploadReferenceResult | null> {
   const { nodeId, file, brandId } = params;
@@ -58,7 +64,7 @@ export async function uploadReferenceFile(
       sourceUrl: signedUrl,
       referenceStatus: 'ready',
       referenceError: undefined,
-    } as Partial<ImageNodeData & VideoNodeData>);
+    } as Partial<ImageNodeData & VideoNodeData & AudioNodeData>);
     return { signedUrl, storagePath, bucket: REFERENCE_UPLOAD_BUCKET };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';

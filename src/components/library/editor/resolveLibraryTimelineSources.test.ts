@@ -6,10 +6,12 @@ import type { LibraryPoolSource } from './timelineDraftMapping';
 const BRAND_ID = '33333333-3333-4333-8333-333333333333';
 const VIDEO_ID = '11111111-1111-4111-8111-111111111111';
 const IMAGE_ID = '22222222-2222-4222-8222-222222222222';
+const AUDIO_ID = '44444444-4444-4444-8444-444444444444';
 
 const POOL: LibraryPoolSource[] = [
   { nodeId: VIDEO_ID, kind: 'video', label: 'Hero' },
   { nodeId: IMAGE_ID, kind: 'image', label: 'Logo' },
+  { nodeId: AUDIO_ID, kind: 'audio', label: 'Voiceover' },
 ];
 
 type Recorded = { url: string; body?: unknown };
@@ -208,5 +210,43 @@ describe('createLibraryTimelineResolver — resolveOverlays', () => {
         },
       ]),
     ).rejects.toThrow(/Overlay clip o9/);
+  });
+});
+
+describe('createLibraryTimelineResolver — resolveAudioTracks', () => {
+  it('resolves absolute-time Library audio into the render shape', async () => {
+    const { fetchImpl, calls } = createFetchStub();
+    const resolver = createLibraryTimelineResolver({ brandId: BRAND_ID, pool: POOL, fetchImpl });
+    const audio = await resolver.resolveAudioTracks([
+      {
+        id: 'voice-lane',
+        kind: 'audio',
+        items: [
+          item({
+            id: 'voice-1',
+            order: 0,
+            sourceNodeId: AUDIO_ID,
+            kind: 'audio',
+            startSec: 2,
+            trimStartSec: 0.5,
+            trimEndSec: 4,
+            volume: 0.75,
+            audioFadeInSec: 0.2,
+            audioFadeOutSec: 0.4,
+          }),
+        ],
+      },
+    ]);
+
+    expect(audio[0]).toMatchObject({
+      itemId: 'voice-1',
+      startSec: 2,
+      trimStartSec: 0.5,
+      trimEndSec: 4,
+      volume: 0.75,
+      fadeInSec: 0.2,
+      fadeOutSec: 0.4,
+    });
+    expect(calls).toHaveLength(2);
   });
 });

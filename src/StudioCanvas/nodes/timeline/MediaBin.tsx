@@ -2,6 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { Cross2Icon, ImageIcon, PlusIcon, VideoIcon } from '@radix-ui/react-icons';
+import { Music2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -50,20 +51,26 @@ function BinTile({
               alt={source.label}
               className="h-full w-full object-cover"
             />
-          ) : (
+          ) : source.kind === 'video' ? (
             <video
               src={source.previewUrl}
               muted
               preload="metadata"
               className="h-full w-full object-cover"
             />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-violet-500/10 text-violet-300">
+              <Music2 className="h-4 w-4" />
+            </div>
           )
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
             {source.kind === 'image' ? (
               <ImageIcon className="h-4 w-4" />
-            ) : (
+            ) : source.kind === 'video' ? (
               <VideoIcon className="h-4 w-4" />
+            ) : (
+              <Music2 className="h-4 w-4" />
             )}
           </div>
         )}
@@ -128,7 +135,7 @@ export function MediaBin({
       </div>
       {pool.length === 0 ? (
         <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 p-4 text-center text-2xs text-muted-foreground">
-          Wire image or video nodes into this editor to place them here.
+          Wire image, video, or audio nodes into this editor to place them here.
         </div>
       ) : (
         <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
