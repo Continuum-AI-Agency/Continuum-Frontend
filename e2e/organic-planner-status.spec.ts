@@ -100,6 +100,24 @@ function draftRows() {
   return SEEDED_DRAFTS.map((seed, index) => {
     const dayId = dayIdOffsetFromToday(index);
     const clientKey = `${BENCH_CLIENT_KEY_PREFIX}${seed.status}`;
+    const contentJson =
+      seed.status === 'draft'
+        ? {
+            content: { type: 'post', format: 'FeedPost' },
+            copy: {
+              caption: seed.caption,
+              hashtags: { high: [], medium: [], low: [] },
+              claims: [],
+            },
+            creative: {
+              mediaSuggestion: {
+                kind: 'image',
+                assetUrl: 'https://staging.example/planner-approval-bench.jpg',
+              },
+            },
+            quality: { passed: true },
+          }
+        : undefined;
 
     return {
       brand_id: brandId,
@@ -136,6 +154,7 @@ function draftRows() {
           mediaCount: 0,
         },
       },
+      ...(contentJson ? { content_json: contentJson } : {}),
     };
   });
 }
@@ -405,5 +424,48 @@ test.describe('organic planner status + agent chat speakers', () => {
     ).toBeGreaterThan(0);
 
     await page.screenshot({ path: `${SCREENSHOT_DIR}/chat-speaker-identity.png` });
+  });
+
+  test('approve and schedule sends a bodyless POST and persists the scheduled draft', async () => {
+    await openWeekPlanner(page);
+
+    const card = page.locator('button[aria-pressed]').filter({ hasText: 'WPD Draft' }).first();
+    await expect(card).toBeVisible({ timeout: 90_000 });
+    await card.click();
+
+    const preview = page.getByRole('complementary', { name: 'Draft preview' });
+    const approveButton = preview.getByRole('button', { name: 'Approve & Schedule' });
+    await expect(approveButton).toBeEnabled({ timeout: 30_000 });
+
+    const approvalResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/organic/calendar/drafts/') &&
+        response.url().endsWith('/approve') &&
+        response.request().method() === 'POST',
+    );
+    await approveButton.click();
+
+    const response = await approvalResponse;
+    expect(response.status()).toBe(200);
+    expect(response.request().postData()).toBeNull();
+    expect(response.request().headers()['content-type']).toBeUndefined();
+
+    const supabase = admin();
+    await expect
+      .poll(
+        async () => {
+          const { data, error } = await supabase
+            .schema('organic')
+            .from('organic_calendar_drafts')
+            .select('status')
+            .eq('brand_id', brandId)
+            .eq('client_key', `${BENCH_CLIENT_KEY_PREFIX}draft`)
+            .single();
+          if (error) throw error;
+          return data?.status;
+        },
+        { timeout: 30_000, intervals: [500, 1000, 2000] },
+      )
+      .toBe('scheduled');
   });
 });

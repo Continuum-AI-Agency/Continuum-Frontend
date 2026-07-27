@@ -63,14 +63,15 @@ describe('useApproveScheduleDraft', () => {
     });
 
     expect(outcome).toBe(true);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      `${API_BASE}/api/organic/calendar/drafts/draft-1/approve`,
-      expect.objectContaining({ method: 'POST' }),
-    );
+    const [approveUrl, approveInit] = fetchMock.mock.calls[0];
+    expect(approveUrl).toBe(`${API_BASE}/api/organic/calendar/drafts/draft-1/approve`);
+    expect(approveInit.method).toBe('POST');
+    expect(approveInit.body).toBeUndefined();
+    expect(approveInit.headers).not.toHaveProperty('Content-Type');
     const [scheduleUrl, scheduleInit] = fetchMock.mock.calls[1];
     expect(scheduleUrl).toBe(`${API_BASE}/api/organic/calendar/drafts/draft-1`);
     expect(scheduleInit.method).toBe('PATCH');
+    expect(scheduleInit.headers).toMatchObject({ 'Content-Type': 'application/json' });
     // scheduled_date must be ABSENT (the route treats its presence as an overwrite).
     expect(JSON.parse(scheduleInit.body as string)).toEqual({ status: 'scheduled' });
     // Store reflects the server-persisted transition.

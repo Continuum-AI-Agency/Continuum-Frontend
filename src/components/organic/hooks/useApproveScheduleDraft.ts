@@ -62,13 +62,13 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
       setIsApproving(true);
       try {
         const token = await getBrowserAccessToken();
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
+        const authHeaders: Record<string, string> = {};
+        if (token) authHeaders.Authorization = `Bearer ${token}`;
         const apiBase = getApiBaseUrl();
 
         const approveResp = await fetch(
           `${apiBase}/api/organic/calendar/drafts/${backendDraftId}/approve`,
-          { method: 'POST', headers },
+          { method: 'POST', headers: authHeaders },
         );
 
         if (!approveResp.ok) {
@@ -93,7 +93,11 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
         // existing timestamptz (sending the key would overwrite it).
         const scheduleResp = await fetch(
           `${apiBase}/api/organic/calendar/drafts/${backendDraftId}`,
-          { method: 'PATCH', headers, body: JSON.stringify({ status: 'scheduled' }) },
+          {
+            method: 'PATCH',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'scheduled' }),
+          },
         );
 
         if (!scheduleResp.ok) {
